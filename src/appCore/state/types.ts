@@ -8,6 +8,7 @@
 import type { Conversation } from "../../hooks/useConversations";
 import type { Subscription } from "../../../electron/types/models";
 import type { PendingOAuthData } from "../../components/Login";
+import type { SyncStatus } from "../../hooks/useAutoRefresh";
 
 // Application navigation steps
 export type AppStep =
@@ -174,6 +175,12 @@ export interface AppStateMachine {
   isTourActive: boolean;
   appPath: string;
 
+  // Sync status (for dashboard indicator)
+  syncStatus?: SyncStatus;
+  isAnySyncing: boolean;
+  currentSyncMessage: string | null;
+  triggerRefresh: () => Promise<void>;
+
   // ============================================
   // SEMANTIC MODAL TRANSITIONS
   // ============================================
@@ -263,6 +270,18 @@ export interface AppStateMachine {
   ) => Promise<void>;
   handleEmailOnboardingSkip: () => Promise<void>;
   handleEmailOnboardingBack: () => void;
+
+  /**
+   * Start Google OAuth flow for email connection.
+   * Sets up event listeners and initiates the OAuth popup.
+   */
+  handleStartGoogleEmailConnect: () => Promise<void>;
+
+  /**
+   * Start Microsoft OAuth flow for email connection.
+   * Sets up event listeners and initiates the OAuth popup.
+   */
+  handleStartMicrosoftEmailConnect: () => Promise<void>;
 
   // ============================================
   // KEYCHAIN HANDLERS

@@ -3,6 +3,10 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { AuthProvider, NetworkProvider, PlatformProvider } from "./contexts";
 import ErrorBoundary from "./components/ErrorBoundary";
+import {
+  FeatureFlaggedProvider,
+  LoadingOrchestrator,
+} from "./appCore/state/machine";
 import "./index.css";
 
 const rootElement = document.getElementById("root");
@@ -17,7 +21,11 @@ ReactDOM.createRoot(rootElement).render(
       <PlatformProvider>
         <NetworkProvider>
           <AuthProvider>
-            <App />
+            <FeatureFlaggedProvider>
+              <LoadingOrchestrator>
+                <App />
+              </LoadingOrchestrator>
+            </FeatureFlaggedProvider>
           </AuthProvider>
         </NetworkProvider>
       </PlatformProvider>

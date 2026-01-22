@@ -28,6 +28,7 @@ import {
   BackupEncryptionInfo,
   BackupErrorCode,
 } from "../types/backup";
+import { validateDeviceUdid, ValidationError } from "../utils/validation";
 
 /**
  * Service for managing iPhone backups via idevicebackup2
@@ -91,13 +92,20 @@ export class BackupService extends EventEmitter {
    * Check if a device requires encrypted backup (TASK-007)
    * @param udid Device UDID
    * @returns Encryption info
+   *
+   * SECURITY (TASK-601): UDID is validated before use in spawn() to prevent
+   * command injection. The UDID flows from IPC (renderer process) and must be
+   * treated as untrusted input.
    */
   async checkEncryptionStatus(udid: string): Promise<BackupEncryptionInfo> {
     try {
+      // SECURITY: Validate UDID before spawning process
+      // This prevents command injection via malicious UDID values
+      const validatedUdid = validateDeviceUdid(udid);
       const ideviceinfo = getCommand("ideviceinfo");
 
       return new Promise((resolve) => {
-        const proc = spawn(ideviceinfo, ["-u", udid, "-k", "WillEncrypt"]);
+        const proc = spawn(ideviceinfo, ["-u", validatedUdid, "-k", "WillEncrypt"]);
         let output = "";
         let errorOutput = "";
 
@@ -168,14 +176,41 @@ export class BackupService extends EventEmitter {
    *
    * @param options Backup options
    * @returns Promise resolving to backup result
+   *
+   * SECURITY (TASK-601): UDID is validated before use in spawn() and path operations.
+   * The UDID is used in:
+   * - spawn() arguments to idevicebackup2 (via buildBackupArgs)
+   * - path.join() for backup directory path
+   * Both usages require validation to prevent injection attacks.
    */
   async startBackup(options: BackupOptions): Promise<BackupResult> {
     if (this.isRunning) {
       throw new Error("Backup already in progress");
     }
 
+    // SECURITY: Validate UDID early before any spawn or path operations
+    // This prevents command injection and path traversal attacks
+    let validatedUdid: string;
+    try {
+      validatedUdid = validateDeviceUdid(options.udid);
+    } catch (error) {
+      log.error("[BackupService] Invalid UDID:", error);
+      return {
+        success: false,
+        backupPath: null,
+        error: error instanceof ValidationError ? error.message : "Invalid device UDID",
+        errorCode: "BACKUP_FAILED" as BackupErrorCode,
+        duration: 0,
+        deviceUdid: options.udid,
+        isIncremental: false,
+        backupSize: 0,
+        isEncrypted: false,
+      };
+    }
+
     // Check encryption status (TASK-007)
-    const encryptionInfo = await this.checkEncryptionStatus(options.udid);
+    // Note: checkEncryptionStatus also validates UDID, but we already validated above
+    const encryptionInfo = await this.checkEncryptionStatus(validatedUdid);
 
     if (encryptionInfo.isEncrypted && !options.password) {
       // Emit event to signal UI should prompt for password
@@ -206,11 +241,13 @@ export class BackupService extends EventEmitter {
     await fs.mkdir(backupPath, { recursive: true });
 
     // Check if previous backup exists (for incremental detection)
-    const deviceBackupPath = path.join(backupPath, options.udid);
+    // SECURITY: Use validated UDID in path operations
+    const deviceBackupPath = path.join(backupPath, validatedUdid);
     const previousBackupExists = await this.pathExists(deviceBackupPath);
 
     // Build command arguments
-    const args = this.buildBackupArgs(options, backupPath);
+    // SECURITY: Pass validatedUdid to buildBackupArgs
+    const args = this.buildBackupArgs(options, backupPath, validatedUdid);
 
     log.info("[BackupService] Starting backup with args:", args);
     log.info("[BackupService] Backup path:", backupPath);
@@ -481,15 +518,25 @@ export class BackupService extends EventEmitter {
    *
    * Note: We use --skip-apps to reduce backup size since we only need
    * messages and contacts which are in HomeDomain.
+   *
+   * SECURITY (TASK-601): The validatedUdid parameter MUST be pre-validated using
+   * validateDeviceUdid() before calling this method. This is a private method,
+   * so the caller (startBackup) is responsible for validation.
+   *
+   * @param options - Backup options
+   * @param backupPath - Destination path for backup
+   * @param validatedUdid - Pre-validated device UDID (caller must validate)
    */
   private buildBackupArgs(
     options: BackupOptions,
     backupPath: string,
+    validatedUdid: string,
   ): string[] {
     const args: string[] = [];
 
     // Target device by UDID
-    args.push("-u", options.udid);
+    // SECURITY: validatedUdid must be validated before this call
+    args.push("-u", validatedUdid);
 
     // Command: backup
     args.push("backup");
@@ -899,6 +946,52 @@ export class BackupService extends EventEmitter {
       };
     } catch (error) {
       log.error("[BackupService] Error checking backup status:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Get backup metadata for change detection (TASK-908)
+   *
+   * Returns the modification time and SHA-256 hash of Manifest.db,
+   * which is the primary indicator of backup content changes.
+   *
+   * @param backupPath Full path to the backup directory
+   * @returns Metadata object or null if backup/manifest doesn't exist
+   */
+  async getBackupMetadata(backupPath: string): Promise<{
+    modifiedAt: Date;
+    manifestHash: string;
+  } | null> {
+    try {
+      const manifestPath = path.join(backupPath, "Manifest.db");
+
+      // Check if manifest exists
+      if (!(await this.pathExists(manifestPath))) {
+        log.debug("[BackupService] Manifest.db not found at:", manifestPath);
+        return null;
+      }
+
+      // Get file stats for modification time
+      const stats = await fs.stat(manifestPath);
+
+      // Compute SHA-256 hash of manifest for reliable change detection
+      const { createHash } = await import("crypto");
+      const manifestContent = await fs.readFile(manifestPath);
+      const hash = createHash("sha256").update(manifestContent).digest("hex");
+
+      log.debug("[BackupService] Backup metadata:", {
+        backupPath,
+        modifiedAt: stats.mtime.toISOString(),
+        manifestHash: hash.substring(0, 16) + "...", // Log truncated for brevity
+      });
+
+      return {
+        modifiedAt: stats.mtime,
+        manifestHash: hash,
+      };
+    } catch (error) {
+      log.error("[BackupService] Failed to get backup metadata:", error);
       return null;
     }
   }

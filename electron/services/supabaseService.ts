@@ -8,9 +8,7 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { User, SubscriptionTier, Subscription } from "../types/models";
 import type { AuditLogEntry } from "./auditService";
-import * as dotenv from "dotenv";
-
-dotenv.config({ path: ".env.development" });
+import logService from "./logService";
 
 /**
  * User data for sync operations
@@ -94,13 +92,14 @@ class SupabaseService {
     const supabaseKey = process.env.SUPABASE_SERVICE_KEY; // Using service_role for now
 
     if (!supabaseUrl || !supabaseKey) {
-      console.error(
+      logService.error(
         "[Supabase] Missing credentials. Check .env.development file.",
+        "Supabase"
       );
       throw new Error("Supabase credentials not configured");
     }
 
-    console.log("[Supabase] Initializing with URL:", supabaseUrl);
+    logService.info("[Supabase] Initializing with URL:", "Supabase", { supabaseUrl });
 
     this.client = createClient(supabaseUrl, supabaseKey, {
       auth: {
@@ -110,7 +109,7 @@ class SupabaseService {
     });
 
     this.initialized = true;
-    console.log("[Supabase] Initialized successfully");
+    logService.debug("[Supabase] Initialized successfully", "Supabase");
   }
 
   /**
@@ -184,7 +183,7 @@ class SupabaseService {
         });
 
         result = data as User;
-        console.log("[Supabase] User updated:", result.id);
+        logService.info("[Supabase] User updated:", "Supabase", { userId: result.id });
       } else {
         // Create new user
         const { data, error } = await client
@@ -211,12 +210,12 @@ class SupabaseService {
 
         if (error) throw error;
         result = data as User;
-        console.log("[Supabase] New user created:", result.id);
+        logService.info("[Supabase] New user created:", "Supabase", { userId: result.id });
       }
 
       return result;
     } catch (error) {
-      console.error("[Supabase] Failed to sync user:", error);
+      logService.error("[Supabase] Failed to sync user:", "Supabase", { error });
       throw error;
     }
   }
@@ -239,7 +238,7 @@ class SupabaseService {
       if (error) throw error;
       return data as User;
     } catch (error) {
-      console.error("[Supabase] Failed to get user:", error);
+      logService.error("[Supabase] Failed to get user:", "Supabase", { error });
       throw error;
     }
   }
@@ -272,10 +271,10 @@ class SupabaseService {
         .single();
 
       if (error) throw error;
-      console.log("[Supabase] Terms acceptance synced for user:", userId);
+      logService.info("[Supabase] Terms acceptance synced for user:", "Supabase", { userId });
       return data as User;
     } catch (error) {
-      console.error("[Supabase] Failed to sync terms acceptance:", error);
+      logService.error("[Supabase] Failed to sync terms acceptance:", "Supabase", { error });
       throw error;
     }
   }
@@ -297,14 +296,16 @@ class SupabaseService {
         .eq("id", userId);
 
       if (error) throw error;
-      console.log(
+      logService.info(
         "[Supabase] Email onboarding completion synced for user:",
-        userId,
+        "Supabase",
+        { userId }
       );
     } catch (error) {
-      console.error(
+      logService.error(
         "[Supabase] Failed to sync email onboarding completion:",
-        error,
+        "Supabase",
+        { error }
       );
       throw error;
     }
@@ -355,7 +356,7 @@ class SupabaseService {
 
       return subscription;
     } catch (error) {
-      console.error("[Supabase] Failed to validate subscription:", error);
+      logService.error("[Supabase] Failed to validate subscription:", "Supabase", { error });
       throw error;
     }
   }
@@ -404,7 +405,7 @@ class SupabaseService {
           .single();
 
         if (error) throw error;
-        console.log("[Supabase] Device updated:", data.id);
+        logService.info("[Supabase] Device updated:", "Supabase", { deviceId: data.id });
         return data as DeviceRecord;
       } else {
         // Create new device
@@ -421,11 +422,11 @@ class SupabaseService {
           .single();
 
         if (error) throw error;
-        console.log("[Supabase] Device registered:", data.id);
+        logService.info("[Supabase] Device registered:", "Supabase", { deviceId: data.id });
         return data as DeviceRecord;
       }
     } catch (error) {
-      console.error("[Supabase] Failed to register device:", error);
+      logService.error("[Supabase] Failed to register device:", "Supabase", { error });
       throw error;
     }
   }
@@ -473,7 +474,7 @@ class SupabaseService {
         isCurrentDevice,
       };
     } catch (error) {
-      console.error("[Supabase] Failed to check device limit:", error);
+      logService.error("[Supabase] Failed to check device limit:", "Supabase", { error });
       // If error, allow access (fail open)
       return { allowed: true, current: 0, max: 2 };
     }
@@ -509,10 +510,10 @@ class SupabaseService {
         app_version: appVersion,
       });
 
-      console.log("[Supabase] Event tracked:", eventName);
+      logService.info("[Supabase] Event tracked:", "Supabase", { eventName });
     } catch (error) {
       // Don't throw - analytics failures shouldn't break the app
-      console.error("[Supabase] Failed to track event:", error);
+      logService.error("[Supabase] Failed to track event:", "Supabase", { error });
     }
   }
 
@@ -543,10 +544,10 @@ class SupabaseService {
         estimated_cost: estimatedCost,
       });
 
-      console.log("[Supabase] API usage tracked:", apiName, endpoint);
+      logService.info("[Supabase] API usage tracked:", "Supabase", { apiName, endpoint });
     } catch (error) {
       // Don't throw - tracking failures shouldn't break the app
-      console.error("[Supabase] Failed to track API usage:", error);
+      logService.error("[Supabase] Failed to track API usage:", "Supabase", { error });
     }
   }
 
@@ -591,7 +592,7 @@ class SupabaseService {
         remaining: Math.max(0, limit - (count || 0)),
       };
     } catch (error) {
-      console.error("[Supabase] Failed to check API limit:", error);
+      logService.error("[Supabase] Failed to check API limit:", "Supabase", { error });
       // If error, allow access (fail open)
       return { allowed: true, current: 0, limit: 100, remaining: 100 };
     }
@@ -620,9 +621,9 @@ class SupabaseService {
       });
 
       if (error) throw error;
-      console.log("[Supabase] Preferences synced");
+      logService.info("[Supabase] Preferences synced", "Supabase");
     } catch (error) {
-      console.error("[Supabase] Failed to sync preferences:", error);
+      logService.error("[Supabase] Failed to sync preferences:", "Supabase", { error });
       throw error;
     }
   }
@@ -630,27 +631,25 @@ class SupabaseService {
   /**
    * Get user preferences from cloud
    * @param userId - User UUID
-   * @returns User preferences
+   * @returns User preferences (empty object if not found)
+   * @throws Error if there's a database error (not including "not found")
    */
   async getPreferences(userId: string): Promise<Record<string, any>> {
     const client = this._ensureClient();
 
-    try {
-      const { data, error } = await client
-        .from("user_preferences")
-        .select("preferences")
-        .eq("user_id", userId)
-        .single();
+    const { data, error } = await client
+      .from("user_preferences")
+      .select("preferences")
+      .eq("user_id", userId)
+      .single();
 
-      if (error && error.code !== "PGRST116") {
-        throw error;
-      }
-
-      return data?.preferences || {};
-    } catch (error) {
-      console.error("[Supabase] Failed to get preferences:", error);
-      return {};
+    // PGRST116 = "not found" - this is expected for new users
+    if (error && error.code !== "PGRST116") {
+      logService.error("[Supabase] Failed to get preferences:", "Supabase", { error });
+      throw error;
     }
+
+    return data?.preferences || {};
   }
 
   // ============================================
@@ -677,9 +676,10 @@ class SupabaseService {
       if (error) throw error;
       return data;
     } catch (error) {
-      console.error(
+      logService.error(
         `[Supabase] Edge function '${functionName}' failed:`,
-        error,
+        "Supabase",
+        { error }
       );
       throw error;
     }
@@ -724,9 +724,9 @@ class SupabaseService {
 
       if (error) throw error;
 
-      console.log(`[Supabase] Synced ${entries.length} audit logs to cloud`);
+      logService.info(`[Supabase] Synced ${entries.length} audit logs to cloud`, "Supabase");
     } catch (error) {
-      console.error("[Supabase] Failed to sync audit logs:", error);
+      logService.error("[Supabase] Failed to sync audit logs:", "Supabase", { error });
       throw error;
     }
   }
@@ -804,7 +804,7 @@ class SupabaseService {
         errorMessage: row.error_message as string | undefined,
       }));
     } catch (error) {
-      console.error("[Supabase] Failed to get audit logs:", error);
+      logService.error("[Supabase] Failed to get audit logs:", "Supabase", { error });
       throw error;
     }
   }

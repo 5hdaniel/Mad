@@ -46,6 +46,9 @@ const mockDb = {
       return mockDb;
     },
   ),
+  transaction: jest.fn((callback: () => void) => {
+    return () => callback();
+  }),
 };
 
 jest.mock("better-sqlite3-multiple-ciphers", () => {
@@ -509,7 +512,7 @@ describe("DatabaseService", () => {
           property_state: "IL",
           property_zip: "62701",
           transaction_type: "purchase" as const,
-          closing_date: "2024-12-31",
+          closed_at: "2024-12-31",
         };
 
         const mockTransaction = {
@@ -616,7 +619,7 @@ describe("DatabaseService", () => {
       it("should update transaction fields", async () => {
         await databaseService.updateTransaction("txn-123", {
           property_address: "Updated Address",
-          closing_date: "2024-12-31",
+          closed_at: "2024-12-31",
         });
 
         expect(mockStatement.run).toHaveBeenCalled();
@@ -865,6 +868,81 @@ describe("DatabaseService", () => {
           "txn-123",
           "contact-456",
         );
+      });
+    });
+
+    describe("batchUpdateContactAssignments", () => {
+      beforeEach(() => {
+        mockDb.transaction.mockClear();
+        mockStatement.get.mockClear();
+        mockStatement.run.mockClear();
+      });
+
+      it("should handle empty operations array", async () => {
+        await databaseService.batchUpdateContactAssignments("txn-123", []);
+        // No database transaction should be created for empty array
+        expect(mockDb.transaction).not.toHaveBeenCalled();
+      });
+
+      it("should execute add operations", async () => {
+        mockStatement.get.mockReturnValue(undefined); // No existing assignment
+
+        await databaseService.batchUpdateContactAssignments("txn-123", [
+          {
+            action: "add",
+            contactId: "contact-1",
+            role: "Buyer Agent",
+            roleCategory: "buyer_side",
+            isPrimary: true,
+          },
+        ]);
+
+        expect(mockDb.transaction).toHaveBeenCalled();
+      });
+
+      it("should execute remove operations", async () => {
+        await databaseService.batchUpdateContactAssignments("txn-123", [
+          {
+            action: "remove",
+            contactId: "contact-1",
+          },
+        ]);
+
+        expect(mockDb.transaction).toHaveBeenCalled();
+      });
+
+      it("should handle mixed add and remove operations", async () => {
+        mockStatement.get.mockReturnValue(undefined);
+
+        await databaseService.batchUpdateContactAssignments("txn-123", [
+          { action: "remove", contactId: "contact-1" },
+          {
+            action: "add",
+            contactId: "contact-2",
+            role: "Seller Agent",
+            roleCategory: "seller_side",
+          },
+          { action: "remove", contactId: "contact-3" },
+        ]);
+
+        expect(mockDb.transaction).toHaveBeenCalled();
+      });
+
+      it("should update existing assignment instead of inserting", async () => {
+        // Simulate existing assignment
+        mockStatement.get.mockReturnValue({ id: "existing-tc-123" });
+
+        await databaseService.batchUpdateContactAssignments("txn-123", [
+          {
+            action: "add",
+            contactId: "contact-1",
+            role: "Updated Role",
+            roleCategory: "neutral",
+            isPrimary: false,
+          },
+        ]);
+
+        expect(mockDb.transaction).toHaveBeenCalled();
       });
     });
   });
@@ -1117,7 +1195,7 @@ describe("DatabaseService", () => {
       it("should run VACUUM command", async () => {
         await databaseService.vacuum();
 
-        expect(mockStatement.run).toHaveBeenCalled();
+        expect(mockDb.exec).toHaveBeenCalledWith("VACUUM");
       });
     });
 

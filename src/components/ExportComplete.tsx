@@ -135,7 +135,7 @@ function ExportComplete({ result, onStartOver }: ExportCompleteProps) {
               onClick={() => {
                 // Open the folder in Finder
                 if (result.exportPath) {
-                  window.electron.openFolder(result.exportPath);
+                  window.api.shell.openFolder(result.exportPath);
                 }
               }}
               className="flex-1 bg-gray-100 text-gray-700 py-3 px-6 rounded-lg font-semibold hover:bg-gray-200 transition-colors"

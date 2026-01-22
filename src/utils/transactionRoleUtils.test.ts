@@ -3,6 +3,7 @@ import {
   getTransactionTypeContext,
   validateRoleAssignments,
   getRoleDisplayName,
+  formatRoleLabel,
   type RoleConfig,
   type ContactAssignments,
 } from "./transactionRoleUtils";
@@ -115,6 +116,28 @@ describe("transactionRoleUtils", () => {
       );
       expect(result.length).toBe(0);
     });
+
+    it("should filter out non-matching roles for 'other' transaction type", () => {
+      const roles: RoleConfig[] = [
+        { role: SPECIFIC_ROLES.CLIENT, required: true, multiple: false },
+        { role: SPECIFIC_ROLES.BUYER_AGENT, required: false, multiple: false },
+        { role: SPECIFIC_ROLES.SELLER_AGENT, required: false, multiple: false },
+        { role: "custom_role", required: false, multiple: false },
+      ];
+
+      const result = filterRolesByTransactionType(
+        roles,
+        "other",
+        "Client & Agents",
+      );
+
+      // Only CLIENT should be included since 'other' matches neither purchase nor sale
+      expect(result.length).toBe(1);
+      expect(result.map((r) => r.role)).toContain(SPECIFIC_ROLES.CLIENT);
+      expect(result.map((r) => r.role)).not.toContain(SPECIFIC_ROLES.BUYER_AGENT);
+      expect(result.map((r) => r.role)).not.toContain(SPECIFIC_ROLES.SELLER_AGENT);
+      expect(result.map((r) => r.role)).not.toContain("custom_role");
+    });
   });
 
   describe("getTransactionTypeContext", () => {
@@ -132,6 +155,14 @@ describe("transactionRoleUtils", () => {
       expect(result.title).toBe("Transaction Type: Sale");
       expect(result.message).toContain("representing the seller");
       expect(result.message).toContain("buyer's agent");
+    });
+
+    it("should return sale context as default for 'other' transaction type", () => {
+      // 'other' transaction type falls through to default (sale context)
+      const result = getTransactionTypeContext("other");
+
+      expect(result.title).toBe("Transaction Type: Sale");
+      expect(result.message).toContain("representing the seller");
     });
   });
 
@@ -204,14 +235,14 @@ describe("transactionRoleUtils", () => {
   });
 
   describe("getRoleDisplayName", () => {
-    it('should return "Client (Buyer)" for CLIENT role in purchase transaction', () => {
+    it('should return "Buyer (Client)" for CLIENT role in purchase transaction', () => {
       const result = getRoleDisplayName(SPECIFIC_ROLES.CLIENT, "purchase");
-      expect(result).toBe("Client (Buyer)");
+      expect(result).toBe("Buyer (Client)");
     });
 
-    it('should return "Client (Seller)" for CLIENT role in sale transaction', () => {
+    it('should return "Seller (Client)" for CLIENT role in sale transaction', () => {
       const result = getRoleDisplayName(SPECIFIC_ROLES.CLIENT, "sale");
-      expect(result).toBe("Client (Seller)");
+      expect(result).toBe("Seller (Client)");
     });
 
     it("should return standard display name for non-CLIENT roles", () => {
@@ -230,6 +261,98 @@ describe("transactionRoleUtils", () => {
         "purchase",
       );
       expect(result).toBe("Transaction Coordinator (TC)");
+    });
+
+    it("should fall back to ROLE_DISPLAY_NAMES for CLIENT role with 'other' transaction type", () => {
+      // When transaction type is 'other', CLIENT role should use standard display name
+      const result = getRoleDisplayName(SPECIFIC_ROLES.CLIENT, "other");
+      // Falls through to ROLE_DISPLAY_NAMES lookup
+      expect(result).toBe("Client (Buyer/Seller)");
+    });
+
+    it("should format unknown roles using formatRoleLabel", () => {
+      const result = getRoleDisplayName("unknown_custom_role", "purchase");
+      // When role is not in ROLE_DISPLAY_NAMES, format it using formatRoleLabel
+      expect(result).toBe("Unknown Custom Role");
+    });
+
+    it("should handle empty string role", () => {
+      const result = getRoleDisplayName("", "sale");
+      expect(result).toBe("");
+    });
+  });
+
+  describe("validateRoleAssignments edge cases", () => {
+    it("should handle undefined assignment value", () => {
+      const contactAssignments: ContactAssignments = {
+        client: undefined,
+      };
+
+      const roles: RoleConfig[] = [
+        { role: "client", required: true, multiple: false },
+      ];
+
+      const result = validateRoleAssignments(contactAssignments, roles);
+
+      expect(result.isValid).toBe(false);
+      expect(result.missingRoles).toContain("client");
+    });
+
+    it("should handle multiple required roles missing", () => {
+      const contactAssignments: ContactAssignments = {};
+
+      const roles: RoleConfig[] = [
+        { role: "client", required: true, multiple: false },
+        { role: "inspector", required: true, multiple: false },
+        { role: "appraiser", required: false, multiple: false },
+      ];
+
+      const result = validateRoleAssignments(contactAssignments, roles);
+
+      expect(result.isValid).toBe(false);
+      expect(result.missingRoles).toHaveLength(2);
+      expect(result.missingRoles).toContain("client");
+      expect(result.missingRoles).toContain("inspector");
+    });
+
+    it("should handle empty roles array", () => {
+      const contactAssignments: ContactAssignments = {};
+      const roles: RoleConfig[] = [];
+
+      const result = validateRoleAssignments(contactAssignments, roles);
+
+      expect(result.isValid).toBe(true);
+      expect(result.missingRoles).toHaveLength(0);
+    });
+  });
+
+  describe("formatRoleLabel", () => {
+    it("should return display name for known roles", () => {
+      expect(formatRoleLabel(SPECIFIC_ROLES.SELLER_AGENT)).toBe("Seller Agent");
+      expect(formatRoleLabel(SPECIFIC_ROLES.BUYER_AGENT)).toBe("Buyer Agent");
+      expect(formatRoleLabel(SPECIFIC_ROLES.INSPECTOR)).toBe("Inspector");
+      expect(formatRoleLabel(SPECIFIC_ROLES.APPRAISER)).toBe("Appraiser");
+      expect(formatRoleLabel(SPECIFIC_ROLES.LENDER)).toBe("Lender");
+      expect(formatRoleLabel(SPECIFIC_ROLES.OTHER)).toBe("Other");
+    });
+
+    it("should format unknown roles by splitting on underscores and title-casing", () => {
+      expect(formatRoleLabel("custom_role")).toBe("Custom Role");
+      expect(formatRoleLabel("my_special_agent")).toBe("My Special Agent");
+    });
+
+    it("should handle single word roles", () => {
+      expect(formatRoleLabel("seller")).toBe("Seller");
+      expect(formatRoleLabel("buyer")).toBe("Buyer");
+    });
+
+    it("should handle empty string", () => {
+      expect(formatRoleLabel("")).toBe("");
+    });
+
+    it("should handle roles with mixed case in input", () => {
+      expect(formatRoleLabel("CUSTOM_ROLE")).toBe("Custom Role");
+      expect(formatRoleLabel("Custom_Role")).toBe("Custom Role");
     });
   });
 });

@@ -62,13 +62,13 @@ function OutlookExport({
     initializeOutlook();
 
     // Listen for export progress updates
-    const progressListener = (progress: ExportProgress) => {
-      setExportProgress(progress);
+    const progressListener = (progress: unknown) => {
+      setExportProgress(progress as ExportProgress);
     };
 
     let cleanup: (() => void) | undefined;
-    if (window.electron.onExportProgress) {
-      cleanup = window.electron.onExportProgress(progressListener);
+    if (window.api.outlook.onExportProgress) {
+      cleanup = window.api.outlook.onExportProgress(progressListener);
     }
 
     return () => {
@@ -82,7 +82,7 @@ function OutlookExport({
 
     try {
       // Initialize Outlook service
-      const initResult = await window.electron.outlookInitialize();
+      const initResult = await window.api.outlook.initialize();
 
       if (!initResult.success) {
         setError(initResult.error || "Failed to initialize Outlook");
@@ -90,7 +90,7 @@ function OutlookExport({
       }
 
       // Check if already authenticated
-      const isAuth = await window.electron.outlookIsAuthenticated();
+      const isAuth = await window.api.outlook.isAuthenticated();
 
       if (isAuth) {
         setIsAuthenticated(true);
@@ -105,7 +105,7 @@ function OutlookExport({
 
   const loadUserEmail = async () => {
     try {
-      const email = await window.electron.outlookGetUserEmail();
+      const email = await window.api.outlook.getUserEmail();
       if (email) {
         setUserEmail(email);
       }
@@ -120,7 +120,7 @@ function OutlookExport({
     setDeviceCode(null);
 
     try {
-      const result = await window.electron.outlookAuthenticate();
+      const result = await window.api.outlook.authenticate();
 
       if (result.success) {
         setIsAuthenticated(true);
@@ -155,7 +155,7 @@ function OutlookExport({
       );
 
       const result =
-        await window.electron.outlookExportEmails(contactsToExport);
+        await window.api.outlook.exportEmails(contactsToExport);
 
       if (result.success && !result.canceled) {
         setExportResults(result);
@@ -173,7 +173,7 @@ function OutlookExport({
 
   const handleOpenFolder = () => {
     if (exportResults?.exportPath) {
-      window.electron.openFolder(exportResults.exportPath);
+      window.api.shell.openFolder(exportResults.exportPath);
     }
   };
 

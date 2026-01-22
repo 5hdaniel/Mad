@@ -16,6 +16,8 @@ import {
 import { iPhoneSyncStorageService } from "./services/iPhoneSyncStorageService";
 import sessionService from "./services/sessionService";
 import type { iOSDevice } from "./types/device";
+import { rateLimiters } from "./utils/rateLimit";
+import { syncStatusService } from "./services/syncStatusService";
 
 let orchestrator: SyncOrchestrator | null = null;
 let mainWindowRef: BrowserWindow | null = null;
@@ -77,6 +79,8 @@ export function registerSyncHandlers(mainWindow: BrowserWindow, userId?: string)
   setupEventForwarding();
 
   // Start sync operation
+  // Rate limited: 10 second cooldown per device to prevent sync spam.
+  // Syncs involve device communication and database writes.
   ipcMain.handle(
     "sync:start",
     async (
@@ -84,6 +88,28 @@ export function registerSyncHandlers(mainWindow: BrowserWindow, userId?: string)
       options: { udid: string; password?: string; forceFullBackup?: boolean },
     ) => {
       log.info("[SyncHandlers] Starting sync", { udid: options.udid });
+
+      // Rate limit check - 10 second cooldown per device
+      const { allowed, remainingMs } = rateLimiters.sync.canExecute(
+        "sync:start",
+        options.udid
+      );
+      if (!allowed && remainingMs !== undefined) {
+        const seconds = Math.ceil(remainingMs / 1000);
+        log.warn(
+          `[SyncHandlers] Rate limited sync:start for device ${options.udid}. ` +
+            `Retry in ${seconds}s`
+        );
+        return {
+          success: false,
+          messages: [],
+          contacts: [],
+          conversations: [],
+          error: `Please wait ${seconds} seconds before starting another sync.`,
+          duration: 0,
+          rateLimited: true,
+        };
+      }
 
       // Capture user ID at sync start to prevent race conditions
       // This ensures data is saved to the correct user even if login state changes during sync
@@ -138,6 +164,12 @@ export function registerSyncHandlers(mainWindow: BrowserWindow, userId?: string)
   // Get current sync status
   ipcMain.handle("sync:status", () => {
     return orchestrator?.getStatus() || { isRunning: false, phase: "idle" };
+  });
+
+  // Get unified sync status (aggregates backup + orchestrator state)
+  // TASK-904: Exposes combined sync state to UI for preventing concurrent operations
+  ipcMain.handle("sync:getUnifiedStatus", () => {
+    return syncStatusService.getStatus();
   });
 
   // Process existing backup without running new backup (for testing)
@@ -375,6 +407,7 @@ export function cleanupSyncHandlers(): void {
   ipcMain.removeHandler("sync:cancel");
   ipcMain.removeHandler("sync:reset");
   ipcMain.removeHandler("sync:status");
+  ipcMain.removeHandler("sync:getUnifiedStatus");
   ipcMain.removeHandler("sync:process-existing");
   ipcMain.removeHandler("sync:devices");
   ipcMain.removeHandler("sync:start-detection");

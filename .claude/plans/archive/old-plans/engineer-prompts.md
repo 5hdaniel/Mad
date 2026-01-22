@@ -1,0 +1,215 @@
+# Engineer Assignment Prompts
+
+## Overview
+
+These are the exact prompts to be given to engineers for each task in the onboarding refactor sprint. Each prompt is self-contained and provides everything needed to execute the task.
+
+---
+
+## 🚨 ENGINEER GUARDRAILS (READ FIRST)
+
+Every engineer MUST follow these guardrails. PRs will be REJECTED if these are not followed.
+
+### 1. Setup Requirements (MANDATORY - DO NOT SKIP)
+
+⚠️ **WARNING**: If you skip this step or branch from the wrong place, your PR will be REJECTED.
+
+```bash
+# Step 1: Fetch and branch from the integration branch (NOT main, NOT develop)
+git fetch origin claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
+git checkout -b <your-branch-name> origin/claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
+```
+
+**If Claude Code auto-created a branch for you**, you MUST rebase it:
+```bash
+git fetch origin claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
+git rebase origin/claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
+```
+
+### 2. Verify You're On The Correct Base (REQUIRED)
+
+Run this command and verify the files exist:
+```bash
+ls -la src/components/onboarding/
+```
+
+**You MUST see these files** (depending on which task you're doing):
+- `types.ts` - Required for TASK-102 and later
+- `steps/index.ts` - Required for TASK-103 and later
+
+**If these files are MISSING:**
+1. STOP - you branched from the wrong place
+2. Delete your branch: `git checkout main && git branch -D <your-branch-name>`
+3. Re-run Step 1 above
+
+### 3. Read the Task File First
+
+Before writing ANY code:
+1. Read the full task file in `.claude/plans/tasks/TASK-XXX-*.md`
+2. Read any referenced addenda in `.claude/plans/addendum-*.md`
+3. Understand the acceptance criteria
+4. Note the specific values, names, and patterns specified
+
+### 4. Follow the Plan Exactly
+
+**DO NOT deviate from the plan without documenting it.**
+
+If the task file specifies:
+- Specific type names → use those exact names
+- Specific step IDs → use those exact IDs
+- Specific file locations → create files in those exact locations
+- Specific function signatures → implement those exact signatures
+
+If you believe a deviation is necessary:
+1. Document it clearly in your Implementation Summary
+2. Explain WHY you deviated
+3. Flag it with "⚠️ DEVIATION FROM PLAN:" prefix
+4. The PM will review and decide if it's acceptable
+
+### 5. Before Pushing (REQUIRED)
+
+> ⚠️ **REQUIRED**: You MUST update the Implementation Summary in your task file BEFORE pushing. This is a deliverable, not optional documentation.
+
+You MUST complete ALL of these before pushing your branch:
+
+#### A. Update the Implementation Summary (THIS IS A DELIVERABLE)
+
+Go to `.claude/plans/tasks/TASK-XXX-*.md` and complete the "Implementation Summary (Engineer-Owned)" section:
+
+1. Check all completed boxes: `- [ ]` → `- [x]`
+2. Add completion date
+3. Add a "### Notes" section with:
+   - Any deviations from plan (with reasoning)
+   - Issues or challenges encountered
+   - Design decisions you made and why
+   - Anything the reviewer should pay attention to
+
+**Your branch will be REJECTED if this section is not complete.**
+
+#### B. Verify Your Work
+
+```bash
+npm run type-check  # Must pass
+npm run lint        # Must pass
+npm test            # Must pass (if tests exist)
+```
+
+**If local verification fails due to environment issues (npm install errors, network issues):**
+1. Document the issue in your Implementation Summary under "Issues encountered"
+2. Note: "Local verification failed due to [reason]. CI will verify."
+3. Push your branch - CI will run type-check and lint
+4. Monitor the CI results and fix any failures before requesting merge
+
+⚠️ You are still responsible for ensuring CI passes. "CI will verify" is not an excuse for broken code.
+
+#### C. Final Checklist (ALL REQUIRED)
+
+Before pushing, verify ALL of these:
+- [ ] Code files created/modified as specified
+- [ ] Task file Implementation Summary COMPLETED with all boxes checked
+- [ ] Task file has Notes section (deviations, decisions, issues)
+- [ ] All acceptance criteria in task file are met
+- [ ] All specified names/IDs/patterns match the plan exactly
+- [ ] Code compiles and lints (or documented why CI will verify)
+
+### 6. PR Requirements
+
+- **Target branch:** `claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J`
+- **Title format:** `feat(onboarding): <description from task>`
+- **PR will be REJECTED if:**
+  - Implementation Summary is not complete
+  - Deviations exist without documentation
+  - CI checks fail
+  - Acceptance criteria not met
+
+### 7. When to Stop and Ask
+
+STOP and ask the PM before proceeding if:
+- Requirements are ambiguous or contradictory
+- You need to deviate from the plan significantly
+- You encounter a blocker not covered in the task file
+- The specified approach won't work for technical reasons
+- You're unsure about a design decision
+
+**It's better to ask than to assume.**
+
+---
+
+## Phase 1: Foundation
+
+### TASK-101: Type Definitions ✅ COMPLETED
+
+*This task has been completed and merged.*
+
+---
+
+### TASK-102: Step Registry ✅ COMPLETED
+
+*This task has been completed and merged.*
+
+---
+
+### TASK-103: Flow Definitions ✅ COMPLETED
+
+*This task has been completed and merged.*
+
+---
+
+## Phase 2: Shell Components
+
+### TASK-104: OnboardingShell ✅ COMPLETED
+
+*This task has been completed and merged.*
+
+---
+
+### TASK-105: ProgressIndicator ✅ COMPLETED
+
+*This task has been completed and merged.*
+
+---
+
+### TASK-106: NavigationButtons ✅ COMPLETED
+
+*This task has been completed and merged.*
+
+---
+
+## Phase 3: Step Extraction
+
+*Note: Phase 3 tasks can run in parallel after Phase 2 is complete.*
+
+### TASK-107 through TASK-112
+
+See individual task files in `.claude/plans/tasks/` for full prompts.
+
+Each step extraction follows this pattern:
+1. Read the task file AND the addendum
+2. Create step file in `src/components/onboarding/steps/`
+3. Register in step registry
+4. Use EXACT step IDs from the plan
+5. Complete Implementation Summary before PR
+
+---
+
+## Phase 4: Integration
+
+### TASK-113 through TASK-116
+
+See individual task files in `.claude/plans/tasks/` for full prompts.
+
+These must run sequentially: 113 → 114 → 115 → 116
+
+---
+
+## Sprint Completion Checklist
+
+When all tasks are complete:
+
+1. [ ] All task branches merged to integration branch
+2. [ ] All Implementation Summaries completed
+3. [ ] Integration branch CI is green
+4. [ ] Manual testing of full flows complete
+5. [ ] Old components marked deprecated
+6. [ ] All tests passing
+7. [ ] Integration branch merged to main

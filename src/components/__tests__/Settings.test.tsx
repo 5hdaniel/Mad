@@ -8,6 +8,16 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
 import Settings from "../Settings";
+import { PlatformProvider } from "../../contexts/PlatformContext";
+
+// Wrap Settings in PlatformProvider for tests
+const renderSettings = (props: { onClose: () => void; userId: string }) => {
+  return render(
+    <PlatformProvider>
+      <Settings {...props} />
+    </PlatformProvider>
+  );
+};
 
 describe("Settings", () => {
   const mockUserId = "user-123";
@@ -43,6 +53,36 @@ describe("Settings", () => {
     window.api.onMicrosoftMailboxConnected.mockReturnValue(jest.fn());
     window.api.onGoogleMailboxDisconnected.mockReturnValue(jest.fn());
     window.api.onMicrosoftMailboxDisconnected.mockReturnValue(jest.fn());
+
+    // Messages mocks for MacOSMessagesImportSettings component
+    window.api.messages.onImportProgress.mockReturnValue(jest.fn());
+    window.api.messages.importMacOSMessages.mockResolvedValue({
+      success: true,
+      messagesImported: 0,
+      messagesSkipped: 0,
+      duration: 100,
+    });
+
+    // LLM mocks for LLMSettings component
+    window.api.llm.getConfig.mockResolvedValue({
+      success: true,
+      data: {
+        hasOpenAIKey: false,
+        hasAnthropicKey: false,
+        consentGiven: true,
+        usePlatformAllowance: true,
+        enableAutoDetect: false,
+        enableRoleExtraction: false,
+      },
+    });
+    window.api.llm.getUsage.mockResolvedValue({
+      success: true,
+      data: {
+        tokensThisMonth: 0,
+        platformAllowance: 10000,
+        platformUsed: 0,
+      },
+    });
   });
 
   // Helper to get the export format combobox (has PDF option)
@@ -57,13 +97,13 @@ describe("Settings", () => {
 
   describe("Rendering", () => {
     it("should render settings modal with title", async () => {
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByText("Settings")).toBeInTheDocument();
     });
 
     it("should show all settings sections", async () => {
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(screen.getByText("General")).toBeInTheDocument();
@@ -71,12 +111,13 @@ describe("Settings", () => {
 
       expect(screen.getByText("Email Connections")).toBeInTheDocument();
       expect(screen.getByText("Export")).toBeInTheDocument();
+      expect(screen.getByText("AI Settings")).toBeInTheDocument();
       expect(screen.getByText("Data & Privacy")).toBeInTheDocument();
       expect(screen.getByText("About")).toBeInTheDocument();
     });
 
     it("should show version information", async () => {
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByText("MagicAudit")).toBeInTheDocument();
       expect(screen.getByText("Version 1.0.7")).toBeInTheDocument();
@@ -85,7 +126,7 @@ describe("Settings", () => {
 
   describe("Email Connections", () => {
     it("should show Gmail connection status", async () => {
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(screen.getByText("Gmail")).toBeInTheDocument();
@@ -95,7 +136,7 @@ describe("Settings", () => {
     });
 
     it("should show Outlook connection status", async () => {
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(screen.getByText("Outlook")).toBeInTheDocument();
@@ -109,7 +150,7 @@ describe("Settings", () => {
         microsoft: { connected: false },
       });
 
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(screen.getAllByText("Connected").length).toBeGreaterThan(0);
@@ -125,7 +166,7 @@ describe("Settings", () => {
         microsoft: { connected: true, email: "user@outlook.com" },
       });
 
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(screen.getAllByText("Connected").length).toBeGreaterThan(0);
@@ -139,13 +180,13 @@ describe("Settings", () => {
         () => new Promise((resolve) => setTimeout(resolve, 1000)),
       );
 
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getAllByText("Checking...").length).toBeGreaterThan(0);
     });
 
     it("should call connect Gmail when button is clicked", async () => {
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(screen.getByText("Gmail")).toBeInTheDocument();
@@ -162,7 +203,7 @@ describe("Settings", () => {
     });
 
     it("should call connect Outlook when button is clicked", async () => {
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(screen.getByText("Outlook")).toBeInTheDocument();
@@ -185,7 +226,7 @@ describe("Settings", () => {
         microsoft: { connected: false },
       });
 
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(
@@ -206,7 +247,7 @@ describe("Settings", () => {
         microsoft: { connected: false },
       });
 
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(
@@ -231,7 +272,7 @@ describe("Settings", () => {
         microsoft: { connected: true, email: "user@outlook.com" },
       });
 
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(
@@ -252,7 +293,7 @@ describe("Settings", () => {
 
   describe("Export Settings", () => {
     it("should show export format dropdown", async () => {
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(screen.getByText("Default Format")).toBeInTheDocument();
@@ -263,7 +304,7 @@ describe("Settings", () => {
     });
 
     it("should show all export format options", async () => {
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         const select = getExportFormatSelect();
@@ -286,7 +327,7 @@ describe("Settings", () => {
         },
       });
 
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         const select = getExportFormatSelect();
@@ -295,7 +336,7 @@ describe("Settings", () => {
     });
 
     it("should save export format when changed", async () => {
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(getExportFormatSelect()).toBeInTheDocument();
@@ -314,7 +355,7 @@ describe("Settings", () => {
         () => new Promise((resolve) => setTimeout(resolve, 1000)),
       );
 
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       const select = getExportFormatSelect();
       expect(select).toBeDisabled();
@@ -323,7 +364,7 @@ describe("Settings", () => {
 
   describe("General Settings", () => {
     it("should show notifications toggle (disabled/coming soon)", async () => {
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByText("Notifications")).toBeInTheDocument();
       expect(
@@ -332,7 +373,7 @@ describe("Settings", () => {
     });
 
     it("should show auto export toggle (disabled/coming soon)", async () => {
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByText("Auto Export")).toBeInTheDocument();
       expect(
@@ -341,7 +382,7 @@ describe("Settings", () => {
     });
 
     it("should show dark mode toggle (coming soon)", async () => {
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByText("Dark Mode")).toBeInTheDocument();
       expect(screen.getByText(/coming soon/i)).toBeInTheDocument();
@@ -350,7 +391,7 @@ describe("Settings", () => {
 
   describe("Data & Privacy", () => {
     it("should show view stored data button (disabled)", async () => {
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByText("View Stored Data")).toBeInTheDocument();
       expect(
@@ -359,7 +400,7 @@ describe("Settings", () => {
     });
 
     it("should show clear all data button (disabled)", async () => {
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByText("Clear All Data")).toBeInTheDocument();
       expect(screen.getByText(/delete all local data/i)).toBeInTheDocument();
@@ -368,14 +409,14 @@ describe("Settings", () => {
 
   describe("About Section", () => {
     it("should show app name and version", async () => {
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByText("MagicAudit")).toBeInTheDocument();
       expect(screen.getByText("Version 1.0.7")).toBeInTheDocument();
     });
 
     it("should show disabled action buttons", async () => {
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByText("Check for Updates")).toBeInTheDocument();
       expect(screen.getByText("View Release Notes")).toBeInTheDocument();
@@ -386,7 +427,7 @@ describe("Settings", () => {
 
   describe("Close Modal", () => {
     it("should call onClose when close button is clicked", async () => {
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       const closeButton = screen
         .getAllByRole("button")
@@ -399,7 +440,7 @@ describe("Settings", () => {
     });
 
     it("should call onClose when done button is clicked", async () => {
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       const doneButton = screen.getByRole("button", { name: /done/i });
       await userEvent.click(doneButton);
@@ -410,7 +451,7 @@ describe("Settings", () => {
 
   describe("API Integration", () => {
     it("should check connections on mount", async () => {
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(window.api.system.checkAllConnections).toHaveBeenCalledWith(
@@ -420,7 +461,7 @@ describe("Settings", () => {
     });
 
     it("should load preferences on mount", async () => {
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(window.api.preferences.get).toHaveBeenCalledWith(mockUserId);
@@ -445,7 +486,7 @@ describe("Settings", () => {
         error: "Network error",
       });
 
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       // Should still render without crashing
       await waitFor(() => {
@@ -459,7 +500,7 @@ describe("Settings", () => {
         error: "Failed to load preferences",
       });
 
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       // Should still render with default values
       await waitFor(() => {
@@ -474,7 +515,7 @@ describe("Settings", () => {
         error: "Failed to save preferences",
       });
 
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(getExportFormatSelect()).toBeInTheDocument();
@@ -490,7 +531,7 @@ describe("Settings", () => {
 
   describe("Accessibility", () => {
     it("should have accessible form controls", async () => {
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(getExportFormatSelect()).toBeInTheDocument();
@@ -502,7 +543,7 @@ describe("Settings", () => {
     });
 
     it("should have accessible buttons", async () => {
-      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByRole("button", { name: /done/i })).toBeInTheDocument();
     });

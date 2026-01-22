@@ -25,6 +25,7 @@ jest.mock("../services/databaseService", () => ({
   default: {
     saveFeedback: jest.fn(),
     getFeedbackByTransaction: jest.fn(),
+    getFeedbackByField: jest.fn(),
   },
 }));
 
@@ -35,6 +36,22 @@ jest.mock("../services/feedbackLearningService", () => ({
     generateSuggestion: jest.fn(),
     getLearningStats: jest.fn(),
   },
+}));
+
+// Mock FeedbackService
+const mockRecordTransactionFeedback = jest.fn();
+const mockRecordRoleFeedback = jest.fn();
+const mockRecordCommunicationFeedback = jest.fn();
+const mockGetFeedbackStats = jest.fn();
+
+jest.mock("../services/feedbackService", () => ({
+  __esModule: true,
+  getFeedbackService: jest.fn(() => ({
+    recordTransactionFeedback: mockRecordTransactionFeedback,
+    recordRoleFeedback: mockRecordRoleFeedback,
+    recordCommunicationFeedback: mockRecordCommunicationFeedback,
+    getFeedbackStats: mockGetFeedbackStats,
+  })),
 }));
 
 // Import after mocks are set up
@@ -446,6 +463,243 @@ describe("Feedback Handlers", () => {
       expect(result.success).toBe(false);
       expect(result.error).toContain("Stats retrieval failed");
       expect(result.stats).toBeNull();
+    });
+  });
+
+  // ============================================
+  // LLM FEEDBACK HANDLERS TESTS
+  // ============================================
+
+  describe("feedback:record-transaction", () => {
+    beforeEach(() => {
+      mockRecordTransactionFeedback.mockReset();
+    });
+
+    it("should record transaction feedback successfully", async () => {
+      mockRecordTransactionFeedback.mockResolvedValue("feedback-id");
+
+      const feedback = {
+        detectedTransactionId: TEST_TXN_ID,
+        action: "confirm" as const,
+        modelVersion: "gpt-4",
+        promptVersion: "v1.0",
+      };
+
+      const handler = registeredHandlers.get("feedback:record-transaction");
+      const result = await handler(mockEvent, TEST_USER_ID, feedback);
+
+      expect(result.success).toBe(true);
+      expect(mockRecordTransactionFeedback).toHaveBeenCalledWith(
+        TEST_USER_ID,
+        feedback,
+      );
+    });
+
+    it("should record transaction rejection", async () => {
+      mockRecordTransactionFeedback.mockResolvedValue("feedback-id");
+
+      const feedback = {
+        detectedTransactionId: TEST_TXN_ID,
+        action: "reject" as const,
+      };
+
+      const handler = registeredHandlers.get("feedback:record-transaction");
+      const result = await handler(mockEvent, TEST_USER_ID, feedback);
+
+      expect(result.success).toBe(true);
+      expect(mockRecordTransactionFeedback).toHaveBeenCalled();
+    });
+
+    it("should record transaction with corrections", async () => {
+      mockRecordTransactionFeedback.mockResolvedValue("feedback-id");
+
+      const feedback = {
+        detectedTransactionId: TEST_TXN_ID,
+        action: "confirm" as const,
+        corrections: {
+          propertyAddress: "456 Oak Ave",
+          transactionType: "purchase",
+        },
+      };
+
+      const handler = registeredHandlers.get("feedback:record-transaction");
+      const result = await handler(mockEvent, TEST_USER_ID, feedback);
+
+      expect(result.success).toBe(true);
+    });
+
+    it("should handle service error", async () => {
+      mockRecordTransactionFeedback.mockRejectedValue(
+        new Error("Service error"),
+      );
+
+      const feedback = {
+        detectedTransactionId: TEST_TXN_ID,
+        action: "confirm" as const,
+      };
+
+      const handler = registeredHandlers.get("feedback:record-transaction");
+      const result = await handler(mockEvent, TEST_USER_ID, feedback);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Service error");
+    });
+  });
+
+  describe("feedback:record-role", () => {
+    beforeEach(() => {
+      mockRecordRoleFeedback.mockReset();
+    });
+
+    it("should record role feedback successfully", async () => {
+      mockRecordRoleFeedback.mockResolvedValue("feedback-id");
+
+      const feedback = {
+        transactionId: TEST_TXN_ID,
+        contactId: "contact-123",
+        originalRole: "Buyer",
+        correctedRole: "Seller",
+        modelVersion: "gpt-4",
+      };
+
+      const handler = registeredHandlers.get("feedback:record-role");
+      const result = await handler(mockEvent, TEST_USER_ID, feedback);
+
+      expect(result.success).toBe(true);
+      expect(mockRecordRoleFeedback).toHaveBeenCalledWith(TEST_USER_ID, feedback);
+    });
+
+    it("should handle service error", async () => {
+      mockRecordRoleFeedback.mockRejectedValue(new Error("Role error"));
+
+      const feedback = {
+        transactionId: TEST_TXN_ID,
+        contactId: "contact-123",
+        originalRole: "Buyer",
+        correctedRole: "Seller",
+      };
+
+      const handler = registeredHandlers.get("feedback:record-role");
+      const result = await handler(mockEvent, TEST_USER_ID, feedback);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Role error");
+    });
+  });
+
+  describe("feedback:record-relevance", () => {
+    beforeEach(() => {
+      mockRecordCommunicationFeedback.mockReset();
+    });
+
+    it("should record relevance feedback for unlink", async () => {
+      mockRecordCommunicationFeedback.mockResolvedValue("feedback-id");
+
+      const feedback = {
+        communicationId: "comm-123",
+        wasRelevant: false,
+        modelVersion: "gpt-4",
+      };
+
+      const handler = registeredHandlers.get("feedback:record-relevance");
+      const result = await handler(mockEvent, TEST_USER_ID, feedback);
+
+      expect(result.success).toBe(true);
+      expect(mockRecordCommunicationFeedback).toHaveBeenCalledWith(
+        TEST_USER_ID,
+        feedback,
+      );
+    });
+
+    it("should record relevance feedback for add", async () => {
+      mockRecordCommunicationFeedback.mockResolvedValue("feedback-id");
+
+      const feedback = {
+        communicationId: "comm-123",
+        wasRelevant: true,
+        correctTransactionId: TEST_TXN_ID,
+      };
+
+      const handler = registeredHandlers.get("feedback:record-relevance");
+      const result = await handler(mockEvent, TEST_USER_ID, feedback);
+
+      expect(result.success).toBe(true);
+    });
+
+    it("should handle service error", async () => {
+      mockRecordCommunicationFeedback.mockRejectedValue(
+        new Error("Relevance error"),
+      );
+
+      const feedback = {
+        communicationId: "comm-123",
+        wasRelevant: false,
+      };
+
+      const handler = registeredHandlers.get("feedback:record-relevance");
+      const result = await handler(mockEvent, TEST_USER_ID, feedback);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Relevance error");
+    });
+  });
+
+  describe("feedback:get-stats", () => {
+    beforeEach(() => {
+      mockGetFeedbackStats.mockReset();
+    });
+
+    it("should return feedback stats successfully", async () => {
+      const mockStats = {
+        totalFeedback: 100,
+        transactionApprovals: 70,
+        transactionRejections: 15,
+        transactionEdits: 15,
+        roleCorrections: 10,
+        communicationUnlinks: 5,
+        communicationAdds: 3,
+        approvalRate: 0.85,
+        correctionRate: 0.15,
+      };
+      mockGetFeedbackStats.mockResolvedValue(mockStats);
+
+      const handler = registeredHandlers.get("feedback:get-stats");
+      const result = await handler(mockEvent, TEST_USER_ID);
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual(mockStats);
+      expect(mockGetFeedbackStats).toHaveBeenCalledWith(TEST_USER_ID);
+    });
+
+    it("should return empty stats for new user", async () => {
+      const emptyStats = {
+        totalFeedback: 0,
+        transactionApprovals: 0,
+        transactionRejections: 0,
+        transactionEdits: 0,
+        roleCorrections: 0,
+        communicationUnlinks: 0,
+        communicationAdds: 0,
+        approvalRate: 0,
+        correctionRate: 0,
+      };
+      mockGetFeedbackStats.mockResolvedValue(emptyStats);
+
+      const handler = registeredHandlers.get("feedback:get-stats");
+      const result = await handler(mockEvent, TEST_USER_ID);
+
+      expect(result.success).toBe(true);
+      expect(result.data.totalFeedback).toBe(0);
+    });
+
+    it("should handle service error", async () => {
+      mockGetFeedbackStats.mockRejectedValue(new Error("Stats error"));
+
+      const handler = registeredHandlers.get("feedback:get-stats");
+      const result = await handler(mockEvent, TEST_USER_ID);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Stats error");
     });
   });
 });

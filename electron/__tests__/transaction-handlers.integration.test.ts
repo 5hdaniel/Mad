@@ -92,6 +92,16 @@ jest.mock("../services/databaseService", () => ({
   default: mockDatabaseService,
 }));
 
+// Mock rate limiters to always allow in tests
+jest.mock("../utils/rateLimit", () => ({
+  rateLimiters: {
+    scan: {
+      canExecute: jest.fn().mockReturnValue({ allowed: true }),
+      clearAll: jest.fn(),
+    },
+  },
+}));
+
 // Import after mocks
 import { registerTransactionHandlers } from "../transaction-handlers";
 
@@ -381,14 +391,14 @@ describe("Transaction Handlers Integration Tests", () => {
       mockTransactionService.updateTransaction.mockResolvedValue({
         ...baseTransaction,
         status: "closed",
-        closing_date: "2025-06-15",
+        closed_at: "2025-06-15",
         closing_date_verified: 1,
       });
 
       const handler = registeredHandlers.get("transactions:update");
       const result = await handler(mockEvent, TEST_TXN_ID, {
         status: "closed",
-        closing_date: "2025-06-15",
+        closed_at: "2025-06-15",
         closing_date_verified: 1,
       });
 
@@ -406,9 +416,11 @@ describe("Transaction Handlers Integration Tests", () => {
     };
 
     it("should assign multiple contacts with different roles", async () => {
-      mockTransactionService.assignContactToTransaction.mockResolvedValue(
-        undefined,
-      );
+      // TASK-1031: assignContactToTransaction now returns AssignContactResult
+      mockTransactionService.assignContactToTransaction.mockResolvedValue({
+        success: true,
+        autoLink: { emailsLinked: 0, messagesLinked: 0, alreadyLinked: 0, errors: 0 },
+      });
       mockTransactionService.getTransactionWithContacts.mockResolvedValue({
         ...mockTransaction,
         contacts: [
@@ -471,9 +483,11 @@ describe("Transaction Handlers Integration Tests", () => {
       mockTransactionService.removeContactFromTransaction.mockResolvedValue(
         undefined,
       );
-      mockTransactionService.assignContactToTransaction.mockResolvedValue(
-        undefined,
-      );
+      // TASK-1031: assignContactToTransaction now returns AssignContactResult
+      mockTransactionService.assignContactToTransaction.mockResolvedValue({
+        success: true,
+        autoLink: { emailsLinked: 0, messagesLinked: 0, alreadyLinked: 0, errors: 0 },
+      });
 
       const removeHandler = registeredHandlers.get(
         "transactions:remove-contact",
@@ -641,8 +655,8 @@ describe("Transaction Handlers Integration Tests", () => {
         property_address: "100 Corporate Dr, Suite 500",
         transaction_type: "lease",
         status: "active",
-        representation_start_date: "2025-01-01",
-        closing_date: "2025-06-30",
+        started_at: "2025-01-01",
+        closed_at: "2025-06-30",
         listing_price: 75000,
         sale_price: 72000,
         contacts: [{ id: TEST_CONTACT_ID, role: "Tenant", isPrimary: true }],
@@ -657,8 +671,8 @@ describe("Transaction Handlers Integration Tests", () => {
         property_address: "100 Corporate Dr, Suite 500",
         transaction_type: "lease",
         status: "active",
-        representation_start_date: "2025-01-01",
-        closing_date: "2025-06-30",
+        started_at: "2025-01-01",
+        closed_at: "2025-06-30",
         listing_price: 75000,
         sale_price: 72000,
       });

@@ -1,10 +1,13 @@
 import axios, { AxiosRequestConfig } from "axios";
-// NOTE: tokenEncryptionService removed - using session-only OAuth
-// Tokens stored in encrypted database, no additional keychain encryption needed
 import databaseService from "./databaseService";
 import logService from "./logService";
 import microsoftAuthService from "./microsoftAuthService";
 import { OAuthToken } from "../types/models";
+import { computeEmailHash } from "../utils/emailHash";
+import {
+  EmailDeduplicationService,
+  DuplicateCheckResult,
+} from "./emailDeduplicationService";
 
 /**
  * Microsoft Graph API email recipient
@@ -25,6 +28,14 @@ interface GraphEmailBody {
 }
 
 /**
+ * Microsoft Graph internet message header
+ */
+interface GraphInternetMessageHeader {
+  name: string;
+  value: string;
+}
+
+/**
  * Microsoft Graph API message
  */
 interface GraphMessage {
@@ -40,6 +51,12 @@ interface GraphMessage {
   hasAttachments: boolean;
   body?: GraphEmailBody;
   bodyPreview?: string;
+  // TASK-502: Added for junk detection
+  inferenceClassification?: 'focused' | 'other';
+  parentFolderId?: string;
+  // TASK-917: Added for Message-ID extraction (deduplication)
+  internetMessageId?: string;
+  internetMessageHeaders?: GraphInternetMessageHeader[];
 }
 
 /**
@@ -91,6 +108,15 @@ interface ParsedEmail {
   hasAttachments: boolean;
   attachmentCount: number;
   raw: GraphMessage;
+  // TASK-502: Added for junk detection
+  inferenceClassification?: string;
+  parentFolderId?: string;
+  /** RFC 5322 Message-ID header for deduplication (TASK-917) */
+  messageIdHeader: string | null;
+  /** SHA-256 content hash for fallback deduplication (TASK-918) */
+  contentHash: string;
+  /** ID of the original message if this is a duplicate (TASK-919) */
+  duplicateOf?: string;
 }
 
 /**
@@ -102,6 +128,31 @@ interface EmailSearchOptions {
   before?: Date | null;
   maxResults?: number;
   onProgress?: (progress: FetchProgress) => void;
+}
+
+/**
+ * Extract RFC 5322 Message-ID header from Outlook message
+ * Uses internetMessageId property first (preferred), falls back to internetMessageHeaders
+ * @param message - Graph API message object
+ * @returns Message-ID header value or null if not found
+ */
+function extractMessageIdHeader(message: GraphMessage): string | null {
+  // Option 1: Use internetMessageId property (preferred, simpler)
+  if (message.internetMessageId) {
+    return message.internetMessageId;
+  }
+
+  // Option 2: Fall back to internetMessageHeaders array
+  if (message.internetMessageHeaders && message.internetMessageHeaders.length > 0) {
+    const messageIdHeader = message.internetMessageHeaders.find(
+      (h) => h.name?.toLowerCase() === "message-id",
+    );
+    if (messageIdHeader?.value) {
+      return messageIdHeader.value;
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -136,7 +187,7 @@ class OutlookFetchService {
       this.accessToken = tokenRecord.access_token || "";
       this.refreshToken = tokenRecord.refresh_token || null;
 
-      logService.info("Initialized successfully", "OutlookFetch");
+      logService.debug("Initialized successfully", "OutlookFetch");
       return true;
     } catch (error) {
       logService.error("Initialization failed", "OutlookFetch", { error });
@@ -266,7 +317,7 @@ class OutlookFetchService {
       const filterString =
         filters.length > 0 ? `$filter=${filters.join(" and ")}` : "";
       const selectFields =
-        "$select=id,subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,sentDateTime,hasAttachments,body,bodyPreview,conversationId";
+        "$select=id,subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,sentDateTime,hasAttachments,body,bodyPreview,conversationId,inferenceClassification,parentFolderId,internetMessageId,internetMessageHeaders";
 
       logService.info("Searching emails", "OutlookFetch");
 
@@ -416,6 +467,17 @@ class OutlookFetchService {
         ? message.body.content
         : message.bodyPreview || "";
 
+    // Use sentDateTime for hash (consistent with Gmail using internalDate)
+    const sentDate = new Date(message.sentDateTime);
+
+    // Compute content hash for deduplication fallback (TASK-918)
+    const contentHash = computeEmailHash({
+      subject: message.subject,
+      from,
+      sentDate,
+      bodyPlain,
+    });
+
     return {
       id: message.id,
       threadId: message.conversationId,
@@ -425,13 +487,20 @@ class OutlookFetchService {
       cc: cc,
       bcc: bcc,
       date: new Date(message.receivedDateTime),
-      sentDate: new Date(message.sentDateTime),
+      sentDate: sentDate,
       body: body,
       bodyPlain: bodyPlain,
       snippet: message.bodyPreview || "",
       hasAttachments: message.hasAttachments || false,
       attachmentCount: 0, // Would need separate call to get attachment count
       raw: message,
+      // TASK-502: Added for junk detection
+      inferenceClassification: message.inferenceClassification,
+      parentFolderId: message.parentFolderId,
+      // TASK-917: Message-ID for deduplication
+      messageIdHeader: extractMessageIdHeader(message),
+      // TASK-918: Content hash for fallback deduplication
+      contentHash,
     };
   }
 
@@ -507,6 +576,65 @@ class OutlookFetchService {
     } catch (error) {
       logService.error("Failed to get folders", "OutlookFetch", { error });
       throw error;
+    }
+  }
+
+  /**
+   * Check emails for duplicates and populate duplicateOf field (TASK-919)
+   *
+   * Uses EmailDeduplicationService to detect duplicates by:
+   * 1. Message-ID header (most reliable)
+   * 2. Content hash (fallback)
+   *
+   * @param userId - User ID to scope the duplicate check
+   * @param emails - Array of parsed emails to check
+   * @returns Same emails with duplicateOf field populated where applicable
+   */
+  async checkDuplicates(
+    userId: string,
+    emails: ParsedEmail[]
+  ): Promise<ParsedEmail[]> {
+    if (emails.length === 0) {
+      return emails;
+    }
+
+    try {
+      const db = databaseService.getRawDatabase();
+      const dedupService = new EmailDeduplicationService(db);
+
+      // Use batch check for efficiency
+      const dedupInputs = emails.map((e) => ({
+        messageIdHeader: e.messageIdHeader,
+        contentHash: e.contentHash,
+      }));
+
+      const results = dedupService.checkForDuplicatesBatch(userId, dedupInputs);
+
+      // Populate duplicateOf field for each email
+      const enrichedEmails = emails.map((email, index) => {
+        const result = results.get(index);
+        if (result?.isDuplicate && result.originalId) {
+          return {
+            ...email,
+            duplicateOf: result.originalId,
+          };
+        }
+        return email;
+      });
+
+      const duplicateCount = enrichedEmails.filter((e) => e.duplicateOf).length;
+      if (duplicateCount > 0) {
+        logService.info(
+          `Duplicate check: ${duplicateCount}/${emails.length} duplicates found`,
+          "OutlookFetch"
+        );
+      }
+
+      return enrichedEmails;
+    } catch (error) {
+      logService.error("Failed to check duplicates", "OutlookFetch", { error });
+      // Return original emails without duplicate info on error
+      return emails;
     }
   }
 }

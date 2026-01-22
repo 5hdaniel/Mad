@@ -22,6 +22,43 @@ jest.mock("../outlookFetchService");
 jest.mock("../transactionExtractorService");
 jest.mock("../logService");
 
+// TASK-1031: Mock autoLinkService
+jest.mock("../autoLinkService", () => ({
+  autoLinkCommunicationsForContact: jest.fn().mockResolvedValue({
+    emailsLinked: 0,
+    messagesLinked: 0,
+    alreadyLinked: 0,
+    errors: 0,
+  }),
+}));
+
+// Mock hybrid extraction services
+jest.mock("../extraction/extractionStrategyService", () => ({
+  ExtractionStrategyService: jest.fn().mockImplementation(() => ({
+    selectStrategy: jest.fn().mockResolvedValue({
+      method: "pattern",
+      reason: "Test: LLM not available",
+      fallbackMethod: "pattern",
+    }),
+  })),
+}));
+
+jest.mock("../llm/llmConfigService", () => ({
+  LLMConfigService: jest.fn().mockImplementation(() => ({
+    getUserConfig: jest.fn().mockResolvedValue({
+      hasConsent: false,
+      hasOpenAI: false,
+      hasAnthropic: false,
+    }),
+  })),
+}));
+
+jest.mock("../extraction/hybridExtractorService", () => ({
+  HybridExtractorService: jest.fn().mockImplementation(() => ({
+    extract: jest.fn(),
+  })),
+}));
+
 describe("TransactionService - Additional Coverage", () => {
   const mockUserId = "test-user-id";
   const mockTransactionId = "test-transaction-id";
@@ -37,6 +74,8 @@ describe("TransactionService - Additional Coverage", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // TASK-964: Default mock for deduplication lookup (returns empty Map = no duplicates)
+    (databaseService.findExistingTransactionsByAddresses as jest.Mock).mockResolvedValue(new Map());
   });
 
   describe("scanAndExtractTransactions", () => {
@@ -377,7 +416,9 @@ describe("TransactionService - Additional Coverage", () => {
           notes: "Primary buyer",
         },
       );
-      expect(result).toEqual(mockAssignment);
+      // TASK-1031: Now returns AssignContactResult with success and autoLink
+      expect(result.success).toBe(true);
+      expect(result.autoLink).toBeDefined();
     });
 
     it("should handle null notes", async () => {
@@ -385,7 +426,7 @@ describe("TransactionService - Additional Coverage", () => {
         databaseService.assignContactToTransaction as jest.Mock
       ).mockResolvedValue({});
 
-      await transactionService.assignContactToTransaction(
+      const result = await transactionService.assignContactToTransaction(
         mockTransactionId,
         mockContactId,
         "seller",
@@ -400,6 +441,27 @@ describe("TransactionService - Additional Coverage", () => {
           notes: undefined,
         }),
       );
+      // TASK-1031: Result should still indicate success
+      expect(result.success).toBe(true);
+    });
+
+    it("should skip auto-link when skipAutoLink is true", async () => {
+      (
+        databaseService.assignContactToTransaction as jest.Mock
+      ).mockResolvedValue({});
+
+      const result = await transactionService.assignContactToTransaction(
+        mockTransactionId,
+        mockContactId,
+        "seller",
+        "client",
+        false,
+        null,
+        true, // skipAutoLink = true
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.autoLink).toBeUndefined();
     });
   });
 
@@ -659,6 +721,270 @@ describe("TransactionService - Additional Coverage", () => {
           property_state: "CA",
           property_zip: "94102",
         }),
+      );
+    });
+  });
+
+  // TASK-964: Duplicate Transaction Prevention Tests
+  describe("Duplicate Transaction Prevention (TASK-964)", () => {
+    const mockEmails = [
+      {
+        subject: "RE: 123 Main St Offer",
+        from: "agent@realty.com",
+        date: "2024-01-15",
+        to: "client@email.com",
+      },
+    ];
+
+    const mockAnalyzedEmails = [
+      {
+        subject: "RE: 123 Main St Offer",
+        from: "agent@realty.com",
+        date: "2024-01-15",
+        isRealEstateRelated: true,
+        keywords: "offer, closing",
+        confidence: 85,
+      },
+    ];
+
+    beforeEach(() => {
+      // Reset mocks for each test
+      (databaseService.findExistingTransactionsByAddresses as jest.Mock)?.mockReset();
+    });
+
+    it("should skip importing duplicate transactions", async () => {
+      const mockGrouped = {
+        "123 Main St, City, ST 12345": mockAnalyzedEmails,
+      };
+
+      const mockSummary = {
+        propertyAddress: "123 Main St, City, ST 12345",
+        transactionType: "purchase",
+        closingDate: "2024-02-15",
+        communicationsCount: 1,
+        confidence: 85,
+        firstCommunication: "2024-01-15",
+        lastCommunication: "2024-01-15",
+      };
+
+      (gmailFetchService.initialize as jest.Mock).mockResolvedValue(undefined);
+      (gmailFetchService.searchEmails as jest.Mock).mockResolvedValue(mockEmails);
+      (transactionExtractorService.batchAnalyze as jest.Mock).mockReturnValue(mockAnalyzedEmails);
+      (transactionExtractorService.groupByProperty as jest.Mock).mockReturnValue(mockGrouped);
+      (transactionExtractorService.generateTransactionSummary as jest.Mock).mockReturnValue(mockSummary);
+      (logService.info as jest.Mock).mockResolvedValue(undefined);
+      (logService.debug as jest.Mock).mockResolvedValue(undefined);
+
+      // Simulate existing transaction for this address
+      const existingTxMap = new Map<string, string>();
+      existingTxMap.set("123 main st, city, st 12345", "existing-tx-id");
+      (databaseService.findExistingTransactionsByAddresses as jest.Mock).mockResolvedValue(existingTxMap);
+
+      const result = await transactionService.scanAndExtractTransactions(mockUserId, {
+        provider: "google",
+      });
+
+      // Should NOT create a new transaction
+      expect(databaseService.createTransaction).not.toHaveBeenCalled();
+      expect(result.transactionsFound).toBe(0);
+
+      // Should log the duplicate skip
+      expect(logService.debug).toHaveBeenCalledWith(
+        "Skipping duplicate transaction import",
+        "TransactionService._saveDetectedTransactions",
+        expect.objectContaining({
+          propertyAddress: "123 Main St, City, ST 12345",
+          existingTransactionId: "existing-tx-id",
+        }),
+      );
+    });
+
+    it("should create new transactions that do not exist", async () => {
+      const mockGrouped = {
+        "456 Oak Ave, City, ST 12345": mockAnalyzedEmails,
+      };
+
+      const mockSummary = {
+        propertyAddress: "456 Oak Ave, City, ST 12345",
+        transactionType: "sale",
+        closingDate: "2024-03-01",
+        communicationsCount: 1,
+        confidence: 90,
+        firstCommunication: "2024-01-15",
+        lastCommunication: "2024-01-15",
+      };
+
+      (gmailFetchService.initialize as jest.Mock).mockResolvedValue(undefined);
+      (gmailFetchService.searchEmails as jest.Mock).mockResolvedValue(mockEmails);
+      (transactionExtractorService.batchAnalyze as jest.Mock).mockReturnValue(mockAnalyzedEmails);
+      (transactionExtractorService.groupByProperty as jest.Mock).mockReturnValue(mockGrouped);
+      (transactionExtractorService.generateTransactionSummary as jest.Mock).mockReturnValue(mockSummary);
+      (databaseService.createTransaction as jest.Mock).mockResolvedValue({ id: "new-tx-id" });
+      (databaseService.createCommunication as jest.Mock).mockResolvedValue({});
+      (logService.info as jest.Mock).mockResolvedValue(undefined);
+
+      // No existing transactions
+      (databaseService.findExistingTransactionsByAddresses as jest.Mock).mockResolvedValue(new Map());
+
+      const result = await transactionService.scanAndExtractTransactions(mockUserId, {
+        provider: "google",
+      });
+
+      // Should create the new transaction
+      expect(databaseService.createTransaction).toHaveBeenCalledTimes(1);
+      expect(result.transactionsFound).toBe(1);
+    });
+
+    it("should handle batch import with mix of new and duplicate transactions", async () => {
+      const mixedGrouped = {
+        "123 Main St, City, ST 12345": mockAnalyzedEmails, // Duplicate
+        "789 Pine Rd, City, ST 12345": mockAnalyzedEmails, // New
+      };
+
+      const mockSummary = {
+        propertyAddress: "123 Main St, City, ST 12345",
+        transactionType: "purchase",
+        closingDate: "2024-02-15",
+        communicationsCount: 1,
+        confidence: 85,
+        firstCommunication: "2024-01-15",
+        lastCommunication: "2024-01-15",
+      };
+
+      const mockSummary2 = {
+        propertyAddress: "789 Pine Rd, City, ST 12345",
+        transactionType: "sale",
+        closingDate: "2024-03-01",
+        communicationsCount: 1,
+        confidence: 90,
+        firstCommunication: "2024-01-15",
+        lastCommunication: "2024-01-15",
+      };
+
+      (gmailFetchService.initialize as jest.Mock).mockResolvedValue(undefined);
+      (gmailFetchService.searchEmails as jest.Mock).mockResolvedValue(mockEmails);
+      (transactionExtractorService.batchAnalyze as jest.Mock).mockReturnValue(mockAnalyzedEmails);
+      (transactionExtractorService.groupByProperty as jest.Mock).mockReturnValue(mixedGrouped);
+      (transactionExtractorService.generateTransactionSummary as jest.Mock)
+        .mockReturnValueOnce(mockSummary)
+        .mockReturnValueOnce(mockSummary2);
+      (databaseService.createTransaction as jest.Mock).mockResolvedValue({ id: "new-tx-id" });
+      (databaseService.createCommunication as jest.Mock).mockResolvedValue({});
+      (logService.info as jest.Mock).mockResolvedValue(undefined);
+      (logService.debug as jest.Mock).mockResolvedValue(undefined);
+
+      // One existing transaction (123 Main St is duplicate)
+      const existingTxMap = new Map<string, string>();
+      existingTxMap.set("123 main st, city, st 12345", "existing-tx-id");
+      (databaseService.findExistingTransactionsByAddresses as jest.Mock).mockResolvedValue(existingTxMap);
+
+      const result = await transactionService.scanAndExtractTransactions(mockUserId, {
+        provider: "google",
+      });
+
+      // Should only create 1 transaction (789 Pine Rd)
+      expect(databaseService.createTransaction).toHaveBeenCalledTimes(1);
+      expect(result.transactionsFound).toBe(1);
+
+      // Should log the duplicate skip
+      expect(logService.debug).toHaveBeenCalledWith(
+        "Skipping duplicate transaction import",
+        "TransactionService._saveDetectedTransactions",
+        expect.objectContaining({
+          existingTransactionId: "existing-tx-id",
+        }),
+      );
+
+      // Should log the import summary
+      expect(logService.info).toHaveBeenCalledWith(
+        "Transaction import completed",
+        "TransactionService._saveDetectedTransactions",
+        expect.objectContaining({
+          totalDetected: 2,
+          created: 1,
+          skippedDuplicates: 1,
+        }),
+      );
+    });
+
+    it("should handle case-insensitive address matching for deduplication", async () => {
+      const mockGrouped = {
+        "123 MAIN ST, CITY, ST 12345": mockAnalyzedEmails, // Uppercase
+      };
+
+      const mockSummary = {
+        propertyAddress: "123 MAIN ST, CITY, ST 12345",
+        transactionType: "purchase",
+        closingDate: "2024-02-15",
+        communicationsCount: 1,
+        confidence: 85,
+        firstCommunication: "2024-01-15",
+        lastCommunication: "2024-01-15",
+      };
+
+      (gmailFetchService.initialize as jest.Mock).mockResolvedValue(undefined);
+      (gmailFetchService.searchEmails as jest.Mock).mockResolvedValue(mockEmails);
+      (transactionExtractorService.batchAnalyze as jest.Mock).mockReturnValue(mockAnalyzedEmails);
+      (transactionExtractorService.groupByProperty as jest.Mock).mockReturnValue(mockGrouped);
+      (transactionExtractorService.generateTransactionSummary as jest.Mock).mockReturnValue(mockSummary);
+      (logService.info as jest.Mock).mockResolvedValue(undefined);
+      (logService.debug as jest.Mock).mockResolvedValue(undefined);
+
+      // Existing transaction with lowercase address
+      const existingTxMap = new Map<string, string>();
+      existingTxMap.set("123 main st, city, st 12345", "existing-tx-id");
+      (databaseService.findExistingTransactionsByAddresses as jest.Mock).mockResolvedValue(existingTxMap);
+
+      const result = await transactionService.scanAndExtractTransactions(mockUserId, {
+        provider: "google",
+      });
+
+      // Should skip due to case-insensitive match
+      expect(databaseService.createTransaction).not.toHaveBeenCalled();
+      expect(result.transactionsFound).toBe(0);
+    });
+
+    it("should use batch lookup for efficiency (no N+1 queries)", async () => {
+      const multipleGrouped = {
+        "123 Main St, City, ST 12345": mockAnalyzedEmails,
+        "456 Oak Ave, City, ST 12345": mockAnalyzedEmails,
+        "789 Pine Rd, City, ST 12345": mockAnalyzedEmails,
+      };
+
+      const mockSummary = {
+        propertyAddress: "123 Main St, City, ST 12345",
+        transactionType: "purchase",
+        closingDate: "2024-02-15",
+        communicationsCount: 1,
+        confidence: 85,
+        firstCommunication: "2024-01-15",
+        lastCommunication: "2024-01-15",
+      };
+
+      (gmailFetchService.initialize as jest.Mock).mockResolvedValue(undefined);
+      (gmailFetchService.searchEmails as jest.Mock).mockResolvedValue(mockEmails);
+      (transactionExtractorService.batchAnalyze as jest.Mock).mockReturnValue(mockAnalyzedEmails);
+      (transactionExtractorService.groupByProperty as jest.Mock).mockReturnValue(multipleGrouped);
+      (transactionExtractorService.generateTransactionSummary as jest.Mock).mockReturnValue(mockSummary);
+      (databaseService.createTransaction as jest.Mock).mockResolvedValue({ id: "new-tx-id" });
+      (databaseService.createCommunication as jest.Mock).mockResolvedValue({});
+      (logService.info as jest.Mock).mockResolvedValue(undefined);
+      (databaseService.findExistingTransactionsByAddresses as jest.Mock).mockResolvedValue(new Map());
+
+      await transactionService.scanAndExtractTransactions(mockUserId, {
+        provider: "google",
+      });
+
+      // Should only call findExistingTransactionsByAddresses ONCE (batch lookup)
+      expect(databaseService.findExistingTransactionsByAddresses).toHaveBeenCalledTimes(1);
+      // Should be called with all 3 addresses
+      expect(databaseService.findExistingTransactionsByAddresses).toHaveBeenCalledWith(
+        mockUserId,
+        expect.arrayContaining([
+          "123 Main St, City, ST 12345",
+          "456 Oak Ave, City, ST 12345",
+          "789 Pine Rd, City, ST 12345",
+        ]),
       );
     });
   });

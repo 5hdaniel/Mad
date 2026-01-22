@@ -705,6 +705,27 @@ describe("SupabaseService", () => {
 
         expect(result).toEqual({});
       });
+
+      it("should throw error on database failure", async () => {
+        const query = createQueryMock(null, { code: "42501", message: "Permission denied" });
+        mockSupabaseClient.from.mockReturnValue(query);
+
+        await expect(supabaseService.getPreferences("user-123")).rejects.toEqual({
+          code: "42501",
+          message: "Permission denied",
+        });
+      });
+
+      it("should return preferences with scan.lookbackMonths", async () => {
+        const preferences = { scan: { lookbackMonths: 6 } };
+        const query = createQueryMock({ preferences });
+        mockSupabaseClient.from.mockReturnValue(query);
+
+        const result = await supabaseService.getPreferences("user-123");
+
+        expect(result).toEqual(preferences);
+        expect(result.scan.lookbackMonths).toBe(6);
+      });
     });
   });
 

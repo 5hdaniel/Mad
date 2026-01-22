@@ -1,7 +1,8 @@
 import path from "path";
 import fs from "fs/promises";
 import { app } from "electron";
-import pdfExportService from "./pdfExportService";
+import folderExportService from "./folderExportService";
+import logService from "./logService";
 import { Transaction, Communication } from "../types/models";
 
 /**
@@ -17,8 +18,9 @@ import { Transaction, Communication } from "../types/models";
 interface ExportOptions {
   contentType?: "text" | "email" | "both";
   exportFormat?: "pdf" | "excel" | "csv" | "json" | "txt_eml";
-  representationStartDate?: string;
-  closingDate?: string;
+  startDate?: string;
+  endDate?: string;
+  summaryOnly?: boolean; // If true, only export summary + indexes (no full content)
 }
 
 class EnhancedExportService {
@@ -39,24 +41,45 @@ class EnhancedExportService {
     const {
       contentType = "both",
       exportFormat = "pdf",
-      representationStartDate,
-      closingDate,
+      startDate: optionStartDate,
+      endDate: optionEndDate,
+      summaryOnly = false,
     } = options;
 
     try {
-      console.log("[Enhanced Export] Starting export:", {
+      logService.info("[Enhanced Export] Starting export:", "EnhancedExport", {
         format: exportFormat,
         contentType,
         transactionId: transaction.id,
         propertyAddress: transaction.property_address,
+        startDate: optionStartDate || "not set",
+        endDate: optionEndDate || "not set",
       });
 
       // Filter communications by date range
+      // If dates aren't provided in options, use transaction dates
+      const startDate = optionStartDate || (transaction.started_at as string | undefined);
+      const endDate = optionEndDate || (transaction.closed_at as string | undefined);
+
+      const totalBefore = communications.length;
       let filteredComms = this._filterCommunicationsByDate(
         communications,
-        representationStartDate,
-        closingDate,
+        startDate,
+        endDate,
       );
+      const afterDateFilter = filteredComms.length;
+
+      if (startDate || endDate) {
+        logService.info(
+          `[Enhanced Export] Date filtering: ${totalBefore} -> ${afterDateFilter} communications (filtered ${totalBefore - afterDateFilter} outside date range)`,
+          "EnhancedExport",
+          {
+            startDate: startDate || "none",
+            endDate: endDate || "none",
+            filtered: totalBefore - afterDateFilter,
+          },
+        );
+      }
 
       // IMPORTANT: Verify address relevance to prevent cross-transaction contamination
       // This ensures that contacts working on multiple transactions don't get mixed emails
@@ -75,15 +98,16 @@ class EnhancedExportService {
         return dateB - dateA;
       });
 
-      console.log(
+      logService.info(
         `[Enhanced Export] Filtered to ${filteredComms.length} communications (verified address relevance)`,
+        "EnhancedExport",
       );
 
       // Export based on format
       let exportPath: string;
       switch (exportFormat) {
         case "pdf":
-          exportPath = await this._exportPDF(transaction, filteredComms);
+          exportPath = await this._exportPDF(transaction, filteredComms, summaryOnly);
           break;
         case "excel":
         case "csv":
@@ -103,10 +127,10 @@ class EnhancedExportService {
           throw new Error(`Unknown export format: ${exportFormat}`);
       }
 
-      console.log("[Enhanced Export] Export complete:", exportPath);
+      logService.info("[Enhanced Export] Export complete:", "EnhancedExport", { exportPath });
       return exportPath;
     } catch (error) {
-      console.error("[Enhanced Export] Export failed:", error);
+      logService.error("[Enhanced Export] Export failed:", "EnhancedExport", { error });
       throw error;
     }
   }
@@ -169,8 +193,9 @@ class EnhancedExportService {
     propertyAddress?: string,
   ): Communication[] {
     if (!propertyAddress) {
-      console.warn(
+      logService.warn(
         "[Enhanced Export] No property address provided, skipping address verification",
+        "EnhancedExport",
       );
       return communications;
     }
@@ -180,7 +205,16 @@ class EnhancedExportService {
     const addressParts = this._extractAddressParts(normalizedAddress);
 
     return communications.filter((comm) => {
-      // Check subject and body for address references
+      // IMPORTANT: Text messages are linked by contact relationship, not content matching
+      // They should always be included - the user explicitly linked these messages
+      // to this transaction via contact assignment, so address filtering doesn't apply
+      // Check for all text message types: sms, imessage, and legacy "text"
+      const commType = comm.communication_type?.toLowerCase();
+      if (commType === "sms" || commType === "imessage" || commType === "text") {
+        return true;
+      }
+
+      // For emails: Check subject and body for address references
       const subject = (comm.subject || "").toLowerCase();
       const body = (comm.body_plain || comm.body || "").toLowerCase();
       const combinedContent = `${subject} ${body}`;
@@ -222,8 +256,9 @@ class EnhancedExportService {
       }
 
       // Log filtered out emails for debugging
-      console.log(
+      logService.info(
         `[Enhanced Export] Filtered out email (no address match): "${comm.subject}" from ${comm.sender}`,
+        "EnhancedExport",
       );
       return false;
     });
@@ -269,23 +304,28 @@ class EnhancedExportService {
   }
 
   /**
-   * Export as PDF using existing PDF export service
+   * Export as PDF using folder export service's combined PDF functionality
+   * This generates individual PDFs (summary, emails, texts) and combines them
+   * into a single document for a comprehensive audit report
    * @private
    */
   private async _exportPDF(
     transaction: Transaction,
     communications: Communication[],
+    summaryOnly: boolean = false,
   ): Promise<string> {
     const downloadsPath = app.getPath("downloads");
+    const suffix = summaryOnly ? "Summary" : "Full";
     const fileName = this._sanitizeFileName(
-      `Transaction_${transaction.property_address}_${Date.now()}.pdf`,
+      `Transaction_${suffix}_${transaction.property_address}_${Date.now()}.pdf`,
     );
     const outputPath = path.join(downloadsPath, fileName);
 
-    return await pdfExportService.generateTransactionPDF(
+    return await folderExportService.exportTransactionToCombinedPDF(
       transaction,
       communications,
       outputPath,
+      summaryOnly,
     );
   }
 
@@ -333,13 +373,13 @@ class EnhancedExportService {
       `Transaction Report: ${transaction.property_address}`,
       `Generated: ${new Date().toLocaleString()}`,
       `Representation Start: ${
-        transaction.representation_start_date
-          ? new Date(transaction.representation_start_date).toLocaleDateString()
+        transaction.started_at
+          ? new Date(transaction.started_at).toLocaleDateString()
           : "N/A"
       }`,
       `Closing Date: ${
-        transaction.closing_date
-          ? new Date(transaction.closing_date).toLocaleDateString()
+        transaction.closed_at
+          ? new Date(transaction.closed_at).toLocaleDateString()
           : "N/A"
       }`,
       `Total Communications: ${communications.length}`,
@@ -375,8 +415,8 @@ class EnhancedExportService {
         property_address: transaction.property_address,
         transaction_type: transaction.transaction_type,
         status: transaction.status,
-        representation_start_date: transaction.representation_start_date,
-        closing_date: transaction.closing_date,
+        started_at: transaction.started_at,
+        closed_at: transaction.closed_at,
         sale_price: transaction.sale_price,
         listing_price: transaction.listing_price,
         earnest_money_amount: transaction.earnest_money_amount,
@@ -538,15 +578,15 @@ class EnhancedExportService {
     lines.push("");
     lines.push(
       `Representation Start Date: ${
-        transaction.representation_start_date
-          ? new Date(transaction.representation_start_date).toLocaleDateString()
+        transaction.started_at
+          ? new Date(transaction.started_at).toLocaleDateString()
           : "N/A"
       }`,
     );
     lines.push(
       `Closing Date: ${
-        transaction.closing_date
-          ? new Date(transaction.closing_date).toLocaleDateString()
+        transaction.closed_at
+          ? new Date(transaction.closed_at).toLocaleDateString()
           : "N/A"
       }`,
     );

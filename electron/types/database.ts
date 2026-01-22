@@ -123,6 +123,10 @@ export interface IDatabaseService {
     updates: Partial<Transaction>,
   ): Promise<void>;
   deleteTransaction(transactionId: string): Promise<void>;
+  findExistingTransactionsByAddresses(
+    userId: string,
+    propertyAddresses: string[],
+  ): Promise<Map<string, string>>;
 
   // Communication operations
   createCommunication(
@@ -222,9 +226,9 @@ export interface ExportResult {
 
 export interface ExtractionResult {
   transaction_type?: "purchase" | "sale";
-  closing_date?: Date | string;
+  closed_at?: Date | string;
   mutual_acceptance_date?: Date | string;
-  representation_start_date?: Date | string;
+  started_at?: Date | string;
   listing_price?: number;
   sale_price?: number;
   earnest_money_amount?: number;

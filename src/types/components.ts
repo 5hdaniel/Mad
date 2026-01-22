@@ -12,7 +12,88 @@ import type {
   ExportFormat,
   CommunicationType,
   OAuthProvider,
+  ContactSource,
 } from "../../electron/types/models";
+
+// ============================================
+// EXTENDED/SHARED TYPES
+// ============================================
+
+/**
+ * Extended contact type with additional fields from Contacts app
+ * Consolidates fields from various contact components
+ */
+export interface ExtendedContact extends Contact {
+  /** All email addresses (from Contacts app import) */
+  allEmails?: string[];
+  /** All phone numbers (from Contacts app import) */
+  allPhones?: string[];
+  /** Count of property address mentions in communications */
+  address_mention_count?: number;
+  /** Last communication date with this contact */
+  last_communication_at?: string | Date | null;
+  /** Whether this contact was derived from message participants (not explicitly imported) */
+  is_message_derived?: number | boolean;
+  /** Total communication count with this contact */
+  communication_count?: number;
+}
+
+/**
+ * Transaction with roles field for blocking modal display
+ * Used when showing which transactions a contact is involved in
+ */
+export interface TransactionWithRoles extends Transaction {
+  /** Comma-separated list of roles the contact has in this transaction */
+  roles?: string;
+}
+
+/**
+ * Contact form data for add/edit operations
+ */
+export interface ContactFormData {
+  name: string;
+  email: string;
+  phone: string;
+  company: string;
+  title: string;
+}
+
+/**
+ * Source badge configuration
+ */
+export interface SourceBadge {
+  text: string;
+  color: string;
+}
+
+/**
+ * Get source badge configuration for a contact source
+ */
+export function getSourceBadge(source: ContactSource): SourceBadge {
+  const badges: Record<ContactSource, SourceBadge> = {
+    manual: { text: "Manual", color: "bg-blue-100 text-blue-700" },
+    email: { text: "From Email", color: "bg-green-100 text-green-700" },
+    contacts_app: {
+      text: "Contacts App",
+      color: "bg-purple-100 text-purple-700",
+    },
+    sms: { text: "From SMS", color: "bg-orange-100 text-orange-700" },
+    inferred: { text: "Inferred", color: "bg-gray-100 text-gray-700" },
+  };
+  return badges[source] || badges.manual;
+}
+
+/**
+ * Simple communication type for transaction details display
+ * This is a subset of the full Communication/Message type for local use
+ */
+export interface TransactionCommunication {
+  id: string;
+  subject?: string;
+  sender?: string;
+  sent_at?: string;
+  body_plain?: string;
+}
 
 // ============================================
 // COMMON COMPONENT PROPS

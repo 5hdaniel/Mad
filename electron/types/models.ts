@@ -27,7 +27,7 @@ export type FalsePositiveReason = "signature" | "promotional" | "unrelated" | "o
 
 // Transactions
 export type TransactionType = "purchase" | "sale" | "other";
-export type TransactionStatus = "active" | "closed" | "archived";
+export type TransactionStatus = "pending" | "active" | "closed" | "archived" | "rejected";
 export type TransactionStage =
   | "intro"
   | "showing"
@@ -180,7 +180,8 @@ export interface Contact {
   user_id: string;
 
   // Display Info
-  display_name?: string; // Optional for backwards compat - use name as fallback
+  /** Primary field for contact name. Migration ensures this is always populated. */
+  display_name?: string;
   company?: string;
   title?: string;
 
@@ -198,15 +199,21 @@ export interface Contact {
   created_at: Date | string;
   updated_at: Date | string;
 
+  // Import status
+  /** Whether this contact was derived from message participants (not explicitly imported) */
+  is_message_derived?: number | boolean;
+  /** Last communication date (for message-derived contacts and activity tracking) */
+  last_communication_at?: Date | string | null;
+
   // ========== Legacy Fields (backwards compatibility) ==========
-  /** @deprecated Use display_name instead */
+  /** @deprecated Read-only. Use display_name for all writes. */
   name?: string;
   /** @deprecated Use ContactEmail child table instead */
   email?: string;
   /** @deprecated Use ContactPhone child table instead */
   phone?: string;
   /** @deprecated Derive from source field instead */
-  is_imported?: boolean;
+  is_imported?: boolean | number;
 }
 
 export interface ContactEmail {
@@ -308,6 +315,18 @@ export interface Message {
 
   created_at: Date | string;
 
+  // ========== LLM Analysis (Migration 11) ==========
+  /** Full LLM analysis response stored as JSON string */
+  llm_analysis?: string;
+
+  // ========== Deduplication (TASK-905) ==========
+  /** RFC 5322 Message-ID header for cross-provider deduplication */
+  message_id_header?: string;
+  /** SHA-256 hash of email content for fallback deduplication */
+  content_hash?: string;
+  /** ID of the original message if this is a duplicate */
+  duplicate_of?: string;
+
   // ========== Legacy Fields (backwards compatibility) ==========
   /** @deprecated Use channel instead */
   communication_type?: string;
@@ -343,6 +362,18 @@ export interface Message {
   is_compliance_related?: boolean;
   /** @deprecated Use is_false_positive instead */
   flagged_for_review?: boolean;
+
+  // ========== TASK-975: Junction Table Fields ==========
+  // These fields are used when storing as a communications record (junction table)
+  // linking a message to a transaction
+  /** Reference to the source message in the messages table (for junction table pattern) */
+  message_id?: string;
+  /** How the link was created: 'auto', 'manual', or 'scan' */
+  link_source?: 'auto' | 'manual' | 'scan';
+  /** Confidence score for the link (0.0 - 1.0) */
+  link_confidence?: number;
+  /** When the link was created */
+  linked_at?: Date | string;
 }
 
 // ============================================
@@ -433,6 +464,14 @@ export interface Transaction {
   // Stats
   message_count: number;
   attachment_count: number;
+  /** BACKLOG-396: Stored thread count for consistent display across card/details */
+  text_thread_count?: number;
+
+  // Separate communication counts by type
+  /** Count of email communications linked to this transaction */
+  email_count?: number;
+  /** @deprecated Use text_thread_count for display. This is computed dynamically and may be incorrect. */
+  text_count?: number;
 
   // Export Tracking
   export_status: ExportStatus;
@@ -444,13 +483,25 @@ export interface Transaction {
   created_at: Date | string;
   updated_at: Date | string;
 
+  // ========== AI Detection Fields (Migration 11) ==========
+  /** How the transaction was created: manual, auto-detected, or hybrid */
+  detection_source?: 'manual' | 'auto' | 'hybrid';
+  /** User review status of detected transaction */
+  detection_status?: 'pending' | 'confirmed' | 'rejected';
+  /** Confidence score from detection (0.0 - 1.0) */
+  detection_confidence?: number;
+  /** Which algorithm detected it: 'pattern' | 'llm' | 'hybrid' */
+  detection_method?: string;
+  /** JSON array of suggested contact assignments */
+  suggested_contacts?: string;
+  /** When user reviewed the detected transaction */
+  reviewed_at?: Date | string;
+  /** Why user rejected (if detection_status='rejected') */
+  rejection_reason?: string;
+
   // ========== Legacy Fields (backwards compatibility) ==========
   /** @deprecated Use status instead */
   transaction_status?: string;
-  /** @deprecated Use closed_at instead */
-  closing_date?: Date | string;
-  /** @deprecated Use started_at instead */
-  representation_start_date?: Date | string;
   /** @deprecated Use confidence_score instead */
   extraction_confidence?: number;
   /** @deprecated Use message_count instead */
@@ -674,6 +725,96 @@ export interface AttachmentFilters {
   message_id?: string;
   document_type?: DocumentType;
   has_text_content?: boolean;
+}
+
+// ============================================
+// LLM SETTINGS MODELS (Migration 11)
+// ============================================
+
+/**
+ * LLM settings and configuration per user
+ * Stores API keys (encrypted), usage tracking, and feature flags
+ */
+export interface LLMSettings {
+  id: string;
+  user_id: string;
+
+  // Provider Config
+  /** Encrypted OpenAI API key */
+  openai_api_key_encrypted?: string;
+  /** Encrypted Anthropic API key */
+  anthropic_api_key_encrypted?: string;
+  /** Preferred LLM provider */
+  preferred_provider: 'openai' | 'anthropic';
+  /** OpenAI model to use */
+  openai_model: string;
+  /** Anthropic model to use */
+  anthropic_model: string;
+
+  // Usage Tracking
+  /** Tokens used in current billing period */
+  tokens_used_this_month: number;
+  /** User-defined token budget limit */
+  budget_limit_tokens?: number;
+  /** Date when monthly usage resets */
+  budget_reset_date?: string;
+
+  // Platform Allowance
+  /** Platform-provided token allowance */
+  platform_allowance_tokens: number;
+  /** Platform allowance tokens used */
+  platform_allowance_used: number;
+  /** Whether to use platform allowance */
+  use_platform_allowance: boolean;
+
+  // Feature Flags
+  /** Enable automatic transaction detection */
+  enable_auto_detect: boolean;
+  /** Enable role extraction from messages */
+  enable_role_extraction: boolean;
+
+  // Consent (Security Option C)
+  /** User has consented to LLM data processing */
+  llm_data_consent: boolean;
+  /** When user gave consent */
+  llm_data_consent_at?: string;
+
+  // Timestamps
+  created_at: string;
+  updated_at: string;
+}
+
+// ============================================
+// LLM ANALYSIS MODELS (Migration 11)
+// ============================================
+
+/**
+ * Typed interface for the JSON content stored in Message.llm_analysis
+ * Parsing happens in the service layer, this interface is for documentation
+ */
+export interface MessageLLMAnalysis {
+  /** Whether the message is related to real estate transactions */
+  isRealEstateRelated: boolean;
+  /** Overall confidence in the analysis (0.0 - 1.0) */
+  confidence: number;
+  /** Transaction indicators extracted from the message */
+  transactionIndicators: {
+    type: 'purchase' | 'sale' | 'lease' | null;
+    stage: 'prospecting' | 'active' | 'pending' | 'closing' | 'closed' | null;
+  };
+  /** Entities extracted from the message */
+  extractedEntities: {
+    addresses: Array<{ value: string; confidence: number }>;
+    amounts: Array<{ value: number; context: string }>;
+    dates: Array<{ value: string; type: string }>;
+    contacts: Array<{ name: string; email?: string; suggestedRole?: string }>;
+  };
+  /** LLM's reasoning for the classification */
+  reasoning: string;
+  /** Model used for analysis */
+  model: string;
+  /** Version of the prompt used */
+  promptVersion: string;
 }
 
 // ============================================

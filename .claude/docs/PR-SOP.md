@@ -145,6 +145,61 @@ log.error('Failed to sync', { context: 'SyncService', metadata: { error: err.mes
 
 🤖 **LLM Assist**: Claude can generate consistent, standardized log statements using the LogService pattern.
 
+### 2.4 React Effect Anti-Patterns
+
+Check for these common patterns that cause infinite loops or lost navigation:
+
+#### Callback Effects Must Use Ref Guards
+Any `useEffect` that calls a prop callback (e.g., `onXChange`, `onComplete`, `onUpdate`) MUST track the last-reported value:
+
+```typescript
+// BAD - causes infinite loops if parent re-renders on callback
+useEffect(() => {
+  onValueChange?.(value);
+}, [value, onValueChange]);
+
+// GOOD - ref guard prevents duplicate calls
+const lastValueRef = useRef<typeof value | null>(null);
+useEffect(() => {
+  if (onValueChange && lastValueRef.current !== value) {
+    lastValueRef.current = value;
+    onValueChange(value);
+  }
+}, [value, onValueChange]);
+```
+
+- [ ] All `useEffect` callbacks use ref guards
+
+#### Empty State Must Navigate (Not Return Null)
+Flow/wizard components that can have zero steps must actively navigate:
+
+```typescript
+// BAD - component returns null but user is stuck
+if (steps.length === 0) return null;
+
+// GOOD - actively navigates when nothing to show
+useEffect(() => {
+  if (steps.length === 0) app.goToStep("dashboard");
+}, [steps.length, app]);
+```
+
+- [ ] Flow components navigate on empty state (not just return null)
+
+#### Related Booleans Checked Together
+When checking completion flags, ensure ALL semantically-related states are considered:
+
+```typescript
+// BAD - incomplete check
+const needsEmailOnboarding = !hasCompletedEmailOnboarding;
+
+// GOOD - checks both completion flag AND actual state
+const needsEmailOnboarding = !hasCompletedEmailOnboarding && !hasEmailConnected;
+```
+
+- [ ] Related boolean flags are checked together
+
+🤖 **LLM Assist**: Claude can audit useEffect patterns and identify missing ref guards or incomplete conditionals.
+
 ---
 
 ## Phase 3: Security & Documentation
@@ -324,6 +379,47 @@ gh pr create --base develop --title "type: description" --body "..."
 
 ---
 
+## Phase 7.5: MANDATORY Sync with Target Branch
+
+**⚠️ NON-NEGOTIABLE: Always merge the target branch INTO your feature branch before final CI run.**
+
+This step MUST be performed before pushing for final CI verification:
+
+```bash
+# 1. Fetch latest from target branch
+git fetch origin
+
+# 2. Merge target branch into your feature branch
+git merge origin/develop  # or origin/main for hotfixes
+
+# 3. If conflicts exist, resolve them NOW
+# 4. Run tests locally to verify nothing broke
+npm run type-check
+npm test
+
+# 5. Push (this triggers CI on the merged state)
+git push
+```
+
+**Why this is mandatory:**
+- Other PRs may have been merged since you started
+- Merge conflicts caught BEFORE merge to develop, not after
+- CI runs against the FINAL merged state
+- Prevents broken `develop` branch from conflicting changes
+
+**If conflicts exist:**
+1. Resolve them in your feature branch
+2. Test locally
+3. Push the resolution
+4. CI will run on the conflict-resolved code
+
+**DO NOT skip this step even if:**
+- Your PR was just created
+- CI already passed once before
+- You think develop hasn't changed
+
+---
+
 ## Phase 8: CI Verification
 
 **⚠️ CRITICAL: Never claim CI passed without explicit verification. False CI claims waste user time and erode trust.**
@@ -407,7 +503,7 @@ gh run view <RUN-ID>
 
 ### Pre-Merge Checklist
 - [ ] All CI checks pass
-- [ ] No merge conflicts
+- [ ] No merge conflicts (verified in Phase 7.5)
 - [ ] PR approved (if reviews required)
 - [ ] Target branch is correct
 
@@ -415,13 +511,59 @@ gh run view <RUN-ID>
 
 ```bash
 # ALWAYS use traditional merge (--merge), NEVER squash
-gh pr merge <PR-NUMBER> --merge --delete-branch
+# Do NOT auto-delete branches - deletion is a separate, manual step
+gh pr merge <PR-NUMBER> --merge
 ```
+
+**Branch Deletion:** See `.claude/docs/shared/git-branching.md` for deletion policy. Do NOT use `--delete-branch` unless explicitly requested.
 
 ### Post-Merge
 - [ ] Verify merge completed successfully
 - [ ] Delete local branch: `git branch -d your-branch-name`
 - [ ] Pull latest changes: `git checkout develop && git pull`
+
+### 9.4 Debugging Metrics Verification (MANDATORY)
+
+Before merging, SR Engineer MUST verify debugging metrics are accurately captured.
+
+**Goal:** Capture ALL debugging for estimation accuracy, block only on clear discrepancies.
+
+**Step 1: Collect evidence**
+```bash
+# Count fix commits
+FIX_COUNT=$(git log --oneline origin/develop..HEAD | grep -iE "fix" | wc -l)
+echo "Fix commits: $FIX_COUNT"
+
+# Check PR age
+gh pr view --json createdAt --jq '.createdAt'
+```
+
+**Step 2: Tiered response based on evidence vs reported**
+
+| Fix Commits | Debugging Reported | Response |
+|-------------|-------------------|----------|
+| 0 | 0 | PASS |
+| 0 | >0 | PASS (honest about investigation time) |
+| 1-2 | 0 | ASK engineer: "These fix commits took 0 debugging time?" |
+| 1-2 | >0 | PASS |
+| 3-5 | 0 | BLOCK - Require metrics update before merge |
+| 3-5 | >0 | PASS (verify roughly proportional) |
+| 6+ | any | INCIDENT REPORT required |
+
+**Step 3: Timeline as signal (not blocker)**
+
+PR open time does not equal work time. Engineers wait for CI, answers, dependencies.
+
+**If PR >4h AND Debugging: 0, ASK:**
+- "Was there waiting time (CI, blocked, waiting for answer)?"
+- "Were there any unexpected issues that required debugging?"
+- "Did investigation/troubleshooting happen that didn't result in fix commits?"
+
+**Only block if:** fix commits present + Debugging: 0 (clear discrepancy)
+
+**Why this matters:** Without accurate debugging metrics, PM estimates appear more accurate than they are. Even 10 minutes of debugging affects estimation calibration.
+
+**Reference:** BACKLOG-126 (TASK-704 incident - 22h debugging reported as 0)
 
 ---
 
@@ -479,7 +621,8 @@ When reviewing PRs, verify:
 - [ ] **Phase 5**: Type check + lint pass
 - [ ] **Phase 6**: Automated code review completed
 - [ ] **Phase 7**: Clear PR description
-- [ ] **Phase 8**: CI passes
+- [ ] **Phase 7.5**: Target branch merged into feature branch (MANDATORY)
+- [ ] **Phase 8**: CI passes (after Phase 7.5 sync)
 
 ### Review Output Format
 

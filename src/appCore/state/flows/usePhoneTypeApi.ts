@@ -5,10 +5,25 @@
  * Checks:
  * - User's stored phone type from database
  * - Windows + iPhone driver setup requirements
+ *
+ * @module appCore/state/flows/usePhoneTypeApi
+ *
+ * ## State Machine Integration
+ *
+ * This hook derives all state from the state machine.
+ * Values are read-only; setters are no-ops (state machine is source of truth).
+ *
+ * Requires the state machine feature flag to be enabled.
+ * If disabled, throws an error - legacy code paths have been removed.
  */
 
-import { useState, useEffect } from "react";
+import { useCallback } from "react";
 import type { PhoneType } from "../types";
+import {
+  useOptionalMachineState,
+  selectHasSelectedPhoneType,
+  selectPhoneType,
+} from "../machine";
 
 interface UsePhoneTypeApiOptions {
   userId: string | undefined;
@@ -27,111 +42,99 @@ interface UsePhoneTypeApiReturn {
 }
 
 export function usePhoneTypeApi({
-  userId,
-  isWindows,
+  userId: _userId,
+  isWindows: _isWindows,
 }: UsePhoneTypeApiOptions): UsePhoneTypeApiReturn {
-  const [hasSelectedPhoneType, setHasSelectedPhoneType] =
-    useState<boolean>(false);
-  const [selectedPhoneType, setSelectedPhoneType] = useState<PhoneType>(null);
-  const [isLoadingPhoneType, setIsLoadingPhoneType] = useState<boolean>(true);
-  const [needsDriverSetup, setNeedsDriverSetup] = useState<boolean>(false);
+  const machineState = useOptionalMachineState();
 
-  // Load user's phone type from database when user logs in
-  useEffect(() => {
-    const loadPhoneType = async () => {
-      if (userId) {
-        setIsLoadingPhoneType(true);
-        try {
-          const userApi = window.api.user as {
-            getPhoneType: (userId: string) => Promise<{
-              success: boolean;
-              phoneType: "iphone" | "android" | null;
-              error?: string;
-            }>;
-          };
-          const result = await userApi.getPhoneType(userId);
-          if (result.success && result.phoneType) {
-            setSelectedPhoneType(result.phoneType);
+  if (!machineState) {
+    throw new Error(
+      "usePhoneTypeApi requires state machine to be enabled. " +
+        "Legacy code paths have been removed."
+    );
+  }
 
-            // On Windows + iPhone, check if drivers need to be installed/updated
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const drivers = (window.electron as any)?.drivers;
-            if (isWindows && result.phoneType === "iphone" && drivers) {
-              try {
-                const driverStatus = await drivers.checkApple();
-                if (!driverStatus.installed || !driverStatus.serviceRunning) {
-                  setNeedsDriverSetup(true);
-                  setHasSelectedPhoneType(false);
-                } else {
-                  setNeedsDriverSetup(false);
-                  setHasSelectedPhoneType(true);
-                }
-              } catch (driverError) {
-                console.error(
-                  "[usePhoneTypeApi] Failed to check driver status:",
-                  driverError,
-                );
-                setNeedsDriverSetup(true);
-                setHasSelectedPhoneType(false);
-              }
-            } else {
-              setNeedsDriverSetup(false);
-              setHasSelectedPhoneType(true);
-            }
-          } else {
-            // No phone type stored - user needs to select
-            setHasSelectedPhoneType(false);
-            setSelectedPhoneType(null);
-            setNeedsDriverSetup(false);
-          }
-        } catch (error) {
-          console.error("[usePhoneTypeApi] Failed to load phone type:", error);
-          setHasSelectedPhoneType(false);
-          setSelectedPhoneType(null);
-          setNeedsDriverSetup(false);
-        } finally {
-          setIsLoadingPhoneType(false);
+  const { state, dispatch } = machineState;
+
+  // Derive hasSelectedPhoneType from state machine
+  const hasSelectedPhoneType = selectHasSelectedPhoneType(state);
+
+  // Loading if we're in loading phase before user data
+  const isLoadingPhoneType =
+    state.status === "loading" &&
+    [
+      "checking-storage",
+      "initializing-db",
+      "loading-auth",
+      "loading-user-data",
+    ].includes(state.phase);
+
+  // Get phone type from state machine
+  const selectedPhoneType = selectPhoneType(state);
+
+  // Derive needsDriverSetup from state machine
+  // When ready, it's in userData; when onboarding, derive from platform
+  const needsDriverSetup =
+    state.status === "ready"
+      ? state.userData.needsDriverSetup
+      : state.status === "onboarding" &&
+        state.platform.isWindows &&
+        state.platform.hasIPhone;
+
+  // Setters are no-ops - state machine is source of truth
+  const setHasSelectedPhoneType = useCallback((_selected: boolean) => {
+    // No-op: state machine is source of truth
+  }, []);
+
+  const setSelectedPhoneType = useCallback((_type: PhoneType) => {
+    // No-op: state machine is source of truth
+  }, []);
+
+  const setNeedsDriverSetup = useCallback((_needs: boolean) => {
+    // No-op: state machine is source of truth
+  }, []);
+
+  // savePhoneType persists to API and dispatches onboarding step complete
+  const savePhoneType = useCallback(
+    async (phoneType: "iphone" | "android"): Promise<boolean> => {
+      // userId comes from state machine
+      const currentUserId =
+        state.status === "ready" || state.status === "onboarding"
+          ? state.user.id
+          : null;
+
+      if (!currentUserId) return false;
+
+      try {
+        const userApi = window.api.user as {
+          setPhoneType: (
+            userId: string,
+            phoneType: "iphone" | "android"
+          ) => Promise<{ success: boolean; error?: string }>;
+        };
+        const result = await userApi.setPhoneType(currentUserId, phoneType);
+
+        if (result.success) {
+          // Dispatch onboarding step complete
+          dispatch({
+            type: "ONBOARDING_STEP_COMPLETE",
+            step: "phone-type",
+          });
+          return true;
+        } else {
+          console.error(
+            "[usePhoneTypeApi] Failed to save phone type:",
+            result.error
+          );
+          return false;
         }
-      } else {
-        // No user logged in
-        setIsLoadingPhoneType(false);
-        setHasSelectedPhoneType(false);
-        setSelectedPhoneType(null);
-        setNeedsDriverSetup(false);
-      }
-    };
-    loadPhoneType();
-  }, [userId, isWindows]);
-
-  // Save phone type to database
-  const savePhoneType = async (
-    phoneType: "iphone" | "android",
-  ): Promise<boolean> => {
-    if (!userId) return false;
-
-    try {
-      const userApi = window.api.user as {
-        setPhoneType: (
-          userId: string,
-          phoneType: "iphone" | "android",
-        ) => Promise<{ success: boolean; error?: string }>;
-      };
-      const result = await userApi.setPhoneType(userId, phoneType);
-      if (result.success) {
-        setSelectedPhoneType(phoneType);
-        return true;
-      } else {
-        console.error(
-          "[usePhoneTypeApi] Failed to save phone type:",
-          result.error,
-        );
+      } catch (error) {
+        console.error("[usePhoneTypeApi] Error saving phone type:", error);
         return false;
       }
-    } catch (error) {
-      console.error("[usePhoneTypeApi] Error saving phone type:", error);
-      return false;
-    }
-  };
+    },
+    [state, dispatch]
+  );
 
   return {
     hasSelectedPhoneType,

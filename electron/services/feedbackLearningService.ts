@@ -4,6 +4,7 @@
  */
 
 import databaseService from "./databaseService";
+import logService from "./logService";
 import { UserFeedback } from "../types/models";
 
 interface Pattern {
@@ -53,6 +54,35 @@ interface LearningStats {
   rejections: number;
   patterns_detected: number;
   patterns: Pattern[];
+}
+
+/**
+ * Accuracy statistics for a provider or prompt version
+ */
+export interface AccuracyStats {
+  approvals: number;
+  rejections: number;
+  rate: number;
+}
+
+/**
+ * Systematic error pattern detected in LLM feedback
+ */
+export interface SystematicError {
+  pattern: string;
+  frequency: number;
+  suggestion: string;
+}
+
+/**
+ * Comprehensive LLM feedback analysis results
+ */
+export interface LLMFeedbackAnalysis {
+  accuracyByProvider: Record<string, AccuracyStats>;
+  accuracyByPromptVersion: Record<string, AccuracyStats>;
+  systematicErrors: SystematicError[];
+  totalLLMFeedback: number;
+  overallAccuracy: number;
 }
 
 class FeedbackLearningService {
@@ -119,7 +149,7 @@ class FeedbackLearningService {
 
       return patterns;
     } catch (error) {
-      console.error("[FeedbackLearning] Pattern detection failed:", error);
+      logService.error("[FeedbackLearning] Pattern detection failed:", "FeedbackLearning", { error });
       return [];
     }
   }
@@ -431,7 +461,7 @@ class FeedbackLearningService {
           return null;
       }
     } catch (error) {
-      console.error("[FeedbackLearning] Pattern application failed:", error);
+      logService.error("[FeedbackLearning] Pattern application failed:", "FeedbackLearning", { error });
       return null;
     }
   }
@@ -479,6 +509,238 @@ class FeedbackLearningService {
     };
 
     return stats;
+  }
+
+  // ============================================
+  // LLM FEEDBACK ANALYSIS METHODS
+  // ============================================
+
+  /**
+   * Parse model/prompt version from feedback original_value JSON
+   * @private
+   */
+  private _parseMetadata(
+    originalValue: string | undefined,
+  ): { modelVersion?: string; promptVersion?: string; action?: string } {
+    if (!originalValue) return {};
+    try {
+      const parsed = JSON.parse(originalValue);
+      return {
+        modelVersion: parsed.modelVersion,
+        promptVersion: parsed.promptVersion,
+        action: parsed.action,
+      };
+    } catch {
+      return {};
+    }
+  }
+
+  /**
+   * Get accuracy statistics grouped by LLM provider/model
+   * Analyzes feedback from llm_transaction_action field
+   * @param userId - User ID to analyze
+   * @returns Record of provider -> accuracy stats
+   */
+  async getAccuracyByProvider(
+    userId: string,
+  ): Promise<Record<string, AccuracyStats>> {
+    try {
+      // Get all LLM transaction feedback for this user
+      const feedback = await databaseService.getFeedbackByField(
+        userId,
+        "llm_transaction_action",
+        1000,
+      );
+
+      const result: Record<string, AccuracyStats> = {};
+
+      for (const f of feedback) {
+        const metadata = this._parseMetadata(f.original_value);
+        const modelVersion = metadata.modelVersion || "unknown";
+        const action = metadata.action;
+
+        if (!result[modelVersion]) {
+          result[modelVersion] = { approvals: 0, rejections: 0, rate: 0 };
+        }
+
+        // transaction_approved and transaction_edited count as approvals
+        if (action === "transaction_approved" || action === "transaction_edited") {
+          result[modelVersion].approvals++;
+        } else if (action === "transaction_rejected") {
+          result[modelVersion].rejections++;
+        }
+      }
+
+      // Calculate rates
+      for (const stats of Object.values(result)) {
+        const total = stats.approvals + stats.rejections;
+        stats.rate = total > 0 ? stats.approvals / total : 0;
+      }
+
+      return result;
+    } catch (error) {
+      logService.error("[FeedbackLearning] getAccuracyByProvider failed:", "FeedbackLearning", { error });
+      return {};
+    }
+  }
+
+  /**
+   * Get accuracy statistics grouped by prompt version
+   * Analyzes feedback from llm_transaction_action field
+   * @param userId - User ID to analyze
+   * @returns Record of prompt version -> accuracy stats
+   */
+  async getAccuracyByPromptVersion(
+    userId: string,
+  ): Promise<Record<string, AccuracyStats>> {
+    try {
+      // Get all LLM transaction feedback for this user
+      const feedback = await databaseService.getFeedbackByField(
+        userId,
+        "llm_transaction_action",
+        1000,
+      );
+
+      const result: Record<string, AccuracyStats> = {};
+
+      for (const f of feedback) {
+        const metadata = this._parseMetadata(f.original_value);
+        const promptVersion = metadata.promptVersion || "unknown";
+        const action = metadata.action;
+
+        if (!result[promptVersion]) {
+          result[promptVersion] = { approvals: 0, rejections: 0, rate: 0 };
+        }
+
+        // transaction_approved and transaction_edited count as approvals
+        if (action === "transaction_approved" || action === "transaction_edited") {
+          result[promptVersion].approvals++;
+        } else if (action === "transaction_rejected") {
+          result[promptVersion].rejections++;
+        }
+      }
+
+      // Calculate rates
+      for (const stats of Object.values(result)) {
+        const total = stats.approvals + stats.rejections;
+        stats.rate = total > 0 ? stats.approvals / total : 0;
+      }
+
+      return result;
+    } catch (error) {
+      logService.error("[FeedbackLearning] getAccuracyByPromptVersion failed:", "FeedbackLearning", { error });
+      return {};
+    }
+  }
+
+  /**
+   * Identify systematic errors in LLM feedback
+   * Analyzes rejection patterns to find common failure modes
+   * @param userId - User ID to analyze
+   * @returns Array of systematic error patterns with suggestions
+   */
+  async identifySystematicErrors(userId: string): Promise<SystematicError[]> {
+    try {
+      // Get all LLM transaction feedback for this user
+      const feedback = await databaseService.getFeedbackByField(
+        userId,
+        "llm_transaction_action",
+        1000,
+      );
+
+      // Filter to rejections only
+      const rejections = feedback.filter((f) => f.feedback_type === "rejection");
+
+      if (rejections.length === 0) {
+        return [];
+      }
+
+      // Count patterns in corrected_value (contains rejection reasons/corrections)
+      const patternCounts: Record<string, number> = {};
+
+      for (const rejection of rejections) {
+        try {
+          if (!rejection.corrected_value) continue;
+
+          const data = JSON.parse(rejection.corrected_value);
+          // Look for reason field or other pattern indicators
+          const pattern = data.reason || data.rejectionReason || "unknown_reason";
+
+          patternCounts[pattern] = (patternCounts[pattern] || 0) + 1;
+        } catch {
+          // If corrected_value is not JSON, use it directly as pattern
+          if (rejection.corrected_value) {
+            const pattern = rejection.corrected_value;
+            patternCounts[pattern] = (patternCounts[pattern] || 0) + 1;
+          }
+        }
+      }
+
+      // Convert to array and filter for patterns that appear more than once
+      const errors: SystematicError[] = [];
+
+      for (const [pattern, frequency] of Object.entries(patternCounts)) {
+        if (frequency > 1 && pattern !== "unknown_reason") {
+          errors.push({
+            pattern,
+            frequency,
+            suggestion: `Review detection logic for: ${pattern}`,
+          });
+        }
+      }
+
+      // Sort by frequency descending
+      errors.sort((a, b) => b.frequency - a.frequency);
+
+      // Limit to top 10
+      return errors.slice(0, 10);
+    } catch (error) {
+      logService.error("[FeedbackLearning] identifySystematicErrors failed:", "FeedbackLearning", { error });
+      return [];
+    }
+  }
+
+  /**
+   * Get comprehensive LLM feedback analysis
+   * Combines all analysis methods into a single report
+   * @param userId - User ID to analyze
+   * @returns Complete LLM feedback analysis
+   */
+  async getLLMFeedbackAnalysis(userId: string): Promise<LLMFeedbackAnalysis> {
+    try {
+      const [byProvider, byPromptVersion, systematicErrors] = await Promise.all([
+        this.getAccuracyByProvider(userId),
+        this.getAccuracyByPromptVersion(userId),
+        this.identifySystematicErrors(userId),
+      ]);
+
+      // Calculate totals from provider stats
+      let totalApprovals = 0;
+      let totalRejections = 0;
+      for (const stats of Object.values(byProvider)) {
+        totalApprovals += stats.approvals;
+        totalRejections += stats.rejections;
+      }
+
+      const totalLLMFeedback = totalApprovals + totalRejections;
+
+      return {
+        accuracyByProvider: byProvider,
+        accuracyByPromptVersion: byPromptVersion,
+        systematicErrors,
+        totalLLMFeedback,
+        overallAccuracy: totalLLMFeedback > 0 ? totalApprovals / totalLLMFeedback : 0,
+      };
+    } catch (error) {
+      logService.error("[FeedbackLearning] getLLMFeedbackAnalysis failed:", "FeedbackLearning", { error });
+      return {
+        accuracyByProvider: {},
+        accuracyByPromptVersion: {},
+        systematicErrors: [],
+        totalLLMFeedback: 0,
+        overallAccuracy: 0,
+      };
+    }
   }
 }
 

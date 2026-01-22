@@ -23,7 +23,7 @@ export default function MoveAppPrompt({
   const handleMoveToApplications = async () => {
     // Open Finder to Applications folder so user can drag the app
     try {
-      await window.electron.openFolder("/Applications");
+      await window.api.shell.openFolder("/Applications");
       // Also dismiss the dialog
       if (dontShowAgain) {
         localStorage.setItem("ignoreMoveAppPrompt", "true");

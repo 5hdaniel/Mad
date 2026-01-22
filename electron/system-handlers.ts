@@ -228,12 +228,11 @@ export function registerSystemHandlers(): void {
           "SystemHandlers",
         );
 
-        // Session-only OAuth: Clear all sessions and OAuth tokens
-        // This forces users to re-authenticate each app launch for better security
+        // Session-only login: Clear login sessions but keep mailbox tokens
+        // Users must re-login each app launch (security), but mailbox access persists (UX)
         await databaseService.clearAllSessions();
-        await databaseService.clearAllOAuthTokens();
         logService.info(
-          "Cleared sessions and OAuth tokens for session-only OAuth",
+          "Cleared login sessions (mailbox tokens preserved)",
           "SystemHandlers",
         );
 
@@ -323,7 +322,7 @@ export function registerSystemHandlers(): void {
       try {
         await initializeDatabase();
         initializationComplete = true;
-        logService.info("Database initialized successfully", "SystemHandlers");
+        logService.debug("Database initialized successfully", "SystemHandlers");
         return { success: true };
       } catch (error) {
         const errorMessage =
@@ -907,6 +906,51 @@ export function registerSystemHandlers(): void {
   );
 
   /**
+   * Show file in folder (Finder on macOS, Explorer on Windows)
+   */
+  ipcMain.handle(
+    "system:show-in-folder",
+    async (
+      event: IpcMainInvokeEvent,
+      filePath: string,
+    ): Promise<SystemResponse> => {
+      try {
+        // Validate file path
+        const validatedPath = validateString(filePath, "filePath", {
+          required: true,
+          maxLength: 2000,
+        });
+
+        if (!validatedPath) {
+          return {
+            success: false,
+            error: "File path is required",
+          };
+        }
+
+        shell.showItemInFolder(validatedPath);
+        return { success: true };
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error("Failed to show item in folder", "SystemHandlers", {
+          error: errorMessage,
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: errorMessage,
+        };
+      }
+    },
+  );
+
+  /**
    * Open support email with pre-filled content
    */
   ipcMain.handle(
@@ -1098,6 +1142,113 @@ export function registerSystemHandlers(): void {
           success: false,
           error: errorMessage,
         };
+      }
+    },
+  );
+
+  // ============================================
+  // DATA DIAGNOSTIC HANDLERS
+  // ============================================
+
+  ipcMain.handle(
+    "diagnostic:message-health-report",
+    async (_event: IpcMainInvokeEvent, userId: string) => {
+      try {
+        validateUserId(userId);
+        return await databaseService.diagnosticMessageHealthReport(userId);
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error("diagnostic:message-health-report failed", "SystemHandlers", {
+          error: errorMessage,
+        });
+        throw error;
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "diagnostic:messages-null-thread-id",
+    async (_event: IpcMainInvokeEvent, userId: string) => {
+      try {
+        validateUserId(userId);
+        return await databaseService.diagnosticGetMessagesWithNullThreadId(userId);
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error("diagnostic:messages-null-thread-id failed", "SystemHandlers", {
+          error: errorMessage,
+        });
+        throw error;
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "diagnostic:messages-garbage-text",
+    async (_event: IpcMainInvokeEvent, userId: string) => {
+      try {
+        validateUserId(userId);
+        return await databaseService.diagnosticGetMessagesWithGarbageText(userId);
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error("diagnostic:messages-garbage-text failed", "SystemHandlers", {
+          error: errorMessage,
+        });
+        throw error;
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "diagnostic:threads-for-contact",
+    async (_event: IpcMainInvokeEvent, userId: string, phoneDigits: string) => {
+      try {
+        validateUserId(userId);
+        validateString(phoneDigits, "phoneDigits");
+        return await databaseService.diagnosticGetThreadsForContact(userId, phoneDigits);
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error("diagnostic:threads-for-contact failed", "SystemHandlers", {
+          error: errorMessage,
+        });
+        throw error;
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "diagnostic:null-thread-id-analysis",
+    async (_event: IpcMainInvokeEvent, userId: string) => {
+      try {
+        validateUserId(userId);
+        return await databaseService.diagnosticNullThreadIdAnalysis(userId);
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error("diagnostic:null-thread-id-analysis failed", "SystemHandlers", {
+          error: errorMessage,
+        });
+        throw error;
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "diagnostic:unknown-recipient-messages",
+    async (_event: IpcMainInvokeEvent, userId: string) => {
+      try {
+        validateUserId(userId);
+        return await databaseService.diagnosticUnknownRecipientMessages(userId);
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error("diagnostic:unknown-recipient-messages failed", "SystemHandlers", {
+          error: errorMessage,
+        });
+        throw error;
       }
     },
   );

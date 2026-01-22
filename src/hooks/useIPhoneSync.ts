@@ -32,11 +32,42 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
   const [pendingPassword, setPendingPassword] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [isWaitingForPasscode, setIsWaitingForPasscode] = useState(false);
+  // TASK-910: Sync lock state
+  const [syncLocked, setSyncLocked] = useState(false);
+  const [lockReason, setLockReason] = useState<string | null>(null);
 
   // Track cleanup functions
   const cleanupRef = useRef<(() => void)[]>([]);
   // Track current progress phase for disconnect handler (avoids stale closure)
   const progressPhaseRef = useRef<BackupProgress["phase"] | null>(null);
+
+  /**
+   * Check unified sync status to detect if another operation is running
+   * TASK-910: Prevents users from triggering concurrent syncs
+   */
+  const checkSyncStatus = useCallback(async () => {
+    try {
+      // Use type assertion to access getUnifiedStatus
+      // Type is defined in window.d.ts but TypeScript infers narrower type from deviceBridge.ts
+      type SyncApiWithUnifiedStatus = {
+        getUnifiedStatus?: () => Promise<{
+          isAnyOperationRunning: boolean;
+          currentOperation: string | null;
+        }>;
+      };
+      const syncApi = window.api?.sync as SyncApiWithUnifiedStatus | undefined;
+      if (!syncApi?.getUnifiedStatus) {
+        console.warn("[useIPhoneSync] getUnifiedStatus not available");
+        return;
+      }
+
+      const status = await syncApi.getUnifiedStatus();
+      setSyncLocked(status.isAnyOperationRunning);
+      setLockReason(status.currentOperation);
+    } catch (err) {
+      console.error("[useIPhoneSync] Failed to check sync status:", err);
+    }
+  }, []);
 
   // Set up device detection and event listeners
   useEffect(() => {
@@ -367,6 +398,14 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     };
   }, []);
 
+  // TASK-910: Check sync status on mount and poll while component is mounted
+  useEffect(() => {
+    checkSyncStatus();
+    // Poll every 5 seconds while component is mounted
+    const interval = setInterval(checkSyncStatus, 5000);
+    return () => clearInterval(interval);
+  }, [checkSyncStatus]);
+
   // Start sync operation
   const startSync = useCallback(async () => {
     if (!device) {
@@ -380,6 +419,29 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       console.error("[useIPhoneSync] Sync API not available");
       setError("Sync service not available");
       return;
+    }
+
+    // TASK-910: Check if another sync is running before starting
+    type SyncApiWithUnifiedStatus = {
+      getUnifiedStatus?: () => Promise<{
+        isAnyOperationRunning: boolean;
+        currentOperation: string | null;
+      }>;
+    };
+    const syncApiTyped = window.api?.sync as SyncApiWithUnifiedStatus | undefined;
+    if (syncApiTyped?.getUnifiedStatus) {
+      try {
+        const status = await syncApiTyped.getUnifiedStatus();
+        if (status.isAnyOperationRunning) {
+          console.warn("[useIPhoneSync] Sync blocked - another operation running:", status.currentOperation);
+          setSyncLocked(true);
+          setLockReason(status.currentOperation);
+          return;
+        }
+      } catch (err) {
+        console.error("[useIPhoneSync] Failed to check sync status:", err);
+        // Continue with sync attempt if status check fails
+      }
     }
 
     setSyncStatus("syncing");
@@ -518,9 +580,13 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     needsPassword,
     lastSyncTime,
     isWaitingForPasscode,
+    // TASK-910: Sync lock state
+    syncLocked,
+    lockReason,
     startSync,
     submitPassword,
     cancelSync,
+    checkSyncStatus,
   };
 }
 

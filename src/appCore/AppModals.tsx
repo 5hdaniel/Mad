@@ -8,7 +8,7 @@
 import React, { useCallback } from "react";
 import Profile from "../components/Profile";
 import Settings from "../components/Settings";
-import Transactions from "../components/Transactions";
+import TransactionList from "../components/TransactionList";
 import Contacts from "../components/Contacts";
 import WelcomeTerms from "../components/WelcomeTerms";
 import AuditTransactionModal from "../components/AuditTransactionModal";
@@ -29,6 +29,9 @@ export function AppModals({ app }: AppModalsProps) {
     currentUser,
     authProvider,
     subscription,
+
+    // Database state (for modal guards)
+    isDatabaseInitialized,
 
     // Pending data for terms modal
     pendingOAuthData,
@@ -96,18 +99,18 @@ export function AppModals({ app }: AppModalsProps) {
       )}
 
       {/* Transactions View */}
-      {modalState.showTransactions && currentUser && authProvider && (
+      {modalState.showTransactions && currentUser && authProvider && isDatabaseInitialized && (
         <div className="fixed inset-0 z-[60]">
-          <Transactions
+          <TransactionList
             userId={currentUser.id}
-            provider={authProvider}
+            provider={authProvider as "google" | "microsoft"}
             onClose={closeTransactions}
           />
         </div>
       )}
 
       {/* Contacts View */}
-      {modalState.showContacts && currentUser && (
+      {modalState.showContacts && currentUser && isDatabaseInitialized && (
         <div className="fixed inset-0 z-[60]">
           <Contacts userId={currentUser.id} onClose={closeContacts} />
         </div>
@@ -133,9 +136,9 @@ export function AppModals({ app }: AppModalsProps) {
       )}
 
       {/* Audit Transaction Modal */}
-      {modalState.showAuditTransaction && currentUser && authProvider && (
+      {modalState.showAuditTransaction && currentUser && authProvider && isDatabaseInitialized && (
         <AuditTransactionModal
-          userId={currentUser.id as any}
+          userId={currentUser.id}
           provider={authProvider}
           onClose={closeAuditTransaction}
           onSuccess={handleAuditTransactionSuccess}

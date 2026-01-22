@@ -49,3 +49,5 @@ resources/win/apple-drivers/*.msi
 
 # Temporary build files
 temp-itunes-extract/
+nul
+.claude/metrics/tokens.jsonl

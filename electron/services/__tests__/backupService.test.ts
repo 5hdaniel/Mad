@@ -10,6 +10,10 @@ import {
   BackupResult,
 } from "../../types/backup";
 
+// Valid UDID formats for testing (TASK-601 security requirement)
+// Traditional format: 40 hex chars
+const TEST_UDID = "a1b2c3d4e5f6789012345678901234567890abcd";
+
 // Mock better-sqlite3-multiple-ciphers native module
 jest.mock("better-sqlite3-multiple-ciphers", () => {
   return jest.fn().mockImplementation(() => ({
@@ -147,7 +151,7 @@ describe("BackupService", () => {
 
     it("should reflect running status during backup", async () => {
       const options: BackupOptions = {
-        udid: "test-device-udid",
+        udid: TEST_UDID, // Use valid UDID format (TASK-601)
       };
 
       // Start backup (in mock mode, it runs asynchronously)
@@ -158,7 +162,7 @@ describe("BackupService", () => {
 
       const status = backupService.getStatus();
       expect(status.isRunning).toBe(true);
-      expect(status.currentDeviceUdid).toBe("test-device-udid");
+      expect(status.currentDeviceUdid).toBe(TEST_UDID);
 
       // Wait for completion
       await backupPromise;
@@ -168,7 +172,7 @@ describe("BackupService", () => {
   describe("startBackup", () => {
     it("should throw error if backup already in progress", async () => {
       const options: BackupOptions = {
-        udid: "test-device-udid",
+        udid: TEST_UDID, // Use valid UDID format (TASK-601)
       };
 
       // Start first backup (don't await it)
@@ -188,7 +192,7 @@ describe("BackupService", () => {
 
     it("should emit progress events during backup", async () => {
       const options: BackupOptions = {
-        udid: "test-device-udid",
+        udid: TEST_UDID, // Use valid UDID format (TASK-601)
       };
 
       const progressEvents: BackupProgress[] = [];
@@ -209,14 +213,14 @@ describe("BackupService", () => {
 
     it("should return success result on completion", async () => {
       const options: BackupOptions = {
-        udid: "test-device-udid",
+        udid: TEST_UDID, // Use valid UDID format (TASK-601)
       };
 
       const result = await backupService.startBackup(options);
 
       expect(result).toMatchObject({
         success: true,
-        deviceUdid: "test-device-udid",
+        deviceUdid: TEST_UDID,
         error: null,
       });
       expect(result.duration).toBeGreaterThan(0);
@@ -225,7 +229,7 @@ describe("BackupService", () => {
 
     it("should emit complete event when finished", async () => {
       const options: BackupOptions = {
-        udid: "test-device-udid",
+        udid: TEST_UDID, // Use valid UDID format (TASK-601)
       };
 
       let completedResult: BackupResult | null = null;
@@ -241,7 +245,7 @@ describe("BackupService", () => {
 
     it("should use skip-apps by default", async () => {
       const options: BackupOptions = {
-        udid: "test-device-udid",
+        udid: TEST_UDID, // Use valid UDID format (TASK-601)
         // skipApps defaults to true
       };
 
@@ -252,7 +256,7 @@ describe("BackupService", () => {
 
     it("should support custom output directory", async () => {
       const options: BackupOptions = {
-        udid: "test-device-udid",
+        udid: TEST_UDID, // Use valid UDID format (TASK-601)
         outputDir: "/custom/backup/path",
       };
 
@@ -262,7 +266,7 @@ describe("BackupService", () => {
 
     it("should support force full backup option", async () => {
       const options: BackupOptions = {
-        udid: "test-device-udid",
+        udid: TEST_UDID, // Use valid UDID format (TASK-601)
         forceFullBackup: true,
       };
 
@@ -274,7 +278,7 @@ describe("BackupService", () => {
   describe("cancelBackup", () => {
     it("should cancel running backup", async () => {
       const options: BackupOptions = {
-        udid: "test-device-udid",
+        udid: TEST_UDID, // Use valid UDID format (TASK-601)
       };
 
       // Start backup
@@ -324,6 +328,82 @@ describe("BackupService", () => {
     });
   });
 
+  describe("getBackupMetadata (TASK-908)", () => {
+    it("should return null when manifest does not exist", async () => {
+      // Reset fs.access to reject (file not found)
+      const fsModule = require("fs");
+      fsModule.promises.access = jest
+        .fn()
+        .mockRejectedValue(new Error("Not found"));
+
+      const result = await backupService.getBackupMetadata("/some/backup/path");
+      expect(result).toBeNull();
+    });
+
+    it("should return metadata when manifest exists", async () => {
+      const fsModule = require("fs");
+      const mockDate = new Date("2024-01-15T10:00:00Z");
+
+      // Mock pathExists to return true for manifest
+      fsModule.promises.access = jest.fn().mockResolvedValue(undefined);
+      fsModule.promises.stat = jest.fn().mockResolvedValue({
+        mtime: mockDate,
+        size: 1024,
+      });
+      fsModule.promises.readFile = jest
+        .fn()
+        .mockResolvedValue(Buffer.from("test manifest content"));
+
+      const result = await backupService.getBackupMetadata("/mock/backup/path");
+
+      expect(result).not.toBeNull();
+      expect(result?.modifiedAt).toEqual(mockDate);
+      expect(result?.manifestHash).toBeDefined();
+      expect(result?.manifestHash).toHaveLength(64); // SHA-256 hex is 64 chars
+    });
+
+    it("should return consistent hash for same content", async () => {
+      const fsModule = require("fs");
+      const mockContent = Buffer.from("consistent manifest content");
+
+      fsModule.promises.access = jest.fn().mockResolvedValue(undefined);
+      fsModule.promises.stat = jest.fn().mockResolvedValue({
+        mtime: new Date(),
+        size: 1024,
+      });
+      fsModule.promises.readFile = jest.fn().mockResolvedValue(mockContent);
+
+      const result1 = await backupService.getBackupMetadata("/mock/backup/path");
+      const result2 = await backupService.getBackupMetadata("/mock/backup/path");
+
+      expect(result1?.manifestHash).toBe(result2?.manifestHash);
+    });
+
+    it("should return different hash for different content", async () => {
+      const fsModule = require("fs");
+
+      fsModule.promises.access = jest.fn().mockResolvedValue(undefined);
+      fsModule.promises.stat = jest.fn().mockResolvedValue({
+        mtime: new Date(),
+        size: 1024,
+      });
+
+      // First call with content A
+      fsModule.promises.readFile = jest
+        .fn()
+        .mockResolvedValue(Buffer.from("content A"));
+      const result1 = await backupService.getBackupMetadata("/mock/backup/path");
+
+      // Second call with content B
+      fsModule.promises.readFile = jest
+        .fn()
+        .mockResolvedValue(Buffer.from("content B"));
+      const result2 = await backupService.getBackupMetadata("/mock/backup/path");
+
+      expect(result1?.manifestHash).not.toBe(result2?.manifestHash);
+    });
+  });
+
   describe("event emitter", () => {
     it("should support progress event listeners", () => {
       const listener = jest.fn();
@@ -358,22 +438,25 @@ describe("BackupService - buildBackupArgs", () => {
     backupService = new BackupService();
   });
 
+  // TASK-601: buildBackupArgs now takes validatedUdid as third parameter
+  // The method signature is: buildBackupArgs(options, backupPath, validatedUdid)
   it("should include -u flag with UDID", () => {
     // Access private method via type assertion for testing
     const buildArgs = (backupService as any).buildBackupArgs.bind(
       backupService,
     );
-    const args = buildArgs({ udid: "ABC123", skipApps: true }, "/backup/path");
+    // Pass validated UDID as third parameter (TASK-601 security change)
+    const args = buildArgs({ udid: TEST_UDID, skipApps: true }, "/backup/path", TEST_UDID);
 
     expect(args).toContain("-u");
-    expect(args).toContain("ABC123");
+    expect(args).toContain(TEST_UDID);
   });
 
   it("should include backup command", () => {
     const buildArgs = (backupService as any).buildBackupArgs.bind(
       backupService,
     );
-    const args = buildArgs({ udid: "ABC123" }, "/backup/path");
+    const args = buildArgs({ udid: TEST_UDID }, "/backup/path", TEST_UDID);
 
     expect(args).toContain("backup");
   });
@@ -382,7 +465,7 @@ describe("BackupService - buildBackupArgs", () => {
     const buildArgs = (backupService as any).buildBackupArgs.bind(
       backupService,
     );
-    const args = buildArgs({ udid: "ABC123" }, "/backup/path");
+    const args = buildArgs({ udid: TEST_UDID }, "/backup/path", TEST_UDID);
 
     expect(args).toContain("--skip-apps");
   });
@@ -391,7 +474,7 @@ describe("BackupService - buildBackupArgs", () => {
     const buildArgs = (backupService as any).buildBackupArgs.bind(
       backupService,
     );
-    const args = buildArgs({ udid: "ABC123", skipApps: false }, "/backup/path");
+    const args = buildArgs({ udid: TEST_UDID, skipApps: false }, "/backup/path", TEST_UDID);
 
     expect(args).not.toContain("--skip-apps");
   });
@@ -401,8 +484,9 @@ describe("BackupService - buildBackupArgs", () => {
       backupService,
     );
     const args = buildArgs(
-      { udid: "ABC123", forceFullBackup: true },
+      { udid: TEST_UDID, forceFullBackup: true },
       "/backup/path",
+      TEST_UDID,
     );
 
     expect(args).toContain("--full");
@@ -412,7 +496,7 @@ describe("BackupService - buildBackupArgs", () => {
     const buildArgs = (backupService as any).buildBackupArgs.bind(
       backupService,
     );
-    const args = buildArgs({ udid: "ABC123" }, "/backup/path");
+    const args = buildArgs({ udid: TEST_UDID }, "/backup/path", TEST_UDID);
 
     expect(args[args.length - 1]).toBe("/backup/path");
   });

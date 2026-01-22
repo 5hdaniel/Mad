@@ -10,8 +10,8 @@ import "@testing-library/jest-dom";
 import AppleDriverSetup from "../AppleDriverSetup";
 import { PlatformProvider } from "../../contexts/PlatformContext";
 
-// Store original window.electron
-const originalElectron = window.electron;
+// Store original window.api
+const originalApi = window.api;
 
 // Shared mock functions that persist across tests
 const mockDrivers = {
@@ -27,10 +27,14 @@ function renderWithPlatform(
   ui: React.ReactElement,
   platform: string = "win32",
 ) {
-  // Mock the electron object with drivers API (reusing mock functions)
-  Object.defineProperty(window, "electron", {
+  // Mock the api object with system.platform and drivers API
+  Object.defineProperty(window, "api", {
     value: {
-      platform,
+      ...originalApi,
+      system: {
+        ...originalApi?.system,
+        platform,
+      },
       drivers: mockDrivers,
     },
     writable: true,
@@ -55,9 +59,9 @@ describe("AppleDriverSetup", () => {
   });
 
   afterEach(() => {
-    // Restore original window.electron
-    Object.defineProperty(window, "electron", {
-      value: originalElectron,
+    // Restore original window.api
+    Object.defineProperty(window, "api", {
+      value: originalApi,
       writable: true,
       configurable: true,
     });
@@ -110,8 +114,7 @@ describe("AppleDriverSetup", () => {
   });
 
   describe("Already Installed State", () => {
-    // TODO: This test is flaky - the auto-skip logic may have timing issues
-    it.skip("should immediately skip when drivers are already installed (no update available)", async () => {
+    it("should show already installed state with Continue button when drivers are installed (no update available)", async () => {
       mockDrivers.checkApple.mockResolvedValue({
         installed: true,
         serviceRunning: true,
@@ -130,10 +133,19 @@ describe("AppleDriverSetup", () => {
         );
       });
 
-      // Should immediately call onComplete without showing UI
+      // Should show already installed state with Continue button
       await waitFor(() => {
-        expect(mockOnComplete).toHaveBeenCalled();
+        expect(screen.getByText("Already Installed")).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /continue/i })).toBeInTheDocument();
       });
+
+      // onComplete should NOT have been called yet (user must click Continue)
+      expect(mockOnComplete).not.toHaveBeenCalled();
+
+      // Click Continue
+      const user = userEvent.setup();
+      await user.click(screen.getByRole("button", { name: /continue/i }));
+      expect(mockOnComplete).toHaveBeenCalled();
     });
 
     it("should show update available when newer version exists", async () => {
@@ -204,20 +216,19 @@ describe("AppleDriverSetup", () => {
       });
     });
 
-    // TODO: "Skip for now" text may have changed in component UI
-    it.skip("should show skip option", async () => {
+    it("should show skip option", async () => {
       renderWithPlatform(
         <AppleDriverSetup onComplete={mockOnComplete} onSkip={mockOnSkip} />,
         "win32",
       );
 
       await waitFor(() => {
-        expect(screen.getByText(/Skip for now/)).toBeInTheDocument();
+        // Component uses "Skip for Now" (capital N)
+        expect(screen.getByText(/skip for now/i)).toBeInTheDocument();
       });
     });
 
-    // TODO: Skip button text/behavior may have changed
-    it.skip("should call onSkip when skip button is clicked", async () => {
+    it("should call onSkip when skip button is clicked", async () => {
       const user = userEvent.setup();
 
       renderWithPlatform(
@@ -226,10 +237,10 @@ describe("AppleDriverSetup", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByText(/Skip for now/)).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /skip for now/i })).toBeInTheDocument();
       });
 
-      await user.click(screen.getByText(/Skip for now/));
+      await user.click(screen.getByRole("button", { name: /skip for now/i }));
       expect(mockOnSkip).toHaveBeenCalled();
     });
   });
@@ -317,8 +328,7 @@ describe("AppleDriverSetup", () => {
       });
     });
 
-    // TODO: Installation success flow has timing issues with fake timers
-    it.skip("should complete successfully after successful installation", async () => {
+    it("should complete successfully after successful installation", async () => {
       jest.useFakeTimers();
       const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
 
@@ -337,12 +347,13 @@ describe("AppleDriverSetup", () => {
 
       await user.click(screen.getByRole("button", { name: /install tools/i }));
 
+      // Component shows "Tools Ready!" for installed state
       await waitFor(() => {
-        expect(screen.getByText("Tools Installed!")).toBeInTheDocument();
+        expect(screen.getByText("Tools Ready!")).toBeInTheDocument();
       });
 
-      // Fast-forward the auto-continue timer
-      act(() => {
+      // Fast-forward the auto-continue timer (1500ms)
+      await act(async () => {
         jest.advanceTimersByTime(1500);
       });
 
@@ -351,8 +362,7 @@ describe("AppleDriverSetup", () => {
       jest.useRealTimers();
     });
 
-    // TODO: Error state test times out - needs investigation
-    it.skip("should show error state when installation fails", async () => {
+    it("should show error state when installation fails", async () => {
       const user = userEvent.setup();
 
       mockDrivers.installApple.mockResolvedValue({
@@ -424,8 +434,7 @@ describe("AppleDriverSetup", () => {
       });
     });
 
-    // TODO: Error state buttons not rendering as expected
-    it.skip("should show Try Again and Install iTunes buttons in error state", async () => {
+    it("should show Try Again and Install iTunes buttons in error state", async () => {
       const user = userEvent.setup();
 
       renderWithPlatform(
@@ -442,15 +451,15 @@ describe("AppleDriverSetup", () => {
       await user.click(screen.getByRole("button", { name: /install tools/i }));
 
       await waitFor(() => {
-        expect(screen.getByText("Try Again")).toBeInTheDocument();
-        expect(screen.getByText("Install iTunes")).toBeInTheDocument();
-        expect(screen.getByText(/Skip for now/)).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /install itunes/i })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /skip for now/i })).toBeInTheDocument();
       });
     });
 
-    // TODO: Retry flow has timing issues - success state not showing
-    it.skip("should retry installation when Try Again is clicked", async () => {
-      const user = userEvent.setup();
+    it("should retry installation when Try Again is clicked", async () => {
+      jest.useFakeTimers();
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
 
       // First call fails, second call succeeds
       mockDrivers.installApple
@@ -471,14 +480,17 @@ describe("AppleDriverSetup", () => {
       await user.click(screen.getByRole("button", { name: /install tools/i }));
 
       await waitFor(() => {
-        expect(screen.getByText("Try Again")).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
       });
 
-      await user.click(screen.getByText("Try Again"));
+      await user.click(screen.getByRole("button", { name: /try again/i }));
 
+      // Component shows "Tools Ready!" for installed state
       await waitFor(() => {
-        expect(screen.getByText("Tools Installed!")).toBeInTheDocument();
+        expect(screen.getByText("Tools Ready!")).toBeInTheDocument();
       });
+
+      jest.useRealTimers();
     });
 
     it("should open iTunes store when Install iTunes is clicked", async () => {
@@ -507,8 +519,7 @@ describe("AppleDriverSetup", () => {
     });
   });
 
-  // TODO: Progress indicator step names may have changed in component
-  describe.skip("Progress Indicator", () => {
+  describe("Progress Indicator", () => {
     beforeEach(() => {
       mockDrivers.checkApple.mockResolvedValue({
         installed: false,
@@ -517,19 +528,19 @@ describe("AppleDriverSetup", () => {
       mockDrivers.hasBundled.mockResolvedValue({ hasBundled: true });
     });
 
-    it("should show 4 steps in the progress indicator", async () => {
+    it("should show 3 steps in the progress indicator", async () => {
       renderWithPlatform(
         <AppleDriverSetup onComplete={mockOnComplete} onSkip={mockOnSkip} />,
         "win32",
       );
 
       await waitFor(() => {
-        expect(screen.getByText("Sign In")).toBeInTheDocument();
+        // Component shows 3 steps: Phone Type, Connect Email, Install Tools
         expect(screen.getByText("Phone Type")).toBeInTheDocument();
-        // "Install Tools" appears multiple times (progress + button)
+        expect(screen.getByText("Connect Email")).toBeInTheDocument();
+        // "Install Tools" appears multiple times (progress + button + heading)
         const installToolsElements = screen.getAllByText("Install Tools");
         expect(installToolsElements.length).toBeGreaterThanOrEqual(1);
-        expect(screen.getByText("Connect Email")).toBeInTheDocument();
       });
     });
 

@@ -10,6 +10,15 @@ import "@testing-library/jest-dom";
 import Transactions from "../Transactions";
 import { PlatformProvider } from "../../contexts/PlatformContext";
 
+// Mock useAppStateMachine to return isDatabaseInitialized: true
+// This allows tests to render the actual component content
+jest.mock("../../appCore", () => ({
+  ...jest.requireActual("../../appCore"),
+  useAppStateMachine: () => ({
+    isDatabaseInitialized: true,
+  }),
+}));
+
 describe("Transactions", () => {
   // Helper to render component with PlatformProvider
   const renderWithProvider = (ui: React.ReactElement) => {
@@ -27,8 +36,10 @@ describe("Transactions", () => {
       transaction_type: "purchase",
       status: "active",
       sale_price: 450000,
-      closing_date: "2024-03-15",
+      closed_at: "2024-03-15",
       total_communications_count: 25,
+      email_count: 25,
+      text_count: 0,
       extraction_confidence: 85,
     },
     {
@@ -38,8 +49,10 @@ describe("Transactions", () => {
       transaction_type: "sale",
       status: "closed",
       sale_price: 325000,
-      closing_date: "2024-01-20",
+      closed_at: "2024-01-20",
       total_communications_count: 18,
+      email_count: 18,
+      text_count: 0,
       extraction_confidence: 92,
     },
     {
@@ -49,8 +62,10 @@ describe("Transactions", () => {
       transaction_type: "purchase",
       status: "active",
       sale_price: 550000,
-      closing_date: null,
+      closed_at: null,
       total_communications_count: 12,
+      email_count: 12,
+      text_count: 0,
       extraction_confidence: 78,
     },
   ];
@@ -329,7 +344,7 @@ describe("Transactions", () => {
         expect(screen.getByText("123 Main Street")).toBeInTheDocument();
       });
 
-      expect(screen.getByText(/25 emails/i)).toBeInTheDocument();
+      expect(screen.getByText(/25 email threads/i)).toBeInTheDocument();
     });
   });
 

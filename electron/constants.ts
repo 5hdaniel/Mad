@@ -53,6 +53,7 @@ export const FALLBACK_MESSAGES: Record<string, string> = {
   PARSING_ERROR: "[Message text - parsing error]",
   ATTACHMENT: "[Attachment - Photo/Video/File]",
   REACTION_OR_SYSTEM: "[Reaction or system message]",
+  UNABLE_TO_PARSE: "[Unable to parse message]", // TASK-1049: Deterministic fallback for unknown formats
 };
 
 // Window Configuration Interface

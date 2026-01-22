@@ -2,8 +2,11 @@ import type {
   Transaction,
   NewTransaction,
   UpdateTransaction,
+  Communication,
   NewCommunication,
   OAuthProvider,
+  Contact,
+  Message,
 } from "../types";
 
 import gmailFetchService from "./gmailFetchService";
@@ -12,6 +15,22 @@ import transactionExtractorService from "./transactionExtractorService";
 import databaseService from "./databaseService";
 import logService from "./logService";
 import supabaseService from "./supabaseService";
+import { getContactNames } from "./contactsService";
+import { createCommunicationReference } from "./messageMatchingService";
+import { autoLinkCommunicationsForContact, AutoLinkResult } from "./autoLinkService";
+
+// Hybrid extraction imports
+import { HybridExtractorService } from "./extraction/hybridExtractorService";
+import {
+  ExtractionStrategyService,
+  ExtractionStrategy,
+} from "./extraction/extractionStrategyService";
+import { LLMConfigService } from "./llm/llmConfigService";
+import type {
+  ExtractionMethod,
+  DetectedTransaction,
+  MessageInput,
+} from "./extraction/types";
 
 // ============================================
 // TYPES
@@ -141,6 +160,15 @@ interface ReanalysisResult {
 }
 
 /**
+ * Result of assigning a contact to a transaction
+ * TASK-1031: Now includes auto-link results
+ */
+interface AssignContactResult {
+  success: boolean;
+  autoLink?: AutoLinkResult;
+}
+
+/**
  * Transaction Service
  * Orchestrates the entire transaction extraction workflow
  * Fetches emails → Analyzes → Extracts data → Saves to database
@@ -149,7 +177,37 @@ class TransactionService {
   private scanCancelled: boolean = false;
   private currentScanUserId: string | null = null;
 
+  // Lazy-initialized hybrid extraction services
+  private hybridExtractor: HybridExtractorService | null = null;
+  private strategyService: ExtractionStrategyService | null = null;
+  private llmConfigService: LLMConfigService | null = null;
+
   constructor() {}
+
+  /**
+   * Lazy initialization of hybrid extraction services.
+   * Avoids startup cost when LLM features are not used.
+   */
+  private getHybridServices(): {
+    extractor: HybridExtractorService;
+    strategy: ExtractionStrategyService;
+    config: LLMConfigService;
+  } {
+    if (!this.llmConfigService) {
+      this.llmConfigService = new LLMConfigService();
+    }
+    if (!this.strategyService) {
+      this.strategyService = new ExtractionStrategyService(this.llmConfigService);
+    }
+    if (!this.hybridExtractor) {
+      this.hybridExtractor = new HybridExtractorService(this.llmConfigService);
+    }
+    return {
+      extractor: this.hybridExtractor,
+      strategy: this.strategyService,
+      config: this.llmConfigService,
+    };
+  }
 
   /**
    * Cancel the current scan for a user
@@ -189,8 +247,9 @@ class TransactionService {
     let lookbackMonths = 9; // Default 9 months
     try {
       const preferences = await supabaseService.getPreferences(userId);
-      if (preferences?.scan?.lookbackMonths) {
-        lookbackMonths = preferences.scan.lookbackMonths;
+      const savedLookback = preferences?.scan?.lookbackMonths;
+      if (typeof savedLookback === "number" && savedLookback > 0) {
+        lookbackMonths = savedLookback;
       }
     } catch {
       // Use default if preferences unavailable
@@ -254,6 +313,8 @@ class TransactionService {
     try {
       // Step 1: Fetch emails from all connected providers
       const allEmails: any[] = [];
+      // Track which providers we successfully fetched from (for updating last_sync_at later)
+      const successfulProviders: OAuthProvider[] = [];
 
       for (let i = 0; i < providers.length; i++) {
         // Check for cancellation before each provider
@@ -266,6 +327,28 @@ class TransactionService {
             ? `[${i + 1}/${providers.length}] ${providerName}: `
             : "";
 
+        // Get last sync time for incremental fetch (TASK-906: Gmail, TASK-907: Outlook)
+        let effectiveStartDate = startDate;
+        const lastSyncAt = await databaseService.getOAuthTokenSyncTime(userId, provider);
+        if (lastSyncAt) {
+          // Use last sync time for incremental fetch
+          effectiveStartDate = lastSyncAt;
+          await logService.info(
+            `Incremental sync: fetching emails since ${lastSyncAt.toISOString()}`,
+            "TransactionService.scanAndExtractTransactions",
+            { userId, provider, lastSyncAt: lastSyncAt.toISOString() },
+          );
+        } else {
+          // First sync: use 90-day lookback (or user preference if shorter)
+          const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+          effectiveStartDate = startDate > ninetyDaysAgo ? startDate : ninetyDaysAgo;
+          await logService.info(
+            `First sync: fetching last 90 days of emails`,
+            "TransactionService.scanAndExtractTransactions",
+            { userId, provider, startDate: effectiveStartDate.toISOString() },
+          );
+        }
+
         if (onProgress)
           onProgress({
             step: "fetching",
@@ -274,7 +357,7 @@ class TransactionService {
 
         const emails = await this._fetchEmails(userId, provider, {
           query: searchQuery,
-          after: startDate,
+          after: effectiveStartDate,
           before: endDate,
           maxResults: Math.floor(maxEmails / providers.length), // Split limit between providers
           onProgress: onProgress
@@ -300,6 +383,7 @@ class TransactionService {
         this.checkCancelled();
 
         allEmails.push(...emails);
+        successfulProviders.push(provider);
         await logService.info(
           `Fetched ${emails.length} emails from ${providerName}`,
           "TransactionService.scanAndExtractTransactions",
@@ -317,85 +401,110 @@ class TransactionService {
       // Check for cancellation before analysis
       this.checkCancelled();
 
-      // Step 2: Analyze emails
-      if (onProgress)
-        onProgress({
-          step: "analyzing",
-          message: `Analyzing ${emails.length} emails...`,
-        });
-
-      const analyzed = transactionExtractorService.batchAnalyze(emails);
-
-      // Filter to only real estate related emails
-      const realEstateEmails = analyzed.filter(
-        (a: any) => a.isRealEstateRelated,
-      );
+      // Step 2: Determine extraction strategy
+      const { strategy: strategyService } = this.getHybridServices();
+      const strategy = await strategyService.selectStrategy(userId, {
+        messageCount: emails.length,
+      });
 
       await logService.info(
-        `Found ${realEstateEmails.length} real estate related emails`,
+        `Using ${strategy.method} extraction strategy: ${strategy.reason}`,
         "TransactionService.scanAndExtractTransactions",
         {
-          realEstateCount: realEstateEmails.length,
-          totalEmails: emails.length,
+          userId,
+          method: strategy.method,
+          provider: strategy.provider,
+          budgetRemaining: strategy.budgetRemaining,
+          estimatedTokenCost: strategy.estimatedTokenCost,
         },
       );
 
-      // Check for cancellation before grouping
-      this.checkCancelled();
+      // Step 3: Run extraction based on strategy
+      let extractionResult: {
+        detectedTransactions: (DetectedTransaction & { emails?: AnalyzedEmail[] })[];
+        realEstateCount: number;
+        extractionMethod: ExtractionMethod;
+      };
 
-      // Step 3: Group by property
-      if (onProgress)
-        onProgress({ step: "grouping", message: "Grouping by property..." });
-
-      const grouped =
-        transactionExtractorService.groupByProperty(realEstateEmails);
-      const propertyAddresses = Object.keys(grouped);
+      if (strategy.method === "pattern") {
+        // Use pattern-only extraction path
+        extractionResult = await this._patternOnlyExtraction(
+          emails,
+          userId,
+          onProgress,
+        );
+      } else {
+        // Use hybrid extraction (hybrid or llm mode)
+        try {
+          extractionResult = await this._hybridExtraction(
+            emails,
+            userId,
+            strategy,
+            onProgress,
+          );
+        } catch (hybridError) {
+          // If hybrid extraction fails, fall back to pattern-only
+          await logService.warn(
+            "Hybrid extraction failed, falling back to pattern-only",
+            "TransactionService.scanAndExtractTransactions",
+            {
+              error: hybridError instanceof Error ? hybridError.message : String(hybridError),
+              userId,
+            },
+          );
+          extractionResult = await this._patternOnlyExtraction(
+            emails,
+            userId,
+            onProgress,
+          );
+        }
+      }
 
       await logService.info(
-        `Found ${propertyAddresses.length} properties`,
+        `Found ${extractionResult.realEstateCount} real estate related emails`,
         "TransactionService.scanAndExtractTransactions",
-        { propertyCount: propertyAddresses.length },
+        {
+          realEstateCount: extractionResult.realEstateCount,
+          totalEmails: emails.length,
+          extractionMethod: extractionResult.extractionMethod,
+        },
       );
 
       // Check for cancellation before saving
       this.checkCancelled();
 
-      // Step 4: Create transactions and save communications
+      // Step 4: Save transactions with detection metadata
       if (onProgress)
         onProgress({ step: "saving", message: "Saving transactions..." });
 
-      const transactions: TransactionWithSummary[] = [];
+      const transactions = await this._saveDetectedTransactions(
+        userId,
+        extractionResult,
+        emails,
+      );
 
-      for (const address of propertyAddresses) {
-        // Check for cancellation for each property save
-        this.checkCancelled();
+      await logService.info(
+        `Found ${transactions.length} properties`,
+        "TransactionService.scanAndExtractTransactions",
+        {
+          propertyCount: transactions.length,
+          extractionMethod: extractionResult.extractionMethod,
+        },
+      );
 
-        const emailGroup = grouped[address];
-        const summary =
-          transactionExtractorService.generateTransactionSummary(emailGroup);
-
-        // Create transaction in database if summary is valid
-        if (!summary) continue;
-        const transactionId = await this._createTransactionFromSummary(
-          userId,
-          summary,
+      // Step 5: Update last_sync_at for successful providers (TASK-906: Gmail, TASK-907: Outlook)
+      // This happens AFTER successful storage to ensure we don't skip emails on next sync
+      const syncTime = new Date();
+      for (const provider of successfulProviders) {
+        await databaseService.updateOAuthTokenSyncTime(userId, provider, syncTime);
+        await logService.info(
+          `Updated last_sync_at for ${provider}`,
+          "TransactionService.scanAndExtractTransactions",
+          { userId, provider, syncTime: syncTime.toISOString() },
         );
-
-        // Save communications
-        await this._saveCommunications(
-          userId,
-          transactionId,
-          emailGroup as any,
-          emails as any,
-        );
-
-        transactions.push({
-          id: transactionId,
-          ...summary,
-        });
       }
 
-      // Step 5: Complete
+      // Step 6: Complete
       if (onProgress)
         onProgress({ step: "complete", message: "Scan complete!" });
 
@@ -403,7 +512,7 @@ class TransactionService {
         success: true,
         transactionsFound: transactions.length,
         emailsScanned: emails.length,
-        realEstateEmailsFound: realEstateEmails.length,
+        realEstateEmailsFound: extractionResult.realEstateCount,
         transactions,
       };
     } catch (error) {
@@ -478,7 +587,7 @@ class TransactionService {
       transaction_type: summary.transactionType,
       transaction_status: "completed",
       status: "active",
-      closing_date: toISOString(summary.closingDate),
+      closed_at: toISOString(summary.closingDate),
       closing_date_verified: false,
       communications_scanned: summary.communicationsCount || 0,
       extraction_confidence: summary.confidence,
@@ -599,6 +708,377 @@ class TransactionService {
     };
   }
 
+  // ============================================
+  // HYBRID EXTRACTION METHODS
+  // ============================================
+
+  /**
+   * Hybrid extraction path using AI + pattern matching.
+   * Uses HybridExtractorService for combined analysis.
+   * @private
+   */
+  private async _hybridExtraction(
+    emails: EmailMessage[],
+    userId: string,
+    strategy: ExtractionStrategy,
+    onProgress: ((progress: ProgressUpdate) => void) | null,
+  ): Promise<{
+    detectedTransactions: DetectedTransaction[];
+    realEstateCount: number;
+    extractionMethod: ExtractionMethod;
+  }> {
+    const { extractor } = this.getHybridServices();
+
+    if (onProgress) {
+      onProgress({
+        step: "analyzing",
+        message: `Analyzing ${emails.length} emails with AI...`,
+      });
+    }
+
+    // Prepare messages for hybrid extraction
+    const messages: MessageInput[] = emails.map((email, i) => ({
+      id: `msg_${i}_${Date.now()}`,
+      subject: email.subject || "",
+      body: email.bodyPlain || email.body || "",
+      sender: email.from || "",
+      recipients: (email.to || "").split(",").map((e: string) => e.trim()),
+      date:
+        email.date instanceof Date
+          ? email.date.toISOString()
+          : String(email.date || new Date().toISOString()),
+    }));
+
+    // Get existing transactions for context
+    const existingTransactions = await databaseService.getTransactions({
+      user_id: userId,
+    });
+    const txContext = existingTransactions.map((tx) => ({
+      id: tx.id,
+      propertyAddress: tx.property_address,
+      transactionType: tx.transaction_type,
+    }));
+
+    // Get known contacts for role matching
+    const contacts: Contact[] = await databaseService.getContacts({
+      user_id: userId,
+    });
+
+    // Check for cancellation before LLM call
+    this.checkCancelled();
+
+    // Run hybrid extraction
+    const result = await extractor.extract(messages, txContext, contacts, {
+      usePatternMatching: true,
+      useLLM: strategy.method !== "pattern",
+      llmProvider: strategy.provider,
+      userId,
+    });
+
+    // Check for cancellation after extraction
+    this.checkCancelled();
+
+    if (onProgress) {
+      onProgress({
+        step: "grouping",
+        message: `Found ${result.detectedTransactions.length} potential transactions...`,
+      });
+    }
+
+    const realEstateCount = result.analyzedMessages.filter(
+      (m) => m.isRealEstateRelated,
+    ).length;
+
+    await logService.info(
+      `Hybrid extraction completed`,
+      "TransactionService._hybridExtraction",
+      {
+        userId,
+        method: result.extractionMethod,
+        llmUsed: result.llmUsed,
+        transactionsFound: result.detectedTransactions.length,
+        realEstateCount,
+        latencyMs: result.latencyMs,
+      },
+    );
+
+    return {
+      detectedTransactions: result.detectedTransactions,
+      realEstateCount,
+      extractionMethod: result.extractionMethod,
+    };
+  }
+
+  /**
+   * Pattern-only extraction (existing behavior refactored).
+   * Uses transactionExtractorService for pattern matching only.
+   * @private
+   */
+  private async _patternOnlyExtraction(
+    emails: EmailMessage[],
+    _userId: string,
+    onProgress: ((progress: ProgressUpdate) => void) | null,
+  ): Promise<{
+    detectedTransactions: (DetectedTransaction & { emails?: AnalyzedEmail[] })[];
+    realEstateCount: number;
+    extractionMethod: ExtractionMethod;
+  }> {
+    if (onProgress) {
+      onProgress({
+        step: "analyzing",
+        message: `Analyzing ${emails.length} emails...`,
+      });
+    }
+
+    // batchAnalyze expects Email[] with required date field
+    // EmailMessage has optional date, so we provide a default
+    const emailsWithDate = emails.map((email) => ({
+      ...email,
+      date: email.date || new Date().toISOString(),
+    }));
+
+    // batchAnalyze returns AnalysisResult[] from transactionExtractorService
+    const analyzed = transactionExtractorService.batchAnalyze(emailsWithDate);
+    const realEstateResults = analyzed.filter((a) => a.isRealEstateRelated);
+
+    // Check for cancellation
+    this.checkCancelled();
+
+    if (onProgress) {
+      onProgress({ step: "grouping", message: "Grouping by property..." });
+    }
+
+    const grouped = transactionExtractorService.groupByProperty(realEstateResults);
+
+    // Convert to DetectedTransaction format for consistency
+    const detectedTransactions: (DetectedTransaction & { emails?: AnalyzedEmail[] })[] = Object.entries(grouped)
+      .map(([address, emailGroup]) => {
+        const summary =
+          transactionExtractorService.generateTransactionSummary(emailGroup);
+        if (!summary) return null;
+
+        // Convert AnalysisResult[] to AnalyzedEmail[] for communications saving
+        // Handle both KeywordMatch[] (from actual service) and string (from test mocks)
+        const analyzedEmails: AnalyzedEmail[] = emailGroup.map((result) => {
+          // Handle keywords - could be KeywordMatch[] or string (legacy/mocks)
+          let keywordsStr: string | undefined;
+          if (Array.isArray(result.keywords)) {
+            keywordsStr = result.keywords.map((k) => k.keyword).join(", ");
+          } else if (typeof result.keywords === "string") {
+            keywordsStr = result.keywords;
+          }
+
+          // Handle parties - could be Party[] or string (legacy/mocks)
+          let partiesStr: string | undefined;
+          if (Array.isArray(result.parties)) {
+            partiesStr = result.parties.map((p) => p.name || p.email).join(", ");
+          } else if (typeof result.parties === "string") {
+            partiesStr = result.parties;
+          }
+
+          return {
+            subject: result.subject,
+            from: result.from || "",
+            date: result.date,
+            isRealEstateRelated: result.isRealEstateRelated,
+            keywords: keywordsStr,
+            parties: partiesStr,
+            confidence: result.confidence,
+          };
+        });
+
+        return {
+          id: `pat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          propertyAddress: address,
+          transactionType: summary.transactionType || null,
+          stage: null,
+          confidence: (summary.confidence || 0) / 100, // Normalize to 0-1
+          extractionMethod: "pattern" as ExtractionMethod,
+          communicationIds: [],
+          dateRange: {
+            start: new Date(summary.firstCommunication).toISOString(),
+            end: new Date(summary.lastCommunication).toISOString(),
+          },
+          suggestedContacts: { assignments: [] },
+          summary: `Transaction at ${address}`,
+          patternSummary: {
+            propertyAddress: summary.propertyAddress,
+            transactionType: summary.transactionType,
+            salePrice: summary.salePrice,
+            closingDate: summary.closingDate
+              ? typeof summary.closingDate === "string"
+                ? summary.closingDate
+                : new Date(summary.closingDate).toISOString()
+              : null,
+            mlsNumbers: summary.mlsNumbers || [],
+            communicationsCount: summary.communicationsCount,
+            firstCommunication: summary.firstCommunication,
+            lastCommunication: summary.lastCommunication,
+            confidence: summary.confidence || 0,
+          },
+          // Store emails for saving communications later
+          emails: analyzedEmails,
+        } as DetectedTransaction & { emails: AnalyzedEmail[] };
+      })
+      .filter((tx): tx is DetectedTransaction & { emails: AnalyzedEmail[] } => tx !== null);
+
+    return {
+      detectedTransactions,
+      realEstateCount: realEstateResults.length,
+      extractionMethod: "pattern",
+    };
+  }
+
+  /**
+   * Save detected transactions with detection metadata.
+   * Sets detection_source, detection_status, detection_method, etc.
+   * Includes deduplication to skip transactions that already exist (TASK-964).
+   * @private
+   */
+  private async _saveDetectedTransactions(
+    userId: string,
+    extractionResult: {
+      detectedTransactions: (DetectedTransaction & { emails?: AnalyzedEmail[] })[];
+      realEstateCount: number;
+      extractionMethod: ExtractionMethod;
+    },
+    originalEmails: EmailMessage[],
+  ): Promise<TransactionWithSummary[]> {
+    const transactions: TransactionWithSummary[] = [];
+
+    // TASK-964: Batch lookup existing transactions for deduplication (prevents N+1 queries)
+    const propertyAddresses = extractionResult.detectedTransactions.map(
+      (tx) => tx.propertyAddress
+    );
+    const existingTransactions = await databaseService.findExistingTransactionsByAddresses(
+      userId,
+      propertyAddresses,
+    );
+
+    let skippedCount = 0;
+
+    for (const detected of extractionResult.detectedTransactions) {
+      // Check for cancellation for each transaction save
+      this.checkCancelled();
+
+      // TASK-964: Check for existing transaction (deduplication)
+      const normalizedAddress = detected.propertyAddress.toLowerCase().trim();
+      const existingTxId = existingTransactions.get(normalizedAddress);
+      if (existingTxId) {
+        skippedCount++;
+        await logService.debug(
+          "Skipping duplicate transaction import",
+          "TransactionService._saveDetectedTransactions",
+          {
+            propertyAddress: detected.propertyAddress,
+            existingTransactionId: existingTxId,
+            userId,
+          },
+        );
+        continue;
+      }
+
+      // Parse address components
+      const addressParts = this._parseAddress(detected.propertyAddress);
+
+      // Helper to convert date to ISO string safely
+      const toISOString = (date: string | Date | number | undefined | null): string | undefined => {
+        if (!date) return undefined;
+        if (date instanceof Date) return date.toISOString();
+        if (typeof date === "string") return date;
+        if (typeof date === "number") return new Date(date).toISOString();
+        return undefined;
+      };
+
+      // Map extraction method to detection_source
+      // 'pattern' | 'llm' -> 'auto', 'hybrid' -> 'hybrid'
+      const detectionSource: "manual" | "auto" | "hybrid" =
+        extractionResult.extractionMethod === "hybrid" ? "hybrid" : "auto";
+
+      // Map DetectedTransaction.transactionType to Transaction.transaction_type
+      // DetectedTransaction uses 'purchase' | 'sale' | 'lease' | null
+      // Transaction uses 'purchase' | 'sale' | 'other'
+      let txType: "purchase" | "sale" | "other" | undefined;
+      if (detected.transactionType === "purchase" || detected.transactionType === "sale") {
+        txType = detected.transactionType;
+      } else if (detected.transactionType === "lease") {
+        txType = "other"; // Map lease to other
+      } else {
+        txType = undefined;
+      }
+
+      const transactionData: Partial<NewTransaction> = {
+        user_id: userId,
+        property_address: detected.propertyAddress,
+        property_street: addressParts.street || undefined,
+        property_city: addressParts.city || undefined,
+        property_state: addressParts.state || undefined,
+        property_zip: addressParts.zip || undefined,
+        transaction_type: txType,
+        transaction_status: "pending", // New from AI detection
+        status: "active",
+        closed_at: toISOString(detected.dateRange?.end),
+        closing_date_verified: false,
+        extraction_confidence: Math.round(detected.confidence * 100),
+        first_communication_date: toISOString(detected.dateRange?.start),
+        last_communication_date: toISOString(detected.dateRange?.end),
+        total_communications_count: detected.communicationIds?.length || 0,
+        export_status: "not_exported",
+        export_count: 0,
+        offer_count: 0,
+        failed_offers_count: 0,
+        // New AI detection fields
+        detection_source: detectionSource,
+        detection_status: "pending", // Awaiting user confirmation
+        detection_confidence: detected.confidence,
+        detection_method: extractionResult.extractionMethod,
+        suggested_contacts: detected.suggestedContacts
+          ? JSON.stringify(detected.suggestedContacts)
+          : undefined,
+      };
+
+      const transaction = await databaseService.createTransaction(
+        transactionData as NewTransaction,
+      );
+
+      // Save communications if available
+      // For pattern extraction, emails are attached to detected transaction
+      // For hybrid extraction, we need to find matching emails
+      const emailsToSave = detected.emails || [];
+      if (emailsToSave.length > 0) {
+        await this._saveCommunications(
+          userId,
+          transaction.id,
+          emailsToSave,
+          originalEmails,
+        );
+      }
+
+      // Create result - use transaction.id and omit detected.id to avoid duplication
+      const { id: _detectedId, ...detectedWithoutId } = detected;
+      transactions.push({
+        id: transaction.id,
+        ...detectedWithoutId,
+      } as TransactionWithSummary);
+    }
+
+    // TASK-964: Log import summary including skipped duplicates
+    if (skippedCount > 0 || transactions.length > 0) {
+      await logService.info(
+        "Transaction import completed",
+        "TransactionService._saveDetectedTransactions",
+        {
+          userId,
+          totalDetected: extractionResult.detectedTransactions.length,
+          created: transactions.length,
+          skippedDuplicates: skippedCount,
+        },
+      );
+    }
+
+    return transactions;
+  }
+
   /**
    * Get all transactions for a user
    */
@@ -648,8 +1128,8 @@ class TransactionService {
       transaction_type: transactionData.transaction_type,
       transaction_status: "pending",
       status: transactionData.status || "active",
-      representation_start_date: transactionData.representation_start_date,
-      closing_date: transactionData.closing_date,
+      started_at: transactionData.started_at,
+      closed_at: transactionData.closed_at,
       closing_date_verified: false,
       representation_start_confidence: undefined,
       closing_date_confidence: undefined,
@@ -667,6 +1147,7 @@ class TransactionService {
   /**
    * Create audited transaction with contact assignments
    * Used for the "Audit New Transaction" feature
+   * TASK-1031: Now auto-links communications for each assigned contact
    */
   async createAuditedTransaction(
     userId: string,
@@ -706,7 +1187,7 @@ class TransactionService {
       } as NewTransaction);
       const transactionId = transaction.id;
 
-      // Assign all contacts
+      // Assign all contacts (skip auto-link during bulk assignment)
       if (contact_assignments && contact_assignments.length > 0) {
         for (const assignment of contact_assignments) {
           await databaseService.assignContactToTransaction(transactionId, {
@@ -717,6 +1198,36 @@ class TransactionService {
             is_primary: assignment.is_primary,
             notes: assignment.notes,
           });
+        }
+
+        // TASK-1031: Auto-link communications for all assigned contacts
+        // Run after all contacts are assigned to avoid duplicate queries
+        let totalEmailsLinked = 0;
+        let totalMessagesLinked = 0;
+
+        for (const assignment of contact_assignments) {
+          try {
+            const autoLinkResult = await autoLinkCommunicationsForContact({
+              contactId: assignment.contact_id,
+              transactionId,
+            });
+            totalEmailsLinked += autoLinkResult.emailsLinked;
+            totalMessagesLinked += autoLinkResult.messagesLinked;
+          } catch (error) {
+            // Log but don't fail transaction creation if auto-link fails
+            await logService.warn(
+              `Auto-link failed for contact ${assignment.contact_id}: ${error instanceof Error ? error.message : "Unknown"}`,
+              "TransactionService.createAuditedTransaction",
+            );
+          }
+        }
+
+        if (totalEmailsLinked > 0 || totalMessagesLinked > 0) {
+          await logService.info(
+            `Auto-linked ${totalEmailsLinked} emails and ${totalMessagesLinked} messages for new transaction`,
+            "TransactionService.createAuditedTransaction",
+            { transactionId, contactCount: contact_assignments.length },
+          );
         }
       }
 
@@ -760,6 +1271,17 @@ class TransactionService {
 
   /**
    * Assign contact to transaction role
+   * TASK-1031: Now auto-links existing communications (emails and texts)
+   * from the contact to the transaction.
+   *
+   * @param transactionId - Transaction ID
+   * @param contactId - Contact ID to assign
+   * @param role - Role in the transaction
+   * @param roleCategory - Role category
+   * @param isPrimary - Whether this is the primary contact for this role
+   * @param notes - Optional notes
+   * @param skipAutoLink - If true, skip auto-linking (for bulk operations)
+   * @returns Assignment result including auto-link counts
    */
   async assignContactToTransaction(
     transactionId: string,
@@ -768,8 +1290,10 @@ class TransactionService {
     roleCategory: string,
     isPrimary: boolean = false,
     notes: string | null = null,
-  ): Promise<any> {
-    return await databaseService.assignContactToTransaction(transactionId, {
+    skipAutoLink: boolean = false,
+  ): Promise<AssignContactResult> {
+    // 1. Save the contact assignment (existing behavior)
+    await databaseService.assignContactToTransaction(transactionId, {
       contact_id: contactId,
       role: role,
       role_category: roleCategory,
@@ -777,6 +1301,33 @@ class TransactionService {
       is_primary: isPrimary ? 1 : 0,
       notes: notes || undefined,
     });
+
+    // 2. Auto-link communications for this contact (TASK-1031)
+    // Skip for bulk operations to avoid performance issues
+    if (skipAutoLink) {
+      return { success: true };
+    }
+
+    try {
+      const autoLinkResult = await autoLinkCommunicationsForContact({
+        contactId,
+        transactionId,
+      });
+
+      return {
+        success: true,
+        autoLink: autoLinkResult,
+      };
+    } catch (error) {
+      // Log but don't fail the assignment if auto-link fails
+      await logService.warn(
+        `Auto-link failed after contact assignment: ${error instanceof Error ? error.message : "Unknown"}`,
+        "TransactionService.assignContactToTransaction",
+        { transactionId, contactId },
+      );
+
+      return { success: true };
+    }
   }
 
   /**
@@ -789,6 +1340,28 @@ class TransactionService {
     return await databaseService.unlinkContactFromTransaction(
       transactionId,
       contactId,
+    );
+  }
+
+  /**
+   * Batch update contact assignments for a transaction
+   * Performs multiple add/remove operations in a single atomic transaction
+   */
+  async batchUpdateContactAssignments(
+    transactionId: string,
+    operations: Array<{
+      action: "add" | "remove";
+      contactId: string;
+      role?: string;
+      roleCategory?: string;
+      specificRole?: string;
+      isPrimary?: boolean;
+      notes?: string;
+    }>,
+  ): Promise<void> {
+    return await databaseService.batchUpdateContactAssignments(
+      transactionId,
+      operations,
     );
   }
 
@@ -907,6 +1480,230 @@ class TransactionService {
       realEstateEmailsFound: realEstateEmails.length,
       analyzed: realEstateEmails as any,
     };
+  }
+
+  /**
+   * Get unlinked messages for a user (messages not attached to any transaction)
+   * Queries the messages table directly for SMS/iMessage channels
+   */
+  async getUnlinkedMessages(userId: string): Promise<Message[]> {
+    // Query messages table directly - much cleaner than filtering communications
+    const messages = await databaseService.getUnlinkedTextMessages(userId);
+
+    await logService.info(
+      "Retrieved unlinked messages",
+      "TransactionService.getUnlinkedMessages",
+      {
+        userId,
+        count: messages.length,
+      },
+    );
+
+    return messages;
+  }
+
+  /**
+   * Get unlinked emails for a user
+   * Returns emails from communications table that have no transaction_id
+   */
+  async getUnlinkedEmails(userId: string): Promise<Communication[]> {
+    const emails = await databaseService.getUnlinkedEmails(userId);
+
+    await logService.info(
+      "Retrieved unlinked emails",
+      "TransactionService.getUnlinkedEmails",
+      {
+        userId,
+        count: emails.length,
+      },
+    );
+
+    return emails;
+  }
+
+  /**
+   * Get distinct contacts with unlinked message counts
+   * Returns a list of phone numbers/contacts with their message counts
+   */
+  async getMessageContacts(userId: string): Promise<{ contact: string; contactName: string | null; messageCount: number; lastMessageAt: string }[]> {
+    const contacts = await databaseService.getMessageContacts(userId);
+
+    // Resolve contact names from the macOS Contacts database
+    let contactNameMap: Record<string, string> = {};
+    try {
+      const { contactMap } = await getContactNames();
+      contactNameMap = contactMap;
+    } catch (err) {
+      await logService.warn(
+        "Failed to load contact names, will use phone numbers only",
+        "TransactionService.getMessageContacts",
+        { error: err instanceof Error ? err.message : String(err) },
+      );
+    }
+
+    // Enrich contacts with names
+    const enrichedContacts = contacts.map((c) => {
+      // Try to find name by phone number (normalized and raw)
+      const name = contactNameMap[c.contact] || contactNameMap[c.contact.replace(/\D/g, '')] || null;
+      return {
+        ...c,
+        contactName: name,
+      };
+    });
+
+    await logService.info(
+      "Retrieved message contacts",
+      "TransactionService.getMessageContacts",
+      {
+        userId,
+        contactCount: contacts.length,
+        withNames: enrichedContacts.filter(c => c.contactName).length,
+      },
+    );
+
+    return enrichedContacts;
+  }
+
+  /**
+   * Get unlinked messages for a specific contact
+   * Used after user selects a contact from the contact list
+   */
+  async getMessagesByContact(userId: string, contact: string): Promise<Message[]> {
+    const messages = await databaseService.getMessagesByContact(userId, contact);
+
+    await logService.info(
+      "Retrieved messages for contact",
+      "TransactionService.getMessagesByContact",
+      {
+        userId,
+        contact,
+        count: messages.length,
+      },
+    );
+
+    return messages;
+  }
+
+  /**
+   * Link messages to a transaction
+   * Sets transaction_id on the specified messages in the messages table
+   */
+  async linkMessages(messageIds: string[], transactionId: string): Promise<void> {
+    // Verify transaction exists
+    const transaction = await this.getTransactionDetails(transactionId);
+    if (!transaction) {
+      throw new Error("Transaction not found");
+    }
+
+    let linkedCount = 0;
+
+    // Update each message and create communication reference
+    for (const messageId of messageIds) {
+      // Update messages table
+      await databaseService.linkMessageToTransaction(messageId, transactionId);
+
+      // Create communication reference so it shows in getDetails
+      const refId = await createCommunicationReference(
+        messageId,
+        transactionId,
+        transaction.user_id,
+        "manual", // Manual link from UI
+        1.0 // Full confidence for manual links
+      );
+
+      if (refId) {
+        linkedCount++;
+      }
+    }
+
+    // Update transaction message count
+    const newCount = (transaction.message_count || 0) + linkedCount;
+    await databaseService.updateTransaction(transactionId, {
+      message_count: newCount,
+    });
+
+    await logService.info(
+      "Messages linked to transaction",
+      "TransactionService.linkMessages",
+      {
+        messageIds,
+        transactionId,
+        linkedCount,
+      },
+    );
+  }
+
+  /**
+   * Unlink messages from a transaction (sets transaction_id to null)
+   * Does NOT add to ignored communications - simply removes the link
+   *
+   * TASK-1116: Now operates at thread level. When any message in a thread
+   * is unlinked, the entire thread is unlinked from the transaction.
+   * This matches user expectations where threads are displayed as units.
+   */
+  async unlinkMessages(messageIds: string[], passedTransactionId?: string): Promise<void> {
+    // Get transaction IDs and thread IDs for updating counts later
+    const transactionCounts = new Map<string, number>();
+    // Map of transactionId -> Set of threadIds to delete
+    const transactionThreads = new Map<string, Set<string>>();
+
+    for (const messageId of messageIds) {
+      const message = await databaseService.getMessageById(messageId);
+
+      // TASK-1116: Use passed transactionId for thread-based linking,
+      // fall back to message.transaction_id for legacy per-message linking
+      const transactionId = passedTransactionId || message?.transaction_id;
+
+      if (transactionId) {
+        const count = transactionCounts.get(transactionId) || 0;
+        transactionCounts.set(transactionId, count + 1);
+
+        // TASK-1116: Collect thread_ids for thread-level communication deletion
+        if (message?.thread_id) {
+          let threads = transactionThreads.get(transactionId);
+          if (!threads) {
+            threads = new Set<string>();
+            transactionThreads.set(transactionId, threads);
+          }
+          threads.add(message.thread_id);
+        }
+      }
+
+      // Remove the transaction link from messages table (legacy per-message linking)
+      if (message?.transaction_id) {
+        await databaseService.unlinkMessageFromTransaction(messageId);
+      }
+
+      // Also delete any per-message communication records (legacy linking)
+      await databaseService.deleteCommunicationByMessageId(messageId);
+    }
+
+    // TASK-1116: Delete communications by thread (one record per thread)
+    for (const [transactionId, threadIds] of transactionThreads) {
+      for (const threadId of threadIds) {
+        await databaseService.deleteCommunicationByThread(threadId, transactionId);
+      }
+    }
+
+    // Update transaction message counts
+    for (const [transactionId, unlinkedCount] of transactionCounts) {
+      const transaction = await this.getTransactionDetails(transactionId);
+      if (transaction) {
+        const newCount = Math.max(0, (transaction.message_count || 0) - unlinkedCount);
+        await databaseService.updateTransaction(transactionId, {
+          message_count: newCount,
+        });
+      }
+    }
+
+    await logService.info(
+      "Messages unlinked from transaction",
+      "TransactionService.unlinkMessages",
+      {
+        unlinkedCount: messageIds.length,
+        threadsUnlinked: Array.from(transactionThreads.values()).reduce((sum, threads) => sum + threads.size, 0),
+      },
+    );
   }
 }
 

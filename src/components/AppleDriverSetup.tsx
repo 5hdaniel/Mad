@@ -1,3 +1,13 @@
+/**
+ * @deprecated Use `onboarding/steps/AppleDriverStep.tsx` instead.
+ *
+ * Migration guide:
+ * 1. New step file has `meta` object with configuration
+ * 2. Content component receives `onAction` callback
+ * 3. Layout/navigation handled by OnboardingShell
+ *
+ * This file will be removed after migration is complete.
+ */
 import React, { useState, useEffect } from "react";
 import { usePlatform } from "../contexts/PlatformContext";
 
@@ -30,7 +40,7 @@ interface DriversAPI {
  */
 function getDriversAPI(): DriversAPI | null {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (window.electron as any)?.drivers as DriversAPI | null;
+  return (window.api as any)?.drivers as DriversAPI | null;
 }
 
 // Windows + iPhone setup steps (includes driver installation)

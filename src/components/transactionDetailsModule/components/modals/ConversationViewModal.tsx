@@ -1,0 +1,592 @@
+/**
+ * ConversationViewModal Component
+ * Phone-style popup modal for viewing a full conversation thread.
+ * Supports inline display of image/GIF attachments (TASK-1012).
+ */
+import React, { useEffect, useState, useRef, useMemo } from "react";
+import type { MessageLike } from "../MessageThreadCard";
+
+/**
+ * Attachment info for display (TASK-1012)
+ */
+interface MessageAttachmentInfo {
+  id: string;
+  message_id: string;
+  filename: string;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  data: string | null;
+}
+
+interface ConversationViewModalProps {
+  /** Messages in the thread */
+  messages: MessageLike[];
+  /** Contact name for header */
+  contactName?: string;
+  /** Phone number for header */
+  phoneNumber: string;
+  /** Map of phone -> name for group chat sender resolution */
+  contactNames?: Record<string, string>;
+  /** Audit period start date for filtering */
+  auditStartDate?: Date | string | null;
+  /** Audit period end date for filtering */
+  auditEndDate?: Date | string | null;
+  /** Callback to close the modal */
+  onClose: () => void;
+}
+
+/**
+ * Normalize phone for lookup (last 10 digits)
+ */
+function normalizePhoneForLookup(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  return digits.length >= 10 ? digits.slice(-10) : digits;
+}
+
+/**
+ * Extract sender phone from message participants
+ */
+function getSenderPhone(msg: MessageLike): string | null {
+  if (msg.direction === "outbound") return null;
+
+  try {
+    if (msg.participants) {
+      const parsed =
+        typeof msg.participants === "string"
+          ? JSON.parse(msg.participants)
+          : msg.participants;
+      if (parsed.from) return parsed.from;
+    }
+  } catch {
+    // Fall through
+  }
+
+  if ("sender" in msg && msg.sender) {
+    return msg.sender;
+  }
+
+  return null;
+}
+
+/**
+ * Format timestamp for display
+ */
+function formatMessageTime(date: Date): string {
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+/**
+ * Check if a MIME type is a displayable image
+ */
+function isDisplayableImage(mimeType: string | null): boolean {
+  if (!mimeType) return false;
+  return (
+    mimeType.startsWith("image/") &&
+    !mimeType.includes("heic") // HEIC requires conversion
+  );
+}
+
+/**
+ * Check if text is empty or only contains the object replacement character
+ * macOS uses U+FFFC (￼) as a placeholder for attachments in message text
+ */
+function isEmptyOrReplacementChar(text: string): boolean {
+  if (!text) return true;
+  // U+FFFC is the Object Replacement Character, U+FFFD is the Replacement Character
+  const cleaned = text.replace(/[\uFFFC\uFFFD\s]/g, "");
+  return cleaned.length === 0;
+}
+
+/**
+ * Get a human-readable label for an attachment MIME type
+ */
+function getAttachmentLabel(mimeType: string | null, filename: string): string {
+  if (mimeType?.startsWith("video/")) return "Video";
+  if (mimeType?.startsWith("audio/")) return "Audio";
+  if (mimeType?.startsWith("image/")) return "Image";
+  if (mimeType === "application/pdf") return "PDF";
+  if (mimeType?.includes("word") || mimeType?.includes("document")) return "Document";
+
+  // Fall back to extension
+  const ext = filename.toLowerCase().split(".").pop() || "";
+  const labels: Record<string, string> = {
+    mp4: "Video", mov: "Video", m4v: "Video",
+    mp3: "Audio", m4a: "Audio", caf: "Voice Message",
+    pdf: "PDF", doc: "Document", docx: "Document",
+  };
+  return labels[ext] || "Attachment";
+}
+
+/**
+ * Attachment image component with loading state and error handling
+ */
+function AttachmentImage({
+  attachment,
+  isOutbound,
+}: {
+  attachment: MessageAttachmentInfo;
+  isOutbound: boolean;
+}): React.ReactElement | null {
+  const [imageError, setImageError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  if (!attachment.data || imageError) {
+    // Show placeholder for missing/failed attachments
+    return (
+      <div
+        className={`text-xs italic ${isOutbound ? "text-green-100" : "text-gray-400"}`}
+      >
+        [Image: {attachment.filename || "attachment"}]
+      </div>
+    );
+  }
+
+  const mimeType = attachment.mime_type || "image/jpeg";
+  const dataUrl = `data:${mimeType};base64,${attachment.data}`;
+
+  return (
+    <div className="relative">
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded">
+          <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+        </div>
+      )}
+      <img
+        src={dataUrl}
+        alt={attachment.filename || "Attachment"}
+        className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+        onLoad={() => setIsLoading(false)}
+        onError={() => {
+          setIsLoading(false);
+          setImageError(true);
+        }}
+        onClick={() => {
+          // Open in new window for full-size view
+          const win = window.open("", "_blank");
+          if (win) {
+            win.document.write(`<img src="${dataUrl}" style="max-width: 100%; height: auto;" />`);
+          }
+        }}
+      />
+    </div>
+  );
+}
+
+/**
+ * Format a date range for display in the toggle label
+ * Handles partial dates (only start, only end, or both)
+ */
+function formatDateRangeLabel(startDate: Date | null, endDate: Date | null): string {
+  const formatDate = (d: Date) =>
+    d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+  if (startDate && endDate) {
+    return `${formatDate(startDate)} - ${formatDate(endDate)}`;
+  } else if (startDate) {
+    return `from ${formatDate(startDate)}`;
+  } else if (endDate) {
+    return `until ${formatDate(endDate)}`;
+  }
+  return "";
+}
+
+export function ConversationViewModal({
+  messages,
+  contactName,
+  phoneNumber,
+  contactNames = {},
+  auditStartDate,
+  auditEndDate,
+  onClose,
+}: ConversationViewModalProps): React.ReactElement {
+  // Attachments state (TASK-1012)
+  const [attachmentsMap, setAttachmentsMap] = useState<
+    Record<string, MessageAttachmentInfo[]>
+  >({});
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
+  const loadedAttachmentsKeyRef = useRef<string>("");
+
+  // TASK-1157: Audit date filtering state
+  // Parse audit dates
+  const parsedStartDate = auditStartDate ? new Date(auditStartDate) : null;
+  const parsedEndDate = auditEndDate ? new Date(auditEndDate) : null;
+  // Show filter if at least one date is set (handles ongoing transactions with only start date)
+  const hasAuditDates = !!(parsedStartDate || parsedEndDate);
+
+  // Default to showing audit period only when dates are available
+  const [showAuditPeriodOnly, setShowAuditPeriodOnly] = useState<boolean>(hasAuditDates);
+
+  // Sort messages chronologically
+  const sortedMessages = [...messages].sort((a, b) => {
+    const dateA = new Date(a.sent_at || a.received_at || 0).getTime();
+    const dateB = new Date(b.sent_at || b.received_at || 0).getTime();
+    return dateA - dateB;
+  });
+
+  // TASK-1157: Filter messages by audit date range
+  const filteredMessages = React.useMemo(() => {
+    if (!showAuditPeriodOnly || !hasAuditDates) {
+      return sortedMessages;
+    }
+
+    return sortedMessages.filter((msg) => {
+      const msgDate = new Date(msg.sent_at || msg.received_at || 0);
+
+      // Check start date (if set)
+      if (parsedStartDate && msgDate < parsedStartDate) {
+        return false;
+      }
+
+      // Check end date (if set) - use end of day for inclusive comparison
+      if (parsedEndDate) {
+        const endOfDay = new Date(parsedEndDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        if (msgDate > endOfDay) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [sortedMessages, showAuditPeriodOnly, hasAuditDates, parsedStartDate, parsedEndDate]);
+
+  // Collect unique participants from all sources (not just inbound senders)
+  const uniqueSenders = new Set<string>();
+  messages.forEach((msg) => {
+    try {
+      if (msg.participants) {
+        const parsed =
+          typeof msg.participants === "string"
+            ? JSON.parse(msg.participants)
+            : msg.participants;
+
+        // Collect from chat_members (authoritative list of other participants)
+        if (parsed.chat_members && Array.isArray(parsed.chat_members)) {
+          parsed.chat_members.forEach((m: string) => {
+            if (m && m !== "unknown") uniqueSenders.add(normalizePhoneForLookup(m));
+          });
+        }
+
+        // Collect from inbound message sender
+        if (msg.direction === "inbound" && parsed.from) {
+          if (parsed.from !== "me" && parsed.from !== "unknown") {
+            uniqueSenders.add(normalizePhoneForLookup(parsed.from));
+          }
+        }
+
+        // Collect from outbound message recipients
+        if (msg.direction === "outbound" && parsed.to) {
+          const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
+          toList.forEach((p: string) => {
+            if (p && p !== "me" && p !== "unknown") {
+              uniqueSenders.add(normalizePhoneForLookup(p));
+            }
+          });
+        }
+      }
+    } catch {
+      // Continue
+    }
+  });
+
+  // Resolve senders to names and deduplicate
+  const resolveToName = (normalizedPhone: string): string => {
+    for (const [phone, name] of Object.entries(contactNames)) {
+      if (normalizePhoneForLookup(phone) === normalizedPhone) {
+        return name;
+      }
+    }
+    // Find original phone format for display
+    for (const msg of messages) {
+      const msgSender = getSenderPhone(msg);
+      if (msgSender && normalizePhoneForLookup(msgSender) === normalizedPhone) {
+        return msgSender;
+      }
+    }
+    return normalizedPhone;
+  };
+
+  // Get unique participant names (deduplicated by resolved name)
+  const uniqueParticipantNames = [...new Set(
+    Array.from(uniqueSenders).map(resolveToName)
+  )];
+
+  // Group chat = more than one unique participant (by resolved name)
+  const isGroupChat = uniqueParticipantNames.length > 1;
+
+  /**
+   * Get title for group chat header.
+   * Shows participant names (up to 3) with "+X more" for larger groups.
+   */
+  const getGroupChatTitle = (): string => {
+    if (uniqueParticipantNames.length === 0) {
+      return `Group (${uniqueSenders.size} participants)`;
+    }
+
+    // Show up to 3 names, then "+X more"
+    if (uniqueParticipantNames.length <= 3) {
+      return uniqueParticipantNames.join(", ");
+    }
+    return `${uniqueParticipantNames.slice(0, 3).join(", ")} +${uniqueParticipantNames.length - 3} more`;
+  };
+
+  // Load attachments for messages that have them (TASK-1012)
+  // Create stable key from message IDs to prevent re-fetching
+  const attachmentsKey = messages
+    .filter((msg) => msg.has_attachments && msg.message_id)
+    .map((msg) => msg.message_id)
+    .sort()
+    .join(",");
+
+  useEffect(() => {
+    // Skip if we've already loaded for this key
+    if (attachmentsKey === loadedAttachmentsKeyRef.current || !attachmentsKey) {
+      return;
+    }
+
+    const messageIdsWithAttachments = attachmentsKey.split(",");
+    loadedAttachmentsKeyRef.current = attachmentsKey;
+
+    const loadAttachments = async () => {
+      setAttachmentsLoading(true);
+      try {
+        // Check if API is available (may not be on all platforms)
+        if (window.api?.messages?.getMessageAttachmentsBatch) {
+          console.log("[Attachments] Fetching for message_ids:", messageIdsWithAttachments);
+          const result = await window.api.messages.getMessageAttachmentsBatch(
+            messageIdsWithAttachments
+          );
+          console.log("[Attachments] Result:", Object.keys(result).length, "messages with attachments");
+          for (const [msgId, atts] of Object.entries(result)) {
+            console.log(`[Attachments] ${msgId}: ${(atts as unknown[]).length} attachments`);
+          }
+          setAttachmentsMap(result);
+        }
+      } catch (error) {
+        console.error("Failed to load attachments:", error);
+      } finally {
+        setAttachmentsLoading(false);
+      }
+    };
+
+    loadAttachments();
+  }, [attachmentsKey]);
+
+  return (
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[80]"
+      onClick={onClose}
+    >
+      <div
+        className="bg-gray-100 w-full max-w-md h-[600px] rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Phone-style header */}
+        <div className="bg-gradient-to-r from-green-500 to-teal-600 px-4 py-3 flex items-center gap-3">
+          <button
+            onClick={onClose}
+            className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-colors"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+          <div className="flex-1">
+            <h4 className="text-white font-semibold">
+              {isGroupChat ? getGroupChatTitle() : (contactName || phoneNumber)}
+            </h4>
+            <p className="text-green-100 text-xs">
+              {filteredMessages.length} message{filteredMessages.length !== 1 ? "s" : ""}
+              {showAuditPeriodOnly && hasAuditDates && filteredMessages.length !== sortedMessages.length && (
+                <span className="ml-1">of {sortedMessages.length}</span>
+              )}
+            </p>
+          </div>
+        </div>
+
+        {/* TASK-1157: Audit date filter toggle */}
+        {hasAuditDates && (
+          <div className="bg-gray-100 px-4 py-2 flex items-center justify-between border-b border-gray-200">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showAuditPeriodOnly}
+                onChange={(e) => setShowAuditPeriodOnly(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-green-500 focus:ring-green-500"
+              />
+              <span className="text-sm text-gray-700">
+                Show audit period only ({formatDateRangeLabel(parsedStartDate, parsedEndDate)})
+              </span>
+            </label>
+            <span className="text-xs text-gray-500">
+              Showing {filteredMessages.length} of {sortedMessages.length}
+            </span>
+          </div>
+        )}
+
+        {/* Messages list - phone style */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {filteredMessages.map((msg, index) => {
+            const isOutbound = msg.direction === "outbound";
+            const rawText =
+              msg.body_text ||
+              msg.body_plain ||
+              ("body" in msg ? (msg as { body?: string }).body : "") ||
+              "";
+
+            const msgText = rawText;
+            const msgTime = new Date(msg.sent_at || msg.received_at || 0);
+
+            // Get sender info for group chats
+            const senderPhone = getSenderPhone(msg);
+            let senderName: string | undefined;
+            let showSender = false;
+
+            if (isGroupChat && senderPhone && !isOutbound) {
+              const normalized = normalizePhoneForLookup(senderPhone);
+              senderName =
+                contactNames[senderPhone] ||
+                contactNames[normalized] ||
+                senderPhone;
+
+              // Show sender if different from previous message
+              if (index === 0) {
+                showSender = true;
+              } else {
+                const prevSender = getSenderPhone(filteredMessages[index - 1]);
+                if (prevSender) {
+                  const prevNormalized = normalizePhoneForLookup(prevSender);
+                  showSender = normalized !== prevNormalized;
+                } else {
+                  showSender = true;
+                }
+              }
+            }
+
+            // Get attachments for this message (TASK-1012)
+            // Use message_id to look up attachments (attachments table uses message_id, not communication id)
+            const messageAttachments = msg.message_id ? (attachmentsMap[msg.message_id] || []) : [];
+            const displayableAttachments = messageAttachments.filter((att) =>
+              isDisplayableImage(att.mime_type)
+            );
+            const nonDisplayableAttachments = messageAttachments.filter((att) =>
+              !isDisplayableImage(att.mime_type)
+            );
+
+            // Check if message text is empty or just replacement character
+            const hasRealText = !isEmptyOrReplacementChar(msgText);
+
+            return (
+              <div
+                key={msg.id}
+                className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`max-w-[80%] rounded-2xl px-4 py-2 ${
+                    isOutbound
+                      ? "bg-green-500 text-white rounded-br-md"
+                      : "bg-white text-gray-900 rounded-bl-md shadow-sm"
+                  }`}
+                >
+                  {showSender && senderName && (
+                    <p
+                      className="text-xs font-semibold text-green-600 mb-1"
+                      data-testid="group-message-sender"
+                    >
+                      {senderName}
+                    </p>
+                  )}
+                  {/* Display inline images (TASK-1012) */}
+                  {displayableAttachments.length > 0 && (
+                    <div className="mb-2 space-y-2">
+                      {displayableAttachments.map((att) => (
+                        <AttachmentImage
+                          key={att.id}
+                          attachment={att}
+                          isOutbound={isOutbound}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {/* Show placeholders for non-displayable attachments (videos, documents, etc.) */}
+                  {nonDisplayableAttachments.length > 0 && (
+                    <div className="mb-2 space-y-1">
+                      {nonDisplayableAttachments.map((att) => (
+                        <div
+                          key={att.id}
+                          className={`text-xs italic ${isOutbound ? "text-green-100" : "text-gray-500"}`}
+                        >
+                          [{getAttachmentLabel(att.mime_type, att.filename)}: {att.filename}]
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* Show placeholder for attachments still loading */}
+                  {!!msg.has_attachments &&
+                    messageAttachments.length === 0 &&
+                    attachmentsLoading && (
+                      <div
+                        className={`text-xs italic mb-1 ${isOutbound ? "text-green-100" : "text-gray-400"}`}
+                      >
+                        Loading attachment...
+                      </div>
+                    )}
+                  {/* Show generic placeholder when we know there's an attachment but can't load it */}
+                  {!!msg.has_attachments &&
+                    messageAttachments.length === 0 &&
+                    !attachmentsLoading && (
+                      <div
+                        className={`text-xs italic mb-1 ${isOutbound ? "text-green-100" : "text-gray-400"}`}
+                      >
+                        [Attachment]
+                      </div>
+                    )}
+                  {/* Show message text if it's not just a replacement character */}
+                  {hasRealText && (
+                    <p className="text-sm whitespace-pre-wrap break-words">
+                      {msgText}
+                    </p>
+                  )}
+                  <p
+                    className={`text-xs mt-1 ${
+                      isOutbound ? "text-green-100" : "text-gray-400"
+                    }`}
+                  >
+                    {formatMessageTime(msgTime)}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div className="bg-white border-t px-4 py-3 flex justify-center">
+          <button
+            onClick={onClose}
+            className="px-6 py-2 bg-gray-200 hover:bg-gray-300 rounded-full text-sm font-medium text-gray-700 transition-all"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default ConversationViewModal;

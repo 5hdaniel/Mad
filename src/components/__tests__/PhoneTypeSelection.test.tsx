@@ -13,16 +13,16 @@ import "@testing-library/jest-dom";
 import PhoneTypeSelection from "../PhoneTypeSelection";
 import { PlatformProvider } from "../../contexts/PlatformContext";
 
-// Store original window.electron
-const originalElectron = window.electron;
+// Store original window.api
+const originalApi = window.api;
 
 // Helper to render with PlatformProvider
 function renderWithPlatform(
   ui: React.ReactElement,
   platform: string = "darwin",
 ) {
-  Object.defineProperty(window, "electron", {
-    value: { platform },
+  Object.defineProperty(window, "api", {
+    value: { ...originalApi, system: { ...originalApi?.system, platform } },
     writable: true,
     configurable: true,
   });
@@ -39,9 +39,9 @@ describe("PhoneTypeSelection", () => {
   });
 
   afterEach(() => {
-    // Restore original window.electron
-    Object.defineProperty(window, "electron", {
-      value: originalElectron,
+    // Restore original window.api
+    Object.defineProperty(window, "api", {
+      value: originalApi,
       writable: true,
       configurable: true,
     });

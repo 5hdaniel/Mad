@@ -10,6 +10,7 @@
 
 import React from "react";
 import type { AppStateMachine } from "./state/types";
+import { OfflineBanner, VersionPopup } from "./shell";
 
 interface AppShellProps {
   app: AppStateMachine;
@@ -20,6 +21,7 @@ export function AppShell({ app, children }: AppShellProps) {
   const {
     currentStep,
     isAuthenticated,
+    isDatabaseInitialized,
     currentUser,
     isOnline,
     isChecking,
@@ -30,6 +32,21 @@ export function AppShell({ app, children }: AppShellProps) {
     handleRetryConnection,
     getPageTitle,
   } = app;
+
+  // PRIMARY DATABASE INITIALIZATION GATE
+  // Block all content for authenticated users until database is ready
+  // This prevents "Database is not initialized" errors from modal bypass
+  if (isAuthenticated && !isDatabaseInitialized) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Initializing secure storage...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
       {/* Title Bar - Hide on login screen */}
@@ -64,60 +81,16 @@ export function AppShell({ app, children }: AppShellProps) {
       )}
 
       {/* Offline Banner - Show when network is unavailable */}
-      {!isOnline && currentStep !== "login" && (
-        <div className="flex-shrink-0 bg-yellow-50 border-b border-yellow-200 px-4 py-3">
-          <div className="flex items-center justify-between max-w-4xl mx-auto">
-            <div className="flex items-center gap-3">
-              <div className="flex-shrink-0">
-                <svg
-                  className="w-5 h-5 text-yellow-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414"
-                  />
-                </svg>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-yellow-800">
-                  You're offline
-                </p>
-                <p className="text-xs text-yellow-700">
-                  Some features may be limited. Your local data is still
-                  accessible.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleRetryConnection}
-                disabled={isChecking}
-                className="px-3 py-1.5 text-xs font-medium text-yellow-800 bg-yellow-200 hover:bg-yellow-300 rounded-md transition-colors disabled:opacity-50"
-              >
-                {isChecking ? "Checking..." : "Retry"}
-              </button>
-              <button
-                onClick={() =>
-                  window.api?.system?.contactSupport?.(
-                    "Network connection issue",
-                  )
-                }
-                className="px-3 py-1.5 text-xs font-medium text-yellow-800 hover:text-yellow-900 transition-colors"
-              >
-                Get Help
-              </button>
-            </div>
-          </div>
-        </div>
+      {currentStep !== "login" && (
+        <OfflineBanner
+          isOnline={isOnline}
+          isChecking={isChecking}
+          onRetry={handleRetryConnection}
+        />
       )}
 
       {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-y-auto relative">
+      <div className="flex-1 min-h-0 overflow-y-auto relative">
         {children}
 
         {/* Version Info Button - Bottom Left */}
@@ -142,48 +115,10 @@ export function AppShell({ app, children }: AppShellProps) {
         </button>
 
         {/* Version Info Popup */}
-        {modalState.showVersion && (
-          <div className="fixed bottom-16 left-4 bg-white rounded-lg shadow-xl border border-gray-200 p-4 z-50 min-w-64">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-900">App Info</h3>
-              <button
-                onClick={closeVersion}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            </div>
-            <div className="space-y-2 text-xs">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Version:</span>
-                <span className="font-mono font-semibold text-gray-900">
-                  1.0.7
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Last Update:</span>
-                <span className="font-mono text-gray-700 bg-green-100 px-1 rounded">
-                  Clean Filenames
-                </span>
-              </div>
-              <div className="pt-2 border-t border-gray-200">
-                <p className="text-gray-500 text-xs">MagicAudit</p>
-              </div>
-            </div>
-          </div>
-        )}
+        <VersionPopup
+          isVisible={modalState.showVersion}
+          onClose={closeVersion}
+        />
       </div>
     </div>
   );

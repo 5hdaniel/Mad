@@ -399,15 +399,36 @@ export function validateContactData(
  */
 export interface ValidatedTransactionData {
   property_address?: string | null;
+  property_street?: string | null;
+  property_city?: string | null;
+  property_state?: string | null;
+  property_zip?: string | null;
+  property_coordinates?: string | null;
   transaction_type?: string;
   amount?: number;
   status?: string;
   notes?: string | null;
   sale_price?: number;
   listing_price?: number;
-  representation_start_date?: string;
-  closing_date?: string;
   closing_date_verified?: number;
+  started_at?: string;
+  closed_at?: string;
+  closing_deadline?: string;
+  // AI detection fields
+  detection_status?: string;
+  reviewed_at?: string;
+  rejection_reason?: string | null;
+  // Contact assignments (for audited transaction creation)
+  contact_assignments?: ContactAssignmentData[];
+}
+
+// Contact assignment data for transaction creation
+export interface ContactAssignmentData {
+  contact_id: string;
+  role: string;
+  role_category?: string;
+  is_primary?: number;
+  notes?: string | null;
 }
 
 /**
@@ -415,15 +436,27 @@ export interface ValidatedTransactionData {
  */
 export interface RawTransactionData {
   property_address?: unknown;
+  property_street?: unknown;
+  property_city?: unknown;
+  property_state?: unknown;
+  property_zip?: unknown;
+  property_coordinates?: unknown;
   transaction_type?: unknown;
   amount?: unknown;
   status?: unknown;
   notes?: unknown;
   sale_price?: unknown;
   listing_price?: unknown;
-  representation_start_date?: unknown;
-  closing_date?: unknown;
   closing_date_verified?: unknown;
+  started_at?: unknown;
+  closed_at?: unknown;
+  closing_deadline?: unknown;
+  // AI detection fields
+  detection_status?: unknown;
+  reviewed_at?: unknown;
+  rejection_reason?: unknown;
+  // Contact assignments
+  contact_assignments?: unknown;
 }
 
 /**
@@ -458,6 +491,44 @@ export function validateTransactionData(
         maxLength: 500,
       },
     );
+  }
+
+  // Property address components (optional)
+  if (data.property_street !== undefined) {
+    validated.property_street = validateString(
+      data.property_street,
+      "property_street",
+      { required: false, maxLength: 200 },
+    );
+  }
+  if (data.property_city !== undefined) {
+    validated.property_city = validateString(
+      data.property_city,
+      "property_city",
+      { required: false, maxLength: 100 },
+    );
+  }
+  if (data.property_state !== undefined) {
+    validated.property_state = validateString(
+      data.property_state,
+      "property_state",
+      { required: false, maxLength: 100 },
+    );
+  }
+  if (data.property_zip !== undefined) {
+    validated.property_zip = validateString(
+      data.property_zip,
+      "property_zip",
+      { required: false, maxLength: 20 },
+    );
+  }
+  if (data.property_coordinates !== undefined) {
+    // Can be a string (JSON) or null
+    if (data.property_coordinates === null) {
+      validated.property_coordinates = null;
+    } else if (typeof data.property_coordinates === "string") {
+      validated.property_coordinates = data.property_coordinates;
+    }
   }
 
   // Transaction type
@@ -534,42 +605,6 @@ export function validateTransactionData(
     validated.listing_price = price;
   }
 
-  // Representation start date (optional, must be valid date string)
-  if (
-    data.representation_start_date !== undefined &&
-    data.representation_start_date !== null
-  ) {
-    if (
-      typeof data.representation_start_date === "string" &&
-      data.representation_start_date.trim()
-    ) {
-      // Validate it's a valid date format (YYYY-MM-DD or ISO date string)
-      const dateStr = data.representation_start_date.trim();
-      if (!/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
-        throw new ValidationError(
-          "Representation start date must be in YYYY-MM-DD format",
-          "representation_start_date",
-        );
-      }
-      validated.representation_start_date = dateStr;
-    }
-  }
-
-  // Closing date (optional, must be valid date string)
-  if (data.closing_date !== undefined && data.closing_date !== null) {
-    if (typeof data.closing_date === "string" && data.closing_date.trim()) {
-      // Validate it's a valid date format (YYYY-MM-DD or ISO date string)
-      const dateStr = data.closing_date.trim();
-      if (!/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
-        throw new ValidationError(
-          "Closing date must be in YYYY-MM-DD format",
-          "closing_date",
-        );
-      }
-      validated.closing_date = dateStr;
-    }
-  }
-
   // Closing date verified flag (optional, must be 0 or 1)
   if (
     data.closing_date_verified !== undefined &&
@@ -583,6 +618,109 @@ export function validateTransactionData(
       );
     }
     validated.closing_date_verified = verified;
+  }
+
+  // Started at date (optional, must be valid date string)
+  if (data.started_at !== undefined && data.started_at !== null) {
+    if (typeof data.started_at === "string" && data.started_at.trim()) {
+      // Validate it's a valid date format (YYYY-MM-DD or ISO date string)
+      const dateStr = data.started_at.trim();
+      if (!/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+        throw new ValidationError(
+          "Started at date must be in YYYY-MM-DD format",
+          "started_at",
+        );
+      }
+      validated.started_at = dateStr;
+    }
+  }
+
+  // Closed at date (optional, must be valid date string)
+  if (data.closed_at !== undefined && data.closed_at !== null) {
+    if (typeof data.closed_at === "string" && data.closed_at.trim()) {
+      // Validate it's a valid date format (YYYY-MM-DD or ISO date string)
+      const dateStr = data.closed_at.trim();
+      if (!/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+        throw new ValidationError(
+          "Closed at date must be in YYYY-MM-DD format",
+          "closed_at",
+        );
+      }
+      validated.closed_at = dateStr;
+    }
+  }
+
+  // Closing deadline date (optional, must be valid date string)
+  if (data.closing_deadline !== undefined && data.closing_deadline !== null) {
+    if (typeof data.closing_deadline === "string" && data.closing_deadline.trim()) {
+      // Validate it's a valid date format (YYYY-MM-DD or ISO date string)
+      const dateStr = data.closing_deadline.trim();
+      if (!/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+        throw new ValidationError(
+          "Closing deadline date must be in YYYY-MM-DD format",
+          "closing_deadline",
+        );
+      }
+      validated.closing_deadline = dateStr;
+    }
+  }
+
+  // Detection status (for AI-detected transactions)
+  if (data.detection_status !== undefined) {
+    const validDetectionStatuses = ["pending", "confirmed", "rejected"];
+    const detectionStatus =
+      typeof data.detection_status === "string"
+        ? data.detection_status.toLowerCase()
+        : "";
+    if (!validDetectionStatuses.includes(detectionStatus)) {
+      throw new ValidationError(
+        `Detection status must be one of: ${validDetectionStatuses.join(", ")}`,
+        "detection_status",
+      );
+    }
+    validated.detection_status = detectionStatus;
+  }
+
+  // Reviewed at timestamp (for AI-detected transactions)
+  if (data.reviewed_at !== undefined && data.reviewed_at !== null) {
+    if (typeof data.reviewed_at === "string" && data.reviewed_at.trim()) {
+      validated.reviewed_at = data.reviewed_at.trim();
+    }
+  }
+
+  // Rejection reason (for rejected AI-detected transactions)
+  if (data.rejection_reason !== undefined && data.rejection_reason !== null) {
+    validated.rejection_reason = validateString(
+      data.rejection_reason,
+      "rejection_reason",
+      {
+        required: false,
+        maxLength: 1000,
+      },
+    );
+  }
+
+  // Contact assignments (for audited transaction creation)
+  if (data.contact_assignments !== undefined && Array.isArray(data.contact_assignments)) {
+    validated.contact_assignments = data.contact_assignments.map((assignment: unknown) => {
+      if (typeof assignment !== "object" || assignment === null) {
+        throw new ValidationError("Contact assignment must be an object", "contact_assignments");
+      }
+      const a = assignment as { contact_id?: unknown; role?: unknown; role_category?: unknown; is_primary?: unknown; notes?: unknown };
+      if (!a.contact_id || typeof a.contact_id !== "string") {
+        throw new ValidationError("Contact assignment must have a valid contact_id", "contact_assignments");
+      }
+      if (!a.role || typeof a.role !== "string") {
+        throw new ValidationError("Contact assignment must have a valid role", "contact_assignments");
+      }
+      return {
+        contact_id: a.contact_id,
+        role: a.role,
+        role_category: typeof a.role_category === "string" ? a.role_category : undefined,
+        is_primary: typeof a.is_primary === "number" ? a.is_primary : 0,
+        notes: typeof a.notes === "string" ? a.notes : null,
+      };
+    });
   }
 
   return validated;
@@ -672,4 +810,245 @@ export function sanitizeObject(
   }
 
   return cleaned;
+}
+
+// =============================================================================
+// SECURITY: Device and Spawn Input Validation
+// =============================================================================
+// These validators are CRITICAL for preventing command injection attacks.
+// All spawn/exec calls that take external input MUST validate that input first.
+//
+// SECURITY AUDIT (TASK-601):
+// - appleDriverService.ts: PowerShell spawn uses internal paths only (safe)
+// - backupService.ts: UDID from IPC - MUST validate before spawn
+// - deviceDetectionService.ts: UDID from IPC - MUST validate before spawn
+// =============================================================================
+
+/**
+ * iOS Device UDID format patterns.
+ *
+ * SECURITY: UDIDs are used as command-line arguments to ideviceinfo, idevicebackup2, etc.
+ * If not validated, a malicious UDID could inject shell commands.
+ *
+ * Valid UDID formats:
+ * - iOS devices (pre-iPhone X): 40 hexadecimal characters
+ *   Example: "a1b2c3d4e5f6789012345678901234567890abcd"
+ *
+ * - iOS devices (iPhone X+): 8-4-16 format with hyphens (25 chars total)
+ *   Example: "00000000-0000000000000000"
+ *
+ * - Simulator UDIDs: Standard UUID format (36 chars with hyphens)
+ *   Example: "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+ */
+const UDID_PATTERNS = {
+  /** 40 hex chars - traditional iOS UDID format */
+  TRADITIONAL: /^[0-9a-fA-F]{40}$/,
+  /** 8-4-16 format - newer iOS devices (iPhone X+) */
+  MODERN: /^[0-9a-fA-F]{8}-[0-9a-fA-F]{16}$/,
+  /** UUID format - iOS Simulator */
+  SIMULATOR: /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
+};
+
+/**
+ * Validate iOS device UDID for use in spawn/exec commands.
+ *
+ * SECURITY: This is a CRITICAL security function. UDIDs are passed as arguments
+ * to libimobiledevice CLI tools (ideviceinfo, idevicebackup2, etc.). Without
+ * validation, a malicious UDID could contain shell metacharacters that enable
+ * command injection.
+ *
+ * @param udid - Device UDID to validate
+ * @param required - Whether the field is required (default: true)
+ * @returns Validated UDID string
+ * @throws ValidationError if validation fails
+ *
+ * @example
+ * // Valid UDIDs
+ * validateDeviceUdid("00000000-0000000000000000"); // Modern format
+ * validateDeviceUdid("a1b2c3d4e5f6789012345678901234567890abcd"); // Traditional
+ *
+ * // Invalid - would throw ValidationError
+ * validateDeviceUdid("$(rm -rf /)"); // Command injection attempt
+ * validateDeviceUdid("udid; cat /etc/passwd"); // Shell metacharacters
+ */
+export function validateDeviceUdid(
+  udid: unknown,
+  required: boolean = true,
+): string {
+  // Check for null/undefined/empty
+  if (udid === null || udid === undefined || udid === "") {
+    if (required) {
+      throw new ValidationError("Device UDID is required", "udid");
+    }
+    return "";
+  }
+
+  // Must be a string
+  if (typeof udid !== "string") {
+    throw new ValidationError("Device UDID must be a string", "udid");
+  }
+
+  const trimmed = udid.trim();
+
+  // Check length bounds (shortest is 25 for modern format, longest is 40 for traditional)
+  if (trimmed.length < 25 || trimmed.length > 40) {
+    throw new ValidationError(
+      "Device UDID has invalid length (expected 25-40 characters)",
+      "udid",
+    );
+  }
+
+  // Validate against known UDID patterns
+  const isValidFormat =
+    UDID_PATTERNS.TRADITIONAL.test(trimmed) ||
+    UDID_PATTERNS.MODERN.test(trimmed) ||
+    UDID_PATTERNS.SIMULATOR.test(trimmed);
+
+  if (!isValidFormat) {
+    throw new ValidationError(
+      "Device UDID has invalid format (must be hexadecimal with optional hyphens)",
+      "udid",
+    );
+  }
+
+  return trimmed;
+}
+
+/**
+ * Check if a UDID is valid without throwing.
+ *
+ * SECURITY: Use this for quick validation checks before spawning processes.
+ *
+ * @param udid - Device UDID to check
+ * @returns true if valid, false otherwise
+ *
+ * @example
+ * if (!isValidDeviceUdid(options.udid)) {
+ *   return { success: false, error: "Invalid device UDID" };
+ * }
+ */
+export function isValidDeviceUdid(udid: unknown): boolean {
+  try {
+    validateDeviceUdid(udid);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Validate an executable path for spawn/exec operations.
+ *
+ * SECURITY: Executable paths used with spawn() must be validated to prevent:
+ * - Path traversal attacks (../)
+ * - Execution of arbitrary binaries
+ * - Shell injection via path manipulation
+ *
+ * @param execPath - Path to the executable
+ * @param allowedBasePaths - Array of allowed base paths the executable must be under
+ * @returns Validated path string
+ * @throws ValidationError if path is invalid or not under allowed paths
+ *
+ * @example
+ * // Validate that an executable is in the expected location
+ * const validPath = validateExecutablePath(
+ *   "/app/resources/win/libimobiledevice/ideviceinfo.exe",
+ *   ["/app/resources/win/libimobiledevice", "C:\\Program Files\\7-Zip"]
+ * );
+ */
+export function validateExecutablePath(
+  execPath: unknown,
+  allowedBasePaths: string[],
+): string {
+  if (!execPath || typeof execPath !== "string") {
+    throw new ValidationError(
+      "Executable path is required and must be a string",
+      "execPath",
+    );
+  }
+
+  const trimmed = execPath.trim();
+
+  // Check for empty path
+  if (trimmed.length === 0) {
+    throw new ValidationError("Executable path cannot be empty", "execPath");
+  }
+
+  // Prevent path traversal attacks
+  if (trimmed.includes("..")) {
+    throw new ValidationError(
+      "Executable path contains path traversal sequences",
+      "execPath",
+    );
+  }
+
+  // Check for shell metacharacters that could enable injection
+  // These characters have special meaning in shell contexts
+  const dangerousChars = /[;&|`$(){}[\]<>!#*?~\n\r]/;
+  if (dangerousChars.test(trimmed)) {
+    throw new ValidationError(
+      "Executable path contains dangerous characters",
+      "execPath",
+    );
+  }
+
+  // Normalize path separators for cross-platform comparison
+  const normalizedPath = trimmed.replace(/\\/g, "/").toLowerCase();
+
+  // Verify path is under one of the allowed base paths
+  const isUnderAllowedPath = allowedBasePaths.some((basePath) => {
+    const normalizedBase = basePath.replace(/\\/g, "/").toLowerCase();
+    return normalizedPath.startsWith(normalizedBase);
+  });
+
+  if (!isUnderAllowedPath) {
+    throw new ValidationError(
+      "Executable path is not in an allowed location",
+      "execPath",
+    );
+  }
+
+  return trimmed;
+}
+
+/**
+ * Validate an MSI installer path for Windows driver installation.
+ *
+ * SECURITY: MSI paths are embedded in PowerShell commands. Invalid paths
+ * could enable command injection. This function ensures:
+ * - Path is within expected directories (app resources or userData)
+ * - No path traversal sequences
+ * - File has .msi extension
+ *
+ * @param msiPath - Path to the MSI file
+ * @param allowedBasePaths - Array of allowed base paths
+ * @returns Validated path string
+ * @throws ValidationError if validation fails
+ *
+ * @example
+ * validateMsiPath(
+ *   "C:\\Users\\App\\resources\\win\\AppleMobileDeviceSupport64.msi",
+ *   [app.getPath("userData"), process.resourcesPath]
+ * );
+ */
+export function validateMsiPath(
+  msiPath: unknown,
+  allowedBasePaths: string[],
+): string {
+  if (!msiPath || typeof msiPath !== "string") {
+    throw new ValidationError(
+      "MSI path is required and must be a string",
+      "msiPath",
+    );
+  }
+
+  const trimmed = msiPath.trim();
+
+  // Must end with .msi extension
+  if (!trimmed.toLowerCase().endsWith(".msi")) {
+    throw new ValidationError("Path must be an MSI file", "msiPath");
+  }
+
+  // Validate as executable path (reuse common checks)
+  return validateExecutablePath(trimmed, allowedBasePaths);
 }

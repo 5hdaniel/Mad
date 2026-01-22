@@ -48,6 +48,23 @@ interface SyncResult {
 }
 
 /**
+ * Unified sync status (TASK-904)
+ * Aggregates status from backup and sync orchestrator
+ */
+interface UnifiedSyncStatus {
+  /** True if any backup/sync operation is currently running */
+  isAnyOperationRunning: boolean;
+  /** True if an iPhone backup is in progress */
+  backupInProgress: boolean;
+  /** True if email/message sync is in progress (not backup) */
+  emailSyncInProgress: boolean;
+  /** Human-readable label for the current operation, or null if idle */
+  currentOperation: string | null;
+  /** Current sync phase from orchestrator */
+  syncPhase: "idle" | "backup" | "decrypting" | "parsing-contacts" | "parsing-messages" | "resolving" | "cleanup" | "complete" | "error";
+}
+
+/**
  * iOS Device information from libimobiledevice
  */
 interface iOSDeviceInfo {
@@ -99,10 +116,13 @@ interface ElectronAPI {
     update: (id: string, data: unknown) => Promise<{ success: boolean }>;
     delete: (id: string) => Promise<{ success: boolean }>;
     bulkDelete: (transactionIds: string[]) => Promise<{ success: boolean; deletedCount?: number; error?: string }>;
-    bulkUpdateStatus: (transactionIds: string[], status: string) => Promise<{ success: boolean; updatedCount?: number; error?: string }>;
+    bulkUpdateStatus: (transactionIds: string[], status: "pending" | "active" | "closed" | "rejected") => Promise<{ success: boolean; updatedCount?: number; error?: string }>;
   };
   onTransactionScanProgress: (
     callback: (progress: unknown) => void,
+  ) => () => void;
+  onExportFolderProgress: (
+    callback: (progress: { stage: string; current: number; total: number; message: string }) => void,
   ) => () => void;
 
   // File System
@@ -212,7 +232,133 @@ interface ElectronAPI {
  * Main API namespace (preferred for new code)
  * Exposed via contextBridge in preload.js
  */
+/**
+ * Progress event from macOS message import
+ */
+interface MacOSImportProgress {
+  current: number;
+  total: number;
+  percent: number;
+}
+
+/**
+ * Result of macOS message import
+ */
+interface MacOSImportResult {
+  success: boolean;
+  messagesImported: number;
+  messagesSkipped: number;
+  attachmentsImported: number;
+  attachmentsSkipped: number;
+  duration: number;
+  error?: string;
+}
+
+/**
+ * Attachment info for display (TASK-1012)
+ */
+interface MessageAttachmentInfo {
+  id: string;
+  message_id: string;
+  filename: string;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  /** Base64-encoded file content for inline display */
+  data: string | null;
+}
+
 interface MainAPI {
+  // Messages API (iMessage/SMS - migrated from window.electron)
+  messages: {
+    getConversations: () => Promise<GetConversationsResult>;
+    getMessages: (chatId: string) => Promise<unknown[]>;
+    exportConversations: (
+      conversationIds: string[],
+    ) => Promise<{ success: boolean; exportPath?: string }>;
+    /** Import messages from macOS Messages app into the app database (macOS only) */
+    importMacOSMessages: (userId: string, forceReimport?: boolean) => Promise<MacOSImportResult>;
+    /** Get count of messages available for import from macOS Messages */
+    getImportCount: () => Promise<{ success: boolean; count?: number; error?: string }>;
+    /** Listen for import progress updates */
+    onImportProgress: (callback: (progress: MacOSImportProgress) => void) => () => void;
+    /** Get attachments for a message with base64 data (TASK-1012) */
+    getMessageAttachments: (messageId: string) => Promise<MessageAttachmentInfo[]>;
+    /** Get attachments for multiple messages at once (TASK-1012) */
+    getMessageAttachmentsBatch: (messageIds: string[]) => Promise<Record<string, MessageAttachmentInfo[]>>;
+  };
+
+  // Outlook integration (migrated from window.electron)
+  outlook: {
+    initialize: () => Promise<{ success: boolean; error?: string }>;
+    authenticate: () => Promise<{
+      success: boolean;
+      error?: string;
+      userInfo?: { username?: string };
+    }>;
+    isAuthenticated: () => Promise<boolean>;
+    getUserEmail: () => Promise<string | null>;
+    exportEmails: (
+      contacts: Array<{
+        name: string;
+        chatId?: string;
+        emails?: string[];
+        phones?: string[];
+      }>,
+    ) => Promise<{
+      success: boolean;
+      error?: string;
+      canceled?: boolean;
+      exportPath?: string;
+      results?: Array<{
+        contactName: string;
+        success: boolean;
+        textMessageCount: number;
+        emailCount?: number;
+        error: string | null;
+      }>;
+    }>;
+    signout: () => Promise<{ success: boolean }>;
+    onDeviceCode: (callback: (info: unknown) => void) => () => void;
+    onExportProgress: (callback: (progress: unknown) => void) => () => void;
+  };
+
+  // Auto-update (migrated from window.electron)
+  update: {
+    onAvailable: (callback: (info: unknown) => void) => () => void;
+    onProgress: (callback: (progress: unknown) => void) => () => void;
+    onDownloaded: (callback: (info: unknown) => void) => () => void;
+    install: () => void;
+  };
+
+  // Shell operations
+  shell: {
+    openExternal: (url: string) => Promise<{ success: boolean }>;
+    openFolder: (folderPath: string) => Promise<{ success: boolean }>;
+  };
+
+  // Apple Driver Management (Windows only)
+  drivers: {
+    checkApple: () => Promise<{
+      installed: boolean;
+      version?: string;
+      serviceRunning: boolean;
+      error?: string;
+    }>;
+    hasBundled: () => Promise<{ hasBundled: boolean }>;
+    installApple: () => Promise<{
+      success: boolean;
+      cancelled?: boolean;
+      error?: string;
+      rebootRequired?: boolean;
+    }>;
+    openITunesStore: () => Promise<{ success: boolean; error?: string }>;
+    checkUpdate: () => Promise<{
+      updateAvailable: boolean;
+      installedVersion: string | null;
+      bundledVersion: string | null;
+    }>;
+  };
+
   auth: {
     googleLogin: () => Promise<{
       success: boolean;
@@ -293,6 +439,30 @@ interface MainAPI {
     }) => Promise<{ success: boolean; error?: string }>;
   };
   system: {
+    // Platform detection (migrated from window.electron.platform)
+    platform: "darwin" | "win32" | "linux" | string;
+
+    // App info (migrated from window.electron)
+    getAppInfo: () => Promise<{ version: string; name: string }>;
+    getMacOSVersion: () => Promise<{ version: string | number; name?: string }>;
+    checkAppLocation: () => Promise<{
+      inApplications?: boolean;
+      shouldPrompt?: boolean;
+      appPath?: string;
+      path?: string;
+    }>;
+
+    // Permission checks (migrated from window.electron)
+    checkPermissions: () => Promise<{
+      hasPermission?: boolean;
+      fullDiskAccess?: boolean;
+      contacts?: boolean;
+    }>;
+    triggerFullDiskAccess: () => Promise<{ granted: boolean }>;
+    requestPermissions: () => Promise<Record<string, unknown>>;
+    openSystemSettings: () => Promise<{ success: boolean }>;
+
+    // Existing system methods
     getSecureStorageStatus: () => Promise<{
       success: boolean;
       available: boolean;
@@ -341,12 +511,27 @@ interface MainAPI {
       }>;
     }>;
     openPrivacyPane: (pane: string) => Promise<void>;
+    setupFullDiskAccess: () => Promise<void>;
+    checkFullDiskAccess: () => Promise<{ granted: boolean }>;
+    checkContactsPermission: () => Promise<{ granted: boolean }>;
+    checkAllPermissions: () => Promise<{
+      allGranted: boolean;
+      permissions: {
+        fullDiskAccess?: { hasPermission: boolean; error?: string };
+        contacts?: { hasPermission: boolean; error?: string };
+      };
+      errors: Array<{ hasPermission: boolean; error?: string }>;
+    }>;
     contactSupport: (
       errorDetails?: string,
     ) => Promise<{ success: boolean; error?: string }>;
     getDiagnostics: () => Promise<{
       success: boolean;
       diagnostics?: string;
+      error?: string;
+    }>;
+    showInFolder: (filePath: string) => Promise<{
+      success: boolean;
       error?: string;
     }>;
   };
@@ -393,6 +578,12 @@ interface MainAPI {
       phase: string;
     }>;
 
+    /**
+     * Get unified sync status (aggregates backup + orchestrator state)
+     * TASK-904: Use this to check if any sync operation is running
+     */
+    getUnifiedStatus: () => Promise<UnifiedSyncStatus>;
+
     /** Get connected devices */
     getDevices: () => Promise<iOSDeviceInfo[]>;
 
@@ -401,6 +592,15 @@ interface MainAPI {
 
     /** Stop device detection polling */
     stopDetection: () => Promise<{ success: boolean }>;
+
+    /**
+     * Process existing backup without running new backup (for testing/recovery)
+     * @param options - Processing options including device UDID and optional password
+     */
+    processExisting: (options: {
+      udid: string;
+      password?: string;
+    }) => Promise<SyncResult>;
 
     /** Subscribe to sync progress updates */
     onProgress: (callback: (progress: SyncProgress) => void) => () => void;
@@ -416,6 +616,12 @@ interface MainAPI {
 
     /** Subscribe to password required events */
     onPasswordRequired: (callback: () => void) => () => void;
+
+    /** Subscribe to passcode waiting events (user needs to enter passcode on iPhone) */
+    onWaitingForPasscode: (callback: () => void) => () => void;
+
+    /** Subscribe to passcode entered events (user entered passcode, backup starting) */
+    onPasscodeEntered: (callback: () => void) => () => void;
 
     /** Subscribe to sync error events */
     onError: (callback: (error: { message: string }) => void) => () => void;
@@ -665,6 +871,76 @@ interface MainAPI {
     onError: (callback: (error: { message: string }) => void) => () => void;
   };
 
+  // Contacts API
+  contacts: {
+    getAll: (userId: string) => Promise<{
+      success: boolean;
+      contacts?: unknown[];
+      error?: string;
+    }>;
+    getAvailable: (userId: string) => Promise<{
+      success: boolean;
+      contacts?: unknown[];
+      contactsStatus?: unknown;
+      error?: string;
+    }>;
+    import: (userId: string, contactsToImport: unknown[]) => Promise<{
+      success: boolean;
+      contacts?: unknown[];
+      error?: string;
+    }>;
+    getSortedByActivity: (userId: string, propertyAddress?: string) => Promise<{
+      success: boolean;
+      contacts?: unknown[];
+      error?: string;
+    }>;
+    create: (userId: string, contactData: unknown) => Promise<{
+      success: boolean;
+      contact?: unknown;
+      error?: string;
+    }>;
+    update: (contactId: string, updates: unknown) => Promise<{
+      success: boolean;
+      contact?: unknown;
+      error?: string;
+    }>;
+    checkCanDelete: (contactId: string) => Promise<{
+      success: boolean;
+      canDelete?: boolean;
+      transactions?: unknown[];
+      count?: number;
+      error?: string;
+    }>;
+    delete: (contactId: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    remove: (contactId: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    getNamesByPhones: (phones: string[]) => Promise<{
+      success: boolean;
+      names: Record<string, string>;
+      error?: string;
+    }>;
+    /**
+     * Search contacts at database level (for selection modal)
+     * Enables searching beyond the initial LIMIT 200 contacts
+     * @param userId - User ID to search contacts for
+     * @param query - Search query (name, email, phone, company)
+     * @returns Matching contacts sorted by relevance
+     */
+    searchContacts: (userId: string, query: string) => Promise<{
+      success: boolean;
+      contacts?: unknown[];
+      error?: string;
+    }>;
+    onImportProgress: (
+      callback: (progress: { current: number; total: number; percent: number }) => void
+    ) => () => void;
+  };
+
   // Transactions API
   transactions: {
     getAll: (
@@ -709,7 +985,10 @@ interface MainAPI {
     }>;
     getDetails: (transactionId: string) => Promise<{
       success: boolean;
-      transaction?: Record<string, unknown>;
+      transaction?: Transaction & {
+        communications?: unknown[];
+        contact_assignments?: unknown[];
+      };
       error?: string;
     }>;
     getWithContacts: (transactionId: string) => Promise<{
@@ -752,6 +1031,22 @@ interface MainAPI {
       transactionId: string,
       contactId: string,
     ) => Promise<{ success: boolean; error?: string }>;
+    /**
+     * Batch update contact assignments for a transaction
+     * Performs multiple add/remove operations in a single atomic transaction
+     */
+    batchUpdateContacts: (
+      transactionId: string,
+      operations: Array<{
+        action: "add" | "remove";
+        contactId: string;
+        role?: string;
+        roleCategory?: string;
+        specificRole?: string;
+        isPrimary?: boolean;
+        notes?: string;
+      }>,
+    ) => Promise<{ success: boolean; error?: string }>;
     unlinkCommunication: (
       communicationId: string,
       reason?: string,
@@ -777,10 +1072,35 @@ interface MainAPI {
     }>;
     exportEnhanced: (
       transactionId: string,
-      options: Record<string, unknown>,
+      options: {
+        exportFormat?: string;
+        contentType?: "text" | "email" | "both";
+        representationStartDate?: string;
+        closingDate?: string;
+        startDate?: string;
+        endDate?: string;
+        summaryOnly?: boolean;
+      },
     ) => Promise<{
       success: boolean;
       filePath?: string;
+      path?: string;
+      error?: string;
+    }>;
+    /**
+     * Export transaction to an organized folder structure
+     * Creates: Summary_Report.pdf, emails/, texts/, attachments/
+     */
+    exportFolder: (
+      transactionId: string,
+      options?: {
+        includeEmails?: boolean;
+        includeTexts?: boolean;
+        includeAttachments?: boolean;
+      },
+    ) => Promise<{
+      success: boolean;
+      path?: string;
       error?: string;
     }>;
     bulkDelete: (transactionIds: string[]) => Promise<{
@@ -791,11 +1111,49 @@ interface MainAPI {
     }>;
     bulkUpdateStatus: (
       transactionIds: string[],
-      status: string,
+      status: "pending" | "active" | "closed" | "rejected",
     ) => Promise<{
       success: boolean;
       updatedCount?: number;
       errors?: string[];
+      error?: string;
+    }>;
+    /**
+     * Gets unlinked messages (SMS/iMessage not attached to any transaction)
+     */
+    getUnlinkedMessages: (userId: string) => Promise<{
+      success: boolean;
+      messages?: unknown[];
+      error?: string;
+    }>;
+    /**
+     * Links messages to a transaction
+     */
+    linkMessages: (
+      messageIds: string[],
+      transactionId: string,
+    ) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    /**
+     * Unlinks messages from a transaction (sets transaction_id to null)
+     */
+    unlinkMessages: (messageIds: string[]) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    /**
+     * Re-syncs auto-link communications for all contacts on a transaction.
+     * Useful when contacts have been updated with new email/phone info.
+     */
+    resyncAutoLink: (transactionId: string) => Promise<{
+      success: boolean;
+      contactsProcessed?: number;
+      totalEmailsLinked?: number;
+      totalMessagesLinked?: number;
+      totalAlreadyLinked?: number;
+      totalErrors?: number;
       error?: string;
     }>;
   };
@@ -803,6 +1161,11 @@ interface MainAPI {
   // Transaction scan progress event
   onTransactionScanProgress: (
     callback: (progress: { step: string; message: string }) => void,
+  ) => () => void;
+
+  // Folder export progress event
+  onExportFolderProgress: (
+    callback: (progress: { stage: string; current: number; total: number; message: string }) => void,
   ) => () => void;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

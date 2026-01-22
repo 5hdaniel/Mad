@@ -13,8 +13,22 @@ import {
   Platform,
 } from "../platform";
 
-// Store original window.electron
-const originalElectron = window.electron;
+// Store originals
+const originalApi = window.api;
+const originalNavigator = window.navigator;
+
+// Helper to mock navigator properties
+function mockNavigator(platform: string, userAgent: string) {
+  Object.defineProperty(window, "navigator", {
+    value: {
+      ...originalNavigator,
+      platform,
+      userAgent,
+    },
+    writable: true,
+    configurable: true,
+  });
+}
 
 describe("Platform Detection Utility", () => {
   beforeEach(() => {
@@ -22,9 +36,15 @@ describe("Platform Detection Utility", () => {
   });
 
   afterEach(() => {
-    // Restore original window.electron
-    Object.defineProperty(window, "electron", {
-      value: originalElectron,
+    // Restore original window.api
+    Object.defineProperty(window, "api", {
+      value: originalApi,
+      writable: true,
+      configurable: true,
+    });
+    // Restore original navigator
+    Object.defineProperty(window, "navigator", {
+      value: originalNavigator,
       writable: true,
       configurable: true,
     });
@@ -32,8 +52,8 @@ describe("Platform Detection Utility", () => {
 
   describe("getPlatform", () => {
     it('should return "macos" when platform is darwin', () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "darwin" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "darwin" } },
         writable: true,
         configurable: true,
       });
@@ -42,8 +62,8 @@ describe("Platform Detection Utility", () => {
     });
 
     it('should return "windows" when platform is win32', () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "win32" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "win32" } },
         writable: true,
         configurable: true,
       });
@@ -52,8 +72,8 @@ describe("Platform Detection Utility", () => {
     });
 
     it('should return "linux" when platform is linux', () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "linux" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "linux" } },
         writable: true,
         configurable: true,
       });
@@ -61,49 +81,109 @@ describe("Platform Detection Utility", () => {
       expect(getPlatform()).toBe("linux");
     });
 
-    it('should default to "windows" when platform is unknown', () => {
+    it('should default to "windows" when platform is unknown and no navigator fallback', () => {
       const consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation();
-      Object.defineProperty(window, "electron", {
-        value: { platform: "unknown" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "unknown" } },
         writable: true,
         configurable: true,
       });
+      mockNavigator("", "");
 
       expect(getPlatform()).toBe("windows");
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining(
-          '[Platform] Unknown platform detected: "unknown"',
-        ),
+        expect.stringContaining("Could not detect platform"),
       );
 
       consoleWarnSpy.mockRestore();
     });
 
-    it('should default to "windows" when window.electron is undefined', () => {
-      Object.defineProperty(window, "electron", {
+    it('should fallback to navigator.platform when window.api is undefined', () => {
+      Object.defineProperty(window, "api", {
         value: undefined,
         writable: true,
         configurable: true,
       });
+      mockNavigator("MacIntel", "");
+
+      expect(getPlatform()).toBe("macos");
+    });
+
+    it('should fallback to navigator.platform for Windows when window.api is undefined', () => {
+      Object.defineProperty(window, "api", {
+        value: undefined,
+        writable: true,
+        configurable: true,
+      });
+      mockNavigator("Win32", "");
 
       expect(getPlatform()).toBe("windows");
     });
 
-    it('should default to "windows" when platform property is missing', () => {
-      Object.defineProperty(window, "electron", {
-        value: {},
+    it('should fallback to navigator.platform for Linux when window.api is undefined', () => {
+      Object.defineProperty(window, "api", {
+        value: undefined,
         writable: true,
         configurable: true,
       });
+      mockNavigator("Linux x86_64", "");
+
+      expect(getPlatform()).toBe("linux");
+    });
+
+    it('should fallback to userAgent when both api and navigator.platform are unavailable', () => {
+      Object.defineProperty(window, "api", {
+        value: undefined,
+        writable: true,
+        configurable: true,
+      });
+      mockNavigator("", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)");
+
+      expect(getPlatform()).toBe("macos");
+    });
+
+    it('should fallback to userAgent for Windows when navigator.platform is unavailable', () => {
+      Object.defineProperty(window, "api", {
+        value: undefined,
+        writable: true,
+        configurable: true,
+      });
+      mockNavigator("", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
 
       expect(getPlatform()).toBe("windows");
+    });
+
+    it('should fallback to userAgent for Linux when navigator.platform is unavailable', () => {
+      Object.defineProperty(window, "api", {
+        value: undefined,
+        writable: true,
+        configurable: true,
+      });
+      mockNavigator("", "Mozilla/5.0 (X11; Linux x86_64)");
+
+      expect(getPlatform()).toBe("linux");
+    });
+
+    it('should default to "windows" when all detection methods fail', () => {
+      const consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation();
+      Object.defineProperty(window, "api", {
+        value: { system: {} },
+        writable: true,
+        configurable: true,
+      });
+      mockNavigator("", "");
+
+      expect(getPlatform()).toBe("windows");
+      expect(consoleWarnSpy).toHaveBeenCalled();
+
+      consoleWarnSpy.mockRestore();
     });
   });
 
   describe("isMacOS", () => {
     it("should return true on macOS", () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "darwin" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "darwin" } },
         writable: true,
         configurable: true,
       });
@@ -112,8 +192,8 @@ describe("Platform Detection Utility", () => {
     });
 
     it("should return false on Windows", () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "win32" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "win32" } },
         writable: true,
         configurable: true,
       });
@@ -122,8 +202,8 @@ describe("Platform Detection Utility", () => {
     });
 
     it("should return false on Linux", () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "linux" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "linux" } },
         writable: true,
         configurable: true,
       });
@@ -134,8 +214,8 @@ describe("Platform Detection Utility", () => {
 
   describe("isWindows", () => {
     it("should return true on Windows", () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "win32" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "win32" } },
         writable: true,
         configurable: true,
       });
@@ -144,8 +224,8 @@ describe("Platform Detection Utility", () => {
     });
 
     it("should return false on macOS", () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "darwin" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "darwin" } },
         writable: true,
         configurable: true,
       });
@@ -154,8 +234,8 @@ describe("Platform Detection Utility", () => {
     });
 
     it("should return false on Linux", () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "linux" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "linux" } },
         writable: true,
         configurable: true,
       });
@@ -166,8 +246,8 @@ describe("Platform Detection Utility", () => {
 
   describe("isLinux", () => {
     it("should return true on Linux", () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "linux" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "linux" } },
         writable: true,
         configurable: true,
       });
@@ -176,8 +256,8 @@ describe("Platform Detection Utility", () => {
     });
 
     it("should return false on macOS", () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "darwin" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "darwin" } },
         writable: true,
         configurable: true,
       });
@@ -186,8 +266,8 @@ describe("Platform Detection Utility", () => {
     });
 
     it("should return false on Windows", () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "win32" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "win32" } },
         writable: true,
         configurable: true,
       });
@@ -221,8 +301,8 @@ describe("Platform Detection Utility", () => {
   describe("isFeatureAvailable", () => {
     describe("on macOS", () => {
       beforeEach(() => {
-        Object.defineProperty(window, "electron", {
-          value: { platform: "darwin" },
+        Object.defineProperty(window, "api", {
+          value: { ...originalApi, system: { ...originalApi?.system, platform: "darwin" } },
           writable: true,
           configurable: true,
         });
@@ -247,8 +327,8 @@ describe("Platform Detection Utility", () => {
 
     describe("on Windows", () => {
       beforeEach(() => {
-        Object.defineProperty(window, "electron", {
-          value: { platform: "win32" },
+        Object.defineProperty(window, "api", {
+          value: { ...originalApi, system: { ...originalApi?.system, platform: "win32" } },
           writable: true,
           configurable: true,
         });
@@ -273,8 +353,8 @@ describe("Platform Detection Utility", () => {
 
     describe("on Linux", () => {
       beforeEach(() => {
-        Object.defineProperty(window, "electron", {
-          value: { platform: "linux" },
+        Object.defineProperty(window, "api", {
+          value: { ...originalApi, system: { ...originalApi?.system, platform: "linux" } },
           writable: true,
           configurable: true,
         });

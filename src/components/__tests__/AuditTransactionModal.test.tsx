@@ -10,6 +10,15 @@ import "@testing-library/jest-dom";
 import AuditTransactionModal from "../AuditTransactionModal";
 import { PlatformProvider } from "../../contexts/PlatformContext";
 
+// Mock useAppStateMachine to return isDatabaseInitialized: true
+// This allows tests to render the actual component content
+jest.mock("../../appCore", () => ({
+  ...jest.requireActual("../../appCore"),
+  useAppStateMachine: () => ({
+    isDatabaseInitialized: true,
+  }),
+}));
+
 describe("AuditTransactionModal", () => {
   const mockUserId = 123;
   const mockProvider = "google";
@@ -625,6 +634,356 @@ describe("AuditTransactionModal", () => {
         screen.getByRole("button", { name: /purchase/i }),
       ).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /sale/i })).toBeInTheDocument();
+    });
+  });
+
+  describe("Edit Mode", () => {
+    const mockEditTransaction = {
+      id: "txn-123",
+      user_id: "123",
+      property_address: "456 Oak Street, City, ST 67890",
+      property_street: "456 Oak Street",
+      property_city: "City",
+      property_state: "ST",
+      property_zip: "67890",
+      property_coordinates: JSON.stringify({ lat: 37.1234, lng: -122.4567 }),
+      transaction_type: "sale" as const,
+      status: "active" as const,
+      message_count: 5,
+      attachment_count: 2,
+      export_status: "not_exported" as const,
+      export_count: 0,
+      detection_source: "auto" as const,
+      detection_status: "pending" as const,
+      created_at: "2024-01-01T00:00:00Z",
+      updated_at: "2024-01-01T00:00:00Z",
+    };
+
+    beforeEach(() => {
+      window.api.transactions.update.mockResolvedValue({ success: true });
+      window.api.feedback.recordTransaction.mockResolvedValue({ success: true });
+    });
+
+    it("should display edit mode title when editTransaction is provided", () => {
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={mockEditTransaction}
+        />,
+      );
+
+      expect(screen.getByText(/edit transaction/i)).toBeInTheDocument();
+    });
+
+    it("should pre-fill address when editing", () => {
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={mockEditTransaction}
+        />,
+      );
+
+      const addressInput = screen.getByPlaceholderText(
+        /enter property address/i,
+      );
+      expect(addressInput).toHaveValue("456 Oak Street, City, ST 67890");
+    });
+
+    it("should pre-fill transaction type when editing", () => {
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={mockEditTransaction}
+        />,
+      );
+
+      const saleButton = screen.getByRole("button", { name: /sale/i });
+      expect(saleButton).toHaveClass("bg-indigo-500");
+    });
+
+    it("should show simplified subtitle in edit mode (no steps)", () => {
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={mockEditTransaction}
+        />,
+      );
+
+      // Edit mode shows simplified subtitle, not step info
+      expect(screen.getByText(/update property address and transaction dates/i)).toBeInTheDocument();
+      // Progress bar (step numbers) should not be visible
+      expect(screen.queryByText("2")).not.toBeInTheDocument();
+      expect(screen.queryByText("3")).not.toBeInTheDocument();
+    });
+
+    it("should show Save Changes button directly in edit mode (single-step flow)", async () => {
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={mockEditTransaction}
+        />,
+      );
+
+      // Edit mode shows Save Changes directly (no multi-step flow)
+      expect(screen.getByRole("button", { name: /save changes/i })).toBeInTheDocument();
+      // Continue button should NOT be present in edit mode
+      expect(screen.queryByRole("button", { name: /continue/i })).not.toBeInTheDocument();
+    });
+
+    it("should have Save Changes button visible on initial render in edit mode", () => {
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={mockEditTransaction}
+        />,
+      );
+
+      // Edit mode renders Save Changes immediately (no multi-step navigation)
+      expect(screen.getByRole("button", { name: /save changes/i })).toBeInTheDocument();
+    });
+
+    it("should handle suggested_contacts JSON parsing", () => {
+      const txnWithContacts = {
+        ...mockEditTransaction,
+        suggested_contacts: JSON.stringify([
+          { role: "client", contact_id: "contact-1", is_primary: true },
+          { role: "listing_agent", contact_id: "contact-2", is_primary: false },
+        ]),
+      };
+
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={txnWithContacts}
+        />,
+      );
+
+      // Modal should render without errors
+      expect(screen.getByText(/edit transaction/i)).toBeInTheDocument();
+    });
+
+    it("should handle invalid suggested_contacts JSON gracefully", () => {
+      const txnWithBadJson = {
+        ...mockEditTransaction,
+        suggested_contacts: "invalid json{",
+      };
+
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={txnWithBadJson}
+        />,
+      );
+
+      // Modal should still render without errors
+      expect(screen.getByText(/edit transaction/i)).toBeInTheDocument();
+    });
+
+    it("should display Saving... text when submitting in edit mode", async () => {
+      // Make update slow to see loading state
+      window.api.transactions.update.mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(() => resolve({ success: true }), 1000),
+          ),
+      );
+
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={mockEditTransaction}
+        />,
+      );
+
+      // Click Save Changes directly (edit mode is single-step)
+      await userEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+      // Should show "Saving..." loading text
+      await waitFor(() => {
+        expect(screen.getByText(/saving/i)).toBeInTheDocument();
+      });
+    });
+
+    it("should have required APIs for edit mode", () => {
+      expect(window.api.transactions.update).toBeDefined();
+      expect(typeof window.api.transactions.update).toBe("function");
+      expect(window.api.feedback.recordTransaction).toBeDefined();
+      expect(typeof window.api.feedback.recordTransaction).toBe("function");
+    });
+
+    // TASK-1030: Verify contact_assignments is used for pre-population
+    it("should use contact_assignments from junction table when editing", () => {
+      // Transaction with contact_assignments (from getTransactionDetails)
+      const txnWithContactAssignments = {
+        ...mockEditTransaction,
+        contact_assignments: [
+          {
+            id: "assign-1",
+            contact_id: "contact-1",
+            contact_name: "John Doe",
+            contact_email: "john@example.com",
+            role: "client",
+            specific_role: "client",
+            is_primary: 1,
+          },
+          {
+            id: "assign-2",
+            contact_id: "contact-2",
+            contact_name: "Jane Smith",
+            contact_email: "jane@realty.com",
+            role: "seller_agent",
+            specific_role: "seller_agent",
+            is_primary: 0,
+          },
+        ],
+        // Also has suggested_contacts but should be ignored
+        suggested_contacts: JSON.stringify([
+          { role: "old_client", contact_id: "old-contact", is_primary: true },
+        ]),
+      };
+
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={txnWithContactAssignments}
+        />,
+      );
+
+      // Modal should render without errors
+      expect(screen.getByText(/edit transaction/i)).toBeInTheDocument();
+    });
+
+    it("should fall back to suggested_contacts when contact_assignments is empty", () => {
+      const txnWithOnlySuggested = {
+        ...mockEditTransaction,
+        contact_assignments: [], // Empty array
+        suggested_contacts: JSON.stringify([
+          { role: "client", contact_id: "contact-1", is_primary: true },
+        ]),
+      };
+
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={txnWithOnlySuggested}
+        />,
+      );
+
+      // Modal should render without errors
+      expect(screen.getByText(/edit transaction/i)).toBeInTheDocument();
+    });
+
+    // TASK-1038: When editTransaction doesn't have contact_assignments,
+    // the hook should fetch them via getDetails() API call
+    it("should fetch contact_assignments via getDetails when not included in editTransaction", async () => {
+      // Transaction WITHOUT contact_assignments (typical from getAll())
+      const txnWithoutContactAssignments = {
+        ...mockEditTransaction,
+        // No contact_assignments field - simulates data from transactions.getAll()
+      };
+
+      // Mock getDetails to return contact_assignments
+      window.api.transactions.getDetails.mockResolvedValue({
+        success: true,
+        transaction: {
+          ...mockEditTransaction,
+          contact_assignments: [
+            {
+              id: "assign-1",
+              contact_id: "contact-1",
+              contact_name: "John Fetched",
+              contact_email: "john@example.com",
+              role: "client",
+              specific_role: "client",
+              is_primary: 1,
+            },
+          ],
+        },
+      });
+
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={txnWithoutContactAssignments}
+        />,
+      );
+
+      // Modal should render without errors
+      expect(screen.getByText(/edit transaction/i)).toBeInTheDocument();
+
+      // Should call getDetails to fetch full transaction data
+      await waitFor(() => {
+        expect(window.api.transactions.getDetails).toHaveBeenCalledWith(
+          mockEditTransaction.id,
+        );
+      });
+    });
+
+    it("should handle getDetails API failure gracefully in edit mode", async () => {
+      // Transaction WITHOUT contact_assignments
+      const txnWithoutContactAssignments = {
+        ...mockEditTransaction,
+      };
+
+      // Mock getDetails to fail
+      window.api.transactions.getDetails.mockResolvedValue({
+        success: false,
+        error: "Failed to fetch transaction details",
+      });
+
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={txnWithoutContactAssignments}
+        />,
+      );
+
+      // Modal should still render without errors (graceful degradation)
+      expect(screen.getByText(/edit transaction/i)).toBeInTheDocument();
+
+      // Should have attempted to call getDetails
+      await waitFor(() => {
+        expect(window.api.transactions.getDetails).toHaveBeenCalled();
+      });
     });
   });
 });

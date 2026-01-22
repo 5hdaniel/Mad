@@ -8,6 +8,8 @@ import type { IpcMainInvokeEvent } from "electron";
 import transactionService from "./services/transactionService";
 import auditService from "./services/auditService";
 import logService from "./services/logService";
+import { autoLinkAllToTransaction } from "./services/messageMatchingService";
+import { autoLinkCommunicationsForContact } from "./services/autoLinkService";
 import type {
   Transaction,
   NewTransaction,
@@ -16,9 +18,12 @@ import type {
 } from "./types/models";
 
 // Services (still JS - to be migrated)
-const pdfExportService = require("./services/pdfExportService").default;
 const enhancedExportService =
   require("./services/enhancedExportService").default;
+const folderExportService = require("./services/folderExportService").default;
+const databaseService = require("./services/databaseService").default;
+const gmailFetchService = require("./services/gmailFetchService").default;
+const outlookFetchService = require("./services/outlookFetchService").default;
 
 // Import validation utilities
 import {
@@ -31,6 +36,9 @@ import {
   validateProvider,
   sanitizeObject,
 } from "./utils/validation";
+
+// Import rate limiting
+import { rateLimiters } from "./utils/rateLimit";
 
 // Type definitions
 interface TransactionResponse {
@@ -106,6 +114,8 @@ export const registerTransactionHandlers = (
   );
 
   // Scan and extract transactions from emails
+  // Rate limited: 5 second cooldown per user to prevent scan spam.
+  // Scans hit external email APIs (Gmail, Outlook).
   ipcMain.handle(
     "transactions:scan",
     async (
@@ -123,6 +133,25 @@ export const registerTransactionHandlers = (
         if (!validatedUserId) {
           throw new ValidationError("User ID validation failed", "userId");
         }
+
+        // Rate limit check - 5 second cooldown per user
+        const { allowed, remainingMs } = rateLimiters.scan.canExecute(
+          "transactions:scan",
+          validatedUserId
+        );
+        if (!allowed && remainingMs !== undefined) {
+          const seconds = Math.ceil(remainingMs / 1000);
+          logService.warn(
+            `Rate limited transactions:scan for user ${validatedUserId}. Retry in ${seconds}s`,
+            "Transactions"
+          );
+          return {
+            success: false,
+            error: `Please wait ${seconds} seconds before starting another scan.`,
+            rateLimited: true,
+          };
+        }
+
         const sanitizedOptions = sanitizeObject(options || {}) as ScanOptions;
 
         const result = await transactionService.scanAndExtractTransactions(
@@ -184,6 +213,16 @@ export const registerTransactionHandlers = (
 
         const transactions =
           await transactionService.getTransactions(validatedUserId);
+
+        // Debug: log detection fields being returned to frontend
+        if (transactions.length > 0) {
+          logService.debug("First transaction detection fields", "TransactionHandlers", {
+            id: transactions[0].id,
+            detection_source: transactions[0].detection_source,
+            detection_status: transactions[0].detection_status,
+            detection_confidence: transactions[0].detection_confidence,
+          });
+        }
 
         return {
           success: true,
@@ -334,8 +373,9 @@ export const registerTransactionHandlers = (
             "transactionId",
           );
         }
+        const sanitizedUpdates = sanitizeObject(updates || {});
         const validatedUpdates = validateTransactionData(
-          sanitizeObject(updates || {}),
+          sanitizedUpdates,
           true,
         );
 
@@ -474,6 +514,8 @@ export const registerTransactionHandlers = (
           false,
         );
 
+        // TASK-1031: createAuditedTransaction now auto-links communications
+        // for all assigned contacts internally
         const transaction = await transactionService.createAuditedTransaction(
           validatedUserId as string,
           validatedData as any,
@@ -607,7 +649,9 @@ export const registerTransactionHandlers = (
         const validatedNotes =
           notes && typeof notes === "string" ? notes.trim() : null;
 
-        await transactionService.assignContactToTransaction(
+        // TASK-1031: assignContactToTransaction now auto-links communications
+        // for the newly added contact
+        const result = await transactionService.assignContactToTransaction(
           validatedTransactionId as string,
           validatedContactId as string,
           role.trim(),
@@ -616,8 +660,23 @@ export const registerTransactionHandlers = (
           validatedNotes ?? undefined,
         );
 
+        // Log auto-link results if any communications were linked
+        if (result.autoLink) {
+          const { emailsLinked, messagesLinked } = result.autoLink;
+          if (emailsLinked > 0 || messagesLinked > 0) {
+            logService.info("Auto-linked communications for new contact", "Transactions", {
+              transactionId: validatedTransactionId,
+              contactId: validatedContactId,
+              emailsLinked,
+              messagesLinked,
+            });
+          }
+        }
+
         return {
           success: true,
+          // TASK-1031: Return auto-link results so UI can notify user
+          autoLink: result.autoLink,
         };
       } catch (error) {
         logService.error(
@@ -677,6 +736,158 @@ export const registerTransactionHandlers = (
           {
             transactionId,
             contactId,
+            error: error instanceof Error ? error.message : "Unknown error",
+          },
+        );
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Batch update contact assignments for a transaction
+  ipcMain.handle(
+    "transactions:batchUpdateContacts",
+    async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+      operations: Array<{
+        action: "add" | "remove";
+        contactId: string;
+        role?: string;
+        roleCategory?: string;
+        specificRole?: string;
+        isPrimary?: boolean;
+        notes?: string;
+      }>,
+    ): Promise<TransactionResponse> => {
+      try {
+        // Validate transaction ID
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        // Validate operations array
+        if (!Array.isArray(operations)) {
+          throw new ValidationError(
+            "Operations must be an array",
+            "operations",
+          );
+        }
+
+        // Validate each operation
+        const validatedOperations = operations.map((op, index) => {
+          if (!op.action || (op.action !== "add" && op.action !== "remove")) {
+            throw new ValidationError(
+              `Invalid action at index ${index}: must be 'add' or 'remove'`,
+              "operations",
+            );
+          }
+
+          const validatedContactId = validateContactId(op.contactId);
+          if (!validatedContactId) {
+            throw new ValidationError(
+              `Invalid contact ID at index ${index}`,
+              "operations",
+            );
+          }
+
+          return {
+            action: op.action,
+            contactId: validatedContactId,
+            role: op.role?.trim(),
+            roleCategory: op.roleCategory?.trim(),
+            specificRole: op.specificRole?.trim(),
+            isPrimary: op.isPrimary ?? false,
+            notes: op.notes?.trim(),
+          };
+        });
+
+        await transactionService.batchUpdateContactAssignments(
+          validatedTransactionId as string,
+          validatedOperations,
+        );
+
+        logService.info(
+          "Batch contact assignments updated",
+          "Transactions",
+          {
+            transactionId: validatedTransactionId,
+            operationCount: validatedOperations.length,
+          },
+        );
+
+        // TASK-1126: Auto-link communications for each added contact
+        const autoLinkResults: Array<{
+          contactId: string;
+          emailsLinked: number;
+          messagesLinked: number;
+          alreadyLinked: number;
+          errors: number;
+        }> = [];
+
+        const addOperations = validatedOperations.filter(
+          (op) => op.action === "add"
+        );
+
+        for (const op of addOperations) {
+          try {
+            const result = await autoLinkCommunicationsForContact({
+              contactId: op.contactId,
+              transactionId: validatedTransactionId as string,
+            });
+
+            autoLinkResults.push({
+              contactId: op.contactId,
+              ...result,
+            });
+
+            logService.debug(
+              "Auto-link complete for contact",
+              "Transactions",
+              {
+                contactId: op.contactId,
+                emailsLinked: result.emailsLinked,
+                messagesLinked: result.messagesLinked,
+                alreadyLinked: result.alreadyLinked,
+              }
+            );
+          } catch (error) {
+            // Log but don't fail the entire operation
+            logService.warn(
+              `Auto-link failed for contact ${op.contactId}`,
+              "Transactions",
+              {
+                error: error instanceof Error ? error.message : "Unknown",
+              }
+            );
+          }
+        }
+
+        return {
+          success: true,
+          autoLinkResults:
+            autoLinkResults.length > 0 ? autoLinkResults : undefined,
+        };
+      } catch (error) {
+        logService.error(
+          "Batch update contact assignments failed",
+          "Transactions",
+          {
+            transactionId,
+            operationCount: operations?.length ?? 0,
             error: error instanceof Error ? error.message : "Unknown error",
           },
         );
@@ -843,10 +1054,10 @@ export const registerTransactionHandlers = (
 
         // Use provided output path or generate default one
         const pdfPath =
-          validatedPath || pdfExportService.getDefaultExportPath(details);
+          validatedPath || folderExportService.getDefaultExportPath(details).replace(/\/$/, "") + ".pdf";
 
-        // Generate PDF
-        const generatedPath = await pdfExportService.generateTransactionPDF(
+        // Generate combined PDF using folder export service
+        const generatedPath = await folderExportService.exportTransactionToCombinedPDF(
           details,
           (details as any).communications || [],
           pdfPath,
@@ -1009,10 +1220,10 @@ export const registerTransactionHandlers = (
           );
         }
 
-        // Validate status
-        if (!status || !["active", "closed"].includes(status)) {
+        // Validate status - allow all 4 transaction statuses
+        if (!status || !["pending", "active", "closed", "rejected"].includes(status)) {
           throw new ValidationError(
-            "Status must be 'active' or 'closed'",
+            "Status must be 'pending', 'active', 'closed', or 'rejected'",
             "status",
           );
         }
@@ -1030,6 +1241,25 @@ export const registerTransactionHandlers = (
           validatedIds.push(validatedId);
         }
 
+        // TASK-984: Validate that manual transactions cannot be set to pending/rejected
+        // These statuses are only meaningful for AI-detected transactions
+        if (status === "pending" || status === "rejected") {
+          const manualTransactionIds: string[] = [];
+          for (const transactionId of validatedIds) {
+            const tx = await transactionService.getTransactionDetails(transactionId);
+            if (tx?.detection_source === "manual") {
+              manualTransactionIds.push(transactionId);
+            }
+          }
+
+          if (manualTransactionIds.length > 0) {
+            throw new ValidationError(
+              `Cannot set manual transactions to "${status}". Manual transactions can only be "active" or "closed".`,
+              "status",
+            );
+          }
+        }
+
         // Update each transaction
         let updatedCount = 0;
         const errors: string[] = [];
@@ -1042,7 +1272,7 @@ export const registerTransactionHandlers = (
             const userId = existingTransaction?.user_id || "unknown";
 
             await transactionService.updateTransaction(transactionId, {
-              status: status as "active" | "closed",
+              status: status as "pending" | "active" | "closed" | "rejected",
             });
 
             // Audit log transaction update
@@ -1057,9 +1287,14 @@ export const registerTransactionHandlers = (
 
             updatedCount++;
           } catch (err) {
-            errors.push(
-              `Failed to update ${transactionId}: ${err instanceof Error ? err.message : "Unknown error"}`,
-            );
+            const errorMsg = err instanceof Error ? err.message : "Unknown error";
+            logService.error("Failed to update transaction status", "Transactions", {
+              transactionId,
+              status,
+              error: errorMsg,
+              stack: err instanceof Error ? err.stack : undefined,
+            });
+            errors.push(`Failed to update ${transactionId}: ${errorMsg}`);
           }
         }
 
@@ -1075,6 +1310,520 @@ export const registerTransactionHandlers = (
         };
       } catch (error) {
         logService.error("Bulk status update failed", "Transactions", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Get unlinked messages (not attached to any transaction)
+  ipcMain.handle(
+    "transactions:get-unlinked-messages",
+    async (
+      event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Getting unlinked messages", "Transactions", { userId });
+
+        // Validate input
+        const validatedUserId = validateUserId(userId);
+        if (!validatedUserId) {
+          throw new ValidationError("User ID validation failed", "userId");
+        }
+
+        const messages = await transactionService.getUnlinkedMessages(validatedUserId);
+
+        return {
+          success: true,
+          messages,
+        };
+      } catch (error) {
+        logService.error("Get unlinked messages failed", "Transactions", {
+          userId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Get unlinked emails - fetches directly from email provider (Gmail/Outlook)
+  ipcMain.handle(
+    "transactions:get-unlinked-emails",
+    async (
+      event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Fetching emails from provider", "Transactions", { userId });
+
+        const validatedUserId = validateUserId(userId);
+        if (!validatedUserId) {
+          throw new ValidationError("User ID validation failed", "userId");
+        }
+
+        // Check which provider the user is authenticated with
+        const googleToken = await databaseService.getOAuthToken(validatedUserId, "google", "mailbox");
+        const microsoftToken = await databaseService.getOAuthToken(validatedUserId, "microsoft", "mailbox");
+
+        let emails: Array<{
+          id: string;
+          subject: string | null;
+          sender: string | null;
+          sent_at: string | null;
+          body_preview?: string | null;
+          provider: "gmail" | "outlook";
+        }> = [];
+
+        // Fetch from Gmail if authenticated
+        if (googleToken) {
+          try {
+            const isReady = await gmailFetchService.initialize(validatedUserId);
+            if (isReady) {
+              // Fetch recent emails (last 100)
+              const gmailEmails = await gmailFetchService.searchEmails({
+                maxResults: 100,
+              });
+              emails = gmailEmails.map((email: { id: string; subject: string | null; from: string | null; date: string | null; plainBody: string | null }) => ({
+                id: `gmail:${email.id}`,
+                subject: email.subject,
+                sender: email.from,
+                sent_at: email.date ? new Date(email.date).toISOString() : null,
+                body_preview: email.plainBody?.substring(0, 200) || null,
+                provider: "gmail" as const,
+              }));
+              logService.info(`Fetched ${emails.length} emails from Gmail`, "Transactions");
+            }
+          } catch (gmailError) {
+            logService.warn("Failed to fetch from Gmail", "Transactions", {
+              error: gmailError instanceof Error ? gmailError.message : "Unknown",
+            });
+          }
+        }
+
+        // Fetch from Outlook if authenticated (and no Gmail emails)
+        if (microsoftToken && emails.length === 0) {
+          try {
+            const isReady = await outlookFetchService.initialize(validatedUserId);
+            if (isReady) {
+              // Fetch recent emails (last 100)
+              const outlookEmails = await outlookFetchService.searchEmails({
+                maxResults: 100,
+              });
+              emails = outlookEmails.map((email: { id: string; subject: string | null; from: string | null; date: string | null; plainBody: string | null }) => ({
+                id: `outlook:${email.id}`,
+                subject: email.subject,
+                sender: email.from,
+                sent_at: email.date ? new Date(email.date).toISOString() : null,
+                body_preview: email.plainBody?.substring(0, 200) || null,
+                provider: "outlook" as const,
+              }));
+              logService.info(`Fetched ${emails.length} emails from Outlook`, "Transactions");
+            }
+          } catch (outlookError) {
+            logService.warn("Failed to fetch from Outlook", "Transactions", {
+              error: outlookError instanceof Error ? outlookError.message : "Unknown",
+            });
+          }
+        }
+
+        if (emails.length === 0 && !googleToken && !microsoftToken) {
+          return {
+            success: false,
+            error: "No email account connected. Please connect Gmail or Outlook in Settings.",
+          };
+        }
+
+        return {
+          success: true,
+          emails,
+        };
+      } catch (error) {
+        logService.error("Get emails from provider failed", "Transactions", {
+          userId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Link emails to a transaction - fetches full email from provider and saves to database
+  ipcMain.handle(
+    "transactions:link-emails",
+    async (
+      event: IpcMainInvokeEvent,
+      emailIds: string[],
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Linking emails to transaction", "Transactions", {
+          emailCount: emailIds?.length || 0,
+          transactionId,
+        });
+
+        // Validate transaction ID
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        // Validate email IDs
+        if (!Array.isArray(emailIds) || emailIds.length === 0) {
+          throw new ValidationError(
+            "Email IDs must be a non-empty array",
+            "emailIds",
+          );
+        }
+
+        // Get transaction to get user_id
+        const transaction = await transactionService.getTransactionDetails(validatedTransactionId);
+        if (!transaction) {
+          throw new ValidationError("Transaction not found", "transactionId");
+        }
+
+        // Import the function we need
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { createCommunication } = require("./services/db/communicationDbService");
+
+        // Group emails by provider
+        const gmailIds: string[] = [];
+        const outlookIds: string[] = [];
+        for (const emailId of emailIds) {
+          if (!emailId || typeof emailId !== "string") continue;
+          if (emailId.startsWith("gmail:")) {
+            gmailIds.push(emailId.replace("gmail:", ""));
+          } else if (emailId.startsWith("outlook:")) {
+            outlookIds.push(emailId.replace("outlook:", ""));
+          }
+        }
+
+        let linkedCount = 0;
+
+        // Fetch and save Gmail emails
+        if (gmailIds.length > 0) {
+          try {
+            const isReady = await gmailFetchService.initialize(transaction.user_id);
+            if (isReady) {
+              for (const messageId of gmailIds) {
+                try {
+                  const email = await gmailFetchService.getEmailById(messageId);
+                  // Save to communications table
+                  await createCommunication({
+                    user_id: transaction.user_id,
+                    transaction_id: validatedTransactionId,
+                    communication_type: "email",
+                    source: "gmail",
+                    email_thread_id: email.threadId,
+                    sender: email.from,
+                    recipients: email.to,
+                    cc: email.cc,
+                    subject: email.subject,
+                    body: email.htmlBody || email.plainBody,
+                    body_plain: email.plainBody,
+                    sent_at: email.date ? new Date(email.date).toISOString() : null,
+                    has_attachments: email.hasAttachments || false,
+                    attachment_count: email.attachmentCount || 0,
+                    link_source: "manual",
+                    link_confidence: 1.0,
+                  });
+                  linkedCount++;
+                } catch (emailError) {
+                  logService.warn(`Failed to fetch Gmail email ${messageId}`, "Transactions", {
+                    error: emailError instanceof Error ? emailError.message : "Unknown",
+                  });
+                }
+              }
+            }
+          } catch (gmailError) {
+            logService.error("Gmail fetch failed", "Transactions", {
+              error: gmailError instanceof Error ? gmailError.message : "Unknown",
+            });
+          }
+        }
+
+        // Fetch and save Outlook emails
+        if (outlookIds.length > 0) {
+          try {
+            const isReady = await outlookFetchService.initialize(transaction.user_id);
+            if (isReady) {
+              for (const messageId of outlookIds) {
+                try {
+                  const email = await outlookFetchService.getEmailById(messageId);
+                  // Save to communications table
+                  await createCommunication({
+                    user_id: transaction.user_id,
+                    transaction_id: validatedTransactionId,
+                    communication_type: "email",
+                    source: "outlook",
+                    email_thread_id: email.threadId,
+                    sender: email.from,
+                    recipients: email.to,
+                    cc: email.cc,
+                    subject: email.subject,
+                    body: email.htmlBody || email.plainBody,
+                    body_plain: email.plainBody,
+                    sent_at: email.date ? new Date(email.date).toISOString() : null,
+                    has_attachments: email.hasAttachments || false,
+                    attachment_count: email.attachmentCount || 0,
+                    link_source: "manual",
+                    link_confidence: 1.0,
+                  });
+                  linkedCount++;
+                } catch (emailError) {
+                  logService.warn(`Failed to fetch Outlook email ${messageId}`, "Transactions", {
+                    error: emailError instanceof Error ? emailError.message : "Unknown",
+                  });
+                }
+              }
+            }
+          } catch (outlookError) {
+            logService.error("Outlook fetch failed", "Transactions", {
+              error: outlookError instanceof Error ? outlookError.message : "Unknown",
+            });
+          }
+        }
+
+        logService.info("Emails linked successfully", "Transactions", {
+          requestedCount: emailIds.length,
+          linkedCount,
+          transactionId: validatedTransactionId,
+        });
+
+        return {
+          success: true,
+          linkedCount,
+        };
+      } catch (error) {
+        logService.error("Link emails failed", "Transactions", {
+          emailCount: emailIds?.length || 0,
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Get message contacts for contact-first browsing
+  ipcMain.handle(
+    "transactions:get-message-contacts",
+    async (
+      event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Getting message contacts", "Transactions", { userId });
+
+        const validatedUserId = validateUserId(userId);
+        if (!validatedUserId) {
+          throw new ValidationError("User ID validation failed", "userId");
+        }
+
+        const contacts = await transactionService.getMessageContacts(validatedUserId);
+
+        return {
+          success: true,
+          contacts,
+        };
+      } catch (error) {
+        logService.error("Get message contacts failed", "Transactions", {
+          userId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Get messages for a specific contact
+  ipcMain.handle(
+    "transactions:get-messages-by-contact",
+    async (
+      event: IpcMainInvokeEvent,
+      userId: string,
+      contact: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Getting messages by contact", "Transactions", { userId, contact });
+
+        const validatedUserId = validateUserId(userId);
+        if (!validatedUserId) {
+          throw new ValidationError("User ID validation failed", "userId");
+        }
+
+        if (!contact || typeof contact !== "string") {
+          throw new ValidationError("Contact is required", "contact");
+        }
+
+        const messages = await transactionService.getMessagesByContact(validatedUserId, contact);
+
+        return {
+          success: true,
+          messages,
+        };
+      } catch (error) {
+        logService.error("Get messages by contact failed", "Transactions", {
+          userId,
+          contact,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Link messages to a transaction
+  ipcMain.handle(
+    "transactions:link-messages",
+    async (
+      event: IpcMainInvokeEvent,
+      messageIds: string[],
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Linking messages to transaction", "Transactions", {
+          messageCount: messageIds?.length || 0,
+          transactionId,
+        });
+
+        // Validate transaction ID
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        // Validate message IDs
+        if (!Array.isArray(messageIds) || messageIds.length === 0) {
+          throw new ValidationError(
+            "Message IDs must be a non-empty array",
+            "messageIds",
+          );
+        }
+
+        // Validate each message ID
+        for (const id of messageIds) {
+          if (!id || typeof id !== "string" || id.trim().length === 0) {
+            throw new ValidationError(`Invalid message ID: ${id}`, "messageIds");
+          }
+        }
+
+        await transactionService.linkMessages(messageIds, validatedTransactionId);
+
+        logService.info("Messages linked successfully", "Transactions", {
+          messageCount: messageIds.length,
+          transactionId: validatedTransactionId,
+        });
+
+        return {
+          success: true,
+        };
+      } catch (error) {
+        logService.error("Link messages failed", "Transactions", {
+          messageCount: messageIds?.length || 0,
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Unlink messages from a transaction (sets transaction_id to null)
+  ipcMain.handle(
+    "transactions:unlink-messages",
+    async (
+      event: IpcMainInvokeEvent,
+      messageIds: string[],
+      transactionId?: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Unlinking messages from transaction", "Transactions", {
+          messageCount: messageIds?.length || 0,
+          transactionId,
+        });
+
+        // Validate message IDs
+        if (!Array.isArray(messageIds) || messageIds.length === 0) {
+          throw new ValidationError(
+            "Message IDs must be a non-empty array",
+            "messageIds",
+          );
+        }
+
+        // Validate each message ID
+        for (const id of messageIds) {
+          if (!id || typeof id !== "string" || id.trim().length === 0) {
+            throw new ValidationError(`Invalid message ID: ${id}`, "messageIds");
+          }
+        }
+
+        // TASK-1116: Pass transactionId for thread-based unlinking
+        await transactionService.unlinkMessages(messageIds, transactionId);
+
+        logService.info("Messages unlinked successfully", "Transactions", {
+          messageCount: messageIds.length,
+        });
+
+        return {
+          success: true,
+        };
+      } catch (error) {
+        logService.error("Unlink messages failed", "Transactions", {
+          messageCount: messageIds?.length || 0,
           error: error instanceof Error ? error.message : "Unknown error",
         });
         if (error instanceof ValidationError) {
@@ -1167,6 +1916,333 @@ export const registerTransactionHandlers = (
         };
       } catch (error) {
         logService.error("Enhanced export failed", "Transactions", {
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Auto-link text messages to a transaction based on assigned contacts
+  ipcMain.handle(
+    "transactions:auto-link-texts",
+    async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Auto-linking communications to transaction", "Transactions", {
+          transactionId,
+        });
+
+        // Validate transaction ID
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        const result = await autoLinkAllToTransaction(validatedTransactionId);
+
+        logService.info("Auto-link communications complete", "Transactions", {
+          transactionId: validatedTransactionId,
+          linked: result.linked,
+          skipped: result.skipped,
+          errors: result.errors.length,
+        });
+
+        return {
+          success: result.errors.length === 0,
+          linked: result.linked,
+          skipped: result.skipped,
+          errors: result.errors.length > 0 ? result.errors : undefined,
+        };
+      } catch (error) {
+        logService.error("Auto-link communications failed", "Transactions", {
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Export transaction to organized folder structure
+  ipcMain.handle(
+    "transactions:export-folder",
+    async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+      options?: unknown,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Starting folder export", "Transactions", {
+          transactionId,
+        });
+
+        // Validate inputs
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+        const sanitizedOptions = sanitizeObject(options || {}) as {
+          includeEmails?: boolean;
+          includeTexts?: boolean;
+          includeAttachments?: boolean;
+        };
+
+        // Get transaction details with communications
+        const details = await transactionService.getTransactionDetails(
+          validatedTransactionId,
+        );
+
+        if (!details) {
+          return {
+            success: false,
+            error: "Transaction not found",
+          };
+        }
+
+        // Filter communications by date range if transaction has dates set
+        let communications = (details as any).communications || [];
+        const startDate = details.started_at;
+        const endDate = details.closed_at;
+
+        if (startDate || endDate) {
+          const start = startDate ? new Date(startDate as string) : null;
+          const end = endDate ? new Date(endDate as string) : null;
+          // Add a day to end date to include messages on the closing day
+          if (end) end.setDate(end.getDate() + 1);
+
+          communications = communications.filter((comm: any) => {
+            const commDate = new Date(comm.sent_at || comm.received_at);
+            if (start && commDate < start) return false;
+            if (end && commDate > end) return false;
+            return true;
+          });
+
+          logService.info("Filtered communications by date range", "Transactions", {
+            original: ((details as any).communications || []).length,
+            filtered: communications.length,
+            startDate: startDate,
+            endDate: endDate,
+          });
+        }
+
+        // Export to folder structure
+        const exportPath = await folderExportService.exportTransactionToFolder(
+          details,
+          communications,
+          {
+            transactionId: validatedTransactionId,
+            includeEmails: sanitizedOptions.includeEmails ?? true,
+            includeTexts: sanitizedOptions.includeTexts ?? true,
+            includeAttachments: sanitizedOptions.includeAttachments ?? true,
+            onProgress: (progress: unknown) => {
+              // Send progress updates to renderer
+              if (mainWindow) {
+                mainWindow.webContents.send(
+                  "transactions:export-folder-progress",
+                  progress,
+                );
+              }
+            },
+          },
+        );
+
+        // Update export tracking in database
+        const db = require("./services/databaseService").default;
+        await db.updateTransaction(validatedTransactionId, {
+          export_status: "exported",
+          export_format: "folder",
+          last_exported_on: new Date().toISOString(),
+          export_count: (details.export_count || 0) + 1,
+        });
+
+        // Audit log data export
+        await auditService.log({
+          userId: details.user_id,
+          action: "DATA_EXPORT",
+          resourceType: "EXPORT",
+          resourceId: validatedTransactionId,
+          metadata: {
+            format: "folder",
+            propertyAddress: details.property_address,
+          },
+          success: true,
+        });
+
+        logService.info("Folder export successful", "Transactions", {
+          transactionId: validatedTransactionId,
+          path: exportPath,
+        });
+
+        return {
+          success: true,
+          path: exportPath,
+        };
+      } catch (error) {
+        logService.error("Folder export failed", "Transactions", {
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Re-sync auto-link communications for all contacts on a transaction
+  // Use when contacts have been updated and user wants to re-link communications
+  ipcMain.handle(
+    "transactions:resync-auto-link",
+    async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Re-syncing auto-link for transaction", "Transactions", {
+          transactionId,
+        });
+
+        // Validate transaction ID
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        // Get transaction with contacts
+        const transactionDetails = await transactionService.getTransactionWithContacts(
+          validatedTransactionId,
+        );
+
+        if (!transactionDetails) {
+          return {
+            success: false,
+            error: "Transaction not found",
+          };
+        }
+
+        const contactAssignments = (transactionDetails as any).contact_assignments || [];
+
+        if (contactAssignments.length === 0) {
+          return {
+            success: true,
+            message: "No contacts to sync",
+            totalEmailsLinked: 0,
+            totalMessagesLinked: 0,
+            totalAlreadyLinked: 0,
+          };
+        }
+
+        // Auto-link communications for each contact
+        const results: Array<{
+          contactId: string;
+          emailsLinked: number;
+          messagesLinked: number;
+          alreadyLinked: number;
+          errors: number;
+        }> = [];
+
+        let totalEmailsLinked = 0;
+        let totalMessagesLinked = 0;
+        let totalAlreadyLinked = 0;
+        let totalErrors = 0;
+
+        for (const assignment of contactAssignments) {
+          try {
+            const result = await autoLinkCommunicationsForContact({
+              contactId: assignment.contact_id,
+              transactionId: validatedTransactionId,
+            });
+
+            results.push({
+              contactId: assignment.contact_id,
+              ...result,
+            });
+
+            totalEmailsLinked += result.emailsLinked;
+            totalMessagesLinked += result.messagesLinked;
+            totalAlreadyLinked += result.alreadyLinked;
+            totalErrors += result.errors;
+
+            logService.debug(
+              "Re-sync auto-link complete for contact",
+              "Transactions",
+              {
+                contactId: assignment.contact_id,
+                emailsLinked: result.emailsLinked,
+                messagesLinked: result.messagesLinked,
+                alreadyLinked: result.alreadyLinked,
+              }
+            );
+          } catch (error) {
+            totalErrors++;
+            logService.warn(
+              `Re-sync auto-link failed for contact ${assignment.contact_id}`,
+              "Transactions",
+              {
+                error: error instanceof Error ? error.message : "Unknown",
+              }
+            );
+          }
+        }
+
+        logService.info("Re-sync auto-link complete", "Transactions", {
+          transactionId: validatedTransactionId,
+          contactsProcessed: contactAssignments.length,
+          totalEmailsLinked,
+          totalMessagesLinked,
+          totalAlreadyLinked,
+          totalErrors,
+        });
+
+        return {
+          success: true,
+          contactsProcessed: contactAssignments.length,
+          totalEmailsLinked,
+          totalMessagesLinked,
+          totalAlreadyLinked,
+          totalErrors,
+          results,
+        };
+      } catch (error) {
+        logService.error("Re-sync auto-link failed", "Transactions", {
           transactionId,
           error: error instanceof Error ? error.message : "Unknown error",
         });

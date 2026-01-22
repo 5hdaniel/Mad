@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { LLMSettings } from "./settings/LLMSettings";
+import { MacOSMessagesImportSettings } from "./settings/MacOSMessagesImportSettings";
 
 interface ConnectionStatus {
   connected: boolean;
@@ -12,12 +14,16 @@ interface Connections {
 
 interface PreferencesResult {
   success: boolean;
+  error?: string;
   preferences?: {
     export?: {
       defaultFormat?: string;
     };
     scan?: {
       lookbackMonths?: number;
+    };
+    sync?: {
+      autoSyncOnLogin?: boolean;
     };
   };
 }
@@ -49,6 +55,7 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
   >(null);
   const [exportFormat, setExportFormat] = useState<string>("pdf"); // Default export format
   const [scanLookbackMonths, setScanLookbackMonths] = useState<number>(9); // Default 9 months
+  const [autoSyncOnLogin, setAutoSyncOnLogin] = useState<boolean>(true); // Default auto-sync ON
   const [loadingPreferences, setLoadingPreferences] = useState<boolean>(true);
 
   // Load connection status and preferences on mount
@@ -86,15 +93,21 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
         if (result.preferences.export?.defaultFormat) {
           setExportFormat(result.preferences.export.defaultFormat);
         }
-        // Load scan lookback preference
-        if (result.preferences.scan?.lookbackMonths) {
-          setScanLookbackMonths(result.preferences.scan.lookbackMonths);
+        // Load scan lookback preference - use type check for numbers
+        const loadedLookback = result.preferences.scan?.lookbackMonths;
+        if (typeof loadedLookback === "number" && loadedLookback > 0) {
+          setScanLookbackMonths(loadedLookback);
         }
+        // Load auto-sync preference (default is true if not set)
+        if (typeof result.preferences.sync?.autoSyncOnLogin === "boolean") {
+          setAutoSyncOnLogin(result.preferences.sync.autoSyncOnLogin);
+        }
+      } else if (!result.success) {
+        console.error("[Settings] Failed to load preferences:", result.error);
       }
     } catch (error) {
-      // Silently handle preference loading errors - preferences are non-critical
-      // User will just get default values
-      console.debug("Preferences not available, using defaults");
+      // Log preference loading errors for debugging
+      console.error("[Settings] Error loading preferences:", error);
     } finally {
       setLoadingPreferences(false);
     }
@@ -104,17 +117,14 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
     setExportFormat(newFormat);
     try {
       // Update only the export format preference
-      const result = await window.api.preferences.update(userId, {
+      await window.api.preferences.update(userId, {
         export: {
           defaultFormat: newFormat,
         },
       });
-      if (!result.success) {
-        console.debug("Could not save export format preference");
-      }
-    } catch (error) {
       // Silently handle - preference will still be applied locally for this session
-      console.debug("Could not save export format preference");
+    } catch {
+      // Silently handle - preference will still be applied locally for this session
     }
   };
 
@@ -127,10 +137,26 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
         },
       });
       if (!result.success) {
-        console.debug("Could not save scan lookback preference");
+        console.error("[Settings] Failed to save scan lookback:", result);
       }
     } catch (error) {
-      console.debug("Could not save scan lookback preference");
+      console.error("[Settings] Error saving scan lookback:", error);
+    }
+  };
+
+  const handleAutoSyncToggle = async (): Promise<void> => {
+    const newValue = !autoSyncOnLogin;
+    setAutoSyncOnLogin(newValue);
+    try {
+      // Update auto-sync preference
+      await window.api.preferences.update(userId, {
+        sync: {
+          autoSyncOnLogin: newValue,
+        },
+      });
+      // Silently handle - preference will still be applied locally for this session
+    } catch {
+      // Silently handle - preference will still be applied locally for this session
     }
   };
 
@@ -220,9 +246,9 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="relative z-10 bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-4 flex items-center justify-between rounded-t-xl flex-shrink-0">
+        <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <h2 className="text-xl font-bold text-white">Settings</h2>
           <button
             onClick={onClose}
@@ -244,15 +270,70 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
           </button>
         </div>
 
-        {/* Settings Content - Scrollable area with inset scrollbar */}
-        <div className="flex-1 min-h-0 overflow-hidden px-2">
-          <div className="h-full overflow-y-auto px-4 py-6">
+        {/* Settings Content - Scrollable area */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
             {/* General Settings */}
             <div className="mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 General
               </h3>
               <div className="space-y-4">
+                {/* Scan Lookback */}
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex-1">
+                    <h4 className="text-sm font-medium text-gray-900">
+                      Scan Lookback Period
+                    </h4>
+                    <p className="text-xs text-gray-600 mt-1">
+                      How far back to search emails and messages
+                    </p>
+                  </div>
+                  <select
+                    value={scanLookbackMonths}
+                    onChange={(e) =>
+                      handleScanLookbackChange(Number(e.target.value))
+                    }
+                    disabled={loadingPreferences}
+                    className="ml-4 text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value={3}>3 months</option>
+                    <option value={6}>6 months</option>
+                    <option value={9}>9 months</option>
+                    <option value={12}>12 months</option>
+                    <option value={18}>18 months</option>
+                    <option value={24}>24 months</option>
+                  </select>
+                </div>
+
+                {/* Auto-Sync on Login */}
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex-1">
+                    <h4 className="text-sm font-medium text-gray-900">
+                      Auto-Sync on Login
+                    </h4>
+                    <p className="text-xs text-gray-600 mt-1">
+                      Automatically sync emails and messages when you open the app
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleAutoSyncToggle}
+                    disabled={loadingPreferences}
+                    className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                      autoSyncOnLogin ? "bg-blue-500" : "bg-gray-300"
+                    }`}
+                    role="switch"
+                    aria-checked={autoSyncOnLogin}
+                    aria-label="Auto-sync on login"
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        autoSyncOnLogin ? "translate-x-6" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Coming Soon Settings */}
                 {/* Notifications */}
                 {/* TODO: Implement desktop notifications system */}
                 <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 opacity-50">
@@ -306,33 +387,6 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                   >
                     <span className="inline-block h-4 w-4 transform rounded-full bg-white translate-x-1" />
                   </button>
-                </div>
-
-                {/* Scan Lookback */}
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <div className="flex-1">
-                    <h4 className="text-sm font-medium text-gray-900">
-                      Scan Lookback Period
-                    </h4>
-                    <p className="text-xs text-gray-600 mt-1">
-                      How far back to search emails and messages
-                    </p>
-                  </div>
-                  <select
-                    value={scanLookbackMonths}
-                    onChange={(e) =>
-                      handleScanLookbackChange(Number(e.target.value))
-                    }
-                    disabled={loadingPreferences}
-                    className="ml-4 text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <option value={3}>3 months</option>
-                    <option value={6}>6 months</option>
-                    <option value={9}>9 months</option>
-                    <option value={12}>12 months</option>
-                    <option value={18}>18 months</option>
-                    <option value={24}>24 months</option>
-                  </select>
                 </div>
               </div>
             </div>
@@ -484,6 +538,16 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
               </div>
             </div>
 
+            {/* macOS Messages Import - Only shows on macOS */}
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Messages
+              </h3>
+              <div className="space-y-4">
+                <MacOSMessagesImportSettings userId={userId} />
+              </div>
+            </div>
+
             {/* Export Settings */}
             <div className="mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
@@ -516,6 +580,14 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                   </button>
                 </div>
               </div>
+            </div>
+
+            {/* AI Settings */}
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                AI Settings
+              </h3>
+              <LLMSettings userId={userId} />
             </div>
 
             {/* Data & Privacy */}
@@ -636,10 +708,9 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
               </div>
             </div>
           </div>
-        </div>
 
         {/* Footer */}
-        <div className="relative z-10 bg-gray-50 px-6 py-4 border-t border-gray-200 rounded-b-xl flex-shrink-0">
+        <div className="flex-shrink-0 bg-gray-50 px-6 py-4 border-t border-gray-200 rounded-b-xl">
           <button
             onClick={onClose}
             className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-lg transition-all"

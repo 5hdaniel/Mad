@@ -3,7 +3,12 @@
  * A floating toolbar that appears when multiple items are selected
  * Provides bulk actions like delete, export, and status change
  */
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
+
+interface SelectedTransaction {
+  id: string;
+  detection_source?: "manual" | "auto" | "hybrid";
+}
 
 interface BulkActionBarProps {
   selectedCount: number;
@@ -12,11 +17,13 @@ interface BulkActionBarProps {
   onDeselectAll: () => void;
   onBulkDelete: () => void;
   onBulkExport: () => void;
-  onBulkStatusChange: (status: "active" | "closed") => void;
+  onBulkStatusChange: (status: "pending" | "active" | "closed" | "rejected") => void;
   onClose: () => void;
   isDeleting?: boolean;
   isExporting?: boolean;
   isUpdating?: boolean;
+  /** Selected transactions to determine available status options */
+  selectedTransactions?: SelectedTransaction[];
 }
 
 export function BulkActionBar({
@@ -31,10 +38,18 @@ export function BulkActionBar({
   isDeleting = false,
   isExporting = false,
   isUpdating = false,
+  selectedTransactions = [],
 }: BulkActionBarProps) {
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const isProcessing = isDeleting || isExporting || isUpdating;
   const hasSelection = selectedCount > 0;
+
+  // Determine available status options based on selected transactions
+  // Manual transactions can only be set to "active" or "closed"
+  // AI-detected transactions can use all 4 statuses
+  const hasManualTransactions = useMemo(() => {
+    return selectedTransactions.some((t) => t.detection_source === "manual");
+  }, [selectedTransactions]);
 
   return (
     <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50">
@@ -150,6 +165,19 @@ export function BulkActionBar({
             {/* Status Dropdown Menu */}
             {showStatusDropdown && !isProcessing && hasSelection && (
               <div className="absolute bottom-full mb-2 left-0 bg-gray-800 rounded-lg shadow-xl border border-gray-700 py-2 min-w-[160px]">
+                {/* Pending - only for AI-detected transactions */}
+                {!hasManualTransactions && (
+                  <button
+                    onClick={() => {
+                      onBulkStatusChange("pending");
+                      setShowStatusDropdown(false);
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-gray-700 flex items-center gap-2 whitespace-nowrap"
+                  >
+                    <span className="w-2 h-2 bg-yellow-500 rounded-full flex-shrink-0"></span>
+                    Mark as Pending
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     onBulkStatusChange("active");
@@ -170,6 +198,19 @@ export function BulkActionBar({
                   <span className="w-2 h-2 bg-gray-500 rounded-full flex-shrink-0"></span>
                   Mark as Closed
                 </button>
+                {/* Rejected - only for AI-detected transactions */}
+                {!hasManualTransactions && (
+                  <button
+                    onClick={() => {
+                      onBulkStatusChange("rejected");
+                      setShowStatusDropdown(false);
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-gray-700 flex items-center gap-2 whitespace-nowrap"
+                  >
+                    <span className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0"></span>
+                    Mark as Rejected
+                  </button>
+                )}
               </div>
             )}
           </div>

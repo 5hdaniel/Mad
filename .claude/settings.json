@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": ["Read", "Glob", "Grep", "Write", "Edit", "Bash"]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/loop-detector.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/track-agent-tokens.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
