@@ -311,17 +311,18 @@ describe("useNavigationFlow - State Machine Path", () => {
       expect(result.current.currentStep).toBe(valueBefore);
     });
 
-    it("goToEmailOnboarding is a no-op", () => {
+    it("goToEmailOnboarding dispatches START_EMAIL_SETUP and navigates to email onboarding", () => {
       const { result } = renderHook(() => useNavigationFlow(defaultOptions), {
         wrapper: createWrapper(readyState),
       });
 
-      const valueBefore = result.current.currentStep;
+      // Should start on dashboard (ready state)
+      expect(result.current.currentStep).toBe("dashboard");
       act(() => {
         result.current.goToEmailOnboarding();
       });
-      // Value should remain unchanged
-      expect(result.current.currentStep).toBe(valueBefore);
+      // Should now be on email onboarding
+      expect(result.current.currentStep).toBe("email-onboarding");
     });
   });
 

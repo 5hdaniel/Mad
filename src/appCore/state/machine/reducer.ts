@@ -481,6 +481,27 @@ export function appStateReducer(
       return state;
     }
 
+    case "START_EMAIL_SETUP": {
+      // Only valid from ready state - allows user to connect email after initial onboarding
+      if (state.status !== "ready") {
+        return state;
+      }
+
+      // Transition back to onboarding with email-connect step
+      // Preserve user data except mark email onboarding as incomplete
+      return {
+        status: "onboarding",
+        step: "email-connect",
+        user: state.user,
+        platform: state.platform,
+        // Mark all steps before email-connect as complete
+        completedSteps: ["phone-type", ...(state.platform.isMacOS ? ["secure-storage" as const] : [])],
+        // Preserve email connected state if they already have it (shouldn't happen, but be safe)
+        hasEmailConnected: state.userData.hasEmailConnected,
+        hasPermissions: state.userData.hasPermissions,
+      };
+    }
+
     // ============================================
     // LOGOUT
     // ============================================

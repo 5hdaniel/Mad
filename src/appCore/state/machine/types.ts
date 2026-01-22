@@ -231,6 +231,7 @@ export type AppAction =
   | OnboardingStepCompleteAction
   | OnboardingSkipAction
   | EmailConnectedAction
+  | StartEmailSetupAction
   | AppReadyAction
   | LogoutAction
   | ErrorAction
@@ -329,6 +330,15 @@ export interface EmailConnectedAction {
   email: string;
   /** The email provider (google or microsoft) */
   provider: "google" | "microsoft";
+}
+
+/**
+ * User wants to start email setup from the dashboard.
+ * Transitions from ready state back to onboarding with email-connect step.
+ * Used when user clicks "Continue Setup" on the dashboard.
+ */
+export interface StartEmailSetupAction {
+  type: "START_EMAIL_SETUP";
 }
 
 /**

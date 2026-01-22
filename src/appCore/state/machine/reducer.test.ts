@@ -779,6 +779,90 @@ describe("appStateReducer - Ready State Transitions", () => {
       expect(result).toBe(state);
     });
   });
+
+  describe("START_EMAIL_SETUP", () => {
+    it("transitions from ready to onboarding with email-connect step", () => {
+      const state: ReadyState = {
+        status: "ready",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        userData: mockCompleteUserData,
+      };
+      const action: AppAction = { type: "START_EMAIL_SETUP" };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("onboarding");
+      if (result.status === "onboarding") {
+        expect(result.step).toBe("email-connect");
+        expect(result.user).toEqual(mockUser);
+        expect(result.platform).toEqual(mockMacOSPlatform);
+        // Previous steps should be marked complete
+        expect(result.completedSteps).toContain("phone-type");
+      }
+    });
+
+    it("includes secure-storage in completed steps for macOS", () => {
+      const state: ReadyState = {
+        status: "ready",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        userData: mockCompleteUserData,
+      };
+      const action: AppAction = { type: "START_EMAIL_SETUP" };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("onboarding");
+      if (result.status === "onboarding") {
+        expect(result.completedSteps).toContain("secure-storage");
+      }
+    });
+
+    it("does not include secure-storage in completed steps for Windows", () => {
+      const state: ReadyState = {
+        status: "ready",
+        user: mockUser,
+        platform: mockWindowsPlatform,
+        userData: mockCompleteUserData,
+      };
+      const action: AppAction = { type: "START_EMAIL_SETUP" };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("onboarding");
+      if (result.status === "onboarding") {
+        expect(result.completedSteps).not.toContain("secure-storage");
+      }
+    });
+
+    it("preserves hasEmailConnected from userData", () => {
+      const userDataWithEmail = { ...mockCompleteUserData, hasEmailConnected: true };
+      const state: ReadyState = {
+        status: "ready",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        userData: userDataWithEmail,
+      };
+      const action: AppAction = { type: "START_EMAIL_SETUP" };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("onboarding");
+      if (result.status === "onboarding") {
+        expect(result.hasEmailConnected).toBe(true);
+      }
+    });
+
+    it("does not transition from non-ready states", () => {
+      const state: AppState = { status: "unauthenticated" };
+      const action: AppAction = { type: "START_EMAIL_SETUP" };
+
+      const result = appStateReducer(state, action);
+
+      expect(result).toBe(state);
+    });
+  });
 });
 
 // ============================================
