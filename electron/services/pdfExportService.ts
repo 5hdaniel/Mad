@@ -849,6 +849,19 @@ class PDFExportService {
     if (hasAppendix) {
       html += '<div class="appendix">';
       html += '<a name="appendix"></a>';
+      html += '<h2>Full Message Content</h2>';
+
+      // Navigation links at top of appendix
+      html += '<div style="margin-bottom: 24px; padding: 12px; background: #f7fafc; border-radius: 8px; font-size: 13px;">';
+      html += '<span style="color: #4a5568; font-weight: 500;">Quick Navigation:</span> ';
+      if (emailsWithContent.length > 0) {
+        html += '<a href="#email-threads" style="color: #667eea; text-decoration: none; margin-left: 12px;">&larr; Back to Email Threads</a>';
+      }
+      if (threadsWithContent.length > 0) {
+        if (emailsWithContent.length > 0) html += ' <span style="color: #cbd5e0; margin: 0 8px;">|</span> ';
+        html += '<a href="#text-conversations" style="color: #667eea; text-decoration: none;">&larr; Back to Text Conversations</a>';
+      }
+      html += '</div>';
 
       // Email appendix items
       emailsWithContent.forEach((comm, idx) => {
