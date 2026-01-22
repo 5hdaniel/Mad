@@ -334,4 +334,23 @@ export const transactionBridge = {
    */
   exportFolder: (transactionId: string, options?: ExportFolderOptions) =>
     ipcRenderer.invoke("transactions:export-folder", transactionId, options),
+
+  /**
+   * Re-syncs auto-link communications for all contacts on a transaction.
+   * Useful when contacts have been updated with new email/phone info and
+   * user wants to re-link matching communications.
+   * @param transactionId - Transaction ID to re-sync
+   * @returns Results with counts of newly linked communications
+   */
+  resyncAutoLink: (transactionId: string) =>
+    ipcRenderer.invoke("transactions:resync-auto-link", transactionId),
+
+  /**
+   * Link emails to a transaction
+   * @param emailIds - Array of email IDs to link
+   * @param transactionId - Transaction ID to link to
+   * @returns Success/error result
+   */
+  linkEmails: (emailIds: string[], transactionId: string) =>
+    ipcRenderer.invoke("transactions:link-emails", emailIds, transactionId),
 };
