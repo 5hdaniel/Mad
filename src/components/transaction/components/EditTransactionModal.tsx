@@ -174,6 +174,11 @@ export function EditTransactionModal({
       return;
     }
 
+    if (!formData.started_at) {
+      setError("Representation start date is required");
+      return;
+    }
+
     setSaving(true);
     setError(null);
 
@@ -391,7 +396,13 @@ export function EditTransactionModal({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Representation Start Date
+                    Representation Start Date *
+                    <span
+                      className="ml-1 text-gray-400 cursor-help text-xs"
+                      title="The date you officially started representing this client in this transaction"
+                    >
+                      (?)
+                    </span>
                   </label>
                   <input
                     type="date"
@@ -399,8 +410,16 @@ export function EditTransactionModal({
                     onChange={(e) =>
                       handleChange("started_at", e.target.value)
                     }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      !formData.started_at
+                        ? "border-red-300 bg-red-50"
+                        : "border-gray-300"
+                    }`}
+                    required
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Required - When you began representing this client
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">

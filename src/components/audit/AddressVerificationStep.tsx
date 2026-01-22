@@ -110,7 +110,13 @@ function AddressVerificationStep({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
-              Start Date *
+              Representation Start Date *
+              <span
+                className="ml-1 text-gray-400 cursor-help"
+                title="The date you officially started representing this client in this transaction"
+              >
+                (?)
+              </span>
             </label>
             <input
               type="date"
@@ -118,11 +124,15 @@ function AddressVerificationStep({
               onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                 onStartDateChange(e.target.value)
               }
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+                !addressData.started_at
+                  ? "border-red-300 bg-red-50"
+                  : "border-gray-300"
+              }`}
               required
             />
             <p className="text-xs text-gray-500 mt-1">
-              When representation began
+              Required - The date you began representing this client
             </p>
           </div>
           <div>
