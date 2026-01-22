@@ -18,6 +18,7 @@ The `hasEmailConnected` state returns `false` even when email sync is actually w
 3. `hasEmailConnected` returns `false`
 4. Dashboard shows "Continue Setup" prompt incorrectly
 5. Settings may show "Connected" status (inconsistent)
+6. **Banner does not auto-dismiss after successful email reconnection** - requires page refresh
 
 ## Expected Behavior
 
@@ -49,6 +50,7 @@ The `hasEmailConnected` state returns `false` even when email sync is actually w
 - [ ] Dashboard does not show "Continue Setup" when email is connected
 - [ ] State is consistent across Dashboard and Settings
 - [ ] No false positives (don't show connected if not actually connected)
+- [ ] Banner auto-dismisses after successful email connection (no refresh needed)
 
 ## Related
 
@@ -58,3 +60,16 @@ The `hasEmailConnected` state returns `false` even when email sync is actually w
 ## Notes
 
 This may be the same root cause as BACKLOG-211. If so, fixing BACKLOG-211 should resolve this. Recommend investigating together.
+
+### Debug Session Findings (2026-01-21)
+
+Console debugging revealed:
+```javascript
+// Email onboarding thinks setup is complete
+checkEmailOnboarding: { success: true, completed: true }
+
+// But actual Google connection shows expired token
+checkGoogleConnection: { connected: false, error: { type: 'TOKEN_REFRESH_FAILED', userMessage: 'Gmail connection expired' }}
+```
+
+**Root cause**: `email_onboarding_completed` flag is set to `true` once, but actual token can expire later. The banner logic checks the flag (completed=true, so should hide) but something else is triggering the banner to show. Need to trace the banner's visibility logic.

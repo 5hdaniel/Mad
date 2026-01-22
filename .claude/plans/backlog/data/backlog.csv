@@ -216,7 +216,7 @@ BACKLOG-234,Fix Race Condition in Sync Orchestrator,service,Critical,Pending,-,~
 BACKLOG-235,Patch jsdiff DoS Vulnerability,security,Critical,Completed,-,~10K,-,npm audit vulnerability,2026-01-17,,PR #434
 BACKLOG-236,Fix Incomplete PII Masking in LLM Pipeline,security,Critical,Completed,-,~45K,-,Content sent to LLM may expose PII,2026-01-17,,PR #436
 BACKLOG-287,Dashboard Visible After Logout,security,Critical,Completed,-,~30K,-,Auth state not cleared on logout,2026-01-15,2026-01-16,PR #437
-BACKLOG-237,Reduce Transactions.tsx State Complexity (17 useState),refactor,Critical,In-Progress,TASK-1159,~60K,-,Extract to custom hooks/context,2026-01-17,,feature/BACKLOG-237-reduce-transactions-state
+BACKLOG-237,Reduce Transactions.tsx State Complexity (17 useState),refactor,Critical,Completed,TASK-1159,~60K,~25K,58% under estimate,2026-01-17,2026-01-22,feature/BACKLOG-237-reduce-transactions-state
 BACKLOG-238,Break Down Oversized Flow Hooks,refactor,Critical,Pending,-,~100K,-,"useEmailHandlers 382 lines, useAuthFlow 233 lines",2026-01-17,,-
 BACKLOG-239,Reduce Direct Database Access Pattern,refactor,Critical,Pending,-,~120K,-,45 instances of const db = pattern,2026-01-17,,-
 BACKLOG-240,Implement Database Migration Rollback Strategy,infra,Critical,Pending,-,~60K,-,No rollback procedures exist,2026-01-17,,-
