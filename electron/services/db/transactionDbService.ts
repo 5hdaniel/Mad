@@ -124,11 +124,12 @@ export async function getTransactions(
                                    OR (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
               WHERE c.transaction_id = t.id
               AND COALESCE(m.channel, c.communication_type) = 'email') as email_count,
-             (SELECT COUNT(DISTINCT COALESCE(m.thread_id, c.thread_id, c.id)) FROM communications c
-              LEFT JOIN messages m ON (c.message_id IS NOT NULL AND c.message_id = m.id)
-                                   OR (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+             (SELECT COUNT(DISTINCT m.thread_id) FROM communications c
+              INNER JOIN messages m ON (c.message_id IS NOT NULL AND c.message_id = m.id)
+                                    OR (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
               WHERE c.transaction_id = t.id
-              AND COALESCE(m.channel, c.communication_type) IN ('text', 'sms', 'imessage')) as text_count
+              AND m.channel IN ('text', 'sms', 'imessage')
+              AND m.thread_id IS NOT NULL) as text_count
              FROM transactions t WHERE 1=1`;
   const params: unknown[] = [];
 
