@@ -5,7 +5,20 @@
 **Category**: Bug
 **Status**: Closed
 **Closed**: 2026-01-22
-**Resolution**: Fixed via PR #520
+**Resolution**: Fixed via direct commits to develop (3 attempts)
+
+## Resolution Notes
+
+**Root Cause**: CSS flexbox nested container issue. `flex-1` children need `min-h-0` to allow `overflow-y-auto` to work properly.
+
+**Fix Attempts**:
+1. PR #520 - Fixed `Transactions.tsx` - Wrong file (app uses TransactionList)
+2. Commit 612a362 - Fixed `AppShell.tsx` - Parent container, not root cause
+3. Commit ac25ed0 - Fixed `TransactionList.tsx` - **Correct fix**
+   - Changed `min-h-screen` to `h-screen overflow-hidden`
+   - Added `min-h-0` to scrollable content area
+
+**Lesson Learned**: Always trace component hierarchy to find which component is actually rendered. `AppModals.tsx` renders `TransactionList`, not `Transactions`.
 
 ---
 
