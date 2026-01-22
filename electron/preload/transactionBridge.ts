@@ -353,4 +353,55 @@ export const transactionBridge = {
    */
   linkEmails: (emailIds: string[], transactionId: string) =>
     ipcRenderer.invoke("transactions:link-emails", emailIds, transactionId),
+
+  // ============================================
+  // SUBMISSION METHODS (BACKLOG-391)
+  // ============================================
+
+  /**
+   * Submit transaction to broker portal for review
+   * @param transactionId - Transaction ID to submit
+   * @returns Submission result with cloud submission ID
+   */
+  submit: (transactionId: string) =>
+    ipcRenderer.invoke("transactions:submit", transactionId),
+
+  /**
+   * Resubmit transaction (creates new version)
+   * @param transactionId - Transaction ID to resubmit
+   * @returns Submission result with new submission ID
+   */
+  resubmit: (transactionId: string) =>
+    ipcRenderer.invoke("transactions:resubmit", transactionId),
+
+  /**
+   * Get submission status from cloud
+   * @param submissionId - Cloud submission ID
+   * @returns Current status and review info
+   */
+  getSubmissionStatus: (submissionId: string) =>
+    ipcRenderer.invoke("transactions:get-submission-status", submissionId),
+
+  /**
+   * Listen for submission progress updates
+   * @param callback - Progress callback
+   * @returns Cleanup function
+   */
+  onSubmitProgress: (callback: (progress: {
+    stage: string;
+    stageProgress: number;
+    overallProgress: number;
+    currentItem?: string;
+  }) => void) => {
+    const handler = (_event: unknown, progress: {
+      stage: string;
+      stageProgress: number;
+      overallProgress: number;
+      currentItem?: string;
+    }) => callback(progress);
+    ipcRenderer.on("transactions:submit-progress", handler);
+    return () => {
+      ipcRenderer.removeListener("transactions:submit-progress", handler);
+    };
+  },
 };
