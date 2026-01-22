@@ -170,8 +170,8 @@ export function validateRoleAssignments(
  * Get role display name based on transaction type
  *
  * For CLIENT role:
- * - Purchase: "Client (Buyer)" - agent represents the buyer
- * - Sale: "Client (Seller)" - agent represents the seller
+ * - Purchase: "Buyer (Client)" - agent represents the buyer
+ * - Sale: "Seller (Client)" - agent represents the seller
  *
  * @param role - The specific role constant
  * @param transactionType - 'purchase' or 'sale'
@@ -184,9 +184,9 @@ export function getRoleDisplayName(
   // Special handling for CLIENT role - changes based on transaction type
   if (role === SPECIFIC_ROLES.CLIENT) {
     if (transactionType === "purchase") {
-      return "Client (Buyer)";
+      return "Buyer (Client)";
     } else if (transactionType === "sale") {
-      return "Client (Seller)";
+      return "Seller (Client)";
     }
   }
 
