@@ -265,42 +265,9 @@ export function TransactionMessagesTab({
     setUnlinkTarget(null);
   }, []);
 
-  // Loading state
-  if (loading) {
-    return (
-      <div className="text-center py-12">
-        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-        <p className="text-gray-500 mt-4">Loading messages...</p>
-      </div>
-    );
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <div className="text-center py-12">
-        <svg
-          className="w-16 h-16 text-red-300 mx-auto mb-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-        <p className="text-red-600 mb-2">{error}</p>
-        <p className="text-sm text-gray-500">
-          Please try again or contact support if the issue persists.
-        </p>
-      </div>
-    );
-  }
-
   // Group messages by thread and sort by most recent
+  // NOTE: These computations and useMemo MUST be called before any early returns
+  // to comply with React's Rules of Hooks
   const threads = groupMessagesByThread(messages);
   const sortedThreads = sortThreadsByRecent(threads);
 
@@ -340,6 +307,41 @@ export function TransactionMessagesTab({
       totalConversationCount: sortedThreads.length,
     };
   }, [sortedThreads, messages.length, showAuditPeriodOnly, hasAuditDates, parsedStartDate, parsedEndDate]);
+
+  // Loading state (placed after hooks to comply with Rules of Hooks)
+  if (loading) {
+    return (
+      <div className="text-center py-12">
+        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+        <p className="text-gray-500 mt-4">Loading messages...</p>
+      </div>
+    );
+  }
+
+  // Error state (placed after hooks to comply with Rules of Hooks)
+  if (error) {
+    return (
+      <div className="text-center py-12">
+        <svg
+          className="w-16 h-16 text-red-300 mx-auto mb-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
+        </svg>
+        <p className="text-red-600 mb-2">{error}</p>
+        <p className="text-sm text-gray-500">
+          Please try again or contact support if the issue persists.
+        </p>
+      </div>
+    );
+  }
 
   // Empty state
   if (messages.length === 0) {
