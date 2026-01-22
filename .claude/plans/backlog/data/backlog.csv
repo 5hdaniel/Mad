@@ -200,7 +200,7 @@ BACKLOG-218,Group Chat Display in Transaction Details (Placeholder),ui,High,Bloc
 BACKLOG-219,Audit Debug/Logging Calls Across Repository,refactor,Low,Pending,-,~20K,-,-,2026-01-13,,[BACKLOG-219.md](BACKLOG-219.md)
 BACKLOG-220,Unlink Communications UI Not Refreshing,fix,High,Completed,SPRINT-049,~25K,~35K,+40%,2026-01-13,,PR #462
 BACKLOG-221,iMessage Attachments Not Displaying (Stale message_id),fix,High,Completed,SPRINT-044,~40K,~25K,-37%,2026-01-13,2026-01-18,PR #471
-BACKLOG-222,Contact Changes Not Saving When Editing Transaction,fix,High,Pending,SPRINT-049,~30K,-,-,2026-01-13,,[BACKLOG-222.md](BACKLOG-222.md)
+BACKLOG-222,Contact Changes Not Saving When Editing Transaction,fix,High,Completed,SPRINT-049,~30K,-,-,2026-01-13,2026-01-22,[BACKLOG-222.md](BACKLOG-222.md)
 BACKLOG-223,Add Text Message Status Indicator (Like Email Status),ui,Medium,Pending,-,~25K,-,-,2026-01-13,,[BACKLOG-223.md](BACKLOG-223.md)
 BACKLOG-224,Apply Edit Contacts Pattern to Transaction Details,ui,Low,Pending,-,~20K,-,-,2026-01-13,,[BACKLOG-224.md](BACKLOG-224.md)
 BACKLOG-225,Video Attachment Support for iMessage Import,feature,Low,Pending,-,~40K,-,-,2026-01-13,,[BACKLOG-225.md](BACKLOG-225.md)
@@ -344,3 +344,4 @@ BACKLOG-379,Continue Setup Button No-Op (goToEmailOnboarding),fix,High,Pending,S
 BACKLOG-380,hasEmailConnected Returns False Despite Working Email Sync,fix,High,Pending,-,~20K,-,-,2026-01-21,,[BACKLOG-380.md](items/BACKLOG-380.md)
 BACKLOG-381,Transaction Details Header Improvements (Audit Period + Type + Edit Button),ui,Medium,Pending,SPRINT-049,-,-,-,2026-01-22,,[BACKLOG-381.md](items/BACKLOG-381.md)
 BACKLOG-382,Persistent Export History in Transaction Details,feature,Medium,Pending,SPRINT-049,-,-,-,2026-01-22,,[BACKLOG-382.md](items/BACKLOG-382.md)
+BACKLOG-383,Format Role Pills with Human-Readable Labels,ui,Medium,Pending,SPRINT-049,-,-,-,2026-01-22,,[BACKLOG-383.md](items/BACKLOG-383.md)
