@@ -1,22 +1,25 @@
-# BACKLOG-390: Desktop - Local Schema Changes
+# BACKLOG-390: Desktop - Local Schema Changes + Auth Migration
 
 **Priority:** P0 (Critical)
-**Category:** schema / desktop
+**Category:** schema / desktop / auth
 **Created:** 2026-01-22
 **Status:** Pending
 **Sprint:** SPRINT-050
-**Estimated Tokens:** ~15K
+**Estimated Tokens:** ~20K
 
 ---
 
 ## Summary
 
-Add submission tracking fields to the local SQLite `transactions` table to track submission status, cloud reference IDs, and broker feedback.
+Two changes to desktop app infrastructure:
+1. Add submission tracking fields to local SQLite `transactions` table
+2. Migrate auth to use Supabase Auth (signInWithIdToken after direct OAuth)
 
 ---
 
 ## Problem Statement
 
+### Part 1: Submission Tracking
 The desktop app needs to track:
 - Whether a transaction has been submitted for broker review
 - The cloud submission ID for syncing status updates
@@ -24,6 +27,16 @@ The desktop app needs to track:
 - Broker review notes received from the cloud
 
 Currently, transactions have no awareness of the broker review workflow.
+
+### Part 2: Auth Migration
+The desktop app currently uses:
+- Direct Google/Microsoft OAuth (handles flow itself)
+- Service key to access Supabase (bypasses all RLS)
+
+For B2B, we need:
+- Supabase Auth session so RLS policies work
+- `auth.uid()` returns the user's ID in database queries
+- Same OAuth flow, but tell Supabase about the token after
 
 ---
 
@@ -94,6 +107,47 @@ export type SubmissionStatus =
   | 'rejected';
 ```
 
+### Part 2: Auth Migration
+
+Update the auth flow to create a Supabase session after direct OAuth:
+
+```typescript
+// In electron/services/supabaseService.ts or auth service
+
+// Current: Direct OAuth with Google/Microsoft
+const tokens = await googleOAuth.getTokens(); // or microsoftOAuth
+
+// NEW: Tell Supabase about this user (creates session + JWT)
+const { data, error } = await supabase.auth.signInWithIdToken({
+  provider: 'google', // or 'azure' for Microsoft
+  token: tokens.id_token,
+});
+
+if (error) {
+  console.error('Supabase auth failed:', error);
+  // Fall back to service key for now, but log warning
+}
+
+// Now supabase queries include JWT, RLS works
+// auth.uid() returns user's ID
+```
+
+**Key Points:**
+- Keep existing OAuth flow unchanged (user experience same)
+- Add one call after OAuth completes
+- Supabase validates the ID token cryptographically (secure)
+- Creates user in `auth.users` if first login
+- Triggers `on_auth_user_created` → creates profile
+- RLS policies now work with `auth.uid()`
+
+**For Microsoft OAuth:**
+```typescript
+const { data, error } = await supabase.auth.signInWithIdToken({
+  provider: 'azure',
+  token: microsoftTokens.id_token,
+});
+```
+
 ---
 
 ## Files to Create/Modify
@@ -102,6 +156,8 @@ export type SubmissionStatus =
 |------|--------|
 | `electron/migrations/XXXX_add_submission_tracking.sql` | New migration file |
 | `electron/services/databaseService.ts` | Add migration to runner, update queries |
+| `electron/services/supabaseService.ts` | Add signInWithIdToken after OAuth |
+| `electron/services/authService.ts` | Update to call Supabase after OAuth |
 | `src/types/transaction.ts` or similar | Add new fields to type |
 | `electron/utils/databaseSchema.ts` | Update schema version |
 
@@ -116,6 +172,7 @@ export type SubmissionStatus =
 
 ## Acceptance Criteria
 
+### Schema Changes
 - [ ] Migration creates all 4 new columns
 - [ ] Migration is idempotent (can run multiple times safely)
 - [ ] TypeScript types updated with new fields
@@ -123,6 +180,15 @@ export type SubmissionStatus =
 - [ ] Index created for status queries
 - [ ] Database queries include new fields in SELECT/INSERT/UPDATE
 - [ ] App starts successfully after migration
+
+### Auth Migration
+- [ ] After Google OAuth, `signInWithIdToken` is called
+- [ ] After Microsoft OAuth, `signInWithIdToken` is called (provider: 'azure')
+- [ ] User is created in Supabase `auth.users` on first login
+- [ ] Profile is auto-created via trigger
+- [ ] Supabase client has valid session after login
+- [ ] Graceful fallback if Supabase auth fails (log warning, continue with service key)
+- [ ] Existing login UX unchanged (same popups, same flow)
 
 ---
 
@@ -160,12 +226,21 @@ Status updates come from cloud to local:
 
 ## Testing Plan
 
+### Schema Changes
 1. Run migration on fresh database
 2. Run migration on database with existing transactions
 3. Verify default values applied
 4. Query transactions and verify new fields present
 5. Update a transaction's submission_status
 6. Restart app and verify data persisted
+
+### Auth Migration
+1. Login with Google - verify user created in Supabase auth.users
+2. Login with Microsoft - verify user created in Supabase auth.users
+3. Check Supabase dashboard: profile auto-created with 14-day trial
+4. Verify `supabase.auth.getUser()` returns valid user after login
+5. Test logout and re-login
+6. Test with network offline - should fall back gracefully
 
 ---
 
