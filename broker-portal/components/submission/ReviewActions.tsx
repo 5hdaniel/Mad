@@ -58,25 +58,6 @@ export function ReviewActions({ submission, disabled }: ReviewActionsProps) {
       const newStatus = statusMap[action];
       const now = new Date().toISOString();
 
-      // First fetch current status_history to append to it
-      const { data: currentSubmission } = await supabase
-        .from('transaction_submissions')
-        .select('status_history')
-        .eq('id', submission.id)
-        .single();
-
-      // Build new history entry
-      const historyEntry = {
-        status: newStatus,
-        changed_at: now,
-        changed_by: user?.email || 'Unknown',
-        notes: notes || undefined,
-      };
-
-      // Append to existing history or create new array
-      const existingHistory = currentSubmission?.status_history || [];
-      const updatedHistory = [...existingHistory, historyEntry];
-
       const { error: updateError } = await supabase
         .from('transaction_submissions')
         .update({
@@ -84,7 +65,6 @@ export function ReviewActions({ submission, disabled }: ReviewActionsProps) {
           reviewed_by: user?.id,
           reviewed_at: now,
           review_notes: notes || null,
-          status_history: updatedHistory,
         })
         .eq('id', submission.id);
 
