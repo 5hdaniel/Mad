@@ -384,7 +384,7 @@ export function ReviewActions({ submission, disabled }: ReviewActionsProps) {
                 <button
                   onClick={handleCancel}
                   disabled={loading}
-                  className="px-6 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 text-sm font-medium"
+                  className="px-6 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 text-sm font-medium text-gray-700"
                 >
                   Cancel
                 </button>
