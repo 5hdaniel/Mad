@@ -661,6 +661,172 @@ class DatabaseService implements IDatabaseService {
       await logService.info("BACKLOG-426: Added license type columns to users_local", "DatabaseService");
     }
 
+    // Migration 17 (BACKLOG-443): Backfill contact_emails and contact_phones junction tables
+    // This migration handles contacts imported from macOS Contacts App that may have
+    // multiple emails/phones but none were stored in the junction tables.
+    // It fetches the full contact data from macOS Contacts and populates the junction tables.
+    const schemaVersionRow = db.prepare(
+      "SELECT version FROM schema_version WHERE id = 1"
+    ).get() as { version: number } | undefined;
+    const currentSchemaVersion = schemaVersionRow?.version || 0;
+
+    if (currentSchemaVersion < 17) {
+      await logService.info("BACKLOG-443: Starting contact junction table backfill", "DatabaseService");
+
+      // Step 1: Backfill from legacy contacts.email and contacts.phone columns if they exist
+      const contactColumns = getColumns('contacts');
+
+      if (contactColumns.includes('email')) {
+        const emailBackfillResult = db.prepare(`
+          INSERT OR IGNORE INTO contact_emails (id, contact_id, email, is_primary, source, created_at)
+          SELECT
+            lower(hex(randomblob(16))),
+            c.id,
+            LOWER(TRIM(c.email)),
+            1,
+            'backfill',
+            CURRENT_TIMESTAMP
+          FROM contacts c
+          WHERE c.email IS NOT NULL
+            AND c.email != ''
+            AND NOT EXISTS (
+              SELECT 1 FROM contact_emails ce WHERE ce.contact_id = c.id
+            )
+        `).run();
+
+        if (emailBackfillResult.changes > 0) {
+          await logService.info(`BACKLOG-443: Backfilled ${emailBackfillResult.changes} emails from legacy field`, "DatabaseService");
+        }
+      }
+
+      if (contactColumns.includes('phone')) {
+        const phoneBackfillResult = db.prepare(`
+          INSERT OR IGNORE INTO contact_phones (id, contact_id, phone_e164, phone_display, is_primary, source, created_at)
+          SELECT
+            lower(hex(randomblob(16))),
+            c.id,
+            CASE
+              WHEN c.phone LIKE '+%' THEN c.phone
+              WHEN LENGTH(REPLACE(REPLACE(REPLACE(c.phone, '-', ''), ' ', ''), '(', '')) = 10
+                THEN '+1' || REPLACE(REPLACE(REPLACE(REPLACE(c.phone, '-', ''), ' ', ''), '(', ''), ')', '')
+              ELSE '+' || REPLACE(REPLACE(REPLACE(REPLACE(c.phone, '-', ''), ' ', ''), '(', ''), ')', '')
+            END,
+            c.phone,
+            1,
+            'backfill',
+            CURRENT_TIMESTAMP
+          FROM contacts c
+          WHERE c.phone IS NOT NULL
+            AND c.phone != ''
+            AND NOT EXISTS (
+              SELECT 1 FROM contact_phones cp WHERE cp.contact_id = c.id
+            )
+        `).run();
+
+        if (phoneBackfillResult.changes > 0) {
+          await logService.info(`BACKLOG-443: Backfilled ${phoneBackfillResult.changes} phones from legacy field`, "DatabaseService");
+        }
+      }
+
+      // Step 2: Fetch full contact data from macOS Contacts for contacts_app contacts
+      // that still have no junction table entries (these may have multiple emails/phones)
+      try {
+        const { getContactNames } = await import('./contactsService');
+        const { phoneToContactInfo } = await getContactNames();
+
+        // Get contacts from contacts_app that have no junction entries
+        const contactsNeedingBackfill = db.prepare(`
+          SELECT c.id, c.display_name, c.user_id
+          FROM contacts c
+          WHERE c.source = 'contacts_app'
+            AND c.is_imported = 1
+            AND NOT EXISTS (SELECT 1 FROM contact_emails ce WHERE ce.contact_id = c.id)
+            AND NOT EXISTS (SELECT 1 FROM contact_phones cp WHERE cp.contact_id = c.id)
+        `).all() as { id: string; display_name: string; user_id: string }[];
+
+        if (contactsNeedingBackfill.length > 0) {
+          await logService.info(`BACKLOG-443: Found ${contactsNeedingBackfill.length} contacts from Contacts App needing backfill`, "DatabaseService");
+
+          let emailsAdded = 0;
+          let phonesAdded = 0;
+
+          for (const contact of contactsNeedingBackfill) {
+            // Search for this contact in macOS Contacts by name
+            const matchingEntry = Object.values(phoneToContactInfo).find(
+              info => info.name?.toLowerCase() === contact.display_name?.toLowerCase()
+            );
+
+            if (matchingEntry) {
+              // Add all emails
+              if (matchingEntry.emails && matchingEntry.emails.length > 0) {
+                for (let i = 0; i < matchingEntry.emails.length; i++) {
+                  const email = matchingEntry.emails[i];
+                  if (email && email.trim()) {
+                    try {
+                      db.prepare(`
+                        INSERT OR IGNORE INTO contact_emails (id, contact_id, email, is_primary, source, created_at)
+                        VALUES (?, ?, ?, ?, 'macos_contacts_backfill', CURRENT_TIMESTAMP)
+                      `).run([
+                        crypto.randomUUID(),
+                        contact.id,
+                        email.toLowerCase().trim(),
+                        i === 0 ? 1 : 0,
+                      ]);
+                      emailsAdded++;
+                    } catch (_err) {
+                      // Ignore duplicate errors
+                    }
+                  }
+                }
+              }
+
+              // Add all phones
+              if (matchingEntry.phones && matchingEntry.phones.length > 0) {
+                for (let i = 0; i < matchingEntry.phones.length; i++) {
+                  const phone = matchingEntry.phones[i];
+                  if (phone && phone.trim()) {
+                    try {
+                      // Normalize to E.164
+                      const digits = phone.replace(/\D/g, '');
+                      const phoneE164 = digits.length === 10
+                        ? `+1${digits}`
+                        : digits.length === 11 && digits.startsWith('1')
+                          ? `+${digits}`
+                          : phone.startsWith('+')
+                            ? phone
+                            : `+${digits}`;
+
+                      db.prepare(`
+                        INSERT OR IGNORE INTO contact_phones (id, contact_id, phone_e164, phone_display, is_primary, source, created_at)
+                        VALUES (?, ?, ?, ?, ?, 'macos_contacts_backfill', CURRENT_TIMESTAMP)
+                      `).run([
+                        crypto.randomUUID(),
+                        contact.id,
+                        phoneE164,
+                        phone,
+                        i === 0 ? 1 : 0,
+                      ]);
+                      phonesAdded++;
+                    } catch (_err) {
+                      // Ignore duplicate errors
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          if (emailsAdded > 0 || phonesAdded > 0) {
+            await logService.info(`BACKLOG-443: Backfilled ${emailsAdded} emails and ${phonesAdded} phones from macOS Contacts`, "DatabaseService");
+          }
+        }
+      } catch (err) {
+        await logService.warn("BACKLOG-443: Could not access macOS Contacts for backfill, skipping", "DatabaseService", { error: (err as Error).message });
+      }
+
+      await logService.info("BACKLOG-443: Contact junction table backfill completed", "DatabaseService");
+    }
+
     // Finalize schema version (create table if missing for backwards compatibility)
     const schemaVersionExists = db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
@@ -673,12 +839,12 @@ class DatabaseService implements IDatabaseService {
           version INTEGER NOT NULL DEFAULT 1,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
-        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 16);
+        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 17);
       `);
     } else {
       const currentVersion = (db.prepare("SELECT version FROM schema_version").get() as { version: number } | undefined)?.version || 0;
-      if (currentVersion < 16) {
-        db.exec("UPDATE schema_version SET version = 16");
+      if (currentVersion < 17) {
+        db.exec("UPDATE schema_version SET version = 17");
       }
     }
 
