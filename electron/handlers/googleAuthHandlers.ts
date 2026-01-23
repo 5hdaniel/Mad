@@ -260,6 +260,12 @@ export async function handleGoogleLogin(
         // Exchange code for tokens
         const { tokens, userInfo } = await googleAuthService.exchangeCodeForTokens(code);
 
+        // BACKLOG-390: Sign in with Supabase Auth for RLS support
+        // This creates a Supabase session so auth.uid() works in RLS policies
+        if (tokens.id_token) {
+          await supabaseService.signInWithIdToken("google", tokens.id_token);
+        }
+
         // Sync user to Supabase
         const cloudUser = await supabaseService.syncUser({
           email: userInfo.email,
@@ -408,6 +414,11 @@ export async function handleGoogleCompleteLogin(
     // Exchange code for tokens
     const { tokens, userInfo } =
       await googleAuthService.exchangeCodeForTokens(validatedAuthCode);
+
+    // BACKLOG-390: Sign in with Supabase Auth for RLS support
+    if (tokens.id_token) {
+      await supabaseService.signInWithIdToken("google", tokens.id_token);
+    }
 
     // Session-only OAuth: no keychain encryption needed
     const accessToken = tokens.access_token;

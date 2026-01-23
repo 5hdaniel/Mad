@@ -10,6 +10,9 @@ import auditService from "./services/auditService";
 import logService from "./services/logService";
 import { autoLinkAllToTransaction } from "./services/messageMatchingService";
 import { autoLinkCommunicationsForContact } from "./services/autoLinkService";
+import submissionService from "./services/submissionService";
+import submissionSyncService from "./services/submissionSyncService";
+import type { SubmissionProgress } from "./services/submissionService";
 import type {
   Transaction,
   NewTransaction,
@@ -62,6 +65,14 @@ interface ExportOptions {
   exportFormat?: string;
   [key: string]: unknown;
 }
+
+/**
+ * Cleanup transaction handlers (call on app quit)
+ */
+export const cleanupTransactionHandlers = (): void => {
+  // Stop submission sync service
+  submissionSyncService.stopPeriodicSync();
+};
 
 /**
  * Register all transaction-related IPC handlers
@@ -2128,6 +2139,203 @@ export const registerTransactionHandlers = (
     },
   );
 
+  // ============================================
+  // SUBMISSION HANDLERS (BACKLOG-391)
+  // ============================================
+
+  // Submit transaction to broker portal for review
+  ipcMain.handle(
+    "transactions:submit",
+    async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Submitting transaction for broker review", "Transactions", {
+          transactionId,
+        });
+
+        // Validate transaction ID
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        // Track progress via IPC events
+        const result = await submissionService.submitTransaction(
+          validatedTransactionId,
+          (progress: SubmissionProgress) => {
+            if (mainWindow) {
+              mainWindow.webContents.send("transactions:submit-progress", progress);
+            }
+          }
+        );
+
+        if (result.success) {
+          // Audit log submission
+          const transaction = await transactionService.getTransactionDetails(
+            validatedTransactionId
+          );
+          await auditService.log({
+            userId: transaction?.user_id || "unknown",
+            action: "TRANSACTION_SUBMIT",
+            resourceType: "SUBMISSION",
+            resourceId: result.submissionId || validatedTransactionId,
+            metadata: {
+              propertyAddress: transaction?.property_address,
+              messagesCount: result.messagesCount,
+              attachmentsCount: result.attachmentsCount,
+            },
+            success: true,
+          });
+
+          logService.info("Transaction submitted successfully", "Transactions", {
+            transactionId: validatedTransactionId,
+            submissionId: result.submissionId,
+            messagesCount: result.messagesCount,
+            attachmentsCount: result.attachmentsCount,
+          });
+        }
+
+        return {
+          success: result.success,
+          submissionId: result.submissionId,
+          messagesCount: result.messagesCount,
+          attachmentsCount: result.attachmentsCount,
+          attachmentsFailed: result.attachmentsFailed,
+          error: result.error,
+        };
+      } catch (error) {
+        logService.error("Submit transaction failed", "Transactions", {
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Resubmit transaction (creates new version)
+  ipcMain.handle(
+    "transactions:resubmit",
+    async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Resubmitting transaction for broker review", "Transactions", {
+          transactionId,
+        });
+
+        // Validate transaction ID
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        // Track progress via IPC events
+        const result = await submissionService.resubmitTransaction(
+          validatedTransactionId,
+          (progress: SubmissionProgress) => {
+            if (mainWindow) {
+              mainWindow.webContents.send("transactions:submit-progress", progress);
+            }
+          }
+        );
+
+        if (result.success) {
+          logService.info("Transaction resubmitted successfully", "Transactions", {
+            transactionId: validatedTransactionId,
+            submissionId: result.submissionId,
+          });
+        }
+
+        return {
+          success: result.success,
+          submissionId: result.submissionId,
+          messagesCount: result.messagesCount,
+          attachmentsCount: result.attachmentsCount,
+          attachmentsFailed: result.attachmentsFailed,
+          error: result.error,
+        };
+      } catch (error) {
+        logService.error("Resubmit transaction failed", "Transactions", {
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Get submission status from cloud
+  ipcMain.handle(
+    "transactions:get-submission-status",
+    async (
+      event: IpcMainInvokeEvent,
+      submissionId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        if (!submissionId || typeof submissionId !== "string") {
+          throw new ValidationError(
+            "Submission ID is required",
+            "submissionId",
+          );
+        }
+
+        const status = await submissionService.getSubmissionStatus(submissionId);
+
+        if (!status) {
+          return {
+            success: false,
+            error: "Submission not found",
+          };
+        }
+
+        return {
+          success: true,
+          status: status.status,
+          reviewNotes: status.review_notes,
+          reviewedBy: status.reviewed_by,
+          reviewedAt: status.reviewed_at,
+        };
+      } catch (error) {
+        logService.error("Get submission status failed", "Transactions", {
+          submissionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
   // Re-sync auto-link communications for all contacts on a transaction
   // Use when contacts have been updated and user wants to re-link communications
   ipcMain.handle(
@@ -2247,6 +2455,91 @@ export const registerTransactionHandlers = (
         };
       } catch (error) {
         logService.error("Re-sync auto-link failed", "Transactions", {
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // ============================================
+  // SYNC HANDLERS (BACKLOG-395)
+  // ============================================
+
+  // Set main window reference for sync service and start periodic sync
+  if (mainWindow) {
+    submissionSyncService.setMainWindow(mainWindow);
+    // Start periodic sync with 1 minute interval
+    // Sync will only query for transactions that have been submitted but not in terminal states
+    submissionSyncService.startPeriodicSync(60000);
+  }
+
+  // Sync all submission statuses from cloud
+  ipcMain.handle(
+    "transactions:sync-submissions",
+    async (): Promise<TransactionResponse> => {
+      try {
+        logService.info("Manual sync triggered", "SubmissionSync");
+
+        const result = await submissionSyncService.syncAllSubmissions();
+
+        logService.info("Manual sync complete", "SubmissionSync", {
+          updated: result.updated,
+          failed: result.failed,
+        });
+
+        return {
+          success: true,
+          updated: result.updated,
+          failed: result.failed,
+          details: result.details,
+        };
+      } catch (error) {
+        logService.error("Manual sync failed", "SubmissionSync", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Sync a specific transaction's submission status
+  ipcMain.handle(
+    "transactions:sync-submission",
+    async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        const wasUpdated = await submissionSyncService.syncSubmission(validatedTransactionId);
+
+        return {
+          success: true,
+          updated: wasUpdated,
+        };
+      } catch (error) {
+        logService.error("Single sync failed", "SubmissionSync", {
           transactionId,
           error: error instanceof Error ? error.message : "Unknown error",
         });

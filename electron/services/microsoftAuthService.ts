@@ -21,6 +21,8 @@ interface TokenResponse {
   refresh_token: string;
   expires_in: number;
   scope: string;
+  /** BACKLOG-390: ID token for Supabase Auth signInWithIdToken */
+  id_token?: string;
 }
 
 interface UserInfo {

@@ -636,6 +636,19 @@ class DatabaseService implements IDatabaseService {
       await logService.info("BACKLOG-396: text_thread_count backfill completed", "DatabaseService");
     }
 
+    // Migration 15 (BACKLOG-390): B2B Submission Tracking
+    // Add columns to track broker review workflow state
+    const txSubmissionColumns = getColumns('transactions');
+    if (!txSubmissionColumns.includes('submission_status')) {
+      runSafe(`ALTER TABLE transactions ADD COLUMN submission_status TEXT DEFAULT 'not_submitted' CHECK (submission_status IN ('not_submitted', 'submitted', 'under_review', 'needs_changes', 'resubmitted', 'approved', 'rejected'))`);
+      runSafe(`ALTER TABLE transactions ADD COLUMN submission_id TEXT`);
+      runSafe(`ALTER TABLE transactions ADD COLUMN submitted_at DATETIME`);
+      runSafe(`ALTER TABLE transactions ADD COLUMN last_review_notes TEXT`);
+      runSafe(`CREATE INDEX IF NOT EXISTS idx_transactions_submission_status ON transactions(submission_status)`);
+      runSafe(`CREATE INDEX IF NOT EXISTS idx_transactions_submission_id ON transactions(submission_id)`);
+      await logService.info("BACKLOG-390: Added B2B submission tracking columns", "DatabaseService");
+    }
+
     // Finalize schema version (create table if missing for backwards compatibility)
     const schemaVersionExists = db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"

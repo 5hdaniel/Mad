@@ -13,8 +13,6 @@ interface TransactionDetailsTabProps {
   contactAssignments: ContactAssignment[];
   loading: boolean;
   onEditContacts?: () => void;
-  /** Callback to open transaction edit modal */
-  onEditDetails?: () => void;
   /** AI suggested contacts to review */
   resolvedSuggestions?: ResolvedSuggestedContact[];
   /** ID of contact currently being processed */
@@ -62,7 +60,6 @@ export function TransactionDetailsTab({
   contactAssignments,
   loading,
   onEditContacts,
-  onEditDetails,
   resolvedSuggestions = [],
   processingContactId,
   processingAll = false,
@@ -110,27 +107,6 @@ export function TransactionDetailsTab({
             </svg>
             Summary
           </h4>
-          {onEditDetails && (
-            <button
-              onClick={onEditDetails}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition-colors"
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                />
-              </svg>
-              Edit Details
-            </button>
-          )}
         </div>
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
           <div className="flex flex-wrap items-center gap-4">
