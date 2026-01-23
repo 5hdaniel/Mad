@@ -11,3 +11,5 @@ export { AttachEmailsModal } from "./AttachEmailsModal";
 export { UnlinkMessageModal } from "./UnlinkMessageModal";
 export { ConversationViewModal } from "./ConversationViewModal";
 export { EditContactsModal } from "./EditContactsModal";
+export { SubmitForReviewModal } from "./SubmitForReviewModal";
+export type { SubmitProgress } from "./SubmitForReviewModal";

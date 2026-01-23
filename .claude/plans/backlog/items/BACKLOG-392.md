@@ -1,43 +1,220 @@
-# BACKLOG-392: Improve Client Role Label Based on Transaction Type
+# BACKLOG-392: Desktop - Bulk Submit UI (List Page)
 
-**Created**: 2026-01-22
-**Priority**: Medium
-**Category**: UI/UX Enhancement
-**Status**: In Progress
+**Priority:** P1 (Should Have)
+**Category:** ui / desktop
+**Created:** 2026-01-22
+**Status:** Pending
+**Sprint:** SPRINT-050
+**Estimated Tokens:** ~20K
 
 ---
 
-## Problem
+## Summary
 
-The "Client" role label doesn't indicate whether the client is a buyer or seller. This can be inferred from the transaction type.
+Add bulk submission capability to the transaction list page, allowing agents to submit multiple transactions for broker review at once.
 
-## Solution
+---
 
-Update the Client role label to show context based on transaction type:
-- If transaction type is "purchase" → Show "Buyer (Client)"
-- If transaction type is "sale" → Show "Seller (Client)"
+## Problem Statement
 
-## Current Behavior
+Agents may have multiple completed audits ready for broker review. Submitting them one by one is tedious. A bulk submission feature lets agents:
+1. Select multiple transactions from the list
+2. Submit all selected in one action
+3. See submission status for each in the list
+
+---
+
+## Proposed Solution
+
+### Transaction List Enhancements
+
+#### Status Column
+
+Add a "Submission" column to the transaction list:
+
 ```
-Client: John Smith
+┌────────────────────────────────────────────────────────────────────────────┐
+│ □ | Address              | Type | Status | Submission      | Messages | ▼ │
+├────────────────────────────────────────────────────────────────────────────┤
+│ □ | 123 Oak Street       | Sale | Closed | ✓ Approved      | 15       |   │
+│ ■ | 456 Maple Ave        | Buy  | Active | ⚠ Changes Req   | 12       |   │
+│ ■ | 789 Pine Road        | Sale | Closed | — Not Submitted | 20       |   │
+│ □ | 321 Elm Court        | Sale | Closed | ● Under Review  | 25       |   │
+└────────────────────────────────────────────────────────────────────────────┘
+
+Selected: 2 transactions                    [Submit Selected for Review]
 ```
 
-## Expected Behavior
+#### Bulk Action Bar
+
+When transactions are selected, show a bulk action bar:
+
 ```
-# For purchase transaction:
-Buyer (Client): John Smith
-
-# For sale transaction:
-Seller (Client): John Smith
+┌────────────────────────────────────────────────────────────────────────────┐
+│ 2 transactions selected                                                     │
+│                                                                             │
+│ [Submit for Review]  [Export]  [Delete]  [Clear Selection]                 │
+└────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Files to Modify
+#### Selection Rules
 
-- Role formatting utility (likely where BACKLOG-383 changes were made)
-- Need to pass transaction type to the role formatter
+Only allow selecting transactions that are:
+- `not_submitted` - Can submit
+- `needs_changes` - Can resubmit
+- `rejected` - Can resubmit (after fixes)
+
+Disable selection (or show warning) for:
+- `submitted` - Already pending
+- `under_review` - Being reviewed
+- `approved` - Already complete
+
+### Bulk Submit Modal
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Submit 3 Transactions for Review                  │
+│─────────────────────────────────────────────────────────────────────│
+│                                                                      │
+│  The following transactions will be submitted:                       │
+│                                                                      │
+│  1. 456 Maple Ave, Santa Monica         (Resubmission)              │
+│     • 12 messages, 5 attachments                                     │
+│                                                                      │
+│  2. 789 Pine Road, Beverly Hills        (New)                       │
+│     • 20 messages, 12 attachments                                    │
+│                                                                      │
+│  3. 555 Cedar Lane, Pasadena            (New)                       │
+│     • 8 messages, 3 attachments                                      │
+│                                                                      │
+│  Total: 40 messages, 20 attachments (52.4 MB)                       │
+│                                                                      │
+│  □ Export local copies before submitting                            │
+│    □ Remember my choice                                             │
+│                                                                      │
+│  [Cancel]                                      [Submit All]          │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Progress Modal
+
+Show progress for each transaction:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Submitting Transactions...                        │
+│─────────────────────────────────────────────────────────────────────│
+│                                                                      │
+│  456 Maple Ave        [████████████████████] ✓ Complete             │
+│  789 Pine Road        [██████████░░░░░░░░░░] 50% - Uploading...     │
+│  555 Cedar Lane       [░░░░░░░░░░░░░░░░░░░░] Waiting...             │
+│                                                                      │
+│  Overall: 1 of 3 complete                                           │
+│                                                                      │
+│  [Cancel Remaining]                                                  │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Results Summary
+
+After completion:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Submission Complete                               │
+│─────────────────────────────────────────────────────────────────────│
+│                                                                      │
+│  ✓ 456 Maple Ave        - Submitted successfully                    │
+│  ✓ 789 Pine Road        - Submitted successfully                    │
+│  ✗ 555 Cedar Lane       - Failed (network error)                    │
+│                                                                      │
+│  2 of 3 transactions submitted.                                     │
+│                                                                      │
+│  [Retry Failed]                                         [Close]      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Files to Create/Modify
+
+| File | Change |
+|------|--------|
+| `src/components/Transactions.tsx` | Add selection, status column |
+| `src/components/BulkActionBar.tsx` | Extend with submission action |
+| `src/components/BulkSubmitModal.tsx` | New modal component |
+| `src/components/SubmissionProgressModal.tsx` | New progress component |
+| `src/hooks/useBulkSubmit.ts` | New hook for batch operations |
+
+---
+
+## Dependencies
+
+- BACKLOG-390: Local schema changes (status fields)
+- BACKLOG-391: Single submit UI (shares components)
+- BACKLOG-393: Attachment upload service
+- BACKLOG-394: Transaction push service
+
+---
 
 ## Acceptance Criteria
 
-- [ ] Client role shows "Buyer (Client)" for purchase transactions
-- [ ] Client role shows "Seller (Client)" for sale transactions
-- [ ] Other roles remain unchanged
+- [ ] Submission status column visible in transaction list
+- [ ] Checkbox selection available for eligible transactions
+- [ ] Bulk action bar appears when transactions selected
+- [ ] Cannot select already-submitted transactions (or shows warning)
+- [ ] Confirmation modal shows all selected transactions
+- [ ] Progress modal shows individual progress
+- [ ] Failed submissions can be retried
+- [ ] Status updates in list after completion
+- [ ] Cancel stops remaining submissions
+
+---
+
+## Technical Notes
+
+### Sequential vs Parallel
+
+For reliability, submit transactions **sequentially** (not parallel):
+- Easier progress tracking
+- Simpler error handling
+- Less likely to hit rate limits
+- User can cancel cleanly between items
+
+### Error Recovery
+
+If one submission fails:
+1. Continue with remaining
+2. Track failures separately
+3. Allow retry of just the failed ones
+4. Don't rollback successful submissions
+
+### List Performance
+
+With status column added:
+- Use existing virtualization (if any)
+- Status badge is lightweight component
+- Don't fetch full submission details for list
+
+---
+
+## Testing Plan
+
+1. Test selection behavior for different statuses
+2. Test bulk action bar visibility
+3. Test confirmation modal content
+4. Test progress tracking accuracy
+5. Test partial failure handling
+6. Test retry functionality
+7. Test cancel during submission
+8. Test list updates after completion
+
+---
+
+## Related Items
+
+- BACKLOG-390: Local Schema Changes (dependency)
+- BACKLOG-391: Submit UI Detail Page (shares patterns)
+- BACKLOG-393: Attachment Upload Service (dependency)
+- BACKLOG-394: Transaction Push Service (dependency)
+- SPRINT-050: B2B Broker Portal Demo

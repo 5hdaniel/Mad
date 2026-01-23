@@ -29,6 +29,7 @@ export type AuditAction =
   | "TRANSACTION_CREATE"
   | "TRANSACTION_UPDATE"
   | "TRANSACTION_DELETE"
+  | "TRANSACTION_SUBMIT"
   | "CONTACT_CREATE"
   | "CONTACT_UPDATE"
   | "CONTACT_DELETE"
@@ -46,6 +47,7 @@ export type ResourceType =
   | "CONTACT"
   | "COMMUNICATION"
   | "EXPORT"
+  | "SUBMISSION"
   | "MAILBOX"
   | "SETTINGS";
 

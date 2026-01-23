@@ -8,6 +8,7 @@ import React, { useState, useMemo } from "react";
 interface SelectedTransaction {
   id: string;
   detection_source?: "manual" | "auto" | "hybrid";
+  submission_status?: "not_submitted" | "submitted" | "under_review" | "needs_changes" | "resubmitted" | "approved" | "rejected";
 }
 
 interface BulkActionBarProps {
@@ -18,10 +19,12 @@ interface BulkActionBarProps {
   onBulkDelete: () => void;
   onBulkExport: () => void;
   onBulkStatusChange: (status: "pending" | "active" | "closed" | "rejected") => void;
+  onBulkSubmit?: () => void;
   onClose: () => void;
   isDeleting?: boolean;
   isExporting?: boolean;
   isUpdating?: boolean;
+  isSubmitting?: boolean;
   /** Selected transactions to determine available status options */
   selectedTransactions?: SelectedTransaction[];
 }
@@ -34,14 +37,16 @@ export function BulkActionBar({
   onBulkDelete,
   onBulkExport,
   onBulkStatusChange,
+  onBulkSubmit,
   onClose,
   isDeleting = false,
   isExporting = false,
   isUpdating = false,
+  isSubmitting = false,
   selectedTransactions = [],
 }: BulkActionBarProps) {
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
-  const isProcessing = isDeleting || isExporting || isUpdating;
+  const isProcessing = isDeleting || isExporting || isUpdating || isSubmitting;
   const hasSelection = selectedCount > 0;
 
   // Determine available status options based on selected transactions
@@ -49,6 +54,20 @@ export function BulkActionBar({
   // AI-detected transactions can use all 4 statuses
   const hasManualTransactions = useMemo(() => {
     return selectedTransactions.some((t) => t.detection_source === "manual");
+  }, [selectedTransactions]);
+
+  // Count transactions eligible for submission
+  // Eligible: not_submitted, needs_changes, rejected
+  const submittableCount = useMemo(() => {
+    return selectedTransactions.filter((t) => {
+      const status = t.submission_status;
+      return (
+        status === undefined ||
+        status === "not_submitted" ||
+        status === "needs_changes" ||
+        status === "rejected"
+      );
+    }).length;
   }, [selectedTransactions]);
 
   return (
@@ -86,6 +105,40 @@ export function BulkActionBar({
 
         {/* Bulk Actions */}
         <div className="flex items-center gap-2">
+          {/* Submit Button (BACKLOG-392) */}
+          {onBulkSubmit && (
+            <button
+              onClick={onBulkSubmit}
+              disabled={isProcessing || submittableCount === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              title={submittableCount === 0 ? "No eligible transactions selected" : `Submit ${submittableCount} transactions`}
+            >
+              {isSubmitting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Submitting...</span>
+                </>
+              ) : (
+                <>
+                  <svg
+                    className="w-5 h-5 flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <span>Submit{submittableCount > 0 && submittableCount !== selectedCount ? ` (${submittableCount})` : ""}</span>
+                </>
+              )}
+            </button>
+          )}
+
           {/* Export Button */}
           <button
             onClick={onBulkExport}

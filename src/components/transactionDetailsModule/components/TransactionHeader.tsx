@@ -19,6 +19,8 @@ interface TransactionHeaderProps {
   onRestore: () => void;
   onShowExportModal: () => void;
   onShowDeleteConfirm: () => void;
+  onShowSubmitModal?: () => void;
+  isSubmitting?: boolean;
 }
 
 export function TransactionHeader({
@@ -35,6 +37,8 @@ export function TransactionHeader({
   onRestore,
   onShowExportModal,
   onShowDeleteConfirm,
+  onShowSubmitModal,
+  isSubmitting = false,
 }: TransactionHeaderProps): React.ReactElement {
   // Determine header style based on state
   const getHeaderStyle = () => {
@@ -127,10 +131,10 @@ export function TransactionHeader({
             />
           ) : (
             <ActiveActions
-              isRejecting={isRejecting}
-              onShowRejectReasonModal={onShowRejectReasonModal}
-              onShowExportModal={onShowExportModal}
-              onShowDeleteConfirm={onShowDeleteConfirm}
+              transaction={transaction}
+              isSubmitting={isSubmitting}
+              onShowEditModal={onShowEditModal}
+              onShowSubmitModal={onShowSubmitModal}
             />
           )}
 
@@ -243,52 +247,63 @@ function RejectedActions({
 }
 
 function ActiveActions({
-  isRejecting,
-  onShowRejectReasonModal,
-  onShowExportModal,
-  onShowDeleteConfirm,
+  transaction,
+  isSubmitting,
+  onShowEditModal,
+  onShowSubmitModal,
 }: {
-  isRejecting: boolean;
-  onShowRejectReasonModal: () => void;
-  onShowExportModal: () => void;
-  onShowDeleteConfirm: () => void;
+  transaction: Transaction;
+  isSubmitting: boolean;
+  onShowEditModal: () => void;
+  onShowSubmitModal?: () => void;
 }) {
+  // Check if transaction can be submitted
+  const canSubmit = transaction.submission_status === "not_submitted" ||
+    transaction.submission_status === "needs_changes" ||
+    !transaction.submission_status;
+
+  const isResubmit = transaction.submission_status === "needs_changes";
+  const isSubmitted = transaction.submission_status === "submitted" ||
+    transaction.submission_status === "under_review" ||
+    transaction.submission_status === "approved";
+
   return (
     <>
-      {/* Reject Button */}
-      <button
-        onClick={onShowRejectReasonModal}
-        disabled={isRejecting}
-        className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-orange-600 hover:bg-opacity-90 shadow-md hover:shadow-lg disabled:opacity-50"
-      >
-        {isRejecting ? (
-          <div className="w-5 h-5 border-2 border-orange-600 border-t-transparent rounded-full animate-spin" />
-        ) : (
+      {/* Submit for Review Button - shown when not yet submitted */}
+      {onShowSubmitModal && canSubmit && (
+        <button
+          onClick={onShowSubmitModal}
+          disabled={isSubmitting}
+          className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg disabled:opacity-50"
+        >
+          {isSubmitting ? (
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          )}
+          {isResubmit ? "Resubmit" : "Submit for Review"}
+        </button>
+      )}
+      {/* Submitted Badge - shown when already submitted */}
+      {isSubmitted && (
+        <span className="px-4 py-2 rounded-lg font-medium flex items-center gap-2 bg-green-100 text-green-700">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
-        )}
-        Reject
-      </button>
-      {/* Export Button */}
+          Submitted
+        </span>
+      )}
+      {/* Edit Button */}
       <button
-        onClick={onShowExportModal}
-        className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-green-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
+        onClick={onShowEditModal}
+        className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-gray-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
       >
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
         </svg>
-        Export
-      </button>
-      {/* Delete Button */}
-      <button
-        onClick={onShowDeleteConfirm}
-        className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-red-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
-      >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-        </svg>
-        Delete
+        Edit
       </button>
     </>
   );

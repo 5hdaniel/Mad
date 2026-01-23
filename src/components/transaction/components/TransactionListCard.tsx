@@ -11,6 +11,7 @@ import {
   PendingReviewBadge,
 } from "./DetectionBadges";
 import { formatCommunicationCounts } from "./TransactionCard";
+import { SubmissionStatusBadge } from "../../transactionDetailsModule/components/SubmissionStatusBadge";
 
 // ============================================
 // SVG ICONS (matching TransactionTabs)
@@ -150,6 +151,10 @@ export function TransactionListCard({
                 <PendingReviewBadge />
               )}
             </div>
+            {/* Submission Status Badge (BACKLOG-392) */}
+            {transaction.submission_status && transaction.submission_status !== "not_submitted" && (
+              <SubmissionStatusBadge status={transaction.submission_status} />
+            )}
           </div>
           <div className="flex items-center gap-4 text-sm text-gray-600">
             {transaction.transaction_type && (

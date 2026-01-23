@@ -289,6 +289,12 @@ export async function handleMicrosoftLogin(
           tokens.access_token
         );
 
+        // BACKLOG-390: Sign in with Supabase Auth for RLS support
+        // This creates a Supabase session so auth.uid() works in RLS policies
+        if (tokens.id_token) {
+          await supabaseService.signInWithIdToken("azure", tokens.id_token);
+        }
+
         // Session-only OAuth: no keychain encryption
         const accessToken = tokens.access_token;
         const refreshToken = tokens.refresh_token || null;
