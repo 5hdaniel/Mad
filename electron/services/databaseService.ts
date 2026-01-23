@@ -517,7 +517,7 @@ class DatabaseService implements IDatabaseService {
     runSafe(`UPDATE transactions SET status = 'active' WHERE status = 'pending'`);
     runSafe(`UPDATE transactions SET status = 'active' WHERE status = 'open'`);
     runSafe(`UPDATE transactions SET status = 'active' WHERE status IS NULL OR status = ''`);
-    runSafe(`UPDATE transactions SET status = 'archived' WHERE status = 'cancelled'`);
+    runSafe(`UPDATE transactions SET status = 'closed' WHERE status = 'cancelled'`);
 
     // Migration 9: Normalize contacts display_name
     runSafe(`UPDATE contacts SET display_name = name WHERE (display_name IS NULL OR display_name = '') AND name IS NOT NULL AND name != ''`);

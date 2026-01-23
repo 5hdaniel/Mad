@@ -30,7 +30,7 @@ export type FalsePositiveReason = "signature" | "promotional" | "unrelated" | "o
 
 // Transactions
 export type TransactionType = "purchase" | "sale" | "other";
-export type TransactionStatus = "pending" | "active" | "closed" | "archived" | "rejected";
+export type TransactionStatus = "pending" | "active" | "closed" | "rejected";
 
 // B2B Submission Status (BACKLOG-390)
 export type SubmissionStatus =

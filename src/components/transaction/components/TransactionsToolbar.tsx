@@ -70,7 +70,7 @@ export function TransactionsToolbar({
     (t: Transaction) => t.status === "active"
   ).length;
   const closedCount = transactions.filter(
-    (t: Transaction) => t.status === "closed" || t.status === "archived"
+    (t: Transaction) => t.status === "closed"
   ).length;
 
   return (
