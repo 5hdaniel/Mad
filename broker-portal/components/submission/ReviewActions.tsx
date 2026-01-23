@@ -94,10 +94,8 @@ export function ReviewActions({ submission, disabled }: ReviewActionsProps) {
       if (notes && user) {
         await supabase.from('submission_comments').insert({
           submission_id: submission.id,
-          author_id: user.id,
+          user_id: user.id,
           content: notes,
-          comment_type:
-            action === 'approve' ? 'approval' : action === 'reject' ? 'rejection' : 'feedback',
         });
       }
 
