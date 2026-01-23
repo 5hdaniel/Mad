@@ -187,6 +187,7 @@ function getDefaultDateRange(): { start: Date; end: Date } {
  * 3. Are NOT already linked to this transaction
  * 4. Match the contact's email addresses (sender or recipients)
  * 5. Fall within the date range
+ * 6. EXCLUDES the user's own email (user shouldn't be treated as a contact)
  */
 async function findEmailsByContactEmails(
   userId: string,
@@ -199,16 +200,37 @@ async function findEmailsByContactEmails(
     return [];
   }
 
+  // Get the user's email to exclude it from contact matching
+  const userSql = "SELECT email FROM users_local WHERE id = ?";
+  const userResult = dbGet<{ email: string | null }>(userSql, [userId]);
+  const userEmail = userResult?.email?.toLowerCase().trim();
+
+  // Filter out user's own email from contact emails
+  // The user's email should never be treated as a contact
+  const contactEmails = emails.filter((email) => {
+    const normalizedEmail = email.toLowerCase().trim();
+    return normalizedEmail !== userEmail;
+  });
+
+  if (contactEmails.length === 0) {
+    await logService.debug(
+      "No contact emails to match after filtering user's own email",
+      "AutoLinkService",
+      { userId, userEmail, originalEmails: emails }
+    );
+    return [];
+  }
+
   // Build email patterns for LIKE matching
   // Match emails in sender or recipients fields of the communications table
-  const emailConditions = emails
+  const emailConditions = contactEmails
     .map(() => "(LOWER(c.sender) LIKE ? OR LOWER(c.recipients) LIKE ?)")
     .join(" OR ");
 
   const params: (string | number)[] = [userId, transactionId];
 
   // Add email patterns
-  for (const email of emails) {
+  for (const email of contactEmails) {
     params.push(`%${email}%`, `%${email}%`);
   }
 
