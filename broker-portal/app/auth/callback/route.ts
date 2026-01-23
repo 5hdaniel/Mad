@@ -35,7 +35,8 @@ export async function GET(request: Request) {
         .select('role, organization_id')
         .eq('user_id', user.id)
         .in('role', ['broker', 'admin'])
-        .maybeSingle();
+        .limit(1)
+        .single();
 
       if (!membership) {
         // User exists but is not a broker/admin - sign them out
