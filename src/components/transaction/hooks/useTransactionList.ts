@@ -90,7 +90,7 @@ export function useTransactionList(
           t.detection_status !== "pending" &&
           t.detection_status !== "rejected"
       ).length,
-      closed: transactions.filter((t) => t.status === "closed" || t.status === "archived").length,
+      closed: transactions.filter((t) => t.status === "closed").length,
       rejected: transactions.filter((t) => t.detection_status === "rejected")
         .length,
     }),
@@ -123,8 +123,7 @@ export function useTransactionList(
             t.detection_status !== "rejected";
           break;
         case "closed":
-          // Closed includes both closed and archived transactions
-          matchesFilter = t.status === "closed" || t.status === "archived";
+          matchesFilter = t.status === "closed";
           break;
         case "rejected":
           matchesFilter = t.detection_status === "rejected";
