@@ -35,6 +35,7 @@ import { registerBackupHandlers } from "./backup-handlers";
 import { registerSyncHandlers, cleanupSyncHandlers } from "./sync-handlers";
 import { registerDriverHandlers } from "./driver-handlers";
 import { registerLLMHandlers } from "./llm-handlers";
+import { registerLicenseHandlers } from "./license-handlers";
 import { LLMConfigService } from "./services/llm/llmConfigService";
 
 // Import extracted handlers from handlers/ directory
@@ -236,6 +237,9 @@ app.whenReady().then(async () => {
   // Initialize LLM services and register handlers
   const llmConfigService = new LLMConfigService();
   registerLLMHandlers(llmConfigService);
+
+  // Register license handlers
+  registerLicenseHandlers();
 
   // Register extracted handlers from handlers/ directory
   registerPermissionHandlers();

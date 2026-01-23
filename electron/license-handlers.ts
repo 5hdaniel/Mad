@@ -1,0 +1,130 @@
+// ============================================
+// LICENSE IPC HANDLERS
+// Handles license-related IPC calls from renderer
+// ============================================
+
+import { ipcMain } from "electron";
+import type { IpcMainInvokeEvent } from "electron";
+import sessionService from "./services/sessionService";
+import { getUserById } from "./services/db/userDbService";
+import logService from "./services/logService";
+import type { LicenseType, UserLicense } from "./types/models";
+
+// Type definitions
+interface LicenseResponse {
+  success: boolean;
+  error?: string;
+  license?: UserLicense;
+}
+
+/**
+ * Get license data from the current session user
+ * Falls back to database lookup if session doesn't have license fields
+ */
+async function getLicenseData(): Promise<LicenseResponse> {
+  try {
+    // First try to get license from session
+    const session = await sessionService.loadSession();
+
+    if (!session || !session.user) {
+      logService.debug("[License] No active session", "License");
+      return {
+        success: true,
+        license: {
+          license_type: "individual" as LicenseType,
+          ai_detection_enabled: false,
+          organization_id: undefined,
+        },
+      };
+    }
+
+    const user = session.user;
+
+    // Check if session user has license fields
+    if (user.license_type !== undefined) {
+      logService.debug("[License] License found in session", "License", {
+        license_type: user.license_type,
+        ai_detection_enabled: user.ai_detection_enabled,
+      });
+
+      return {
+        success: true,
+        license: {
+          license_type: user.license_type || "individual",
+          ai_detection_enabled: user.ai_detection_enabled || false,
+          organization_id: user.organization_id,
+        },
+      };
+    }
+
+    // Fallback: Look up user in local database
+    logService.debug(
+      "[License] License not in session, checking database",
+      "License",
+      { userId: user.id }
+    );
+
+    const dbUser = await getUserById(user.id);
+    if (dbUser && dbUser.license_type !== undefined) {
+      logService.debug("[License] License found in database", "License", {
+        license_type: dbUser.license_type,
+        ai_detection_enabled: dbUser.ai_detection_enabled,
+      });
+
+      return {
+        success: true,
+        license: {
+          license_type: dbUser.license_type || "individual",
+          ai_detection_enabled: dbUser.ai_detection_enabled || false,
+          organization_id: dbUser.organization_id,
+        },
+      };
+    }
+
+    // Default: individual license with no AI
+    logService.debug(
+      "[License] No license found, using defaults",
+      "License"
+    );
+
+    return {
+      success: true,
+      license: {
+        license_type: "individual",
+        ai_detection_enabled: false,
+        organization_id: undefined,
+      },
+    };
+  } catch (error) {
+    logService.error("[License] Failed to get license:", "License", { error });
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+/**
+ * Register all license-related IPC handlers
+ */
+export function registerLicenseHandlers(): void {
+  // Get current user's license
+  ipcMain.handle(
+    "license:get",
+    async (_event: IpcMainInvokeEvent): Promise<LicenseResponse> => {
+      logService.debug("[License] Getting license", "License");
+      return getLicenseData();
+    }
+  );
+
+  // Refresh license data (same as get, but explicitly marked for refresh)
+  ipcMain.handle(
+    "license:refresh",
+    async (_event: IpcMainInvokeEvent): Promise<LicenseResponse> => {
+      logService.debug("[License] Refreshing license", "License");
+      return getLicenseData();
+    }
+  );
+
+  logService.debug("License handlers registered", "License");
+}

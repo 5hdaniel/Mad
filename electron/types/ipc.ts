@@ -17,6 +17,7 @@ import type {
   OAuthProvider,
   ExportFormat,
   Subscription,
+  UserLicense,
 } from "./models";
 import type { ExportResult, ExtractionResult, SyncStatus } from "./database";
 
@@ -1553,6 +1554,22 @@ export interface WindowApi {
   onExportFolderProgress: (
     callback: (progress: { stage: string; current: number; total: number; message: string }) => void,
   ) => () => void;
+
+  // License API (BACKLOG-426)
+  license: {
+    /** Get current user's license information */
+    get: () => Promise<{
+      success: boolean;
+      license?: UserLicense;
+      error?: string;
+    }>;
+    /** Refresh license data from database */
+    refresh: () => Promise<{
+      success: boolean;
+      license?: UserLicense;
+      error?: string;
+    }>;
+  };
 }
 
 // Augment Window interface

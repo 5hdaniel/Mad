@@ -1261,6 +1261,30 @@ interface MainAPI {
     callback: (progress: { stage: string; current: number; total: number; message: string }) => void,
   ) => () => void;
 
+  // License API
+  license: {
+    /** Get current user's license information */
+    get: () => Promise<{
+      success: boolean;
+      license?: {
+        license_type: "individual" | "team" | "enterprise";
+        ai_detection_enabled: boolean;
+        organization_id?: string;
+      };
+      error?: string;
+    }>;
+    /** Refresh license data from database */
+    refresh: () => Promise<{
+      success: boolean;
+      license?: {
+        license_type: "individual" | "team" | "enterprise";
+        ai_detection_enabled: boolean;
+        organization_id?: string;
+      };
+      error?: string;
+    }>;
+  };
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any; // Allow other properties for backwards compatibility
 }
