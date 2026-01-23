@@ -4,6 +4,7 @@
  */
 import React from "react";
 import type { Transaction } from "@/types";
+import { LicenseGate } from "@/components/common/LicenseGate";
 
 interface TransactionHeaderProps {
   transaction: Transaction;
@@ -269,32 +270,35 @@ function ActiveActions({
 
   return (
     <>
-      {/* Submit for Review Button - shown when not yet submitted */}
-      {onShowSubmitModal && canSubmit && (
-        <button
-          onClick={onShowSubmitModal}
-          disabled={isSubmitting}
-          className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg disabled:opacity-50"
-        >
-          {isSubmitting ? (
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
+      {/* Submit for Review Button - Team/Enterprise license only */}
+      <LicenseGate requires="team">
+        {/* Submit for Review Button - shown when not yet submitted */}
+        {onShowSubmitModal && canSubmit && (
+          <button
+            onClick={onShowSubmitModal}
+            disabled={isSubmitting}
+            className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg disabled:opacity-50"
+          >
+            {isSubmitting ? (
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )}
+            {isResubmit ? "Resubmit" : "Submit for Review"}
+          </button>
+        )}
+        {/* Submitted Badge - shown when already submitted */}
+        {isSubmitted && (
+          <span className="px-4 py-2 rounded-lg font-medium flex items-center gap-2 bg-green-100 text-green-700">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
-          )}
-          {isResubmit ? "Resubmit" : "Submit for Review"}
-        </button>
-      )}
-      {/* Submitted Badge - shown when already submitted */}
-      {isSubmitted && (
-        <span className="px-4 py-2 rounded-lg font-medium flex items-center gap-2 bg-green-100 text-green-700">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-          Submitted
-        </span>
-      )}
+            Submitted
+          </span>
+        )}
+      </LicenseGate>
       {/* Edit Button */}
       <button
         onClick={onShowEditModal}

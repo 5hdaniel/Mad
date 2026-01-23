@@ -4,6 +4,7 @@ import { useTour } from "../hooks/useTour";
 import { usePendingTransactionCount } from "../hooks/usePendingTransactionCount";
 import { SyncStatusIndicator } from "./dashboard/index";
 import StartNewAuditModal from "./StartNewAuditModal";
+import { LicenseGate } from "./common/LicenseGate";
 import {
   getDashboardTourSteps,
   JOYRIDE_STYLES,
@@ -195,17 +196,20 @@ function Dashboard({
         )}
 
         {/* Unified Sync Status - shows progress during sync, completion after */}
-        {syncStatus && (
-          <div data-tour="ai-detection-status">
-            <SyncStatusIndicator
-              status={syncStatus}
-              isAnySyncing={isAnySyncing}
-              currentMessage={currentSyncMessage}
-              pendingCount={pendingCount}
-              onViewPending={handleViewPending}
-            />
-          </div>
-        )}
+        {/* AI Detection status - only visible with AI add-on */}
+        <LicenseGate requires="ai_addon">
+          {syncStatus && (
+            <div data-tour="ai-detection-status">
+              <SyncStatusIndicator
+                status={syncStatus}
+                isAnySyncing={isAnySyncing}
+                currentMessage={currentSyncMessage}
+                pendingCount={pendingCount}
+                onViewPending={handleViewPending}
+              />
+            </div>
+          )}
+        </LicenseGate>
 
         {/* Header */}
         <div className="text-center mb-12">
@@ -250,11 +254,14 @@ function Dashboard({
                   New Audit
                 </h2>
               </div>
-              {pendingCount > 0 && (
-                <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-sm font-semibold bg-indigo-100 text-indigo-800 animate-pulse">
-                  {pendingCount} new
-                </span>
-              )}
+              {/* Pending count badge - AI add-on only */}
+              <LicenseGate requires="ai_addon">
+                {pendingCount > 0 && (
+                  <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-sm font-semibold bg-indigo-100 text-indigo-800 animate-pulse">
+                    {pendingCount} new
+                  </span>
+                )}
+              </LicenseGate>
               <svg
                 className="w-5 h-5 text-blue-600 group-hover:translate-x-1 transition-transform"
                 fill="none"

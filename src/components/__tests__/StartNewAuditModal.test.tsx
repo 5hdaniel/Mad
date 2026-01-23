@@ -22,6 +22,20 @@ jest.mock("../../contexts/AuthContext", () => {
   };
 });
 
+// Mock the LicenseContext for LicenseGate
+jest.mock("../../contexts/LicenseContext", () => ({
+  useLicense: () => ({
+    licenseType: "individual" as const,
+    hasAIAddon: true, // Enable AI features for testing
+    organizationId: null,
+    canExport: true,
+    canSubmit: false,
+    canAutoDetect: true,
+    isLoading: false,
+    refresh: jest.fn(),
+  }),
+}));
+
 describe("StartNewAuditModal", () => {
   const mockOnSelectPendingTransaction = jest.fn();
   const mockOnViewActiveTransactions = jest.fn();

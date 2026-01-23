@@ -1,5 +1,6 @@
 import React from "react";
 import type { Transaction } from "@/types";
+import { LicenseGate } from "@/components/common/LicenseGate";
 
 // ============================================
 // DETECTION BADGE COMPONENTS
@@ -205,27 +206,37 @@ function TransactionStatusWrapper({
           )}
 
           {/* Right: Action Button */}
-          <button
-            onClick={handleActionClick}
-            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${config.buttonBg} ${config.buttonHover} text-white shadow-sm hover:shadow flex items-center gap-1.5`}
-          >
-            {config.buttonText === "Review & Edit" && (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-            )}
-            {config.buttonText === "Export" && (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            )}
-            {config.buttonText === "Restore" && (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            )}
-            {config.buttonText}
-          </button>
+          {/* Export button - Individual license only */}
+          {config.buttonText === "Export" ? (
+            <LicenseGate requires="individual">
+              <button
+                onClick={handleActionClick}
+                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${config.buttonBg} ${config.buttonHover} text-white shadow-sm hover:shadow flex items-center gap-1.5`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                {config.buttonText}
+              </button>
+            </LicenseGate>
+          ) : (
+            <button
+              onClick={handleActionClick}
+              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${config.buttonBg} ${config.buttonHover} text-white shadow-sm hover:shadow flex items-center gap-1.5`}
+            >
+              {config.buttonText === "Review & Edit" && (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              )}
+              {config.buttonText === "Restore" && (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              )}
+              {config.buttonText}
+            </button>
+          )}
         </div>
       </div>
 
