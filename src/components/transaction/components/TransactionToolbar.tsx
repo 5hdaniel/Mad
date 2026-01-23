@@ -1,4 +1,5 @@
 import React from "react";
+import { LicenseGate } from "@/components/common/LicenseGate";
 
 // ============================================
 // TYPES AND INTERFACES
@@ -140,21 +141,24 @@ function TransactionToolbar({
               {filterCounts.all}
             </span>
           </button>
-          <button
-            onClick={() => onFilterChange("pending")}
-            className={`px-4 py-2 rounded-md font-medium transition-all ${
-              filter === "pending"
-                ? "bg-white text-amber-600 shadow-sm"
-                : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            Pending Review
-            {filterCounts.pending > 0 && (
-              <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700">
-                {filterCounts.pending}
-              </span>
-            )}
-          </button>
+          {/* Pending Review tab - AI add-on only */}
+          <LicenseGate requires="ai_addon">
+            <button
+              onClick={() => onFilterChange("pending")}
+              className={`px-4 py-2 rounded-md font-medium transition-all ${
+                filter === "pending"
+                  ? "bg-white text-amber-600 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Pending Review
+              {filterCounts.pending > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700">
+                  {filterCounts.pending}
+                </span>
+              )}
+            </button>
+          </LicenseGate>
           <button
             onClick={() => onFilterChange("active")}
             className={`px-4 py-2 rounded-md font-medium transition-all ${
@@ -327,52 +331,54 @@ function TransactionToolbar({
             New Transaction
           </button>
 
-          {/* Scan/Stop Button */}
-          {scanning ? (
-            <button
-              onClick={onStopScan}
-              className="px-4 py-2 rounded-lg font-semibold transition-all bg-red-500 text-white hover:bg-red-600 shadow-md hover:shadow-lg"
-            >
-              <span className="flex items-center gap-2">
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-                Stop Scan
-              </span>
-            </button>
-          ) : (
-            <button
-              onClick={onStartScan}
-              className="px-4 py-2 rounded-lg font-semibold transition-all bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 shadow-md hover:shadow-lg"
-            >
-              <span className="flex items-center gap-2">
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
-                Auto Detect
-              </span>
-            </button>
-          )}
+          {/* Scan/Stop Button - AI add-on only */}
+          <LicenseGate requires="ai_addon">
+            {scanning ? (
+              <button
+                onClick={onStopScan}
+                className="px-4 py-2 rounded-lg font-semibold transition-all bg-red-500 text-white hover:bg-red-600 shadow-md hover:shadow-lg"
+              >
+                <span className="flex items-center gap-2">
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                  Stop Scan
+                </span>
+              </button>
+            ) : (
+              <button
+                onClick={onStartScan}
+                className="px-4 py-2 rounded-lg font-semibold transition-all bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 shadow-md hover:shadow-lg"
+              >
+                <span className="flex items-center gap-2">
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                  Auto Detect
+                </span>
+              </button>
+            )}
+          </LicenseGate>
         </div>
 
         {/* Scan Progress */}
