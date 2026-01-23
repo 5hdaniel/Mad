@@ -54,8 +54,9 @@ export function TransactionEmailsTab({
   }, []);
 
   // Handle emails attached successfully
-  const handleAttached = useCallback(() => {
-    onEmailsChanged?.();
+  const handleAttached = useCallback(async () => {
+    // Refresh communications list and transaction data (including email_count)
+    await onEmailsChanged?.();
     onShowSuccess?.("Emails attached successfully");
   }, [onEmailsChanged, onShowSuccess]);
   // Loading state

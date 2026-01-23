@@ -268,14 +268,19 @@ function TransactionDetails({
       if (!comm) return;
       await handleUnlinkCommunication(
         comm,
-        () => {
+        async () => {
           setCommunications((prev) => prev.filter((c) => c.id !== comm.id));
+          // Refresh transaction to update email_count after unlink
+          const refreshed = await window.api.transactions.getDetails(transaction.id);
+          if (refreshed.success && refreshed.transaction) {
+            setTransaction(refreshed.transaction as Transaction);
+          }
           showSuccess("Email unlinked from transaction");
         },
         showError
       );
     },
-    [handleUnlinkCommunication, setCommunications, showSuccess, showError]
+    [handleUnlinkCommunication, setCommunications, showSuccess, showError, transaction.id]
   );
 
   // Suggested contacts handlers with callbacks
@@ -310,6 +315,16 @@ function TransactionDetails({
     });
   }, [handleAcceptAll, resolvedSuggestions, suggestionCallbacks, setResolvedSuggestions]);
 
+  // Handle emails changed (attached/unlinked) - refresh both communications and transaction
+  const handleEmailsChanged = useCallback(async () => {
+    await loadDetails();
+    // Refresh transaction to update email_count
+    const refreshed = await window.api.transactions.getDetails(transaction.id);
+    if (refreshed.success && refreshed.transaction) {
+      setTransaction(refreshed.transaction as Transaction);
+    }
+  }, [loadDetails, transaction.id]);
+
   // Sync communications handler - re-runs auto-link for all contacts
   const handleSyncCommunications = useCallback(async () => {
     setSyncingCommunications(true);
@@ -331,7 +346,7 @@ function TransactionDetails({
         if (totalLinked > 0) {
           showSuccess(`Synced ${totalLinked} communication${totalLinked !== 1 ? "s" : ""} (${result.totalEmailsLinked || 0} emails, ${result.totalMessagesLinked || 0} message threads)`);
           // Refresh to show newly linked communications
-          loadDetails();
+          await handleEmailsChanged();
           refreshMessages();
         } else if (result.totalAlreadyLinked && result.totalAlreadyLinked > 0) {
           showSuccess(`All communications already linked (${result.totalAlreadyLinked} found)`);
@@ -347,7 +362,7 @@ function TransactionDetails({
     } finally {
       setSyncingCommunications(false);
     }
-  }, [transaction.id, showSuccess, showError, loadDetails, refreshMessages]);
+  }, [transaction.id, showSuccess, showError, handleEmailsChanged, refreshMessages]);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4">
@@ -423,7 +438,7 @@ function TransactionDetails({
               userId={userId}
               transactionId={transaction.id}
               propertyAddress={transaction.property_address}
-              onEmailsChanged={loadDetails}
+              onEmailsChanged={handleEmailsChanged}
               onShowSuccess={showSuccess}
             />
           )}
