@@ -60,6 +60,7 @@ if (typeof window !== 'undefined') {
       bulkDelete: jest.fn(),
       bulkUpdateStatus: jest.fn(),
       batchUpdateContacts: jest.fn(),
+      onSubmissionStatusChanged: jest.fn().mockReturnValue(() => {}),
     },
     contacts: {
       getAll: jest.fn(),
