@@ -54,6 +54,11 @@ CREATE TABLE IF NOT EXISTS users_local (
   job_title TEXT,
   mobile_phone_type TEXT CHECK (mobile_phone_type IN ('iphone', 'android')),
 
+  -- License (BACKLOG-426, synced from cloud)
+  license_type TEXT DEFAULT 'individual' CHECK (license_type IN ('individual', 'team', 'enterprise')),
+  ai_detection_enabled INTEGER DEFAULT 0,
+  organization_id TEXT,
+
   -- Sync tracking
   last_cloud_sync_at DATETIME,
 
@@ -566,6 +571,8 @@ CREATE TABLE IF NOT EXISTS extracted_transaction_data (
 
 -- Users & Auth
 CREATE INDEX IF NOT EXISTS idx_users_local_email ON users_local(email);
+CREATE INDEX IF NOT EXISTS idx_users_local_license_type ON users_local(license_type);
+CREATE INDEX IF NOT EXISTS idx_users_local_organization ON users_local(organization_id);
 CREATE INDEX IF NOT EXISTS idx_oauth_tokens_user_provider ON oauth_tokens(user_id, provider, purpose);
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(session_token);
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);

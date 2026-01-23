@@ -15,6 +15,9 @@ export type SubscriptionTier = "free" | "pro" | "enterprise";
 export type SubscriptionStatus = "trial" | "active" | "cancelled" | "expired";
 export type Theme = "light" | "dark" | "auto";
 
+// License Types (BACKLOG-426)
+export type LicenseType = "individual" | "team" | "enterprise";
+
 // Contacts
 export type ContactSource = "manual" | "email" | "sms" | "contacts_app" | "inferred";
 export type ContactInfoSource = "import" | "manual" | "inferred";
@@ -130,6 +133,14 @@ export interface User {
   job_title?: string;
   mobile_phone_type?: "iphone" | "android";
 
+  // License (BACKLOG-426)
+  /** Base license tier: individual, team, or enterprise */
+  license_type?: LicenseType;
+  /** AI detection add-on enabled (works with any base license) */
+  ai_detection_enabled?: boolean;
+  /** Organization ID for team/enterprise users */
+  organization_id?: string;
+
   // Sync
   last_cloud_sync_at?: Date | string;
 }
@@ -179,6 +190,28 @@ export interface Subscription {
   isTrial: boolean;
   trialEnded: boolean;
   trialDaysRemaining: number;
+}
+
+/**
+ * User license information (BACKLOG-426)
+ *
+ * License Model:
+ *   license_type: 'individual' | 'team' | 'enterprise' (base license)
+ *   ai_detection_enabled: boolean (add-on, works with ANY base license)
+ *
+ * Combined Examples:
+ *   - Individual + No AI: Export, manual transactions only
+ *   - Individual + AI: Export, manual transactions, AI detection features
+ *   - Team + No AI: Submit for review, manual transactions only
+ *   - Team + AI: Submit for review, manual transactions, AI detection features
+ */
+export interface UserLicense {
+  /** Base license tier */
+  license_type: LicenseType;
+  /** AI detection add-on enabled (works with any base license) */
+  ai_detection_enabled: boolean;
+  /** Organization ID for team/enterprise users */
+  organization_id?: string;
 }
 
 // ============================================
