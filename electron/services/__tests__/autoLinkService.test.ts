@@ -97,6 +97,10 @@ describe("autoLinkService", () => {
           }
           return { transaction_id: null };
         }
+        // For user email lookup (TEST-051-007 fix)
+        if (sql.includes("FROM users_local")) {
+          return { email: "user@example.com" };
+        }
         return null;
       });
 
@@ -354,6 +358,64 @@ describe("autoLinkService", () => {
         "auto",
         0.9 // Phone confidence
       );
+    });
+
+    it("should NOT link emails when contact's only email is the user's own email (TEST-051-007)", async () => {
+      // TEST-051-007: User's email should never be treated as a contact
+      // Mock returns user@example.com as the user's email
+      setupMocks({
+        contactExists: true,
+        emails: ["user@example.com"], // Contact's email is the user's own email
+        phones: [],
+        transactionExists: true,
+        foundEmailIds: [], // No emails should be found since we filter out user's email
+        foundMessageIds: [],
+      });
+
+      const result = await autoLinkCommunicationsForContact({
+        contactId: mockContactId,
+        transactionId: mockTransactionId,
+      });
+
+      // Should not link any emails because contact's email is the user's email
+      expect(result.emailsLinked).toBe(0);
+      expect(result.messagesLinked).toBe(0);
+      expect(mockDbRun).not.toHaveBeenCalled();
+    });
+
+    it("should only link emails for actual contacts, not user's email (TEST-051-007)", async () => {
+      // TEST-051-007: Contact has multiple emails, one is user's email
+      setupMocks({
+        contactExists: true,
+        emails: ["user@example.com", "contact@example.com"], // Mix of user and contact emails
+        phones: [],
+        transactionExists: true,
+        foundEmailIds: ["email-1"], // Should only find emails for contact@example.com
+        foundMessageIds: [],
+      });
+
+      const result = await autoLinkCommunicationsForContact({
+        contactId: mockContactId,
+        transactionId: mockTransactionId,
+      });
+
+      // Should link emails only for contact@example.com, not user@example.com
+      expect(result.emailsLinked).toBe(1);
+
+      // Verify that the SQL query was built only for contact@example.com
+      // Check dbAll was called with SQL containing only the contact email pattern
+      const dbAllCalls = mockDbAll.mock.calls;
+      const emailQueryCall = dbAllCalls.find(call =>
+        call[0] && typeof call[0] === 'string' && call[0].includes("communication_type = 'email'")
+      );
+
+      if (emailQueryCall) {
+        const params = emailQueryCall[1] as unknown[];
+        // Should have patterns for contact@example.com only (not user@example.com)
+        // Pattern is %email% for LIKE matching
+        expect(params).toContain("%contact@example.com%");
+        expect(params).not.toContain("%user@example.com%");
+      }
     });
   });
 });
