@@ -1545,8 +1545,10 @@ export const registerTransactionHandlers = (
                     recipients: email.to,
                     cc: email.cc,
                     subject: email.subject,
-                    body: email.htmlBody || email.plainBody,
-                    body_plain: email.plainBody,
+                    // BACKLOG-413: Use correct field names from ParsedEmail interface
+                    // Gmail/Outlook services return 'body' (HTML) and 'bodyPlain' (plain text)
+                    body: email.body || email.bodyPlain,
+                    body_plain: email.bodyPlain,
                     sent_at: email.date ? new Date(email.date).toISOString() : null,
                     has_attachments: email.hasAttachments || false,
                     attachment_count: email.attachmentCount || 0,
@@ -1587,8 +1589,10 @@ export const registerTransactionHandlers = (
                     recipients: email.to,
                     cc: email.cc,
                     subject: email.subject,
-                    body: email.htmlBody || email.plainBody,
-                    body_plain: email.plainBody,
+                    // BACKLOG-413: Use correct field names from ParsedEmail interface
+                    // Gmail/Outlook services return 'body' (HTML) and 'bodyPlain' (plain text)
+                    body: email.body || email.bodyPlain,
+                    body_plain: email.bodyPlain,
                     sent_at: email.date ? new Date(email.date).toISOString() : null,
                     has_attachments: email.hasAttachments || false,
                     attachment_count: email.attachmentCount || 0,
