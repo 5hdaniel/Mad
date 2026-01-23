@@ -649,6 +649,18 @@ class DatabaseService implements IDatabaseService {
       await logService.info("BACKLOG-390: Added B2B submission tracking columns", "DatabaseService");
     }
 
+    // Migration 16 (BACKLOG-426): License Type Support
+    // Add columns for license-aware feature gating
+    const userLicenseColumns = getColumns('users_local');
+    if (!userLicenseColumns.includes('license_type')) {
+      runSafe(`ALTER TABLE users_local ADD COLUMN license_type TEXT DEFAULT 'individual' CHECK (license_type IN ('individual', 'team', 'enterprise'))`);
+      runSafe(`ALTER TABLE users_local ADD COLUMN ai_detection_enabled INTEGER DEFAULT 0`);
+      runSafe(`ALTER TABLE users_local ADD COLUMN organization_id TEXT`);
+      runSafe(`CREATE INDEX IF NOT EXISTS idx_users_local_license_type ON users_local(license_type)`);
+      runSafe(`CREATE INDEX IF NOT EXISTS idx_users_local_organization ON users_local(organization_id)`);
+      await logService.info("BACKLOG-426: Added license type columns to users_local", "DatabaseService");
+    }
+
     // Finalize schema version (create table if missing for backwards compatibility)
     const schemaVersionExists = db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
