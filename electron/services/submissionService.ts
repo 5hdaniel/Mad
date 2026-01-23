@@ -544,10 +544,16 @@ class SubmissionService {
     const db = databaseService.getRawDatabase();
 
     // Build query with optional audit period filter
+    // BACKLOG-414: Use dual-join pattern to include both email (via message_id)
+    // AND text messages (via thread_id) like getCommunicationsWithMessages does
     let sql = `
       SELECT DISTINCT m.*
       FROM messages m
-      INNER JOIN communications c ON c.message_id = m.id
+      INNER JOIN communications c ON (
+        (c.message_id IS NOT NULL AND c.message_id = m.id)
+        OR
+        (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+      )
       WHERE c.transaction_id = ?
     `;
     const params: (string | number)[] = [transactionId];
@@ -588,13 +594,19 @@ class SubmissionService {
     // Get attachments from messages linked to this transaction
     const db = databaseService.getRawDatabase();
 
+    // BACKLOG-414: Use dual-join pattern to include attachments from both email
+    // (via message_id) AND text messages (via thread_id)
     const rows = db
       .prepare(
         `
       SELECT DISTINCT a.*
       FROM attachments a
       INNER JOIN messages m ON a.message_id = m.id
-      INNER JOIN communications c ON c.message_id = m.id
+      INNER JOIN communications c ON (
+        (c.message_id IS NOT NULL AND c.message_id = m.id)
+        OR
+        (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+      )
       WHERE c.transaction_id = ?
       AND a.storage_path IS NOT NULL
       ORDER BY a.created_at ASC
