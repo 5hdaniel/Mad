@@ -36,7 +36,6 @@ import {
   EmailViewModal,
   RejectReasonModal,
   EditContactsModal,
-  groupMessagesByThread,
 } from "./transactionDetailsModule";
 // Import ReviewNotesPanel for displaying broker feedback (BACKLOG-395)
 import { ReviewNotesPanel } from "./transactionDetailsModule/components/ReviewNotesPanel";
@@ -156,11 +155,9 @@ function TransactionDetails({
     });
   }, [communications]);
 
-  // Calculate conversation count (number of threads, not individual messages)
-  const conversationCount = useMemo(() => {
-    if (textMessages.length === 0) return 0;
-    return groupMessagesByThread(textMessages).size;
-  }, [textMessages]);
+  // Note: conversation/message count for tabs now uses transaction.text_thread_count
+  // (stored count) instead of computing from dynamically loaded textMessages array.
+  // This ensures correct counts display even before data loads (BACKLOG-415).
 
   // Modal states
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
@@ -377,8 +374,8 @@ function TransactionDetails({
         {/* Tabs */}
         <TransactionTabs
           activeTab={activeTab}
-          conversationCount={conversationCount}
-          emailCount={emailCommunications.length}
+          conversationCount={transaction.text_thread_count || 0}
+          emailCount={transaction.email_count || 0}
           attachmentCount={attachmentCount}
           onTabChange={setActiveTab}
         />
