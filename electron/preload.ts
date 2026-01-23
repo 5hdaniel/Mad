@@ -39,6 +39,7 @@ import {
   outlookBridge,
   updateBridge,
   messageBridge,
+  licenseBridge,
 } from "./preload/index";
 
 // Expose protected methods that allow the renderer process to use
@@ -97,4 +98,7 @@ contextBridge.exposeInMainWorld("api", {
 
   // iMessage conversations (macOS)
   messages: messageBridge,
+
+  // License management
+  license: licenseBridge,
 });
