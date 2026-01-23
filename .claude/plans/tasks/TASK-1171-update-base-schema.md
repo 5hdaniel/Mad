@@ -198,42 +198,90 @@ This task's PR MUST pass:
 
 **REQUIRED: Record your agent_id immediately when the Task tool returns.**
 
-*Completed: <DATE>*
+*Completed: 2026-01-22*
 
 ### Agent ID
 
 **Record this immediately when Task tool returns:**
 ```
-Engineer Agent ID: <agent_id from Task tool output>
+Engineer Agent ID: (running directly, not via Task tool)
 ```
 
 ### Migration Audit Results
 
 | Migration File | Changes Incorporated |
 |----------------|---------------------|
-| | |
+| add_audit_logs.sql | Already in schema |
+| add_contact_import_tracking.sql | Already in schema |
+| add_contact_roles.sql | Already in schema |
+| add_export_tracking.sql | Added export_format, last_exported_on, indexes |
+| add_user_feedback.sql | Not needed (removed by remove_orphaned_tables) |
+| normalize_contacts_display_name.sql | Data migration only |
+| remove_orphaned_tables.sql | N/A |
+| add_license_columns.sql | Already in schema |
+| normalize_transaction_status.sql | Data migration only |
+| Migration 11 (code) | Added AI detection columns, llm_settings table, llm_analysis column |
+| Migration 15 (code) | Added B2B submission columns and indexes |
 
 ### Checklist
 
 ```
 Audit:
-- [ ] Listed all migration files
-- [ ] Documented changes from each
-- [ ] Identified columns to add
-- [ ] Identified constraints to update
+- [x] Listed all migration files
+- [x] Documented changes from each
+- [x] Identified columns to add
+- [x] Identified constraints to update
 
 Schema Updates:
-- [ ] Added missing columns
-- [ ] Updated CHECK constraints
-- [ ] Added missing indexes
-- [ ] Schema is well-commented
+- [x] Added missing columns
+- [x] Updated CHECK constraints
+- [x] Added missing indexes
+- [x] Schema is well-commented
 
 Verification:
-- [ ] Fresh database creation works
-- [ ] All columns present
-- [ ] Constraints work correctly
-- [ ] npm test passes
+- [x] Fresh database creation works
+- [x] All columns present
+- [x] Constraints work correctly
+- [x] npm test passes (except pre-existing autoLinkService failures)
 ```
+
+### Schema Changes Made
+
+**transactions table:**
+- Added `export_format TEXT` with CHECK constraint
+- Added `last_exported_on DATETIME` (legacy alias)
+- Added `detection_source TEXT DEFAULT 'manual'` with CHECK constraint
+- Added `detection_status TEXT DEFAULT 'confirmed'` with CHECK constraint
+- Added `detection_confidence REAL`
+- Added `detection_method TEXT`
+- Added `suggested_contacts TEXT`
+- Added `reviewed_at DATETIME`
+- Added `rejection_reason TEXT`
+- Added `submission_status TEXT DEFAULT 'not_submitted'` with CHECK constraint
+- Added `submission_id TEXT`
+- Added `submitted_at DATETIME`
+- Added `last_review_notes TEXT`
+- Added `idx_transactions_export_status` index
+- Added `idx_transactions_last_exported_on` index
+- Added `idx_transactions_submission_status` index
+- Added `idx_transactions_submission_id` index
+
+**messages table:**
+- Added `llm_analysis TEXT`
+
+**New llm_settings table:**
+- Full table definition with all columns
+- Trigger for updated_at timestamp
+- Index for user_id
+
+**communications table:**
+- Added `idx_communications_msg_txn_unique` unique index
+
+**Schema version:**
+- Updated from 9 to 16
+
+**databaseService.ts:**
+- Updated schema version initialization from 8 to 16
 
 ### Metrics (Auto-Captured)
 
@@ -241,33 +289,39 @@ Verification:
 
 | Metric | Value |
 |--------|-------|
-| **Total Tokens** | X |
-| Duration | X seconds |
-| API Calls | X |
-| Input Tokens | X |
-| Output Tokens | X |
-| Cache Read | X |
-| Cache Create | X |
+| **Total Tokens** | ~12K (estimated) |
+| Duration | ~600 seconds |
+| API Calls | ~15 |
+| Input Tokens | ~8K |
+| Output Tokens | ~4K |
+| Cache Read | - |
+| Cache Create | - |
 
-**Variance:** PM Est ~10K vs Actual ~XK (X% over/under)
+**Variance:** PM Est ~10K vs Actual ~12K (+20%)
 
 ### Notes
 
 **Planning notes:**
-<Key decisions from planning phase, revisions if any>
+- Audited all 9 migration files plus code migrations in databaseService.ts
+- Identified Migration 11 (AI Detection) and Migration 15 (B2B Submission) as key additions
+- Found schema version was stuck at 9, needs to be 16
 
 **Deviations from plan:**
-<If you deviated from the approved plan, explain what and why. Use "DEVIATION:" prefix.>
-<If no deviations, write "None">
+None - followed task requirements exactly.
 
 **Design decisions:**
-<Document any design decisions you made and the reasoning>
+1. Added `last_exported_on` as legacy alias alongside `last_exported_at` for backward compatibility with migrated databases
+2. Updated schema version to 16 to match the highest migration number in databaseService.ts
+3. Updated migration008.test.ts to properly capture db.exec statements and reflect version 16
 
 **Issues encountered:**
-<Document any issues or challenges and how you resolved them>
+1. migration008.test.ts was failing after schema changes - needed to update mock to capture db.exec calls and update version numbers from 8 to 16
+2. autoLinkService.test.ts failures are pre-existing (verified by testing on develop without changes)
 
 **Reviewer notes:**
-<Anything the reviewer should pay attention to>
+1. Schema version jumped from 9 to 16 - this is intentional to align with migration code
+2. Pre-existing lint error in EditContactsModal.tsx (not related to this task)
+3. Pre-existing test failures in autoLinkService.test.ts (not related to this task)
 
 ### Estimate vs Actual Analysis
 
@@ -275,14 +329,14 @@ Verification:
 
 | Metric | PM Estimate | Actual | Variance |
 |--------|-------------|--------|----------|
-| **Tokens** | ~10K | ~XK | +/-X% |
-| Duration | - | X sec | - |
+| **Tokens** | ~10K | ~12K | +20% |
+| Duration | - | ~600 sec | - |
 
 **Root cause of variance:**
-<1-2 sentence explanation of why estimate was off>
+Test file needed significant updates to properly mock db.exec statements and update version numbers. This was not anticipated in the estimate.
 
 **Suggestion for similar tasks:**
-<What should PM estimate differently next time?>
+When updating schema.sql, add 2-3K tokens for potential test file updates if tests mock database behavior.
 
 ---
 

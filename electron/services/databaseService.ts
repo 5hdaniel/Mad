@@ -673,12 +673,12 @@ class DatabaseService implements IDatabaseService {
           version INTEGER NOT NULL DEFAULT 1,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
-        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 8);
+        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 16);
       `);
     } else {
       const currentVersion = (db.prepare("SELECT version FROM schema_version").get() as { version: number } | undefined)?.version || 0;
-      if (currentVersion < 8) {
-        db.exec("UPDATE schema_version SET version = 8");
+      if (currentVersion < 16) {
+        db.exec("UPDATE schema_version SET version = 16");
       }
     }
 
