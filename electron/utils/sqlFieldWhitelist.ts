@@ -70,6 +70,8 @@ export const TABLE_FIELDS = {
   contacts: new Set([
     "id",
     "user_id",
+    "email",
+    "phone",
     "display_name",
     "company",
     "title",

@@ -63,6 +63,15 @@ export const contactBridge = {
     ipcRenderer.invoke("contacts:update", contactId, updates),
 
   /**
+   * Updates contact email (for testing multi-email scenarios)
+   * @param contactId - Contact ID to update
+   * @param newEmail - New email address
+   * @returns Update result
+   */
+  updateEmail: (contactId: string, newEmail: string) =>
+    ipcRenderer.invoke("contacts:updateEmail", contactId, newEmail),
+
+  /**
    * Checks if a contact can be deleted (not assigned to transactions)
    * @param contactId - Contact ID to check
    * @returns Deletion eligibility

@@ -21,17 +21,20 @@ import {
   useAppStateMachine,
 } from "./appCore";
 import { NotificationProvider } from "./contexts/NotificationContext";
+import { LicenseProvider } from "./contexts/LicenseContext";
 
 function App() {
   const app = useAppStateMachine();
 
   return (
     <NotificationProvider>
-      <AppShell app={app}>
-        <AppRouter app={app} />
-        <BackgroundServices app={app} />
-        <AppModals app={app} />
-      </AppShell>
+      <LicenseProvider>
+        <AppShell app={app}>
+          <AppRouter app={app} />
+          <BackgroundServices app={app} />
+          <AppModals app={app} />
+        </AppShell>
+      </LicenseProvider>
     </NotificationProvider>
   );
 }

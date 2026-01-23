@@ -808,6 +808,10 @@ class DatabaseService implements IDatabaseService {
     return contactDb.updateContact(contactId, updates);
   }
 
+  async updateContactEmail(contactId: string, newEmail: string): Promise<void> {
+    return contactDb.updateContactEmail(contactId, newEmail);
+  }
+
   async getTransactionsByContact(contactId: string): Promise<contactDb.TransactionWithRoles[]> {
     return contactDb.getTransactionsByContact(contactId);
   }

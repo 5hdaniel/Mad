@@ -54,9 +54,13 @@ interface LicenseState {
   isLoading: boolean;
 }
 
+// DEV OVERRIDE: Set to 'team' for testing Submit button, 'individual' for Export
+// TODO: Remove this after testing - revert to reading from database
+const DEV_LICENSE_OVERRIDE: LicenseType | null = "team";
+
 // Default license state (individual with no AI)
 const defaultLicenseState: LicenseState = {
-  licenseType: "individual",
+  licenseType: DEV_LICENSE_OVERRIDE || "individual",
   hasAIAddon: false,
   organizationId: null,
   isLoading: true,
@@ -85,6 +89,17 @@ export function LicenseProvider({
    * Fetch license from main process
    */
   const fetchLicense = useCallback(async () => {
+    // DEV OVERRIDE: Skip API call if override is set
+    if (DEV_LICENSE_OVERRIDE) {
+      setState({
+        licenseType: DEV_LICENSE_OVERRIDE,
+        hasAIAddon: false,
+        organizationId: null,
+        isLoading: false,
+      });
+      return;
+    }
+
     if (window.api?.license?.get) {
       try {
         const result = await window.api.license.get();

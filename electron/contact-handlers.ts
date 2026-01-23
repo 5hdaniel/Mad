@@ -740,6 +740,41 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
     },
   );
 
+  // Update contact email (for testing multi-email scenarios)
+  ipcMain.handle(
+    "contacts:updateEmail",
+    async (
+      event: IpcMainInvokeEvent,
+      contactId: string,
+      newEmail: string,
+    ): Promise<ContactResponse> => {
+      try {
+        const validatedContactId = validateContactId(contactId);
+        if (!validatedContactId) {
+          throw new ValidationError("Contact ID validation failed", "contactId");
+        }
+
+        await databaseService.updateContactEmail(validatedContactId, newEmail);
+
+        logService.info("Contact email updated", "Contacts", {
+          contactId: validatedContactId,
+          newEmail,
+        });
+
+        return { success: true };
+      } catch (error) {
+        logService.error("Update contact email failed", "Contacts", {
+          contactId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
   // Check if contact can be deleted (get associated transactions)
   ipcMain.handle(
     "contacts:checkCanDelete",

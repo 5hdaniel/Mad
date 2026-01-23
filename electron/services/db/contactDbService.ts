@@ -717,7 +717,7 @@ export async function updateContact(
   contactId: string,
   updates: Partial<Contact>,
 ): Promise<void> {
-  const allowedFields = ["display_name", "company", "title"];
+  const allowedFields = ["display_name", "company", "title", "email", "phone"];
   const fields: string[] = [];
   const values: unknown[] = [];
 
@@ -738,6 +738,38 @@ export async function updateContact(
   values.push(contactId);
   const sql = `UPDATE contacts SET ${fields.join(", ")} WHERE id = ?`;
   dbRun(sql, values);
+}
+
+/**
+ * Update the primary email for a contact (for testing purposes)
+ * Updates the email in the contact_emails junction table
+ */
+export async function updateContactEmail(
+  contactId: string,
+  newEmail: string,
+): Promise<void> {
+  const normalizedEmail = newEmail.toLowerCase().trim();
+
+  // Update the primary email for this contact
+  const sql = `
+    UPDATE contact_emails
+    SET email = ?
+    WHERE contact_id = ? AND is_primary = 1
+  `;
+  const result = dbRun(sql, [normalizedEmail, contactId]);
+
+  if (result.changes === 0) {
+    // No primary email exists, try updating any email
+    const sqlAny = `
+      UPDATE contact_emails
+      SET email = ?
+      WHERE contact_id = ?
+      LIMIT 1
+    `;
+    dbRun(sqlAny, [normalizedEmail, contactId]);
+  }
+
+  logService.info(`Updated email for contact ${contactId} to ${normalizedEmail}`, "Contacts");
 }
 
 /**

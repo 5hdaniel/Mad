@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import type { ExtendedContact } from "../types/components";
-import { ImportContactsModal } from "./contact";
+import { ImportContactsModal, ContactFormModal } from "./contact";
 
 // Debounce delay for search (ms)
 const SEARCH_DEBOUNCE_MS = 300;
@@ -47,6 +47,7 @@ function ContactSelectModal({
 }: ContactSelectModalProps) {
   const [searchQuery, setSearchQuery] = React.useState("");
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
   // Track IDs to auto-select after import (cleared once contacts refresh)
   const [pendingAutoSelectIds, setPendingAutoSelectIds] = useState<string[]>([]);
 
@@ -504,9 +505,22 @@ function ContactSelectModal({
             onRefreshContacts?.();
           }}
           onAddManually={() => {
-            // For now, just close the import modal
-            // The user can add contacts manually from the Contacts page
             setShowImportModal(false);
+            setShowAddForm(true);
+          }}
+        />
+      )}
+
+      {/* Add Contact Form Modal */}
+      {showAddForm && userId && (
+        <ContactFormModal
+          userId={userId}
+          contact={undefined}
+          onClose={() => setShowAddForm(false)}
+          onSuccess={() => {
+            setShowAddForm(false);
+            // Refresh contacts list to include newly created contact
+            onRefreshContacts?.();
           }}
         />
       )}

@@ -172,7 +172,17 @@ export async function getTransactions(
 export async function getTransactionById(
   transactionId: string,
 ): Promise<Transaction | null> {
-  const sql = "SELECT * FROM transactions WHERE id = ?";
+  // Include computed email_count for consistency with list view
+  const sql = `
+    SELECT t.*,
+           (SELECT COUNT(*) FROM communications c
+            LEFT JOIN messages m ON (c.message_id IS NOT NULL AND c.message_id = m.id)
+                                 OR (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+            WHERE c.transaction_id = t.id
+            AND COALESCE(m.channel, c.communication_type) = 'email') as email_count
+    FROM transactions t
+    WHERE t.id = ?
+  `;
   const transaction = dbGet<Transaction>(sql, [transactionId]);
   return transaction || null;
 }
