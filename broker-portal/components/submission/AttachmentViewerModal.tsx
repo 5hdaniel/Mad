@@ -9,6 +9,7 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import heic2any from 'heic2any';
 
 interface Attachment {
   id: string;
@@ -33,13 +34,22 @@ function formatFileSize(bytes: number | null): string {
 
 export function AttachmentViewerModal({ attachment, open, onClose }: AttachmentViewerModalProps) {
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [displayUrl, setDisplayUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [converting, setConverting] = useState(false);
   const supabase = createClient();
+
+  // Check if file is HEIC/HEIF format
+  const isHeic = attachment?.mime_type === 'image/heic' ||
+    attachment?.mime_type === 'image/heif' ||
+    attachment?.filename?.toLowerCase().endsWith('.heic') ||
+    attachment?.filename?.toLowerCase().endsWith('.heif');
 
   useEffect(() => {
     if (!attachment || !open || !attachment.storage_path) {
       setSignedUrl(null);
+      setDisplayUrl(null);
       return;
     }
 
@@ -54,6 +64,32 @@ export function AttachmentViewerModal({ attachment, open, onClose }: AttachmentV
 
         if (storageError) throw storageError;
         setSignedUrl(data.signedUrl);
+
+        // If HEIC, convert to displayable format
+        if (isHeic) {
+          setConverting(true);
+          try {
+            const response = await fetch(data.signedUrl);
+            const blob = await response.blob();
+            const convertedBlob = await heic2any({
+              blob,
+              toType: 'image/jpeg',
+              quality: 0.8,
+            });
+            // heic2any can return array or single blob
+            const resultBlob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+            const objectUrl = URL.createObjectURL(resultBlob);
+            setDisplayUrl(objectUrl);
+          } catch (conversionError) {
+            console.error('HEIC conversion failed:', conversionError);
+            // Fall back to download-only if conversion fails
+            setDisplayUrl(null);
+          } finally {
+            setConverting(false);
+          }
+        } else {
+          setDisplayUrl(data.signedUrl);
+        }
       } catch (e) {
         console.error('Failed to get signed URL:', e);
         setError('Failed to load attachment. The file may not exist or you may not have access.');
@@ -63,7 +99,14 @@ export function AttachmentViewerModal({ attachment, open, onClose }: AttachmentV
     };
 
     fetchUrl();
-  }, [attachment, open, supabase.storage]);
+
+    // Cleanup object URL on unmount
+    return () => {
+      if (displayUrl && displayUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(displayUrl);
+      }
+    };
+  }, [attachment, open, supabase.storage, isHeic]);
 
   if (!attachment || !open) return null;
 
@@ -168,7 +211,7 @@ export function AttachmentViewerModal({ attachment, open, onClose }: AttachmentV
         {/* Content */}
         <div className="flex-1 overflow-auto bg-gray-100">
           {/* Loading state */}
-          {loading && (
+          {(loading || converting) && (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
                 <svg
@@ -190,7 +233,9 @@ export function AttachmentViewerModal({ attachment, open, onClose }: AttachmentV
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                   />
                 </svg>
-                <p className="text-sm text-gray-500">Loading preview...</p>
+                <p className="text-sm text-gray-500">
+                  {converting ? 'Converting HEIC image...' : 'Loading preview...'}
+                </p>
               </div>
             </div>
           )}
@@ -213,17 +258,39 @@ export function AttachmentViewerModal({ attachment, open, onClose }: AttachmentV
           )}
 
           {/* Preview content */}
-          {signedUrl && !loading && !error && (
+          {signedUrl && !loading && !converting && !error && (
             <>
               {/* Image preview */}
-              {isImage && (
+              {isImage && displayUrl && (
                 <div className="flex items-center justify-center p-4 min-h-[300px]">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={signedUrl}
+                    src={displayUrl}
                     alt={attachment.filename}
                     className="max-w-full max-h-[70vh] object-contain"
                   />
+                </div>
+              )}
+
+              {/* HEIC conversion failed - show download prompt */}
+              {isImage && isHeic && !displayUrl && (
+                <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+                  <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                  <p className="text-lg font-medium mb-1">HEIC Image</p>
+                  <p className="text-sm mb-4">This Apple image format could not be converted for preview</p>
+                  <button
+                    onClick={handleDownload}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Download to view
+                  </button>
                 </div>
               )}
 
