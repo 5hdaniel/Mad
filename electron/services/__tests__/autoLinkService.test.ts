@@ -1,6 +1,8 @@
 /**
  * Tests for Auto-Link Service
  * TASK-1031: Auto-link communications when contact is added to transaction
+ * TASK-1115: Updated for thread-level message linking
+ * BACKLOG-408: Verify sync works with contact_emails junction table
  */
 
 import {
@@ -31,7 +33,14 @@ jest.mock("../logService", () => {
   };
 });
 
-const mockCreateCommunicationReference = jest.fn();
+// TASK-1115: Mock thread-level communication functions
+const mockCreateThreadCommunicationReference = jest.fn();
+const mockIsThreadLinkedToTransaction = jest.fn();
+
+jest.mock("../db/communicationDbService", () => ({
+  createThreadCommunicationReference: (...args: unknown[]) => mockCreateThreadCommunicationReference(...args),
+  isThreadLinkedToTransaction: (...args: unknown[]) => mockIsThreadLinkedToTransaction(...args),
+}));
 
 jest.mock("../messageMatchingService", () => ({
   normalizePhone: jest.fn((phone) => {
@@ -41,7 +50,6 @@ jest.mock("../messageMatchingService", () => ({
     if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
     return null;
   }),
-  createCommunicationReference: (...args: unknown[]) => mockCreateCommunicationReference(...args),
 }));
 
 describe("autoLinkService", () => {
@@ -57,14 +65,17 @@ describe("autoLinkService", () => {
     // Helper to set up standard mocks
     // Note: Since TASK-1037 fix, emails are queried from 'communications' table
     // and text messages from 'messages' table
+    // TASK-1115: Messages now return thread_id for thread-level linking
+    // BACKLOG-408: Emails come from contact_emails junction table
     const setupMocks = (options: {
       contactExists?: boolean;
       emails?: string[];
       phones?: string[];
       transactionExists?: boolean;
       foundEmailIds?: string[];
-      foundMessageIds?: string[];
+      foundMessages?: Array<{ id: string; thread_id: string | null }>;
       emailAlreadyLinked?: Set<string>;
+      threadsAlreadyLinked?: Set<string>;
     }) => {
       const {
         contactExists = true,
@@ -72,8 +83,9 @@ describe("autoLinkService", () => {
         phones = [],
         transactionExists = true,
         foundEmailIds = [],
-        foundMessageIds = [],
+        foundMessages = [],
         emailAlreadyLinked = new Set<string>(),
+        threadsAlreadyLinked = new Set<string>(),
       } = options;
 
       mockDbGet.mockImplementation((sql: string, params?: unknown[]) => {
@@ -101,6 +113,7 @@ describe("autoLinkService", () => {
       });
 
       mockDbAll.mockImplementation((sql: string) => {
+        // BACKLOG-408: Emails from contact_emails junction table
         if (sql.includes("FROM contact_emails")) {
           return emails.map((email) => ({ email }));
         }
@@ -111,11 +124,19 @@ describe("autoLinkService", () => {
         if (sql.includes("FROM communications") && sql.includes("communication_type = 'email'")) {
           return foundEmailIds.map((id) => ({ id }));
         }
-        // Text messages from messages table
+        // TASK-1115: Text messages from messages table now include thread_id
         if (sql.includes("FROM messages") && sql.includes("sms")) {
-          return foundMessageIds.map((id) => ({ id }));
+          return foundMessages;
         }
         return [];
+      });
+
+      // TASK-1115: Mock thread linking functions
+      mockIsThreadLinkedToTransaction.mockImplementation((threadId: string) => {
+        return Promise.resolve(threadsAlreadyLinked.has(threadId));
+      });
+      mockCreateThreadCommunicationReference.mockImplementation(() => {
+        return Promise.resolve("comm-ref-" + Math.random().toString(36).slice(2));
       });
     };
 
@@ -179,13 +200,14 @@ describe("autoLinkService", () => {
     it("should link emails matching contact email addresses", async () => {
       // With the TASK-1037 fix, emails come from the communications table
       // and are linked using UPDATE (dbRun) instead of createCommunicationReference
+      // BACKLOG-408: Email addresses come from contact_emails junction table
       setupMocks({
         contactExists: true,
         emails: ["john@example.com"],
         phones: [],
         transactionExists: true,
         foundEmailIds: ["email-1", "email-2"],
-        foundMessageIds: [],
+        foundMessages: [],
       });
 
       const result = await autoLinkCommunicationsForContact({
@@ -197,24 +219,25 @@ describe("autoLinkService", () => {
       expect(result.messagesLinked).toBe(0);
       // Emails use linkExistingCommunication (dbRun for UPDATE)
       expect(mockDbRun).toHaveBeenCalledTimes(2);
-      // createCommunicationReference is NOT used for emails anymore
-      expect(mockCreateCommunicationReference).toHaveBeenCalledTimes(0);
+      // Thread-level linking is NOT used for emails, only for messages
+      expect(mockCreateThreadCommunicationReference).toHaveBeenCalledTimes(0);
     });
 
-    it("should link text messages matching contact phone numbers", async () => {
+    it("should link text messages matching contact phone numbers at thread level", async () => {
+      // TASK-1115: Messages are now linked at thread level
+      // 3 messages from 2 threads = 2 threads linked
       setupMocks({
         contactExists: true,
         emails: [],
         phones: ["+14155551234"],
         transactionExists: true,
         foundEmailIds: [],
-        foundMessageIds: ["msg-1", "msg-2", "msg-3"],
+        foundMessages: [
+          { id: "msg-1", thread_id: "thread-1" },
+          { id: "msg-2", thread_id: "thread-1" }, // Same thread as msg-1
+          { id: "msg-3", thread_id: "thread-2" }, // Different thread
+        ],
       });
-
-      mockCreateCommunicationReference
-        .mockResolvedValueOnce("ref-1")
-        .mockResolvedValueOnce("ref-2")
-        .mockResolvedValueOnce("ref-3");
 
       const result = await autoLinkCommunicationsForContact({
         contactId: mockContactId,
@@ -222,8 +245,9 @@ describe("autoLinkService", () => {
       });
 
       expect(result.emailsLinked).toBe(0);
-      expect(result.messagesLinked).toBe(3);
-      expect(mockCreateCommunicationReference).toHaveBeenCalledTimes(3);
+      // TASK-1115: messagesLinked now counts unique threads, not individual messages
+      expect(result.messagesLinked).toBe(2);
+      expect(mockCreateThreadCommunicationReference).toHaveBeenCalledTimes(2);
     });
 
     it("should count already-linked communications", async () => {
@@ -234,7 +258,7 @@ describe("autoLinkService", () => {
         phones: [],
         transactionExists: true,
         foundEmailIds: ["email-1", "email-2"],
-        foundMessageIds: [],
+        foundMessages: [],
         emailAlreadyLinked: new Set(["email-2"]),
       });
 
@@ -256,7 +280,7 @@ describe("autoLinkService", () => {
         phones: [],
         transactionExists: true,
         foundEmailIds: ["email-1", "email-2"],
-        foundMessageIds: [],
+        foundMessages: [],
       });
 
       // First succeeds, second fails
@@ -276,19 +300,18 @@ describe("autoLinkService", () => {
     });
 
     it("should link both emails and messages for a contact with both", async () => {
+      // TASK-1115: Messages are now linked at thread level
       setupMocks({
         contactExists: true,
         emails: ["john@example.com"],
         phones: ["+14155551234"],
         transactionExists: true,
         foundEmailIds: ["email-1"],
-        foundMessageIds: ["msg-1", "msg-2"],
+        foundMessages: [
+          { id: "msg-1", thread_id: "thread-1" },
+          { id: "msg-2", thread_id: "thread-2" },
+        ],
       });
-
-      // Messages still use createCommunicationReference
-      mockCreateCommunicationReference
-        .mockResolvedValueOnce("ref-msg-1")
-        .mockResolvedValueOnce("ref-msg-2");
 
       const result = await autoLinkCommunicationsForContact({
         contactId: mockContactId,
@@ -296,10 +319,12 @@ describe("autoLinkService", () => {
       });
 
       expect(result.emailsLinked).toBe(1);
+      // TASK-1115: messagesLinked counts unique threads (2 threads)
       expect(result.messagesLinked).toBe(2);
-      // Emails use dbRun (1 call), messages use createCommunicationReference (2 calls)
+      // Emails use dbRun (1 call for UPDATE)
       expect(mockDbRun).toHaveBeenCalledTimes(1);
-      expect(mockCreateCommunicationReference).toHaveBeenCalledTimes(2);
+      // Messages use createThreadCommunicationReference (2 threads)
+      expect(mockCreateThreadCommunicationReference).toHaveBeenCalledTimes(2);
     });
 
     it("should update communication with correct transaction_id for emails", async () => {
@@ -309,7 +334,7 @@ describe("autoLinkService", () => {
         phones: [],
         transactionExists: true,
         foundEmailIds: ["email-1"],
-        foundMessageIds: [],
+        foundMessages: [],
       });
 
       await autoLinkCommunicationsForContact({
@@ -330,16 +355,15 @@ describe("autoLinkService", () => {
     });
 
     it("should use higher confidence for phone matches than email matches", async () => {
+      // TASK-1115: Messages are now linked at thread level
       setupMocks({
         contactExists: true,
         emails: [],
         phones: ["+14155551234"],
         transactionExists: true,
         foundEmailIds: [],
-        foundMessageIds: ["msg-1"],
+        foundMessages: [{ id: "msg-1", thread_id: "thread-1" }],
       });
-
-      mockCreateCommunicationReference.mockResolvedValueOnce("ref-1");
 
       await autoLinkCommunicationsForContact({
         contactId: mockContactId,
@@ -347,13 +371,64 @@ describe("autoLinkService", () => {
       });
 
       // Verify phone match has higher confidence (0.9 vs 0.85)
-      expect(mockCreateCommunicationReference).toHaveBeenCalledWith(
-        "msg-1",
+      // TASK-1115: Now uses createThreadCommunicationReference with thread_id
+      expect(mockCreateThreadCommunicationReference).toHaveBeenCalledWith(
+        "thread-1", // thread_id, not message_id
         mockTransactionId,
         mockUserId,
         "auto",
         0.9 // Phone confidence
       );
+    });
+
+    it("should handle messages without thread_id gracefully", async () => {
+      // TASK-1115: Messages without thread_id are skipped (they'll be picked up
+      // when thread_id is populated)
+      setupMocks({
+        contactExists: true,
+        emails: [],
+        phones: ["+14155551234"],
+        transactionExists: true,
+        foundEmailIds: [],
+        foundMessages: [
+          { id: "msg-1", thread_id: null },      // No thread_id - skipped
+          { id: "msg-2", thread_id: "thread-1" }, // Has thread_id - linked
+        ],
+      });
+
+      const result = await autoLinkCommunicationsForContact({
+        contactId: mockContactId,
+        transactionId: mockTransactionId,
+      });
+
+      // Only 1 thread linked (msg-1 has no thread_id)
+      expect(result.messagesLinked).toBe(1);
+      expect(mockCreateThreadCommunicationReference).toHaveBeenCalledTimes(1);
+    });
+
+    it("should count already-linked threads", async () => {
+      // TASK-1115: Thread already linked to transaction
+      setupMocks({
+        contactExists: true,
+        emails: [],
+        phones: ["+14155551234"],
+        transactionExists: true,
+        foundEmailIds: [],
+        foundMessages: [
+          { id: "msg-1", thread_id: "thread-1" },
+          { id: "msg-2", thread_id: "thread-2" },
+        ],
+        threadsAlreadyLinked: new Set(["thread-1"]), // thread-1 already linked
+      });
+
+      const result = await autoLinkCommunicationsForContact({
+        contactId: mockContactId,
+        transactionId: mockTransactionId,
+      });
+
+      expect(result.messagesLinked).toBe(1); // Only thread-2 linked
+      expect(result.alreadyLinked).toBe(1);  // thread-1 was already linked
+      expect(mockCreateThreadCommunicationReference).toHaveBeenCalledTimes(1);
     });
   });
 });
