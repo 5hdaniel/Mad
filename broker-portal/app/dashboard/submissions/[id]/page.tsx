@@ -193,10 +193,11 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
       />
 
       {/* Status History Timeline */}
+      {/* Note: status_history column doesn't exist in schema yet, passing empty array */}
+      {/* The StatusHistory component gracefully handles this by showing initial submission entry */}
       <StatusHistory
-        history={submission.status_history || []}
+        history={[]}
         currentStatus={submission.status}
-        submittedBy={submission.submitted_by_email}
         submittedAt={submission.created_at}
       />
 
