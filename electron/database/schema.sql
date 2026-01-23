@@ -251,6 +251,9 @@ CREATE TABLE IF NOT EXISTS messages (
   content_hash TEXT,                     -- SHA-256 hash of normalized content for fallback dedup
   duplicate_of TEXT,                     -- ID of original message if this is a duplicate
 
+  -- LLM Analysis (Migration 11)
+  llm_analysis TEXT,                     -- Full LLM analysis response stored as JSON string
+
   -- Metadata (provider-specific data)
   metadata TEXT,                         -- JSON: labels, flags, etc.
 
@@ -344,8 +347,25 @@ CREATE TABLE IF NOT EXISTS transactions (
 
   -- Export Tracking
   export_status TEXT DEFAULT 'not_exported' CHECK (export_status IN ('not_exported', 'exported', 're_export_needed')),
+  export_format TEXT CHECK (export_format IN ('pdf', 'csv', 'json', 'txt_eml', 'excel')),
   export_count INTEGER DEFAULT 0,
   last_exported_at DATETIME,
+  last_exported_on DATETIME,             -- Legacy alias (migration 4), use last_exported_at for new code
+
+  -- AI Detection Fields (Migration 11)
+  detection_source TEXT DEFAULT 'manual' CHECK (detection_source IN ('manual', 'auto', 'hybrid')),
+  detection_status TEXT DEFAULT 'confirmed' CHECK (detection_status IN ('pending', 'confirmed', 'rejected')),
+  detection_confidence REAL,
+  detection_method TEXT,
+  suggested_contacts TEXT,               -- JSON array of suggested contact assignments
+  reviewed_at DATETIME,
+  rejection_reason TEXT,
+
+  -- B2B Submission Tracking (BACKLOG-390)
+  submission_status TEXT DEFAULT 'not_submitted' CHECK (submission_status IN ('not_submitted', 'submitted', 'under_review', 'needs_changes', 'resubmitted', 'approved', 'rejected')),
+  submission_id TEXT,                    -- UUID reference to transaction_submissions in Supabase cloud
+  submitted_at DATETIME,
+  last_review_notes TEXT,
 
   -- Metadata
   metadata TEXT,                         -- JSON for additional data
@@ -539,6 +559,46 @@ CREATE TABLE IF NOT EXISTS classification_feedback (
 );
 
 -- ============================================
+-- LLM SETTINGS TABLE (User LLM configuration)
+-- ============================================
+-- Stores API keys (encrypted), usage tracking, and feature flags
+CREATE TABLE IF NOT EXISTS llm_settings (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL UNIQUE,
+
+  -- Provider Config
+  openai_api_key_encrypted TEXT,         -- Encrypted OpenAI API key
+  anthropic_api_key_encrypted TEXT,      -- Encrypted Anthropic API key
+  preferred_provider TEXT DEFAULT 'openai' CHECK (preferred_provider IN ('openai', 'anthropic')),
+  openai_model TEXT DEFAULT 'gpt-4o-mini',
+  anthropic_model TEXT DEFAULT 'claude-3-haiku-20240307',
+
+  -- Usage Tracking
+  tokens_used_this_month INTEGER DEFAULT 0,
+  budget_limit_tokens INTEGER,
+  budget_reset_date DATE,
+
+  -- Platform Allowance
+  platform_allowance_tokens INTEGER DEFAULT 0,
+  platform_allowance_used INTEGER DEFAULT 0,
+  use_platform_allowance INTEGER DEFAULT 0,
+
+  -- Feature Flags
+  enable_auto_detect INTEGER DEFAULT 1,
+  enable_role_extraction INTEGER DEFAULT 1,
+
+  -- Consent (Security Option C)
+  llm_data_consent INTEGER DEFAULT 0,
+  llm_data_consent_at DATETIME,
+
+  -- Timestamps
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
+);
+
+-- ============================================
 -- EXTRACTED TRANSACTION DATA (Field-level audit trail)
 -- ============================================
 -- Tracks what was extracted from which message
@@ -611,6 +671,10 @@ CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_property_address ON transactions(property_address);
 CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
 CREATE INDEX IF NOT EXISTS idx_transactions_stage ON transactions(stage);
+CREATE INDEX IF NOT EXISTS idx_transactions_export_status ON transactions(export_status);
+CREATE INDEX IF NOT EXISTS idx_transactions_last_exported_on ON transactions(last_exported_on);
+CREATE INDEX IF NOT EXISTS idx_transactions_submission_status ON transactions(submission_status);
+CREATE INDEX IF NOT EXISTS idx_transactions_submission_id ON transactions(submission_id);
 
 -- Transaction Participants
 CREATE INDEX IF NOT EXISTS idx_transaction_participants_transaction ON transaction_participants(transaction_id);
@@ -650,6 +714,9 @@ CREATE INDEX IF NOT EXISTS idx_feedback_type ON classification_feedback(feedback
 CREATE INDEX IF NOT EXISTS idx_extracted_data_transaction ON extracted_transaction_data(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_extracted_data_field ON extracted_transaction_data(field_name);
 
+-- LLM Settings
+CREATE INDEX IF NOT EXISTS idx_llm_settings_user ON llm_settings(user_id);
+
 -- ============================================
 -- TRIGGERS (Auto-update timestamps)
 -- ============================================
@@ -688,6 +755,13 @@ CREATE TRIGGER IF NOT EXISTS update_transaction_contacts_timestamp
 AFTER UPDATE ON transaction_contacts
 BEGIN
   UPDATE transaction_contacts SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+END;
+
+-- LLM Settings timestamp
+CREATE TRIGGER IF NOT EXISTS update_llm_settings_timestamp
+AFTER UPDATE ON llm_settings
+BEGIN
+  UPDATE llm_settings SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
 
 -- Audit logs are append-only (no updates/deletes allowed)
@@ -785,6 +859,8 @@ CREATE INDEX IF NOT EXISTS idx_communications_sender ON communications(sender);
 -- TASK-975: Junction table indexes for message_id lookups
 CREATE INDEX IF NOT EXISTS idx_communications_message_id ON communications(message_id);
 CREATE INDEX IF NOT EXISTS idx_communications_txn_msg ON communications(transaction_id, message_id);
+-- TASK-975: Unique constraint to prevent duplicate message-transaction links
+CREATE UNIQUE INDEX IF NOT EXISTS idx_communications_msg_txn_unique ON communications(message_id, transaction_id) WHERE message_id IS NOT NULL;
 -- TASK-1114: Thread-based linking indexes (SPRINT-042)
 CREATE INDEX IF NOT EXISTS idx_communications_thread_id ON communications(thread_id);
 CREATE INDEX IF NOT EXISTS idx_communications_thread_txn ON communications(thread_id, transaction_id);
@@ -870,4 +946,5 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 
 -- Initialize schema version if not exists
-INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 9);
+-- Version 16: All migrations through BACKLOG-426 (license type support)
+INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 16);
