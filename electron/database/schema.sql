@@ -946,5 +946,5 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 
 -- Initialize schema version if not exists
--- Version 16: All migrations through BACKLOG-426 (license type support)
-INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 16);
+-- Version 17: All migrations through BACKLOG-443 (contact junction table backfill)
+INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 17);

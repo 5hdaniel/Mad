@@ -661,6 +661,73 @@ class DatabaseService implements IDatabaseService {
       await logService.info("BACKLOG-426: Added license type columns to users_local", "DatabaseService");
     }
 
+    // Migration 17 (BACKLOG-443): Backfill contact_emails junction table
+    // Ensures all contacts have their email addresses in the junction table for auto-link sync
+    // This handles legacy contacts that may have been created before the junction table pattern
+    const schemaVersionRow = db.prepare(
+      "SELECT version FROM schema_version WHERE id = 1"
+    ).get() as { version: number } | undefined;
+    const currentSchemaVersion = schemaVersionRow?.version || 0;
+
+    if (currentSchemaVersion < 17) {
+      // Check if contacts table has a legacy 'email' column (from older schema versions)
+      const contactColumns = getColumns('contacts');
+      if (contactColumns.includes('email')) {
+        // Backfill from legacy contacts.email field
+        const backfillResult = db.prepare(`
+          INSERT OR IGNORE INTO contact_emails (id, contact_id, email, is_primary, source, created_at)
+          SELECT
+            lower(hex(randomblob(16))),
+            c.id,
+            LOWER(c.email),
+            1,
+            'backfill',
+            CURRENT_TIMESTAMP
+          FROM contacts c
+          WHERE c.email IS NOT NULL
+            AND c.email != ''
+            AND NOT EXISTS (
+              SELECT 1 FROM contact_emails ce WHERE ce.contact_id = c.id
+            )
+        `).run();
+
+        if (backfillResult.changes > 0) {
+          await logService.info(`BACKLOG-443: Backfilled ${backfillResult.changes} contact emails from legacy field`, "DatabaseService");
+        }
+      }
+
+      // Also ensure all contacts with phones in legacy field are migrated
+      if (contactColumns.includes('phone')) {
+        const phoneBackfillResult = db.prepare(`
+          INSERT OR IGNORE INTO contact_phones (id, contact_id, phone_e164, phone_display, is_primary, source, created_at)
+          SELECT
+            lower(hex(randomblob(16))),
+            c.id,
+            CASE
+              WHEN c.phone LIKE '+%' THEN c.phone
+              WHEN LENGTH(REPLACE(c.phone, '-', '')) = 10 THEN '+1' || REPLACE(REPLACE(REPLACE(c.phone, '-', ''), ' ', ''), '(', '')
+              ELSE '+' || REPLACE(REPLACE(REPLACE(REPLACE(c.phone, '-', ''), ' ', ''), '(', ''), ')', '')
+            END,
+            c.phone,
+            1,
+            'backfill',
+            CURRENT_TIMESTAMP
+          FROM contacts c
+          WHERE c.phone IS NOT NULL
+            AND c.phone != ''
+            AND NOT EXISTS (
+              SELECT 1 FROM contact_phones cp WHERE cp.contact_id = c.id
+            )
+        `).run();
+
+        if (phoneBackfillResult.changes > 0) {
+          await logService.info(`BACKLOG-443: Backfilled ${phoneBackfillResult.changes} contact phones from legacy field`, "DatabaseService");
+        }
+      }
+
+      await logService.info("BACKLOG-443: Contact junction table backfill migration completed", "DatabaseService");
+    }
+
     // Finalize schema version (create table if missing for backwards compatibility)
     const schemaVersionExists = db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
@@ -673,12 +740,12 @@ class DatabaseService implements IDatabaseService {
           version INTEGER NOT NULL DEFAULT 1,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
-        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 16);
+        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 17);
       `);
     } else {
-      const currentVersion = (db.prepare("SELECT version FROM schema_version").get() as { version: number } | undefined)?.version || 0;
-      if (currentVersion < 16) {
-        db.exec("UPDATE schema_version SET version = 16");
+      const finalVersion = (db.prepare("SELECT version FROM schema_version").get() as { version: number } | undefined)?.version || 0;
+      if (finalVersion < 17) {
+        db.exec("UPDATE schema_version SET version = 17");
       }
     }
 

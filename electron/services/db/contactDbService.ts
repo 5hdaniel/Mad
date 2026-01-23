@@ -962,20 +962,25 @@ export async function removeContact(contactId: string): Promise<void> {
 
 /**
  * Get or create contact from email address
+ * Looks up contacts via the contact_emails junction table
  */
 export async function getOrCreateContactFromEmail(
   userId: string,
   email: string,
   name?: string,
 ): Promise<Contact> {
-  // Try to find existing contact
+  const normalizedEmail = email.toLowerCase().trim();
+
+  // Try to find existing contact via contact_emails junction table
   let contact = dbGet<Contact>(
-    "SELECT * FROM contacts WHERE user_id = ? AND email = ?",
-    [userId, email],
+    `SELECT c.* FROM contacts c
+     JOIN contact_emails ce ON c.id = ce.contact_id
+     WHERE c.user_id = ? AND ce.email = ?`,
+    [userId, normalizedEmail],
   );
 
   if (!contact) {
-    // Create new contact
+    // Create new contact with email stored in junction table
     contact = await createContact({
       user_id: userId,
       display_name: name || email.split("@")[0],
