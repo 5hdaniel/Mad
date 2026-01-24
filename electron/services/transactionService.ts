@@ -139,6 +139,9 @@ interface AuditedTransactionData {
   property_coordinates?: string;
   transaction_type?: "purchase" | "sale";
   contact_assignments?: ContactAssignment[];
+  started_at?: string;
+  closed_at?: string;
+  closing_deadline?: string;
 }
 
 interface ContactRoleUpdate {
@@ -1163,6 +1166,9 @@ class TransactionService {
         property_coordinates,
         transaction_type,
         contact_assignments,
+        started_at,
+        closed_at,
+        closing_deadline,
       } = data;
 
       // Create the transaction
@@ -1177,6 +1183,9 @@ class TransactionService {
         transaction_type,
         transaction_status: "pending",
         status: "active",
+        started_at,
+        closed_at,
+        closing_deadline,
         closing_date_verified: property_coordinates ? true : false,
         export_status: "not_exported",
         export_count: 0,
