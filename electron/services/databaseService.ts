@@ -661,6 +661,47 @@ class DatabaseService implements IDatabaseService {
       await logService.info("BACKLOG-426: Added license type columns to users_local", "DatabaseService");
     }
 
+    // Migration 17: Backfill contact_emails junction table
+    // Fixes issue where imported contacts have emails in old contacts.email column
+    // but not in contact_emails junction table, breaking auto-link functionality
+    const contactsWithEmailsNeedingBackfill = db.prepare(`
+      SELECT c.id, c.email
+      FROM contacts c
+      WHERE c.email IS NOT NULL AND c.email != ''
+      AND NOT EXISTS (
+        SELECT 1 FROM contact_emails ce
+        WHERE ce.contact_id = c.id AND LOWER(ce.email) = LOWER(c.email)
+      )
+    `).all() as { id: string; email: string }[];
+
+    if (contactsWithEmailsNeedingBackfill.length > 0) {
+      await logService.info(
+        `Migration 17: Backfilling contact_emails for ${contactsWithEmailsNeedingBackfill.length} contacts`,
+        "DatabaseService"
+      );
+
+      // Use a transaction for the backfill
+      const backfillStmt = db.prepare(`
+        INSERT OR IGNORE INTO contact_emails (id, contact_id, email, is_primary, source, created_at)
+        VALUES (?, ?, ?, 1, 'migration_17', CURRENT_TIMESTAMP)
+      `);
+
+      const backfillTransaction = db.transaction((contacts: { id: string; email: string }[]) => {
+        for (const contact of contacts) {
+          const emailId = crypto.randomUUID();
+          const normalizedEmail = contact.email.toLowerCase().trim();
+          backfillStmt.run(emailId, contact.id, normalizedEmail);
+        }
+      });
+
+      backfillTransaction(contactsWithEmailsNeedingBackfill);
+
+      await logService.info(
+        `Migration 17: Successfully backfilled ${contactsWithEmailsNeedingBackfill.length} contact emails`,
+        "DatabaseService"
+      );
+    }
+
     // Finalize schema version (create table if missing for backwards compatibility)
     const schemaVersionExists = db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
@@ -673,12 +714,12 @@ class DatabaseService implements IDatabaseService {
           version INTEGER NOT NULL DEFAULT 1,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
-        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 16);
+        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 17);
       `);
     } else {
       const currentVersion = (db.prepare("SELECT version FROM schema_version").get() as { version: number } | undefined)?.version || 0;
-      if (currentVersion < 16) {
-        db.exec("UPDATE schema_version SET version = 16");
+      if (currentVersion < 17) {
+        db.exec("UPDATE schema_version SET version = 17");
       }
     }
 
