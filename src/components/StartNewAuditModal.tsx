@@ -2,6 +2,7 @@ import React from "react";
 import type { Transaction } from "../types";
 import { usePendingTransactions } from "../hooks/usePendingTransactions";
 import { LicenseGate } from "./common/LicenseGate";
+import { useLicense } from "../contexts/LicenseContext";
 
 interface StartNewAuditModalProps {
   /** Callback when user wants to view pending transaction details */
@@ -39,6 +40,7 @@ function StartNewAuditModal({
   isSyncing = false,
 }: StartNewAuditModalProps): React.ReactElement {
   const { pendingTransactions, isLoading, error, refetch } = usePendingTransactions();
+  const { hasAIAddon } = useLicense();
 
   const formatDate = (dateString: string | Date | null | undefined): string => {
     if (!dateString) return "";
@@ -68,7 +70,9 @@ function StartNewAuditModal({
           <div>
             <h2 className="text-xl font-bold text-white">Start New Audit</h2>
             <p className="text-blue-100 text-sm">
-              Review AI-detected transactions or create one manually
+              {hasAIAddon
+                ? "Review AI-detected transactions or create one manually"
+                : "Create a new transaction manually"}
             </p>
           </div>
           <div className="flex items-center gap-2">

@@ -1,5 +1,6 @@
 import React from "react";
 import { LicenseGate } from "@/components/common/LicenseGate";
+import { useLicense } from "@/contexts/LicenseContext";
 
 // ============================================
 // TYPES AND INTERFACES
@@ -93,6 +94,8 @@ function TransactionToolbar({
   quickExportSuccess,
   bulkActionSuccess,
 }: TransactionToolbarProps): React.ReactElement {
+  const { hasAIAddon } = useLicense();
+
   return (
     <>
       {/* Header */}
@@ -225,18 +228,20 @@ function TransactionToolbar({
                 <div className="absolute left-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 p-4 z-20">
                   <h4 className="font-semibold text-gray-900 mb-3">Transaction Statuses</h4>
                   <div className="space-y-3">
-                    <div className="flex items-start gap-3">
-                      <span className="w-3 h-3 rounded-full bg-amber-500 mt-1 flex-shrink-0" />
-                      <div>
-                        <p className="font-medium text-gray-900">Pending Review</p>
-                        <p className="text-sm text-gray-600">Auto-detected transaction awaiting your approval</p>
+                    {hasAIAddon && (
+                      <div className="flex items-start gap-3">
+                        <span className="w-3 h-3 rounded-full bg-amber-500 mt-1 flex-shrink-0" />
+                        <div>
+                          <p className="font-medium text-gray-900">Pending Review</p>
+                          <p className="text-sm text-gray-600">Auto-detected transaction awaiting your approval</p>
+                        </div>
                       </div>
-                    </div>
+                    )}
                     <div className="flex items-start gap-3">
                       <span className="w-3 h-3 rounded-full bg-blue-500 mt-1 flex-shrink-0" />
                       <div>
                         <p className="font-medium text-gray-900">Active</p>
-                        <p className="text-sm text-gray-600">Confirmed real estate transaction in progress</p>
+                        <p className="text-sm text-gray-600">{hasAIAddon ? "Confirmed real estate transaction in progress" : "Real estate transaction in progress"}</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
@@ -246,13 +251,15 @@ function TransactionToolbar({
                         <p className="text-sm text-gray-600">Completed transaction (deal closed)</p>
                       </div>
                     </div>
-                    <div className="flex items-start gap-3">
-                      <span className="w-3 h-3 rounded-full bg-red-500 mt-1 flex-shrink-0" />
-                      <div>
-                        <p className="font-medium text-gray-900">Rejected</p>
-                        <p className="text-sm text-gray-600">Not a real transaction (false positive)</p>
+                    {hasAIAddon && (
+                      <div className="flex items-start gap-3">
+                        <span className="w-3 h-3 rounded-full bg-red-500 mt-1 flex-shrink-0" />
+                        <div>
+                          <p className="font-medium text-gray-900">Rejected</p>
+                          <p className="text-sm text-gray-600">Not a real transaction (false positive)</p>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               </>
