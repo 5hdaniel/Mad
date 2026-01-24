@@ -423,7 +423,7 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
             </div>
 
             {/* Email Connections */}
-            <div className="mb-8">
+            <div id="email-connections" className="mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 Email Connections
               </h3>
