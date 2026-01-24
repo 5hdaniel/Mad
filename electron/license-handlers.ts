@@ -7,6 +7,7 @@ import { ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import sessionService from "./services/sessionService";
 import { getUserById } from "./services/db/userDbService";
+import { dbRun } from "./services/db/core/dbConnection";
 import logService from "./services/logService";
 import type { LicenseType, UserLicense } from "./types/models";
 
@@ -123,6 +124,44 @@ export function registerLicenseHandlers(): void {
     async (_event: IpcMainInvokeEvent): Promise<LicenseResponse> => {
       logService.debug("[License] Refreshing license", "License");
       return getLicenseData();
+    }
+  );
+
+  // DEV ONLY: Toggle AI add-on for testing
+  ipcMain.handle(
+    "license:dev:toggle-ai-addon",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+      enabled: boolean
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        logService.info(
+          `[License] DEV: Setting AI add-on to ${enabled} for user ${userId}`,
+          "License"
+        );
+
+        // Update local database directly (SQLite uses INTEGER 0/1 for boolean)
+        dbRun(
+          "UPDATE users_local SET ai_detection_enabled = ? WHERE id = ?",
+          [enabled ? 1 : 0, userId]
+        );
+
+        logService.info(
+          `[License] DEV: AI add-on ${enabled ? "enabled" : "disabled"} for user ${userId}`,
+          "License"
+        );
+
+        return { success: true };
+      } catch (error) {
+        logService.error("[License] DEV: Failed to toggle AI add-on", "License", {
+          error,
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
     }
   );
 
