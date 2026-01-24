@@ -1,63 +1,55 @@
-# BACKLOG-464: OAuth Reconnect Popup Not Opening
+# BACKLOG-464: Dashboard "Reconnect" Button Does Nothing
 
 ## Summary
 
-Clicking "Reconnect" or "Connect" button for Gmail/Outlook in Settings does NOT open the OAuth popup window. The button click appears to do nothing.
+When email connection expires, a popup/notification appears on the Dashboard with a "Reconnect" button. That button does nothing when clicked.
+
+**Note:** The "Connect" button in Settings page WORKS fine - this is only about the Dashboard popup button.
 
 ## Category
 
-Bug / Critical
+Bug / UX
 
 ## Priority
 
-P0 - Critical (Users cannot reconnect expired email accounts)
+P1 - High (Confusing UX, but workaround exists via Settings)
 
 ## Description
 
 ### Problem
 
-1. User's email connection expires or needs reconnection
-2. User clicks "Reconnect" (or "Connect") button in Settings
-3. **Nothing happens** - no OAuth popup window opens
-4. User cannot reconnect their email account
+1. User's email connection expires
+2. Dashboard shows a popup/notification about expired connection
+3. Popup has a button to reconnect
+4. **Button does nothing when clicked**
+5. User has to manually go to Settings to reconnect
 
 ### Expected Behavior
 
-Clicking "Connect" or "Reconnect" should open a popup window with Google/Microsoft OAuth login.
+The dashboard popup button should either:
+1. **Option A:** Trigger OAuth popup directly (same as Settings), OR
+2. **Option B:** Navigate to Settings and auto-scroll to Email Connection section
 
-### Technical Investigation
-
-The flow is:
-1. UI calls `window.api.auth.googleConnectMailbox(userId)`
-2. IPC invokes `auth:google:connect-mailbox`
-3. Handler calls `handleGoogleConnectMailbox(mainWindow, userId)`
-4. Should create `BrowserWindow` and load `authUrl`
-
-**Possible causes:**
-- `googleAuthService.authenticateForMailbox()` failing silently
-- Error before `BrowserWindow` creation
-- Popup window being blocked
-- `mainWindow` is null
+Option B is simpler to implement.
 
 ### How to Reproduce
 
-1. Go to Settings
-2. Look at Email Connections section
-3. Click "Connect Gmail" or "Reconnect Gmail"
-4. Observe: nothing happens (no popup)
+1. Have an expired email connection
+2. See the dashboard notification/popup about expired connection
+3. Click the reconnect button
+4. Observe: nothing happens
 
 ## Acceptance Criteria
 
-- [ ] Clicking "Connect" opens OAuth popup
-- [ ] Clicking "Reconnect" opens OAuth popup
-- [ ] Proper error message if popup fails to open
-- [ ] Works for both Gmail and Outlook
+- [ ] Dashboard popup button navigates to Settings OR triggers OAuth
+- [ ] If navigating to Settings, auto-scroll to Email Connection section
+- [ ] User can successfully reconnect from the popup flow
 
 ## Estimated Effort
 
-~20K tokens (debugging + fix)
+~10K tokens (simple navigation fix)
 
 ## Related Items
 
 - BACKLOG-458: Email connection status mismatch
-- PR #568: Connection status UI (doesn't fix this)
+- PR #568: Added more UI but button still doesn't work
