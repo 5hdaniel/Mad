@@ -395,4 +395,33 @@ export function registerSharedAuthHandlers(
   ipcMain.handle("auth:microsoft:disconnect-mailbox", (event, userId: string) =>
     handleDisconnectMailbox(mainWindow, userId, "microsoft")
   );
+
+  // DEV ONLY: Expire a mailbox token for testing Connection Issue state
+  // This invalidates both access and refresh tokens to prevent auto-refresh
+  ipcMain.handle(
+    "auth:dev:expire-mailbox-token",
+    async (_event, userId: string, provider: "google" | "microsoft") => {
+      try {
+        const token = await databaseService.getOAuthToken(userId, provider, "mailbox");
+        if (!token) {
+          return { success: false, error: "No token found" };
+        }
+        // Set expiry to 1 hour ago and clear refresh token to prevent auto-refresh
+        const expiredTime = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+        await databaseService.updateOAuthToken(token.id, {
+          token_expires_at: expiredTime,
+          refresh_token: "INVALIDATED_FOR_TESTING",
+          access_token: "EXPIRED_FOR_TESTING",
+        });
+        await logService.info(
+          `[DEV] Expired ${provider} mailbox token for testing (refresh invalidated)`,
+          "SharedAuthHandlers",
+          { userId, expiredTime }
+        );
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: String(error) };
+      }
+    }
+  );
 }
