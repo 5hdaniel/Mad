@@ -21,6 +21,7 @@ jest.mock("../../appCore", () => ({
 
 // Mock the LicenseContext for LicenseGate
 jest.mock("../../contexts/LicenseContext", () => ({
+  LicenseProvider: ({ children }: { children: React.ReactNode }) => children,
   useLicense: () => ({
     licenseType: "individual" as const,
     hasAIAddon: true, // Enable AI features for testing
