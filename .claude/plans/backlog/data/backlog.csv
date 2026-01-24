@@ -79,6 +79,8 @@ BACKLOG-077,AI MVP Phase 4 - Feedback Loop,service,Medium,Completed,SPRINT-006,~
 BACKLOG-078,AI MVP Phase 5 - UI Enhancements,ui,Medium,Completed,SPRINT-006,~40K,-,[BACKLOG-078.md](BACKLOG-078.md),2025-12-16,,
 BACKLOG-079,AI MVP Phase 6 - Integration Testing,test,Medium,Completed,SPRINT-006,~40K,-,[BACKLOG-079.md](BACKLOG-079.md),2025-12-16,,
 BACKLOG-081,Consolidate AI Consent into T&C,feature,Medium,Pending,-,-,-,[BACKLOG-081.md](BACKLOG-081.md),2025-12-20,,
+BACKLOG-082,Consolidate Database Connection Systems,feature,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-082.md](items/BACKLOG-082.md)
+BACKLOG-083,Fix schema_version Migration Warning,feature,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-083.md](items/BACKLOG-083.md)
 BACKLOG-084,Thread-Based Transaction Detection,service,High,Completed,SPRINT-007,-,-,[BACKLOG-084.md](BACKLOG-084.md),2025-12-20,,
 BACKLOG-085,Test Thread-Based Detection Accuracy,test,High,Completed,SPRINT-007,-,-,[BACKLOG-085.md](BACKLOG-085.md),2025-12-20,,
 BACKLOG-086,Local ML Model with Hybrid Training,service,Medium,Pending,-,-,-,[BACKLOG-086.md](BACKLOG-086.md),2025-12-20,,
@@ -101,6 +103,7 @@ BACKLOG-102,Security Hardening Evaluation,security,Medium,Pending,-,~30K,-,[BACK
 BACKLOG-103,Fix Contact Selection Issue,fix,High,Completed,SPRINT-010,~25K-40K,-,Addressed by TASK-700,2025-12-28,,
 BACKLOG-104,Dashboard UI to Emphasize Auto-Detection,ui,Medium,Completed,SPRINT-010,~35K-50K,-,Addressed by TASK-705,2025-12-28,,
 BACKLOG-105,Text Messages Tab in Transaction Details,ui,High,Completed,SPRINT-010,~80K-120K,-,Addressed by TASK-702/703/704,2025-12-28,,
+BACKLOG-106,Add Behavioral Tests for useAppStateMachine,feature,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-106.md](items/BACKLOG-106.md)
 BACKLOG-107,Split useAppStateMachine.ts into Flow Hooks,refactor,Critical,Completed,SPRINT-013,~100K,~36K,-55%,2025-12-28,2026-01-01,[BACKLOG-107.md](BACKLOG-107.md)
 BACKLOG-108,Fix Flaky appleDriverService Test,test,Critical,Completed,SPRINT-011,~10K,~19K,-67%,2025-12-28,2026-01-01,[BACKLOG-108.md](BACKLOG-108.md)
 BACKLOG-109,Reduce AppRouter.tsx to <300 Lines,refactor,High,Completed,SPRINT-013,~20K,~12K,-83%,2025-12-28,2026-01-01,[BACKLOG-109.md](BACKLOG-109.md)
@@ -125,8 +128,10 @@ BACKLOG-127,Add Sprint Capacity Limits to PM Workflow,docs,Medium,Completed,SPRI
 BACKLOG-128,Add Type Verification Checklist for Fixture Tasks,docs,Medium,Completed,SPRINT-012,~6K,-,"TASK-808, PR #262",2026-01-01,2026-01-01,[BACKLOG-128.md](BACKLOG-128.md)
 BACKLOG-129,Create CI Troubleshooting Documentation,docs,Medium,Completed,SPRINT-012,~10K,-,"TASK-809, PR #262",2026-01-01,2026-01-01,[BACKLOG-129.md](BACKLOG-129.md)
 BACKLOG-130,Sub-Agent Permission Auto-Denial Incident,docs,High,Completed,SPRINT-012,~8K,-,"TASK-810, PR #262",2026-01-01,2026-01-01,[BACKLOG-130.md](BACKLOG-130.md)
+BACKLOG-131,Fix PR Metrics Validation Shell Escaping Bug,feature,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-131.md](items/BACKLOG-131.md)
 BACKLOG-132,Mandatory Worktree for Parallel/Background Agents,docs,Critical,Completed,SPRINT-015,~5K,~23K,+360%,2026-01-02,2026-01-02,[BACKLOG-132.md](BACKLOG-132.md)
 BACKLOG-133,Engineer Token Cap with Early Reporting,docs,High,Completed,SPRINT-015,~10K,~800K-1.1M,~100x,2026-01-02,2026-01-02,TASK-914
+BACKLOG-134,Engineer Token Optimization,feature,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-134.md](items/BACKLOG-134.md)
 BACKLOG-135,Fix window.d.ts Type Definitions,refactor,Medium,Completed,SPRINT-015,~10K,~10K,0%,2026-01-02,2026-01-02,TASK-916
 BACKLOG-136,PM Token Monitoring Workflow,docs,High,Completed,SPRINT-015,~5K,~5K,-50%,2026-01-02,2026-01-02,Hotfix during SPRINT-015
 BACKLOG-137,Automatic Token Tracking Tooling,infra,High,Completed,-,~40K,~34K,-56%,2026-01-02,2026-01-03,[BACKLOG-137.md](BACKLOG-137.md)
@@ -136,17 +141,27 @@ BACKLOG-140,Duplicate Transaction Re-Import Prevention,service,High,Completed,SP
 BACKLOG-141,Fix Onboarding Flicker for Returning Users (Quick Fix),ui,Medium,Pending,-,~10K,-,-,2026-01-03,,[BACKLOG-141.md](BACKLOG-141.md)
 BACKLOG-142,State Coordination Layer Overhaul,architecture,Critical,Completed,SPRINT-020/021/022,~850K,-,Multi-phase,2026-01-03,,[BACKLOG-142.md](BACKLOG-142.md)
 BACKLOG-143,Prevent Duplicate Contact Imports,feature,Medium,Pending,-,~40K,-,-,2026-01-04,,[BACKLOG-143.md](BACKLOG-143.md)
+BACKLOG-144,Enforce SR Engineer Review Before PR Merge,feature,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-144.md](items/BACKLOG-144.md)
+BACKLOG-145,Duplicate Contact Keys in ImportContactsModal,feature,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-145.md](items/BACKLOG-145.md)
+BACKLOG-146,Prevent Stuck Jest Worker Processes from Agent Runs,feature,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-146.md](items/BACKLOG-146.md)
+BACKLOG-147,Secure Storage Setup Should Not Show for Returning Users,feature,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-147.md](items/BACKLOG-147.md)
 BACKLOG-148,Split databaseService.ts into Domain Services,refactor,High,Completed,SPRINT-023,~60K,-,"TASK-961, PR #315",2026-01-04,2026-01-04,[BACKLOG-148.md](BACKLOG-148.md)
 BACKLOG-149,Delete Deprecated EmailOnboardingScreen.tsx,refactor,Medium,Completed,SPRINT-023,~15K,-,"TASK-960, PR #314",2026-01-04,2026-01-04,[BACKLOG-149.md](BACKLOG-149.md)
 BACKLOG-150,Reduce useAppStateMachine.ts Return Object,refactor,Low,Completed,SPRINT-028,~10K,-,"TASK-1006, PR #367",2026-01-04,2026-01-10,[BACKLOG-150.md](BACKLOG-150.md)
 BACKLOG-151,Reduce AppModals.tsx Below 150-Line Trigger,refactor,Low,Pending,-,~5K,-,-,2026-01-04,,[BACKLOG-151.md](BACKLOG-151.md)
 BACKLOG-152,Split TransactionDetails.tsx into Tab Components,refactor,Medium,Completed,SPRINT-023,~25K,-,-,2026-01-04,,[BACKLOG-152.md](BACKLOG-152.md)
+BACKLOG-153,State Machine Email Connection Gap,feature,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-153.md](items/BACKLOG-153.md)
+BACKLOG-154,Enforce Branch Protection for All Work,feature,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-154.md](items/BACKLOG-154.md)
 BACKLOG-155,Dashboard Unnecessary Vertical Scroll,ui,Low,Completed,SPRINT-028,~10K,-,"TASK-1004, PR #365",2026-01-04,2026-01-10,[BACKLOG-155.md](BACKLOG-155.md)
 BACKLOG-156,Auto-Refresh Data Sources on App Load,feature,High,Completed,SPRINT-028,~40K,-,"TASK-1003, PR #369",2026-01-04,2026-01-10,[BACKLOG-156.md](BACKLOG-156.md)
 BACKLOG-157,Fix Failing Auth Handler Integration Test,test,High,Obsolete,-,~15K,-,-,2026-01-04,,[BACKLOG-157.md](BACKLOG-157.md)
 BACKLOG-158,Decompose AuditTransactionModal Component,refactor,Medium,Obsolete,-,~60K,-,-,2026-01-04,,[BACKLOG-158.md](BACKLOG-158.md)
 BACKLOG-159,Delete Deprecated PermissionsScreen.tsx,refactor,Medium,Obsolete,-,~10K,-,-,2026-01-04,,[BACKLOG-159.md](BACKLOG-159.md)
 BACKLOG-160,Consolidate last_exported_at/on Column Naming,refactor,Low,Pending,-,~5K,-,-,2026-01-17,,-
+BACKLOG-161,Agent Anti-Loop Enforcement (Exploration + Verification),infra,Critical,Pending,-,-,-,-,2026-01-23,,[BACKLOG-161.md](items/BACKLOG-161.md)
+BACKLOG-162,Fix CI Validate PR Metrics Bash Escaping,infra,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-162.md](items/BACKLOG-162.md)
+BACKLOG-163,Edit Active Transactions,ui,Medium,Pending,SPRINT-026,-,-,-,2026-01-23,,[BACKLOG-163.md](items/BACKLOG-163.md)
+BACKLOG-164,"Rename ""Bulk Edit"" to ""Edit"" in Transaction List",ui,Low,Pending,-,-,-,-,2026-01-23,,[BACKLOG-164.md](items/BACKLOG-164.md)
 BACKLOG-165,Duplicate Contacts in Import Contacts Page,ui,Medium,Pending,-,~20K,-,-,2026-01-05,,[BACKLOG-165.md](BACKLOG-165.md)
 BACKLOG-166,"Platform Detection Returns ""unknown"" in Renderer",service,Medium,Pending,-,~15K,-,-,2026-01-05,,[BACKLOG-166.md](BACKLOG-166.md)
 BACKLOG-167,Restrict Status Options for Manual Transactions,feature,Low,Completed,-,~15K,-,Already implemented in BulkActionBar.tsx,2026-01-05,2026-01-22,[BACKLOG-167.md](BACKLOG-167.md)
@@ -157,6 +172,9 @@ BACKLOG-171,Contacts Not Pre-Populated When Editing Transaction,fix,High,Obsolet
 BACKLOG-172,macOS Messages Import,feature,High,Pending,-,~25K,-,-,2026-01-05,,[BACKLOG-172.md](items/BACKLOG-172.md)
 BACKLOG-173,Contact-First AttachMessagesModal Interface,ui,High,Completed,-,~40K,-,"TASK-989, PR #353",2026-01-05,2026-01-09,[BACKLOG-173.md](BACKLOG-173.md)
 BACKLOG-174,"Redesign ""Start New Audit"" Flow",ui,High,Obsolete,-,~30K,-,-,2026-01-05,,[BACKLOG-174.md](BACKLOG-174.md)
+BACKLOG-175,Missing Recent Messages in AttachMessagesModal,fix,High,Pending,-,-,-,-,2026-01-23,,[BACKLOG-175.md](items/BACKLOG-175.md)
+BACKLOG-176,Show New Messages Count Instead of Total During Import,ui,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-176.md](items/BACKLOG-176.md)
+BACKLOG-177,Clean Up Dashboard Import Status Display,ui,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-177.md](items/BACKLOG-177.md)
 BACKLOG-178,Auto-Linked Messages Display in Transaction Details,feature,High,Completed,SPRINT-027,~20K,-,"TASK-990, PR #358",2026-01-09,2026-01-10,-
 BACKLOG-179,Manual Thread Attach/Unlink in Messages Tab,feature,High,Completed,SPRINT-027,~30K,-,"TASK-991, PR #359",2026-01-09,2026-01-10,-
 BACKLOG-180,Message Bubble Direction Fix,ui,Medium,Completed,SPRINT-027,~10K,-,"TASK-992, PR #356",2026-01-09,2026-01-10,-
@@ -178,6 +196,7 @@ BACKLOG-195,Add Test Coverage for Large Hooks,test,Medium,Pending,-,~50K,-,-,202
 BACKLOG-196,Implement or Remove Settings.tsx TODOs,ui,Low,Pending,-,~20K,-,-,2026-01-11,,[BACKLOG-196.md](BACKLOG-196.md)
 BACKLOG-197,Enable Stricter TypeScript Rules,config,Low,Pending,-,~25K,-,-,2026-01-11,,[BACKLOG-197.md](BACKLOG-197.md)
 BACKLOG-198,Decompose Large Component Files,refactor,Low,Pending,-,~60K,-,-,2026-01-11,,[BACKLOG-198.md](BACKLOG-198.md)
+BACKLOG-199,TypeScript Global Window Type Updates Not Recognized,feature,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-199.md](items/BACKLOG-199.md)
 BACKLOG-200,Contacts import fails with email validation error,fix,Medium,Pending,-,~25K,-,-,2026-01-11,,[BACKLOG-200.md](BACKLOG-200.md)
 BACKLOG-201,"""00"" prefix appearing before iMessage text",fix,Medium,Completed,-,~5K,~180K,+3500%,2026-01-11,,[BACKLOG-201.md](BACKLOG-201.md)
 BACKLOG-202,Fix Test Regressions (contact-handlers/databaseService),test,Critical,Completed,SPRINT-037,~20K,-,[BACKLOG-202.md](BACKLOG-202.md),2026-01-11,,
@@ -209,13 +228,13 @@ BACKLOG-227,Show iMessage Attachments in Attachments Tab,ui,Medium,Pending,-,~30
 BACKLOG-228,UI Freeze When Viewing Messages to Attach,performance,High,Pending,SPRINT-049,~25K,-,Related to BACKLOG-173 regression,2026-01-14,,[BACKLOG-228.md](BACKLOG-228.md)
 BACKLOG-229,Binary Plist Text Still Showing as Garbage (CRITICAL),fix,Critical,Completed,SPRINT-036,~40K,~30K,-25%,2026-01-14,2026-01-14,PR #431 (TASK-1071)
 BACKLOG-230,NULL thread_id Investigation and Fix,fix,Medium,Completed,-,~20K,-,"Analysis complete; macOS orphans, not parser issue",2026-01-17,,[BACKLOG-230-null-thread-id-investigation.md](BACKLOG-230-null-thread-id-investigation.md)
+BACKLOG-230-null-thread-id-investigation,NULL thread_id Investigation and Fix,feature,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-230-null-thread-id-investigation.md](items/BACKLOG-230-null-thread-id-investigation.md)
 BACKLOG-231,Fix Failing iosMessagesParser Tests (20 tests),test,Medium,Pending,-,~30K,-,Mock database setup issues,2026-01-15,,[BACKLOG-231.md](BACKLOG-231.md)
 BACKLOG-232,Fix Disabled webSecurity in OAuth Popup Windows,security,Critical,Completed,-,~40K,-,"googleAuthHandlers.ts, microsoftAuthHandlers.ts",2026-01-17,,PR #433
 BACKLOG-233,Add Global Unhandled Rejection Handlers,service,Critical,Completed,-,~25K,-,"main.ts, main.tsx missing process.on handlers",2026-01-17,,PR #435
 BACKLOG-234,Fix Race Condition in Sync Orchestrator,service,Critical,Pending,-,~50K,-,Concurrent sync state conflicts,2026-01-17,,-
 BACKLOG-235,Patch jsdiff DoS Vulnerability,security,Critical,Completed,-,~10K,-,npm audit vulnerability,2026-01-17,,PR #434
 BACKLOG-236,Fix Incomplete PII Masking in LLM Pipeline,security,Critical,Completed,-,~45K,-,Content sent to LLM may expose PII,2026-01-17,,PR #436
-BACKLOG-287,Dashboard Visible After Logout,security,Critical,Completed,-,~30K,-,Auth state not cleared on logout,2026-01-15,2026-01-16,PR #437
 BACKLOG-237,Reduce Transactions.tsx State Complexity (17 useState),refactor,Critical,Completed,TASK-1159,~60K,~25K,58% under estimate,2026-01-17,2026-01-22,feature/BACKLOG-237-reduce-transactions-state
 BACKLOG-238,Break Down Oversized Flow Hooks,refactor,Critical,Pending,-,~100K,-,"useEmailHandlers 382 lines, useAuthFlow 233 lines",2026-01-17,,-
 BACKLOG-239,Reduce Direct Database Access Pattern,refactor,Critical,Pending,-,~120K,-,45 instances of const db = pattern,2026-01-17,,-
@@ -265,12 +284,15 @@ BACKLOG-282,Document Error Handling Patterns,docs,Medium,Pending,-,~30K,-,Error 
 BACKLOG-283,Document Configuration/Environment Setup,docs,Medium,Pending,-,~25K,-,Setup documentation gaps,2026-01-17,,-
 BACKLOG-284,Implement Dependency Injection for Services,refactor,Low,Pending,-,~120K,-,Manual service instantiation,2026-01-17,,-
 BACKLOG-285,Add Data Abstraction Layer for Components,refactor,Low,Pending,-,~100K,-,Direct data access in components,2026-01-17,,-
+BACKLOG-286,Unify Chat Card and Group Chat Card Components,ui,Low,Completed,SPRINT-040,~40K,~70K,"PRs #442,445-448",2026-01-15,2026-01-17,-
+BACKLOG-287,Dashboard Visible After Logout,security,Critical,Completed,-,~30K,-,Auth state not cleared on logout,2026-01-15,2026-01-16,PR #437
+BACKLOG-288,Simplify Dashboard Button Labels,ui,Low,Completed,SPRINT-040,~10K,~20K,"PRs #441,443",2026-01-15,2026-01-17,-
 BACKLOG-289,Unified Notification System,ui,Medium,Completed,SPRINT-040,~50K,~40K,PR #439,2026-01-16,2026-01-17,-
 BACKLOG-290,Reusable Sync Progress Component,ui,Medium,Completed,SPRINT-040,~40K,~45K,PR #440,2026-01-16,2026-01-17,-
+BACKLOG-291,Enhanced Error Diagnostics Report,feature,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-291.md](items/BACKLOG-291.md)
+BACKLOG-292,Resolve Preload Script __DEV__ Undefined Error,infra,Medium,Completed,-,~10K,~5K,-50%,2026-01-16,2026-01-18,PR #438
 BACKLOG-293,Duplicate macOS Messages Sync on Dashboard Load,fix,Medium,Completed,SPRINT-041,~20K,~15K,-25%,2026-01-16,2026-01-17,PR (TASK-1113)
 BACKLOG-294,Extract Reusable DashboardActionCard Component,refactor,Low,Pending,-,~15K,-,DRY refactor for dashboard buttons,2026-01-16,,[BACKLOG-294.md](BACKLOG-294.md)
-BACKLOG-286,Unify Chat Card and Group Chat Card Components,ui,Low,Completed,SPRINT-040,~40K,~70K,"PRs #442,445-448",2026-01-15,2026-01-17,-
-BACKLOG-288,Simplify Dashboard Button Labels,ui,Low,Completed,SPRINT-040,~10K,~20K,"PRs #441,443",2026-01-15,2026-01-17,-
 BACKLOG-295,Transaction Header Responsive Layout,ui,Medium,Completed,SPRINT-040,~18K,~18K,PR #449,2026-01-17,2026-01-17,-
 BACKLOG-296,Database Schema Alignment - Service Updates,refactor,High,Completed,SPRINT-042,~40K,~35K,-12%,2026-01-17,,PR #462
 BACKLOG-297,Startup Error Handling - User-Friendly Failure Screen,ui,Medium,Pending,-,~50K,-,Timeout + error screen on init failure,2026-01-17,,[BACKLOG-297.md](BACKLOG-297.md)
@@ -282,7 +304,6 @@ BACKLOG-302,Service Pattern Audit - Coordination Refactoring,refactor,Medium,Pen
 BACKLOG-303,Centralize dotenv.config() in supabaseService.ts,security,Low,Completed,-,~3K,~3K,0%,2026-01-18,,PR #466
 BACKLOG-304,Fix ESLint react-hooks/exhaustive-deps Rule Not Found,infra,Low,Completed,-,~3K,~1K,-67%,2026-01-18,2026-01-18,PR #468
 BACKLOG-305,Fix autoDetection.test.tsx Button Selector Failure,test,Medium,Completed,-,~5K,~1K,-80%,2026-01-18,2026-01-18,PR #468
-BACKLOG-292,Resolve Preload Script __DEV__ Undefined Error,infra,Medium,Completed,-,~10K,~5K,-50%,2026-01-16,2026-01-18,PR #438
 BACKLOG-306,Hide Phone/Email in Contact Selection Modal,ui,Low,Completed,SPRINT-045,~8K,~8K,0%,2026-01-18,2026-01-19,PR #472
 BACKLOG-307,Contact Select Modal Missing Message-Derived Contacts,fix,High,Completed,SPRINT-045,~45K,~35K,-22%,2026-01-18,2026-01-19,PR #473
 BACKLOG-309,Import Contact Flow - Auto-Select and Refresh Issues,fix,High,Completed,SPRINT-045,~25K,~25K,0%,2026-01-18,2026-01-19,PR #474
@@ -306,6 +327,8 @@ BACKLOG-332,Audit Package Missing Attachments and Text Messages,feature,High,Com
 BACKLOG-333,Gray Out Unimplemented Export Options with Coming Soon Label,ui,Low,Pending,-,-,-,-,2026-01-19,,[BACKLOG-333.md](BACKLOG-333.md)
 BACKLOG-334,Export Settings - Persist Default Export Options and Format,feature,Medium,Pending,-,-,-,-,2026-01-19,,[BACKLOG-334.md](BACKLOG-334.md)
 BACKLOG-335,Enforce Transaction Start Date with Historical Message Filtering,service,High,Pending,SPRINT-049,-,-,-,2026-01-19,,[BACKLOG-335.md](BACKLOG-335.md)
+BACKLOG-336,Export Text Message Attachments with Message References,feature,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-336.md](items/BACKLOG-336.md)
+BACKLOG-337,"Show Agent Name Instead of ""You"" in PDF Exports",feature,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-337.md](items/BACKLOG-337.md)
 BACKLOG-338,Google Profile Image Display Issue,ui,Low,Pending,-,-,-,-,2026-01-20,,[BACKLOG-338.md](items/BACKLOG-338.md)
 BACKLOG-339,Export Progress Indicator with Time Estimate,ui,Low,Pending,-,-,-,-,2026-01-20,,[BACKLOG-339.md](items/BACKLOG-339.md)
 BACKLOG-340,Show/Hide Messages Outside Date Range,ui,Medium,Pending,-,-,-,-,2026-01-17,,[BACKLOG-340.md](items/BACKLOG-340.md)
@@ -332,6 +355,13 @@ BACKLOG-360,Default Export to Audit Package - One PDF as Coming Soon,ui,High,Pen
 BACKLOG-361,Remove Progress Bar from Audit Package Exporter,ui,Low,Pending,-,-,-,-,2026-01-21,,[BACKLOG-361.md](items/BACKLOG-361.md)
 BACKLOG-362,Increase Export Success Popup Visibility Duration,ui,Medium,Pending,SPRINT-049,-,-,-,2026-01-21,,[BACKLOG-362.md](items/BACKLOG-362.md)
 BACKLOG-363,Reorganize Transaction Details Tabs - Move Emails to Own Tab,ui,High,Completed,-,-,-,Already implemented - TransactionEmailsTab.tsx exists,2026-01-21,2026-01-22,[BACKLOG-363.md](items/BACKLOG-363.md)
+BACKLOG-364,Remove Duplicate transaction_participants Table,technical debt,Critical,Pending,-,-,-,-,2026-01-23,,[BACKLOG-364.md](items/BACKLOG-364.md)
+BACKLOG-365,Fix feedbackService Table Reference Mismatch,bug,Critical,Pending,-,-,-,-,2026-01-23,,[BACKLOG-365.md](items/BACKLOG-365.md)
+BACKLOG-366,Verify TransactionStatus Type/Schema Alignment,bug,Critical,Pending,-,-,-,-,2026-01-23,,[BACKLOG-366.md](items/BACKLOG-366.md)
+BACKLOG-367,Consolidate Duplicate Export Date Columns,technical debt,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-367.md](items/BACKLOG-367.md)
+BACKLOG-368,Create transactionStageHistoryDbService,technical debt,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-368.md](items/BACKLOG-368.md)
+BACKLOG-369,Align Audit Log Schema Between Migration and Main Schema,technical debt,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-369.md](items/BACKLOG-369.md)
+BACKLOG-370,Add Unique Constraint for Thread-Based Communication Links,data integrity,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-370.md](items/BACKLOG-370.md)
 BACKLOG-371,Contact Update Sync and Re-link Messages,feature,High,Pending,SPRINT-049,-,-,-,2026-01-21,,[BACKLOG-371.md](items/BACKLOG-371.md)
 BACKLOG-372,Switch Mac to iPhone Backup for Messages/Contacts,architecture,High,Pending,-,-,-,-,2026-01-21,,[BACKLOG-372.md](items/BACKLOG-372.md)
 BACKLOG-373,Android Device Support,feature,High,Pending,-,~150K,-,-,2026-01-21,,[BACKLOG-373.md](items/BACKLOG-373.md)
@@ -363,6 +393,32 @@ BACKLOG-398,Portal - Dashboard + Submission List,ui,Critical,Pending,SPRINT-050,
 BACKLOG-399,Portal - Submission Detail View,ui,Critical,Pending,SPRINT-050,~35K,-,-,2026-01-22,,[BACKLOG-399.md](items/BACKLOG-399.md)
 BACKLOG-400,Portal - Review Actions (Approve/Reject/Changes),feature,Critical,Pending,SPRINT-050,~25K,-,-,2026-01-22,,[BACKLOG-400.md](items/BACKLOG-400.md)
 BACKLOG-401,Portal - Message & Attachment Viewer,ui,High,Pending,SPRINT-050,~30K,-,-,2026-01-22,,[BACKLOG-401.md](items/BACKLOG-401.md)
+BACKLOG-402,File Size Limits per Plan Tier,feature,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-402.md](items/BACKLOG-402.md)
+BACKLOG-403,Malware Scanning on Upload,feature,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-403.md](items/BACKLOG-403.md)
+BACKLOG-404,Internal Admin Panel for User Management,feature,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-404.md](items/BACKLOG-404.md)
+BACKLOG-405,Fix RLS Policies and Auth Triggers,feature,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-405.md](items/BACKLOG-405.md)
+BACKLOG-406,Fix Apple Signing Certificate for macOS Release,infrastructure,High,Pending,SPRINT-052,~5K,-,-,2026-01-22,,[BACKLOG-406.md](items/BACKLOG-406.md)
+BACKLOG-409,Align TypeScript Types with SQLite Schema,refactor,High,Completed,SPRINT-051,~15K,-,-,2026-01-22,2026-01-23,[BACKLOG-409.md](items/BACKLOG-409.md)
+BACKLOG-410,Add AI Detection Columns to SQLite,schema,High,Pending,-,~10K,-,-,2026-01-23,,[BACKLOG-410.md](items/BACKLOG-410.md)
+BACKLOG-411,Update Base schema.sql,refactor,Medium,Completed,SPRINT-051,~10K,-,-,2026-01-22,2026-01-23,[BACKLOG-411.md](items/BACKLOG-411.md)
+BACKLOG-412,Restore Closed Filter Tab,ui,High,Completed,SPRINT-051,~8K,-,-,2026-01-22,2026-01-23,[BACKLOG-412.md](items/BACKLOG-412.md)
+BACKLOG-413,Remove detection_status from Filter Logic,refactor,Medium,Pending,-,~5K,-,-,2026-01-23,,[BACKLOG-413.md](items/BACKLOG-413.md)
+BACKLOG-414,Add Visual Separator Between Status Domains,ui,Low,Pending,-,~5K,-,-,2026-01-23,,[BACKLOG-414.md](items/BACKLOG-414.md)
+BACKLOG-415,Submit Modal Shows Wrong Message Count,bug fix,Medium,Pending,SPRINT-050,~5K tokens,-,-,2026-01-23,,[BACKLOG-415.md](items/BACKLOG-415.md)
+BACKLOG-416,Submitted Transactions Show as Active in Filter,bug fix,Medium,Pending,SPRINT-051,~15K tokens,-,-,2026-01-23,,[BACKLOG-416.md](items/BACKLOG-416.md)
+BACKLOG-417,Display Price Fields in Transaction Summary,ui,Medium,Pending,-,~8K tokens,-,-,2026-01-23,,[BACKLOG-417.md](items/BACKLOG-417.md)
+BACKLOG-418,"Redesign Contact Selection UX (Select First, Assign Roles Second)",ux redesign,Medium,Pending,SPRINT-051,~40K tokens,-,-,2026-01-23,,[BACKLOG-418.md](items/BACKLOG-418.md)
+BACKLOG-419,Audit and Restore RLS Policies,security,High,Completed,SPRINT-051,~10K,-,-,2026-01-22,2026-01-23,[BACKLOG-419.md](items/BACKLOG-419.md)
+BACKLOG-420,Broker Portal - Attachments Not Displaying,bug fix,Medium,Pending,SPRINT-050,~15K tokens,-,-,2026-01-23,,[BACKLOG-420.md](items/BACKLOG-420.md)
+BACKLOG-421,Broker Portal - Request Changes Text Color is White,bug fix,Medium,Pending,SPRINT-050,~3K tokens,-,-,2026-01-23,,[BACKLOG-421.md](items/BACKLOG-421.md)
+BACKLOG-422,Fix Broker Portal Review Actions,fix,Critical,Completed,SPRINT-051,~20K,-,-,2026-01-22,2026-01-23,[BACKLOG-422.md](items/BACKLOG-422.md)
+BACKLOG-423,Fix Transactions.test.tsx Missing Mock,test,Medium,Completed,SPRINT-051,~5K,-,-,2026-01-22,2026-01-23,[BACKLOG-423.md](items/BACKLOG-423.md)
+BACKLOG-424,Broker Portal Submission List UX Tweaks,ux,Low,Pending,SPRINT-051,-,-,-,2026-01-23,,[BACKLOG-424.md](items/BACKLOG-424.md)
+BACKLOG-425,Test Desktop Status Sync,test,High,Completed,SPRINT-051,~10K,-,-,2026-01-22,2026-01-23,[BACKLOG-425.md](items/BACKLOG-425.md)
+BACKLOG-426,License Type Database Schema Support,schema,Critical,Completed,SPRINT-051,~20K,-,-,2026-01-22,2026-01-23,[BACKLOG-426.md](items/BACKLOG-426.md)
+BACKLOG-427,License-Aware UI Components,ui,Critical,Completed,SPRINT-051,~35K,-,-,2026-01-22,2026-01-23,[BACKLOG-427.md](items/BACKLOG-427.md)
+BACKLOG-428,License Context Provider,service,Critical,Completed,SPRINT-051,~25K,-,-,2026-01-22,2026-01-23,[BACKLOG-428.md](items/BACKLOG-428.md)
+BACKLOG-429,Team Workflow E2E Testing,test,Critical,Completed,SPRINT-051,~25K,-,-,2026-01-22,2026-01-23,[BACKLOG-429.md](items/BACKLOG-429.md)
 BACKLOG-452,Admin User Management UI,ui,Medium,Pending,-,~30K,-,-,2026-01-23,,[BACKLOG-452.md](items/BACKLOG-452.md)
 BACKLOG-453,Multi-org broker auth fix,fix,Critical,Completed,SPRINT-051,~10K,-,-,2026-01-23,2026-01-23,[BACKLOG-453.md](items/BACKLOG-453.md)
 BACKLOG-454,Azure AD OAuth email config,auth,Critical,Pending,SPRINT-052,~20K,-,-,2026-01-23,,[BACKLOG-454.md](items/BACKLOG-454.md)
@@ -370,18 +426,3 @@ BACKLOG-455,RLS enablement on tables,security,Critical,Completed,SPRINT-051,~5K,
 BACKLOG-456,Unify Loading Animation UI,ui,Low,Pending,-,~10K,-,-,2026-01-23,,[BACKLOG-456.md](items/BACKLOG-456.md)
 BACKLOG-457,Sync Emails must fetch from provider,feature,Critical,Pending,SPRINT-052,~50K,-,-,2026-01-23,,[BACKLOG-457.md](items/BACKLOG-457.md)
 BACKLOG-458,Email connection status mismatch,fix,High,Pending,SPRINT-052,~30K,-,-,2026-01-23,,[BACKLOG-458.md](items/BACKLOG-458.md)
-BACKLOG-406,Fix Apple Signing Certificate for macOS Release,infrastructure,High,Pending,SPRINT-052,~5K,-,-,2026-01-22,,[BACKLOG-406.md](items/BACKLOG-406.md)
-BACKLOG-409,Align TypeScript Types with SQLite Schema,refactor,High,Completed,SPRINT-051,~15K,-,-,2026-01-22,2026-01-23,[BACKLOG-409.md](items/BACKLOG-409.md)
-BACKLOG-411,Update Base schema.sql,refactor,Medium,Completed,SPRINT-051,~10K,-,-,2026-01-22,2026-01-23,[BACKLOG-411.md](items/BACKLOG-411.md)
-BACKLOG-412,Restore Closed Filter Tab,ui,High,Completed,SPRINT-051,~8K,-,-,2026-01-22,2026-01-23,[BACKLOG-412.md](items/BACKLOG-412.md)
-BACKLOG-419,Audit and Restore RLS Policies,security,High,Completed,SPRINT-051,~10K,-,-,2026-01-22,2026-01-23,[BACKLOG-419.md](items/BACKLOG-419.md)
-BACKLOG-422,Fix Broker Portal Review Actions,fix,Critical,Completed,SPRINT-051,~20K,-,-,2026-01-22,2026-01-23,[BACKLOG-422.md](items/BACKLOG-422.md)
-BACKLOG-423,Fix Transactions.test.tsx Missing Mock,test,Medium,Completed,SPRINT-051,~5K,-,-,2026-01-22,2026-01-23,[BACKLOG-423.md](items/BACKLOG-423.md)
-BACKLOG-425,Test Desktop Status Sync,test,High,Completed,SPRINT-051,~10K,-,-,2026-01-22,2026-01-23,[BACKLOG-425.md](items/BACKLOG-425.md)
-BACKLOG-426,License Type Database Schema Support,schema,Critical,Completed,SPRINT-051,~20K,-,-,2026-01-22,2026-01-23,[BACKLOG-426.md](items/BACKLOG-426.md)
-BACKLOG-427,License-Aware UI Components,ui,Critical,Completed,SPRINT-051,~35K,-,-,2026-01-22,2026-01-23,[BACKLOG-427.md](items/BACKLOG-427.md)
-BACKLOG-428,License Context Provider,service,Critical,Completed,SPRINT-051,~25K,-,-,2026-01-22,2026-01-23,[BACKLOG-428.md](items/BACKLOG-428.md)
-BACKLOG-429,Team Workflow E2E Testing,test,Critical,Completed,SPRINT-051,~25K,-,-,2026-01-22,2026-01-23,[BACKLOG-429.md](items/BACKLOG-429.md)
-BACKLOG-410,Add AI Detection Columns to SQLite,schema,High,Pending,-,~10K,-,-,2026-01-23,,[BACKLOG-410.md](items/BACKLOG-410.md)
-BACKLOG-413,Remove detection_status from Filter Logic,refactor,Medium,Pending,-,~5K,-,-,2026-01-23,,[BACKLOG-413.md](items/BACKLOG-413.md)
-BACKLOG-414,Add Visual Separator Between Status Domains,ui,Low,Pending,-,~5K,-,-,2026-01-23,,[BACKLOG-414.md](items/BACKLOG-414.md)
