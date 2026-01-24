@@ -47,7 +47,21 @@ export function ReviewActions({ submission, disabled }: ReviewActionsProps) {
     try {
       const {
         data: { user },
+        error: authError,
       } = await supabase.auth.getUser();
+
+      // Check for auth errors
+      if (authError) {
+        console.error('Auth error getting user:', authError);
+        throw new Error('Authentication failed. Please refresh the page and try again.');
+      }
+
+      if (!user) {
+        console.error('No user found in session');
+        throw new Error('You must be logged in to review submissions.');
+      }
+
+      console.log('Review action by user:', user.id, 'on submission:', submission.id);
 
       const statusMap: Record<Exclude<ReviewAction, null>, string> = {
         approve: 'approved',
@@ -58,17 +72,28 @@ export function ReviewActions({ submission, disabled }: ReviewActionsProps) {
       const newStatus = statusMap[action];
       const now = new Date().toISOString();
 
-      const { error: updateError } = await supabase
+      const { error: updateError, data: updateData } = await supabase
         .from('transaction_submissions')
         .update({
           status: newStatus,
-          reviewed_by: user?.id,
+          reviewed_by: user.id,
           reviewed_at: now,
           review_notes: notes || null,
         })
-        .eq('id', submission.id);
+        .eq('id', submission.id)
+        .select();
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('Supabase update error:', updateError);
+        // Provide more specific error messages
+        if (updateError.code === 'PGRST301' || updateError.message?.includes('permission')) {
+          throw new Error('Permission denied. You may not have broker access for this organization.');
+        }
+        throw updateError;
+      }
+
+      // Log success for debugging
+      console.log('Review action successful:', updateData);
 
       // Add a comment for the record if notes provided
       if (notes && user) {
@@ -88,7 +113,9 @@ export function ReviewActions({ submission, disabled }: ReviewActionsProps) {
       setShowConfirm(false);
     } catch (err) {
       console.error('Review error:', err);
-      setError('Failed to submit review. Please try again.');
+      // Show more specific error message if available
+      const errorMessage = err instanceof Error ? err.message : 'Failed to submit review. Please try again.';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
