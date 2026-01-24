@@ -1,8 +1,8 @@
 # Sprint Plan: SPRINT-053 - License Enhancement & AI Gating Verification
 
 **Created**: 2026-01-23
-**Updated**: 2026-01-23
-**Status**: Planning
+**Updated**: 2026-01-24
+**Status**: Partial (core items merged, AI gating incomplete)
 **Goal**: Complete license UI enhancements and verify AI feature gating
 
 ---
@@ -281,29 +281,40 @@ Before execution, SR Engineer must validate:
 | Phase | Task | Backlog | Status | Engineer | PR | Actual Tokens |
 |-------|------|---------|--------|----------|-----|---------------|
 | 1 | TASK-TBD | BACKLOG-410 | Pending | - | - | - |
-| 2 | TASK-1176 | BACKLOG-459 | Pending | - | - | - |
-| 3 | TASK-1177 | BACKLOG-462 | Pending | - | - | - |
+| 2 | TASK-1176 | BACKLOG-459 | **MERGED** | Claude | #569 | - |
+| 3 | TASK-1177 | BACKLOG-462 | **PARTIAL** | Claude | #570 | - |
 | 3 | TASK-TBD | BACKLOG-081 | Pending | - | - | - |
+
+### Notes
+- BACKLOG-459 (Team Export): Fully complete, team users see both Submit and Export
+- BACKLOG-462 (AI Gating): Settings section gated, but modal text/Manual pill/Rejected status NOT gated yet
+- Added dev toggle for AI add-on testing: `window.api.license.devToggleAIAddon(userId, true/false)`
 
 ---
 
 ## End-of-Sprint Validation Checklist
 
-- [ ] All tasks merged to develop
-- [ ] All CI checks passing
+- [x] Core tasks merged to develop (459, 462 partial)
+- [ ] All CI checks passing (App.test.tsx has pre-existing failures)
 
-**License Enhancement (TASK-1176):**
-- [ ] Team users see Submit button (primary)
-- [ ] Team users see Export button (secondary)
-- [ ] Individual users see only Export
-- [ ] Both buttons functional
+**License Enhancement (TASK-1176 / PR #569):** ✅ PASS
+- [x] Team users see Submit button (primary)
+- [x] Team users see Export button (secondary)
+- [x] Individual users see only Export
+- [x] Both buttons functional
 
-**AI Verification (TASK-1177):**
-- [ ] Auto-detection hidden without AI add-on
-- [ ] AI consent hidden without AI add-on
-- [ ] AI in new audit hidden without AI add-on
-- [ ] AI filters hidden without AI add-on
-- [ ] All features appear with AI add-on enabled
+**AI Verification (TASK-1177 / PR #570):** ⚠️ PARTIAL
+- [ ] Auto-detection hidden without AI add-on (not verified)
+- [x] AI consent in Settings hidden without AI add-on
+- [ ] AI in new audit modal hidden without AI add-on (NOT IMPLEMENTED)
+- [ ] Manual/AI-detected pill on transaction cards (NOT IMPLEMENTED)
+- [ ] Rejected status badge (NOT IMPLEMENTED)
+- [x] All features appear with AI add-on enabled
+
+**Remaining Work for BACKLOG-462:**
+- Modal subtitle "Review AI-detected transactions or create one manually" should hide without AI
+- "Manual" pill tag on transaction cards should hide without AI
+- "Rejected" status on transaction cards should hide without AI
 
 ---
 
