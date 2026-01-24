@@ -78,6 +78,13 @@ ALTER TABLE users
   ADD COLUMN organization_id TEXT;
 ```
 
+### Device Limits
+
+**Important:** Each license allows a maximum of 1 physical device (phone) per user.
+- Supersedes BACKLOG-020 (Device UUID Licensing) and BACKLOG-021 (License Management System)
+- Device UUID should be tracked to enforce this limit
+- If user tries to connect a second device, prompt them to deactivate the first
+
 ### Upgrade Flow
 
 When Individual user joins a Team:

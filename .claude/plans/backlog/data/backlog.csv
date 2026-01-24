@@ -4,22 +4,22 @@ BACKLOG-002,Code-Split Large JS Bundle,infra,Medium,Pending,-,-,-,-,2025-12-15,,
 BACKLOG-003,Improve First-Sync Time Estimation,ui,Low,Pending,-,-,-,-,2025-12-15,,[BACKLOG-003.md](BACKLOG-003.md)
 BACKLOG-004,Add Sync History/Logs Screen,ui,Low,Pending,-,-,-,-,2025-12-15,,[BACKLOG-004.md](BACKLOG-004.md)
 BACKLOG-005,Implement databaseService with LLM-Ready Patterns,service,Medium,Pending,-,-,-,-,2025-12-15,,[BACKLOG-005.md](BACKLOG-005.md)
-BACKLOG-006,Dark Mode (Match System Settings),ui,Medium,Pending,-,-,-,-,2025-12-15,,[BACKLOG-006.md](BACKLOG-006.md)
+BACKLOG-006,Dark Mode (Match System Settings),ui,Medium,Deferred,-,-,-,-,2025-12-15,,[BACKLOG-006.md](BACKLOG-006.md)
 BACKLOG-007,Add iPhone Sync Integration Tests,test,Medium,Pending,-,-,-,-,2025-12-15,,[BACKLOG-007.md](BACKLOG-007.md)
-BACKLOG-008,Redesign New Transaction Flow,ui,High,Pending,-,-,-,-,2025-12-15,,[BACKLOG-008.md](BACKLOG-008.md)
-BACKLOG-009,Auth Popup Close Handler,ui,High,Pending,-,-,-,-,2025-12-15,,[BACKLOG-009.md](BACKLOG-009.md)
+BACKLOG-008,Redesign New Transaction Flow,ui,High,Completed,-,-,-,-,2025-12-15,2026-01-23,[BACKLOG-008.md](BACKLOG-008.md)
+BACKLOG-009,Auth Popup Close Handler,ui,High,Obsolete,-,-,-,-,2025-12-15,,[BACKLOG-009.md](BACKLOG-009.md)
 BACKLOG-010,Default App Window to Full Screen,ui,Low,Pending,-,-,-,-,2025-12-15,,[BACKLOG-010.md](BACKLOG-010.md)
-BACKLOG-011,Manually Add Missing Emails to Audit,ui,Medium,Pending,-,-,-,-,2025-12-15,,-
-BACKLOG-012,Manually Add Missing Texts to Audit,ui,Medium,Pending,-,-,-,-,2025-12-15,,-
+BACKLOG-011,Manually Add Missing Emails to Audit,ui,Medium,Completed,-,-,-,-,2025-12-15,2026-01-23,-
+BACKLOG-012,Manually Add Missing Texts to Audit,ui,Medium,Completed,-,-,-,-,2025-12-15,2026-01-23,-
 BACKLOG-013,Duplicate Transaction Detection,service,High,Pending,-,-,-,-,2025-12-15,,-
 BACKLOG-014,Update Joyride Demo for New Users,ui,Medium,Completed,SPRINT-011,~35K,~18K,-72%,2025-12-15,2026-01-01,[BACKLOG-014.md](BACKLOG-014.md)
-BACKLOG-015,Display Last Sync Time in UI,ui,Medium,Pending,-,-,-,-,2025-12-15,,-
+BACKLOG-015,Display Last Sync Time in UI,ui,Medium,Completed,-,-,-,-,2025-12-15,2026-01-23,-
 BACKLOG-016,Refactor Contact Import,refactor,High,Pending,-,-,-,-,2025-12-15,,-
 BACKLOG-017,Naming Convention Documentation,docs,Low,Pending,-,-,-,-,2025-12-15,,-
 BACKLOG-018,Smart Contact Sync,service,High,Pending,-,-,-,-,2025-12-15,,-
 BACKLOG-019,Returning User Experience,ui,Medium,Pending,-,-,-,-,2025-12-15,,-
-BACKLOG-020,Device UUID Licensing,infra,High,Pending,-,-,-,-,2025-12-15,,-
-BACKLOG-021,License Management System,infra,High,Pending,-,-,-,-,2025-12-15,,-
+BACKLOG-020,Device UUID Licensing,infra,High,Obsolete,-,-,-,-,2025-12-15,,-
+BACKLOG-021,License Management System,infra,High,Obsolete,-,-,-,-,2025-12-15,,-
 BACKLOG-022,Minimizable iPhone Sync Modal,ui,Medium,Pending,-,-,-,-,2025-12-15,,-
 BACKLOG-023,Detailed Sync Progress,ui,High,Pending,-,-,-,-,2025-12-15,,-
 BACKLOG-024,Auto-Start Sync on Launch,service,Medium,Pending,-,-,-,-,2025-12-15,,-
@@ -32,21 +32,21 @@ BACKLOG-030,Message Parser Async Yielding,service,Critical,Completed,-,-,-,-,202
 BACKLOG-031,Incremental Backup Size Estimation,service,High,Pending,-,-,-,-,2025-12-15,,-
 BACKLOG-032,Handle Backup Already in Progress,service,Critical,Completed,SPRINT-014,-,-,"TASK-904, 910",2025-12-15,2026-01-02,-
 BACKLOG-033,Check Supabase Terms Acceptance,service,High,Pending,-,-,-,-,2025-12-15,,-
-BACKLOG-034,Phone Type Card Layout,ui,Medium,Pending,-,-,-,-,2025-12-15,,-
+BACKLOG-034,Phone Type Card Layout,ui,Medium,Completed,-,-,-,-,2025-12-15,2026-01-23,-
 BACKLOG-035,Remove Orphaned Table,schema,Critical,Completed,SPRINT-003,20-30K,~40K,+25%,2025-12-16,2025-12-17,[BACKLOG-035.md](BACKLOG-035.md)
 BACKLOG-036,Fix Sync Phase UI Text,ui,Medium,Pending,-,-,-,-,2025-12-15,,-
 BACKLOG-037,Don't Fail Sync on Disconnect,service,High,Pending,-,-,-,-,2025-12-15,,-
 BACKLOG-038,Schema Mismatch contacts.name,schema,Critical,Completed,SPRINT-003,40-60K,~30K,-36%,2025-12-16,2025-12-17,[BACKLOG-038.md](BACKLOG-038.md)
 BACKLOG-039,Schema Mismatch transactions.status,schema,Critical,Completed,SPRINT-003,40-60K,~100K,+100%,2025-12-16,2025-12-17,[BACKLOG-039.md](BACKLOG-039.md)
-BACKLOG-040,ContactsService macOS Paths,service,Medium,Pending,-,-,-,-,2025-12-15,,-
-BACKLOG-041,Create UX Engineer Agent,docs,Medium,Pending,-,-,-,-,2025-12-15,,-
-BACKLOG-042,Lookback Period Not Persistent,service,Medium,Pending,-,-,-,-,2025-12-15,,-
-BACKLOG-043,Settings Screen Not Scrollable,ui,Medium,Pending,-,-,-,-,2025-12-15,,-
+BACKLOG-040,ContactsService macOS Paths,service,Medium,Deferred,-,-,-,-,2025-12-15,,-
+BACKLOG-041,Create UX Engineer Agent,docs,Medium,Obsolete,-,-,-,-,2025-12-15,,-
+BACKLOG-042,Lookback Period Not Persistent,service,Medium,Completed,-,-,-,-,2025-12-15,2026-01-23,-
+BACKLOG-043,Settings Screen Not Scrollable,ui,Medium,Completed,-,-,-,-,2025-12-15,2026-01-23,-
 BACKLOG-044,Multiple Contacts Per Role,ui,Critical,Completed,-,-,-,Backend + UI implemented,2025-12-15,2025-12-20,
 BACKLOG-045,Block Contact Deletion,service,Critical,Completed,-,-,-,getTransactionsByContact + tests,2025-12-15,2025-12-20,
 BACKLOG-046,DB Init Circuit Breaker,service,Medium,Pending,-,-,-,-,2025-12-15,,-
 BACKLOG-047,Contact Deletion Query Fix,service,Medium,Pending,-,-,-,-,2025-12-15,,-
-BACKLOG-048,Transaction Edit Preserve Tab,ui,Medium,Pending,-,-,-,-,2025-12-15,,-
+BACKLOG-048,Transaction Edit Preserve Tab,ui,Medium,Completed,-,-,-,-,2025-12-15,2026-01-23,-
 BACKLOG-049,Communications Tab,ui,Medium,Pending,-,-,-,-,2025-12-15,,-
 BACKLOG-050,Attachments Tab,ui,Medium,Completed,SPRINT-010,-,-,Addressed by TASK-706,2025-12-15,,
 BACKLOG-051,Delete Comms/Attachments,service,Medium,Pending,-,-,-,-,2025-12-15,,-
@@ -54,7 +54,7 @@ BACKLOG-052,AI Transaction Timeline,ui,Medium,Pending,-,-,-,-,2025-12-15,,-
 BACKLOG-053,Manually Add Communications,ui,Medium,Pending,-,-,-,-,2025-12-15,,-
 BACKLOG-054,Render Email HTML,ui,Medium,Completed,SPRINT-010,~35K-55K,-,Addressed by TASK-701,2025-12-15,,
 BACKLOG-055,AI House Viewing Extraction,service,Medium,Pending,-,-,-,-,2025-12-15,,-
-BACKLOG-056,macOS Code Signing Fix,infra,High,Pending,-,-,-,-,2025-12-15,,-
+BACKLOG-056,macOS Code Signing Fix,infra,High,Obsolete,-,-,-,-,2025-12-15,,-
 BACKLOG-057,Login Auth Timeout Retry,service,Medium,Pending,-,-,-,-,2025-12-15,,-
 BACKLOG-058,Split databaseService.ts,refactor,Critical,Completed,SPRINT-002,200-300K,~135K,-54%,2025-12-15,2025-12-16,[BACKLOG-058.md](BACKLOG-058.md)
 BACKLOG-059,Fix Skipped Tests (27+),test,Critical,Completed,SPRINT-002,48-72K,~65K,-7%,2025-12-15,2025-12-16,[BACKLOG-059.md](BACKLOG-059.md)
@@ -169,7 +169,7 @@ BACKLOG-168,Transaction Bulk Edit Multi-Select Modal,ui,Medium,Pending,-,~20K,-,
 BACKLOG-169,Show in Folder Button for Exports,ui,Medium,Completed,SPRINT-028,~15K,-,"TASK-1008, PR #366",2026-01-05,2026-01-10,[BACKLOG-169.md](BACKLOG-169.md)
 BACKLOG-170,Messages Not Loading in Attach Modal,fix,Critical,Deferred,-,~5K,-,-,2026-01-05,,[BACKLOG-170.md](BACKLOG-170.md)
 BACKLOG-171,Contacts Not Pre-Populated When Editing Transaction,fix,High,Obsolete,-,~25K,-,Superseded by BACKLOG-210,2026-01-05,,[BACKLOG-171.md](items/BACKLOG-171.md)
-BACKLOG-172,macOS Messages Import,feature,High,Pending,-,~25K,-,-,2026-01-05,,[BACKLOG-172.md](items/BACKLOG-172.md)
+BACKLOG-172,macOS Messages Import,feature,High,Completed,-,~25K,-,-,2026-01-05,2026-01-23,[BACKLOG-172.md](items/BACKLOG-172.md)
 BACKLOG-173,Contact-First AttachMessagesModal Interface,ui,High,Completed,-,~40K,-,"TASK-989, PR #353",2026-01-05,2026-01-09,[BACKLOG-173.md](BACKLOG-173.md)
 BACKLOG-174,"Redesign ""Start New Audit"" Flow",ui,High,Obsolete,-,~30K,-,-,2026-01-05,,[BACKLOG-174.md](BACKLOG-174.md)
 BACKLOG-175,Missing Recent Messages in AttachMessagesModal,fix,High,Pending,-,-,-,-,2026-01-23,,[BACKLOG-175.md](items/BACKLOG-175.md)

@@ -81,3 +81,4 @@ https://appleid.apple.com/account/manage > Security > App-Specific Passwords
 
 - Release v2.0.0: https://github.com/5hdaniel/Mad/releases/tag/v2.0.0
 - SPRINT-049: Testing sprint that preceded this release
+- **Supersedes:** BACKLOG-056 (macOS Code Signing Fix) - marked obsolete
