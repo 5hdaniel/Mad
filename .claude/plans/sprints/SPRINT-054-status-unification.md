@@ -2,7 +2,7 @@
 
 **Created**: 2026-01-23
 **Updated**: 2026-01-24
-**Status**: Ready (includes carryover from SPRINT-052/053)
+**Status**: In Progress - Phase 0 (carryover items)
 **Goal**: Complete status unification between desktop and portal with dashboard notifications
 **Dependencies**: SPRINT-050 (B2B Portal foundation must be complete)
 
@@ -39,11 +39,11 @@ Before starting sprint work, engineers must:
 ## In Scope (9 Items)
 
 ### Phase 0: Carryover from SPRINT-052/053 (Must complete first)
-| ID | Title | Est. Tokens | Priority | Notes |
-|----|-------|-------------|----------|-------|
-| PR-573-FIX | Fix Onboarding Loop Bug | ~10K | P0 | Phone type selection loops infinitely |
-| BACKLOG-462-COMPLETE | Complete AI Gating | ~15K | P1 | Modal text, Manual pill, Rejected status |
-| APP-TEST-FIX | Fix App.test.tsx Failures | ~5K | P2 | Pre-existing on develop |
+| ID | Title | Est. Tokens | Priority | Task File | Notes |
+|----|-------|-------------|----------|-----------|-------|
+| PR-573-FIX | Fix Onboarding Loop Bug | ~10K | P0 | TASK-1180 | **COMPLETE** - Merged PR #573 |
+| BACKLOG-462-COMPLETE | Complete AI Gating | ~15K | P1 | TASK-1181 | Modal text, Manual pill, Rejected status |
+| APP-TEST-FIX | Fix App.test.tsx Failures | ~5K | P2 | TASK-TBD | Pre-existing on develop |
 
 **PR #573 Bug Details:**
 - Symptom: Phone type selection (iPhone/Android) loops back to same screen
@@ -421,8 +421,8 @@ Before execution, SR Engineer must validate:
 
 | Phase | Task | Backlog | Status | Engineer | PR | Actual Tokens |
 |-------|------|---------|--------|----------|-----|---------------|
-| 0 | PR-573-FIX | - | Pending | - | #573 | - |
-| 0 | BACKLOG-462-COMPLETE | BACKLOG-462 | Pending | - | - | - |
+| 0 | PR-573-FIX | - | **COMPLETE** | Foreground | #573 | ~15K |
+| 0 | BACKLOG-462-COMPLETE | BACKLOG-462 | **In Progress** | - | - | - |
 | 0 | APP-TEST-FIX | - | Pending | - | - | - |
 | 1 | TASK-TBD | BACKLOG-366 | Pending | - | - | - |
 | 1 | TASK-TBD | BACKLOG-416 | Pending | - | - | - |
@@ -432,7 +432,7 @@ Before execution, SR Engineer must validate:
 | 4 | TASK-1179 | BACKLOG-460 | Blocked | - | - | - |
 
 **Blockers**:
-- Phase 0: No blockers - must complete first
+- Phase 0: PR-573-FIX complete. BACKLOG-462 and APP-TEST-FIX remaining.
 - Phase 1: Can start after Phase 0 complete
 - Phase 2: Blocked by Phase 1 completion
 - Phase 3: Blocked by SPRINT-050 and Phase 2
