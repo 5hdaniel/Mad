@@ -12,7 +12,13 @@ Direct implementation is PROHIBITED. The correct workflow is:
 2. PM invokes `engineer` agent with `subagent_type="engineer"`
 3. Engineer agent implements, tracks metrics, creates PR
 4. PM invokes `senior-engineer-pr-lead` agent for PR review
-5. SR Engineer approves and merges
+5. SR Engineer approves PR
+6. **Engineer merges PR and verifies merge state is MERGED**
+7. Task marked complete only AFTER merge verified
+
+**CRITICAL:** Creating a PR is step 3 of 7, not the final step. Task is NOT complete until PR is MERGED.
+
+**PR Lifecycle Reference:** `.claude/docs/shared/pr-lifecycle.md`
 
 If you are reading this task file and about to implement it yourself, **STOP**.
 Use the Task tool to spawn the engineer agent instead.
@@ -278,3 +284,17 @@ SR Engineer Agent ID: <agent_id from Task tool output>
 **PR Number:** #XXX
 **Merge Commit:** <hash>
 **Merged To:** develop / int/xxx
+
+### Merge Verification (MANDATORY)
+
+**A task is NOT complete until the PR is MERGED (not just approved).**
+
+```bash
+# Verify merge state
+gh pr view <PR-NUMBER> --json state --jq '.state'
+# Must show: MERGED
+```
+
+- [ ] PR merge command executed: `gh pr merge <PR> --merge`
+- [ ] Merge verified: `gh pr view <PR> --json state` shows `MERGED`
+- [ ] Task can now be marked complete

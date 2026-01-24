@@ -13,9 +13,12 @@
 4. IMPLEMENT → Do the work
 5. SUMMARIZE → Complete task file Implementation Summary
 6. PR       → Create when ready for review
-7. SR REVIEW → Wait for SR Engineer
-8. PM       → SR passes to PM for next task
+7. CI       → Wait for CI, debug failures
+8. SR REVIEW → Wait for SR Engineer approval
+9. MERGE    → Merge PR and verify (MANDATORY - task NOT complete until merged)
 ```
+
+**CRITICAL: Creating a PR is step 6 of 9, not the final step. Task is NOT complete until PR is MERGED (step 9).**
 
 ---
 
@@ -272,18 +275,66 @@ Metrics are auto-captured via SubagentStop hook.
 
 ---
 
-## Step 8: SR Engineer Reviews and Merges
+## Step 8: SR Engineer Approves
 
 The SR Engineer will:
 1. Verify Engineer Metrics are present
 2. Review code quality
 3. Add SR Engineer Metrics to PR
-4. Approve and merge
-5. **Pass to PM for next task assignment**
+4. **Approve** the PR
+
+**After approval, proceed to Step 9.**
+
+---
+
+## Step 9: Merge and Verify (MANDATORY)
+
+**CRITICAL: A PR is NOT complete until MERGED. Creating a PR is step 3 of 4, not the final step.**
+
+**Full lifecycle reference:** `.claude/docs/shared/pr-lifecycle.md`
+
+### 9.1 Merge After Approval
+
+After SR Engineer approves, YOU must merge (do not assume SR will merge):
+
+```bash
+gh pr merge <PR-NUMBER> --merge
+```
+
+### 9.2 Verify Merge Succeeded (MANDATORY)
+
+```bash
+# Verify merge state - MUST show "MERGED"
+gh pr view <PR-NUMBER> --json state --jq '.state'
+```
+
+| Result | Meaning | Action |
+|--------|---------|--------|
+| `MERGED` | Success - task is complete | Proceed to notify PM |
+| `OPEN` | Merge failed or didn't run | Investigate and retry |
+| `CLOSED` | PR was closed without merge | Work is LOST - escalate |
+
+### 9.3 Only THEN Mark Task Complete
 
 **You are done when:**
-- PR is merged
-- SR Engineer has notified PM
+- [ ] PR state shows `MERGED` (not just approved)
+- [ ] Task file updated with completion status
+- [ ] PM notified that task is complete
+
+**Do NOT:**
+- Mark task complete before verifying merge
+- Move to next task before verifying merge
+- End session with approved-but-unmerged PRs
+
+### Session-End Check
+
+Before ending any session:
+```bash
+# Check for orphaned PRs
+gh pr list --state open --author @me
+```
+
+If any approved PRs are still open, merge them NOW.
 
 ---
 

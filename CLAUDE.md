@@ -209,6 +209,40 @@ Do NOT move on to other work until the fix is merged. Unmerged fix branches beco
 git branch -d fix/<branch-name>
 ```
 
+### Orphan PR Prevention (MANDATORY)
+
+> **Incident Reference:** SPRINT-051/052 had 20+ PRs created but never merged, causing fixes to be "lost" and reimplemented multiple times.
+
+**Full lifecycle reference:** `.claude/docs/shared/pr-lifecycle.md`
+
+**The Rule:** A PR is NOT complete until MERGED. Creating a PR is step 3 of 4, not the final step.
+
+```
+1. CREATE   → Branch + commits pushed
+2. OPEN     → PR created
+3. APPROVE  → CI passes + review approved
+4. MERGE    → PR merged ← COMPLETION HAPPENS HERE
+```
+
+**After every PR merge, verify:**
+```bash
+gh pr view <PR-NUMBER> --json state --jq '.state'
+# Must show: MERGED (not OPEN, not CLOSED)
+```
+
+**Session-End Check (MANDATORY):**
+```bash
+# Before ending ANY session, check for orphaned PRs
+gh pr list --state open --author @me
+
+# If any approved PRs are open, MERGE THEM NOW
+```
+
+**Do NOT:**
+- Mark tasks complete before verifying merge
+- Move to next task before verifying merge
+- End session with approved-but-unmerged PRs
+
 ## Starting New Work
 
 ### Step 1: Create Feature Branch
@@ -405,6 +439,7 @@ npx prebuild-install --runtime=electron --target=35.7.5 --arch=x64 --platform=wi
 
 | Topic | Location |
 |-------|----------|
+| **PR Lifecycle** | `.claude/docs/shared/pr-lifecycle.md` |
 | Plan-First Protocol | `.claude/docs/shared/plan-first-protocol.md` |
 | Metrics Templates | `.claude/docs/shared/metrics-templates.md` |
 | Architecture Guardrails | `.claude/docs/shared/architecture-guardrails.md` |

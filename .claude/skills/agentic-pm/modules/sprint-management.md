@@ -132,7 +132,44 @@ If actual tokens > 4x estimate:
 
 ### Sprint Closure Checklist
 
-- [ ] All PRs merged
+> **Incident Reference:** SPRINT-051/052 had 20+ orphaned PRs that were created but never merged, causing massive confusion.
+
+**Full lifecycle reference:** `.claude/docs/shared/pr-lifecycle.md`
+
+#### PR Verification (MANDATORY - Do First)
+
+Before ANY other closure activity:
+
+```bash
+# Check for orphaned PRs
+gh pr list --state open --search "TASK-"
+gh pr list --state open --search "SPRINT-"
+```
+
+**A sprint CANNOT be closed if:**
+- Any sprint-related PR is still open
+- Any task has a PR in `OPEN` state (not `MERGED`)
+- Any approved PR is waiting for merge
+
+**For each open PR found:**
+| PR State | Action |
+|----------|--------|
+| CI failing | Fix before closing sprint |
+| Awaiting review | Complete review and merge |
+| Approved but not merged | Merge immediately |
+| Has conflicts | Resolve and merge |
+
+**Verify all PRs are merged:**
+```bash
+# For each task's PR, verify state is MERGED
+gh pr view <PR-NUMBER> --json state --jq '.state'
+# Must show: MERGED (not OPEN, not CLOSED)
+```
+
+#### Full Closure Checklist
+
+- [ ] **PR Audit complete** - `gh pr list --state open` shows no sprint PRs
+- [ ] **All PRs verified MERGED** - Not just approved, actually merged
 - [ ] All task files have actual (monitored) token data
 - [ ] Token variance analysis complete
 - [ ] INDEX.md updated with completion
