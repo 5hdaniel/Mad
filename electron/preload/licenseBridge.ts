@@ -26,4 +26,13 @@ export const licenseBridge = {
    */
   devToggleAIAddon: (userId: string, enabled: boolean) =>
     ipcRenderer.invoke("license:dev:toggle-ai-addon", userId, enabled),
+
+  /**
+   * DEV ONLY: Set license type for testing
+   * @param userId - User ID to update
+   * @param licenseType - License type: 'individual', 'team', or 'enterprise'
+   * @returns Success status
+   */
+  devSetLicenseType: (userId: string, licenseType: string) =>
+    ipcRenderer.invoke("license:dev:set-license-type", userId, licenseType),
 };
