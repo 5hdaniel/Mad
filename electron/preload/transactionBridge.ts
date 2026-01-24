@@ -346,6 +346,16 @@ export const transactionBridge = {
     ipcRenderer.invoke("transactions:resync-auto-link", transactionId),
 
   /**
+   * Sync emails from provider (Gmail/Outlook) for a transaction.
+   * BACKLOG-457: Fetches NEW emails from connected email provider based on
+   * contact email addresses, stores them, then runs auto-link.
+   * @param transactionId - Transaction ID to sync emails for
+   * @returns Results with counts of fetched, stored, and linked emails
+   */
+  syncAndFetchEmails: (transactionId: string) =>
+    ipcRenderer.invoke("transactions:sync-and-fetch-emails", transactionId),
+
+  /**
    * Link emails to a transaction
    * @param emailIds - Array of email IDs to link
    * @param transactionId - Transaction ID to link to
