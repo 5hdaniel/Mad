@@ -421,10 +421,17 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                         </span>
                         <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                       </div>
+                    ) : connections.google?.email ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-yellow-600 font-medium">
+                          Connection Issue
+                        </span>
+                        <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                      </div>
                     ) : (
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-500">
-                          Not Connected
+                          Not connected
                         </span>
                         <div className="w-2 h-2 bg-gray-300 rounded-full"></div>
                       </div>
@@ -444,6 +451,16 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                       {disconnectingProvider === "google"
                         ? "Disconnecting..."
                         : "Disconnect Gmail"}
+                    </button>
+                  ) : connections.google?.email ? (
+                    <button
+                      onClick={handleConnectGoogle}
+                      disabled={connectingProvider === "google"}
+                      className="w-full mt-2 px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {connectingProvider === "google"
+                        ? "Reconnecting..."
+                        : "Reconnect Gmail"}
                     </button>
                   ) : (
                     <button
@@ -499,10 +516,17 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                         </span>
                         <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                       </div>
+                    ) : connections.microsoft?.email ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-yellow-600 font-medium">
+                          Connection Issue
+                        </span>
+                        <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                      </div>
                     ) : (
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-500">
-                          Not Connected
+                          Not connected
                         </span>
                         <div className="w-2 h-2 bg-gray-300 rounded-full"></div>
                       </div>
@@ -522,6 +546,16 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                       {disconnectingProvider === "microsoft"
                         ? "Disconnecting..."
                         : "Disconnect Outlook"}
+                    </button>
+                  ) : connections.microsoft?.email ? (
+                    <button
+                      onClick={handleConnectMicrosoft}
+                      disabled={connectingProvider === "microsoft"}
+                      className="w-full mt-2 px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {connectingProvider === "microsoft"
+                        ? "Reconnecting..."
+                        : "Reconnect Outlook"}
                     </button>
                   ) : (
                     <button
