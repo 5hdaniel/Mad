@@ -751,6 +751,59 @@ class SupabaseService {
   }
 
   // ============================================
+  // ORGANIZATION MEMBERSHIP (B2B)
+  // ============================================
+
+  /**
+   * Check if user is a member of an organization with an active license
+   * Used to determine team vs individual license type
+   * @param userId - User UUID
+   * @returns Organization membership info or null if not a team member
+   */
+  async getActiveOrganizationMembership(userId: string): Promise<{
+    organization_id: string;
+    role: string;
+    license_status: string;
+  } | null> {
+    const client = this._ensureClient();
+
+    try {
+      const { data, error } = await client
+        .from("organization_members")
+        .select("organization_id, role, license_status")
+        .eq("user_id", userId)
+        .eq("license_status", "active")
+        .maybeSingle();
+
+      if (error) {
+        logService.error(
+          "[Supabase] Failed to check organization membership:",
+          "Supabase",
+          { error }
+        );
+        return null;
+      }
+
+      if (data) {
+        logService.debug(
+          "[Supabase] User has active organization membership",
+          "Supabase",
+          { userId, organization_id: data.organization_id, role: data.role }
+        );
+      }
+
+      return data;
+    } catch (error) {
+      logService.error(
+        "[Supabase] Exception checking organization membership:",
+        "Supabase",
+        { error }
+      );
+      return null;
+    }
+  }
+
+  // ============================================
   // PREFERENCES SYNC
   // ============================================
 

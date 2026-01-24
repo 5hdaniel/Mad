@@ -7,6 +7,7 @@ import { ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import sessionService from "./services/sessionService";
 import { getUserById } from "./services/db/userDbService";
+import supabaseService from "./services/supabaseService";
 import logService from "./services/logService";
 import type { LicenseType, UserLicense } from "./types/models";
 
@@ -18,12 +19,12 @@ interface LicenseResponse {
 }
 
 /**
- * Get license data from the current session user
- * Falls back to database lookup if session doesn't have license fields
+ * Get license data by checking Supabase for organization membership
+ * This is the single source of truth for team license status
  */
 async function getLicenseData(): Promise<LicenseResponse> {
   try {
-    // First try to get license from session
+    // Get current user session
     const session = await sessionService.loadSession();
 
     if (!session || !session.user) {
@@ -38,61 +39,37 @@ async function getLicenseData(): Promise<LicenseResponse> {
       };
     }
 
-    const user = session.user;
+    const userId = session.user.id;
 
-    // Check if session user has license fields
-    if (user.license_type !== undefined) {
-      logService.debug("[License] License found in session", "License", {
-        license_type: user.license_type,
-        ai_detection_enabled: user.ai_detection_enabled,
-      });
-
-      return {
-        success: true,
-        license: {
-          license_type: user.license_type || "individual",
-          ai_detection_enabled: user.ai_detection_enabled || false,
-          organization_id: user.organization_id,
-        },
-      };
-    }
-
-    // Fallback: Look up user in local database
+    // Check Supabase for active organization membership (single source of truth)
     logService.debug(
-      "[License] License not in session, checking database",
+      "[License] Checking Supabase for organization membership",
       "License",
-      { userId: user.id }
+      { userId }
     );
 
-    const dbUser = await getUserById(user.id);
-    if (dbUser && dbUser.license_type !== undefined) {
-      logService.debug("[License] License found in database", "License", {
-        license_type: dbUser.license_type,
-        ai_detection_enabled: dbUser.ai_detection_enabled,
-      });
+    const membership = await supabaseService.getActiveOrganizationMembership(userId);
 
-      return {
-        success: true,
-        license: {
-          license_type: dbUser.license_type || "individual",
-          ai_detection_enabled: dbUser.ai_detection_enabled || false,
-          organization_id: dbUser.organization_id,
-        },
-      };
-    }
+    // Determine license type based on organization membership
+    const licenseType: LicenseType = membership ? "team" : "individual";
 
-    // Default: individual license with no AI
-    logService.debug(
-      "[License] No license found, using defaults",
-      "License"
-    );
+    // Get AI detection status from local user record
+    const dbUser = await getUserById(userId);
+    const aiEnabled = dbUser?.ai_detection_enabled || false;
+
+    logService.debug("[License] License determined", "License", {
+      license_type: licenseType,
+      ai_detection_enabled: aiEnabled,
+      organization_id: membership?.organization_id,
+      source: membership ? "organization_members" : "default",
+    });
 
     return {
       success: true,
       license: {
-        license_type: "individual",
-        ai_detection_enabled: false,
-        organization_id: undefined,
+        license_type: licenseType,
+        ai_detection_enabled: aiEnabled,
+        organization_id: membership?.organization_id,
       },
     };
   } catch (error) {
