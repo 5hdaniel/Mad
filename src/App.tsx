@@ -3,6 +3,7 @@
  *
  * This is the root component that composes the application from modular pieces:
  * - NotificationProvider: Unified notification system (toasts)
+ * - LicenseProvider: License type and AI addon state
  * - AppShell: Layout structure (title bar, offline banner, version info)
  * - AppRouter: Screen routing based on current step
  * - AppModals: Modal dialogs (profile, settings, etc.)
@@ -21,17 +22,20 @@ import {
   useAppStateMachine,
 } from "./appCore";
 import { NotificationProvider } from "./contexts/NotificationContext";
+import { LicenseProvider } from "./contexts/LicenseContext";
 
 function App() {
   const app = useAppStateMachine();
 
   return (
     <NotificationProvider>
-      <AppShell app={app}>
-        <AppRouter app={app} />
-        <BackgroundServices app={app} />
-        <AppModals app={app} />
-      </AppShell>
+      <LicenseProvider>
+        <AppShell app={app}>
+          <AppRouter app={app} />
+          <BackgroundServices app={app} />
+          <AppModals app={app} />
+        </AppShell>
+      </LicenseProvider>
     </NotificationProvider>
   );
 }

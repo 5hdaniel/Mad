@@ -49,6 +49,13 @@ const devDiagnostics = __DEV__
        */
       diagnosticUnknownRecipientMessages: (userId: string) =>
         ipcRenderer.invoke("diagnostic:unknown-recipient-messages", userId),
+
+      /**
+       * Diagnostic: Check email data for a specific contact email
+       * Checks both contact_emails junction table and communications table
+       */
+      diagnosticCheckEmailData: (userId: string, emailAddress: string) =>
+        ipcRenderer.invoke("diagnostic:check-email-data", userId, emailAddress),
     }
   : {};
 

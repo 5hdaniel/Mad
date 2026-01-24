@@ -464,6 +464,95 @@ export async function markContactAsImported(contactId: string): Promise<void> {
 }
 
 /**
+ * Backfill emails for a contact from external source (e.g., macOS Contacts)
+ * Only adds emails that don't already exist in the junction table.
+ */
+export async function backfillContactEmails(contactId: string, emails: string[]): Promise<number> {
+  if (!emails || emails.length === 0) return 0;
+
+  let added = 0;
+  const storedEmails = new Set<string>();
+
+  // Get existing emails for this contact
+  const existingSql = "SELECT LOWER(email) as email FROM contact_emails WHERE contact_id = ?";
+  const existingRows = dbAll<{ email: string }>(existingSql, [contactId]);
+  for (const row of existingRows) {
+    storedEmails.add(row.email);
+  }
+
+  // Add any new emails
+  for (const email of emails) {
+    if (!email) continue;
+
+    const normalizedEmail = email.toLowerCase().trim();
+    if (storedEmails.has(normalizedEmail)) continue;
+    storedEmails.add(normalizedEmail);
+
+    const emailId = crypto.randomUUID();
+    const isPrimary = existingRows.length === 0 && added === 0 ? 1 : 0;
+    const emailSql = `
+      INSERT OR IGNORE INTO contact_emails (
+        id, contact_id, email, is_primary, source, created_at
+      ) VALUES (?, ?, ?, ?, 'backfill', CURRENT_TIMESTAMP)
+    `;
+    dbRun(emailSql, [emailId, contactId, normalizedEmail, isPrimary]);
+    added++;
+  }
+
+  if (added > 0) {
+    logService.info(`[Contacts] Backfilled ${added} email(s) for contact ${contactId}`, "Contacts");
+  }
+
+  return added;
+}
+
+/**
+ * Backfill phones for a contact from external source (e.g., macOS Contacts)
+ * Only adds phones that don't already exist in the junction table.
+ */
+export async function backfillContactPhones(contactId: string, phones: string[]): Promise<number> {
+  if (!phones || phones.length === 0) return 0;
+
+  let added = 0;
+  const storedPhones = new Set<string>();
+
+  // Get existing phones for this contact (normalized to last 10 digits)
+  const existingSql = "SELECT phone_e164 FROM contact_phones WHERE contact_id = ?";
+  const existingRows = dbAll<{ phone_e164: string }>(existingSql, [contactId]);
+  for (const row of existingRows) {
+    const normalized = row.phone_e164.replace(/\D/g, '').slice(-10);
+    storedPhones.add(normalized);
+  }
+
+  // Add any new phones
+  for (const phone of phones) {
+    if (!phone) continue;
+
+    const phoneE164 = normalizeToE164(phone);
+    const normalizedKey = phoneE164.replace(/\D/g, '').slice(-10);
+
+    if (storedPhones.has(normalizedKey)) continue;
+    storedPhones.add(normalizedKey);
+
+    const phoneId = crypto.randomUUID();
+    const isPrimary = existingRows.length === 0 && added === 0 ? 1 : 0;
+    const phoneSql = `
+      INSERT OR IGNORE INTO contact_phones (
+        id, contact_id, phone_e164, phone_display, is_primary, source, created_at
+      ) VALUES (?, ?, ?, ?, ?, 'backfill', CURRENT_TIMESTAMP)
+    `;
+    dbRun(phoneSql, [phoneId, contactId, phoneE164, phone, isPrimary]);
+    added++;
+  }
+
+  if (added > 0) {
+    logService.info(`[Contacts] Backfilled ${added} phone(s) for contact ${contactId}`, "Contacts");
+  }
+
+  return added;
+}
+
+/**
  * Get contacts sorted by recent communication and optionally by property address relevance
  */
 export async function getContactsSortedByActivity(

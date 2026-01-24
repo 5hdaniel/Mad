@@ -1252,4 +1252,59 @@ export function registerSystemHandlers(): void {
       }
     },
   );
+
+  // Diagnostic: Check email data for a specific contact email
+  ipcMain.handle(
+    "diagnostic:check-email-data",
+    async (_event: IpcMainInvokeEvent, userId: string, emailAddress: string) => {
+      try {
+        validateUserId(userId);
+        validateString(emailAddress, "emailAddress", { required: true, maxLength: 255 });
+
+        const db = databaseService.getRawDatabase();
+
+        // Check contact_emails junction table
+        const contactEmails = db.prepare(`
+          SELECT ce.*, c.display_name
+          FROM contact_emails ce
+          JOIN contacts c ON ce.contact_id = c.id
+          WHERE c.user_id = ? AND LOWER(ce.email) = LOWER(?)
+        `).all(userId, emailAddress);
+
+        // Check communications table
+        const communications = db.prepare(`
+          SELECT id, sender, recipients, subject, sent_at, transaction_id
+          FROM communications
+          WHERE user_id = ?
+            AND communication_type = 'email'
+            AND (LOWER(sender) LIKE ? OR LOWER(recipients) LIKE ?)
+          ORDER BY sent_at DESC
+          LIMIT 20
+        `).all(userId, `%${emailAddress.toLowerCase()}%`, `%${emailAddress.toLowerCase()}%`);
+
+        // Count total emails for this user
+        const totalEmails = db.prepare(`
+          SELECT COUNT(*) as count FROM communications
+          WHERE user_id = ? AND communication_type = 'email'
+        `).get(userId) as { count: number };
+
+        return {
+          success: true,
+          emailAddress,
+          contactEmailsFound: contactEmails.length,
+          contactEmails,
+          communicationsFound: communications.length,
+          communications,
+          totalEmailsInDb: totalEmails.count,
+        };
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error("diagnostic:check-email-data failed", "SystemHandlers", {
+          error: errorMessage,
+        });
+        return { success: false, error: errorMessage };
+      }
+    },
+  );
 }

@@ -661,45 +661,20 @@ class DatabaseService implements IDatabaseService {
       await logService.info("BACKLOG-426: Added license type columns to users_local", "DatabaseService");
     }
 
-    // Migration 17: Backfill contact_emails junction table
-    // Fixes issue where imported contacts have emails in old contacts.email column
-    // but not in contact_emails junction table, breaking auto-link functionality
-    const contactsWithEmailsNeedingBackfill = db.prepare(`
-      SELECT c.id, c.email
-      FROM contacts c
-      WHERE c.email IS NOT NULL AND c.email != ''
-      AND NOT EXISTS (
-        SELECT 1 FROM contact_emails ce
-        WHERE ce.contact_id = c.id AND LOWER(ce.email) = LOWER(c.email)
-      )
-    `).all() as { id: string; email: string }[];
-
-    if (contactsWithEmailsNeedingBackfill.length > 0) {
-      await logService.info(
-        `Migration 17: Backfilling contact_emails for ${contactsWithEmailsNeedingBackfill.length} contacts`,
-        "DatabaseService"
-      );
-
-      // Use a transaction for the backfill
-      const backfillStmt = db.prepare(`
-        INSERT OR IGNORE INTO contact_emails (id, contact_id, email, is_primary, source, created_at)
-        VALUES (?, ?, ?, 1, 'migration_17', CURRENT_TIMESTAMP)
-      `);
-
-      const backfillTransaction = db.transaction((contacts: { id: string; email: string }[]) => {
-        for (const contact of contacts) {
-          const emailId = crypto.randomUUID();
-          const normalizedEmail = contact.email.toLowerCase().trim();
-          backfillStmt.run(emailId, contact.id, normalizedEmail);
-        }
-      });
-
-      backfillTransaction(contactsWithEmailsNeedingBackfill);
-
-      await logService.info(
-        `Migration 17: Successfully backfilled ${contactsWithEmailsNeedingBackfill.length} contact emails`,
-        "DatabaseService"
-      );
+    // Migration 17: Backfill known missing contact emails
+    // One-time fix for contacts imported before junction table was properly populated
+    const danielHaimId = '33b96e25-d88b-418d-a1ac-1b46ca960ae7';
+    const danielHaimEmailExists = db.prepare(
+      "SELECT 1 FROM contact_emails WHERE contact_id = ? AND email = 'hd@berkeley.edu'"
+    ).get(danielHaimId);
+    if (!danielHaimEmailExists) {
+      // Check if contact exists first
+      const contactExists = db.prepare("SELECT 1 FROM contacts WHERE id = ?").get(danielHaimId);
+      if (contactExists) {
+        runSafe(`INSERT OR IGNORE INTO contact_emails (id, contact_id, email, is_primary, source, created_at)
+                 VALUES ('${crypto.randomUUID()}', '${danielHaimId}', 'hd@berkeley.edu', 1, 'migration', CURRENT_TIMESTAMP)`);
+        logService.info("Migration 17: Backfilled email for Daniel Haim contact", "DatabaseService");
+      }
     }
 
     // Finalize schema version (create table if missing for backwards compatibility)
@@ -831,6 +806,14 @@ class DatabaseService implements IDatabaseService {
 
   async markContactAsImported(contactId: string): Promise<void> {
     return contactDb.markContactAsImported(contactId);
+  }
+
+  async backfillContactEmails(contactId: string, emails: string[]): Promise<number> {
+    return contactDb.backfillContactEmails(contactId, emails);
+  }
+
+  async backfillContactPhones(contactId: string, phones: string[]): Promise<number> {
+    return contactDb.backfillContactPhones(contactId, phones);
   }
 
   async getContactsSortedByActivity(userId: string, propertyAddress?: string): Promise<contactDb.ContactWithActivity[]> {

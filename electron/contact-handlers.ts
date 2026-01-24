@@ -281,14 +281,24 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           // Mark this contact's identifiers as seen
           markAsSeen(dbContact);
 
+          // Try to find additional data from macOS Contacts by matching name
+          const macOsMatch = phoneToContactInfo
+            ? Object.values(phoneToContactInfo).find(
+                (c) => c.name?.toLowerCase() === dbContact.display_name?.toLowerCase()
+              )
+            : null;
+
           availableContacts.push({
             id: dbContact.id, // Use actual DB ID so we can mark as imported
             name: dbContact.name || dbContact.display_name,
             phone: dbContact.phone || null,
-            email: dbContact.email || null,
+            email: dbContact.email || macOsMatch?.emails?.[0] || null,
             company: dbContact.company || null,
             source: dbContact.source || "contacts_app",
             isFromDatabase: true, // Flag to distinguish from macOS Contacts app
+            // Include all phones/emails from macOS Contacts for backfilling
+            allPhones: macOsMatch?.phones || [],
+            allEmails: macOsMatch?.emails || [],
           });
         }
 
@@ -460,9 +470,18 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
 
         let processed = 0;
 
-        // Mark existing DB contacts as imported
-        for (const { id } of existingDbContacts) {
+        // Mark existing DB contacts as imported and backfill any missing emails/phones
+        for (const { id, contact } of existingDbContacts) {
           await databaseService.markContactAsImported(id);
+
+          // Backfill emails/phones from macOS Contacts if available
+          if (contact.allEmails && contact.allEmails.length > 0) {
+            await databaseService.backfillContactEmails(id, contact.allEmails);
+          }
+          if (contact.allPhones && contact.allPhones.length > 0) {
+            await databaseService.backfillContactPhones(id, contact.allPhones);
+          }
+
           const updatedContact = await databaseService.getContactById(id);
           if (updatedContact) {
             importedContacts.push(updatedContact);
