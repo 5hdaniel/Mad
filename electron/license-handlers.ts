@@ -9,6 +9,7 @@ import sessionService from "./services/sessionService";
 import { getUserById } from "./services/db/userDbService";
 import { dbRun } from "./services/db/core/dbConnection";
 import logService from "./services/logService";
+import supabaseService from "./services/supabaseService";
 import type { LicenseType, UserLicense } from "./types/models";
 
 // Type definitions
@@ -41,32 +42,40 @@ async function getLicenseData(): Promise<LicenseResponse> {
 
     const user = session.user;
 
-    // Check if session user has license fields
-    if (user.license_type !== undefined) {
-      logService.debug("[License] License found in session", "License", {
-        license_type: user.license_type,
-        ai_detection_enabled: user.ai_detection_enabled,
+    // Check Supabase for organization membership (source of truth for team license)
+    // This takes precedence over local database
+    const orgMembership = await supabaseService.getActiveOrganizationMembership(user.id);
+
+    if (orgMembership) {
+      logService.debug("[License] Team membership found in Supabase", "License", {
+        organization_id: orgMembership.organization_id,
+        organization_name: orgMembership.organization_name,
       });
+
+      // Get AI addon status from local database (local setting)
+      const dbUser = await getUserById(user.id);
+      const aiEnabled = dbUser?.ai_detection_enabled || false;
 
       return {
         success: true,
         license: {
-          license_type: user.license_type || "individual",
-          ai_detection_enabled: user.ai_detection_enabled || false,
-          organization_id: user.organization_id,
+          license_type: "team" as LicenseType,
+          ai_detection_enabled: aiEnabled,
+          organization_id: orgMembership.organization_id,
+          organization_name: orgMembership.organization_name,
         },
       };
     }
 
-    // Fallback: Look up user in local database
+    // No team membership - check local database for license info
     logService.debug(
-      "[License] License not in session, checking database",
+      "[License] No team membership, checking local database",
       "License",
       { userId: user.id }
     );
 
     const dbUser = await getUserById(user.id);
-    if (dbUser && dbUser.license_type !== undefined) {
+    if (dbUser) {
       logService.debug("[License] License found in database", "License", {
         license_type: dbUser.license_type,
         ai_detection_enabled: dbUser.ai_detection_enabled,
@@ -155,6 +164,43 @@ export function registerLicenseHandlers(): void {
         return { success: true };
       } catch (error) {
         logService.error("[License] DEV: Failed to toggle AI add-on", "License", {
+          error,
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    }
+  );
+
+  // DEV ONLY: Set license type for testing
+  ipcMain.handle(
+    "license:dev:set-license-type",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+      licenseType: string
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        logService.info(
+          `[License] DEV: Setting license_type to ${licenseType} for user ${userId}`,
+          "License"
+        );
+
+        dbRun(
+          "UPDATE users_local SET license_type = ? WHERE id = ?",
+          [licenseType, userId]
+        );
+
+        logService.info(
+          `[License] DEV: license_type set to ${licenseType} for user ${userId}`,
+          "License"
+        );
+
+        return { success: true };
+      } catch (error) {
+        logService.error("[License] DEV: Failed to set license type", "License", {
           error,
         });
         return {

@@ -255,6 +255,45 @@ class SupabaseService {
   }
 
   /**
+   * Get active organization membership for a user
+   * Used to determine team license status
+   * @param userId - User UUID to check
+   * @returns Organization membership data or null if not a team member
+   */
+  async getActiveOrganizationMembership(
+    userId: string
+  ): Promise<{ organization_id: string; organization_name?: string } | null> {
+    try {
+      const client = this._ensureClient();
+      const { data, error } = await client
+        .from("organization_members")
+        .select("organization_id, organizations(name)")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (error) {
+        logService.warn(
+          `[Supabase] Failed to get org membership: ${error.message}`,
+          "SupabaseService"
+        );
+        return null;
+      }
+
+      if (!data) {
+        return null;
+      }
+
+      return {
+        organization_id: data.organization_id,
+        organization_name: (data.organizations as { name?: string } | null)?.name,
+      };
+    } catch (err) {
+      logService.error("[Supabase] Error checking org membership", "SupabaseService", { err });
+      return null;
+    }
+  }
+
+  /**
    * Get the Supabase client (public access for storage service)
    * BACKLOG-393: Needed by supabaseStorageService for file uploads
    * @returns Initialized Supabase client

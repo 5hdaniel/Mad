@@ -212,6 +212,8 @@ export interface UserLicense {
   ai_detection_enabled: boolean;
   /** Organization ID for team/enterprise users */
   organization_id?: string;
+  /** Organization name for display purposes */
+  organization_name?: string;
 }
 
 // ============================================
