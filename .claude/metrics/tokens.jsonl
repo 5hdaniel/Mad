@@ -5822,3 +5822,18 @@
   "started_at": "2026-01-22T15:39:40.935Z",
   "ended_at": "2026-01-22T15:47:33.391Z"
 }
+{
+  "timestamp": "2026-01-24T01:30:31Z",
+  "session_id": "ddb4b401-094b-4dc7-97df-8342611fb10a",
+  "agent_id": "a388669",
+  "input_tokens": 24913,
+  "output_tokens": 285,
+  "cache_read": 2368782,
+  "cache_create": 274975,
+  "billable_tokens": 275260,
+  "total_tokens": 2668955,
+  "api_calls": 53,
+  "duration_secs": 312,
+  "started_at": "2026-01-24T01:25:19.272Z",
+  "ended_at": "2026-01-24T01:30:31.742Z"
+}
