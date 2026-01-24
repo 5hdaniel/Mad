@@ -1,8 +1,8 @@
 # Sprint Plan: SPRINT-054 - Transaction Status Unification & Notifications
 
 **Created**: 2026-01-23
-**Updated**: 2026-01-23
-**Status**: Planning (Blocked by SPRINT-050)
+**Updated**: 2026-01-24
+**Status**: Ready (includes carryover from SPRINT-052/053)
 **Goal**: Complete status unification between desktop and portal with dashboard notifications
 **Dependencies**: SPRINT-050 (B2B Portal foundation must be complete)
 
@@ -36,7 +36,20 @@ Before starting sprint work, engineers must:
 
 ---
 
-## In Scope (6 Items)
+## In Scope (9 Items)
+
+### Phase 0: Carryover from SPRINT-052/053 (Must complete first)
+| ID | Title | Est. Tokens | Priority | Notes |
+|----|-------|-------------|----------|-------|
+| PR-573-FIX | Fix Onboarding Loop Bug | ~10K | P0 | Phone type selection loops infinitely |
+| BACKLOG-462-COMPLETE | Complete AI Gating | ~15K | P1 | Modal text, Manual pill, Rejected status |
+| APP-TEST-FIX | Fix App.test.tsx Failures | ~5K | P2 | Pre-existing on develop |
+
+**PR #573 Bug Details:**
+- Symptom: Phone type selection (iPhone/Android) loops back to same screen
+- No skip button available
+- Cause: Reducer changes to `isOnboardingComplete` logic
+- Files: `src/appCore/state/machine/reducer.ts`
 
 ### Phase 1: Schema Verification & Filter Fix (Sequential - Foundation)
 | ID | Title | Est. Tokens | Task File |
@@ -408,6 +421,9 @@ Before execution, SR Engineer must validate:
 
 | Phase | Task | Backlog | Status | Engineer | PR | Actual Tokens |
 |-------|------|---------|--------|----------|-----|---------------|
+| 0 | PR-573-FIX | - | Pending | - | #573 | - |
+| 0 | BACKLOG-462-COMPLETE | BACKLOG-462 | Pending | - | - | - |
+| 0 | APP-TEST-FIX | - | Pending | - | - | - |
 | 1 | TASK-TBD | BACKLOG-366 | Pending | - | - | - |
 | 1 | TASK-TBD | BACKLOG-416 | Pending | - | - | - |
 | 2 | TASK-TBD | BACKLOG-413 | Blocked | - | - | - |
@@ -416,10 +432,36 @@ Before execution, SR Engineer must validate:
 | 4 | TASK-1179 | BACKLOG-460 | Blocked | - | - | - |
 
 **Blockers**:
-- Phase 1: Can start after SPRINT-053 Phase 1 (schema alignment)
+- Phase 0: No blockers - must complete first
+- Phase 1: Can start after Phase 0 complete
 - Phase 2: Blocked by Phase 1 completion
 - Phase 3: Blocked by SPRINT-050 and Phase 2
 - Phase 4: Blocked by Phase 3
+
+---
+
+## Phase 0: Carryover Bug Details
+
+### PR #573 Onboarding Loop Bug
+
+**How to Reproduce:**
+1. Checkout branch: `git checkout fix/QA-052-001-email-connection-status`
+2. Run app: `npm run dev`
+3. Log out (or use fresh account)
+4. Go through login/onboarding
+5. Reach phone type selection screen
+6. Select iPhone or Android
+7. **Bug**: Screen loops back to phone selection (no skip button)
+
+**Root Cause Analysis:**
+- PR #573 modified `isOnboardingComplete()` in `src/appCore/state/machine/reducer.ts`
+- Changed to check `phoneType` first, then `hasCompletedEmailOnboarding` only for new users
+- The state transition after phone selection may be returning to phone selection step
+
+**Fix Approach:**
+- Debug `getNextOnboardingStep()` to see what step it returns after phone selection
+- Ensure phone type selection persists and advances to next step
+- May need to adjust `isNewUser` detection logic
 
 ---
 

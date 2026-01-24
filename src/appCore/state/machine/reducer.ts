@@ -380,9 +380,7 @@ export function appStateReducer(
     // ============================================
 
     case "ONBOARDING_STEP_COMPLETE": {
-      console.log("[Reducer] ONBOARDING_STEP_COMPLETE received:", action.step, "current state:", state.status);
       if (state.status !== "onboarding") {
-        console.log("[Reducer] Not in onboarding state, returning unchanged");
         return state;
       }
 
@@ -412,7 +410,6 @@ export function appStateReducer(
           }
         }
       }
-      console.log("[Reducer] completedSteps after adding:", completedSteps, "selectedPhoneType:", selectedPhoneType);
 
       // Determine user data state based on completed steps
       // Use selectedPhoneType from action/state, fallback to platform detection only if no explicit selection
@@ -437,11 +434,9 @@ export function appStateReducer(
         state.platform,
         userData
       );
-      console.log("[Reducer] nextStep from getNextOnboardingStep:", nextStep, "platform:", state.platform, "userData:", userData);
 
       if (!nextStep) {
         // All onboarding complete - transition to ready
-        console.log("[Reducer] No next step - transitioning to READY");
         return {
           status: "ready",
           user: state.user,
@@ -449,7 +444,6 @@ export function appStateReducer(
           userData,
         };
       }
-      console.log("[Reducer] More steps to go, staying in onboarding with step:", nextStep);
 
       // Continue to next step
       return {
