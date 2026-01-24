@@ -29,6 +29,7 @@ export function BackgroundServices({ app }: BackgroundServicesProps) {
     isTourActive,
     needsTermsAcceptance,
     isDatabaseInitialized,
+    openSettings,
   } = app;
 
   // Determine if we're in onboarding flow
@@ -69,6 +70,7 @@ export function BackgroundServices({ app }: BackgroundServicesProps) {
             userId={currentUser.id}
             provider={authProvider as OAuthProvider}
             hidden={isTourActive || needsTermsAcceptance}
+            onOpenSettings={openSettings}
           />
         )}
     </>

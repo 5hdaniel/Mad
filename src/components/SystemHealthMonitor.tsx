@@ -6,6 +6,8 @@ interface SystemHealthMonitorProps {
   userId: string;
   provider: OAuthProvider;
   hidden?: boolean;
+  /** Callback to open Settings modal - used for reconnect actions */
+  onOpenSettings?: () => void;
 }
 
 interface SystemIssue {
@@ -33,6 +35,7 @@ function SystemHealthMonitor({
   userId,
   provider,
   hidden = false,
+  onOpenSettings,
 }: SystemHealthMonitorProps) {
   const [issues, setIssues] = useState<SystemIssue[]>([]);
   const [dismissed, setDismissed] = useState(new Set<number>());
@@ -87,52 +90,49 @@ function SystemHealthMonitor({
 
       case "connect-google":
       case "reconnect-google":
-        // Trigger Google mailbox connection
-        try {
-          const result = await window.api.auth.googleConnectMailbox(userId);
-          if (result.success) {
-            // Auth popup window opens automatically and will close when done
-            // Listen for connection completion
-            const cleanup = window.api.onGoogleMailboxConnected(
-              async (connectionResult) => {
-                if (connectionResult.success) {
-                  await checkSystemHealth();
-                }
-                if (cleanup) cleanup(); // Clean up listener after handling the event
-              },
-            );
-          }
-        } catch (error) {
-          console.error(
-            "[SystemHealthMonitor] Google mailbox connection failed:",
-            error,
-          );
-        }
-        break;
-
       case "connect-microsoft":
       case "reconnect-microsoft":
-        // Trigger Microsoft mailbox connection
-        try {
-          const result = await window.api.auth.microsoftConnectMailbox(userId);
-          if (result.success) {
-            // Auth popup window opens automatically and will close when done
-            // Listen for connection completion
-            const cleanup = window.api.onMicrosoftMailboxConnected(
-              (connectionResult) => {
-                if (connectionResult.success) {
-                  checkSystemHealth();
-                  handleDismiss(issueIndex);
-                }
-                cleanup(); // Remove listener
-              },
+        // Navigate to Settings and scroll to Email Connections section
+        // This is more reliable than triggering OAuth directly from the notification
+        if (onOpenSettings) {
+          onOpenSettings();
+          // Scroll to email connections section after modal opens
+          setTimeout(() => {
+            const emailSection = document.getElementById("email-connections");
+            if (emailSection) {
+              emailSection.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+          }, 100);
+          handleDismiss(issueIndex);
+        } else {
+          // Fallback: Try OAuth directly if Settings callback not available
+          try {
+            const isGoogle = issue.actionHandler === "connect-google" || issue.actionHandler === "reconnect-google";
+            const result = isGoogle
+              ? await window.api.auth.googleConnectMailbox(userId)
+              : await window.api.auth.microsoftConnectMailbox(userId);
+            if (result.success) {
+              const cleanup = isGoogle
+                ? window.api.onGoogleMailboxConnected(async (connectionResult) => {
+                    if (connectionResult.success) {
+                      await checkSystemHealth();
+                    }
+                    if (cleanup) cleanup();
+                  })
+                : window.api.onMicrosoftMailboxConnected((connectionResult) => {
+                    if (connectionResult.success) {
+                      checkSystemHealth();
+                      handleDismiss(issueIndex);
+                    }
+                    cleanup();
+                  });
+            }
+          } catch (error) {
+            console.error(
+              `[SystemHealthMonitor] ${issue.actionHandler} failed:`,
+              error,
             );
           }
-        } catch (error) {
-          console.error(
-            "[SystemHealthMonitor] Microsoft mailbox connection failed:",
-            error,
-          );
         }
         break;
 
