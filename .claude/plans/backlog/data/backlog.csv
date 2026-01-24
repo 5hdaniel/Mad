@@ -431,3 +431,4 @@ BACKLOG-460,Dashboard Notifications for Status Changes,feature,High,Pending,SPRI
 BACKLOG-461,Under Review Status When Broker Opens Submission,feature,High,Pending,SPRINT-054,~15K,-,-,2026-01-23,,[BACKLOG-461.md](items/BACKLOG-461.md)
 BACKLOG-462,Verify AI Add-on Feature Gating Completeness,qa,Critical,Pending,SPRINT-053,~15K,-,-,2026-01-23,,[BACKLOG-462.md](items/BACKLOG-462.md)
 BACKLOG-463,Single-Screen Contact Management Flow,ux,High,Pending,SPRINT-055b,~45K,-,-,2026-01-23,,[BACKLOG-463.md](items/BACKLOG-463.md)
+BACKLOG-464,OAuth Reconnect Popup Not Opening,bug,Critical,Pending,SPRINT-052,~20K,-,-,2026-01-24,,[BACKLOG-464.md](items/BACKLOG-464.md)
