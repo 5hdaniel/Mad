@@ -89,7 +89,9 @@ export function getNextOnboardingStep(
   }
 
   // 5. Windows + iPhone driver setup (if needed)
-  if (platform.isWindows && platform.hasIPhone && userData.needsDriverSetup) {
+  // Use userData.phoneType instead of platform.hasIPhone to check user's actual selection
+  // (fixes TASK-1180: platform.hasIPhone may not be updated yet when step completes)
+  if (platform.isWindows && userData.phoneType === "iphone" && userData.needsDriverSetup) {
     steps.push("apple-driver");
   }
 
@@ -129,7 +131,8 @@ function isOnboardingComplete(userData: UserData, platform: PlatformInfo, isNewU
   }
 
   // Windows + iPhone must not need driver setup
-  if (platform.isWindows && platform.hasIPhone && userData.needsDriverSetup) {
+  // Use userData.phoneType instead of platform.hasIPhone to check user's actual selection
+  if (platform.isWindows && userData.phoneType === "iphone" && userData.needsDriverSetup) {
     return false;
   }
 
@@ -389,6 +392,13 @@ export function appStateReducer(
         ? state.completedSteps
         : [...state.completedSteps, action.step];
 
+      // Track phone type selection from the action (when completing phone-type step)
+      // This is the user's actual selection, not inferred from platform detection
+      const selectedPhoneType: "iphone" | "android" | undefined =
+        action.step === "phone-type" && action.phoneType
+          ? action.phoneType
+          : state.selectedPhoneType;
+
       // If completing permissions on macOS, mark all preceding steps as complete
       // (you can't get to permissions without going through phone-type, secure-storage, email-connect)
       if (action.step === "permissions") {
@@ -402,18 +412,21 @@ export function appStateReducer(
           }
         }
       }
-      console.log("[Reducer] completedSteps after adding:", completedSteps);
+      console.log("[Reducer] completedSteps after adding:", completedSteps, "selectedPhoneType:", selectedPhoneType);
 
       // Determine user data state based on completed steps
+      // Use selectedPhoneType from action/state, fallback to platform detection only if no explicit selection
+      const phoneTypeForUserData: "iphone" | "android" | null = completedSteps.includes("phone-type")
+        ? (selectedPhoneType ?? (state.platform.hasIPhone ? "iphone" : "android"))
+        : null;
+
       const userData: UserData = {
-        phoneType: completedSteps.includes("phone-type")
-          ? (state.platform.hasIPhone ? "iphone" : "android")
-          : null,
+        phoneType: phoneTypeForUserData,
         hasCompletedEmailOnboarding: completedSteps.includes("email-connect"),
         hasEmailConnected: state.hasEmailConnected ?? false,
         needsDriverSetup:
           state.platform.isWindows &&
-          state.platform.hasIPhone &&
+          selectedPhoneType === "iphone" &&
           !completedSteps.includes("apple-driver"),
         hasPermissions:
           !state.platform.isMacOS || completedSteps.includes("permissions"),
@@ -443,6 +456,7 @@ export function appStateReducer(
         ...state,
         step: nextStep,
         completedSteps,
+        selectedPhoneType,
       };
     }
 

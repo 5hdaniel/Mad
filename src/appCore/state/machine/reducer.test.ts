@@ -139,10 +139,12 @@ describe("getNextOnboardingStep", () => {
     });
 
     it("returns apple-driver after email-connect if needed", () => {
+      // Must include phoneType: "iphone" because getNextOnboardingStep now
+      // checks userData.phoneType instead of platform.hasIPhone (TASK-1180 fix)
       const result = getNextOnboardingStep(
         ["phone-type", "email-connect"],
         mockWindowsPlatform,
-        { ...mockIncompleteUserData, needsDriverSetup: true }
+        { ...mockIncompleteUserData, phoneType: "iphone", needsDriverSetup: true }
       );
       expect(result).toBe("apple-driver");
     });
@@ -699,6 +701,7 @@ describe("appStateReducer - Onboarding Transitions", () => {
         user: mockUser,
         platform: mockWindowsPlatform,
         completedSteps: ["phone-type", "email-connect"],
+        selectedPhoneType: "iphone", // TASK-1180: must have explicit phone type for apple-driver
       };
       const action: AppAction = {
         type: "ONBOARDING_STEP_COMPLETE",
@@ -710,6 +713,76 @@ describe("appStateReducer - Onboarding Transitions", () => {
       expect(result.status).toBe("ready");
       if (result.status === "ready") {
         expect(result.userData.needsDriverSetup).toBe(false);
+      }
+    });
+
+    // TASK-1180: Test for phone type selection with explicit phoneType in action
+    it("uses phoneType from action when completing phone-type step", () => {
+      const state: OnboardingState = {
+        status: "onboarding",
+        step: "phone-type",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        completedSteps: [],
+      };
+      // Explicitly pass phoneType: "android" even though platform.hasIPhone is true
+      const action = {
+        type: "ONBOARDING_STEP_COMPLETE" as const,
+        step: "phone-type" as const,
+        phoneType: "android" as const,
+      };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("onboarding");
+      if (result.status === "onboarding") {
+        expect(result.selectedPhoneType).toBe("android");
+        expect(result.step).toBe("secure-storage"); // Next step on macOS
+      }
+    });
+
+    it("preserves selectedPhoneType in state after phone-type step is complete", () => {
+      const state: OnboardingState = {
+        status: "onboarding",
+        step: "secure-storage",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        completedSteps: ["phone-type"],
+        selectedPhoneType: "iphone", // Set from previous phone-type step completion
+      };
+      const action: AppAction = {
+        type: "ONBOARDING_STEP_COMPLETE",
+        step: "secure-storage",
+      };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("onboarding");
+      if (result.status === "onboarding") {
+        expect(result.selectedPhoneType).toBe("iphone"); // Should be preserved
+        expect(result.step).toBe("email-connect"); // Next step
+      }
+    });
+
+    it("uses selectedPhoneType in userData when transitioning to ready", () => {
+      const state: OnboardingState = {
+        status: "onboarding",
+        step: "permissions",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        completedSteps: ["phone-type", "secure-storage", "email-connect"],
+        selectedPhoneType: "android", // Explicitly selected android
+      };
+      const action: AppAction = {
+        type: "ONBOARDING_STEP_COMPLETE",
+        step: "permissions",
+      };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("ready");
+      if (result.status === "ready") {
+        expect(result.userData.phoneType).toBe("android");
       }
     });
   });
