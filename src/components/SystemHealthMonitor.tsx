@@ -156,11 +156,33 @@ function SystemHealthMonitor({
     return null;
   }
 
+  // Severity styling
+  const severityClasses: Record<"error" | "warning" | "info", string> = {
+    error: "bg-red-50 border-red-200",
+    warning: "bg-yellow-50 border-yellow-200",
+    info: "bg-blue-50 border-blue-200",
+  };
+
+  const iconClasses: Record<"error" | "warning" | "info", string> = {
+    error: "text-red-600",
+    warning: "text-yellow-600",
+    info: "text-blue-600",
+  };
+
+  const textClasses: Record<"error" | "warning" | "info", string> = {
+    error: "text-red-800",
+    warning: "text-yellow-800",
+    info: "text-blue-800",
+  };
+
+  const buttonClasses: Record<"error" | "warning" | "info", string> = {
+    error: "bg-red-200 hover:bg-red-300 text-red-800",
+    warning: "bg-yellow-200 hover:bg-yellow-300 text-yellow-800",
+    info: "bg-blue-200 hover:bg-blue-300 text-blue-800",
+  };
+
   return (
-    <div
-      className="fixed top-16 right-4 z-50 space-y-3"
-      style={{ maxWidth: "420px" }}
-    >
+    <div className="space-y-0">
       {visibleIssues.map((issue, _index) => {
         const originalIndex = issues.findIndex(
           (i, idx) => i === issue && !dismissed.has(idx),
@@ -168,157 +190,94 @@ function SystemHealthMonitor({
         const severity: "error" | "warning" | "info" =
           issue.severity || "warning";
 
-        // Severity styling
-        const severityClasses: Record<"error" | "warning" | "info", string> = {
-          error: "bg-red-50 border-red-200",
-          warning: "bg-yellow-50 border-yellow-200",
-          info: "bg-blue-50 border-blue-200",
-        };
-
-        const iconClasses: Record<"error" | "warning" | "info", string> = {
-          error: "text-red-600",
-          warning: "text-yellow-600",
-          info: "text-blue-600",
-        };
-
-        const buttonClasses: Record<"error" | "warning" | "info", string> = {
-          error: "bg-red-600 hover:bg-red-700",
-          warning: "bg-yellow-600 hover:bg-yellow-700",
-          info: "bg-blue-600 hover:bg-blue-700",
-        };
-
         return (
           <div
             key={originalIndex}
-            className={`rounded-lg shadow-lg border-2 p-4 ${severityClasses[severity]} animate-slide-in-right`}
+            className={`flex-shrink-0 ${severityClasses[severity]} border-b px-4 py-3`}
           >
-            <div className="flex items-start gap-3">
-              {/* Icon */}
-              <div className={`flex-shrink-0 ${iconClasses[severity]}`}>
-                {severity === "error" && (
-                  <svg
-                    className="w-6 h-6"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                )}
-                {severity === "warning" && (
-                  <svg
-                    className="w-6 h-6"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                    />
-                  </svg>
-                )}
-                {severity === "info" && (
-                  <svg
-                    className="w-6 h-6"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                )}
-              </div>
-
-              {/* Content */}
-              <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-semibold text-gray-900 mb-1">
-                  {issue.title || issue.userMessage}
-                </h3>
-                <p className="text-sm text-gray-700 mb-2">
-                  {issue.message || issue.userMessage}
-                </p>
-                {issue.details && (
-                  <details className="text-xs text-gray-600 mb-2">
-                    <summary className="cursor-pointer hover:text-gray-800">
-                      Technical details
-                    </summary>
-                    <p className="mt-1 font-mono bg-gray-100 p-2 rounded">
-                      {issue.details}
-                    </p>
-                  </details>
-                )}
-
-                {/* Actions */}
-                <div className="flex items-center gap-2 mt-3">
-                  {issue.action && (
-                    <button
-                      onClick={() => handleAction(issue, originalIndex)}
-                      className={`px-3 py-1.5 text-xs font-medium text-white rounded-md shadow-sm transition-colors ${buttonClasses[severity]}`}
+            <div className="flex items-center justify-between max-w-4xl mx-auto">
+              <div className="flex items-center gap-3">
+                {/* Icon */}
+                <div className={`flex-shrink-0 ${iconClasses[severity]}`}>
+                  {severity === "error" && (
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
                     >
-                      {issue.action}
-                    </button>
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
                   )}
-                  <button
-                    onClick={() => handleDismiss(originalIndex)}
-                    className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-800 transition-colors"
-                  >
-                    Dismiss
-                  </button>
+                  {severity === "warning" && (
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                      />
+                    </svg>
+                  )}
+                  {severity === "info" && (
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                  )}
+                </div>
+
+                {/* Content */}
+                <div>
+                  <p className={`text-sm font-medium ${textClasses[severity]}`}>
+                    {issue.title || issue.userMessage}
+                  </p>
+                  <p className={`text-xs ${textClasses[severity]} opacity-80`}>
+                    {issue.message || issue.action}
+                  </p>
                 </div>
               </div>
 
-              {/* Close button */}
-              <button
-                onClick={() => handleDismiss(originalIndex)}
-                className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+              {/* Actions */}
+              <div className="flex items-center gap-2">
+                {issue.action && (
+                  <button
+                    onClick={() => handleAction(issue, originalIndex)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${buttonClasses[severity]}`}
+                  >
+                    {issue.action}
+                  </button>
+                )}
+                <button
+                  onClick={() => handleDismiss(originalIndex)}
+                  className={`px-3 py-1.5 text-xs font-medium ${textClasses[severity]} hover:opacity-80 transition-colors`}
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
+                  Dismiss
+                </button>
+              </div>
             </div>
           </div>
         );
       })}
-
-      <style>{`
-        @keyframes slide-in-right {
-          from {
-            transform: translateX(100%);
-            opacity: 0;
-          }
-          to {
-            transform: translateX(0);
-            opacity: 1;
-          }
-        }
-        .animate-slide-in-right {
-          animation: slide-in-right 0.3s ease-out;
-        }
-      `}</style>
     </div>
   );
 }
