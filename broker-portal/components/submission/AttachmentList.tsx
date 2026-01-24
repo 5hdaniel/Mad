@@ -165,7 +165,12 @@ function MediaThumbnail({
         } else {
           setThumbnailUrl(data.signedUrl);
         }
-      } catch {
+      } catch (err) {
+        console.error('Failed to load attachment thumbnail:', {
+          filename: attachment.filename,
+          storagePath: attachment.storage_path,
+          error: err instanceof Error ? err.message : err,
+        });
         setError(true);
       } finally {
         setLoading(false);

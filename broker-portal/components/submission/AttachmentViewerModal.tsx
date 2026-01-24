@@ -91,8 +91,13 @@ export function AttachmentViewerModal({ attachment, open, onClose }: AttachmentV
           setDisplayUrl(data.signedUrl);
         }
       } catch (e) {
-        console.error('Failed to get signed URL:', e);
-        setError('Failed to load attachment. The file may not exist or you may not have access.');
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        console.error('Failed to get signed URL:', {
+          filename: attachment.filename,
+          storagePath: attachment.storage_path,
+          error: errorMessage,
+        });
+        setError(`Failed to load attachment: ${errorMessage}`);
       } finally {
         setLoading(false);
       }
