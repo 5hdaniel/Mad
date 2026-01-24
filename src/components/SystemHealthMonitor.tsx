@@ -96,13 +96,19 @@ function SystemHealthMonitor({
         // This is more reliable than triggering OAuth directly from the notification
         if (onOpenSettings) {
           onOpenSettings();
-          // Scroll to email connections section after modal opens
+          // Scroll to and highlight email connections section after modal opens
           setTimeout(() => {
             const emailSection = document.getElementById("email-connections");
             if (emailSection) {
               emailSection.scrollIntoView({ behavior: "smooth", block: "start" });
+              // Add highlight effect
+              emailSection.classList.add("ring-2", "ring-amber-400", "ring-offset-2", "rounded-lg");
+              // Remove highlight after 3 seconds
+              setTimeout(() => {
+                emailSection.classList.remove("ring-2", "ring-amber-400", "ring-offset-2", "rounded-lg");
+              }, 3000);
             }
-          }, 100);
+          }, 150);
           handleDismiss(issueIndex);
         } else {
           // Fallback: Try OAuth directly if Settings callback not available
