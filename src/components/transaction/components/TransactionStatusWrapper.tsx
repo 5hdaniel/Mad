@@ -1,6 +1,7 @@
 import React from "react";
 import type { Transaction } from "@/types";
 import { LicenseGate } from "@/components/common/LicenseGate";
+import { useLicense } from "@/contexts/LicenseContext";
 
 // ============================================
 // DETECTION BADGE COMPONENTS
@@ -8,13 +9,20 @@ import { LicenseGate } from "@/components/common/LicenseGate";
 
 /**
  * Badge showing manual entry - only shown for manually created transactions
- * (AI-detected is the default, no badge needed)
+ * when the user has AI add-on (otherwise all transactions are manual by default)
  */
 export function ManualEntryBadge({
   source,
 }: {
   source: "auto" | "manual" | "hybrid" | undefined;
 }) {
+  const { hasAIAddon } = useLicense();
+
+  // Don't show badge if no AI add-on - no distinction needed
+  if (!hasAIAddon) {
+    return null;
+  }
+
   // Only show badge for manually entered transactions
   if (source !== "manual") {
     return null;
