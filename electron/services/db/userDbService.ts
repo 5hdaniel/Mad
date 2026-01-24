@@ -107,6 +107,10 @@ export async function updateUser(
     "privacy_policy_version_accepted",
     "email_onboarding_completed_at",
     "mobile_phone_type",
+    // License fields (BACKLOG-426)
+    "license_type",
+    "ai_detection_enabled",
+    "organization_id",
   ];
 
   const fields: string[] = [];

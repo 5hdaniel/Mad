@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { LLMSettings } from "./settings/LLMSettings";
 import { MacOSMessagesImportSettings } from "./settings/MacOSMessagesImportSettings";
+import { LicenseGate } from "./common/LicenseGate";
 
 interface ConnectionError {
   type: string;
@@ -686,13 +687,15 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
               </div>
             </div>
 
-            {/* AI Settings */}
-            <div className="mb-8">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                AI Settings
-              </h3>
-              <LLMSettings userId={userId} />
-            </div>
+            {/* AI Settings - Only visible with AI add-on (BACKLOG-462) */}
+            <LicenseGate requires="ai_addon">
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  AI Settings
+                </h3>
+                <LLMSettings userId={userId} />
+              </div>
+            </LicenseGate>
 
             {/* Data & Privacy */}
             <div className="mb-8">
