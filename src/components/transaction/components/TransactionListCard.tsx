@@ -12,6 +12,7 @@ import {
 } from "./DetectionBadges";
 import { formatCommunicationCounts } from "./TransactionCard";
 import { SubmissionStatusBadge } from "../../transactionDetailsModule/components/SubmissionStatusBadge";
+import { LicenseGate } from "../../common/LicenseGate";
 
 // ============================================
 // SVG ICONS (matching TransactionTabs)
@@ -138,19 +139,21 @@ export function TransactionListCard({
             <h3 className="font-semibold text-gray-900">
               {transaction.property_address}
             </h3>
-            {/* Detection Status Badges */}
-            <div className="flex items-center gap-1.5">
-              <DetectionSourceBadge source={transaction.detection_source} />
-              {transaction.detection_source === "auto" &&
-                transaction.detection_confidence !== undefined && (
-                  <ConfidencePill
-                    confidence={transaction.detection_confidence}
-                  />
+            {/* Detection Status Badges - AI add-on only (BACKLOG-462) */}
+            <LicenseGate requires="ai_addon">
+              <div className="flex items-center gap-1.5">
+                <DetectionSourceBadge source={transaction.detection_source} />
+                {transaction.detection_source === "auto" &&
+                  transaction.detection_confidence !== undefined && (
+                    <ConfidencePill
+                      confidence={transaction.detection_confidence}
+                    />
+                  )}
+                {transaction.detection_status === "pending" && (
+                  <PendingReviewBadge />
                 )}
-              {transaction.detection_status === "pending" && (
-                <PendingReviewBadge />
-              )}
-            </div>
+              </div>
+            </LicenseGate>
             {/* Submission Status Badge (BACKLOG-392) */}
             {transaction.submission_status && transaction.submission_status !== "not_submitted" && (
               <SubmissionStatusBadge status={transaction.submission_status} />
