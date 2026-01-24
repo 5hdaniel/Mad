@@ -164,4 +164,12 @@ export const authBridge = {
       scopes: string;
     };
   }) => ipcRenderer.invoke("auth:save-pending-mailbox-tokens", data),
+
+  /**
+   * DEV ONLY: Expire a mailbox token for testing Connection Issue state
+   * @param userId - User ID
+   * @param provider - OAuth provider (google | microsoft)
+   */
+  devExpireMailboxToken: (userId: string, provider: "google" | "microsoft") =>
+    ipcRenderer.invoke("auth:dev:expire-mailbox-token", userId, provider),
 };

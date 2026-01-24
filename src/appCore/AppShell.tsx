@@ -11,6 +11,10 @@
 import React from "react";
 import type { AppStateMachine } from "./state/types";
 import { OfflineBanner, VersionPopup } from "./shell";
+import SystemHealthMonitor from "../components/SystemHealthMonitor";
+
+// OAuthProvider type to match SystemHealthMonitor expectations
+type OAuthProvider = "google" | "microsoft";
 
 interface AppShellProps {
   app: AppStateMachine;
@@ -23,10 +27,16 @@ export function AppShell({ app, children }: AppShellProps) {
     isAuthenticated,
     isDatabaseInitialized,
     currentUser,
+    authProvider,
+    hasPermissions,
+    hasEmailConnected,
+    isTourActive,
+    needsTermsAcceptance,
     isOnline,
     isChecking,
     modalState,
     openProfile,
+    openSettings,
     toggleVersion,
     closeVersion,
     handleRetryConnection,
@@ -88,6 +98,22 @@ export function AppShell({ app, children }: AppShellProps) {
           onRetry={handleRetryConnection}
         />
       )}
+
+      {/* System Health Monitor - Show permission/connection errors */}
+      {isAuthenticated &&
+        currentUser &&
+        authProvider &&
+        hasPermissions &&
+        currentStep === "dashboard" &&
+        hasEmailConnected && (
+          <SystemHealthMonitor
+            key={`health-monitor-${hasEmailConnected}`}
+            userId={currentUser.id}
+            provider={authProvider as OAuthProvider}
+            hidden={isTourActive || needsTermsAcceptance}
+            onOpenSettings={openSettings}
+          />
+        )}
 
       {/* Scrollable Content Area */}
       <div className="flex-1 min-h-0 overflow-y-auto relative">
