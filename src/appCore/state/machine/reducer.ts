@@ -105,17 +105,21 @@ export function getNextOnboardingStep(
 
 /**
  * Checks if onboarding is complete based on user data.
- * Onboarding is complete when email onboarding is done and
+ * Onboarding is complete when the user has selected phone type and
  * platform-specific requirements are met.
+ *
+ * Email onboarding is optional for returning users - they can skip it
+ * and connect email later from the dashboard.
  */
-function isOnboardingComplete(userData: UserData, platform: PlatformInfo): boolean {
-  // Must have completed email onboarding
-  if (!userData.hasCompletedEmailOnboarding) {
+function isOnboardingComplete(userData: UserData, platform: PlatformInfo, isNewUser: boolean = false): boolean {
+  // Must have phone type selected
+  if (!userData.phoneType) {
     return false;
   }
 
-  // Must have phone type selected
-  if (!userData.phoneType) {
+  // For NEW users, email onboarding is required during initial setup
+  // For RETURNING users, email is optional (can be done later)
+  if (isNewUser && !userData.hasCompletedEmailOnboarding) {
     return false;
   }
 
@@ -321,7 +325,9 @@ export function appStateReducer(
       }
 
       // Determine if onboarding is complete
-      if (isOnboardingComplete(data, platform)) {
+      // USER_DATA_LOADED is only called for returning users, so isNewUser = false
+      // This allows returning users to skip email onboarding and go to dashboard
+      if (isOnboardingComplete(data, platform, false)) {
         // All onboarding complete - go to ready state
         return {
           status: "ready",
