@@ -382,3 +382,6 @@ BACKLOG-426,License Type Database Schema Support,schema,Critical,Completed,SPRIN
 BACKLOG-427,License-Aware UI Components,ui,Critical,Completed,SPRINT-051,~35K,-,-,2026-01-22,2026-01-23,[BACKLOG-427.md](items/BACKLOG-427.md)
 BACKLOG-428,License Context Provider,service,Critical,Completed,SPRINT-051,~25K,-,-,2026-01-22,2026-01-23,[BACKLOG-428.md](items/BACKLOG-428.md)
 BACKLOG-429,Team Workflow E2E Testing,test,Critical,Completed,SPRINT-051,~25K,-,-,2026-01-22,2026-01-23,[BACKLOG-429.md](items/BACKLOG-429.md)
+BACKLOG-410,Add AI Detection Columns to SQLite,schema,High,Pending,-,~10K,-,-,2026-01-23,,[BACKLOG-410.md](items/BACKLOG-410.md)
+BACKLOG-413,Remove detection_status from Filter Logic,refactor,Medium,Pending,-,~5K,-,-,2026-01-23,,[BACKLOG-413.md](items/BACKLOG-413.md)
+BACKLOG-414,Add Visual Separator Between Status Domains,ui,Low,Pending,-,~5K,-,-,2026-01-23,,[BACKLOG-414.md](items/BACKLOG-414.md)

@@ -92,6 +92,7 @@ Engineers DON'T see:
 - [ ] Sprint file created: `.claude/plans/sprints/SPRINT-XXX-slug.md`
 - [ ] All task files created in `.claude/plans/tasks/`
 - [ ] INDEX.md updated with sprint assignment
+- [ ] **Backlog CSV updated** - All items have `sprint` column set
 - [ ] Worktrees ready for parallel tasks (BACKLOG-132)
 
 ---
