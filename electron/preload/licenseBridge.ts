@@ -17,4 +17,13 @@ export const licenseBridge = {
    * @returns Updated license data
    */
   refresh: () => ipcRenderer.invoke("license:refresh"),
+
+  /**
+   * DEV ONLY: Toggle AI add-on for testing
+   * @param userId - User ID to toggle
+   * @param enabled - Whether to enable or disable AI add-on
+   * @returns Success status
+   */
+  devToggleAIAddon: (userId: string, enabled: boolean) =>
+    ipcRenderer.invoke("license:dev:toggle-ai-addon", userId, enabled),
 };

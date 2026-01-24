@@ -44,6 +44,10 @@ export const TABLE_FIELDS = {
     "mobile_phone_type",
     "last_cloud_sync_at",
     "email_onboarding_completed_at",
+    // License fields (BACKLOG-426)
+    "license_type",
+    "ai_detection_enabled",
+    "organization_id",
   ]),
 
   oauth_tokens: new Set([
