@@ -491,8 +491,26 @@ interface MainAPI {
     }>;
     checkAllConnections: (userId: string) => Promise<{
       success: boolean;
-      google?: { connected: boolean; email?: string };
-      microsoft?: { connected: boolean; email?: string };
+      google?: {
+        connected: boolean;
+        email?: string;
+        error?: {
+          type: string;
+          userMessage: string;
+          action?: string;
+          actionHandler?: string;
+        } | null;
+      };
+      microsoft?: {
+        connected: boolean;
+        email?: string;
+        error?: {
+          type: string;
+          userMessage: string;
+          action?: string;
+          actionHandler?: string;
+        } | null;
+      };
       error?: string;
     }>;
     healthCheck: (
