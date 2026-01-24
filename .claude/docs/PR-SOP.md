@@ -501,13 +501,17 @@ gh run view <RUN-ID>
 
 ## Phase 9: Merge
 
+**CRITICAL: Creating a PR is step 3 of 4, not the final step. The task is NOT complete until the PR is MERGED.**
+
+**Full lifecycle reference:** `.claude/docs/shared/pr-lifecycle.md`
+
 ### Pre-Merge Checklist
 - [ ] All CI checks pass
 - [ ] No merge conflicts (verified in Phase 7.5)
 - [ ] PR approved (if reviews required)
 - [ ] Target branch is correct
 
-### Merge Command
+### 9.1 Merge Command
 
 ```bash
 # ALWAYS use traditional merge (--merge), NEVER squash
@@ -517,12 +521,31 @@ gh pr merge <PR-NUMBER> --merge
 
 **Branch Deletion:** See `.claude/docs/shared/git-branching.md` for deletion policy. Do NOT use `--delete-branch` unless explicitly requested.
 
-### Post-Merge
-- [ ] Verify merge completed successfully
+### 9.2 Merge Verification (MANDATORY)
+
+**After running the merge command, you MUST verify the merge succeeded.**
+
+```bash
+# Verify merge state - MUST show "MERGED"
+gh pr view <PR-NUMBER> --json state --jq '.state'
+```
+
+| Result | Meaning | Action |
+|--------|---------|--------|
+| `MERGED` | Success - task can be marked complete | Proceed to Post-Merge |
+| `OPEN` | Merge failed or didn't run | Investigate and retry |
+| `CLOSED` | PR was closed without merge | Work is LOST - investigate |
+
+**Do NOT mark the task as complete until you see `MERGED`.**
+
+### 9.3 Post-Merge
+- [ ] Verify merge completed: `gh pr view <PR> --json state` shows `MERGED`
 - [ ] Delete local branch: `git branch -d your-branch-name`
 - [ ] Pull latest changes: `git checkout develop && git pull`
+- [ ] Update task file with completion status
+- [ ] Notify PM that task is complete (only AFTER merge verified)
 
-### 9.4 Debugging Metrics Verification (MANDATORY)
+### 9.5 Debugging Metrics Verification (MANDATORY)
 
 Before merging, SR Engineer MUST verify debugging metrics are accurately captured.
 
@@ -702,8 +725,52 @@ grep -rn "?: .*=>.*void" src/components --include="*.tsx"
 
 ---
 
+## Session-End Checklist (MANDATORY)
+
+**Before ending ANY working session, verify no orphaned PRs exist.**
+
+> **Incident Reference:** SPRINT-051/052 had 20+ orphaned PRs that were created but never merged, causing fixes to be "lost" and reimplemented multiple times.
+
+### Quick Verification
+
+```bash
+# Check for any open PRs you created
+gh pr list --state open --author @me
+
+# Check for any sprint-related open PRs
+gh pr list --state open --search "TASK-"
+```
+
+### For Each Open PR Found
+
+| PR State | Action Required |
+|----------|-----------------|
+| CI failing | Fix before ending session OR document blocker |
+| Awaiting review | Note for next session (acceptable) |
+| Approved but not merged | **MERGE NOW** - do not leave approved PRs unmerged |
+| Has merge conflicts | Resolve before ending session |
+
+### Session-End Checklist
+
+Copy this to your notes:
+
+```markdown
+## Before Ending Session
+
+- [ ] `gh pr list --state open --author @me` - reviewed all open PRs
+- [ ] All approved PRs have been merged
+- [ ] All merges verified with `gh pr view <PR> --json state`
+- [ ] No PRs with failing CI left unattended (or blocker documented)
+- [ ] Task files updated with merge confirmations
+```
+
+**Do NOT end a session with approved-but-unmerged PRs.**
+
+---
+
 ## Questions?
 
 - **Architecture decisions**: Consult senior-engineer-pr-lead agent
 - **CI/CD issues**: Check `.github/workflows/ci.yml`
 - **Branching strategy**: See `CLAUDE.md`
+- **PR lifecycle**: See `.claude/docs/shared/pr-lifecycle.md`

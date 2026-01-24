@@ -154,6 +154,21 @@ After engineers complete tasks, PRs go through the `senior-engineer-pr-lead` age
 - Runs the PR-SOP checklist (`.claude/docs/PR-SOP.md`)
 - Ensures testing requirements from task files are met
 - Enforces merge policy (traditional merge, never squash)
+- **Verifies PR is MERGED (not just approved)** before task completion
+
+### PR Lifecycle Enforcement
+
+**Full reference:** `.claude/docs/shared/pr-lifecycle.md`
+
+**CRITICAL:** A task is NOT complete until its PR is MERGED. Creating a PR is step 3 of 4, not the final step.
+
+Before closing any sprint, PM MUST verify:
+```bash
+# Check for orphaned PRs
+gh pr list --state open --search "TASK-"
+```
+
+If any sprint-related PRs are open, the sprint CANNOT be closed.
 
 ### With existing project structure
 
