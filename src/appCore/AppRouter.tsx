@@ -46,8 +46,8 @@ export function AppRouter({ app }: AppRouterProps) {
     handleKeychainBack, handleMicrosoftLogin, handleMicrosoftSkip, handleConnectOutlook,
     handlePermissionsGranted, checkPermissions, handleExportComplete, handleOutlookExport,
     handleOutlookCancel, handleStartOver, setExportResult, handleRetryConnection,
-    openAuditTransaction, openTransactions, openContacts, goToStep, goToEmailOnboarding,
-    handleDismissSetupPrompt, setIsTourActive, openIPhoneSync,
+    openAuditTransaction, openTransactions, openContacts, goToStep,
+    handleDismissSetupPrompt, setIsTourActive, openIPhoneSync, openSettings,
   } = app;
 
   // New onboarding architecture (when enabled)
@@ -148,7 +148,7 @@ export function AppRouter({ app }: AppRouterProps) {
         onSyncPhone={showIPhoneSyncButton ? openIPhoneSync : undefined}
         onTourStateChange={setIsTourActive}
         showSetupPrompt={!hasEmailConnected && !showSetupPromptDismissed}
-        onContinueSetup={goToEmailOnboarding}
+        onContinueSetup={openSettings}
         onDismissSetupPrompt={handleDismissSetupPrompt}
         syncStatus={app.syncStatus}
         isAnySyncing={app.isAnySyncing}
