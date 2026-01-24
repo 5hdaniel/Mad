@@ -310,33 +310,54 @@ function TransactionDetails({
     });
   }, [handleAcceptAll, resolvedSuggestions, suggestionCallbacks, setResolvedSuggestions]);
 
-  // Sync communications handler - re-runs auto-link for all contacts
+  // Sync communications handler - fetches from provider and auto-links
+  // BACKLOG-457: Now fetches NEW emails from Gmail/Outlook, not just local DB
   const handleSyncCommunications = useCallback(async () => {
     setSyncingCommunications(true);
     try {
-      // Cast to access resyncAutoLink - method is defined in preload but window.d.ts augmentation has issues with tsc
+      // Cast to access syncAndFetchEmails - method is defined in preload but window.d.ts augmentation has issues with tsc
       const result = await (window.api.transactions as typeof window.api.transactions & {
-        resyncAutoLink: (transactionId: string) => Promise<{
+        syncAndFetchEmails: (transactionId: string) => Promise<{
           success: boolean;
-          contactsProcessed?: number;
+          provider?: "gmail" | "outlook";
+          emailsFetched?: number;
+          emailsStored?: number;
           totalEmailsLinked?: number;
           totalMessagesLinked?: number;
           totalAlreadyLinked?: number;
           totalErrors?: number;
           error?: string;
+          message?: string;
         }>;
-      }).resyncAutoLink(transaction.id);
+      }).syncAndFetchEmails(transaction.id);
       if (result.success) {
+        const emailsFetched = result.emailsFetched || 0;
+        const emailsStored = result.emailsStored || 0;
         const totalLinked = (result.totalEmailsLinked || 0) + (result.totalMessagesLinked || 0);
-        if (totalLinked > 0) {
-          showSuccess(`Synced ${totalLinked} communication${totalLinked !== 1 ? "s" : ""} (${result.totalEmailsLinked || 0} emails, ${result.totalMessagesLinked || 0} message threads)`);
-          // Refresh to show newly linked communications
+
+        if (emailsStored > 0 || totalLinked > 0) {
+          const parts: string[] = [];
+          if (emailsStored > 0) {
+            parts.push(`${emailsStored} new email${emailsStored !== 1 ? "s" : ""} fetched`);
+          }
+          if (result.totalEmailsLinked && result.totalEmailsLinked > 0) {
+            parts.push(`${result.totalEmailsLinked} email${result.totalEmailsLinked !== 1 ? "s" : ""} linked`);
+          }
+          if (result.totalMessagesLinked && result.totalMessagesLinked > 0) {
+            parts.push(`${result.totalMessagesLinked} message thread${result.totalMessagesLinked !== 1 ? "s" : ""} linked`);
+          }
+          showSuccess(parts.join(", "));
+          // Refresh to show newly fetched/linked communications
           loadDetails();
           refreshMessages();
+        } else if (emailsFetched > 0 && emailsStored === 0) {
+          showSuccess(`Checked ${emailsFetched} emails - all already in database`);
         } else if (result.totalAlreadyLinked && result.totalAlreadyLinked > 0) {
           showSuccess(`All communications already linked (${result.totalAlreadyLinked} found)`);
+        } else if (result.message) {
+          showSuccess(result.message);
         } else {
-          showSuccess("No new communications found to link");
+          showSuccess("No new communications found");
         }
       } else {
         showError(result.error || "Failed to sync communications");
