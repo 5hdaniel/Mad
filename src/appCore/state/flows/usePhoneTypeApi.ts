@@ -115,10 +115,13 @@ export function usePhoneTypeApi({
         const result = await userApi.setPhoneType(currentUserId, phoneType);
 
         if (result.success) {
-          // Dispatch onboarding step complete
+          // Dispatch onboarding step complete with the selected phone type
+          // This ensures the reducer uses the user's actual selection,
+          // not platform detection (fixes TASK-1180 onboarding loop bug)
           dispatch({
             type: "ONBOARDING_STEP_COMPLETE",
             step: "phone-type",
+            phoneType,
           });
           return true;
         } else {

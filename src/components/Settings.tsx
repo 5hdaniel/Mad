@@ -423,14 +423,14 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
             </div>
 
             {/* Email Connections */}
-            <div className="mb-8">
+            <div id="email-connections" className="mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 Email Connections
               </h3>
               <div className="space-y-4">
                 {/* Gmail Connection */}
                 <div className={`p-4 rounded-lg border ${
-                  connections.google?.error && !connections.google?.connected
+                  connections.google?.error && !connections.google?.connected && connections.google.error.type !== "NOT_CONNECTED"
                     ? "bg-yellow-50 border-yellow-200"
                     : "bg-gray-50 border-gray-200"
                 }`}>
@@ -456,7 +456,7 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                         </span>
                         <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                       </div>
-                    ) : connections.google?.error ? (
+                    ) : connections.google?.error && connections.google.error.type !== "NOT_CONNECTED" ? (
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-yellow-600 font-medium">
                           {connections.google.error.type === "TOKEN_REFRESH_FAILED" ||
@@ -480,8 +480,8 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                       {connections.google.email}
                     </p>
                   )}
-                  {/* Show error message and action prompt when connection has issues */}
-                  {connections.google?.error && !connections.google?.connected && (
+                  {/* Show error message and action prompt when connection has issues (not for NOT_CONNECTED) */}
+                  {connections.google?.error && !connections.google?.connected && connections.google.error.type !== "NOT_CONNECTED" && (
                     <div className="mb-3 p-2 bg-yellow-100 rounded text-xs">
                       <p className="text-yellow-800 font-medium">
                         {connections.google.error.userMessage}
@@ -503,7 +503,7 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                         ? "Disconnecting..."
                         : "Disconnect Gmail"}
                     </button>
-                  ) : connections.google?.error ? (
+                  ) : connections.google?.error && connections.google.error.type !== "NOT_CONNECTED" ? (
                     <button
                       onClick={handleConnectGoogle}
                       disabled={connectingProvider === "google"}
@@ -528,7 +528,7 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
 
                 {/* Outlook Connection */}
                 <div className={`p-4 rounded-lg border ${
-                  connections.microsoft?.error && !connections.microsoft?.connected
+                  connections.microsoft?.error && !connections.microsoft?.connected && connections.microsoft.error.type !== "NOT_CONNECTED"
                     ? "bg-yellow-50 border-yellow-200"
                     : "bg-gray-50 border-gray-200"
                 }`}>
@@ -571,7 +571,7 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                         </span>
                         <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                       </div>
-                    ) : connections.microsoft?.error ? (
+                    ) : connections.microsoft?.error && connections.microsoft.error.type !== "NOT_CONNECTED" ? (
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-yellow-600 font-medium">
                           {connections.microsoft.error.type === "TOKEN_REFRESH_FAILED" ||
@@ -595,8 +595,8 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                       {connections.microsoft.email}
                     </p>
                   )}
-                  {/* Show error message and action prompt when connection has issues */}
-                  {connections.microsoft?.error && !connections.microsoft?.connected && (
+                  {/* Show error message and action prompt when connection has issues (not for NOT_CONNECTED) */}
+                  {connections.microsoft?.error && !connections.microsoft?.connected && connections.microsoft.error.type !== "NOT_CONNECTED" && (
                     <div className="mb-3 p-2 bg-yellow-100 rounded text-xs">
                       <p className="text-yellow-800 font-medium">
                         {connections.microsoft.error.userMessage}
@@ -618,7 +618,7 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                         ? "Disconnecting..."
                         : "Disconnect Outlook"}
                     </button>
-                  ) : connections.microsoft?.error ? (
+                  ) : connections.microsoft?.error && connections.microsoft.error.type !== "NOT_CONNECTED" ? (
                     <button
                       onClick={handleConnectMicrosoft}
                       disabled={connectingProvider === "microsoft"}

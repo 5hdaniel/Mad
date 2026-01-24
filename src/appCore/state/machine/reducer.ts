@@ -89,7 +89,9 @@ export function getNextOnboardingStep(
   }
 
   // 5. Windows + iPhone driver setup (if needed)
-  if (platform.isWindows && platform.hasIPhone && userData.needsDriverSetup) {
+  // Use userData.phoneType instead of platform.hasIPhone to check user's actual selection
+  // (fixes TASK-1180: platform.hasIPhone may not be updated yet when step completes)
+  if (platform.isWindows && userData.phoneType === "iphone" && userData.needsDriverSetup) {
     steps.push("apple-driver");
   }
 
@@ -105,17 +107,21 @@ export function getNextOnboardingStep(
 
 /**
  * Checks if onboarding is complete based on user data.
- * Onboarding is complete when email onboarding is done and
+ * Onboarding is complete when the user has selected phone type and
  * platform-specific requirements are met.
+ *
+ * Email onboarding is optional for returning users - they can skip it
+ * and connect email later from the dashboard.
  */
-function isOnboardingComplete(userData: UserData, platform: PlatformInfo): boolean {
-  // Must have completed email onboarding
-  if (!userData.hasCompletedEmailOnboarding) {
+function isOnboardingComplete(userData: UserData, platform: PlatformInfo, isNewUser: boolean = false): boolean {
+  // Must have phone type selected
+  if (!userData.phoneType) {
     return false;
   }
 
-  // Must have phone type selected
-  if (!userData.phoneType) {
+  // For NEW users, email onboarding is required during initial setup
+  // For RETURNING users, email is optional (can be done later)
+  if (isNewUser && !userData.hasCompletedEmailOnboarding) {
     return false;
   }
 
@@ -125,7 +131,8 @@ function isOnboardingComplete(userData: UserData, platform: PlatformInfo): boole
   }
 
   // Windows + iPhone must not need driver setup
-  if (platform.isWindows && platform.hasIPhone && userData.needsDriverSetup) {
+  // Use userData.phoneType instead of platform.hasIPhone to check user's actual selection
+  if (platform.isWindows && userData.phoneType === "iphone" && userData.needsDriverSetup) {
     return false;
   }
 
@@ -321,7 +328,9 @@ export function appStateReducer(
       }
 
       // Determine if onboarding is complete
-      if (isOnboardingComplete(data, platform)) {
+      // USER_DATA_LOADED is only called for returning users, so isNewUser = false
+      // This allows returning users to skip email onboarding and go to dashboard
+      if (isOnboardingComplete(data, platform, false)) {
         // All onboarding complete - go to ready state
         return {
           status: "ready",
@@ -371,9 +380,7 @@ export function appStateReducer(
     // ============================================
 
     case "ONBOARDING_STEP_COMPLETE": {
-      console.log("[Reducer] ONBOARDING_STEP_COMPLETE received:", action.step, "current state:", state.status);
       if (state.status !== "onboarding") {
-        console.log("[Reducer] Not in onboarding state, returning unchanged");
         return state;
       }
 
@@ -382,6 +389,13 @@ export function appStateReducer(
       let completedSteps = state.completedSteps.includes(action.step)
         ? state.completedSteps
         : [...state.completedSteps, action.step];
+
+      // Track phone type selection from the action (when completing phone-type step)
+      // This is the user's actual selection, not inferred from platform detection
+      const selectedPhoneType: "iphone" | "android" | undefined =
+        action.step === "phone-type" && action.phoneType
+          ? action.phoneType
+          : state.selectedPhoneType;
 
       // If completing permissions on macOS, mark all preceding steps as complete
       // (you can't get to permissions without going through phone-type, secure-storage, email-connect)
@@ -396,18 +410,20 @@ export function appStateReducer(
           }
         }
       }
-      console.log("[Reducer] completedSteps after adding:", completedSteps);
 
       // Determine user data state based on completed steps
+      // Use selectedPhoneType from action/state, fallback to platform detection only if no explicit selection
+      const phoneTypeForUserData: "iphone" | "android" | null = completedSteps.includes("phone-type")
+        ? (selectedPhoneType ?? (state.platform.hasIPhone ? "iphone" : "android"))
+        : null;
+
       const userData: UserData = {
-        phoneType: completedSteps.includes("phone-type")
-          ? (state.platform.hasIPhone ? "iphone" : "android")
-          : null,
+        phoneType: phoneTypeForUserData,
         hasCompletedEmailOnboarding: completedSteps.includes("email-connect"),
         hasEmailConnected: state.hasEmailConnected ?? false,
         needsDriverSetup:
           state.platform.isWindows &&
-          state.platform.hasIPhone &&
+          selectedPhoneType === "iphone" &&
           !completedSteps.includes("apple-driver"),
         hasPermissions:
           !state.platform.isMacOS || completedSteps.includes("permissions"),
@@ -418,11 +434,9 @@ export function appStateReducer(
         state.platform,
         userData
       );
-      console.log("[Reducer] nextStep from getNextOnboardingStep:", nextStep, "platform:", state.platform, "userData:", userData);
 
       if (!nextStep) {
         // All onboarding complete - transition to ready
-        console.log("[Reducer] No next step - transitioning to READY");
         return {
           status: "ready",
           user: state.user,
@@ -430,13 +444,13 @@ export function appStateReducer(
           userData,
         };
       }
-      console.log("[Reducer] More steps to go, staying in onboarding with step:", nextStep);
 
       // Continue to next step
       return {
         ...state,
         step: nextStep,
         completedSteps,
+        selectedPhoneType,
       };
     }
 

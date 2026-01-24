@@ -257,7 +257,20 @@ Use conventional commits:
 - `chore:` - Maintenance tasks
 - `ci:` - CI/CD changes
 
-### Step 4: Push and Create PR
+### Step 4: Sync with Develop (MANDATORY before PR)
+
+```bash
+git fetch origin
+git merge origin/develop
+
+# If conflicts exist, resolve them MANUALLY (see .claude/docs/shared/git-branching.md)
+# NEVER use 'git checkout --theirs' blindly - it discards your branch's changes!
+
+npm run type-check
+npm test
+```
+
+### Step 5: Push and Create PR
 
 ```bash
 git push -u origin feature/your-feature-name
@@ -266,14 +279,14 @@ git push -u origin feature/your-feature-name
 gh pr create --base develop --title "feat: your feature" --body "Description..."
 ```
 
-### Step 5: Wait for CI
+### Step 6: Wait for CI
 
 Required checks:
 - Test & Lint (macOS/Windows, Node 18/20)
 - Security Audit
 - Build Application
 
-### Step 6: Merge
+### Step 7: Merge
 
 After CI passes, merge with traditional merge (not squash):
 

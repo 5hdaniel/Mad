@@ -183,6 +183,8 @@ export interface OnboardingState {
   hasEmailConnected?: boolean;
   /** True if macOS Full Disk Access is granted (checked during loading) */
   hasPermissions?: boolean;
+  /** Phone type selected during onboarding (iphone or android) */
+  selectedPhoneType?: "iphone" | "android";
 }
 
 /**
@@ -309,6 +311,8 @@ export interface OnboardingStepCompleteAction {
   type: "ONBOARDING_STEP_COMPLETE";
   /** The step that was completed */
   step: OnboardingStep;
+  /** Phone type selected during phone-type step (required when step is "phone-type") */
+  phoneType?: "iphone" | "android";
 }
 
 /**

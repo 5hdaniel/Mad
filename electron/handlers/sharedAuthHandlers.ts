@@ -424,4 +424,38 @@ export function registerSharedAuthHandlers(
       }
     }
   );
+
+  // DEV ONLY: Reset onboarding for testing the onboarding flow
+  // This clears email_onboarding_completed_at and mobile_phone_type
+  ipcMain.handle(
+    "auth:dev:reset-onboarding",
+    async (_event, userId: string) => {
+      try {
+        await logService.info(
+          `[Auth] DEV: Resetting onboarding for user ${userId}`,
+          "AuthHandlers"
+        );
+
+        // Use raw SQL to set fields to NULL (updateUser doesn't support null values)
+        const db = databaseService.getRawDatabase();
+        db.prepare(
+          "UPDATE users_local SET email_onboarding_completed_at = NULL, mobile_phone_type = NULL WHERE id = ?"
+        ).run(userId);
+
+        await logService.info(
+          `[Auth] DEV: Onboarding reset complete for user ${userId}`,
+          "AuthHandlers"
+        );
+
+        return { success: true };
+      } catch (error) {
+        await logService.error(
+          "[Auth] DEV: Failed to reset onboarding",
+          "AuthHandlers",
+          { error: String(error) }
+        );
+        return { success: false, error: String(error) };
+      }
+    }
+  );
 }

@@ -172,4 +172,12 @@ export const authBridge = {
    */
   devExpireMailboxToken: (userId: string, provider: "google" | "microsoft") =>
     ipcRenderer.invoke("auth:dev:expire-mailbox-token", userId, provider),
+
+  /**
+   * DEV ONLY: Reset onboarding for testing the onboarding flow
+   * Clears email_onboarding_completed_at and mobile_phone_type
+   * @param userId - User ID to reset
+   */
+  devResetOnboarding: (userId: string) =>
+    ipcRenderer.invoke("auth:dev:reset-onboarding", userId),
 };
