@@ -839,29 +839,9 @@ class DatabaseService implements IDatabaseService {
       await logService.info("Migration 24 (BACKLOG-506): communications table recreated as clean junction table", "DatabaseService");
     }
 
-    // Migration 19: Clean up legacy communication records that cause duplicates
-    // Legacy records stored content directly in body_plain without message_id reference.
-    // When the same message was re-imported with proper message_id linking, both records
-    // exist with the same content but different IDs, causing duplicate messages in the UI.
-    // Since we have no users yet, we can safely delete the legacy records.
-    // The proper junction records (with message_id) remain and link messages to transactions.
-    const legacyCommsCount = (db.prepare(`
-      SELECT COUNT(*) as count FROM communications
-      WHERE body_plain IS NOT NULL
-      AND message_id IS NULL
-      AND communication_type IN ('text', 'sms', 'imessage')
-    `).get() as { count: number })?.count || 0;
-
-    if (legacyCommsCount > 0) {
-      await logService.info(`Migration 19: Found ${legacyCommsCount} legacy text communication records to clean up`, "DatabaseService");
-      runSafe(`
-        DELETE FROM communications
-        WHERE body_plain IS NOT NULL
-        AND message_id IS NULL
-        AND communication_type IN ('text', 'sms', 'imessage')
-      `);
-      await logService.info("Migration 19: Legacy text communications cleaned up - duplicates should be resolved", "DatabaseService");
-    }
+    // Note: Migration 19 (legacy text communications cleanup) was removed - now handled by Migration 24.
+    // Migration 24 only copies records with message_id or thread_id set, automatically
+    // excluding legacy records that had body_plain but no proper references.
 
     // Finalize schema version (create table if missing for backwards compatibility)
     const schemaVersionExists = db.prepare(
@@ -1306,22 +1286,22 @@ class DatabaseService implements IDatabaseService {
   }
 
   /**
-   * Get unlinked emails from the communications table
+   * Get unlinked emails from the messages table
    * These are emails not yet attached to any transaction
-   * Note: Emails are stored in communications table, not messages table
+   * Note: Emails are now stored in messages table with junction links in communications
    */
-  async getUnlinkedEmails(userId: string, limit = 500): Promise<Communication[]> {
+  async getUnlinkedEmails(userId: string, limit = 500): Promise<Message[]> {
     const db = this._ensureDb();
     const sql = `
-      SELECT id, user_id, transaction_id, subject, sender, sent_at, body_plain as body_preview
-      FROM communications
-      WHERE user_id = ?
-        AND transaction_id IS NULL
-        AND (communication_type = 'email' OR communication_type IS NULL)
-      ORDER BY sent_at DESC
+      SELECT m.id, m.user_id, m.transaction_id, m.subject, m.sender, m.sent_at, m.body_text as body_preview
+      FROM messages m
+      WHERE m.user_id = ?
+        AND m.transaction_id IS NULL
+        AND m.channel = 'email'
+      ORDER BY m.sent_at DESC
       LIMIT ?
     `;
-    return db.prepare(sql).all(userId, limit) as Communication[];
+    return db.prepare(sql).all(userId, limit) as Message[];
   }
 
   /**
