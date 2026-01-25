@@ -468,15 +468,28 @@ export function appStateReducer(
     }
 
     case "EMAIL_CONNECTED": {
-      if (state.status !== "onboarding") {
-        return state;
+      if (state.status === "onboarding") {
+        // Update onboarding state to track that email was connected
+        return {
+          ...state,
+          hasEmailConnected: true,
+        };
       }
 
-      // Update onboarding state to track that email was connected
-      return {
-        ...state,
-        hasEmailConnected: true,
-      };
+      if (state.status === "ready") {
+        // User connected email from Settings after onboarding complete
+        // Update userData.hasEmailConnected so dashboard banner disappears
+        return {
+          ...state,
+          userData: {
+            ...state.userData,
+            hasEmailConnected: true,
+          },
+        };
+      }
+
+      // Invalid state for email connection
+      return state;
     }
 
     // ============================================
