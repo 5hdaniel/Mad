@@ -764,6 +764,81 @@ class DatabaseService implements IDatabaseService {
       await logService.info("Migration 21: Content-duplicate messages cleaned up", "DatabaseService");
     }
 
+    // Migration 22 (BACKLOG-506): Add unique index on communications(thread_id, transaction_id)
+    // This prevents duplicate thread links to the same transaction
+    // Only applies where thread_id IS NOT NULL and message_id IS NULL (thread-based linking)
+    runSafe(`CREATE UNIQUE INDEX IF NOT EXISTS idx_communications_thread_txn_unique
+             ON communications(thread_id, transaction_id)
+             WHERE thread_id IS NOT NULL AND message_id IS NULL`);
+
+    // Migration 23 (BACKLOG-506): Drop unused transaction_participants table
+    // The transaction_contacts table provides the same functionality with more flexibility
+    // Drop indexes first, then triggers, then the table
+    const txParticipantsExists = db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='transaction_participants'"
+    ).get();
+    if (txParticipantsExists) {
+      await logService.info("Migration 23 (BACKLOG-506): Dropping unused transaction_participants table", "DatabaseService");
+      runSafe(`DROP INDEX IF EXISTS idx_transaction_participants_transaction_id`);
+      runSafe(`DROP INDEX IF EXISTS idx_transaction_participants_contact_id`);
+      runSafe(`DROP INDEX IF EXISTS idx_transaction_participants_role`);
+      runSafe(`DROP TRIGGER IF EXISTS update_transaction_participants_timestamp`);
+      runSafe(`DROP TABLE IF EXISTS transaction_participants`);
+      await logService.info("Migration 23 (BACKLOG-506): transaction_participants table dropped", "DatabaseService");
+    }
+
+    // Migration 24 (BACKLOG-506): Recreate communications as clean junction table
+    // Check if legacy columns exist - if so, migrate to clean schema
+    const commColumns = getColumns('communications');
+    if (commColumns.includes('body_plain')) {
+      await logService.info("Migration 24 (BACKLOG-506): Recreating communications table as clean junction table", "DatabaseService");
+
+      // Step 1: Rename old table
+      runSafe(`ALTER TABLE communications RENAME TO communications_legacy`);
+
+      // Step 2: Create new clean communications table
+      db.exec(`
+        CREATE TABLE communications (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          transaction_id TEXT,
+          message_id TEXT,
+          thread_id TEXT,
+          communication_type TEXT DEFAULT 'email' CHECK (communication_type IN ('email', 'text', 'imessage')),
+          link_source TEXT CHECK (link_source IN ('auto', 'manual', 'scan')),
+          link_confidence REAL,
+          linked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
+          FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL,
+          FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+        )
+      `);
+
+      // Step 3: Copy junction data from legacy table (only the reference columns)
+      runSafe(`
+        INSERT INTO communications (id, user_id, transaction_id, message_id, thread_id, communication_type, link_source, link_confidence, linked_at, created_at)
+        SELECT id, user_id, transaction_id, message_id, thread_id, communication_type, link_source, link_confidence, linked_at, created_at
+        FROM communications_legacy
+        WHERE message_id IS NOT NULL OR thread_id IS NOT NULL
+      `);
+
+      // Step 4: Recreate indexes
+      runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_user_id ON communications(user_id)`);
+      runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_transaction_id ON communications(transaction_id)`);
+      runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_message_id ON communications(message_id)`);
+      runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_txn_msg ON communications(transaction_id, message_id)`);
+      runSafe(`CREATE UNIQUE INDEX IF NOT EXISTS idx_communications_msg_txn_unique ON communications(message_id, transaction_id) WHERE message_id IS NOT NULL`);
+      runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_thread_id ON communications(thread_id)`);
+      runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_thread_txn ON communications(thread_id, transaction_id)`);
+      runSafe(`CREATE UNIQUE INDEX IF NOT EXISTS idx_communications_thread_txn_unique ON communications(thread_id, transaction_id) WHERE thread_id IS NOT NULL AND message_id IS NULL`);
+
+      // Step 5: Drop legacy table
+      runSafe(`DROP TABLE IF EXISTS communications_legacy`);
+
+      await logService.info("Migration 24 (BACKLOG-506): communications table recreated as clean junction table", "DatabaseService");
+    }
+
     // Migration 19: Clean up legacy communication records that cause duplicates
     // Legacy records stored content directly in body_plain without message_id reference.
     // When the same message was re-imported with proper message_id linking, both records
@@ -800,12 +875,12 @@ class DatabaseService implements IDatabaseService {
           version INTEGER NOT NULL DEFAULT 1,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
-        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 21);
+        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 24);
       `);
     } else {
       const currentVersion = (db.prepare("SELECT version FROM schema_version").get() as { version: number } | undefined)?.version || 0;
-      if (currentVersion < 21) {
-        db.exec("UPDATE schema_version SET version = 21");
+      if (currentVersion < 24) {
+        db.exec("UPDATE schema_version SET version = 24");
       }
     }
 
