@@ -204,14 +204,18 @@ function Settings({ onClose, userId, onEmailConnected }: SettingsComponentProps)
         cleanup = window.api.onGoogleMailboxConnected(
           async (connectionResult: ConnectionResult & { email?: string }) => {
             if (connectionResult.success) {
+              // Refresh connections first
               await checkConnections();
-              // Notify parent to update app state
-              if (connectionResult.email && onEmailConnected) {
-                onEmailConnected(connectionResult.email, "google");
+              // Get email from connection status API (reliable source)
+              const connResult = await window.api.system.checkAllConnections(userId);
+              const email = connResult.google?.email;
+              // Notify parent to update app state so banner disappears
+              if (email && onEmailConnected) {
+                onEmailConnected(email, "google");
               }
             }
             setConnectingProvider(null);
-            if (cleanup) cleanup(); // Clean up listener after handling the event
+            if (cleanup) cleanup();
           },
         );
       }
@@ -233,14 +237,18 @@ function Settings({ onClose, userId, onEmailConnected }: SettingsComponentProps)
         cleanup = window.api.onMicrosoftMailboxConnected(
           async (connectionResult: ConnectionResult & { email?: string }) => {
             if (connectionResult.success) {
+              // Refresh connections first
               await checkConnections();
-              // Notify parent to update app state
-              if (connectionResult.email && onEmailConnected) {
-                onEmailConnected(connectionResult.email, "microsoft");
+              // Get email from connection status API (reliable source)
+              const connResult = await window.api.system.checkAllConnections(userId);
+              const email = connResult.microsoft?.email;
+              // Notify parent to update app state so banner disappears
+              if (email && onEmailConnected) {
+                onEmailConnected(email, "microsoft");
               }
             }
             setConnectingProvider(null);
-            if (cleanup) cleanup(); // Clean up listener after handling the event
+            if (cleanup) cleanup();
           },
         );
       }
