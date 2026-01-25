@@ -677,6 +677,23 @@ class DatabaseService implements IDatabaseService {
       }
     }
 
+    // Migration 18: Performance indexes to reduce UI freezes during queries
+    // BACKLOG-497: Quick win before full worker thread refactor
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_contacts_user_id ON contacts(user_id)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_contact_emails_contact_id ON contact_emails(contact_id)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_contact_emails_email ON contact_emails(email)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_contact_phones_contact_id ON contact_phones(contact_id)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_user_id ON communications(user_id)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_sender ON communications(sender)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_sent_at ON communications(sent_at)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_user_sent ON communications(user_id, sent_at)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_transaction ON communications(transaction_id)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_user_id ON messages(user_id)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_sent_at ON messages(sent_at)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_user_sent ON messages(user_id, sent_at)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel)`);
+
     // Finalize schema version (create table if missing for backwards compatibility)
     const schemaVersionExists = db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
@@ -689,12 +706,12 @@ class DatabaseService implements IDatabaseService {
           version INTEGER NOT NULL DEFAULT 1,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
-        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 17);
+        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 18);
       `);
     } else {
       const currentVersion = (db.prepare("SELECT version FROM schema_version").get() as { version: number } | undefined)?.version || 0;
-      if (currentVersion < 17) {
-        db.exec("UPDATE schema_version SET version = 17");
+      if (currentVersion < 18) {
+        db.exec("UPDATE schema_version SET version = 18");
       }
     }
 
