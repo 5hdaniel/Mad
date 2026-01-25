@@ -73,7 +73,7 @@ gh pr view <PR-NUMBER> --json state --jq '.state'
 
 ### Metrics (Auto-Captured)
 
-Run: `grep "<your_agent_id>" .claude/metrics/tokens.jsonl | jq '.'`
+Run: `grep "<your_agent_id>" .claude/metrics/tokens.csv`
 
 | Metric | Value |
 |--------|-------|
