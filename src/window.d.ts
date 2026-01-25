@@ -552,6 +552,13 @@ interface MainAPI {
       success: boolean;
       error?: string;
     }>;
+    /** Reindex database for performance optimization */
+    reindexDatabase: () => Promise<{
+      success: boolean;
+      indexesRebuilt?: number;
+      durationMs?: number;
+      error?: string;
+    }>;
   };
   device: {
     /** Lists all currently connected iOS devices */

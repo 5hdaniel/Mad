@@ -1617,6 +1617,98 @@ class DatabaseService implements IDatabaseService {
       : false;
     return { isEncrypted, keyMetadata };
   }
+
+  /**
+   * Reindex all performance indexes
+   * Recreates indexes that optimize query performance for contacts, communications, and messages.
+   * This can help resolve slowness caused by fragmented or outdated indexes.
+   *
+   * @returns Object with reindex results including index count and duration
+   */
+  async reindexDatabase(): Promise<{
+    success: boolean;
+    indexesRebuilt: number;
+    durationMs: number;
+    error?: string;
+  }> {
+    const db = this._ensureDb();
+    const startTime = Date.now();
+    let indexesRebuilt = 0;
+
+    try {
+      await logService.info("Starting database reindex operation", "DatabaseService");
+
+      // Performance indexes from Migration 18 (BACKLOG-497)
+      // Drop and recreate to ensure fresh, optimized indexes
+      const performanceIndexes = [
+        // Contact indexes
+        { name: "idx_contacts_user_id", sql: "CREATE INDEX IF NOT EXISTS idx_contacts_user_id ON contacts(user_id)" },
+        { name: "idx_contact_emails_contact_id", sql: "CREATE INDEX IF NOT EXISTS idx_contact_emails_contact_id ON contact_emails(contact_id)" },
+        { name: "idx_contact_emails_email", sql: "CREATE INDEX IF NOT EXISTS idx_contact_emails_email ON contact_emails(email)" },
+        { name: "idx_contact_phones_contact_id", sql: "CREATE INDEX IF NOT EXISTS idx_contact_phones_contact_id ON contact_phones(contact_id)" },
+        // Communication indexes
+        { name: "idx_communications_user_id", sql: "CREATE INDEX IF NOT EXISTS idx_communications_user_id ON communications(user_id)" },
+        { name: "idx_communications_sender", sql: "CREATE INDEX IF NOT EXISTS idx_communications_sender ON communications(sender)" },
+        { name: "idx_communications_sent_at", sql: "CREATE INDEX IF NOT EXISTS idx_communications_sent_at ON communications(sent_at)" },
+        { name: "idx_communications_user_sent", sql: "CREATE INDEX IF NOT EXISTS idx_communications_user_sent ON communications(user_id, sent_at)" },
+        { name: "idx_communications_transaction", sql: "CREATE INDEX IF NOT EXISTS idx_communications_transaction ON communications(transaction_id)" },
+        // Message indexes
+        { name: "idx_messages_user_id", sql: "CREATE INDEX IF NOT EXISTS idx_messages_user_id ON messages(user_id)" },
+        { name: "idx_messages_sent_at", sql: "CREATE INDEX IF NOT EXISTS idx_messages_sent_at ON messages(sent_at)" },
+        { name: "idx_messages_thread_id", sql: "CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id)" },
+        { name: "idx_messages_user_sent", sql: "CREATE INDEX IF NOT EXISTS idx_messages_user_sent ON messages(user_id, sent_at)" },
+        { name: "idx_messages_channel", sql: "CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel)" },
+      ];
+
+      // Use a transaction for consistency
+      db.exec("BEGIN TRANSACTION");
+
+      try {
+        for (const index of performanceIndexes) {
+          // Drop the existing index if it exists
+          db.exec(`DROP INDEX IF EXISTS ${index.name}`);
+          // Recreate the index
+          db.exec(index.sql);
+          indexesRebuilt++;
+        }
+
+        // Run ANALYZE to update statistics used by the query planner
+        db.exec("ANALYZE");
+
+        db.exec("COMMIT");
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      }
+
+      const durationMs = Date.now() - startTime;
+      await logService.info(
+        `Database reindex completed: ${indexesRebuilt} indexes rebuilt in ${durationMs}ms`,
+        "DatabaseService"
+      );
+
+      return {
+        success: true,
+        indexesRebuilt,
+        durationMs,
+      };
+    } catch (error) {
+      const durationMs = Date.now() - startTime;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      await logService.error("Database reindex failed", "DatabaseService", {
+        error: errorMessage,
+        indexesRebuilt,
+        durationMs,
+      });
+
+      return {
+        success: false,
+        indexesRebuilt,
+        durationMs,
+        error: errorMessage,
+      };
+    }
+  }
 }
 
 // Export singleton instance

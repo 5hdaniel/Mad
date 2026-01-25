@@ -100,6 +100,7 @@ if (typeof window !== 'undefined') {
       initializeSecureStorage: jest.fn(),
       getSecureStorageStatus: jest.fn(),
       setupFullDiskAccess: jest.fn(),
+      reindexDatabase: jest.fn(),
     },
     address: {
       initialize: jest.fn(),

@@ -419,6 +419,75 @@ describe("Settings", () => {
       expect(screen.getByText("Clear All Data")).toBeInTheDocument();
       expect(screen.getByText(/delete all local data/i)).toBeInTheDocument();
     });
+
+    it("should show reindex database button", async () => {
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      expect(screen.getByText("Reindex Database")).toBeInTheDocument();
+      expect(
+        screen.getByText(/optimize database performance/i),
+      ).toBeInTheDocument();
+    });
+
+    it("should call reindexDatabase when button is clicked", async () => {
+      window.api.system.reindexDatabase.mockResolvedValue({
+        success: true,
+        indexesRebuilt: 14,
+        durationMs: 150,
+      });
+
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      const reindexButton = screen
+        .getByText("Reindex Database")
+        .closest("button");
+      expect(reindexButton).not.toBeDisabled();
+
+      await userEvent.click(reindexButton!);
+
+      expect(window.api.system.reindexDatabase).toHaveBeenCalled();
+    });
+
+    it("should show success message after reindex", async () => {
+      window.api.system.reindexDatabase.mockResolvedValue({
+        success: true,
+        indexesRebuilt: 14,
+        durationMs: 150,
+      });
+
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      const reindexButton = screen
+        .getByText("Reindex Database")
+        .closest("button");
+      await userEvent.click(reindexButton!);
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(/database optimized.*14 indexes rebuilt/i),
+        ).toBeInTheDocument();
+      });
+    });
+
+    it("should show error message when reindex fails", async () => {
+      window.api.system.reindexDatabase.mockResolvedValue({
+        success: false,
+        indexesRebuilt: 0,
+        durationMs: 50,
+        error: "Database is locked",
+      });
+
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      const reindexButton = screen
+        .getByText("Reindex Database")
+        .closest("button");
+      await userEvent.click(reindexButton!);
+
+      await waitFor(() => {
+        expect(screen.getByText(/database is locked/i)).toBeInTheDocument();
+      });
+    });
   });
 
   describe("About Section", () => {
