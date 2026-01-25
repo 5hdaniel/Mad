@@ -9,7 +9,7 @@
  * since both steps use ContactAssignmentStep which would otherwise each
  * trigger their own contact loading on mount.
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   SPECIFIC_ROLES,
   ROLE_TO_CATEGORY,
@@ -171,36 +171,73 @@ export function useAuditTransaction({
   const [contactsLoading, setContactsLoading] = useState<boolean>(true);
   const [contactsError, setContactsError] = useState<string | null>(null);
 
+  // Track if initial contact load has been performed (prevents duplicate loads in StrictMode)
+  const contactsLoadedRef = useRef(false);
+  // Track if component is mounted to prevent state updates after unmount
+  const isMountedRef = useRef(true);
+
   /**
-   * Load contacts - called once on mount and when refreshed
+   * Load contacts - called once on mount and when explicitly refreshed
    * Lifted from ContactAssignmentStep to prevent N API calls (one per step)
+   *
+   * Note: This function does NOT depend on addressData.property_address to prevent
+   * re-loading contacts every time the address changes. Contacts are loaded once
+   * when the modal opens. Address-specific sorting is done at the API level
+   * but subsequent address changes should not trigger re-fetches.
+   *
+   * The forceRefresh parameter allows explicit refresh after imports.
    */
-  const loadContacts = useCallback(async () => {
+  const loadContacts = useCallback(async (forceRefresh = false) => {
+    // Skip if already loaded and not a forced refresh (prevents StrictMode double-call)
+    if (contactsLoadedRef.current && !forceRefresh) {
+      return;
+    }
+
+    if (!isMountedRef.current) return;
+
     setContactsLoading(true);
     setContactsError(null);
 
     try {
+      // For initial load, use getAll since we don't have an address yet
+      // Address-sorted contacts are fetched when explicitly refreshed with an address
       const propertyAddress = addressData.property_address;
       const result = propertyAddress
         ? await window.api.contacts.getSortedByActivity(userId, propertyAddress)
         : await window.api.contacts.getAll(userId);
 
+      if (!isMountedRef.current) return;
+
       if (result.success) {
         setContacts(result.contacts || []);
+        contactsLoadedRef.current = true;
       } else {
         setContactsError(result.error || "Failed to load contacts");
       }
     } catch (err) {
+      if (!isMountedRef.current) return;
       console.error("Failed to load contacts:", err);
       setContactsError("Unable to load contacts");
     } finally {
-      setContactsLoading(false);
+      if (isMountedRef.current) {
+        setContactsLoading(false);
+      }
     }
   }, [userId, addressData.property_address]);
 
-  // Load contacts on mount
+  // Load contacts once on mount
   useEffect(() => {
+    isMountedRef.current = true;
     loadContacts();
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []); // Empty deps - load once on mount only
+
+  // Wrapper to expose refresh functionality that always forces reload
+  const refreshContacts = useCallback(() => {
+    loadContacts(true);
   }, [loadContacts]);
 
   /**
@@ -749,7 +786,7 @@ export function useAuditTransaction({
     contacts,
     contactsLoading,
     contactsError,
-    refreshContacts: loadContacts,
+    refreshContacts,
 
     // Setters
     setAddressData,
