@@ -311,6 +311,14 @@ function Settings({ onClose, userId, onEmailConnected }: SettingsComponentProps)
   };
 
   const handleReindexDatabase = async (): Promise<void> => {
+    // Show confirmation with freeze warning
+    const confirmed = window.confirm(
+      "This will optimize the database for better performance.\n\n" +
+        "Note: The app may briefly freeze during this process. This is normal and should only take a few seconds.\n\n" +
+        "Continue?",
+    );
+    if (!confirmed) return;
+
     setReindexing(true);
     setReindexResult(null);
     try {
