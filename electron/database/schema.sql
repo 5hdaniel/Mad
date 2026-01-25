@@ -653,6 +653,8 @@ CREATE INDEX IF NOT EXISTS idx_messages_transaction_id ON messages(transaction_i
 CREATE INDEX IF NOT EXISTS idx_messages_sent_at ON messages(sent_at);
 CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel);
 CREATE INDEX IF NOT EXISTS idx_messages_external_id ON messages(external_id);
+-- CRITICAL: Unique constraint to make INSERT OR IGNORE work for deduplication
+CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_user_external_id ON messages(user_id, external_id) WHERE external_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id);
 CREATE INDEX IF NOT EXISTS idx_messages_is_transaction_related ON messages(is_transaction_related);
 CREATE INDEX IF NOT EXISTS idx_messages_participants_flat ON messages(participants_flat);

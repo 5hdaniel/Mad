@@ -694,6 +694,100 @@ class DatabaseService implements IDatabaseService {
     runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_user_sent ON messages(user_id, sent_at)`);
     runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel)`);
 
+    // Migration 20: Add UNIQUE constraint on messages.external_id to prevent import duplicates
+    // The import service uses INSERT OR IGNORE but without a unique constraint it does nothing!
+    // First, delete duplicate messages keeping only the oldest one (by created_at or id)
+    const dupMessagesCount = (db.prepare(`
+      SELECT COUNT(*) as count FROM messages m1
+      WHERE EXISTS (
+        SELECT 1 FROM messages m2
+        WHERE m2.user_id = m1.user_id
+        AND m2.external_id = m1.external_id
+        AND m2.external_id IS NOT NULL
+        AND m2.id < m1.id
+      )
+    `).get() as { count: number })?.count || 0;
+
+    if (dupMessagesCount > 0) {
+      await logService.info(`Migration 20: Found ${dupMessagesCount} duplicate messages to clean up`, "DatabaseService");
+      runSafe(`
+        DELETE FROM messages
+        WHERE id IN (
+          SELECT m1.id FROM messages m1
+          WHERE EXISTS (
+            SELECT 1 FROM messages m2
+            WHERE m2.user_id = m1.user_id
+            AND m2.external_id = m1.external_id
+            AND m2.external_id IS NOT NULL
+            AND m2.id < m1.id
+          )
+        )
+      `);
+      await logService.info("Migration 20: Duplicate messages cleaned up", "DatabaseService");
+    }
+
+    // Now add the unique index so INSERT OR IGNORE actually works
+    runSafe(`CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_user_external_id ON messages(user_id, external_id) WHERE external_id IS NOT NULL`);
+
+    // Migration 21: Delete content-based duplicates (same body_text + sent_at)
+    // This catches duplicates that have different external_ids but same content
+    const contentDupCount = (db.prepare(`
+      SELECT COUNT(*) as count FROM messages m1
+      WHERE m1.channel IN ('sms', 'imessage')
+      AND EXISTS (
+        SELECT 1 FROM messages m2
+        WHERE m2.user_id = m1.user_id
+        AND m2.body_text = m1.body_text
+        AND m2.sent_at = m1.sent_at
+        AND m2.channel IN ('sms', 'imessage')
+        AND m2.id < m1.id
+      )
+    `).get() as { count: number })?.count || 0;
+
+    if (contentDupCount > 0) {
+      await logService.info(`Migration 21: Found ${contentDupCount} content-duplicate messages to clean up`, "DatabaseService");
+      runSafe(`
+        DELETE FROM messages
+        WHERE id IN (
+          SELECT m1.id FROM messages m1
+          WHERE m1.channel IN ('sms', 'imessage')
+          AND EXISTS (
+            SELECT 1 FROM messages m2
+            WHERE m2.user_id = m1.user_id
+            AND m2.body_text = m1.body_text
+            AND m2.sent_at = m1.sent_at
+            AND m2.channel IN ('sms', 'imessage')
+            AND m2.id < m1.id
+          )
+        )
+      `);
+      await logService.info("Migration 21: Content-duplicate messages cleaned up", "DatabaseService");
+    }
+
+    // Migration 19: Clean up legacy communication records that cause duplicates
+    // Legacy records stored content directly in body_plain without message_id reference.
+    // When the same message was re-imported with proper message_id linking, both records
+    // exist with the same content but different IDs, causing duplicate messages in the UI.
+    // Since we have no users yet, we can safely delete the legacy records.
+    // The proper junction records (with message_id) remain and link messages to transactions.
+    const legacyCommsCount = (db.prepare(`
+      SELECT COUNT(*) as count FROM communications
+      WHERE body_plain IS NOT NULL
+      AND message_id IS NULL
+      AND communication_type IN ('text', 'sms', 'imessage')
+    `).get() as { count: number })?.count || 0;
+
+    if (legacyCommsCount > 0) {
+      await logService.info(`Migration 19: Found ${legacyCommsCount} legacy text communication records to clean up`, "DatabaseService");
+      runSafe(`
+        DELETE FROM communications
+        WHERE body_plain IS NOT NULL
+        AND message_id IS NULL
+        AND communication_type IN ('text', 'sms', 'imessage')
+      `);
+      await logService.info("Migration 19: Legacy text communications cleaned up - duplicates should be resolved", "DatabaseService");
+    }
+
     // Finalize schema version (create table if missing for backwards compatibility)
     const schemaVersionExists = db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
@@ -706,12 +800,12 @@ class DatabaseService implements IDatabaseService {
           version INTEGER NOT NULL DEFAULT 1,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
-        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 18);
+        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 21);
       `);
     } else {
       const currentVersion = (db.prepare("SELECT version FROM schema_version").get() as { version: number } | undefined)?.version || 0;
-      if (currentVersion < 18) {
-        db.exec("UPDATE schema_version SET version = 18");
+      if (currentVersion < 21) {
+        db.exec("UPDATE schema_version SET version = 21");
       }
     }
 

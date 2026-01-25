@@ -603,7 +603,37 @@ export async function getCommunicationsWithMessages(
     ORDER BY COALESCE(m.sent_at, c.sent_at) DESC
   `;
 
-  return dbAll<Communication>(sql, [transactionId]);
+  const results = dbAll<Communication>(sql, [transactionId]);
+
+  // Deduplicate by message ID first
+  const seenIds = new Set<string>();
+  const dedupedById = results.filter(r => {
+    if (seenIds.has(r.id)) return false;
+    seenIds.add(r.id);
+    return true;
+  });
+
+  // Content-based deduplication for text messages
+  // Catches cases where same content exists with different IDs
+  const seenContent = new Set<string>();
+  const deduped = dedupedById.filter(r => {
+    const channel = (r as { channel?: string }).channel;
+    const commType = (r as { communication_type?: string }).communication_type;
+    const isTextMessage = channel === 'sms' || channel === 'imessage' ||
+                          commType === 'sms' || commType === 'imessage';
+
+    if (!isTextMessage) return true;
+
+    const bodyText = (r as { body_text?: string }).body_text || '';
+    const sentAt = (r as { sent_at?: string }).sent_at || '';
+    const contentKey = `${bodyText}|${sentAt}`;
+
+    if (seenContent.has(contentKey)) return false;
+    seenContent.add(contentKey);
+    return true;
+  });
+
+  return deduped;
 }
 
 /**
