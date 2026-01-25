@@ -3,73 +3,17 @@ import path from "path";
 import fs from "fs/promises";
 import { Transaction, Communication } from "../types/models";
 import logService from "./logService";
-import { dbAll } from "./db/core/dbConnection";
-
-/**
- * Look up contact names for phone numbers
- */
-function getContactNamesByPhones(phones: string[]): Record<string, string> {
-  if (phones.length === 0) return {};
-
-  try {
-    // Normalize phones to last 10 digits for matching
-    const normalizedPhones = phones.map(p => p.replace(/\D/g, '').slice(-10));
-
-    // Query contact_phones to find names
-    const placeholders = normalizedPhones.map(() => '?').join(',');
-    const sql = `
-      SELECT
-        cp.phone_e164,
-        cp.phone_display,
-        c.display_name
-      FROM contact_phones cp
-      JOIN contacts c ON cp.contact_id = c.id
-      WHERE SUBSTR(REPLACE(cp.phone_e164, '+', ''), -10) IN (${placeholders})
-         OR SUBSTR(REPLACE(cp.phone_display, '-', ''), -10) IN (${placeholders})
-    `;
-
-    const results = dbAll<{ phone_e164: string; phone_display: string; display_name: string }>(
-      sql,
-      [...normalizedPhones, ...normalizedPhones]
-    );
-
-    const nameMap: Record<string, string> = {};
-    for (const row of results) {
-      // Map both original and normalized forms
-      const e164Normalized = row.phone_e164.replace(/\D/g, '').slice(-10);
-      const displayNormalized = row.phone_display.replace(/\D/g, '').slice(-10);
-      nameMap[e164Normalized] = row.display_name;
-      nameMap[displayNormalized] = row.display_name;
-      nameMap[row.phone_e164] = row.display_name;
-      nameMap[row.phone_display] = row.display_name;
-    }
-
-    return nameMap;
-  } catch (error) {
-    logService.warn("[PDF Export] Failed to look up contact names", "PDFExport", { error });
-    return {};
-  }
-}
-
-/**
- * Format phone number or resolve to contact name
- */
-function formatSenderName(sender: string | null | undefined, nameMap: Record<string, string>): string {
-  if (!sender) return "Unknown";
-
-  // Check if it's a phone number (starts with + or contains mostly digits)
-  const isPhone = sender.startsWith('+') || /^\d{10,}$/.test(sender.replace(/\D/g, ''));
-
-  if (isPhone) {
-    const normalized = sender.replace(/\D/g, '').slice(-10);
-    const name = nameMap[normalized] || nameMap[sender];
-    if (name) {
-      return `${name} (${sender})`;
-    }
-  }
-
-  return sender;
-}
+import {
+  getContactNamesByPhones,
+  formatSenderName,
+  looksLikePhoneNumber,
+} from "../utils/contactUtils";
+import { getTrailingDigits } from "../utils/phoneUtils";
+import {
+  getThreadKey,
+  getThreadContact,
+  isGroupChat,
+} from "../utils/threadUtils";
 
 /**
  * PDF Export Service
@@ -581,7 +525,7 @@ class PDFExportService {
     // Look up contact names for text message phone numbers
     const textPhones = texts
       .map(t => t.sender)
-      .filter((s): s is string => !!s && (s.startsWith('+') || /^\d{7,}$/.test(s.replace(/\D/g, ''))));
+      .filter((s): s is string => !!s && looksLikePhoneNumber(s));
     const phoneNameMap = getContactNamesByPhones(textPhones);
 
     // Helper to escape HTML
@@ -659,77 +603,8 @@ class PDFExportService {
       return escapeHtml(cleaned.substring(0, maxLen)) + '...';
     };
 
-    // Helper to normalize phone for matching
-    const normalizePhone = (phone: string): string => {
-      return phone.replace(/\D/g, '').slice(-10);
-    };
-
-    // Helper to get thread key (matches UI logic)
-    const getThreadKey = (msg: Communication): string => {
-      // Use thread_id if available
-      if (msg.thread_id) return msg.thread_id;
-
-      // Fallback: compute from participants
-      try {
-        if (msg.participants) {
-          const parsed = typeof msg.participants === 'string'
-            ? JSON.parse(msg.participants)
-            : msg.participants;
-
-          const allParticipants = new Set<string>();
-          if (parsed.from) allParticipants.add(normalizePhone(parsed.from));
-          if (parsed.to) {
-            const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
-            toList.forEach((p: string) => allParticipants.add(normalizePhone(p)));
-          }
-
-          if (allParticipants.size > 0) {
-            return 'participants-' + Array.from(allParticipants).sort().join('-');
-          }
-        }
-      } catch {
-        // Fall through
-      }
-
-      // Last resort: use message id
-      return 'msg-' + msg.id;
-    };
-
-    // Helper to extract phone/contact name from thread
-    const getThreadContact = (msgs: Communication[]): { phone: string; name: string | null } => {
-      for (const msg of msgs) {
-        try {
-          if (msg.participants) {
-            const parsed = typeof msg.participants === 'string'
-              ? JSON.parse(msg.participants)
-              : msg.participants;
-
-            let phone: string | null = null;
-            if (msg.direction === 'inbound' && parsed.from) {
-              phone = parsed.from;
-            } else if (msg.direction === 'outbound' && parsed.to?.length > 0) {
-              phone = Array.isArray(parsed.to) ? parsed.to[0] : parsed.to;
-            }
-
-            if (phone) {
-              const normalized = normalizePhone(phone);
-              const name = phoneNameMap[normalized] || phoneNameMap[phone] || null;
-              return { phone, name };
-            }
-          }
-        } catch {
-          // Continue
-        }
-
-        // Fallback to sender
-        if (msg.sender) {
-          const normalized = normalizePhone(msg.sender);
-          const name = phoneNameMap[normalized] || phoneNameMap[msg.sender] || null;
-          return { phone: msg.sender, name };
-        }
-      }
-      return { phone: 'Unknown', name: null };
-    };
+    // Use shared thread utilities for grouping and contact extraction
+    // Note: getThreadKey and getThreadContact are imported from threadUtils
 
     // Group text messages by thread
     const textThreads = new Map<string, Communication[]>();
@@ -805,17 +680,17 @@ class PDFExportService {
       html += '<div class="communications">';
 
       sortedThreads.forEach(([threadId, msgs], idx) => {
-        const contact = getThreadContact(msgs);
+        const contact = getThreadContact(msgs, phoneNameMap);
         const lastMsg = msgs[msgs.length - 1];
         const preview = truncatePreview(lastMsg.body_text || lastMsg.body_plain);
         const hasContent = msgs.some(m => m.body_text || m.body_plain);
         const anchorId = 'thread-' + idx;
-        const isGroupChat = this._isGroupChat(msgs);
+        const isGroup = isGroupChat(msgs);
 
         html += '<div class="communication">';
         // Contact name in bold (or phone if no name)
         html += '<div class="subject">' + escapeHtml(contact.name || contact.phone);
-        if (isGroupChat) {
+        if (isGroup) {
           html += ' <span style="font-size: 11px; color: #718096; font-weight: normal;">(Group Chat)</span>';
         }
         html += '</div>';
@@ -903,15 +778,15 @@ class PDFExportService {
 
       // Text thread appendix items (show all messages in thread)
       threadsWithContent.forEach(([threadId, msgs], threadIdx) => {
-        const contact = getThreadContact(msgs);
-        const isGroupChat = this._isGroupChat(msgs);
+        const contact = getThreadContact(msgs, phoneNameMap);
+        const isGroup = isGroupChat(msgs);
 
         html += '<div class="appendix-item">';
         html += '<a name="thread-' + threadIdx + '"></a>';
         html += '<div class="header-row">';
         html += '<div>';
         // Group chats show "Group Chat", 1:1 shows "Conversation with [name]"
-        if (isGroupChat) {
+        if (isGroup) {
           html += '<div class="subject-line">Group Chat</div>';
         } else {
           html += '<div class="subject-line">Conversation with ' + escapeHtml(contact.name || contact.phone) + '</div>';
@@ -934,8 +809,8 @@ class PDFExportService {
 
           if (!isOutbound) {
             // For group chats, try to show individual sender
-            if (isGroupChat && msg.sender) {
-              const senderNormalized = normalizePhone(msg.sender);
+            if (isGroup && msg.sender) {
+              const senderNormalized = getTrailingDigits(msg.sender, 10);
               const resolvedName = phoneNameMap[senderNormalized] || phoneNameMap[msg.sender];
               senderName = resolvedName || msg.sender;
               // Show phone if we resolved to a name (group chats only)
@@ -959,7 +834,7 @@ class PDFExportService {
           html += ' <span style="color: #718096; font-size: 11px;">' + time + '</span>';
           html += '</div>';
           // Phone number below name (only for group chats to identify sender)
-          if (senderPhone && isGroupChat) {
+          if (senderPhone && isGroup) {
             html += '<div style="font-size: 11px; color: #718096; margin-bottom: 8px;">' + escapeHtml(senderPhone) + '</div>';
           }
           html += '<div>' + escapeHtml(body) + '</div>';
@@ -974,35 +849,6 @@ class PDFExportService {
     }
 
     return html;
-  }
-
-  /**
-   * Check if a thread is a group chat (has multiple unique participants)
-   * @private
-   */
-  private _isGroupChat(msgs: Communication[]): boolean {
-    const participants = new Set<string>();
-
-    for (const msg of msgs) {
-      try {
-        if (msg.participants) {
-          const parsed = typeof msg.participants === 'string'
-            ? JSON.parse(msg.participants)
-            : msg.participants;
-
-          if (parsed.from) participants.add(parsed.from.replace(/\D/g, '').slice(-10));
-          if (parsed.to) {
-            const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
-            toList.forEach((p: string) => participants.add(p.replace(/\D/g, '').slice(-10)));
-          }
-        }
-      } catch {
-        // Continue
-      }
-    }
-
-    // More than 2 unique participants means group chat
-    return participants.size > 2;
   }
 
   /**

@@ -21,7 +21,7 @@ import {
   validateString,
   sanitizeObject,
 } from "./utils/validation";
-import { normalizePhoneNumber } from "./utils/phoneNormalization";
+import { normalizeToE164 as normalizePhoneNumber } from "./utils/phoneUtils";
 
 // Import handler types
 import type {

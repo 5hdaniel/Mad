@@ -23,10 +23,10 @@ import type {
 } from "../types/iosContacts";
 import { ABMultiValuePropertyType } from "../types/iosContacts";
 import {
-  normalizePhoneNumber,
+  normalizeToE164 as normalizePhoneNumber,
   isPhoneNumber,
   getTrailingDigits,
-} from "../utils/phoneNormalization";
+} from "../utils/phoneUtils";
 
 /**
  * Parser for iOS AddressBook.sqlitedb from iTunes-style backups.

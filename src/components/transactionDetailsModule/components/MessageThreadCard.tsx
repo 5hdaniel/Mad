@@ -6,6 +6,14 @@
 import React, { useState } from "react";
 import type { Communication, Message } from "../types";
 import { ConversationViewModal } from "./modals";
+import { getTrailingDigits } from "../../../../electron/utils/phoneUtils";
+import {
+  getThreadParticipants as getThreadParticipantsShared,
+  isGroupChat as isGroupChatShared,
+  formatParticipantNames as formatParticipantNamesShared,
+  getThreadKey as getThreadKeyShared,
+  type MessageLike as ThreadMessageLike,
+} from "../../../../electron/utils/threadUtils";
 
 /**
  * Union type for messages - can be from messages table or communications table
@@ -43,132 +51,26 @@ function getAvatarInitial(contactName?: string, phoneNumber?: string): string {
   return "#";
 }
 
-/**
- * Get all unique participants from a thread (excluding the user).
- * Returns an array of phone numbers/identifiers.
- *
- * Collects from multiple sources to ensure all participants are found:
- * 1. chat_members (from Apple's chat_handle_join) - authoritative list
- * 2. from/to fields - catches participants missed by chat_members
- */
+// Thread utilities are imported from shared modules (electron/utils/threadUtils)
+// Local wrappers for type compatibility
+
 function getThreadParticipants(messages: MessageLike[]): string[] {
-  const participants = new Set<string>();
-
-  for (const msg of messages) {
-    try {
-      if (msg.participants) {
-        const parsed =
-          typeof msg.participants === "string"
-            ? JSON.parse(msg.participants)
-            : msg.participants;
-
-        // Collect from chat_members (authoritative, doesn't include user)
-        if (parsed.chat_members && Array.isArray(parsed.chat_members)) {
-          parsed.chat_members.forEach((m: string) => {
-            if (m && m !== "unknown") participants.add(m);
-          });
-        }
-
-        // Also collect from from/to fields to catch any missed participants
-        // For inbound messages, the sender (from) is the other person
-        if (msg.direction === "inbound" && parsed.from) {
-          const from = parsed.from;
-          if (from !== "me" && from !== "unknown") {
-            participants.add(from);
-          }
-        }
-        // For outbound messages, the recipient (to) is the other person
-        if (msg.direction === "outbound" && parsed.to) {
-          const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
-          toList.forEach((p: string) => {
-            if (p && p !== "me" && p !== "unknown") participants.add(p);
-          });
-        }
-      }
-    } catch {
-      // Continue to next message
-    }
-  }
-
-  return Array.from(participants);
+  return getThreadParticipantsShared(messages as ThreadMessageLike[]);
 }
 
-/**
- * Check if a thread is a group chat (more than one unique external participant).
- * Considers resolved contact names to avoid treating one contact with multiple
- * phone numbers as a group chat.
- */
 function isGroupChat(
   messages: MessageLike[],
   contactNames: Record<string, string> = {}
 ): boolean {
-  const participants = getThreadParticipants(messages);
-
-  // Resolve phone numbers to names and deduplicate
-  const normalizePhone = (phone: string): string => {
-    const digits = phone.replace(/\D/g, "");
-    return digits.length >= 10 ? digits.slice(-10) : digits;
-  };
-
-  const resolvedNames = new Set<string>();
-  for (const p of participants) {
-    // Try direct lookup
-    if (contactNames[p]) {
-      resolvedNames.add(contactNames[p]);
-      continue;
-    }
-    // Try normalized phone lookup
-    const normalized = normalizePhone(p);
-    let found = false;
-    for (const [phone, name] of Object.entries(contactNames)) {
-      if (normalizePhone(phone) === normalized) {
-        resolvedNames.add(name);
-        found = true;
-        break;
-      }
-    }
-    // If no name found, use phone as unique identifier
-    if (!found) {
-      resolvedNames.add(p);
-    }
-  }
-
-  return resolvedNames.size > 1;
+  return isGroupChatShared(messages as ThreadMessageLike[], contactNames);
 }
 
-/**
- * Format participant names for display.
- * Uses contactNames map to resolve phone numbers to names.
- */
 function formatParticipantNames(
   participants: string[],
   contactNames: Record<string, string>,
   maxShow: number = 3
 ): string {
-  const normalizePhone = (phone: string): string => {
-    const digits = phone.replace(/\D/g, "");
-    return digits.length >= 10 ? digits.slice(-10) : digits;
-  };
-
-  const names = participants.map((p) => {
-    // Try direct lookup first
-    if (contactNames[p]) return contactNames[p];
-    // Try normalized phone lookup
-    const normalized = normalizePhone(p);
-    for (const [phone, name] of Object.entries(contactNames)) {
-      if (normalizePhone(phone) === normalized) return name;
-    }
-    // Fall back to phone number
-    return p;
-  });
-
-  // Deduplicate names (same contact may have multiple phone numbers)
-  const uniqueNames = [...new Set(names)];
-
-  if (uniqueNames.length <= maxShow) {
-    return uniqueNames.join(", ");
-  }
-  return `${uniqueNames.slice(0, maxShow).join(", ")} +${uniqueNames.length - maxShow} more`;
+  return formatParticipantNamesShared(participants, contactNames, maxShow);
 }
 
 /**
@@ -198,10 +100,10 @@ function getSenderPhone(msg: MessageLike): string | null {
 
 /**
  * Normalize phone for lookup (last 10 digits)
+ * Uses shared utility from phoneUtils
  */
 function normalizePhoneForLookup(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
-  return digits.length >= 10 ? digits.slice(-10) : digits;
+  return getTrailingDigits(phone, 10);
 }
 
 /**
@@ -359,65 +261,10 @@ export function MessageThreadCard({
 
 /**
  * Generate a key for grouping messages into chats.
- * Uses thread_id (from macOS chat_id) first, as this is the actual conversation ID.
- * Falls back to participant-based grouping only if thread_id is not available.
+ * Uses shared utility from threadUtils.
  */
 function getThreadKey(msg: MessageLike): string {
-  // FIRST: Use thread_id if available - this is the actual iMessage chat ID
-  // Format is "macos-chat-{chat_id}" from the import
-  if (msg.thread_id) {
-    return msg.thread_id;
-  }
-
-  // FALLBACK: Compute from participants if no thread_id
-  try {
-    if (msg.participants) {
-      const parsed = typeof msg.participants === 'string'
-        ? JSON.parse(msg.participants)
-        : msg.participants;
-
-      // Collect all participants
-      const allParticipants = new Set<string>();
-
-      if (parsed.from) {
-        allParticipants.add(normalizeParticipant(parsed.from));
-      }
-      if (parsed.to) {
-        const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
-        toList.forEach((p: string) => allParticipants.add(normalizeParticipant(p)));
-      }
-
-      // Remove "me" - we only care about external participants for grouping
-      allParticipants.delete('me');
-
-      // Sort and join to create a consistent key
-      if (allParticipants.size > 0) {
-        return `participants-${Array.from(allParticipants).sort().join('|')}`;
-      }
-    }
-  } catch {
-    // Fall through to default
-  }
-
-  // Last resort: use message id (each message is its own "thread")
-  return `msg-${msg.id}`;
-}
-
-/**
- * Normalize a participant identifier (phone/email) for consistent grouping.
- */
-function normalizeParticipant(participant: string): string {
-  if (!participant) return '';
-
-  // If it looks like a phone number, normalize to digits only
-  const digits = participant.replace(/\D/g, '');
-  if (digits.length >= 10) {
-    // Use last 10 digits to normalize +1 prefix variations
-    return digits.slice(-10);
-  }
-
-  // Otherwise return lowercase trimmed version
-  return participant.toLowerCase().trim();
+  return getThreadKeyShared(msg as ThreadMessageLike);
 }
 
 /**
