@@ -694,6 +694,42 @@ class DatabaseService implements IDatabaseService {
     runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_user_sent ON messages(user_id, sent_at)`);
     runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel)`);
 
+    // Migration 20: Add UNIQUE constraint on messages.external_id to prevent import duplicates
+    // The import service uses INSERT OR IGNORE but without a unique constraint it does nothing!
+    // First, delete duplicate messages keeping only the oldest one (by created_at or id)
+    const dupMessagesCount = (db.prepare(`
+      SELECT COUNT(*) as count FROM messages m1
+      WHERE EXISTS (
+        SELECT 1 FROM messages m2
+        WHERE m2.user_id = m1.user_id
+        AND m2.external_id = m1.external_id
+        AND m2.external_id IS NOT NULL
+        AND m2.id < m1.id
+      )
+    `).get() as { count: number })?.count || 0;
+
+    if (dupMessagesCount > 0) {
+      await logService.info(`Migration 20: Found ${dupMessagesCount} duplicate messages to clean up`, "DatabaseService");
+      runSafe(`
+        DELETE FROM messages
+        WHERE id IN (
+          SELECT m1.id FROM messages m1
+          WHERE EXISTS (
+            SELECT 1 FROM messages m2
+            WHERE m2.user_id = m1.user_id
+            AND m2.external_id = m1.external_id
+            AND m2.external_id IS NOT NULL
+            AND m2.id < m1.id
+          )
+        )
+      `);
+      await logService.info("Migration 20: Duplicate messages cleaned up", "DatabaseService");
+    }
+
+    // Now add the unique index so INSERT OR IGNORE actually works
+    runSafe(`CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_user_external_id ON messages(user_id, external_id) WHERE external_id IS NOT NULL`);
+    await logService.info("Migration 20: Added unique constraint on messages(user_id, external_id)", "DatabaseService");
+
     // Migration 19: Clean up legacy communication records that cause duplicates
     // Legacy records stored content directly in body_plain without message_id reference.
     // When the same message was re-imported with proper message_id linking, both records
@@ -730,12 +766,12 @@ class DatabaseService implements IDatabaseService {
           version INTEGER NOT NULL DEFAULT 1,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
-        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 19);
+        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 20);
       `);
     } else {
       const currentVersion = (db.prepare("SELECT version FROM schema_version").get() as { version: number } | undefined)?.version || 0;
-      if (currentVersion < 19) {
-        db.exec("UPDATE schema_version SET version = 19");
+      if (currentVersion < 20) {
+        db.exec("UPDATE schema_version SET version = 20");
       }
     }
 
