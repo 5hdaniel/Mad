@@ -50,7 +50,6 @@ export function NetworkProvider({ children }: NetworkProviderProps) {
   // Handle browser online/offline events
   useEffect(() => {
     const handleOnline = () => {
-      console.log("[NetworkContext] Browser reports online");
       setState((prev) => ({
         ...prev,
         isOnline: true,
@@ -60,7 +59,6 @@ export function NetworkProvider({ children }: NetworkProviderProps) {
     };
 
     const handleOffline = () => {
-      console.log("[NetworkContext] Browser reports offline");
       setState((prev) => ({
         ...prev,
         isOnline: false,
