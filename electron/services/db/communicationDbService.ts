@@ -600,6 +600,8 @@ export async function getCommunicationsWithMessages(
       (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
     )
     WHERE c.transaction_id = ?
+    -- Deduplicate: Each message should only appear once even if matched by multiple paths
+    GROUP BY COALESCE(m.id, c.id)
     ORDER BY COALESCE(m.sent_at, c.sent_at) DESC
   `;
 
@@ -827,6 +829,7 @@ export function countTextThreadsForTransaction(transactionId: string): number {
     )
     WHERE c.transaction_id = ?
       AND COALESCE(m.channel, c.communication_type) IN ('text', 'sms', 'imessage')
+    GROUP BY COALESCE(m.id, c.id)
   `;
 
   const messages = dbAll<{ id: string; thread_id: string | null; participants: string | null }>(
