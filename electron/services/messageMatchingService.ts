@@ -293,75 +293,14 @@ export async function createCommunicationReference(
     return null; // Already linked
   }
 
-  // Get message details to populate communication fields
-  const msgSql = `
-    SELECT
-      channel as communication_type,
-      subject,
-      body_text as body_plain,
-      body_html as body,
-      sent_at,
-      received_at,
-      has_attachments,
-      participants
-    FROM messages
-    WHERE id = ?
-  `;
-  const message = dbGet<{
-    communication_type: string | null;
-    subject: string | null;
-    body_plain: string | null;
-    body: string | null;
-    sent_at: string | null;
-    received_at: string | null;
-    has_attachments: number;
-    participants: string | null;
-  }>(msgSql, [messageId]);
-
-  if (!message) {
-    logService.warn(
-      `Message ${messageId} not found when creating communication reference`,
-      "MessageMatchingService"
-    );
-    return null;
-  }
-
-  // Parse participants to extract sender/recipients
-  let sender: string | null = null;
-  let recipients: string | null = null;
-  if (message.participants) {
-    try {
-      const participants = JSON.parse(message.participants);
-      sender = participants.from || null;
-      recipients = Array.isArray(participants.to)
-        ? participants.to.join(", ")
-        : null;
-    } catch {
-      // Ignore parse errors
-    }
-  }
-
-  // Map channel to communication_type
-  // The messages table uses 'sms' but communications table constraint expects 'text'
-  let commType: string;
-  if (message.communication_type === "sms") {
-    commType = "text"; // Map 'sms' to 'text' for the constraint
-  } else if (message.communication_type === "imessage") {
-    commType = "imessage";
-  } else if (message.communication_type === "email") {
-    commType = "email";
-  } else {
-    commType = "text"; // Default for unknown types
-  }
-
+  // BACKLOG-506: Clean junction table pattern
+  // Only store the reference (message_id, transaction_id) - content stays in messages table
+  // This eliminates content duplication and simplifies the schema
   const sql = `
     INSERT INTO communications (
       id, message_id, user_id, transaction_id,
-      communication_type, sender, recipients,
-      subject, body, body_plain,
-      sent_at, received_at, has_attachments,
-      relevance_score, link_source
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      link_source, link_confidence, linked_at
+    ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
   `;
 
   const params = [
@@ -369,17 +308,8 @@ export async function createCommunicationReference(
     messageId,
     userId,
     transactionId,
-    commType,
-    sender,
-    recipients,
-    message.subject,
-    message.body,
-    message.body_plain,
-    message.sent_at,
-    message.received_at,
-    message.has_attachments,
-    linkConfidence,
     linkSource,
+    linkConfidence,
   ];
 
   try {

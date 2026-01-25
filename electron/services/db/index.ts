@@ -40,3 +40,6 @@ export * from "./transactionContactDbService";
 export * from "./communicationDbService";
 export * from "./feedbackDbService";
 export * from "./auditLogDbService";
+
+// Domain services - Phase 5 (BACKLOG-506: Message DB Service)
+export * from "./messageDbService";
