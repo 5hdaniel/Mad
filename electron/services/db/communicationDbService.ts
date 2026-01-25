@@ -670,11 +670,14 @@ export async function createThreadCommunicationReference(
 ): Promise<string> {
   const id = crypto.randomUUID();
 
+  // BACKLOG-502: Set communication_type to 'text' for thread-based links.
+  // This ensures text messages display correctly even if the JOIN to
+  // messages table fails. The schema allows: 'email', 'text', 'imessage'.
   const sql = `
     INSERT INTO communications (
       id, user_id, thread_id, transaction_id,
-      link_source, link_confidence, linked_at
-    ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      communication_type, link_source, link_confidence, linked_at
+    ) VALUES (?, ?, ?, ?, 'text', ?, ?, CURRENT_TIMESTAMP)
   `;
 
   const params = [
