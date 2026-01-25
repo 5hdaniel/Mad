@@ -728,7 +728,41 @@ class DatabaseService implements IDatabaseService {
 
     // Now add the unique index so INSERT OR IGNORE actually works
     runSafe(`CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_user_external_id ON messages(user_id, external_id) WHERE external_id IS NOT NULL`);
-    await logService.info("Migration 20: Added unique constraint on messages(user_id, external_id)", "DatabaseService");
+
+    // Migration 21: Delete content-based duplicates (same body_text + sent_at)
+    // This catches duplicates that have different external_ids but same content
+    const contentDupCount = (db.prepare(`
+      SELECT COUNT(*) as count FROM messages m1
+      WHERE m1.channel IN ('sms', 'imessage')
+      AND EXISTS (
+        SELECT 1 FROM messages m2
+        WHERE m2.user_id = m1.user_id
+        AND m2.body_text = m1.body_text
+        AND m2.sent_at = m1.sent_at
+        AND m2.channel IN ('sms', 'imessage')
+        AND m2.id < m1.id
+      )
+    `).get() as { count: number })?.count || 0;
+
+    if (contentDupCount > 0) {
+      await logService.info(`Migration 21: Found ${contentDupCount} content-duplicate messages to clean up`, "DatabaseService");
+      runSafe(`
+        DELETE FROM messages
+        WHERE id IN (
+          SELECT m1.id FROM messages m1
+          WHERE m1.channel IN ('sms', 'imessage')
+          AND EXISTS (
+            SELECT 1 FROM messages m2
+            WHERE m2.user_id = m1.user_id
+            AND m2.body_text = m1.body_text
+            AND m2.sent_at = m1.sent_at
+            AND m2.channel IN ('sms', 'imessage')
+            AND m2.id < m1.id
+          )
+        )
+      `);
+      await logService.info("Migration 21: Content-duplicate messages cleaned up", "DatabaseService");
+    }
 
     // Migration 19: Clean up legacy communication records that cause duplicates
     // Legacy records stored content directly in body_plain without message_id reference.
@@ -766,12 +800,12 @@ class DatabaseService implements IDatabaseService {
           version INTEGER NOT NULL DEFAULT 1,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
-        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 20);
+        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 21);
       `);
     } else {
       const currentVersion = (db.prepare("SELECT version FROM schema_version").get() as { version: number } | undefined)?.version || 0;
-      if (currentVersion < 20) {
-        db.exec("UPDATE schema_version SET version = 20");
+      if (currentVersion < 21) {
+        db.exec("UPDATE schema_version SET version = 21");
       }
     }
 
