@@ -1,8 +1,8 @@
 # Sprint Plan: SPRINT-053 - License Enhancement & AI Gating Verification
 
 **Created**: 2026-01-23
-**Updated**: 2026-01-24
-**Status**: Partial (core items merged, AI gating incomplete)
+**Updated**: 2026-01-25
+**Status**: COMPLETED
 **Goal**: Complete license UI enhancements and verify AI feature gating
 
 ---
@@ -283,13 +283,13 @@ Before execution, SR Engineer must validate:
 | 1 | TASK-TBD | BACKLOG-410 | Skipped | - | - | - |
 | 2 | TASK-1176 | BACKLOG-459 | **MERGED** | Claude | #569 | - |
 | 3 | TASK-1177 | BACKLOG-462 | **MERGED** | Claude | #570 | - |
-| 3 | TASK-1178 | BACKLOG-462 | **ASSIGNED** | - | - | - |
+| 3 | TASK-1178 | BACKLOG-462 | **MERGED** | Claude | #592 | - |
 | 3 | TASK-TBD | BACKLOG-081 | Deferred | - | - | - |
 
 ### Notes
 - BACKLOG-410 (Schema): Skipped - columns already exist in schema.sql
-- BACKLOG-459 (Team Export): Fully complete, team users see both Submit and Export
-- BACKLOG-462 (AI Gating): TASK-1177 merged Settings gating. TASK-1178 addresses remaining items.
+- BACKLOG-459 (Team Export): Complete - team users see both Submit and Export
+- BACKLOG-462 (AI Gating): Complete - TASK-1177 (Settings), TASK-1178 (Rejected filter/status)
 - BACKLOG-081 (AI Consent in T&C): Deferred to future sprint
 - Dev toggle for AI add-on testing: `window.api.license.devToggleAIAddon(userId, true/false)`
 
