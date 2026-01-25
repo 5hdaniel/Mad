@@ -534,7 +534,12 @@ export async function createCommunicationReference(
  * TASK-992: Added direction field from messages table for proper bubble display.
  *
  * TASK-1116: Updated to support thread-based linking. For records with thread_id
- * but no message_id, returns all messages in the thread.
+ * but no message_id, returns thread summary (not individual messages).
+ *
+ * BACKLOG-502 FIX: Thread-based links now return ONE row per thread (not N rows
+ * per message). The query uses a subquery to get only the latest message per
+ * thread for display purposes. Individual messages are fetched separately when
+ * viewing thread detail.
  *
  * @param transactionId - The transaction ID
  * @returns Communications with content from messages table when available
@@ -542,11 +547,15 @@ export async function createCommunicationReference(
 export async function getCommunicationsWithMessages(
   transactionId: string,
 ): Promise<Communication[]> {
-  // Query 1: Records with message_id (legacy per-message linking)
-  // Query 2: Records with thread_id (new per-thread linking) - returns all messages in thread
+  // This query handles two cases:
+  // 1. Legacy message_id linking: c.message_id -> m.id (1:1 join, no duplication)
+  // 2. Thread-based linking: c.thread_id -> latest message in thread (1:1 join via subquery)
+  //
+  // For thread-based links, we use a subquery to get only ONE representative message
+  // per thread (the latest one) to avoid row multiplication.
   const sql = `
     SELECT
-      -- TASK-1116: Use message ID when available for proper message lookup
+      -- Use message ID when available for proper message lookup
       COALESCE(m.id, c.id) as id,
       c.id as communication_id,
       c.user_id,
@@ -573,7 +582,7 @@ export async function getCommunicationsWithMessages(
       COALESCE(m.has_attachments, c.has_attachments) as has_attachments,
       COALESCE(m.thread_id, c.email_thread_id) as email_thread_id,
       -- Thread ID for grouping messages into conversations
-      m.thread_id as thread_id,
+      COALESCE(m.thread_id, c.thread_id) as thread_id,
       -- Participants JSON for group chat detection and sender identification
       m.participants as participants,
       -- TASK-992: Direction from messages table for bubble display
@@ -593,11 +602,17 @@ export async function getCommunicationsWithMessages(
       c.is_compliance_related
     FROM communications c
     LEFT JOIN messages m ON (
-      -- Legacy: join by message_id
+      -- Case 1: Legacy per-message linking (1:1 relationship)
       (c.message_id IS NOT NULL AND c.message_id = m.id)
       OR
-      -- TASK-1116: Thread-based linking - join by thread_id
-      (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+      -- Case 2: Thread-based linking - join to latest message in thread only
+      -- This subquery ensures we get exactly ONE message per thread, preventing row multiplication
+      (c.message_id IS NULL AND c.thread_id IS NOT NULL AND m.id = (
+        SELECT m2.id FROM messages m2
+        WHERE m2.thread_id = c.thread_id
+        ORDER BY m2.sent_at DESC
+        LIMIT 1
+      ))
     )
     WHERE c.transaction_id = ?
     ORDER BY COALESCE(m.sent_at, c.sent_at) DESC
