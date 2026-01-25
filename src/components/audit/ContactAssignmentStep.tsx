@@ -4,8 +4,10 @@
  * Extracted from AuditTransactionModal as part of TASK-974 decomposition
  *
  * Contact Loading Optimization:
- * Loads contacts once at this level and passes to all child RoleAssignment components.
- * This prevents N API calls (one per role) and instead makes just 1 call.
+ * Contacts are now loaded at the parent level (useAuditTransaction hook)
+ * and passed as props to prevent duplicate API calls when switching
+ * between steps 2 and 3. Previously, each step would trigger its own
+ * contact loading on mount, causing repeated fetches every ~1.3 seconds.
  */
 import React from "react";
 import {
@@ -41,47 +43,11 @@ interface ContactAssignmentStepProps {
   userId: string;
   transactionType: string;
   propertyAddress: string;
-}
-
-/**
- * Lifted contact loading hook - loads contacts once for all role assignments
- * Prevents duplicate API calls (was N calls per role, now 1)
- */
-function useContactsLoader(userId: string, propertyAddress: string) {
-  const [contacts, setContacts] = React.useState<Contact[]>([]);
-  const [loading, setLoading] = React.useState<boolean>(true);
-  const [error, setError] = React.useState<string | null>(null);
-
-  const loadContacts = React.useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const result = propertyAddress
-        ? await window.api.contacts.getSortedByActivity(userId, propertyAddress)
-        : await window.api.contacts.getAll(userId);
-
-      if (result.success) {
-        setContacts(result.contacts || []);
-        // Note: "no contacts" is not treated as an error at this level
-        // Individual RoleAssignment components can show appropriate messaging
-      } else {
-        setError(result.error || "Failed to load contacts");
-      }
-    } catch (err) {
-      console.error("Failed to load contacts:", err);
-      setError("Unable to load contacts");
-    } finally {
-      setLoading(false);
-    }
-  }, [userId, propertyAddress]);
-
-  // Load contacts on mount and when userId/propertyAddress change
-  React.useEffect(() => {
-    loadContacts();
-  }, [loadContacts]);
-
-  return { contacts, loading, error, refreshContacts: loadContacts };
+  // Contacts loaded at parent level (useAuditTransaction hook)
+  contacts: Contact[];
+  contactsLoading: boolean;
+  contactsError: string | null;
+  onRefreshContacts: () => void;
 }
 
 function ContactAssignmentStep({
@@ -92,11 +58,12 @@ function ContactAssignmentStep({
   userId,
   transactionType,
   propertyAddress,
+  // Contacts loaded at parent level
+  contacts,
+  contactsLoading,
+  contactsError,
+  onRefreshContacts,
 }: ContactAssignmentStepProps): React.ReactElement {
-  // Lift contact loading to this level - single API call for all roles
-  const { contacts, loading: contactsLoading, error: contactsError, refreshContacts } =
-    useContactsLoader(userId, propertyAddress);
-
   // Filter roles based on transaction type
   const filteredRoles = filterRolesByTransactionType(
     stepConfig.roles,
@@ -151,7 +118,7 @@ function ContactAssignmentStep({
           onAssign={onAssignContact}
           onRemove={onRemoveContact}
           contacts={contacts}
-          onRefreshContacts={refreshContacts}
+          onRefreshContacts={onRefreshContacts}
           userId={userId}
           propertyAddress={propertyAddress}
           transactionType={transactionType}

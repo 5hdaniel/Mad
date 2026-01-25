@@ -2,13 +2,19 @@
  * useAuditTransaction Hook
  * Manages state and business logic for AuditTransactionModal
  * Extracted to support component decomposition (TASK-974)
+ *
+ * Contact Loading Optimization:
+ * Contacts are loaded once at this level and passed to child components.
+ * This prevents repeated API calls when switching between steps 2 and 3,
+ * since both steps use ContactAssignmentStep which would otherwise each
+ * trigger their own contact loading on mount.
  */
 import { useState, useEffect, useCallback } from "react";
 import {
   SPECIFIC_ROLES,
   ROLE_TO_CATEGORY,
 } from "../constants/contactRoles";
-import type { Transaction } from "../../electron/types/models";
+import type { Transaction, Contact } from "../../electron/types/models";
 
 // Type definitions
 export interface AddressData {
@@ -92,6 +98,12 @@ export interface UseAuditTransactionReturn {
   showAddressAutocomplete: boolean;
   addressSuggestions: AddressSuggestion[];
 
+  // Contact loading state (lifted to parent level to prevent duplicate API calls)
+  contacts: Contact[];
+  contactsLoading: boolean;
+  contactsError: string | null;
+  refreshContacts: () => void;
+
   // Setters
   setAddressData: React.Dispatch<React.SetStateAction<AddressData>>;
   setError: React.Dispatch<React.SetStateAction<string | null>>;
@@ -152,6 +164,44 @@ export function useAuditTransaction({
 
   // Contact assignments state
   const [contactAssignments, setContactAssignments] = useState<ContactAssignments>({});
+
+  // Contact loading state (lifted to parent level to prevent duplicate API calls)
+  // This ensures contacts are loaded once when modal opens, not per-step
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contactsLoading, setContactsLoading] = useState<boolean>(true);
+  const [contactsError, setContactsError] = useState<string | null>(null);
+
+  /**
+   * Load contacts - called once on mount and when refreshed
+   * Lifted from ContactAssignmentStep to prevent N API calls (one per step)
+   */
+  const loadContacts = useCallback(async () => {
+    setContactsLoading(true);
+    setContactsError(null);
+
+    try {
+      const propertyAddress = addressData.property_address;
+      const result = propertyAddress
+        ? await window.api.contacts.getSortedByActivity(userId, propertyAddress)
+        : await window.api.contacts.getAll(userId);
+
+      if (result.success) {
+        setContacts(result.contacts || []);
+      } else {
+        setContactsError(result.error || "Failed to load contacts");
+      }
+    } catch (err) {
+      console.error("Failed to load contacts:", err);
+      setContactsError("Unable to load contacts");
+    } finally {
+      setContactsLoading(false);
+    }
+  }, [userId, addressData.property_address]);
+
+  // Load contacts on mount
+  useEffect(() => {
+    loadContacts();
+  }, [loadContacts]);
 
   /**
    * Initialize Google Places API (if available)
@@ -694,6 +744,12 @@ export function useAuditTransaction({
     contactAssignments,
     showAddressAutocomplete,
     addressSuggestions,
+
+    // Contact loading state (lifted to parent level)
+    contacts,
+    contactsLoading,
+    contactsError,
+    refreshContacts: loadContacts,
 
     // Setters
     setAddressData,
