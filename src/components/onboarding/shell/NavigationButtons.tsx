@@ -72,9 +72,6 @@ export function NavigationButtons({
   // Next is disabled if explicitly disabled OR if step is not complete
   const isNextDisabled = nextDisabled || !isStepComplete;
 
-  // Debug logging
-  console.log("[NavigationButtons] nextDisabled:", nextDisabled, "isStepComplete:", isStepComplete, "isNextDisabled:", isNextDisabled);
-
   return (
     <div className="mt-4">
       {/* Main navigation buttons */}
