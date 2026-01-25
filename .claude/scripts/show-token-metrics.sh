@@ -1,7 +1,9 @@
 #!/bin/bash
 # Show token usage metrics from agent tracking
+# Uses the Python log_metrics.py script for summary
 
-METRICS_FILE=".claude/metrics/tokens.jsonl"
+METRICS_FILE=".claude/metrics/tokens.csv"
+PYTHON_SCRIPT=".claude/skills/log-metrics/log_metrics.py"
 
 if [ ! -f "$METRICS_FILE" ]; then
   echo "No metrics found yet. Run some engineer agents first."
@@ -11,22 +13,15 @@ fi
 echo "=== Token Usage Metrics ==="
 echo ""
 
-# Total stats
-TOTALS=$(jq -s '
-  {
-    sessions: length,
-    total_tokens: (map(.total_tokens) | add),
-    total_input: (map(.input_tokens) | add),
-    total_output: (map(.output_tokens) | add),
-    avg_per_session: ((map(.total_tokens) | add) / length | floor)
-  }
-' "$METRICS_FILE")
-
-echo "Summary:"
-echo "  Sessions tracked: $(echo "$TOTALS" | jq -r '.sessions')"
-echo "  Total tokens: $(echo "$TOTALS" | jq -r '.total_tokens' | numfmt --grouping 2>/dev/null || echo "$TOTALS" | jq -r '.total_tokens')"
-echo "  Avg per session: $(echo "$TOTALS" | jq -r '.avg_per_session' | numfmt --grouping 2>/dev/null || echo "$TOTALS" | jq -r '.avg_per_session')"
-echo ""
-
-echo "Recent sessions:"
-tail -5 "$METRICS_FILE" | jq -r '"\(.timestamp): \(.total_tokens) tokens"'
+# Use Python script for summary
+if [ -f "$PYTHON_SCRIPT" ]; then
+  python "$PYTHON_SCRIPT" --summary
+else
+  # Fallback to basic CSV stats
+  echo "Summary:"
+  TOTAL_ROWS=$(tail -n +2 "$METRICS_FILE" | wc -l | tr -d ' ')
+  echo "  Entries tracked: $TOTAL_ROWS"
+  echo ""
+  echo "Recent entries:"
+  tail -5 "$METRICS_FILE"
+fi

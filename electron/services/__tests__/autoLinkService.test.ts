@@ -31,7 +31,8 @@ jest.mock("../logService", () => {
   };
 });
 
-const mockCreateCommunicationReference = jest.fn();
+const mockCreateThreadCommunicationReference = jest.fn();
+const mockIsThreadLinkedToTransaction = jest.fn();
 
 jest.mock("../messageMatchingService", () => ({
   normalizePhone: jest.fn((phone) => {
@@ -41,12 +42,20 @@ jest.mock("../messageMatchingService", () => ({
     if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
     return null;
   }),
-  createCommunicationReference: (...args: unknown[]) => mockCreateCommunicationReference(...args),
+}));
+
+// BACKLOG-502: Mock the thread-based linking functions from communicationDbService
+jest.mock("../db/communicationDbService", () => ({
+  createThreadCommunicationReference: (...args: unknown[]) => mockCreateThreadCommunicationReference(...args),
+  isThreadLinkedToTransaction: (...args: unknown[]) => mockIsThreadLinkedToTransaction(...args),
 }));
 
 describe("autoLinkService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // BACKLOG-502: Default behavior for thread linking mocks
+    mockCreateThreadCommunicationReference.mockResolvedValue("comm-ref-id");
+    mockIsThreadLinkedToTransaction.mockResolvedValue(false);
   });
 
   describe("autoLinkCommunicationsForContact", () => {
@@ -115,9 +124,9 @@ describe("autoLinkService", () => {
         if (sql.includes("FROM communications") && sql.includes("communication_type = 'email'")) {
           return foundEmailIds.map((id) => ({ id }));
         }
-        // Text messages from messages table
+        // Text messages from messages table (BACKLOG-502: includes thread_id for thread-level linking)
         if (sql.includes("FROM messages") && sql.includes("sms")) {
-          return foundMessageIds.map((id) => ({ id }));
+          return foundMessageIds.map((id, idx) => ({ id, thread_id: `thread-${idx + 1}` }));
         }
         return [];
       });
@@ -202,7 +211,7 @@ describe("autoLinkService", () => {
       // Emails use linkExistingCommunication (dbRun for UPDATE)
       expect(mockDbRun).toHaveBeenCalledTimes(2);
       // createCommunicationReference is NOT used for emails anymore
-      expect(mockCreateCommunicationReference).toHaveBeenCalledTimes(0);
+      expect(mockCreateThreadCommunicationReference).toHaveBeenCalledTimes(0);
     });
 
     it("should link text messages matching contact phone numbers", async () => {
@@ -215,19 +224,16 @@ describe("autoLinkService", () => {
         foundMessageIds: ["msg-1", "msg-2", "msg-3"],
       });
 
-      mockCreateCommunicationReference
-        .mockResolvedValueOnce("ref-1")
-        .mockResolvedValueOnce("ref-2")
-        .mockResolvedValueOnce("ref-3");
-
       const result = await autoLinkCommunicationsForContact({
         contactId: mockContactId,
         transactionId: mockTransactionId,
       });
 
       expect(result.emailsLinked).toBe(0);
+      // BACKLOG-502: Each message has a unique thread_id (thread-1, thread-2, thread-3),
+      // so 3 threads are linked
       expect(result.messagesLinked).toBe(3);
-      expect(mockCreateCommunicationReference).toHaveBeenCalledTimes(3);
+      expect(mockCreateThreadCommunicationReference).toHaveBeenCalledTimes(3);
     });
 
     it("should count already-linked communications", async () => {
@@ -289,21 +295,17 @@ describe("autoLinkService", () => {
         foundMessageIds: ["msg-1", "msg-2"],
       });
 
-      // Messages still use createCommunicationReference
-      mockCreateCommunicationReference
-        .mockResolvedValueOnce("ref-msg-1")
-        .mockResolvedValueOnce("ref-msg-2");
-
       const result = await autoLinkCommunicationsForContact({
         contactId: mockContactId,
         transactionId: mockTransactionId,
       });
 
       expect(result.emailsLinked).toBe(1);
+      // BACKLOG-502: Each message has unique thread_id (thread-1, thread-2), so 2 threads linked
       expect(result.messagesLinked).toBe(2);
-      // Emails use dbRun (1 call), messages use createCommunicationReference (2 calls)
+      // Emails use dbRun (1 call for UPDATE), messages use createThreadCommunicationReference (2 calls)
       expect(mockDbRun).toHaveBeenCalledTimes(1);
-      expect(mockCreateCommunicationReference).toHaveBeenCalledTimes(2);
+      expect(mockCreateThreadCommunicationReference).toHaveBeenCalledTimes(2);
     });
 
     it("should update communication with correct transaction_id for emails", async () => {
@@ -343,16 +345,15 @@ describe("autoLinkService", () => {
         foundMessageIds: ["msg-1"],
       });
 
-      mockCreateCommunicationReference.mockResolvedValueOnce("ref-1");
-
       await autoLinkCommunicationsForContact({
         contactId: mockContactId,
         transactionId: mockTransactionId,
       });
 
-      // Verify phone match has higher confidence (0.9 vs 0.85)
-      expect(mockCreateCommunicationReference).toHaveBeenCalledWith(
-        "msg-1",
+      // BACKLOG-502: Verify thread-based linking with phone match confidence (0.9 vs 0.85 for email)
+      // First param is thread_id (from our mock: "thread-1"), not message_id
+      expect(mockCreateThreadCommunicationReference).toHaveBeenCalledWith(
+        "thread-1",  // thread_id from the mock
         mockTransactionId,
         mockUserId,
         "auto",

@@ -1,86 +1,104 @@
-# BACKLOG-498: Database Maintenance Button in Settings
+# BACKLOG-498: Disk Space Check Before iPhone Sync
 
-## Summary
-
-Add a "Database Maintenance" button in Settings that allows users to manually optimize their database.
+## Type
+Enhancement / UX
 
 ## Priority
+Medium
 
-P2 - Enhancement
+## Status
+Open
 
 ## Description
 
-We recently added performance indexes (Migration 18) to speed up queries. This feature provides users with a manual way to trigger database maintenance when they notice slowdowns. The operations include:
+When users initiate iPhone sync (message import), the app should check available disk space before starting the backup process. iPhone backups can be very large (10+ GB for full backups), and if the system doesn't have enough space, the backup will fail partway through, leaving users confused and potentially with corrupted partial data.
 
-1. **REINDEX** - Rebuilds all indexes for optimal query performance
-2. **VACUUM** - Compacts the database file by reclaiming deleted space
-3. **ANALYZE** - Updates query planner statistics for better execution plans
+## Problem Statement
 
-## User Story
+### Current Behavior
+- User clicks "Sync iPhone"
+- Backup process starts immediately
+- If disk runs out of space mid-backup, process fails
+- User gets unclear error message
+- Partial backup files may be left behind
 
-As a power user, I want to manually optimize my database so that I can maintain optimal performance without waiting for automatic maintenance.
+### Desired Behavior
+- User clicks "Sync iPhone"
+- App checks available disk space
+- App estimates required space based on iPhone storage
+- If insufficient space, shows clear alert with:
+  - Required space estimate
+  - Currently available space
+  - Suggestion to free up space
+- Only proceeds if enough space is available
+
+## Implementation Approach
+
+### 1. Get Available Disk Space
+
+```typescript
+// Use Node.js fs.statfs or os module
+import { statfs } from 'fs/promises';
+
+async function getAvailableDiskSpace(path: string): Promise<number> {
+  const stats = await statfs(path);
+  return stats.bavail * stats.bsize; // Available bytes
+}
+```
+
+### 2. Estimate Required Space
+
+Options:
+- Query iPhone storage via libimobiledevice
+- Use conservative estimate (e.g., 1.5x iPhone used storage)
+- Allow user override with "Proceed anyway" option
+
+### 3. Show Alert
+
+```typescript
+if (availableSpace < requiredSpace) {
+  dialog.showMessageBox({
+    type: 'warning',
+    title: 'Insufficient Disk Space',
+    message: `Not enough disk space for iPhone backup.\n\n` +
+      `Required: ~${formatBytes(requiredSpace)}\n` +
+      `Available: ${formatBytes(availableSpace)}\n\n` +
+      `Please free up disk space and try again.`,
+    buttons: ['OK']
+  });
+  return;
+}
+```
 
 ## Acceptance Criteria
 
-- [ ] "Database Maintenance" button visible in Settings under a new "Advanced" or "Storage" section
-- [ ] Clicking button shows a modal with options or runs all three operations
-- [ ] Progress indicator during maintenance (can take a few seconds)
-- [ ] Success/failure feedback after completion
-- [ ] Operations run in sequence: REINDEX -> ANALYZE -> VACUUM
-- [ ] UI remains responsive during maintenance (async execution)
-- [ ] `npm run type-check` passes
-- [ ] `npm run lint` passes
-- [ ] `npm test` passes
+- [ ] App checks disk space before starting iPhone backup
+- [ ] App estimates required space (conservative estimate is fine)
+- [ ] Clear error message shown if insufficient space
+- [ ] Message includes required vs available space
+- [ ] Backup does not start if insufficient space
+- [ ] Works on both macOS and Windows
 
-## Technical Details
+## Edge Cases
 
-### Existing Infrastructure
+- External drive as backup location (check correct volume)
+- Very large iPhones (256GB+)
+- Multiple users on same machine
+- Network drives (may not report space accurately)
 
-The backend already has partial support:
-- `electron/services/db/core/dbConnection.ts` has `vacuumDb()` function
-- `electron/services/databaseService.ts` exports `vacuum()` method
-- No IPC handler exposed yet
+## Estimated Effort
 
-### Implementation Approach
+Low-Medium (~20K tokens)
+- Disk space check: ~5K
+- Space estimation logic: ~5K
+- UI alert integration: ~5K
+- Testing: ~5K
 
-1. **Backend (electron)**:
-   - Add `reindexDb()` and `analyzeDb()` functions to `dbConnection.ts`
-   - Expose all three via databaseService methods
-   - Add IPC handler: `database:maintenance` or `database:optimize`
+## Related Files
 
-2. **Frontend (renderer)**:
-   - Add button in Settings.tsx (new "Advanced" section)
-   - Add `window.api.database.optimize()` call
-   - Simple modal or inline progress indicator
+- `electron/services/iphoneSyncService.ts` - Main sync logic
+- `electron/handlers/iphone-handlers.ts` - IPC handlers
+- `src/components/Settings.tsx` - Sync UI (if triggered from there)
 
-### Files to Modify
-
-- `electron/services/db/core/dbConnection.ts` - Add REINDEX, ANALYZE functions
-- `electron/services/databaseService.ts` - Expose new methods
-- `electron/handlers.ts` or `electron/database-handlers.ts` - Add IPC handler
-- `electron/preload.ts` - Expose to renderer
-- `src/window.d.ts` - Add type definitions
-- `src/components/Settings.tsx` - Add UI button
-
-## Estimate
-
-~50K tokens (simple UI + backend handler)
-
-## Dependencies
-
-- Migration 18 (performance indexes) - Already merged
-
-## Related Items
-
-- Migration 18: Performance indexes for communications table
-- BACKLOG-497: Move SQLite Queries to Worker Thread (future optimization)
-
-## Sprint Assignment
-
-To be assigned
-
-## Notes
-
-- This is a nice-to-have feature for power users
-- Database file is encrypted with SQLCipher, these operations work normally
-- VACUUM requires temporary disk space (2x database size in worst case)
+## Created
+2026-01-25

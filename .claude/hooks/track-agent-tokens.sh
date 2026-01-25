@@ -1,6 +1,7 @@
 #!/bin/bash
 # Track token usage after engineer agents complete
 # Triggered by SubagentStop hook
+# Writes to tokens.csv (CSV format)
 
 # Log that hook was called (for debugging)
 echo "[HOOK FIRED] $(date)" >> /tmp/claude-hook-debug.log
@@ -10,14 +11,19 @@ INPUT=$(cat)
 echo "[HOOK INPUT] $INPUT" >> /tmp/claude-hook-debug.log
 
 # Extract fields from hook input
-SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // "unknown"')
-AGENT_ID=$(echo "$INPUT" | jq -r '.agent_id // "unknown"')
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // ""')
+AGENT_ID=$(echo "$INPUT" | jq -r '.agent_id // ""')
 # Use agent_transcript_path for subagent token data (not main session transcript)
 TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.agent_transcript_path // .transcript_path // ""')
 
-# Use absolute path for metrics
-METRICS_FILE="/Users/daniel/Documents/Mad/.claude/metrics/tokens.jsonl"
+# Use absolute path for metrics CSV
+METRICS_FILE="/Users/daniel/Documents/Mad/.claude/metrics/tokens.csv"
 mkdir -p "$(dirname "$METRICS_FILE")"
+
+# Create CSV header if file doesn't exist
+if [ ! -f "$METRICS_FILE" ]; then
+  echo "timestamp,session_id,agent_id,agent_type,task_id,description,input_tokens,output_tokens,cache_read,cache_create,billable_tokens,total_tokens,api_calls,duration_secs,started_at,ended_at" > "$METRICS_FILE"
+fi
 
 # Skip if no transcript
 if [ -z "$TRANSCRIPT_PATH" ] || [ ! -f "$TRANSCRIPT_PATH" ]; then
@@ -70,26 +76,15 @@ else
   END_TS=""
 fi
 
-# Log metrics
+# Log metrics as CSV row
+# CSV columns: timestamp,session_id,agent_id,agent_type,task_id,description,input_tokens,output_tokens,cache_read,cache_create,billable_tokens,total_tokens,api_calls,duration_secs,started_at,ended_at
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-LOG_ENTRY=$(jq -n \
-  --arg ts "$TIMESTAMP" \
-  --arg sid "$SESSION_ID" \
-  --arg aid "$AGENT_ID" \
-  --argjson input "$TOTAL_INPUT" \
-  --argjson output "$TOTAL_OUTPUT" \
-  --argjson cache_read "$TOTAL_CACHE_READ" \
-  --argjson cache_create "$TOTAL_CACHE_CREATE" \
-  --argjson billable "$BILLABLE_TOKENS" \
-  --argjson total "$TOTAL_TOKENS" \
-  --argjson calls "$API_CALLS" \
-  --argjson duration "$DURATION_SECS" \
-  --arg start "$START_TS" \
-  --arg end "$END_TS" \
-  '{timestamp: $ts, session_id: $sid, agent_id: $aid, input_tokens: $input, output_tokens: $output, cache_read: $cache_read, cache_create: $cache_create, billable_tokens: $billable, total_tokens: $total, api_calls: $calls, duration_secs: $duration, started_at: $start, ended_at: $end}')
 
-echo "$LOG_ENTRY" >> "$METRICS_FILE"
-echo "[HOOK] Logged: $TOTAL_TOKENS tokens" >> /tmp/claude-hook-debug.log
+# agent_type, task_id, description are left empty - agents can fill these manually using /log-metrics skill
+CSV_ROW="${TIMESTAMP},${SESSION_ID},${AGENT_ID},,,,$TOTAL_INPUT,$TOTAL_OUTPUT,$TOTAL_CACHE_READ,$TOTAL_CACHE_CREATE,$BILLABLE_TOKENS,$TOTAL_TOKENS,$API_CALLS,$DURATION_SECS,$START_TS,$END_TS"
+
+echo "$CSV_ROW" >> "$METRICS_FILE"
+echo "[HOOK] Logged: $TOTAL_TOKENS tokens to CSV" >> /tmp/claude-hook-debug.log
 
 echo '{"decision": "allow"}'
 exit 0

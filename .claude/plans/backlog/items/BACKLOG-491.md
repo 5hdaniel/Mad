@@ -2,9 +2,10 @@
 
 **Category**: bug
 **Priority**: P1
-**Sprint**: SPRINT-056
+**Sprint**: SPRINT-052
 **Estimated Tokens**: ~5K
-**Status**: Pending
+**Status**: Resolved
+**Resolved**: PR #582
 
 ---
 

@@ -2,19 +2,16 @@
  * RoleAssignment Component
  * Single role assignment with contact selection
  * Extracted from AuditTransactionModal as part of TASK-974 decomposition
+ *
+ * Contact Loading Optimization:
+ * Now receives contacts as props from parent (ContactAssignmentStep).
+ * This prevents N API calls (one per role) - contacts are loaded once at the parent level.
  */
 import React from "react";
 import { getRoleDisplayName } from "../../utils/transactionRoleUtils";
 import ContactSelectModal from "../ContactSelectModal";
 import type { Contact } from "../../../electron/types/models";
-import { usePlatform } from "../../contexts/PlatformContext";
 import type { ContactAssignment } from "../../hooks/useAuditTransaction";
-
-interface ErrorState {
-  type: string;
-  message: string;
-  action: string;
-}
 
 interface RoleAssignmentProps {
   role: string;
@@ -28,6 +25,10 @@ interface RoleAssignmentProps {
     notes: string,
   ) => void;
   onRemove: (role: string, contactId: string) => void;
+  /** Contacts loaded by parent, passed as prop */
+  contacts: Contact[];
+  /** Callback to refresh contacts (e.g., after import) */
+  onRefreshContacts: () => void;
   userId: string;
   propertyAddress: string;
   transactionType: string;
@@ -40,82 +41,17 @@ function RoleAssignment({
   assignments,
   onAssign,
   onRemove,
+  contacts,
+  onRefreshContacts,
   userId,
   propertyAddress,
   transactionType,
 }: RoleAssignmentProps): React.ReactElement {
-  const { isMacOS, isWindows } = usePlatform();
-  const [contacts, setContacts] = React.useState<Contact[]>([]);
-  const [loading, setLoading] = React.useState<boolean>(true);
-  const [error, setError] = React.useState<ErrorState | null>(null);
   const [showContactSelect, setShowContactSelect] =
     React.useState<boolean>(false);
 
-  React.useEffect(() => {
-    loadContacts();
-  }, [propertyAddress]);
-
-  const loadContacts = async (): Promise<void> => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Use sorted API when property address is available, otherwise use regular API
-      const result = propertyAddress
-        ? await window.api.contacts.getSortedByActivity(
-            userId,
-            propertyAddress,
-          )
-        : await window.api.contacts.getAll(userId);
-
-      if (result.success) {
-        setContacts(result.contacts || []);
-
-        // If no contacts returned, prompt user to import
-        if (!result.contacts || result.contacts.length === 0) {
-          setError({
-            type: "no_contacts",
-            message: "No contacts imported yet. Click 'Select Contact' to import contacts from your address book.",
-            action: "You can import contacts from macOS Contacts or create them manually.",
-          });
-        }
-      } else {
-        // API returned error
-        setError({
-          type: "api_error",
-          message: isMacOS
-            ? result.error ||
-              "Failed to load contacts. This may be due to missing permissions."
-            : isWindows
-              ? result.error ||
-                "Failed to load contacts. Connect your iPhone to sync contacts."
-              : result.error || "Failed to load contacts.",
-          action: isMacOS
-            ? "Please check Full Disk Access permission in System Settings"
-            : isWindows
-              ? "Connect your iPhone via USB and create a backup"
-              : "Check your connection",
-        });
-      }
-    } catch (err: unknown) {
-      console.error("Failed to load contacts:", err);
-      setError({
-        type: "exception",
-        message: isMacOS
-          ? "Unable to load contacts. Please check your permissions."
-          : isWindows
-            ? "Unable to load contacts. Please sync your iPhone backup."
-            : "Unable to load contacts.",
-        action: isMacOS
-          ? "Open System Settings and enable Full Disk Access for this app"
-          : isWindows
-            ? "Connect your iPhone via USB and create a backup"
-            : "Try again",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Derive "no contacts" state from props
+  const hasNoContacts = contacts.length === 0;
 
   const handleContactsSelected = (selectedContacts: Contact[]): void => {
     selectedContacts.forEach((contact: Contact, index: number) => {
@@ -141,8 +77,8 @@ function RoleAssignment({
         </div>
       </div>
 
-      {/* Error Message */}
-      {error && (
+      {/* No Contacts Message - only show if contacts array is empty */}
+      {hasNoContacts && (
         <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
           <div className="flex items-start gap-2">
             <svg
@@ -160,31 +96,13 @@ function RoleAssignment({
             </svg>
             <div className="flex-1">
               <p className="text-sm font-medium text-yellow-900">
-                {error.message}
+                No contacts imported yet. Click &quot;Select Contact&quot; to import contacts from your address book.
               </p>
-              <p className="text-xs text-yellow-700 mt-1">{error.action}</p>
-              {error.type !== "no_contacts" && (
-                <button
-                  onClick={async () => {
-                    if (window.api?.system?.openPrivacyPane) {
-                      await window.api.system.openPrivacyPane("fullDiskAccess");
-                    }
-                  }}
-                  className="mt-2 text-xs font-medium text-yellow-800 hover:text-yellow-900 underline"
-                >
-                  Open System Settings
-                </button>
-              )}
+              <p className="text-xs text-yellow-700 mt-1">
+                You can import contacts from macOS Contacts or create them manually.
+              </p>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Loading State */}
-      {loading && !error && (
-        <div className="mb-3 p-4 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center gap-2">
-          <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-          <span className="text-sm text-gray-600">Loading contacts...</span>
         </div>
       )}
 
@@ -243,15 +161,10 @@ function RoleAssignment({
       )}
 
       {/* Add Contact Button (if multiple allowed or no contact assigned) */}
-      {!loading && (multiple || assignments.length === 0) && (
+      {(multiple || assignments.length === 0) && (
         <button
           onClick={() => setShowContactSelect(true)}
-          disabled={error !== null && error.type !== "no_contacts"}
-          className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-            error !== null && error.type !== "no_contacts"
-              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-              : "bg-indigo-500 text-white hover:bg-indigo-600"
-          }`}
+          className="w-full px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 bg-indigo-500 text-white hover:bg-indigo-600"
         >
           <svg
             className="w-5 h-5"
@@ -284,7 +197,7 @@ function RoleAssignment({
           onClose={() => setShowContactSelect(false)}
           propertyAddress={propertyAddress}
           userId={userId}
-          onRefreshContacts={loadContacts}
+          onRefreshContacts={onRefreshContacts}
         />
       )}
     </div>

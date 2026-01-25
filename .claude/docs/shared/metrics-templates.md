@@ -29,11 +29,14 @@ All sprint tasks require metrics tracking for:
 
 **How to access:**
 ```bash
-# View all metrics
-cat .claude/metrics/tokens.jsonl | jq '.'
+# View metrics summary
+python .claude/skills/log-metrics/log_metrics.py --summary
+
+# View CSV directly
+cat .claude/metrics/tokens.csv
 
 # Find specific agent's data
-grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'
+grep "<agent_id>" .claude/metrics/tokens.csv
 ```
 
 ---
@@ -95,7 +98,7 @@ Engineer Agent ID: <agent_id from Task tool output>
 
 ### Metrics (Auto-Captured)
 
-**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'`
+**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.csv`
 
 | Metric | Value |
 |--------|-------|
@@ -125,7 +128,7 @@ SR Engineer Agent ID: <agent_id from Task tool output>
 
 ### Metrics (Auto-Captured)
 
-**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'`
+**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.csv`
 
 | Metric | Value |
 |--------|-------|

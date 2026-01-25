@@ -4,7 +4,8 @@
 **Priority**: P1
 **Sprint**: SPRINT-052
 **Estimated Tokens**: ~10K
-**Status**: Root Cause Identified - Ready for Fix
+**Status**: Resolved
+**Resolved**: PR #584
 **QA Investigation**: 2026-01-24
 **Test Case**: TEST-BACKLOG-493-email-unlink-bug.md
 

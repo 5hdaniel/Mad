@@ -208,13 +208,14 @@ describe("useTransactionMessages", () => {
       expect(result.current.error).toBeNull();
     });
 
-    it("should return messages with communication_type='sms' (legacy field)", async () => {
-      // Auto-linked messages use communication_type instead of channel
+    it("should return messages with communication_type='text' (thread-based linking)", async () => {
+      // BACKLOG-502: Thread-based links use communication_type='text' for SMS
+      // (Schema allows 'email', 'text', 'imessage' - not 'sms')
       const autoLinkedMessages: Partial<Communication>[] = [
         {
           id: "auto-1",
           user_id: "user-456",
-          communication_type: "sms",
+          communication_type: "text",
           body_text: "Auto-linked SMS message",
           sent_at: "2024-01-20T10:00:00Z",
           has_attachments: false,
@@ -247,10 +248,10 @@ describe("useTransactionMessages", () => {
         expect(result.current.loading).toBe(false);
       });
 
-      // Should only return the SMS message, not the email
+      // Should only return the text message, not the email
       expect(result.current.messages).toHaveLength(1);
       expect(result.current.messages[0].id).toBe("auto-1");
-      expect(result.current.messages[0].communication_type).toBe("sms");
+      expect(result.current.messages[0].communication_type).toBe("text");
     });
 
     it("should return messages with communication_type='imessage' (legacy field)", async () => {
@@ -301,7 +302,7 @@ describe("useTransactionMessages", () => {
         {
           id: "auto-sms",
           user_id: "user-456",
-          communication_type: "sms",
+          communication_type: "text",
           body_text: "Auto-linked SMS",
           sent_at: "2024-01-20T11:00:00Z",
           has_attachments: false,

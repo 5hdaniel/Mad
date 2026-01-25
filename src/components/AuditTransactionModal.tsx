@@ -39,6 +39,11 @@ function AuditTransactionModal({
     contactAssignments,
     showAddressAutocomplete,
     addressSuggestions,
+    // Contact loading (lifted to parent level to prevent duplicate API calls)
+    contacts,
+    contactsLoading,
+    contactsError,
+    refreshContacts,
     setAddressData,
     handleAddressChange,
     selectAddress,
@@ -177,6 +182,11 @@ function AuditTransactionModal({
               userId={userId}
               transactionType={addressData.transaction_type}
               propertyAddress={addressData.property_address}
+              // Contacts loaded at parent level to prevent duplicate API calls
+              contacts={contacts}
+              contactsLoading={contactsLoading}
+              contactsError={contactsError}
+              onRefreshContacts={refreshContacts}
             />
           )}
 
@@ -189,6 +199,11 @@ function AuditTransactionModal({
               userId={userId}
               transactionType={addressData.transaction_type}
               propertyAddress={addressData.property_address}
+              // Contacts loaded at parent level to prevent duplicate API calls
+              contacts={contacts}
+              contactsLoading={contactsLoading}
+              contactsError={contactsError}
+              onRefreshContacts={refreshContacts}
             />
           )}
         </div>

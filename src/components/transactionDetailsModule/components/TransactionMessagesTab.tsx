@@ -164,12 +164,9 @@ export function TransactionMessagesTab({
       const phones = extractAllPhones(messages);
       if (phones.length === 0) return;
 
-      console.log("[Messages] Looking up contact names for phones:", phones);
-
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const result = await (window.api.contacts as any).getNamesByPhones(phones);
-        console.log("[Messages] Contact lookup result:", result);
 
         if (result.success && result.names) {
           // Build a lookup map with both original and normalized phone keys
@@ -182,10 +179,7 @@ export function TransactionMessagesTab({
               namesWithNormalized[normalized] = name;
             }
           });
-          console.log("[Messages] Contact names map:", namesWithNormalized);
           setContactNames(namesWithNormalized);
-        } else if (Object.keys(result.names || {}).length === 0) {
-          console.log("[Messages] No matching contacts found for these phone numbers");
         }
       } catch (err) {
         console.error("Failed to look up contact names:", err);

@@ -75,14 +75,10 @@ export function usePermissionsFlow({
   }, [checkPermissions, checkAppLocation]);
 
   const handlePermissionsGranted = useCallback((): void => {
-    console.log("[usePermissionsFlow] handlePermissionsGranted called, stateMachineDispatch:", !!stateMachineDispatch);
     setHasPermissions(true);
     // Dispatch to state machine to complete the permissions step
     if (stateMachineDispatch) {
-      console.log("[usePermissionsFlow] Dispatching ONBOARDING_STEP_COMPLETE for permissions");
       stateMachineDispatch({ type: "ONBOARDING_STEP_COMPLETE", step: "permissions" });
-    } else {
-      console.warn("[usePermissionsFlow] No stateMachineDispatch available!");
     }
     // Legacy fallback (no-op if state machine is enabled)
     onSetCurrentStep("dashboard");

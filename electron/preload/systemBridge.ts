@@ -257,6 +257,19 @@ export const systemBridge = {
   showInFolder: (filePath: string) =>
     ipcRenderer.invoke("system:show-in-folder", filePath),
 
+  /**
+   * Reindex the database for performance optimization
+   * Rebuilds all performance indexes to help resolve slowness
+   * @returns Result with index count and duration
+   */
+  reindexDatabase: () =>
+    ipcRenderer.invoke("system:reindex-database") as Promise<{
+      success: boolean;
+      indexesRebuilt?: number;
+      durationMs?: number;
+      error?: string;
+    }>,
+
   // Spread dev-only diagnostics (empty object in production)
   ...devDiagnostics,
 };

@@ -7,6 +7,11 @@ import {
   EmailDeduplicationService,
   DuplicateCheckResult,
 } from "./emailDeduplicationService";
+import {
+  withRetry,
+  apiThrottlers,
+  RetryOptions,
+} from "../utils/apiRateLimit";
 
 /**
  * Email attachment metadata
@@ -90,6 +95,32 @@ function extractMessageIdHeader(
 class GmailFetchService {
   private gmail: gmail_v1.Gmail | null = null;
   private oauth2Client: Auth.OAuth2Client | null = null;
+
+  /**
+   * Retry options for Gmail API calls (BACKLOG-497)
+   */
+  private readonly retryOptions: RetryOptions = {
+    maxRetries: 5,
+    baseDelay: 1000,
+    maxDelay: 30000,
+    context: "GmailFetch",
+  };
+
+  /**
+   * Execute a Gmail API call with rate limiting (BACKLOG-497)
+   *
+   * Features:
+   * - Request throttling (100ms minimum delay between requests)
+   * - Exponential backoff on rate limit errors (429)
+   * - Respects Retry-After headers
+   * - Automatic retry on transient errors
+   *
+   * @private
+   */
+  private async _throttledCall<T>(fn: () => Promise<T>): Promise<T> {
+    await apiThrottlers.gmail.throttle();
+    return withRetry(fn, this.retryOptions);
+  }
 
   /**
    * Initialize Gmail API with user's OAuth tokens
@@ -193,18 +224,20 @@ class GmailFetchService {
       let pageCount = 0;
       let estimatedTotal = 0;
 
-      // Paginate through all results
+      // Paginate through all results with rate limiting (BACKLOG-497)
       do {
         pageCount++;
         logService.debug(`Fetching page ${pageCount}`, "GmailFetch");
 
         const response: { data: gmail_v1.Schema$ListMessagesResponse } =
-          await this.gmail.users.messages.list({
-            userId: "me",
-            q: searchQuery.trim(),
-            maxResults: Math.min(100, maxResults - allMessages.length), // Fetch up to 100 per page
-            pageToken: nextPageToken,
-          });
+          await this._throttledCall(() =>
+            this.gmail!.users.messages.list({
+              userId: "me",
+              q: searchQuery.trim(),
+              maxResults: Math.min(100, maxResults - allMessages.length), // Fetch up to 100 per page
+              pageToken: nextPageToken,
+            })
+          );
 
         // Get estimated total from first response
         if (pageCount === 1 && response.data.resultSizeEstimate) {
@@ -285,7 +318,7 @@ class GmailFetchService {
   }
 
   /**
-   * Get email by ID
+   * Get email by ID with rate limiting (BACKLOG-497)
    * @param messageId - Gmail message ID
    * @returns Parsed email object
    */
@@ -295,11 +328,13 @@ class GmailFetchService {
         throw new Error("Gmail API not initialized. Call initialize() first.");
       }
 
-      const response = await this.gmail.users.messages.get({
-        userId: "me",
-        id: messageId,
-        format: "full",
-      });
+      const response = await this._throttledCall(() =>
+        this.gmail!.users.messages.get({
+          userId: "me",
+          id: messageId,
+          format: "full",
+        })
+      );
 
       const message = response.data;
       return this._parseMessage(message);
@@ -411,7 +446,7 @@ class GmailFetchService {
   }
 
   /**
-   * Get email attachment
+   * Get email attachment with rate limiting (BACKLOG-497)
    * @param messageId - Gmail message ID
    * @param attachmentId - Attachment ID
    * @returns Attachment data
@@ -425,11 +460,13 @@ class GmailFetchService {
         throw new Error("Gmail API not initialized. Call initialize() first.");
       }
 
-      const response = await this.gmail.users.messages.attachments.get({
-        userId: "me",
-        messageId: messageId,
-        id: attachmentId,
-      });
+      const response = await this._throttledCall(() =>
+        this.gmail!.users.messages.attachments.get({
+          userId: "me",
+          messageId: messageId,
+          id: attachmentId,
+        })
+      );
 
       return Buffer.from(response.data.data || "", "base64");
     } catch (error) {
@@ -439,7 +476,7 @@ class GmailFetchService {
   }
 
   /**
-   * Get user's email address
+   * Get user's email address with rate limiting (BACKLOG-497)
    * @returns User's Gmail address
    */
   async getUserEmail(): Promise<string> {
@@ -448,9 +485,11 @@ class GmailFetchService {
         throw new Error("Gmail API not initialized. Call initialize() first.");
       }
 
-      const response = await this.gmail.users.getProfile({
-        userId: "me",
-      });
+      const response = await this._throttledCall(() =>
+        this.gmail!.users.getProfile({
+          userId: "me",
+        })
+      );
 
       return response.data.emailAddress || "";
     } catch (error) {

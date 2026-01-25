@@ -103,7 +103,7 @@ The SubagentStop hook captures total metrics. Your responsibility:
 3. After completion, retrieve metrics:
 
 ```bash
-grep "<your_agent_id>" .claude/metrics/tokens.jsonl | jq '.'
+grep "<your_agent_id>" .claude/metrics/tokens.csv
 ```
 
 ---
@@ -155,7 +155,7 @@ Track each phase separately to identify where tokens are spent:
 
 ### Total Metrics (Auto-Captured)
 
-**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'`
+**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.csv`
 
 | Metric | Value |
 |--------|-------|
@@ -470,7 +470,7 @@ Copy this to your task file or notes:
 ### Metrics Summary
 - [ ] Agent ID recorded immediately when Task tool returned
 - [ ] Three-phase metrics documented (Planning/Implementation/Testing)
-- [ ] Total metrics retrieved: grep "<agent_id>" .claude/metrics/tokens.jsonl
+- [ ] Total metrics retrieved: grep "<agent_id>" .claude/metrics/tokens.csv
 - [ ] Phase analysis completed (% breakdown)
 - [ ] Variance calculated (PM Est vs Actual)
 

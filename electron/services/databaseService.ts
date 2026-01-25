@@ -677,6 +677,117 @@ class DatabaseService implements IDatabaseService {
       }
     }
 
+    // Migration 18: Performance indexes to reduce UI freezes during queries
+    // BACKLOG-497: Quick win before full worker thread refactor
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_contacts_user_id ON contacts(user_id)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_contact_emails_contact_id ON contact_emails(contact_id)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_contact_emails_email ON contact_emails(email)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_contact_phones_contact_id ON contact_phones(contact_id)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_user_id ON communications(user_id)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_sender ON communications(sender)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_sent_at ON communications(sent_at)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_user_sent ON communications(user_id, sent_at)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_transaction ON communications(transaction_id)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_user_id ON messages(user_id)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_sent_at ON messages(sent_at)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_user_sent ON messages(user_id, sent_at)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel)`);
+
+    // Migration 20: Add UNIQUE constraint on messages.external_id to prevent import duplicates
+    // The import service uses INSERT OR IGNORE but without a unique constraint it does nothing!
+    // First, delete duplicate messages keeping only the oldest one (by created_at or id)
+    const dupMessagesCount = (db.prepare(`
+      SELECT COUNT(*) as count FROM messages m1
+      WHERE EXISTS (
+        SELECT 1 FROM messages m2
+        WHERE m2.user_id = m1.user_id
+        AND m2.external_id = m1.external_id
+        AND m2.external_id IS NOT NULL
+        AND m2.id < m1.id
+      )
+    `).get() as { count: number })?.count || 0;
+
+    if (dupMessagesCount > 0) {
+      await logService.info(`Migration 20: Found ${dupMessagesCount} duplicate messages to clean up`, "DatabaseService");
+      runSafe(`
+        DELETE FROM messages
+        WHERE id IN (
+          SELECT m1.id FROM messages m1
+          WHERE EXISTS (
+            SELECT 1 FROM messages m2
+            WHERE m2.user_id = m1.user_id
+            AND m2.external_id = m1.external_id
+            AND m2.external_id IS NOT NULL
+            AND m2.id < m1.id
+          )
+        )
+      `);
+      await logService.info("Migration 20: Duplicate messages cleaned up", "DatabaseService");
+    }
+
+    // Now add the unique index so INSERT OR IGNORE actually works
+    runSafe(`CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_user_external_id ON messages(user_id, external_id) WHERE external_id IS NOT NULL`);
+
+    // Migration 21: Delete content-based duplicates (same body_text + sent_at)
+    // This catches duplicates that have different external_ids but same content
+    const contentDupCount = (db.prepare(`
+      SELECT COUNT(*) as count FROM messages m1
+      WHERE m1.channel IN ('sms', 'imessage')
+      AND EXISTS (
+        SELECT 1 FROM messages m2
+        WHERE m2.user_id = m1.user_id
+        AND m2.body_text = m1.body_text
+        AND m2.sent_at = m1.sent_at
+        AND m2.channel IN ('sms', 'imessage')
+        AND m2.id < m1.id
+      )
+    `).get() as { count: number })?.count || 0;
+
+    if (contentDupCount > 0) {
+      await logService.info(`Migration 21: Found ${contentDupCount} content-duplicate messages to clean up`, "DatabaseService");
+      runSafe(`
+        DELETE FROM messages
+        WHERE id IN (
+          SELECT m1.id FROM messages m1
+          WHERE m1.channel IN ('sms', 'imessage')
+          AND EXISTS (
+            SELECT 1 FROM messages m2
+            WHERE m2.user_id = m1.user_id
+            AND m2.body_text = m1.body_text
+            AND m2.sent_at = m1.sent_at
+            AND m2.channel IN ('sms', 'imessage')
+            AND m2.id < m1.id
+          )
+        )
+      `);
+      await logService.info("Migration 21: Content-duplicate messages cleaned up", "DatabaseService");
+    }
+
+    // Migration 19: Clean up legacy communication records that cause duplicates
+    // Legacy records stored content directly in body_plain without message_id reference.
+    // When the same message was re-imported with proper message_id linking, both records
+    // exist with the same content but different IDs, causing duplicate messages in the UI.
+    // Since we have no users yet, we can safely delete the legacy records.
+    // The proper junction records (with message_id) remain and link messages to transactions.
+    const legacyCommsCount = (db.prepare(`
+      SELECT COUNT(*) as count FROM communications
+      WHERE body_plain IS NOT NULL
+      AND message_id IS NULL
+      AND communication_type IN ('text', 'sms', 'imessage')
+    `).get() as { count: number })?.count || 0;
+
+    if (legacyCommsCount > 0) {
+      await logService.info(`Migration 19: Found ${legacyCommsCount} legacy text communication records to clean up`, "DatabaseService");
+      runSafe(`
+        DELETE FROM communications
+        WHERE body_plain IS NOT NULL
+        AND message_id IS NULL
+        AND communication_type IN ('text', 'sms', 'imessage')
+      `);
+      await logService.info("Migration 19: Legacy text communications cleaned up - duplicates should be resolved", "DatabaseService");
+    }
+
     // Finalize schema version (create table if missing for backwards compatibility)
     const schemaVersionExists = db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
@@ -689,12 +800,12 @@ class DatabaseService implements IDatabaseService {
           version INTEGER NOT NULL DEFAULT 1,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
-        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 17);
+        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 21);
       `);
     } else {
       const currentVersion = (db.prepare("SELECT version FROM schema_version").get() as { version: number } | undefined)?.version || 0;
-      if (currentVersion < 17) {
-        db.exec("UPDATE schema_version SET version = 17");
+      if (currentVersion < 21) {
+        db.exec("UPDATE schema_version SET version = 21");
       }
     }
 
@@ -1599,6 +1710,98 @@ class DatabaseService implements IDatabaseService {
       ? await databaseEncryptionService.isDatabaseEncrypted(this.dbPath)
       : false;
     return { isEncrypted, keyMetadata };
+  }
+
+  /**
+   * Reindex all performance indexes
+   * Recreates indexes that optimize query performance for contacts, communications, and messages.
+   * This can help resolve slowness caused by fragmented or outdated indexes.
+   *
+   * @returns Object with reindex results including index count and duration
+   */
+  async reindexDatabase(): Promise<{
+    success: boolean;
+    indexesRebuilt: number;
+    durationMs: number;
+    error?: string;
+  }> {
+    const db = this._ensureDb();
+    const startTime = Date.now();
+    let indexesRebuilt = 0;
+
+    try {
+      await logService.info("Starting database reindex operation", "DatabaseService");
+
+      // Performance indexes from Migration 18 (BACKLOG-497)
+      // Drop and recreate to ensure fresh, optimized indexes
+      const performanceIndexes = [
+        // Contact indexes
+        { name: "idx_contacts_user_id", sql: "CREATE INDEX IF NOT EXISTS idx_contacts_user_id ON contacts(user_id)" },
+        { name: "idx_contact_emails_contact_id", sql: "CREATE INDEX IF NOT EXISTS idx_contact_emails_contact_id ON contact_emails(contact_id)" },
+        { name: "idx_contact_emails_email", sql: "CREATE INDEX IF NOT EXISTS idx_contact_emails_email ON contact_emails(email)" },
+        { name: "idx_contact_phones_contact_id", sql: "CREATE INDEX IF NOT EXISTS idx_contact_phones_contact_id ON contact_phones(contact_id)" },
+        // Communication indexes
+        { name: "idx_communications_user_id", sql: "CREATE INDEX IF NOT EXISTS idx_communications_user_id ON communications(user_id)" },
+        { name: "idx_communications_sender", sql: "CREATE INDEX IF NOT EXISTS idx_communications_sender ON communications(sender)" },
+        { name: "idx_communications_sent_at", sql: "CREATE INDEX IF NOT EXISTS idx_communications_sent_at ON communications(sent_at)" },
+        { name: "idx_communications_user_sent", sql: "CREATE INDEX IF NOT EXISTS idx_communications_user_sent ON communications(user_id, sent_at)" },
+        { name: "idx_communications_transaction", sql: "CREATE INDEX IF NOT EXISTS idx_communications_transaction ON communications(transaction_id)" },
+        // Message indexes
+        { name: "idx_messages_user_id", sql: "CREATE INDEX IF NOT EXISTS idx_messages_user_id ON messages(user_id)" },
+        { name: "idx_messages_sent_at", sql: "CREATE INDEX IF NOT EXISTS idx_messages_sent_at ON messages(sent_at)" },
+        { name: "idx_messages_thread_id", sql: "CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id)" },
+        { name: "idx_messages_user_sent", sql: "CREATE INDEX IF NOT EXISTS idx_messages_user_sent ON messages(user_id, sent_at)" },
+        { name: "idx_messages_channel", sql: "CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel)" },
+      ];
+
+      // Use a transaction for consistency
+      db.exec("BEGIN TRANSACTION");
+
+      try {
+        for (const index of performanceIndexes) {
+          // Drop the existing index if it exists
+          db.exec(`DROP INDEX IF EXISTS ${index.name}`);
+          // Recreate the index
+          db.exec(index.sql);
+          indexesRebuilt++;
+        }
+
+        // Run ANALYZE to update statistics used by the query planner
+        db.exec("ANALYZE");
+
+        db.exec("COMMIT");
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      }
+
+      const durationMs = Date.now() - startTime;
+      await logService.info(
+        `Database reindex completed: ${indexesRebuilt} indexes rebuilt in ${durationMs}ms`,
+        "DatabaseService"
+      );
+
+      return {
+        success: true,
+        indexesRebuilt,
+        durationMs,
+      };
+    } catch (error) {
+      const durationMs = Date.now() - startTime;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      await logService.error("Database reindex failed", "DatabaseService", {
+        error: errorMessage,
+        indexesRebuilt,
+        durationMs,
+      });
+
+      return {
+        success: false,
+        indexesRebuilt,
+        durationMs,
+        error: errorMessage,
+      };
+    }
   }
 }
 

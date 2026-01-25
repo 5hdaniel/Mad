@@ -8,6 +8,11 @@ import {
   EmailDeduplicationService,
   DuplicateCheckResult,
 } from "./emailDeduplicationService";
+import {
+  withRetry,
+  apiThrottlers,
+  RetryOptions,
+} from "../utils/apiRateLimit";
 
 /**
  * Microsoft Graph API email recipient
@@ -196,7 +201,14 @@ class OutlookFetchService {
   }
 
   /**
-   * Make authenticated request to Microsoft Graph API
+   * Make authenticated request to Microsoft Graph API with rate limiting
+   *
+   * Features (BACKLOG-497):
+   * - Request throttling (100ms minimum delay between requests)
+   * - Exponential backoff on rate limit errors (429)
+   * - Respects Retry-After headers
+   * - Automatic retry on transient errors
+   *
    * @private
    */
   private async _graphRequest<T = any>(
@@ -205,74 +217,86 @@ class OutlookFetchService {
     data: any = null,
     isRetry: boolean = false,
   ): Promise<T> {
-    try {
-      const config: AxiosRequestConfig = {
-        method,
-        url: `${this.graphApiUrl}${endpoint}`,
-        headers: {
-          Authorization: `Bearer ${this.accessToken}`,
-          "Content-Type": "application/json",
-        },
-      };
+    // Throttle requests to avoid rate limiting (BACKLOG-497)
+    await apiThrottlers.microsoftGraph.throttle();
 
-      if (data) {
-        config.data = data;
-      }
+    const retryOptions: RetryOptions = {
+      maxRetries: 5,
+      baseDelay: 1000,
+      maxDelay: 30000,
+      context: "OutlookFetch",
+    };
 
-      const response = await axios(config);
-      return response.data;
-    } catch (error: any) {
-      // Handle token expiration with refresh
-      if (error.response && error.response.status === 401 && !isRetry) {
-        if (this.refreshToken && this.userId) {
-          logService.info(
-            "Access token expired, attempting refresh",
-            "OutlookFetch",
-          );
-          try {
-            const tokenResponse = await microsoftAuthService.refreshToken(
-              this.refreshToken,
+    return withRetry(async () => {
+      try {
+        const config: AxiosRequestConfig = {
+          method,
+          url: `${this.graphApiUrl}${endpoint}`,
+          headers: {
+            Authorization: `Bearer ${this.accessToken}`,
+            "Content-Type": "application/json",
+          },
+        };
+
+        if (data) {
+          config.data = data;
+        }
+
+        const response = await axios(config);
+        return response.data;
+      } catch (error: any) {
+        // Handle token expiration with refresh
+        if (error.response && error.response.status === 401 && !isRetry) {
+          if (this.refreshToken && this.userId) {
+            logService.info(
+              "Access token expired, attempting refresh",
+              "OutlookFetch",
             );
-            this.accessToken = tokenResponse.access_token;
-            this.refreshToken = tokenResponse.refresh_token;
+            try {
+              const tokenResponse = await microsoftAuthService.refreshToken(
+                this.refreshToken,
+              );
+              this.accessToken = tokenResponse.access_token;
+              this.refreshToken = tokenResponse.refresh_token;
 
-            // Update token in database
-            await databaseService.saveOAuthToken(
-              this.userId,
-              "microsoft",
-              "mailbox",
-              {
-                access_token: tokenResponse.access_token,
-                refresh_token: tokenResponse.refresh_token,
-                token_expires_at: new Date(
-                  Date.now() + tokenResponse.expires_in * 1000,
-                ),
-              },
+              // Update token in database
+              await databaseService.saveOAuthToken(
+                this.userId,
+                "microsoft",
+                "mailbox",
+                {
+                  access_token: tokenResponse.access_token,
+                  refresh_token: tokenResponse.refresh_token,
+                  token_expires_at: new Date(
+                    Date.now() + tokenResponse.expires_in * 1000,
+                  ),
+                },
+              );
+
+              logService.info("Token refreshed successfully", "OutlookFetch");
+              // Retry the request with new token (mark as retry to avoid infinite loop)
+              return this._graphRequest<T>(endpoint, method, data, true);
+            } catch (refreshError) {
+              logService.error("Token refresh failed", "OutlookFetch", {
+                error: refreshError,
+              });
+              throw new Error(
+                "Microsoft access token expired and refresh failed. Please reconnect Outlook.",
+              );
+            }
+          } else {
+            logService.error(
+              "Access token expired but no refresh token available",
+              "OutlookFetch",
             );
-
-            logService.info("Token refreshed successfully", "OutlookFetch");
-            // Retry the request with new token
-            return this._graphRequest<T>(endpoint, method, data, true);
-          } catch (refreshError) {
-            logService.error("Token refresh failed", "OutlookFetch", {
-              error: refreshError,
-            });
             throw new Error(
-              "Microsoft access token expired and refresh failed. Please reconnect Outlook.",
+              "Microsoft access token expired. Please reconnect Outlook.",
             );
           }
-        } else {
-          logService.error(
-            "Access token expired but no refresh token available",
-            "OutlookFetch",
-          );
-          throw new Error(
-            "Microsoft access token expired. Please reconnect Outlook.",
-          );
         }
+        throw error;
       }
-      throw error;
-    }
+    }, retryOptions);
   }
 
   /**

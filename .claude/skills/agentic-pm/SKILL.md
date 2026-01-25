@@ -49,7 +49,9 @@ Use this skill when the user asks for any of:
    - **Duration**: Captured automatically (start to end time)
    - **API Calls**: Captured automatically
 
-   Engineers must record their `agent_id` immediately when the Task tool returns, then retrieve metrics from `.claude/metrics/tokens.jsonl`.
+   Engineers must record their `agent_id` immediately when the Task tool returns, then retrieve metrics from `.claude/metrics/tokens.csv`.
+
+   Use `/log-metrics` skill to manually log work with agent_type, task_id, and description for better tracking.
 
    PM estimates in tokens only. Self-reported metrics are deprecated.
 

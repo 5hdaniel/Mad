@@ -197,7 +197,7 @@ Verification:
 
 ### Metrics (Auto-Captured)
 
-**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'`
+**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.csv`
 
 | Metric | Value |
 |--------|-------|
@@ -262,7 +262,7 @@ SR Engineer Agent ID: <agent_id from Task tool output>
 
 ### Metrics (Auto-Captured)
 
-**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'`
+**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.csv`
 
 | Metric | Value |
 |--------|-------|
