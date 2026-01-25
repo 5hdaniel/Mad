@@ -285,7 +285,7 @@ Completion:
 - **Actual Turns**: ~50 (Est: N/A)
 - **Actual Tokens**: ~35K (Est: 35K)
 - **Actual Time**: ~30 min
-- **PR**: [Pending]
+- **PR**: https://github.com/5hdaniel/Mad/pull/607
 
 ### Notes
 
