@@ -605,68 +605,14 @@ export async function getCommunicationsWithMessages(
 
   const results = dbAll<Communication>(sql, [transactionId]);
 
-  // DEBUG: Detailed logging for duplicate investigation
-  console.log(`\n=== [getCommunicationsWithMessages] DEBUG for ${transactionId} ===`);
-  console.log(`Raw query returned: ${results.length} rows`);
-
-  // Check for duplicates
-  const idCounts = new Map<string, number>();
-  results.forEach(r => idCounts.set(r.id, (idCounts.get(r.id) || 0) + 1));
-  const duplicates = Array.from(idCounts.entries()).filter(([, count]) => count > 1);
-
-  if (duplicates.length > 0) {
-    console.log(`!!! DUPLICATES FOUND IN QUERY: ${duplicates.length} duplicate IDs`);
-    duplicates.slice(0, 3).forEach(([id, count]) => {
-      console.log(`  ID ${id.substring(0, 8)}... appears ${count} times`);
-    });
-  } else {
-    console.log(`No duplicate IDs in raw query results`);
-  }
-
-  // Deduplicate by message ID - same message can match via both message_id and thread_id
+  // Deduplicate by message ID - same message can match via both message_id and thread_id conditions
+  // This is a safety net for any remaining edge cases
   const seenIds = new Set<string>();
-  const dedupedById = results.filter(r => {
+  const deduped = results.filter(r => {
     if (seenIds.has(r.id)) return false;
     seenIds.add(r.id);
     return true;
   });
-
-  console.log(`After ID deduplication: ${dedupedById.length} rows`);
-
-  // BUGFIX: Also deduplicate by content for text messages
-  // This handles the case where a legacy communication record (with body_plain)
-  // and a messages table record (with body_text) have the same content but different IDs.
-  // This can happen when messages were re-imported after legacy linking.
-  // Use content + sent_at as the dedup key to preserve genuinely repeated messages.
-  const seenContent = new Set<string>();
-  const deduped = dedupedById.filter(r => {
-    // Only apply content dedup for text messages (sms/imessage)
-    const channel = (r as { channel?: string }).channel;
-    const commType = (r as { communication_type?: string }).communication_type;
-    const isTextMessage = channel === 'sms' || channel === 'imessage' ||
-                          commType === 'sms' || commType === 'imessage';
-
-    if (!isTextMessage) return true; // Keep non-text messages as-is
-
-    // Create content key from body + sent_at to identify duplicate content
-    const bodyText = (r as { body_text?: string }).body_text || '';
-    const sentAt = (r as { sent_at?: string }).sent_at || '';
-    const contentKey = `${bodyText}|${sentAt}`;
-
-    if (seenContent.has(contentKey)) {
-      console.log(`[Dedup] Removing duplicate text message: "${bodyText.substring(0, 30)}..." at ${sentAt}`);
-      return false;
-    }
-    seenContent.add(contentKey);
-    return true;
-  });
-
-  const contentDupsRemoved = dedupedById.length - deduped.length;
-  if (contentDupsRemoved > 0) {
-    console.log(`Removed ${contentDupsRemoved} content duplicates (legacy + message table records)`);
-  }
-  console.log(`After content deduplication: ${deduped.length} rows`);
-  console.log(`=== END DEBUG ===\n`);
 
   return deduped;
 }

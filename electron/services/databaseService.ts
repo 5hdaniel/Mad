@@ -694,6 +694,30 @@ class DatabaseService implements IDatabaseService {
     runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_user_sent ON messages(user_id, sent_at)`);
     runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel)`);
 
+    // Migration 19: Clean up legacy communication records that cause duplicates
+    // Legacy records stored content directly in body_plain without message_id reference.
+    // When the same message was re-imported with proper message_id linking, both records
+    // exist with the same content but different IDs, causing duplicate messages in the UI.
+    // Since we have no users yet, we can safely delete the legacy records.
+    // The proper junction records (with message_id) remain and link messages to transactions.
+    const legacyCommsCount = (db.prepare(`
+      SELECT COUNT(*) as count FROM communications
+      WHERE body_plain IS NOT NULL
+      AND message_id IS NULL
+      AND communication_type IN ('text', 'sms', 'imessage')
+    `).get() as { count: number })?.count || 0;
+
+    if (legacyCommsCount > 0) {
+      await logService.info(`Migration 19: Found ${legacyCommsCount} legacy text communication records to clean up`, "DatabaseService");
+      runSafe(`
+        DELETE FROM communications
+        WHERE body_plain IS NOT NULL
+        AND message_id IS NULL
+        AND communication_type IN ('text', 'sms', 'imessage')
+      `);
+      await logService.info("Migration 19: Legacy text communications cleaned up - duplicates should be resolved", "DatabaseService");
+    }
+
     // Finalize schema version (create table if missing for backwards compatibility)
     const schemaVersionExists = db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
@@ -706,12 +730,12 @@ class DatabaseService implements IDatabaseService {
           version INTEGER NOT NULL DEFAULT 1,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
-        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 18);
+        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 19);
       `);
     } else {
       const currentVersion = (db.prepare("SELECT version FROM schema_version").get() as { version: number } | undefined)?.version || 0;
-      if (currentVersion < 18) {
-        db.exec("UPDATE schema_version SET version = 18");
+      if (currentVersion < 19) {
+        db.exec("UPDATE schema_version SET version = 19");
       }
     }
 
