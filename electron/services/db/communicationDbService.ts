@@ -542,67 +542,133 @@ export async function createCommunicationReference(
 export async function getCommunicationsWithMessages(
   transactionId: string,
 ): Promise<Communication[]> {
-  // First, get all unique message IDs linked to this transaction
-  // via either message_id or thread_id (for thread-based linking)
+  // Query 1: Records with message_id (legacy per-message linking)
+  // Query 2: Records with thread_id (new per-thread linking) - returns all messages in thread
   const sql = `
-    WITH linked_messages AS (
-      -- Get message IDs from direct message_id links
-      SELECT DISTINCT m.id as message_id
-      FROM communications c
-      JOIN messages m ON c.message_id = m.id
-      WHERE c.transaction_id = ?
-
-      UNION
-
-      -- Get message IDs from thread_id links (where message_id is NULL)
-      SELECT DISTINCT m.id as message_id
-      FROM communications c
-      JOIN messages m ON c.thread_id = m.thread_id
-      WHERE c.transaction_id = ?
-        AND c.message_id IS NULL
-        AND c.thread_id IS NOT NULL
-    )
     SELECT
-      m.id as id,
-      m.id as message_id,
-      m.user_id,
-      ? as transaction_id,
-      'linked' as link_source,
-      1.0 as link_confidence,
-      NULL as linked_at,
-      m.created_at,
-      m.channel as channel,
-      m.channel as communication_type,
-      m.body_text as body_text,
-      m.body_text as body_plain,
-      m.body_html as body,
-      m.subject as subject,
-      json_extract(m.participants, '$.from') as sender,
-      (SELECT group_concat(value) FROM json_each(json_extract(m.participants, '$.to'))) as recipients,
-      m.sent_at as sent_at,
-      m.received_at as received_at,
-      m.has_attachments as has_attachments,
-      m.thread_id as email_thread_id,
+      -- TASK-1116: Use message ID when available for proper message lookup
+      COALESCE(m.id, c.id) as id,
+      c.id as communication_id,
+      c.user_id,
+      c.transaction_id,
+      c.message_id,
+      c.link_source,
+      c.link_confidence,
+      c.linked_at,
+      c.created_at,
+      -- Use message content when available, fall back to legacy columns
+      COALESCE(m.channel, c.communication_type) as channel,
+      COALESCE(m.channel, c.communication_type) as communication_type,
+      COALESCE(m.body_text, c.body_plain) as body_text,
+      COALESCE(m.body_text, c.body_plain) as body_plain,
+      COALESCE(m.body_html, c.body) as body,
+      COALESCE(m.subject, c.subject) as subject,
+      COALESCE(json_extract(m.participants, '$.from'), c.sender) as sender,
+      COALESCE(
+        (SELECT group_concat(value) FROM json_each(json_extract(m.participants, '$.to'))),
+        c.recipients
+      ) as recipients,
+      COALESCE(m.sent_at, c.sent_at) as sent_at,
+      COALESCE(m.received_at, c.received_at) as received_at,
+      COALESCE(m.has_attachments, c.has_attachments) as has_attachments,
+      COALESCE(m.thread_id, c.email_thread_id) as email_thread_id,
+      -- Thread ID for grouping messages into conversations
       m.thread_id as thread_id,
+      -- Participants JSON for group chat detection and sender identification
       m.participants as participants,
+      -- TASK-992: Direction from messages table for bubble display
       m.direction as direction,
+      -- External ID (macOS GUID) for attachment lookup fallback
       m.external_id as external_id,
-      NULL as source,
-      NULL as cc,
-      NULL as bcc,
-      0 as attachment_count,
-      NULL as attachment_metadata,
-      NULL as keywords_detected,
-      NULL as parties_involved,
-      NULL as communication_category,
-      NULL as relevance_score,
-      0 as is_compliance_related
-    FROM linked_messages lm
-    JOIN messages m ON lm.message_id = m.id
-    ORDER BY m.sent_at DESC
+      -- Legacy columns preserved for backward compatibility
+      c.source,
+      c.cc,
+      c.bcc,
+      c.attachment_count,
+      c.attachment_metadata,
+      c.keywords_detected,
+      c.parties_involved,
+      c.communication_category,
+      c.relevance_score,
+      c.is_compliance_related
+    FROM communications c
+    LEFT JOIN messages m ON (
+      -- Legacy: join by message_id
+      (c.message_id IS NOT NULL AND c.message_id = m.id)
+      OR
+      -- TASK-1116: Thread-based linking - join by thread_id
+      (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+    )
+    WHERE c.transaction_id = ?
+    ORDER BY COALESCE(m.sent_at, c.sent_at) DESC
   `;
 
-  return dbAll<Communication>(sql, [transactionId, transactionId, transactionId]);
+  const results = dbAll<Communication>(sql, [transactionId]);
+
+  // DEBUG: Detailed logging for duplicate investigation
+  console.log(`\n=== [getCommunicationsWithMessages] DEBUG for ${transactionId} ===`);
+  console.log(`Raw query returned: ${results.length} rows`);
+
+  // Check for duplicates
+  const idCounts = new Map<string, number>();
+  results.forEach(r => idCounts.set(r.id, (idCounts.get(r.id) || 0) + 1));
+  const duplicates = Array.from(idCounts.entries()).filter(([, count]) => count > 1);
+
+  if (duplicates.length > 0) {
+    console.log(`!!! DUPLICATES FOUND IN QUERY: ${duplicates.length} duplicate IDs`);
+    duplicates.slice(0, 3).forEach(([id, count]) => {
+      console.log(`  ID ${id.substring(0, 8)}... appears ${count} times`);
+    });
+  } else {
+    console.log(`No duplicate IDs in raw query results`);
+  }
+
+  // Deduplicate by message ID - same message can match via both message_id and thread_id
+  const seenIds = new Set<string>();
+  const dedupedById = results.filter(r => {
+    if (seenIds.has(r.id)) return false;
+    seenIds.add(r.id);
+    return true;
+  });
+
+  console.log(`After ID deduplication: ${dedupedById.length} rows`);
+
+  // BUGFIX: Also deduplicate by content for text messages
+  // This handles the case where a legacy communication record (with body_plain)
+  // and a messages table record (with body_text) have the same content but different IDs.
+  // This can happen when messages were re-imported after legacy linking.
+  // Use content + sent_at as the dedup key to preserve genuinely repeated messages.
+  const seenContent = new Set<string>();
+  const deduped = dedupedById.filter(r => {
+    // Only apply content dedup for text messages (sms/imessage)
+    const channel = (r as { channel?: string }).channel;
+    const commType = (r as { communication_type?: string }).communication_type;
+    const isTextMessage = channel === 'sms' || channel === 'imessage' ||
+                          commType === 'sms' || commType === 'imessage';
+
+    if (!isTextMessage) return true; // Keep non-text messages as-is
+
+    // Create content key from body + sent_at to identify duplicate content
+    const bodyText = (r as { body_text?: string }).body_text || '';
+    const sentAt = (r as { sent_at?: string }).sent_at || '';
+    const contentKey = `${bodyText}|${sentAt}`;
+
+    if (seenContent.has(contentKey)) {
+      console.log(`[Dedup] Removing duplicate text message: "${bodyText.substring(0, 30)}..." at ${sentAt}`);
+      return false;
+    }
+    seenContent.add(contentKey);
+    return true;
+  });
+
+  const contentDupsRemoved = dedupedById.length - deduped.length;
+  if (contentDupsRemoved > 0) {
+    console.log(`Removed ${contentDupsRemoved} content duplicates (legacy + message table records)`);
+  }
+  console.log(`After content deduplication: ${deduped.length} rows`);
+  console.log(`=== END DEBUG ===\n`);
+
+  return deduped;
 }
 
 /**
@@ -811,39 +877,26 @@ function getThreadKey(msg: { thread_id?: string | null; participants?: string | 
  * BACKLOG-396: This is the source of truth for text thread counts.
  */
 export function countTextThreadsForTransaction(transactionId: string): number {
-  // Get all unique text messages linked to this transaction
-  // Uses same CTE approach as getCommunicationsWithMessages
+  // Get all text communications linked to this transaction
+  // This query matches getCommunicationsWithMessages but only for text messages
   const sql = `
-    WITH linked_messages AS (
-      -- Get message IDs from direct message_id links
-      SELECT DISTINCT m.id as message_id
-      FROM communications c
-      JOIN messages m ON c.message_id = m.id
-      WHERE c.transaction_id = ?
-        AND m.channel IN ('text', 'sms', 'imessage')
-
-      UNION
-
-      -- Get message IDs from thread_id links (where message_id is NULL)
-      SELECT DISTINCT m.id as message_id
-      FROM communications c
-      JOIN messages m ON c.thread_id = m.thread_id
-      WHERE c.transaction_id = ?
-        AND c.message_id IS NULL
-        AND c.thread_id IS NOT NULL
-        AND m.channel IN ('text', 'sms', 'imessage')
-    )
     SELECT
-      m.id as id,
+      COALESCE(m.id, c.id) as id,
       m.thread_id as thread_id,
       m.participants as participants
-    FROM linked_messages lm
-    JOIN messages m ON lm.message_id = m.id
+    FROM communications c
+    LEFT JOIN messages m ON (
+      (c.message_id IS NOT NULL AND c.message_id = m.id)
+      OR
+      (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+    )
+    WHERE c.transaction_id = ?
+      AND COALESCE(m.channel, c.communication_type) IN ('text', 'sms', 'imessage')
   `;
 
   const messages = dbAll<{ id: string; thread_id: string | null; participants: string | null }>(
     sql,
-    [transactionId, transactionId]
+    [transactionId]
   );
 
   // Group messages by thread using the same logic as frontend
