@@ -1253,6 +1253,44 @@ export function registerSystemHandlers(): void {
     },
   );
 
+  // ============================================
+  // DATABASE MAINTENANCE HANDLERS
+  // ============================================
+
+  /**
+   * Reindex the database for performance optimization
+   * Rebuilds all performance indexes and runs ANALYZE
+   */
+  ipcMain.handle(
+    "system:reindex-database",
+    async (): Promise<{
+      success: boolean;
+      indexesRebuilt?: number;
+      durationMs?: number;
+      error?: string;
+    }> => {
+      try {
+        logService.info("Database reindex requested via UI", "SystemHandlers");
+        const result = await databaseService.reindexDatabase();
+        return result;
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error("Database reindex handler failed", "SystemHandlers", {
+          error: errorMessage,
+        });
+        return {
+          success: false,
+          error: errorMessage,
+        };
+      }
+    },
+  );
+
+  // ============================================
+  // DATA DIAGNOSTIC HANDLERS
+  // ============================================
+
   // Diagnostic: Check email data for a specific contact email
   ipcMain.handle(
     "diagnostic:check-email-data",

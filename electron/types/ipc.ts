@@ -796,6 +796,13 @@ export interface WindowApi {
       diagnostics?: string;
       error?: string;
     }>;
+    // Database maintenance methods
+    reindexDatabase: () => Promise<{
+      success: boolean;
+      indexesRebuilt?: number;
+      durationMs?: number;
+      error?: string;
+    }>;
   };
 
   // Preferences methods
