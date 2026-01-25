@@ -10,7 +10,7 @@
  */
 
 import { renderHook, act, waitFor } from "@testing-library/react";
-import { useAutoRefresh, markOnboardingImportComplete, shouldSkipMessagesSync } from "../useAutoRefresh";
+import { useAutoRefresh, markOnboardingImportComplete, shouldSkipMessagesSync, resetAutoRefreshTrigger } from "../useAutoRefresh";
 
 // Mock the platform context
 jest.mock("../../contexts/PlatformContext", () => ({
@@ -43,6 +43,9 @@ describe("useAutoRefresh", () => {
 
   beforeEach(() => {
     jest.useFakeTimers();
+
+    // Reset module-level state between tests (BACKLOG-205)
+    resetAutoRefreshTrigger();
 
     // Reset callbacks
     messagesProgressCallback = null;
@@ -214,24 +217,26 @@ describe("useAutoRefresh", () => {
       expect(mockTransactionsScan).not.toHaveBeenCalled();
     });
 
-    // FIXME: Flaky timer test - see BACKLOG-205
-    it.skip("should only trigger once per dashboard entry", async () => {
+    // BACKLOG-205: Fixed flaky timer test - use multiple act() calls to properly flush async state
+    it("should only trigger once per dashboard entry", async () => {
       renderHook(() => useAutoRefresh(defaultOptions));
 
-      // Load preferences
+      // Step 1: Let preference loading complete (sets hasLoadedPreference = true)
       await act(async () => {
-        await Promise.resolve();
+        await Promise.resolve(); // Flush the loadPreference() promise
+        await Promise.resolve(); // Flush any setState calls
       });
 
-      // First trigger
+      // Step 2: Advance timer to trigger auto-refresh (2.5 seconds)
       await act(async () => {
         jest.advanceTimersByTime(2500);
-        await Promise.resolve();
+        await Promise.resolve(); // Flush the runAutoRefresh promise
       });
 
+      // First trigger should have happened
       expect(mockTransactionsScan).toHaveBeenCalledTimes(1);
 
-      // Wait more time - should not trigger again
+      // Step 3: Advance more time - should not trigger again (hasTriggeredAutoRefresh = true)
       await act(async () => {
         jest.advanceTimersByTime(5000);
         await Promise.resolve();
@@ -649,8 +654,8 @@ describe("useAutoRefresh", () => {
   });
 
   describe("preference loading", () => {
-    // FIXME: Flaky timer test - see BACKLOG-205
-    it.skip("should wait for preferences before triggering", async () => {
+    // BACKLOG-205: Fixed flaky timer test using jest.runAllTimersAsync()
+    it("should wait for preferences before triggering", async () => {
       let resolvePrefs: (value: any) => void;
       mockPreferencesGet.mockReturnValue(
         new Promise((resolve) => {
@@ -660,67 +665,66 @@ describe("useAutoRefresh", () => {
 
       renderHook(() => useAutoRefresh(defaultOptions));
 
-      // Advance timer before prefs load
+      // Advance timer before prefs load - use advanceTimersByTimeAsync for proper async handling
       await act(async () => {
-        jest.advanceTimersByTime(3000);
-        await Promise.resolve();
+        await jest.advanceTimersByTimeAsync(3000);
       });
 
-      // Should not have triggered yet
+      // Should not have triggered yet (prefs still pending)
       expect(mockTransactionsScan).not.toHaveBeenCalled();
 
-      // Now resolve preferences
+      // Now resolve preferences and let the hook react
       await act(async () => {
         resolvePrefs!({ success: true, preferences: { autoSyncOnLogin: true } });
+        // Flush microtasks to let the state update
         await Promise.resolve();
       });
 
-      // Now advance timer
+      // Now advance timer to trigger auto-refresh
       await act(async () => {
-        jest.advanceTimersByTime(2500);
-        await Promise.resolve();
+        await jest.advanceTimersByTimeAsync(2500);
       });
 
       expect(mockTransactionsScan).toHaveBeenCalled();
     });
 
-    // FIXME: Flaky timer test - see BACKLOG-205
-    it.skip("should default to enabled when preference not set", async () => {
+    // BACKLOG-205: Fixed flaky timer test - use multiple act() calls to properly flush async state
+    it("should default to enabled when preference not set", async () => {
       mockPreferencesGet.mockResolvedValue({ success: true, preferences: {} });
 
       renderHook(() => useAutoRefresh(defaultOptions));
 
-      // Wait for preference loading to complete
+      // Step 1: Let preference loading complete (sets hasLoadedPreference = true)
       await act(async () => {
-        await Promise.resolve();
-        await Promise.resolve();
+        await Promise.resolve(); // Flush the loadPreference() promise
+        await Promise.resolve(); // Flush any setState calls
       });
 
-      // Now advance timer for auto-trigger
+      // Step 2: Advance timer to trigger auto-refresh (2.5 seconds)
       await act(async () => {
         jest.advanceTimersByTime(2500);
-        await Promise.resolve();
+        await Promise.resolve(); // Flush the runAutoRefresh promise
       });
 
       expect(mockTransactionsScan).toHaveBeenCalled();
     });
 
-    // FIXME: Flaky timer test - see BACKLOG-205
-    it.skip("should default to enabled on preference load error", async () => {
+    // BACKLOG-205: Fixed flaky timer test - use multiple act() calls to properly flush async state
+    it("should default to enabled on preference load error", async () => {
       mockPreferencesGet.mockRejectedValue(new Error("Failed to load"));
 
       renderHook(() => useAutoRefresh(defaultOptions));
 
-      // Wait for preference loading to fail and complete
+      // Step 1: Let preference loading complete (catch block sets autoSyncEnabled = true, then finally sets hasLoadedPreference = true)
       await act(async () => {
-        await Promise.resolve();
-        await Promise.resolve();
+        await Promise.resolve(); // Flush the loadPreference() rejection
+        await Promise.resolve(); // Flush any setState calls
       });
 
-      // Now advance timer for auto-trigger
+      // Step 2: Advance timer to trigger auto-refresh (2.5 seconds)
       await act(async () => {
         jest.advanceTimersByTime(2500);
-        await Promise.resolve();
+        await Promise.resolve(); // Flush the runAutoRefresh promise
       });
 
       expect(mockTransactionsScan).toHaveBeenCalled();
