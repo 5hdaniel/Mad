@@ -167,15 +167,14 @@ export function NotificationProvider({
     [notify, dismiss, dismissAll]
   );
 
-  // Expose notify to window for dev tools debugging
+  // Expose notify to window for dev tools debugging (development only)
   useEffect(() => {
-    // Always expose in dev - use window.notify in console
+    if (process.env.NODE_ENV !== "development") return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).__notify = notify;
-    console.log(
-      "🔔 Notifications available in console: __notify.success('msg'), __notify.error('msg'), __notify.warning('msg'), __notify.info('msg')"
-    );
-  }, [notify]);
+    // Log once on initial mount only (not on every re-render)
+    // The empty dep array below ensures this runs once
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <NotificationContext.Provider value={contextValue}>
