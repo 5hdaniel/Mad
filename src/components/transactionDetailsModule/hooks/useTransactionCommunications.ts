@@ -37,7 +37,11 @@ export function useTransactionCommunications(): UseTransactionCommunicationsResu
     ): Promise<void> => {
       try {
         setUnlinkingCommId(comm.id);
-        const result = await window.api.transactions.unlinkCommunication(comm.id);
+        // Use communication_id (the actual communications table ID) instead of comm.id
+        // comm.id may be the message ID when the communication has a message_id link
+        // See: getCommunicationsWithMessages() query returns COALESCE(m.id, c.id) as id
+        const communicationId = (comm as unknown as { communication_id: string }).communication_id;
+        const result = await window.api.transactions.unlinkCommunication(communicationId);
 
         if (result.success) {
           setShowUnlinkConfirm(null);
