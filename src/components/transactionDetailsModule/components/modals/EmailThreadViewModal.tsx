@@ -1,7 +1,8 @@
 /**
  * EmailThreadViewModal Component
  * TASK-1183: Modal for viewing all emails in a conversation thread.
- * Displays emails chronologically in a conversation-style layout.
+ * Displays emails in a chat-bubble style for easy reading.
+ * Click to expand for full email details.
  */
 import React, { useState, useCallback, useMemo } from "react";
 import DOMPurify from "dompurify";
@@ -17,8 +18,6 @@ interface EmailThreadViewModalProps {
   onViewEmail?: (email: Communication) => void;
 }
 
-type ViewMode = "html" | "plain";
-
 /**
  * Sanitize HTML content to prevent XSS attacks
  */
@@ -26,37 +25,69 @@ function sanitizeHtml(html: string): string {
   return DOMPurify.sanitize(html, {
     ALLOWED_TAGS: [
       "p", "br", "div", "span", "a", "b", "i", "strong", "em", "u",
-      "ul", "ol", "li", "h1", "h2", "h3", "h4", "h5", "h6",
-      "table", "thead", "tbody", "tr", "td", "th",
-      "img", "blockquote", "pre", "code", "hr",
+      "ul", "ol", "li", "blockquote",
     ],
-    ALLOWED_ATTR: ["href", "src", "alt", "class", "style", "width", "height"],
+    ALLOWED_ATTR: ["href"],
     ALLOW_DATA_ATTR: false,
     FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover"],
   });
 }
 
 /**
- * Get the best available content for display
+ * Strip HTML and get plain text preview - removes quoted content and reply headers
  */
-function getEmailContent(email: Communication): {
-  html: string | null;
-  plain: string | null;
-} {
-  const html = email.body_html || email.body || null;
-  const plain = email.body_text || email.body_plain || null;
-  return { html, plain };
+function getPlainTextPreview(email: Communication, maxLength: number = 300): string {
+  let text = "";
+
+  // Prefer plain text
+  const plain = email.body_text || email.body_plain;
+  if (plain) {
+    text = plain;
+  } else {
+    // Fall back to stripping HTML
+    const html = email.body_html || email.body;
+    if (html) {
+      const div = document.createElement("div");
+      div.innerHTML = sanitizeHtml(html);
+      text = div.textContent || div.innerText || "";
+    }
+  }
+
+  if (!text) return "";
+
+  // Remove Outlook-style reply headers (starts with underscores or dashes)
+  // Pattern: ________________________________\nFrom: ...\nSent: ...\nTo: ...
+  const outlookReplyPattern = /_{10,}[\s\S]*?(?=\n\n|$)/g;
+  text = text.replace(outlookReplyPattern, '');
+
+  // Also catch "From: ... Sent: ..." pattern without underscores
+  const fromSentPattern = /\nFrom:.*?\nSent:.*?(?:\nTo:.*?)?(?:\nSubject:.*?)?(?:\n|$)/gi;
+  text = text.replace(fromSentPattern, '\n');
+
+  // Remove Gmail-style quoted content "On [date], [name] wrote:"
+  const gmailQuotePattern = /On .+? wrote:[\s\S]*/gi;
+  text = text.replace(gmailQuotePattern, '');
+
+  // Remove lines starting with > (traditional quote style)
+  const lines = text.split('\n').filter(line => !line.trim().startsWith('>'));
+  text = lines.join('\n');
+
+  // Clean up excessive whitespace
+  text = text.replace(/\n{3,}/g, '\n\n').replace(/[ \t]+/g, ' ').trim();
+
+  if (text.length > maxLength) {
+    return text.substring(0, maxLength) + "...";
+  }
+  return text;
 }
 
 /**
- * Format date for display
+ * Format time for chat bubble
  */
-function formatDate(date: Date): string {
+function formatTime(date: Date): string {
   return date.toLocaleString(undefined, {
-    weekday: "short",
     month: "short",
     day: "numeric",
-    year: "numeric",
     hour: "numeric",
     minute: "2-digit",
   });
@@ -68,14 +99,12 @@ function formatDate(date: Date): string {
 function extractSenderName(sender: string | undefined): string {
   if (!sender) return "Unknown";
 
-  // Format: "Name <email@example.com>" or just "email@example.com"
   const nameMatch = sender.match(/^([^<]+)/);
   if (nameMatch) {
     const name = nameMatch[1].trim();
     if (name && name !== sender) return name;
   }
 
-  // Return email part before @
   const atIndex = sender.indexOf("@");
   return atIndex > 0 ? sender.substring(0, atIndex) : sender;
 }
@@ -103,30 +132,39 @@ function getAvatarInitial(sender?: string): string {
 }
 
 /**
- * Individual email item in the thread view
+ * Get consistent color for sender
  */
-function EmailItem({
+function getSenderColor(sender: string | undefined): string {
+  const colors = [
+    "from-blue-500 to-indigo-600",
+    "from-green-500 to-teal-600",
+    "from-purple-500 to-pink-600",
+    "from-orange-500 to-red-600",
+    "from-cyan-500 to-blue-600",
+  ];
+  const hash = (sender || "").split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return colors[hash % colors.length];
+}
+
+/**
+ * Chat bubble for a single email
+ */
+function EmailBubble({
   email,
   isExpanded,
   onToggle,
   onViewFull,
-  viewMode,
 }: {
   email: Communication;
   isExpanded: boolean;
   onToggle: () => void;
   onViewFull?: () => void;
-  viewMode: ViewMode;
 }): React.ReactElement {
-  const { html, plain } = useMemo(() => getEmailContent(email), [email]);
-  const hasHtml = Boolean(html);
-  const hasPlain = Boolean(plain);
-  const hasContent = hasHtml || hasPlain;
-
-  const sanitizedHtml = useMemo(() => {
-    if (html) return sanitizeHtml(html);
-    return "";
-  }, [html]);
+  const emailDate = new Date(email.sent_at || email.received_at || 0);
+  const senderName = extractSenderName(email.sender);
+  const avatarInitial = getAvatarInitial(email.sender);
+  const avatarColor = getSenderColor(email.sender);
+  const preview = useMemo(() => getPlainTextPreview(email), [email]);
 
   const handleContentClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -135,6 +173,7 @@ function EmailItem({
 
       if (anchor) {
         e.preventDefault();
+        e.stopPropagation();
         const href = anchor.getAttribute("href");
         if (href && (href.startsWith("http://") || href.startsWith("https://"))) {
           if (window.api?.shell?.openExternal) {
@@ -148,114 +187,79 @@ function EmailItem({
     []
   );
 
-  const emailDate = new Date(email.sent_at || email.received_at || 0);
-  const senderName = extractSenderName(email.sender);
-  const avatarInitial = getAvatarInitial(email.sender);
-
-  // Generate a consistent color based on sender for visual distinction
-  const senderHash = (email.sender || "").split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  const colorIndex = senderHash % 5;
-  const avatarColors = [
-    "from-blue-500 to-indigo-600",
-    "from-green-500 to-teal-600",
-    "from-purple-500 to-pink-600",
-    "from-orange-500 to-red-600",
-    "from-cyan-500 to-blue-600",
-  ];
-
   return (
-    <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-      {/* Email header - always visible */}
+    <div className="flex gap-3">
+      {/* Avatar */}
       <div
-        className="px-4 py-3 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
-        onClick={onToggle}
+        className={`w-8 h-8 bg-gradient-to-br ${avatarColor} rounded-full flex items-center justify-center text-white font-semibold text-xs flex-shrink-0 mt-1`}
       >
-        <div className="flex items-start gap-3">
-          {/* Avatar */}
-          <div
-            className={`w-10 h-10 bg-gradient-to-br ${avatarColors[colorIndex]} rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0`}
-          >
-            {avatarInitial}
-          </div>
-
-          {/* Email meta */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-gray-900 truncate">
-                {senderName}
-              </span>
-              <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
-                {formatDate(emailDate)}
-              </span>
-            </div>
-            <div className="text-sm text-gray-600 truncate">
-              {email.sender || "Unknown sender"}
-            </div>
-            {email.recipients && (
-              <div className="text-xs text-gray-500 mt-1">
-                To: {email.recipients}
-              </div>
-            )}
-          </div>
-
-          {/* Expand/collapse icon */}
-          <svg
-            className={`w-5 h-5 text-gray-400 flex-shrink-0 transition-transform ${
-              isExpanded ? "rotate-180" : ""
-            }`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M19 9l-7 7-7-7"
-            />
-          </svg>
-        </div>
+        {avatarInitial}
       </div>
 
-      {/* Email body - expanded */}
-      {isExpanded && (
-        <div className="border-t border-gray-100">
-          <div className="p-4">
-            {hasContent ? (
-              viewMode === "html" && hasHtml ? (
-                <div
-                  className="prose prose-sm max-w-none email-content"
-                  onClick={handleContentClick}
-                  dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
-                />
-              ) : (
-                <pre className="whitespace-pre-wrap font-sans text-sm text-gray-700 leading-relaxed">
-                  {plain}
-                </pre>
-              )
-            ) : (
-              <p className="text-gray-500 italic text-center py-4">
-                No email content available
-              </p>
-            )}
+      {/* Bubble */}
+      <div className="flex-1 min-w-0">
+        {/* Sender + Time header */}
+        <div className="flex items-center gap-2 mb-1">
+          <span className="font-semibold text-gray-900 text-sm">
+            {senderName}
+          </span>
+          <span className="text-xs text-gray-400">
+            {formatTime(emailDate)}
+          </span>
+        </div>
+
+        {/* Content bubble */}
+        <div
+          className="bg-white rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm border border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors"
+          onClick={onToggle}
+        >
+          {/* Preview text (always shown) */}
+          <div
+            className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed"
+            onClick={handleContentClick}
+          >
+            {preview || <span className="italic text-gray-400">No content</span>}
           </div>
 
-          {/* View full email button */}
-          {onViewFull && (
-            <div className="px-4 pb-3">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onViewFull();
-                }}
-                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-              >
-                View Full Email &rarr;
-              </button>
+          {/* Expanded details */}
+          {isExpanded && (
+            <div className="mt-3 pt-3 border-t border-gray-100">
+              <div className="text-xs text-gray-500 space-y-1">
+                <div>
+                  <span className="font-medium">From:</span> {email.sender || "Unknown"}
+                </div>
+                {email.recipients && (
+                  <div>
+                    <span className="font-medium">To:</span> {email.recipients}
+                  </div>
+                )}
+              </div>
+
+              {onViewFull && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onViewFull();
+                  }}
+                  className="mt-2 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Open Full Email →
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Expand indicator */}
+          {!isExpanded && (
+            <div className="mt-2 text-xs text-gray-400 flex items-center gap-1">
+              <span>Tap for details</span>
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
             </div>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -265,24 +269,8 @@ export function EmailThreadViewModal({
   onClose,
   onViewEmail,
 }: EmailThreadViewModalProps): React.ReactElement {
-  // Track which emails are expanded (default: first and last, or all if <= 3)
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
-    const ids = new Set<string>();
-    if (thread.emails.length <= 3) {
-      // Expand all if small thread
-      thread.emails.forEach(e => ids.add(e.id));
-    } else {
-      // Expand first and last
-      if (thread.emails[0]) ids.add(thread.emails[0].id);
-      if (thread.emails[thread.emails.length - 1]) {
-        ids.add(thread.emails[thread.emails.length - 1].id);
-      }
-    }
-    return ids;
-  });
-
-  // View mode for content display
-  const [viewMode, setViewMode] = useState<ViewMode>("html");
+  // Track which emails are expanded (default: none - show just content bubbles)
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const toggleEmail = useCallback((emailId: string) => {
     setExpandedIds(prev => {
@@ -296,30 +284,13 @@ export function EmailThreadViewModal({
     });
   }, []);
 
-  const expandAll = useCallback(() => {
-    setExpandedIds(new Set(thread.emails.map(e => e.id)));
-  }, [thread.emails]);
-
-  const collapseAll = useCallback(() => {
-    setExpandedIds(new Set());
-  }, []);
-
-  const allExpanded = expandedIds.size === thread.emails.length;
-  // Note: allCollapsed could be used for future UI indication if needed
-  const _allCollapsed = expandedIds.size === 0;
-
-  // Check if any email has HTML content for the toggle
-  const hasAnyHtml = thread.emails.some(e => e.body_html || e.body);
-  const hasAnyPlain = thread.emails.some(e => e.body_text || e.body_plain);
-  const showViewToggle = hasAnyHtml && hasAnyPlain;
-
   return (
     <div
       className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[80] p-4"
       onClick={onClose}
     >
       <div
-        className="bg-gray-100 w-full max-w-2xl max-h-[85vh] rounded-xl shadow-2xl flex flex-col overflow-hidden"
+        className="bg-gray-50 w-full max-w-xl max-h-[85vh] rounded-xl shadow-2xl flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -355,62 +326,16 @@ export function EmailThreadViewModal({
           </div>
         </div>
 
-        {/* Controls bar */}
-        <div className="flex-shrink-0 px-5 py-2 bg-white border-b border-gray-200 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={allExpanded ? collapseAll : expandAll}
-              className="text-sm text-gray-600 hover:text-gray-900"
-            >
-              {allExpanded ? "Collapse All" : "Expand All"}
-            </button>
-          </div>
-
-          {/* View mode toggle */}
-          {showViewToggle && (
-            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-              <button
-                onClick={() => setViewMode("html")}
-                className={`px-3 py-1 text-sm font-medium rounded-md transition-all ${
-                  viewMode === "html"
-                    ? "bg-white text-blue-600 shadow-sm"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                Rich
-              </button>
-              <button
-                onClick={() => setViewMode("plain")}
-                className={`px-3 py-1 text-sm font-medium rounded-md transition-all ${
-                  viewMode === "plain"
-                    ? "bg-white text-blue-600 shadow-sm"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                Plain
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Email list */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {thread.emails.map((email, index) => (
-            <React.Fragment key={email.id}>
-              {/* Thread connector line between emails */}
-              {index > 0 && (
-                <div className="flex justify-center">
-                  <div className="w-px h-4 bg-gray-300"></div>
-                </div>
-              )}
-              <EmailItem
-                email={email}
-                isExpanded={expandedIds.has(email.id)}
-                onToggle={() => toggleEmail(email.id)}
-                onViewFull={onViewEmail ? () => onViewEmail(email) : undefined}
-                viewMode={viewMode}
-              />
-            </React.Fragment>
+        {/* Email conversation - newest first */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {[...thread.emails].reverse().map((email) => (
+            <EmailBubble
+              key={email.id}
+              email={email}
+              isExpanded={expandedIds.has(email.id)}
+              onToggle={() => toggleEmail(email.id)}
+              onViewFull={onViewEmail ? () => onViewEmail(email) : undefined}
+            />
           ))}
         </div>
 

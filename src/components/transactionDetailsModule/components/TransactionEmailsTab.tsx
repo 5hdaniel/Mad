@@ -316,7 +316,7 @@ export function TransactionEmailsTab({
       </div>
 
       {/* Email thread list */}
-      <div className="space-y-0">
+      <div className="space-y-3">
         {emailThreads.map((thread) => (
           <EmailThreadCard
             key={thread.id}

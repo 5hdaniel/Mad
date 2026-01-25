@@ -158,11 +158,18 @@ export function EmailThreadCard({
               {formatDateRange(thread.startDate, thread.endDate)}
             </span>
             <button
-              onClick={() => setShowModal(true)}
+              onClick={() => {
+                if (isMultipleEmails) {
+                  setShowModal(true);
+                } else if (onViewEmail && firstEmail) {
+                  // Single email - open directly in original viewer
+                  onViewEmail(firstEmail);
+                }
+              }}
               className="text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors whitespace-nowrap"
               data-testid="view-thread-button"
             >
-              {isMultipleEmails ? "View Thread" : "View"} &rarr;
+              {isMultipleEmails ? "View Thread →" : "View"}
             </button>
             {onUnlink && (
               <button
