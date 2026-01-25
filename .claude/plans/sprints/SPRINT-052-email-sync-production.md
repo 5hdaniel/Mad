@@ -2,7 +2,7 @@
 
 **Created**: 2026-01-23
 **Updated**: 2026-01-24
-**Status**: Complete (Core items merged)
+**Status**: In Progress - Bug Fixes
 **Goal**: Fix email sync to actually fetch emails from providers and display accurate connection status
 
 ---
@@ -386,7 +386,11 @@ The following MUST pass before merge:
 
 | Task | Source | Root Cause | Added Date | Est. Tokens | Actual Tokens |
 |------|--------|------------|------------|-------------|---------------|
-| - | - | - | - | - | - |
+| BACKLOG-490 | QA Testing | EMAIL_CONNECTED not updating userData.hasEmailConnected in ready state | 2026-01-24 | ~15K | - |
+| BACKLOG-491 | QA Testing | Excessive NavigationButtons console logging (22+ entries) | 2026-01-24 | ~5K | - |
+| BACKLOG-492 | QA Testing | Outlook/Microsoft email sync not tested (only Gmail tested) | 2026-01-24 | ~5K | - |
+| BACKLOG-493 | QA Testing | Cannot unlink emails - "Communication not found" error | 2026-01-24 | ~10K | - |
+| BACKLOG-494 | User Request | Emails not displayed in natural thread format like messages | 2026-01-24 | ~25K | - |
 
 ---
 
@@ -455,8 +459,8 @@ Before execution, SR Engineer must validate:
 |-------|------|---------|--------|----------|-----|---------------|
 | 1 | TASK-1172 | BACKLOG-458 | **MERGED** | Claude | #568 | - |
 | 2 | TASK-1173 | BACKLOG-457 | **MERGED** | Claude | #571 | - |
-| 3 | TASK-1174 | BACKLOG-406 | Deferred | - | - | - |
-| 3 | TASK-1175 | BACKLOG-454 | Deferred | - | - | - |
+| 3 | TASK-1174 | BACKLOG-406 | Deferred to SPRINT-056 | - | - | - |
+| 3 | TASK-1175 | BACKLOG-454 | Deferred (no sprint) | - | - | - |
 
 ### Additional PRs from QA
 | PR | Description | Status |
@@ -468,6 +472,32 @@ Before execution, SR Engineer must validate:
 - BACKLOG-466: Email sync optimization
 - BACKLOG-467: Sync AI add-on from Supabase
 
+### Sprint Reopened for Bug Fixes (2026-01-24)
+- Core items complete: Email connection status (458), Email sync from provider (457)
+- BACKLOG-406 (Apple signing): Deferred to SPRINT-056 (Consumer Launch Track)
+- BACKLOG-454 (Azure AD): Deferred, no sprint assignment (enterprise feature)
+- **Bugs discovered during QA testing - must fix before sprint closure:**
+  - BACKLOG-490: EMAIL_CONNECTED not updating state in ready mode
+  - BACKLOG-491: Excessive NavigationButtons console logging
+  - BACKLOG-492: Outlook/Microsoft email sync not tested
+
+### Phase 4: Bug Fixes (Unplanned - Added 2026-01-24)
+
+| Task | Backlog | Status | Engineer | PR | Actual Tokens |
+|------|---------|--------|----------|-----|---------------|
+| TASK-TBD | BACKLOG-490 | Pending | - | - | - |
+| TASK-TBD | BACKLOG-491 | Pending | - | - | - |
+| TASK-TBD | BACKLOG-492 | Pending | - | - | - |
+| TASK-TBD | BACKLOG-493 | Pending | - | - | - |
+
+### Phase 5: Email Thread Display (User Request - Added 2026-01-24)
+
+| Task | Backlog | Status | Engineer | PR | Actual Tokens |
+|------|---------|--------|----------|-----|---------------|
+| TASK-1183 | BACKLOG-494 | Pending | - | - | - |
+
+**Description**: Display emails in natural thread format, grouping conversations similar to how text messages are displayed. P0 priority - user specifically requested for SPRINT-052.
+
 ---
 
 ## End-of-Sprint Validation Checklist
@@ -475,8 +505,9 @@ Before execution, SR Engineer must validate:
 - [x] Core tasks merged to develop (458, 457)
 - [ ] All CI checks passing (App.test.tsx has pre-existing failures)
 - [x] Core acceptance criteria verified via QA
-- [x] Manual testing completed
+- [ ] Manual testing completed (Outlook not tested)
 - [x] No unresolved conflicts
+- [ ] Bug fixes completed (BACKLOG-490, 491, 492)
 
 **Email Connection Status (TASK-1172 / PR #568):** ✅ PASS
 - [x] Connection status validates OAuth token
