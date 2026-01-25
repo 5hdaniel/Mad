@@ -47,13 +47,15 @@ interface ConnectionResult {
 interface SettingsComponentProps {
   onClose: () => void;
   userId: string;
+  /** Callback when email is connected - updates app state */
+  onEmailConnected?: (email: string, provider: "google" | "microsoft") => void;
 }
 
 /**
  * Settings Component
  * Application settings and preferences
  */
-function Settings({ onClose, userId }: SettingsComponentProps) {
+function Settings({ onClose, userId, onEmailConnected }: SettingsComponentProps) {
   const [connections, setConnections] = useState<Connections>({
     google: null,
     microsoft: null,
@@ -200,9 +202,13 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
         // Auth popup window opens automatically and will close when done
         // Listen for connection completion
         cleanup = window.api.onGoogleMailboxConnected(
-          async (connectionResult: ConnectionResult) => {
+          async (connectionResult: ConnectionResult & { email?: string }) => {
             if (connectionResult.success) {
               await checkConnections();
+              // Notify parent to update app state
+              if (connectionResult.email && onEmailConnected) {
+                onEmailConnected(connectionResult.email, "google");
+              }
             }
             setConnectingProvider(null);
             if (cleanup) cleanup(); // Clean up listener after handling the event
@@ -225,9 +231,13 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
         // Auth popup window opens automatically and will close when done
         // Listen for connection completion
         cleanup = window.api.onMicrosoftMailboxConnected(
-          async (connectionResult: ConnectionResult) => {
+          async (connectionResult: ConnectionResult & { email?: string }) => {
             if (connectionResult.success) {
               await checkConnections();
+              // Notify parent to update app state
+              if (connectionResult.email && onEmailConnected) {
+                onEmailConnected(connectionResult.email, "microsoft");
+              }
             }
             setConnectingProvider(null);
             if (cleanup) cleanup(); // Clean up listener after handling the event
