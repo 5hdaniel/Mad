@@ -357,14 +357,9 @@ export function ConversationViewModal({
       try {
         // Check if API is available (may not be on all platforms)
         if (window.api?.messages?.getMessageAttachmentsBatch) {
-          console.log("[Attachments] Fetching for message_ids:", messageIdsWithAttachments);
           const result = await window.api.messages.getMessageAttachmentsBatch(
             messageIdsWithAttachments
           );
-          console.log("[Attachments] Result:", Object.keys(result).length, "messages with attachments");
-          for (const [msgId, atts] of Object.entries(result)) {
-            console.log(`[Attachments] ${msgId}: ${(atts as unknown[]).length} attachments`);
-          }
           setAttachmentsMap(result);
         }
       } catch (error) {
