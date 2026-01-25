@@ -2,6 +2,10 @@
  * ContactAssignmentStep Component
  * Steps 2-3 of the AuditTransactionModal - Contact assignment
  * Extracted from AuditTransactionModal as part of TASK-974 decomposition
+ *
+ * Contact Loading Optimization:
+ * Loads contacts once at this level and passes to all child RoleAssignment components.
+ * This prevents N API calls (one per role) and instead makes just 1 call.
  */
 import React from "react";
 import {
@@ -10,6 +14,7 @@ import {
 } from "../../utils/transactionRoleUtils";
 import RoleAssignment from "./RoleAssignment";
 import type { ContactAssignments } from "../../hooks/useAuditTransaction";
+import type { Contact } from "../../../electron/types/models";
 
 interface StepConfig {
   title: string;
@@ -38,6 +43,47 @@ interface ContactAssignmentStepProps {
   propertyAddress: string;
 }
 
+/**
+ * Lifted contact loading hook - loads contacts once for all role assignments
+ * Prevents duplicate API calls (was N calls per role, now 1)
+ */
+function useContactsLoader(userId: string, propertyAddress: string) {
+  const [contacts, setContacts] = React.useState<Contact[]>([]);
+  const [loading, setLoading] = React.useState<boolean>(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const loadContacts = React.useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = propertyAddress
+        ? await window.api.contacts.getSortedByActivity(userId, propertyAddress)
+        : await window.api.contacts.getAll(userId);
+
+      if (result.success) {
+        setContacts(result.contacts || []);
+        // Note: "no contacts" is not treated as an error at this level
+        // Individual RoleAssignment components can show appropriate messaging
+      } else {
+        setError(result.error || "Failed to load contacts");
+      }
+    } catch (err) {
+      console.error("Failed to load contacts:", err);
+      setError("Unable to load contacts");
+    } finally {
+      setLoading(false);
+    }
+  }, [userId, propertyAddress]);
+
+  // Load contacts on mount and when userId/propertyAddress change
+  React.useEffect(() => {
+    loadContacts();
+  }, [loadContacts]);
+
+  return { contacts, loading, error, refreshContacts: loadContacts };
+}
+
 function ContactAssignmentStep({
   stepConfig,
   contactAssignments,
@@ -47,6 +93,10 @@ function ContactAssignmentStep({
   transactionType,
   propertyAddress,
 }: ContactAssignmentStepProps): React.ReactElement {
+  // Lift contact loading to this level - single API call for all roles
+  const { contacts, loading: contactsLoading, error: contactsError, refreshContacts } =
+    useContactsLoader(userId, propertyAddress);
+
   // Filter roles based on transaction type
   const filteredRoles = filterRolesByTransactionType(
     stepConfig.roles,
@@ -58,7 +108,23 @@ function ContactAssignmentStep({
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      {/* Loading overlay - prevents layout shift by covering content */}
+      {contactsLoading && (
+        <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-sm text-gray-600">Loading contacts...</span>
+          </div>
+        </div>
+      )}
+
+      {contactsError && (
+        <div className="text-sm text-red-600 text-center py-2">
+          {contactsError}
+        </div>
+      )}
+
       <div>
         <h3 className="text-lg font-semibold text-gray-900 mb-1">
           {stepConfig.title}
@@ -84,6 +150,8 @@ function ContactAssignmentStep({
           assignments={contactAssignments[roleConfig.role] || []}
           onAssign={onAssignContact}
           onRemove={onRemoveContact}
+          contacts={contacts}
+          onRefreshContacts={refreshContacts}
           userId={userId}
           propertyAddress={propertyAddress}
           transactionType={transactionType}

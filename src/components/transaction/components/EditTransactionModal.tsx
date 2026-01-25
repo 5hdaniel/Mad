@@ -515,6 +515,49 @@ export function EditTransactionModal({
 }
 
 // ============================================
+// CONTACTS LOADER HOOK
+// ============================================
+
+/**
+ * Lifted contact loading hook - loads contacts once for all role assignments
+ * Prevents duplicate API calls (was N calls per role, now 1)
+ */
+function useContactsLoader(userId: string, propertyAddress: string) {
+  const [contacts, setContacts] = React.useState<ExtendedContact[]>([]);
+  const [loading, setLoading] = React.useState<boolean>(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const loadContacts = React.useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = propertyAddress
+        ? await window.api.contacts.getSortedByActivity(userId, propertyAddress)
+        : await window.api.contacts.getAll(userId);
+
+      if (result.success) {
+        setContacts(result.contacts || []);
+      } else {
+        setError(result.error || "Failed to load contacts");
+      }
+    } catch (err) {
+      console.error("Failed to load contacts:", err);
+      setError("Unable to load contacts");
+    } finally {
+      setLoading(false);
+    }
+  }, [userId, propertyAddress]);
+
+  // Load contacts on mount and when userId/propertyAddress change
+  React.useEffect(() => {
+    loadContacts();
+  }, [loadContacts]);
+
+  return { contacts, loading, error, refreshContacts: loadContacts };
+}
+
+// ============================================
 // EDIT CONTACT ASSIGNMENTS COMPONENT
 // ============================================
 
@@ -540,7 +583,7 @@ interface EditContactAssignmentsProps {
 
 /**
  * Edit Contact Assignments Component
- * Reusable component for editing contact assignments
+ * Loads contacts once and passes to all children (was N calls, now 1)
  */
 function EditContactAssignments({
   transactionType,
@@ -550,8 +593,27 @@ function EditContactAssignments({
   userId,
   propertyAddress,
 }: EditContactAssignmentsProps): React.ReactElement {
+  // Lift contact loading to parent - single API call for all roles
+  const { contacts, loading: contactsLoading, error: contactsError, refreshContacts } =
+    useContactsLoader(userId, propertyAddress);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      {/* Loading overlay - prevents layout shift by covering content */}
+      {contactsLoading && (
+        <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-sm text-gray-600">Loading contacts...</span>
+          </div>
+        </div>
+      )}
+      {contactsError && (
+        <div className="text-sm text-red-600 text-center py-2">
+          {contactsError}
+        </div>
+      )}
+
       {AUDIT_WORKFLOW_STEPS.map(
         (
           step: { title: string; description: string; roles: RoleConfig[] },
@@ -580,6 +642,8 @@ function EditContactAssignments({
                     assignments={contactAssignments[roleConfig.role] || []}
                     onAssign={onAssignContact}
                     onRemove={onRemoveContact}
+                    contacts={contacts}
+                    onRefreshContacts={refreshContacts}
                     userId={userId}
                     propertyAddress={propertyAddress}
                     transactionType={transactionType}
@@ -624,13 +688,20 @@ interface EditRoleAssignmentProps {
     }
   ) => void;
   onRemove: (role: string, contactId: string) => void;
+  /** Contacts loaded by parent, passed as prop */
+  contacts: ExtendedContact[];
+  /** Callback to refresh contacts (e.g., after import) */
+  onRefreshContacts: () => void;
+  /** User ID for import functionality in ContactSelectModal */
   userId: string;
+  /** Property address for relevance sorting in ContactSelectModal */
   propertyAddress: string;
   transactionType: "purchase" | "sale" | "other";
 }
 
 /**
  * Edit Single Role Assignment Component
+ * Now receives contacts as props from parent (no internal loading)
  */
 function EditRoleAssignment({
   role,
@@ -639,42 +710,14 @@ function EditRoleAssignment({
   assignments,
   onAssign,
   onRemove,
+  contacts,
+  onRefreshContacts,
   userId,
   propertyAddress,
   transactionType,
 }: EditRoleAssignmentProps): React.ReactElement {
-  const [contacts, setContacts] = React.useState<ExtendedContact[]>([]);
-  const [_loading, setLoading] = React.useState<boolean>(true);
-  const [_error, setError] = React.useState<string | null>(null);
   const [showContactSelect, setShowContactSelect] =
     React.useState<boolean>(false);
-
-  React.useEffect(() => {
-    loadContacts();
-  }, [propertyAddress]);
-
-  const loadContacts = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Use sorted API when property address is available, otherwise use regular API
-      const result = propertyAddress
-        ? await window.api.contacts.getSortedByActivity(userId, propertyAddress)
-        : await window.api.contacts.getAll(userId);
-
-      if (result.success) {
-        setContacts(result.contacts || []);
-      } else {
-        setError(result.error || "Failed to load contacts");
-      }
-    } catch (err) {
-      console.error("Failed to load contacts:", err);
-      setError("Unable to load contacts");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleContactSelected = (selectedContacts: ExtendedContact[]) => {
     selectedContacts.forEach((contact: ExtendedContact) => {
@@ -777,6 +820,8 @@ function EditRoleAssignment({
           onSelect={handleContactSelected}
           onClose={() => setShowContactSelect(false)}
           propertyAddress={propertyAddress}
+          userId={userId}
+          onRefreshContacts={onRefreshContacts}
         />
       )}
     </div>

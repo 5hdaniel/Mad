@@ -391,10 +391,9 @@ function useContactsLoader(userId: string, propertyAddress: string) {
   }, [userId, propertyAddress]);
 
   // Load contacts on mount and when userId/propertyAddress change
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   React.useEffect(() => {
     loadContacts();
-  }, [userId, propertyAddress]);
+  }, [loadContacts]);
 
   return { contacts, loading, error, refreshContacts: loadContacts };
 }
