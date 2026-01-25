@@ -4,7 +4,8 @@
 **Priority**: P0 (Critical)
 **Sprint**: SPRINT-052
 **Estimated Tokens**: ~25K
-**Status**: Pending
+**Status**: Resolved
+**Resolved**: PR #586
 **Created**: 2026-01-24
 
 ---
