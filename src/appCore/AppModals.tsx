@@ -15,6 +15,7 @@ import AuditTransactionModal from "../components/AuditTransactionModal";
 import MoveAppPrompt from "../components/MoveAppPrompt";
 import IPhoneSyncFlow from "../components/iphone/IPhoneSyncFlow";
 import type { AppStateMachine } from "./state/types";
+import { useEmailOnboardingApi } from "./state/flows";
 
 interface AppModalsProps {
   app: AppStateMachine;
@@ -69,6 +70,17 @@ export function AppModals({ app }: AppModalsProps) {
     closeAuditTransaction();
     openTransactions();
   }, [closeAuditTransaction, openTransactions]);
+
+  // Get email onboarding API to dispatch EMAIL_CONNECTED when connecting from Settings
+  const { setHasEmailConnected } = useEmailOnboardingApi({ userId: currentUser?.id });
+
+  // Callback for when email is connected from Settings
+  const handleEmailConnectedFromSettings = useCallback(
+    (email: string, provider: "google" | "microsoft") => {
+      setHasEmailConnected(true, email, provider);
+    },
+    [setHasEmailConnected]
+  );
   return (
     <>
       {/* Move App Prompt */}
@@ -95,7 +107,11 @@ export function AppModals({ app }: AppModalsProps) {
 
       {/* Settings Modal */}
       {modalState.showSettings && currentUser && (
-        <Settings userId={currentUser.id} onClose={closeSettings} />
+        <Settings
+          userId={currentUser.id}
+          onClose={closeSettings}
+          onEmailConnected={handleEmailConnectedFromSettings}
+        />
       )}
 
       {/* Transactions View */}

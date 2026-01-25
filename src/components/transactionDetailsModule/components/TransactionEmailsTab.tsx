@@ -1,11 +1,17 @@
 /**
  * TransactionEmailsTab Component
- * Emails tab content showing email threads linked to a transaction.
+ * TASK-1183: Emails tab content showing email threads linked to a transaction.
+ * Now displays emails grouped into conversation threads for a natural viewing experience.
  * Moved from TransactionDetailsTab as part of TASK-1152.
  */
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import type { Communication } from "../types";
 import { AttachEmailsModal } from "./modals";
+import {
+  EmailThreadCard,
+  processEmailThreads,
+  type EmailThread,
+} from "./EmailThreadCard";
 
 interface TransactionEmailsTabProps {
   communications: Communication[];
@@ -48,6 +54,23 @@ export function TransactionEmailsTab({
 }: TransactionEmailsTabProps): React.ReactElement {
   const [showAttachModal, setShowAttachModal] = useState(false);
 
+  // Process communications into email threads
+  const emailThreads = useMemo(() => {
+    return processEmailThreads(communications);
+  }, [communications]);
+
+  // Track which thread is being unlinked (by thread ID -> set of email IDs being unlinked)
+  const unlinkingThreadId = useMemo(() => {
+    if (!unlinkingCommId) return null;
+    // Find which thread contains the email being unlinked
+    for (const thread of emailThreads) {
+      if (thread.emails.some((e) => e.id === unlinkingCommId)) {
+        return thread.id;
+      }
+    }
+    return null;
+  }, [unlinkingCommId, emailThreads]);
+
   // Handle attach button click
   const handleAttachClick = useCallback(() => {
     setShowAttachModal(true);
@@ -58,6 +81,19 @@ export function TransactionEmailsTab({
     onEmailsChanged?.();
     onShowSuccess?.("Emails attached successfully");
   }, [onEmailsChanged, onShowSuccess]);
+
+  // Handle thread unlink - unlinks all emails in the thread
+  const handleUnlinkThread = useCallback(
+    (thread: EmailThread) => {
+      // For now, unlink the first email in the thread to trigger the confirmation
+      // The UI will show the thread subject in the confirmation
+      if (thread.emails.length > 0) {
+        onShowUnlinkConfirm(thread.emails[0]);
+      }
+    },
+    [onShowUnlinkConfirm]
+  );
+
   // Loading state
   if (loading) {
     return (
@@ -69,7 +105,7 @@ export function TransactionEmailsTab({
   }
 
   // Empty state
-  if (communications.length === 0) {
+  if (emailThreads.length === 0) {
     return (
       <div>
         {/* Action buttons */}
@@ -81,8 +117,18 @@ export function TransactionEmailsTab({
               className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
               data-testid="attach-emails-button"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 4v16m8-8H4"
+                />
               </svg>
               Attach Emails
             </button>
@@ -96,16 +142,41 @@ export function TransactionEmailsTab({
             >
               {syncingCommunications ? (
                 <>
-                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  <svg
+                    className="w-4 h-4 animate-spin"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
                   </svg>
                   Syncing...
                 </>
               ) : (
                 <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
                   </svg>
                   Sync Emails
                 </>
@@ -130,7 +201,8 @@ export function TransactionEmailsTab({
           </svg>
           <p className="text-gray-600 mb-2">No emails linked</p>
           <p className="text-sm text-gray-500">
-            Click &quot;Attach Emails&quot; to manually select emails, or add contacts to auto-link
+            Click &quot;Attach Emails&quot; to manually select emails, or add
+            contacts to auto-link
           </p>
         </div>
 
@@ -148,59 +220,110 @@ export function TransactionEmailsTab({
     );
   }
 
+  // Calculate total email count
+  const totalEmailCount = emailThreads.reduce(
+    (sum, thread) => sum + thread.emailCount,
+    0
+  );
+
   return (
     <div>
-      {/* Action buttons */}
-      <div className="flex justify-end gap-2 mb-4">
-        {/* Attach Emails button */}
-        {userId && transactionId && (
-          <button
-            onClick={handleAttachClick}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
-            data-testid="attach-emails-button"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Attach Emails
-          </button>
-        )}
-        {/* Sync button */}
-        {onSyncCommunications && hasContacts && (
-          <button
-            onClick={onSyncCommunications}
-            disabled={syncingCommunications}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {syncingCommunications ? (
-              <>
-                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Syncing...
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                Sync Emails
-              </>
-            )}
-          </button>
-        )}
+      {/* Action buttons and summary */}
+      <div className="flex justify-between items-center mb-4">
+        <div className="text-sm text-gray-500">
+          {emailThreads.length} conversation
+          {emailThreads.length !== 1 ? "s" : ""}
+          {totalEmailCount !== emailThreads.length && (
+            <span className="ml-1">({totalEmailCount} emails total)</span>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          {/* Attach Emails button */}
+          {userId && transactionId && (
+            <button
+              onClick={handleAttachClick}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+              data-testid="attach-emails-button"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 4v16m8-8H4"
+                />
+              </svg>
+              Attach Emails
+            </button>
+          )}
+          {/* Sync button */}
+          {onSyncCommunications && hasContacts && (
+            <button
+              onClick={onSyncCommunications}
+              disabled={syncingCommunications}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {syncingCommunications ? (
+                <>
+                  <svg
+                    className="w-4 h-4 animate-spin"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                  Sync Emails
+                </>
+              )}
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Email list */}
+      {/* Email thread list */}
       <div className="space-y-3">
-        {communications.map((comm) => (
-          <CommunicationCard
-            key={comm.id}
-            communication={comm}
-            isUnlinking={unlinkingCommId === comm.id}
-            onClick={() => onViewEmail(comm)}
-            onUnlink={() => onShowUnlinkConfirm(comm)}
+        {emailThreads.map((thread) => (
+          <EmailThreadCard
+            key={thread.id}
+            thread={thread}
+            onViewEmail={onViewEmail}
+            onUnlink={() => handleUnlinkThread(thread)}
+            isUnlinking={unlinkingThreadId === thread.id}
           />
         ))}
       </div>
@@ -215,83 +338,6 @@ export function TransactionEmailsTab({
           onAttached={handleAttached}
         />
       )}
-    </div>
-  );
-}
-
-// Sub-component for individual communication cards
-function CommunicationCard({
-  communication,
-  isUnlinking,
-  onClick,
-  onUnlink,
-}: {
-  communication: Communication;
-  isUnlinking: boolean;
-  onClick: () => void;
-  onUnlink: () => void;
-}) {
-  return (
-    <div
-      className="bg-gray-50 border border-gray-200 rounded-lg p-4 cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors"
-      onClick={onClick}
-    >
-      <div className="flex items-start justify-between mb-2">
-        <h5 className="font-semibold text-gray-900 flex-1 pr-4">
-          {communication.subject || "(No Subject)"}
-        </h5>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="text-xs text-gray-500">
-            {communication.sent_at
-              ? new Date(communication.sent_at).toLocaleDateString()
-              : "Unknown date"}
-          </span>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onUnlink();
-            }}
-            disabled={isUnlinking}
-            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
-            title="Remove this email from transaction"
-          >
-            {isUnlinking ? (
-              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                ></circle>
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path>
-              </svg>
-            ) : (
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
-                />
-              </svg>
-            )}
-          </button>
-        </div>
-      </div>
-      <p className="text-sm text-gray-600 mb-2">
-        From: {communication.sender || "Unknown"}
-      </p>
     </div>
   );
 }

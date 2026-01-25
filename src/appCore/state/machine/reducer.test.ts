@@ -936,6 +936,77 @@ describe("appStateReducer - Ready State Transitions", () => {
       expect(result).toBe(state);
     });
   });
+
+  describe("EMAIL_CONNECTED", () => {
+    it("updates userData.hasEmailConnected when in ready state", () => {
+      // User with email not connected (dashboard shows setup banner)
+      const userDataNoEmail = { ...mockCompleteUserData, hasEmailConnected: false };
+      const state: ReadyState = {
+        status: "ready",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        userData: userDataNoEmail,
+      };
+      const action: AppAction = { type: "EMAIL_CONNECTED" };
+
+      const result = appStateReducer(state, action);
+
+      // Should update hasEmailConnected so banner disappears
+      expect(result.status).toBe("ready");
+      if (result.status === "ready") {
+        expect(result.userData.hasEmailConnected).toBe(true);
+        // Other userData should be preserved
+        expect(result.userData.phoneType).toBe(userDataNoEmail.phoneType);
+        expect(result.userData.hasPermissions).toBe(userDataNoEmail.hasPermissions);
+      }
+    });
+
+    it("preserves other state properties when updating hasEmailConnected", () => {
+      const userDataNoEmail = { ...mockCompleteUserData, hasEmailConnected: false };
+      const state: ReadyState = {
+        status: "ready",
+        user: mockUser,
+        platform: mockWindowsPlatform,
+        userData: userDataNoEmail,
+      };
+      const action: AppAction = { type: "EMAIL_CONNECTED" };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("ready");
+      if (result.status === "ready") {
+        expect(result.user).toEqual(mockUser);
+        expect(result.platform).toEqual(mockWindowsPlatform);
+      }
+    });
+
+    it("updates hasEmailConnected in onboarding state", () => {
+      const state: OnboardingState = {
+        status: "onboarding",
+        step: "email-connect",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        completedSteps: ["phone-type", "secure-storage"],
+      };
+      const action: AppAction = { type: "EMAIL_CONNECTED" };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("onboarding");
+      if (result.status === "onboarding") {
+        expect(result.hasEmailConnected).toBe(true);
+      }
+    });
+
+    it("returns current state for invalid states", () => {
+      const state: AppState = { status: "unauthenticated" };
+      const action: AppAction = { type: "EMAIL_CONNECTED" };
+
+      const result = appStateReducer(state, action);
+
+      expect(result).toBe(state);
+    });
+  });
 });
 
 // ============================================

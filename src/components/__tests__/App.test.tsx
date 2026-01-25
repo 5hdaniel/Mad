@@ -34,6 +34,18 @@ jest.mock("../../contexts/LicenseContext", () => ({
   }),
 }));
 
+// Mock useEmailOnboardingApi used by AppModals
+jest.mock("../../appCore/state/flows", () => ({
+  ...jest.requireActual("../../appCore/state/flows"),
+  useEmailOnboardingApi: () => ({
+    hasCompletedEmailOnboarding: true,
+    hasEmailConnected: true,
+    isCheckingEmailOnboarding: false,
+    setHasEmailConnected: jest.fn(),
+    setHasCompletedEmailOnboarding: jest.fn(),
+  }),
+}));
+
 // Default mock user data
 const mockUser = {
   id: "user-123",
