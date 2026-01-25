@@ -198,3 +198,7 @@ date,action,details,items_affected
 2026-01-21,BACKLOG-349,created,"SR Engineer rec: Share FolderExportProgress type"
 2026-01-21,BACKLOG-350,created,"SR Engineer rec: Refactor folderExportService.ts"
 2026-01-21,BACKLOG-351,created,"SR Engineer rec: Add logging to empty catch blocks"
+2026-01-25,BACKLOG-459,status,Completed,PR #569 - Team license export button
+2026-01-25,BACKLOG-462,status,Completed,"PRs #570, #592 - AI gating verification (Settings + Rejected filter)"
+2026-01-25,BACKLOG-081,deferred,Pending,Deferred from SPRINT-053 - AI consent in T&C
+2026-01-25,SPRINT-053,completed,Planning,Completed,"License Enhancement & AI Gating - 3 tasks merged (PRs #569, #570, #592)"

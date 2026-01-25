@@ -1,11 +1,12 @@
 # BACKLOG-459: Team License Export After Submission
 
 **Created**: 2026-01-23
-**Status**: Ready
+**Status**: Completed
 **Priority**: P0 (Critical)
 **Category**: Feature / License Gating
-**Sprint**: -
+**Sprint**: SPRINT-053
 **Estimate**: ~20K tokens
+**Resolved**: PR #569 (2026-01-25)
 
 ---
 
