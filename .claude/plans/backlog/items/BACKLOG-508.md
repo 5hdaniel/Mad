@@ -7,7 +7,10 @@ refactor
 low
 
 ## Status
-backlog
+in-progress
+
+## Task File
+`.claude/plans/tasks/TASK-1201-consolidate-message-utilities.md`
 
 ## Description
 
