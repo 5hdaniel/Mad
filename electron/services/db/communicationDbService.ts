@@ -542,70 +542,67 @@ export async function createCommunicationReference(
 export async function getCommunicationsWithMessages(
   transactionId: string,
 ): Promise<Communication[]> {
-  // Query 1: Records with message_id (legacy per-message linking)
-  // Query 2: Records with thread_id (new per-thread linking) - returns all messages in thread
+  // First, get all unique message IDs linked to this transaction
+  // via either message_id or thread_id (for thread-based linking)
   const sql = `
-    SELECT
-      -- TASK-1116: Use message ID when available for proper message lookup
-      COALESCE(m.id, c.id) as id,
-      c.id as communication_id,
-      c.user_id,
-      c.transaction_id,
-      c.message_id,
-      c.link_source,
-      c.link_confidence,
-      c.linked_at,
-      c.created_at,
-      -- Use message content when available, fall back to legacy columns
-      COALESCE(m.channel, c.communication_type) as channel,
-      COALESCE(m.channel, c.communication_type) as communication_type,
-      COALESCE(m.body_text, c.body_plain) as body_text,
-      COALESCE(m.body_text, c.body_plain) as body_plain,
-      COALESCE(m.body_html, c.body) as body,
-      COALESCE(m.subject, c.subject) as subject,
-      COALESCE(json_extract(m.participants, '$.from'), c.sender) as sender,
-      COALESCE(
-        (SELECT group_concat(value) FROM json_each(json_extract(m.participants, '$.to'))),
-        c.recipients
-      ) as recipients,
-      COALESCE(m.sent_at, c.sent_at) as sent_at,
-      COALESCE(m.received_at, c.received_at) as received_at,
-      COALESCE(m.has_attachments, c.has_attachments) as has_attachments,
-      COALESCE(m.thread_id, c.email_thread_id) as email_thread_id,
-      -- Thread ID for grouping messages into conversations
-      m.thread_id as thread_id,
-      -- Participants JSON for group chat detection and sender identification
-      m.participants as participants,
-      -- TASK-992: Direction from messages table for bubble display
-      m.direction as direction,
-      -- External ID (macOS GUID) for attachment lookup fallback
-      m.external_id as external_id,
-      -- Legacy columns preserved for backward compatibility
-      c.source,
-      c.cc,
-      c.bcc,
-      c.attachment_count,
-      c.attachment_metadata,
-      c.keywords_detected,
-      c.parties_involved,
-      c.communication_category,
-      c.relevance_score,
-      c.is_compliance_related
-    FROM communications c
-    LEFT JOIN messages m ON (
-      -- Legacy: join by message_id
-      (c.message_id IS NOT NULL AND c.message_id = m.id)
-      OR
-      -- TASK-1116: Thread-based linking - join by thread_id
-      (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+    WITH linked_messages AS (
+      -- Get message IDs from direct message_id links
+      SELECT DISTINCT m.id as message_id
+      FROM communications c
+      JOIN messages m ON c.message_id = m.id
+      WHERE c.transaction_id = ?
+
+      UNION
+
+      -- Get message IDs from thread_id links (where message_id is NULL)
+      SELECT DISTINCT m.id as message_id
+      FROM communications c
+      JOIN messages m ON c.thread_id = m.thread_id
+      WHERE c.transaction_id = ?
+        AND c.message_id IS NULL
+        AND c.thread_id IS NOT NULL
     )
-    WHERE c.transaction_id = ?
-    -- Deduplicate: Each message should only appear once even if matched by multiple paths
-    GROUP BY COALESCE(m.id, c.id)
-    ORDER BY COALESCE(m.sent_at, c.sent_at) DESC
+    SELECT
+      m.id as id,
+      m.id as message_id,
+      m.user_id,
+      ? as transaction_id,
+      'linked' as link_source,
+      1.0 as link_confidence,
+      NULL as linked_at,
+      m.created_at,
+      m.channel as channel,
+      m.channel as communication_type,
+      m.body_text as body_text,
+      m.body_text as body_plain,
+      m.body_html as body,
+      m.subject as subject,
+      json_extract(m.participants, '$.from') as sender,
+      (SELECT group_concat(value) FROM json_each(json_extract(m.participants, '$.to'))) as recipients,
+      m.sent_at as sent_at,
+      m.received_at as received_at,
+      m.has_attachments as has_attachments,
+      m.thread_id as email_thread_id,
+      m.thread_id as thread_id,
+      m.participants as participants,
+      m.direction as direction,
+      m.external_id as external_id,
+      NULL as source,
+      NULL as cc,
+      NULL as bcc,
+      0 as attachment_count,
+      NULL as attachment_metadata,
+      NULL as keywords_detected,
+      NULL as parties_involved,
+      NULL as communication_category,
+      NULL as relevance_score,
+      0 as is_compliance_related
+    FROM linked_messages lm
+    JOIN messages m ON lm.message_id = m.id
+    ORDER BY m.sent_at DESC
   `;
 
-  return dbAll<Communication>(sql, [transactionId]);
+  return dbAll<Communication>(sql, [transactionId, transactionId, transactionId]);
 }
 
 /**
@@ -814,27 +811,39 @@ function getThreadKey(msg: { thread_id?: string | null; participants?: string | 
  * BACKLOG-396: This is the source of truth for text thread counts.
  */
 export function countTextThreadsForTransaction(transactionId: string): number {
-  // Get all text communications linked to this transaction
-  // This query matches getCommunicationsWithMessages but only for text messages
+  // Get all unique text messages linked to this transaction
+  // Uses same CTE approach as getCommunicationsWithMessages
   const sql = `
+    WITH linked_messages AS (
+      -- Get message IDs from direct message_id links
+      SELECT DISTINCT m.id as message_id
+      FROM communications c
+      JOIN messages m ON c.message_id = m.id
+      WHERE c.transaction_id = ?
+        AND m.channel IN ('text', 'sms', 'imessage')
+
+      UNION
+
+      -- Get message IDs from thread_id links (where message_id is NULL)
+      SELECT DISTINCT m.id as message_id
+      FROM communications c
+      JOIN messages m ON c.thread_id = m.thread_id
+      WHERE c.transaction_id = ?
+        AND c.message_id IS NULL
+        AND c.thread_id IS NOT NULL
+        AND m.channel IN ('text', 'sms', 'imessage')
+    )
     SELECT
-      COALESCE(m.id, c.id) as id,
+      m.id as id,
       m.thread_id as thread_id,
       m.participants as participants
-    FROM communications c
-    LEFT JOIN messages m ON (
-      (c.message_id IS NOT NULL AND c.message_id = m.id)
-      OR
-      (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
-    )
-    WHERE c.transaction_id = ?
-      AND COALESCE(m.channel, c.communication_type) IN ('text', 'sms', 'imessage')
-    GROUP BY COALESCE(m.id, c.id)
+    FROM linked_messages lm
+    JOIN messages m ON lm.message_id = m.id
   `;
 
   const messages = dbAll<{ id: string; thread_id: string | null; participants: string | null }>(
     sql,
-    [transactionId]
+    [transactionId, transactionId]
   );
 
   // Group messages by thread using the same logic as frontend
