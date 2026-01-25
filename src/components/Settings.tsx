@@ -47,13 +47,15 @@ interface ConnectionResult {
 interface SettingsComponentProps {
   onClose: () => void;
   userId: string;
+  /** Callback when email is connected - updates app state */
+  onEmailConnected?: (email: string, provider: "google" | "microsoft") => void;
 }
 
 /**
  * Settings Component
  * Application settings and preferences
  */
-function Settings({ onClose, userId }: SettingsComponentProps) {
+function Settings({ onClose, userId, onEmailConnected }: SettingsComponentProps) {
   const [connections, setConnections] = useState<Connections>({
     google: null,
     microsoft: null,
@@ -85,7 +87,14 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
     }
   }, [userId]);
 
-  const checkConnections = async (): Promise<void> => {
+  /**
+   * Check all email connections and update state.
+   * Returns the connection result for callers that need immediate access to the data.
+   */
+  const checkConnections = async (): Promise<{
+    google?: { connected: boolean; email?: string };
+    microsoft?: { connected: boolean; email?: string };
+  } | null> => {
     setLoadingConnections(true);
     try {
       const result = await window.api.system.checkAllConnections(userId);
@@ -106,9 +115,16 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
               }
             : null,
         });
+        // Return the result for immediate use by callers
+        return {
+          google: result.google,
+          microsoft: result.microsoft,
+        };
       }
+      return null;
     } catch (error) {
       console.error("Failed to check connections:", error);
+      return null;
     } finally {
       setLoadingConnections(false);
     }
@@ -202,10 +218,16 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
         cleanup = window.api.onGoogleMailboxConnected(
           async (connectionResult: ConnectionResult) => {
             if (connectionResult.success) {
-              await checkConnections();
+              // Refresh connections and get the result in one call
+              const connResult = await checkConnections();
+              const email = connResult?.google?.email;
+              // Notify parent to update app state so banner disappears
+              if (email && onEmailConnected) {
+                onEmailConnected(email, "google");
+              }
             }
             setConnectingProvider(null);
-            if (cleanup) cleanup(); // Clean up listener after handling the event
+            if (cleanup) cleanup();
           },
         );
       }
@@ -227,10 +249,16 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
         cleanup = window.api.onMicrosoftMailboxConnected(
           async (connectionResult: ConnectionResult) => {
             if (connectionResult.success) {
-              await checkConnections();
+              // Refresh connections and get the result in one call
+              const connResult = await checkConnections();
+              const email = connResult?.microsoft?.email;
+              // Notify parent to update app state so banner disappears
+              if (email && onEmailConnected) {
+                onEmailConnected(email, "microsoft");
+              }
             }
             setConnectingProvider(null);
-            if (cleanup) cleanup(); // Clean up listener after handling the event
+            if (cleanup) cleanup();
           },
         );
       }

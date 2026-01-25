@@ -162,28 +162,28 @@ function SystemHealthMonitor({
     return null;
   }
 
-  // Severity styling
+  // Severity styling - using amber for warnings to match Dashboard setup banner
   const severityClasses: Record<"error" | "warning" | "info", string> = {
     error: "bg-red-50 border-red-200",
-    warning: "bg-yellow-50 border-yellow-200",
+    warning: "bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200",
     info: "bg-blue-50 border-blue-200",
   };
 
   const iconClasses: Record<"error" | "warning" | "info", string> = {
     error: "text-red-600",
-    warning: "text-yellow-600",
+    warning: "text-amber-600",
     info: "text-blue-600",
   };
 
   const textClasses: Record<"error" | "warning" | "info", string> = {
     error: "text-red-800",
-    warning: "text-yellow-800",
+    warning: "text-amber-900",
     info: "text-blue-800",
   };
 
   const buttonClasses: Record<"error" | "warning" | "info", string> = {
     error: "bg-red-200 hover:bg-red-300 text-red-800",
-    warning: "bg-yellow-200 hover:bg-yellow-300 text-yellow-800",
+    warning: "bg-amber-500 hover:bg-amber-600 text-white",
     info: "bg-blue-200 hover:bg-blue-300 text-blue-800",
   };
 
@@ -275,7 +275,7 @@ function SystemHealthMonitor({
                 )}
                 <button
                   onClick={() => handleDismiss(originalIndex)}
-                  className={`px-3 py-1.5 text-xs font-medium ${textClasses[severity]} hover:opacity-80 transition-colors`}
+                  className={`px-3 py-1.5 text-xs font-medium ${severity === 'warning' ? 'text-amber-700 hover:text-amber-900' : textClasses[severity]} hover:opacity-80 transition-colors`}
                 >
                   Dismiss
                 </button>
