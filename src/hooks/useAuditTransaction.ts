@@ -4,10 +4,10 @@
  * Extracted to support component decomposition (TASK-974)
  *
  * Contact Loading Optimization:
- * Contacts are loaded once at this level and passed to child components.
- * This prevents repeated API calls when switching between steps 2 and 3,
- * since both steps use ContactAssignmentStep which would otherwise each
- * trigger their own contact loading on mount.
+ * Contacts are loaded lazily when user reaches step 2, not on modal open.
+ * This eliminates visible lag when opening the modal since contacts aren't
+ * needed until step 2 (Contact Assignment). Contacts are loaded once and
+ * shared between steps 2 and 3 to prevent repeated API calls when navigating.
  */
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
@@ -98,7 +98,7 @@ export interface UseAuditTransactionReturn {
   showAddressAutocomplete: boolean;
   addressSuggestions: AddressSuggestion[];
 
-  // Contact loading state (lifted to parent level to prevent duplicate API calls)
+  // Contact loading state (lazy-loaded when reaching step 2)
   contacts: Contact[];
   contactsLoading: boolean;
   contactsError: string | null;
@@ -165,25 +165,25 @@ export function useAuditTransaction({
   // Contact assignments state
   const [contactAssignments, setContactAssignments] = useState<ContactAssignments>({});
 
-  // Contact loading state (lifted to parent level to prevent duplicate API calls)
-  // This ensures contacts are loaded once when modal opens, not per-step
+  // Contact loading state (lazy-loaded when reaching step 2)
+  // Contacts aren't needed until step 2, so we defer loading to eliminate modal open lag
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [contactsLoading, setContactsLoading] = useState<boolean>(true);
+  const [contactsLoading, setContactsLoading] = useState<boolean>(false);
   const [contactsError, setContactsError] = useState<string | null>(null);
 
-  // Track if initial contact load has been performed (prevents duplicate loads in StrictMode)
+  // Track if contacts have been loaded (prevents duplicate loads in StrictMode and step navigation)
   const contactsLoadedRef = useRef(false);
   // Track if component is mounted to prevent state updates after unmount
   const isMountedRef = useRef(true);
 
   /**
-   * Load contacts - called once on mount and when explicitly refreshed
+   * Load contacts - called lazily when reaching step 2, or when explicitly refreshed
    * Lifted from ContactAssignmentStep to prevent N API calls (one per step)
    *
-   * Note: This function does NOT depend on addressData.property_address to prevent
-   * re-loading contacts every time the address changes. Contacts are loaded once
-   * when the modal opens. Address-specific sorting is done at the API level
-   * but subsequent address changes should not trigger re-fetches.
+   * Lazy Loading Strategy:
+   * Contacts are NOT loaded when the modal opens. Instead, they're loaded when
+   * the user navigates to step 2 (Contact Assignment). This eliminates the visible
+   * lag on modal open since contact fetching can take noticeable time.
    *
    * The forceRefresh parameter allows explicit refresh after imports.
    */
@@ -199,8 +199,7 @@ export function useAuditTransaction({
     setContactsError(null);
 
     try {
-      // For initial load, use getAll since we don't have an address yet
-      // Address-sorted contacts are fetched when explicitly refreshed with an address
+      // Use address-sorted contacts if we have an address (likely by step 2)
       const propertyAddress = addressData.property_address;
       const result = propertyAddress
         ? await window.api.contacts.getSortedByActivity(userId, propertyAddress)
@@ -225,15 +224,20 @@ export function useAuditTransaction({
     }
   }, [userId, addressData.property_address]);
 
-  // Load contacts once on mount
+  // Setup mounted ref for cleanup
   useEffect(() => {
     isMountedRef.current = true;
-    loadContacts();
-
     return () => {
       isMountedRef.current = false;
     };
-  }, []); // Empty deps - load once on mount only
+  }, []);
+
+  // Lazy load contacts when step changes to 2 (first contact step)
+  useEffect(() => {
+    if (step === 2 && !contactsLoadedRef.current) {
+      loadContacts();
+    }
+  }, [step, loadContacts]);
 
   // Wrapper to expose refresh functionality that always forces reload
   const refreshContacts = useCallback(() => {
@@ -782,7 +786,7 @@ export function useAuditTransaction({
     showAddressAutocomplete,
     addressSuggestions,
 
-    // Contact loading state (lifted to parent level)
+    // Contact loading state (lazy-loaded when reaching step 2)
     contacts,
     contactsLoading,
     contactsError,
