@@ -89,13 +89,16 @@ export interface StatusConfig {
 
 /**
  * Get status configuration based on transaction state
+ * @param transaction - The transaction to get status for
+ * @param hasAIAddon - Whether the user has the AI add-on (affects rejected status display)
  */
-export function getStatusConfig(transaction: Transaction): StatusConfig {
+export function getStatusConfig(transaction: Transaction, hasAIAddon: boolean = true): StatusConfig {
   const detectionStatus = transaction.detection_status;
   const status = transaction.status;
 
   // Pending Review - Amber
   // Show pending styling if EITHER detection_status OR status is "pending"
+  // Note: Without AI add-on, pending status is still possible for manual workflow
   if (detectionStatus === "pending" || status === "pending") {
     return {
       label: "Pending Review",
@@ -112,8 +115,10 @@ export function getStatusConfig(transaction: Transaction): StatusConfig {
     };
   }
 
-  // Rejected - Red
-  if (detectionStatus === "rejected") {
+  // Rejected - Red (AI add-on only)
+  // Without AI add-on, treat rejected transactions as Active
+  // (Rejected is an AI concept - false positive from auto-detection)
+  if (detectionStatus === "rejected" && hasAIAddon) {
     return {
       label: "Rejected",
       headerBg: "bg-gradient-to-r from-red-50 to-rose-50",
@@ -183,7 +188,8 @@ function TransactionStatusWrapper({
   onActionClick,
   children,
 }: TransactionStatusWrapperProps) {
-  const config = getStatusConfig(transaction);
+  const { hasAIAddon } = useLicense();
+  const config = getStatusConfig(transaction, hasAIAddon);
 
   const handleActionClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();

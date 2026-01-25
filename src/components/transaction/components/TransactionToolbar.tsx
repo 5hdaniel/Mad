@@ -188,21 +188,24 @@ function TransactionToolbar({
               {filterCounts.closed}
             </span>
           </button>
-          <button
-            onClick={() => onFilterChange("rejected")}
-            className={`px-4 py-2 rounded-md font-medium transition-all ${
-              filter === "rejected"
-                ? "bg-white text-red-600 shadow-sm"
-                : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            Rejected
-            {filterCounts.rejected > 0 && (
-              <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-red-100 text-red-700">
-                {filterCounts.rejected}
-              </span>
-            )}
-          </button>
+          {/* Rejected tab - AI add-on only */}
+          <LicenseGate requires="ai_addon">
+            <button
+              onClick={() => onFilterChange("rejected")}
+              className={`px-4 py-2 rounded-md font-medium transition-all ${
+                filter === "rejected"
+                  ? "bg-white text-red-600 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Rejected
+              {filterCounts.rejected > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-red-100 text-red-700">
+                  {filterCounts.rejected}
+                </span>
+              )}
+            </button>
+          </LicenseGate>
 
           {/* Status Info Button */}
           <div className="relative ml-2">
