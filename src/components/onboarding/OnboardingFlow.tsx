@@ -157,7 +157,6 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
 
   // Handle onboarding completion
   const handleComplete = useCallback(() => {
-    console.log("[OnboardingFlow] handleComplete called, navigating to dashboard");
     app.goToStep("dashboard");
   }, [app]);
 

@@ -1,8 +1,13 @@
 /**
  * AttachEmailsModal Component
- * Modal for browsing and attaching unlinked emails to a transaction
+ * Modal for browsing and attaching unlinked emails to a transaction.
+ * BACKLOG-504: Now displays emails grouped by thread for consistency with the Emails tab.
  */
 import React, { useState, useEffect, useMemo } from "react";
+import {
+  processEmailThreads,
+} from "../EmailThreadCard";
+import type { Communication } from "../../types";
 
 interface AttachEmailsModalProps {
   /** User ID to fetch unlinked emails for */
@@ -23,37 +28,90 @@ interface EmailInfo {
   sender: string | null;
   sent_at: string | null;
   body_preview?: string | null;
+  email_thread_id?: string | null;
 }
 
 /**
- * Format date for display
+ * Format date range for display (used for threads)
  */
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return "Unknown date";
-  const date = new Date(dateStr);
-  return date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
+function formatDateRange(startDate: Date, endDate: Date): string {
+  const formatDateObj = (d: Date) =>
+    d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 
-/**
- * Format sender for display - extract name or email
- */
-function formatSender(sender: string | null): string {
-  if (!sender) return "Unknown sender";
-  // Try to extract name from "Name <email>" format
-  const match = sender.match(/^([^<]+)\s*</);
-  if (match) {
-    return match[1].trim();
+  if (startDate.toDateString() === endDate.toDateString()) {
+    return formatDateObj(startDate);
   }
-  return sender;
+  return `${formatDateObj(startDate)} - ${formatDateObj(endDate)}`;
+}
+
+/**
+ * Format participant list for display (show first few, then "+X more")
+ */
+function formatParticipants(participants: string[], maxShow: number = 2): string {
+  if (participants.length === 0) return "Unknown";
+
+  // Extract names from email addresses where possible
+  const names = participants.map(p => {
+    const nameMatch = p.match(/^([^<]+)/);
+    if (nameMatch) {
+      const name = nameMatch[1].trim();
+      if (name && name !== p) return name;
+    }
+    // Return email part before @
+    const atIndex = p.indexOf("@");
+    return atIndex > 0 ? p.substring(0, atIndex) : p;
+  });
+
+  // Deduplicate
+  const unique = [...new Set(names)];
+
+  if (unique.length <= maxShow) {
+    return unique.join(", ");
+  }
+  return `${unique.slice(0, maxShow).join(", ")} +${unique.length - maxShow}`;
+}
+
+/**
+ * Get initials for avatar display from sender name/email.
+ */
+function getAvatarInitial(sender?: string | null): string {
+  if (!sender) return "?";
+
+  // Try to get name from email format "Name <email@example.com>"
+  const nameMatch = sender.match(/^([^<]+)/);
+  if (nameMatch) {
+    const name = nameMatch[1].trim();
+    if (name && name !== sender) {
+      return name.charAt(0).toUpperCase();
+    }
+  }
+
+  // Extract first character from email before @
+  const atIndex = sender.indexOf("@");
+  if (atIndex > 0) {
+    return sender.charAt(0).toUpperCase();
+  }
+
+  return sender.charAt(0).toUpperCase();
+}
+
+/**
+ * Convert EmailInfo to Communication format for thread processing
+ */
+function emailInfoToCommunication(email: EmailInfo): Communication {
+  return {
+    id: email.id,
+    subject: email.subject || undefined,
+    sender: email.sender || undefined,
+    sent_at: email.sent_at || undefined,
+    communication_type: "email",
+    email_thread_id: email.email_thread_id || undefined,
+  } as Communication;
 }
 
 // Pagination constants to prevent UI freeze from rendering too many items
-const EMAILS_PER_PAGE = 50;
-const MAX_EMAILS = 500;
+const THREADS_PER_PAGE = 25;
+const MAX_THREADS = 200;
 
 export function AttachEmailsModal({
   userId,
@@ -62,20 +120,20 @@ export function AttachEmailsModal({
   onClose,
   onAttached,
 }: AttachEmailsModalProps): React.ReactElement {
-  // Emails list state
+  // Emails list state (raw from API)
   const [emails, setEmails] = useState<EmailInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Selection state
-  const [selectedEmailIds, setSelectedEmailIds] = useState<Set<string>>(new Set());
+  // Selection state - tracks selected THREAD IDs
+  const [selectedThreadIds, setSelectedThreadIds] = useState<Set<string>>(new Set());
 
   // UI state
   const [searchQuery, setSearchQuery] = useState("");
   const [attaching, setAttaching] = useState(false);
 
-  // Pagination state - only show EMAILS_PER_PAGE at a time to prevent UI freeze
-  const [displayCount, setDisplayCount] = useState(EMAILS_PER_PAGE);
+  // Pagination state - only show THREADS_PER_PAGE at a time to prevent UI freeze
+  const [displayCount, setDisplayCount] = useState(THREADS_PER_PAGE);
 
   // Load unlinked emails on mount
   useEffect(() => {
@@ -109,64 +167,90 @@ export function AttachEmailsModal({
     return () => clearTimeout(timeoutId);
   }, [userId]);
 
-  // Filter emails by search (subject or sender)
-  const filteredEmails = useMemo(() => {
-    if (!searchQuery.trim()) return emails;
+  // Convert emails to threads using the same logic as TransactionEmailsTab
+  const emailThreads = useMemo(() => {
+    const communications = emails.map(emailInfoToCommunication);
+    return processEmailThreads(communications);
+  }, [emails]);
+
+  // Filter threads by search (subject or participant)
+  const filteredThreads = useMemo(() => {
+    if (!searchQuery.trim()) return emailThreads;
     const query = searchQuery.toLowerCase();
-    return emails.filter((email) =>
-      (email.subject && email.subject.toLowerCase().includes(query)) ||
-      (email.sender && email.sender.toLowerCase().includes(query))
+    return emailThreads.filter((thread) =>
+      thread.subject.toLowerCase().includes(query) ||
+      thread.participants.some(p => p.toLowerCase().includes(query))
     );
-  }, [emails, searchQuery]);
+  }, [emailThreads, searchQuery]);
 
-  // Paginated emails - only render displayCount items to prevent UI freeze
-  const displayedEmails = useMemo(() => {
-    return filteredEmails.slice(0, displayCount);
-  }, [filteredEmails, displayCount]);
+  // Paginated threads - only render displayCount items to prevent UI freeze
+  const displayedThreads = useMemo(() => {
+    return filteredThreads.slice(0, displayCount);
+  }, [filteredThreads, displayCount]);
 
-  // Check if there are more emails to load
-  const hasMoreEmails = displayCount < filteredEmails.length;
+  // Check if there are more threads to load
+  const hasMoreThreads = displayCount < filteredThreads.length;
+
+  // Calculate total selected email count
+  const selectedEmailCount = useMemo(() => {
+    let count = 0;
+    filteredThreads.forEach(thread => {
+      if (selectedThreadIds.has(thread.id)) {
+        count += thread.emails.length;
+      }
+    });
+    return count;
+  }, [filteredThreads, selectedThreadIds]);
+
+  // Get all selected email IDs (for the API call)
+  const selectedEmailIds = useMemo(() => {
+    const ids: string[] = [];
+    filteredThreads.forEach(thread => {
+      if (selectedThreadIds.has(thread.id)) {
+        thread.emails.forEach(email => ids.push(email.id));
+      }
+    });
+    return ids;
+  }, [filteredThreads, selectedThreadIds]);
 
   // Reset display count when search changes (to show first page of results)
   useEffect(() => {
-    setDisplayCount(EMAILS_PER_PAGE);
+    setDisplayCount(THREADS_PER_PAGE);
   }, [searchQuery]);
 
   const handleLoadMore = () => {
-    setDisplayCount((prev) => Math.min(prev + EMAILS_PER_PAGE, MAX_EMAILS));
+    setDisplayCount((prev) => Math.min(prev + THREADS_PER_PAGE, MAX_THREADS));
   };
 
-  const handleToggleEmail = (emailId: string) => {
-    setSelectedEmailIds((prev) => {
+  const handleToggleThread = (threadId: string) => {
+    setSelectedThreadIds((prev) => {
       const next = new Set(prev);
-      if (next.has(emailId)) {
-        next.delete(emailId);
+      if (next.has(threadId)) {
+        next.delete(threadId);
       } else {
-        next.add(emailId);
+        next.add(threadId);
       }
       return next;
     });
   };
 
   const handleSelectAll = () => {
-    if (selectedEmailIds.size === filteredEmails.length) {
-      setSelectedEmailIds(new Set());
+    if (selectedThreadIds.size === filteredThreads.length) {
+      setSelectedThreadIds(new Set());
     } else {
-      setSelectedEmailIds(new Set(filteredEmails.map((e) => e.id)));
+      setSelectedThreadIds(new Set(filteredThreads.map((t) => t.id)));
     }
   };
 
   const handleAttach = async () => {
-    if (selectedEmailIds.size === 0) return;
+    if (selectedEmailIds.length === 0) return;
 
     setAttaching(true);
     setError(null);
     try {
-      const emailIds = Array.from(selectedEmailIds);
-
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (window.api.transactions as any).linkEmails(
-        emailIds,
+        selectedEmailIds,
         transactionId
       ) as { success: boolean; error?: string };
 
@@ -230,19 +314,20 @@ export function AttachEmailsModal({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </div>
-          {!loading && filteredEmails.length > 0 && (
+          {!loading && filteredThreads.length > 0 && (
             <div className="flex items-center justify-between mt-2">
               <p className="text-sm text-gray-600">
-                {hasMoreEmails
-                  ? `Showing ${displayCount} of ${filteredEmails.length} unlinked emails`
-                  : `${filteredEmails.length} unlinked email${filteredEmails.length !== 1 ? "s" : ""}`}
+                {filteredThreads.length} conversation{filteredThreads.length !== 1 ? "s" : ""}
+                {emails.length !== filteredThreads.length && (
+                  <span className="ml-1">({emails.length} emails total)</span>
+                )}
               </p>
               <button
                 onClick={handleSelectAll}
                 className="text-sm text-blue-600 hover:text-blue-700 font-medium"
                 data-testid="select-all-button"
               >
-                {selectedEmailIds.size === filteredEmails.length ? "Deselect All" : "Select All"}
+                {selectedThreadIds.size === filteredThreads.length ? "Deselect All" : "Select All"}
               </button>
             </div>
           )}
@@ -269,13 +354,13 @@ export function AttachEmailsModal({
           )}
 
           {/* Empty state */}
-          {!loading && !error && filteredEmails.length === 0 && (
+          {!loading && !error && filteredThreads.length === 0 && (
             <div className="text-center py-12">
               <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
               <p className="text-gray-600 mb-2">
-                {searchQuery ? "No matching emails found" : "No unlinked emails available"}
+                {searchQuery ? "No matching conversations found" : "No unlinked emails available"}
               </p>
               <p className="text-sm text-gray-500">
                 {searchQuery
@@ -285,62 +370,76 @@ export function AttachEmailsModal({
             </div>
           )}
 
-          {/* Email list - using displayedEmails (paginated) to prevent UI freeze */}
-          {!loading && !error && filteredEmails.length > 0 && (
-            <div className="space-y-2">
-              {displayedEmails.map((email) => {
-                const isSelected = selectedEmailIds.has(email.id);
+          {/* Thread list - using displayedThreads (paginated) to prevent UI freeze */}
+          {!loading && !error && filteredThreads.length > 0 && (
+            <div className="space-y-3">
+              {displayedThreads.map((thread) => {
+                const isSelected = selectedThreadIds.has(thread.id);
+                const firstEmail = thread.emails[0];
+                const avatarInitial = getAvatarInitial(firstEmail?.sender);
+                const isMultipleEmails = thread.emailCount > 1;
+
                 return (
                   <div
-                    key={email.id}
+                    key={thread.id}
                     role="button"
                     tabIndex={0}
-                    onClick={() => handleToggleEmail(email.id)}
+                    onClick={() => handleToggleThread(thread.id)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        handleToggleEmail(email.id);
+                        handleToggleThread(thread.id);
                       }
                     }}
-                    className={`p-4 rounded-lg border-2 transition-all cursor-pointer ${
+                    className={`rounded-lg border-2 transition-all cursor-pointer overflow-hidden ${
                       isSelected
                         ? "border-blue-500 bg-blue-50"
-                        : "border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50"
+                        : "border-gray-200 bg-white hover:border-blue-300"
                     }`}
-                    data-testid={`email-${email.id}`}
+                    data-testid={`thread-${thread.id}`}
                   >
-                    <div className="flex items-start gap-3">
-                      {/* Checkbox */}
-                      <div
-                        className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                          isSelected ? "bg-blue-500 border-blue-500" : "border-gray-300 bg-white"
-                        }`}
-                      >
-                        {isSelected && (
-                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                          </svg>
-                        )}
+                    {/* Thread card layout matching EmailThreadCard style */}
+                    <div className="bg-gray-50 px-4 py-3 flex items-center justify-between">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        {/* Checkbox */}
+                        <div
+                          className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${
+                            isSelected ? "bg-blue-500 border-blue-500" : "border-gray-300 bg-white"
+                          }`}
+                        >
+                          {isSelected && (
+                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </div>
+
+                        {/* Avatar - Blue for email */}
+                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
+                          {avatarInitial}
+                        </div>
+
+                        {/* Thread info: Subject and participants */}
+                        <div className="min-w-0 flex-1">
+                          <span className="font-semibold text-gray-900 block truncate">
+                            {thread.subject || "(No Subject)"}
+                          </span>
+                          <span className="font-normal text-gray-500 text-sm block truncate">
+                            {formatParticipants(thread.participants)}
+                            {isMultipleEmails && (
+                              <span className="ml-2 text-gray-400">
+                                ({thread.emailCount} emails)
+                              </span>
+                            )}
+                          </span>
+                        </div>
                       </div>
 
-                      {/* Email Icon */}
-                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                        <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
-                      </div>
-
-                      {/* Email Info */}
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-gray-900 truncate">
-                          {email.subject || "(No Subject)"}
-                        </h4>
-                        <p className="text-sm text-gray-600 truncate">
-                          From: {formatSender(email.sender)}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {formatDate(email.sent_at)}
-                        </p>
+                      {/* Date range */}
+                      <div className="flex items-center gap-4 flex-shrink-0">
+                        <span className="text-sm text-gray-500 hidden sm:inline">
+                          {formatDateRange(thread.startDate, thread.endDate)}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -348,14 +447,14 @@ export function AttachEmailsModal({
               })}
 
               {/* Load More button */}
-              {hasMoreEmails && (
+              {hasMoreThreads && (
                 <div className="text-center pt-4">
                   <button
                     onClick={handleLoadMore}
                     className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg font-medium transition-all"
                     data-testid="load-more-button"
                   >
-                    Load More ({filteredEmails.length - displayCount} remaining)
+                    Load More ({filteredThreads.length - displayCount} remaining)
                   </button>
                 </div>
               )}
@@ -366,9 +465,9 @@ export function AttachEmailsModal({
         {/* Footer */}
         <div className="flex-shrink-0 px-6 py-4 bg-gray-50 rounded-b-xl flex items-center gap-3 justify-between border-t border-gray-200">
           <span className="text-sm text-gray-600">
-            {selectedEmailIds.size > 0
-              ? `${selectedEmailIds.size} email${selectedEmailIds.size !== 1 ? "s" : ""} selected`
-              : "Select emails to attach"}
+            {selectedThreadIds.size > 0
+              ? `${selectedThreadIds.size} conversation${selectedThreadIds.size !== 1 ? "s" : ""} selected (${selectedEmailCount} email${selectedEmailCount !== 1 ? "s" : ""})`
+              : "Select conversations to attach"}
           </span>
           <div className="flex items-center gap-3">
             <button
@@ -381,9 +480,9 @@ export function AttachEmailsModal({
             </button>
             <button
               onClick={handleAttach}
-              disabled={selectedEmailIds.size === 0 || attaching}
+              disabled={selectedEmailIds.length === 0 || attaching}
               className={`px-6 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${
-                selectedEmailIds.size === 0 || attaching
+                selectedEmailIds.length === 0 || attaching
                   ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                   : "bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700 shadow-md hover:shadow-lg"
               }`}
@@ -398,7 +497,7 @@ export function AttachEmailsModal({
                   Attaching...
                 </>
               ) : (
-                <>Attach {selectedEmailIds.size > 0 && `(${selectedEmailIds.size})`}</>
+                <>Attach {selectedEmailCount > 0 && `(${selectedEmailCount} email${selectedEmailCount !== 1 ? "s" : ""})`}</>
               )}
             </button>
           </div>

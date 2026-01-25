@@ -1,11 +1,12 @@
 # BACKLOG-462: Verify AI Add-on Feature Gating Completeness
 
 **Created**: 2026-01-23
-**Status**: Ready
+**Status**: Completed
 **Priority**: P0 (Critical)
 **Category**: QA / Feature Gating
-**Sprint**: -
+**Sprint**: SPRINT-053
 **Estimate**: ~15K tokens
+**Resolved**: PR #570, PR #592 (2026-01-25)
 
 ---
 

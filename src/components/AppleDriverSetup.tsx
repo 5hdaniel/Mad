@@ -153,7 +153,6 @@ function AppleDriverSetup({ onComplete, onSkip, onBack }: AppleDriverSetupProps)
         const driverResult = await drivers.checkApple();
 
         if (driverResult.installed && driverResult.serviceRunning) {
-          console.log("[AppleDriverSetup] Drivers already installed!");
           // Drivers installed - check if update is available
           if (drivers.checkUpdate) {
             try {
