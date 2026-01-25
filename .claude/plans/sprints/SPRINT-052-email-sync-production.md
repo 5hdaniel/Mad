@@ -498,6 +498,14 @@ Before execution, SR Engineer must validate:
 
 **Description**: Display emails in natural thread format, grouping conversations similar to how text messages are displayed. P0 priority - user specifically requested for SPRINT-052.
 
+### Phase 6: Settings Enhancement (Parallel - Added 2026-01-25)
+
+| Task | Backlog | Status | Engineer | PR | Actual Tokens |
+|------|---------|--------|----------|-----|---------------|
+| TASK-1184 | BACKLOG-498 | Pending | - | - | - |
+
+**Description**: Add "Database Maintenance" button in Settings allowing users to manually optimize their database (REINDEX, ANALYZE, VACUUM). Independent feature, can run in parallel with other work.
+
 ---
 
 ## End-of-Sprint Validation Checklist
