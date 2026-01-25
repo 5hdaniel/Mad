@@ -1443,17 +1443,6 @@ class TransactionService {
     // Delete the communication from the database
     await databaseService.deleteCommunication(communicationId);
 
-    // Update the transaction's communication count
-    const transaction = await databaseService.getTransactionById(
-      communication.transaction_id,
-    );
-    if (transaction) {
-      const newCount = Math.max(0, (transaction.total_communications_count || 0) - 1);
-      await databaseService.updateTransaction(communication.transaction_id, {
-        total_communications_count: newCount,
-      });
-    }
-
     await logService.info(
       "Communication unlinked from transaction",
       "TransactionService.unlinkCommunication",
