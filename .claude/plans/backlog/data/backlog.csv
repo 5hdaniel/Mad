@@ -452,3 +452,5 @@ BACKLOG-491,Remove Excessive NavigationButtons Logging,bug,High,Pending,SPRINT-0
 BACKLOG-492,Test Outlook/Microsoft Email Sync,testing,Critical,Pending,SPRINT-052,~5K,-,-,2026-01-24,,[BACKLOG-492.md](items/BACKLOG-492.md)
 BACKLOG-493,Cannot Unlink Emails from Transactions,bug,High,Pending,SPRINT-052,~10K,-,-,2026-01-24,,[BACKLOG-493.md](items/BACKLOG-493.md)
 BACKLOG-494,Display Emails in Natural Thread Format,feature,Critical,Completed,SPRINT-052,~25K,-,-,2026-01-24,,[BACKLOG-494.md](items/BACKLOG-494.md)
+BACKLOG-505,Fix Duplicate Text Messages in Conversation View,bug,Critical,Completed,-,~20K,-,-,2026-01-25,2026-01-25,[BACKLOG-505.md](items/BACKLOG-505.md)
+BACKLOG-506,Database Architecture Cleanup - Eliminate Dual-Storage Pattern,refactor,High,Pending,-,~35K,-,-,2026-01-25,,[BACKLOG-506.md](items/BACKLOG-506.md)
