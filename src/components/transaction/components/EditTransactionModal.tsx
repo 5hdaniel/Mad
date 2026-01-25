@@ -14,6 +14,7 @@ import {
   getRoleDisplayName,
 } from "../../../utils/transactionRoleUtils";
 import ContactSelectModal from "../../ContactSelectModal";
+import { ContactsProvider, useContacts } from "../../../contexts/ContactsContext";
 
 // ============================================
 // TYPES
@@ -476,14 +477,19 @@ export function EditTransactionModal({
                   <p className="text-gray-600 mt-4">Loading contacts...</p>
                 </div>
               ) : (
-                <EditContactAssignments
-                  transactionType={formData.transaction_type}
-                  contactAssignments={contactAssignments}
-                  onAssignContact={handleAssignContact}
-                  onRemoveContact={handleRemoveContact}
+                <ContactsProvider
                   userId={transaction.user_id}
                   propertyAddress={formData.property_address}
-                />
+                >
+                  <EditContactAssignments
+                    transactionType={formData.transaction_type}
+                    contactAssignments={contactAssignments}
+                    onAssignContact={handleAssignContact}
+                    onRemoveContact={handleRemoveContact}
+                    userId={transaction.user_id}
+                    propertyAddress={formData.property_address}
+                  />
+                </ContactsProvider>
               )}
             </div>
           )}
@@ -515,47 +521,12 @@ export function EditTransactionModal({
 }
 
 // ============================================
-// CONTACTS LOADER HOOK
+// CONTACTS CONTEXT INTEGRATION
 // ============================================
 
-/**
- * Lifted contact loading hook - loads contacts once for all role assignments
- * Prevents duplicate API calls (was N calls per role, now 1)
- */
-function useContactsLoader(userId: string, propertyAddress: string) {
-  const [contacts, setContacts] = React.useState<ExtendedContact[]>([]);
-  const [loading, setLoading] = React.useState<boolean>(true);
-  const [error, setError] = React.useState<string | null>(null);
-
-  const loadContacts = React.useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const result = propertyAddress
-        ? await window.api.contacts.getSortedByActivity(userId, propertyAddress)
-        : await window.api.contacts.getAll(userId);
-
-      if (result.success) {
-        setContacts(result.contacts || []);
-      } else {
-        setError(result.error || "Failed to load contacts");
-      }
-    } catch (err) {
-      console.error("Failed to load contacts:", err);
-      setError("Unable to load contacts");
-    } finally {
-      setLoading(false);
-    }
-  }, [userId, propertyAddress]);
-
-  // Load contacts on mount and when userId/propertyAddress change
-  React.useEffect(() => {
-    loadContacts();
-  }, [loadContacts]);
-
-  return { contacts, loading, error, refreshContacts: loadContacts };
-}
+// useContactsLoader has been replaced by ContactsContext
+// See: src/contexts/ContactsContext.tsx
+// This eliminates duplicate API calls when multiple modals use contacts
 
 // ============================================
 // EDIT CONTACT ASSIGNMENTS COMPONENT
@@ -593,9 +564,9 @@ function EditContactAssignments({
   userId,
   propertyAddress,
 }: EditContactAssignmentsProps): React.ReactElement {
-  // Lift contact loading to parent - single API call for all roles
+  // Use shared ContactsContext - single API call for all modals
   const { contacts, loading: contactsLoading, error: contactsError, refreshContacts } =
-    useContactsLoader(userId, propertyAddress);
+    useContacts();
 
   return (
     <div className="space-y-6 relative">

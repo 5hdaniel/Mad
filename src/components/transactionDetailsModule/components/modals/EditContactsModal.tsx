@@ -16,6 +16,7 @@ import {
   getRoleDisplayName,
 } from "../../../../utils/transactionRoleUtils";
 import ContactSelectModal from "../../../ContactSelectModal";
+import { ContactsProvider, useContacts } from "../../../../contexts/ContactsContext";
 
 // ============================================
 // TYPES
@@ -294,17 +295,22 @@ export function EditContactsModal({
               <p className="text-gray-600 mt-4">Loading contacts...</p>
             </div>
           ) : (
-            <EditContactAssignments
-              transactionType={
-                (transaction.transaction_type as "purchase" | "sale" | "other") ||
-                "purchase"
-              }
-              contactAssignments={contactAssignments}
-              onAssignContact={handleAssignContact}
-              onRemoveContact={handleRemoveContact}
+            <ContactsProvider
               userId={transaction.user_id}
               propertyAddress={transaction.property_address || ""}
-            />
+            >
+              <EditContactAssignments
+                transactionType={
+                  (transaction.transaction_type as "purchase" | "sale" | "other") ||
+                  "purchase"
+                }
+                contactAssignments={contactAssignments}
+                onAssignContact={handleAssignContact}
+                onRemoveContact={handleRemoveContact}
+                userId={transaction.user_id}
+                propertyAddress={transaction.property_address || ""}
+              />
+            </ContactsProvider>
           )}
         </div>
 
@@ -359,49 +365,19 @@ interface EditContactAssignmentsProps {
   propertyAddress: string;
 }
 
-/**
- * Lifted contact loading hook - loads contacts once for all role assignments
- * BACKLOG-311: Prevents duplicate API calls (was 15+ calls, now 1)
- */
-function useContactsLoader(userId: string, propertyAddress: string) {
-  const [contacts, setContacts] = React.useState<ExtendedContact[]>([]);
-  const [loading, setLoading] = React.useState<boolean>(true);
-  const [error, setError] = React.useState<string | null>(null);
+// ============================================
+// CONTACTS CONTEXT INTEGRATION
+// ============================================
 
-  const loadContacts = React.useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const result = propertyAddress
-        ? await window.api.contacts.getSortedByActivity(userId, propertyAddress)
-        : await window.api.contacts.getAll(userId);
-
-      if (result.success) {
-        setContacts(result.contacts || []);
-      } else {
-        setError(result.error || "Failed to load contacts");
-      }
-    } catch (err) {
-      console.error("Failed to load contacts:", err);
-      setError("Unable to load contacts");
-    } finally {
-      setLoading(false);
-    }
-  }, [userId, propertyAddress]);
-
-  // Load contacts on mount and when userId/propertyAddress change
-  React.useEffect(() => {
-    loadContacts();
-  }, [loadContacts]);
-
-  return { contacts, loading, error, refreshContacts: loadContacts };
-}
+// useContactsLoader has been replaced by ContactsContext
+// See: src/contexts/ContactsContext.tsx
+// This eliminates duplicate API calls when EditContactsModal and
+// EditTransactionModal both need contacts (PR #585 fix)
 
 /**
  * Edit Contact Assignments Component
  * Displays all role categories with their assigned contacts.
- * BACKLOG-311: Loads contacts once and passes to all children (was N calls, now 1)
+ * BACKLOG-311: Now uses shared ContactsContext (was duplicate hook per modal)
  */
 function EditContactAssignments({
   transactionType,
@@ -411,9 +387,9 @@ function EditContactAssignments({
   userId,
   propertyAddress,
 }: EditContactAssignmentsProps): React.ReactElement {
-  // BACKLOG-311: Lift contact loading to parent - single API call for all roles
+  // Use shared ContactsContext - single API call across all modals
   const { contacts, loading: contactsLoading, error: contactsError, refreshContacts } =
-    useContactsLoader(userId, propertyAddress);
+    useContacts();
 
   return (
     <div className="space-y-6 relative">
