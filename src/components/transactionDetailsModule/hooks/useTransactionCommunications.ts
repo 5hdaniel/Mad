@@ -40,7 +40,9 @@ export function useTransactionCommunications(): UseTransactionCommunicationsResu
         // Use communication_id (the actual communications table ID) instead of comm.id
         // comm.id may be the message ID when the communication has a message_id link
         // See: getCommunicationsWithMessages() query returns COALESCE(m.id, c.id) as id
-        const communicationId = (comm as unknown as { communication_id: string }).communication_id;
+        // Fall back to comm.id if communication_id is not present (e.g., text messages)
+        const communicationId = (comm as unknown as { communication_id?: string }).communication_id || comm.id;
+        console.log("[useTransactionCommunications] Unlinking communication:", { commId: comm.id, communicationId });
         const result = await window.api.transactions.unlinkCommunication(communicationId);
 
         if (result.success) {
