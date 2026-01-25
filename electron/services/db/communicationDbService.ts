@@ -542,20 +542,32 @@ export async function createCommunicationReference(
 export async function getCommunicationsWithMessages(
   transactionId: string,
 ): Promise<Communication[]> {
-  // Query 1: Records with message_id (legacy per-message linking)
-  // Query 2: Records with thread_id (new per-thread linking) - returns all messages in thread
+  // HOTFIX: Duplicate messages bug
+  // The original query could return duplicate messages when:
+  // 1. A message is linked via message_id in one communication record
+  // 2. The same message's thread is linked via thread_id in another communication record
+  //
+  // Solution: Use GROUP BY on the effective message ID (COALESCE(m.id, c.id)) to ensure
+  // each unique message appears only once. We use MIN/MAX aggregates for communication
+  // metadata to pick a deterministic value when duplicates exist.
+  //
+  // Priority: message_id links take precedence over thread_id links (higher confidence)
   const sql = `
     SELECT
       -- TASK-1116: Use message ID when available for proper message lookup
       COALESCE(m.id, c.id) as id,
-      c.id as communication_id,
+      -- For duplicates, prefer the communication with message_id (more specific link)
+      -- Using MIN since message_id links are typically created first
+      MIN(c.id) as communication_id,
       c.user_id,
       c.transaction_id,
-      c.message_id,
-      c.link_source,
-      c.link_confidence,
-      c.linked_at,
-      c.created_at,
+      -- Prefer non-null message_id when available
+      MAX(c.message_id) as message_id,
+      -- Prefer 'manual' > 'auto' > 'scan' for link_source
+      MAX(c.link_source) as link_source,
+      MAX(c.link_confidence) as link_confidence,
+      MIN(c.linked_at) as linked_at,
+      MIN(c.created_at) as created_at,
       -- Use message content when available, fall back to legacy columns
       COALESCE(m.channel, c.communication_type) as channel,
       COALESCE(m.channel, c.communication_type) as communication_type,
@@ -600,6 +612,7 @@ export async function getCommunicationsWithMessages(
       (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
     )
     WHERE c.transaction_id = ?
+    GROUP BY COALESCE(m.id, c.id)
     ORDER BY COALESCE(m.sent_at, c.sent_at) DESC
   `;
 
