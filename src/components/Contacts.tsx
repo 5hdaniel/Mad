@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   ContactCard,
   ContactDetailsModal,
@@ -11,6 +11,9 @@ import {
   ExtendedContact,
 } from "./contact";
 import { useAppStateMachine } from "../appCore";
+
+// LocalStorage key for toggle persistence (shared with ContactSelectModal)
+const SHOW_MESSAGE_CONTACTS_KEY = "contactModal.showMessageContacts";
 
 interface ContactsProps {
   userId: string;
@@ -45,9 +48,42 @@ function Contacts({ userId, onClose }: ContactsProps) {
     setBlockingTransactions,
   } = useContactList(userId);
 
-  // Search and filtering
+  // Toggle for showing message-derived contacts (default: hide them)
+  const [showMessageContacts, setShowMessageContacts] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem(SHOW_MESSAGE_CONTACTS_KEY);
+      return stored === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  // Persist toggle state to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(SHOW_MESSAGE_CONTACTS_KEY, String(showMessageContacts));
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, [showMessageContacts]);
+
+  // Helper to check if a contact is message-derived
+  const isMessageDerived = (contact: ExtendedContact): boolean => {
+    // is_message_derived can be number (1) or boolean (true)
+    return contact.is_message_derived === 1 || contact.is_message_derived === true;
+  };
+
+  // Filter contacts based on message-derived toggle before passing to search
+  const visibleContacts = useMemo(() => {
+    if (showMessageContacts) {
+      return contacts;
+    }
+    return contacts.filter((c) => !isMessageDerived(c));
+  }, [contacts, showMessageContacts]);
+
+  // Search and filtering (uses visibleContacts which respects the message-derived toggle)
   const { searchQuery, setSearchQuery, filteredContacts } =
-    useContactSearch(contacts);
+    useContactSearch(visibleContacts);
 
   // Modal states
   const [showAddEdit, setShowAddEdit] = useState(false);
@@ -148,6 +184,17 @@ function Contacts({ userId, onClose }: ContactsProps) {
               />
             </svg>
           </div>
+
+          {/* Toggle for message-derived contacts */}
+          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none flex-shrink-0 whitespace-nowrap">
+            <input
+              type="checkbox"
+              checked={showMessageContacts}
+              onChange={(e) => setShowMessageContacts(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+            />
+            <span>Include message contacts</span>
+          </label>
 
           {/* Add Contact Button */}
           <button
