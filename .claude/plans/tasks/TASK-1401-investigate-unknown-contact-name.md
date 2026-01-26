@@ -38,11 +38,11 @@ Investigate why some 1:1 text conversations display "unknown" as contact name wh
 
 ## Acceptance Criteria
 
-- [ ] Phone number lookup flow traced end-to-end
-- [ ] Normalization differences identified (if any)
-- [ ] Root cause of "unknown" display clearly documented
-- [ ] Proposed fixes documented with specific file/line changes
-- [ ] No production code modified (investigation only)
+- [x] Phone number lookup flow traced end-to-end
+- [x] Normalization differences identified (if any)
+- [x] Root cause of "unknown" display clearly documented
+- [x] Proposed fixes documented with specific file/line changes
+- [x] No production code modified (investigation only)
 - [ ] Findings PR created and merged
 
 ## Investigation Notes
@@ -184,26 +184,35 @@ This task's PR MUST pass:
 
 **REQUIRED: Record your agent_id immediately when the Task tool returns.**
 
-*Investigation Date: <DATE>*
+*Investigation Date: 2026-01-26*
 
 ### Agent ID
 
 ```
-Engineer Agent ID: <agent_id from Task tool output>
+Engineer Agent ID: (foreground session - no task ID)
 ```
 
 ### Lookup Flow Analysis
 
 **End-to-End Flow:**
-1. UI Component: `MessageThreadCard.tsx`
-2. → <next step>
-3. → <next step>
-4. → Database query in: `<file>`
+1. UI Component: `TransactionMessagesTab.tsx` - calls `extractAllPhones(messages)` and `window.api.contacts.getNamesByPhones(phones)`
+2. IPC Handler: `contact-handlers.ts:1036-1062` - invokes `databaseService.getContactNamesByPhones(phones)`
+3. Database: `contactDbService.ts:726-808` - queries `contact_phones` table, falls back to macOS Contacts
+4. Result: Map<phone, name> returned to UI
+5. UI Render: `MessageThreadCard.tsx:294` - displays `contactName || phoneNumber`
 
 **Where "unknown" is set:**
 ```typescript
-// Paste the exact code that sets "unknown"
+// MessageThreadCard.tsx line 484
+export function extractPhoneFromThread(messages: MessageLike[]): string {
+  for (const msg of messages) {
+    // ... tries to extract phone from participants
+  }
+  return "Unknown"; // Fallback when no phone extractable
+}
 ```
+
+This "Unknown" only appears when NO phone can be extracted from ANY message in a thread (rare edge case).
 
 ---
 
@@ -211,31 +220,44 @@ Engineer Agent ID: <agent_id from Task tool output>
 
 **Contact Phones Storage Format:**
 ```
-Example: <format in contact_phones table>
+E.164 format: +14155550000
+Stored in: contact_phones.phone_e164
 ```
 
 **Messages Participants Format:**
+```json
+{"from": "+14155550000", "to": ["me"]}
 ```
-Example: <format in messages.participants>
-```
+Stored in: `messages.participants` JSON (raw handle from macOS Messages `handle.id`)
 
 **Normalization Function:**
 ```typescript
-// Paste normalizePhoneForLookup or equivalent
+// contactDbService.ts lines 734-737
+const normalizedPhones = phones.map(p => {
+  const digits = p.replace(/\D/g, '');
+  return digits.length >= 10 ? digits.slice(-10) : digits;
+}).filter(p => p.length >= 7);
 ```
 
 **Mismatch Found:**
-<Document specific format differences>
+The normalization is CONSISTENT (both use last 10 digits). The issue is that the result map may not contain all lookup formats the UI tries.
 
 ---
 
 ### Root Cause
 
 **Primary Issue:**
-<Clear explanation of why "unknown" appears>
+The "unknown" contact name appears when:
+1. Contact is NOT in local `contact_phones` table (not imported via app)
+2. macOS Contacts fallback fails (Full Disk Access not granted, or database locked)
+3. UI receives no mapping for that phone -> displays raw phone number
+
+The UI does NOT literally show "unknown" in most cases - it shows the raw phone number like `+14155550000`. The literal "Unknown" string only appears from `extractPhoneFromThread()` when a thread has no parseable participants.
 
 **Secondary Issues (if any):**
-<Additional contributing factors>
+1. Result map stores by original phone AND normalized, but UI may try E.164 format not in map
+2. International numbers (+44, +49) may have different normalization expectations
+3. macOS Contacts fallback is silent on failure - user doesn't know why lookup failed
 
 ---
 
@@ -244,11 +266,24 @@ Example: <format in messages.participants>
 **File Changes:**
 | File | Line(s) | Change |
 |------|---------|--------|
-| `<file>` | `<lines>` | `<description>` |
+| `electron/services/db/contactDbService.ts` | 758-771 | Store results by MORE key formats (E.164, normalized, original) |
+| `src/components/transactionDetailsModule/components/TransactionMessagesTab.tsx` | 472-475 | Try more lookup formats in contactNames |
+| `src/components/transactionDetailsModule/components/MessageThreadCard.tsx` | 153-161 | Update formatParticipantNames to try more formats |
+| `src/components/transactionDetailsModule/components/modals/ConversationViewModal.tsx` | 298-312 | Update resolveToName to try more formats |
 
 **Code Example:**
 ```typescript
-// Proposed fix code
+// In getContactNamesByPhones, store by more formats:
+for (const row of rows) {
+  const rowDigits = row.phone.replace(/\D/g, '');
+  const rowNormalized = rowDigits.slice(-10);
+
+  result.set(rowNormalized, row.display_name);
+  if (rowNormalized.length === 10) {
+    result.set(`+1${rowNormalized}`, row.display_name);
+  }
+  // ... rest of existing logic
+}
 ```
 
 ---
@@ -257,7 +292,12 @@ Example: <format in messages.participants>
 
 Based on investigation:
 
-**TASK-1405**: <specific scope and approach>
+**TASK-1405**: Fix contact phone lookup by:
+1. Storing results in MORE key formats in `getContactNamesByPhones()`
+2. Trying MORE lookup formats in UI components
+3. Low-risk, targeted fix that doesn't require data migration
+
+See full findings: `.claude/plans/investigations/BACKLOG-513-unknown-contact-findings.md`
 
 ---
 
@@ -267,8 +307,8 @@ Based on investigation:
 
 | Metric | Value |
 |--------|-------|
-| **Total Tokens** | X |
-| Duration | X seconds |
+| **Total Tokens** | ~8K (estimate) |
+| Duration | ~5 minutes |
 
 ---
 
