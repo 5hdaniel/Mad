@@ -544,49 +544,66 @@ export async function createCommunicationReference(
 export async function getCommunicationsWithMessages(
   transactionId: string,
 ): Promise<Communication[]> {
-  // Query 1: Records with message_id (legacy per-message linking)
-  // Query 2: Records with thread_id (new per-thread linking) - returns all messages in thread
+  // BACKLOG-506: Three-way join - messages for texts, emails for emails
+  // Query handles:
+  //   1. Records with message_id (per-message text linking)
+  //   2. Records with thread_id (per-thread text linking)
+  //   3. Records with email_id (email linking - NEW)
+  //
+  // NOTE: The return type Communication is aliased to Message for backward compatibility.
+  // The SELECT populates Message fields from JOINs to messages/emails tables.
   const sql = `
     SELECT
-      -- TASK-1116: Use message ID when available for proper message lookup
-      COALESCE(m.id, c.id) as id,
+      -- Use content table ID when available, fall back to communication ID
+      COALESCE(m.id, e.id, c.id) as id,
       c.id as communication_id,
       c.user_id,
       c.transaction_id,
       c.message_id,
+      c.email_id,
       c.link_source,
       c.link_confidence,
       c.linked_at,
       c.created_at,
-      -- Use message content when available, fall back to legacy columns
-      COALESCE(m.channel, c.communication_type) as channel,
-      COALESCE(m.channel, c.communication_type) as communication_type,
-      COALESCE(m.body_text, c.body_plain) as body_text,
-      COALESCE(m.body_text, c.body_plain) as body_plain,
-      COALESCE(m.body_html, c.body) as body,
-      COALESCE(m.subject, c.subject) as subject,
-      COALESCE(json_extract(m.participants, '$.from'), c.sender) as sender,
+      -- Type: prefer message channel, then 'email' if email_id set
+      CASE
+        WHEN m.id IS NOT NULL THEN m.channel
+        WHEN e.id IS NOT NULL THEN 'email'
+        ELSE 'unknown'
+      END as channel,
+      CASE
+        WHEN m.id IS NOT NULL THEN m.channel
+        WHEN e.id IS NOT NULL THEN 'email'
+        ELSE 'unknown'
+      END as communication_type,
+      -- Content from messages or emails table (NO legacy column fallback)
+      COALESCE(m.body_text, e.body_plain) as body_text,
+      COALESCE(m.body_text, e.body_plain) as body_plain,
+      COALESCE(m.body_html, e.body_html) as body,
+      COALESCE(m.subject, e.subject) as subject,
+      COALESCE(json_extract(m.participants, '$.from'), e.sender) as sender,
       COALESCE(
         (SELECT group_concat(value) FROM json_each(json_extract(m.participants, '$.to'))),
-        c.recipients
+        e.recipients
       ) as recipients,
-      COALESCE(m.sent_at, c.sent_at) as sent_at,
-      COALESCE(m.received_at, c.received_at) as received_at,
-      COALESCE(m.has_attachments, c.has_attachments) as has_attachments,
-      COALESCE(m.thread_id, c.email_thread_id) as email_thread_id,
+      COALESCE(m.sent_at, e.sent_at) as sent_at,
+      COALESCE(m.received_at, e.received_at) as received_at,
+      COALESCE(m.has_attachments, e.has_attachments) as has_attachments,
+      COALESCE(m.thread_id, e.thread_id) as email_thread_id,
       -- Thread ID for grouping messages into conversations
-      m.thread_id as thread_id,
+      COALESCE(m.thread_id, e.thread_id) as thread_id,
       -- Participants JSON for group chat detection and sender identification
       m.participants as participants,
-      -- TASK-992: Direction from messages table for bubble display
-      m.direction as direction,
-      -- External ID (macOS GUID) for attachment lookup fallback
-      m.external_id as external_id,
-      -- Legacy columns preserved for backward compatibility
-      c.source,
-      c.cc,
-      c.bcc,
-      c.attachment_count,
+      -- Direction from messages table for bubble display
+      COALESCE(m.direction, e.direction) as direction,
+      -- External ID for attachment lookup fallback
+      COALESCE(m.external_id, e.external_id) as external_id,
+      -- Email-specific fields from emails table only
+      e.source as source,
+      e.cc as cc,
+      e.bcc as bcc,
+      e.attachment_count as attachment_count,
+      -- Legacy metadata columns (may be populated by analysis, not content)
       c.attachment_metadata,
       c.keywords_detected,
       c.parties_involved,
@@ -595,14 +612,18 @@ export async function getCommunicationsWithMessages(
       c.is_compliance_related
     FROM communications c
     LEFT JOIN messages m ON (
-      -- Legacy: join by message_id
+      -- Per-message linking
       (c.message_id IS NOT NULL AND c.message_id = m.id)
       OR
-      -- TASK-1116: Thread-based linking - join by thread_id
-      (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+      -- Thread-based linking
+      (c.message_id IS NULL AND c.email_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+    )
+    LEFT JOIN emails e ON (
+      -- BACKLOG-506: Email linking - join only when email_id is set and matches
+      c.email_id IS NOT NULL AND c.email_id = e.id
     )
     WHERE c.transaction_id = ?
-    ORDER BY COALESCE(m.sent_at, c.sent_at) DESC
+    ORDER BY COALESCE(m.sent_at, e.sent_at) DESC
   `;
 
   const results = dbAll<Communication>(sql, [transactionId]);
