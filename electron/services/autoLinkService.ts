@@ -312,9 +312,10 @@ async function findMessagesByContactPhones(
   params.push(dateRange.end.toISOString());
   params.push(limit);
 
-  // TASK-1115: Also select thread_id for thread-level linking
+  // TASK-1115: Select DISTINCT threads to avoid missing threads due to LIMIT
+  // Previously we limited messages which could miss threads if group chats filled the limit
   const sql = `
-    SELECT m.id, m.thread_id
+    SELECT DISTINCT m.thread_id, MIN(m.id) as id
     FROM messages m
     WHERE m.user_id = ?
       AND m.channel IN ('sms', 'imessage')
@@ -323,14 +324,15 @@ async function findMessagesByContactPhones(
         m.transaction_id IS NULL
         OR m.transaction_id != ?
       )
-      AND m.id NOT IN (
-        SELECT message_id FROM communications
-        WHERE transaction_id = ? AND message_id IS NOT NULL
+      AND m.thread_id NOT IN (
+        SELECT thread_id FROM communications
+        WHERE transaction_id = ? AND thread_id IS NOT NULL
       )
       AND (${phoneConditions})
       AND m.sent_at >= ?
       AND m.sent_at <= ?
-    ORDER BY m.sent_at DESC
+    GROUP BY m.thread_id
+    ORDER BY MAX(m.sent_at) DESC
     LIMIT ?
   `;
 
