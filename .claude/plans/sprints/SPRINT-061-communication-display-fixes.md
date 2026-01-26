@@ -169,13 +169,16 @@ Tasks will be defined after Phase 1 investigation completes. Expected tasks:
 
 ---
 
-### Phase 3: Final Review
+### Phase 3: Verification (USER GATE + SR Review)
 
 | Task | Title | Dependencies | Est. Tokens |
 |------|-------|--------------|-------------|
-| TASK-1408 | SR Engineer final review | All Phase 2 tasks | ~10K |
+| TASK-1408 | Manual testing checklist (USER GATE) | All Phase 2 tasks | ~5K |
+| TASK-1409 | SR Engineer final review | TASK-1408 (approved) | ~12K |
 
-**Integration checkpoint**: Merged to develop.
+**USER GATE**: TASK-1408 requires manual user verification before proceeding.
+
+**Integration checkpoint**: Project branch merged to develop.
 
 ---
 
@@ -197,8 +200,9 @@ graph TD
         TASK1407[TASK-1407: Re-enable UI Counters]
     end
 
-    subgraph Phase3[Phase 3 - Review]
-        TASK1408[TASK-1408: SR Review]
+    subgraph Phase3[Phase 3 - Verification]
+        TASK1408[TASK-1408: Manual Testing - USER GATE]
+        TASK1409[TASK-1409: SR Review + Merge]
     end
 
     TASK1400 --> TASK1403
@@ -210,6 +214,7 @@ graph TD
     TASK1405 --> TASK1408
     TASK1406 --> TASK1408
     TASK1407 --> TASK1408
+    TASK1408 --> TASK1409
 ```
 
 ---
@@ -255,9 +260,13 @@ dependency_graph:
       phase: 2
       title: Re-enable UI counters
     - id: TASK-1408
+      type: testing
+      phase: 3
+      title: Manual testing checklist (USER GATE)
+    - id: TASK-1409
       type: review
       phase: 3
-      title: SR Engineer review
+      title: SR Engineer final review
   edges:
     - from: TASK-1400
       to: TASK-1403
@@ -285,6 +294,9 @@ dependency_graph:
       type: depends_on
     - from: TASK-1407
       to: TASK-1408
+      type: depends_on
+    - from: TASK-1408
+      to: TASK-1409
       type: depends_on
 ```
 
@@ -392,14 +404,25 @@ The following MUST pass before merge:
 | Phase | Tasks | Est. Tokens | Cumulative |
 |-------|-------|-------------|------------|
 | 1 | 3 | ~42K | ~42K |
-| 2 | 5 (estimated) | ~78K | ~120K |
-| 3 | 1 | ~10K | ~130K |
-| **Total** | **9 tasks (estimated)** | **~130K** | - |
+| 2 | 5 | ~73K | ~115K |
+| 3 | 2 | ~17K | ~132K |
+| **Total** | **10 tasks** | **~132K** | - |
+
+**Phase 2 Breakdown:**
+- TASK-1403: ~17.5K (email count fix)
+- TASK-1404: ~13.5K (text thread count)
+- TASK-1405: ~13.5K (contact lookup)
+- TASK-1406: ~17.5K (thread dedup)
+- TASK-1407: ~7K (UI counters)
+
+**Phase 3 Breakdown:**
+- TASK-1408: ~5K (manual testing prep)
+- TASK-1409: ~12K (SR review + merge)
 
 **Contingency**: ~26K (20%)
-**Sprint Total**: ~156K tokens
+**Sprint Total**: ~158K tokens
 
-**Note**: Phase 2 estimates are preliminary. Will be refined after Phase 1 investigation.
+**Note**: Phase 2 estimates will be refined after Phase 1 investigation reveals exact scope.
 
 ---
 
@@ -407,15 +430,16 @@ The following MUST pass before merge:
 
 | Phase | Task | Status | Engineer | PR | Tokens | Notes |
 |-------|------|--------|----------|-----|--------|-------|
-| 1 | TASK-1400 | Pending | - | - | - | Counter investigation |
-| 1 | TASK-1401 | Pending | - | - | - | Contact name investigation |
-| 1 | TASK-1402 | Pending | - | - | - | Thread dedup investigation |
+| 1 | TASK-1400 | Ready | - | - | - | Counter investigation |
+| 1 | TASK-1401 | Ready | - | - | - | Contact name investigation |
+| 1 | TASK-1402 | Ready | - | - | - | Thread dedup investigation |
 | 2 | TASK-1403 | Blocked | - | - | - | Awaiting TASK-1400 |
 | 2 | TASK-1404 | Blocked | - | - | - | Awaiting TASK-1400 |
 | 2 | TASK-1405 | Blocked | - | - | - | Awaiting TASK-1401 |
 | 2 | TASK-1406 | Blocked | - | - | - | Awaiting TASK-1402 |
 | 2 | TASK-1407 | Blocked | - | - | - | Awaiting TASK-1403, TASK-1404 |
-| 3 | TASK-1408 | Blocked | - | - | - | Awaiting Phase 2 |
+| 3 | TASK-1408 | Blocked | USER | - | - | Manual testing (USER GATE) |
+| 3 | TASK-1409 | Blocked | - | - | - | SR Review + Merge to develop |
 
 ---
 
