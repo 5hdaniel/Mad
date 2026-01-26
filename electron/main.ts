@@ -4,6 +4,7 @@ import {
   session,
 } from "electron";
 import path from "path";
+import log from "electron-log";
 
 // ==========================================
 // DEEP LINK PROTOCOL REGISTRATION (TASK-1500)
@@ -14,8 +15,8 @@ if (process.defaultApp) {
   // In development, register with the full path to the project directory
   // This ensures macOS can launch the app correctly via deep link
   const appPath = path.resolve(__dirname, '..');
-  console.log('[DeepLink] Dev mode - registering protocol with path:', appPath);
-  console.log('[DeepLink] Electron binary:', process.execPath);
+  log.info('[DeepLink] Dev mode - registering protocol with path:', appPath);
+  log.info('[DeepLink] Electron binary:', process.execPath);
   app.setAsDefaultProtocolClient('magicaudit', process.execPath, [appPath]);
 } else {
   // In production, electron-builder handles registration via package.json protocols config
@@ -35,7 +36,6 @@ if (!gotTheLock) {
   app.quit();
 }
 import { autoUpdater } from "electron-updater";
-import log from "electron-log";
 import dotenv from "dotenv";
 
 // Load environment files: .env.development first (OAuth credentials), then .env.local for overrides
