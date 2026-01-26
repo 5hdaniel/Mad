@@ -6,14 +6,14 @@
 import React, { useState } from "react";
 import type { Communication, Message } from "../types";
 import { ConversationViewModal } from "./modals";
-import { getTrailingDigits } from "../../../../electron/utils/phoneUtils";
+import { getTrailingDigits } from "../../../utils/phoneUtils";
 import {
   getThreadParticipants as getThreadParticipantsShared,
   isGroupChat as isGroupChatShared,
   formatParticipantNames as formatParticipantNamesShared,
   getThreadKey as getThreadKeyShared,
   type MessageLike as ThreadMessageLike,
-} from "../../../../electron/utils/threadUtils";
+} from "../../../utils/threadUtils";
 
 /**
  * Union type for messages - can be from messages table or communications table
