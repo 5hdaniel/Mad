@@ -54,6 +54,7 @@ describe("Transactions", () => {
       total_communications_count: 25,
       email_count: 25,
       text_count: 0,
+      text_thread_count: 0,
       extraction_confidence: 85,
     },
     {
@@ -67,6 +68,7 @@ describe("Transactions", () => {
       total_communications_count: 18,
       email_count: 18,
       text_count: 0,
+      text_thread_count: 0,
       extraction_confidence: 92,
     },
     {
@@ -80,6 +82,7 @@ describe("Transactions", () => {
       total_communications_count: 12,
       email_count: 12,
       text_count: 0,
+      text_thread_count: 0,
       extraction_confidence: 78,
     },
   ];
@@ -345,9 +348,7 @@ describe("Transactions", () => {
       expect(screen.getAllByText("$450,000").length).toBeGreaterThan(0);
     });
 
-    // BACKLOG-510: Email/text counters are hidden in UI until count accuracy is fixed
-    // See TransactionCard.tsx lines 208-225 where counters are commented out
-    it.skip("should display email count", async () => {
+    it("should display email count", async () => {
       renderWithProvider(
         <Transactions
           userId={mockUserId}
