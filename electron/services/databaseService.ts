@@ -377,6 +377,8 @@ class DatabaseService implements IDatabaseService {
       { name: 'sent_at', sql: `ALTER TABLE communications ADD COLUMN sent_at DATETIME` },
       { name: 'sender', sql: `ALTER TABLE communications ADD COLUMN sender TEXT` },
       { name: 'communication_type', sql: `ALTER TABLE communications ADD COLUMN communication_type TEXT DEFAULT 'email'` },
+      // BACKLOG-506: Email reference column (must be added before schema.sql creates index)
+      { name: 'email_id', sql: `ALTER TABLE communications ADD COLUMN email_id TEXT REFERENCES emails(id) ON DELETE CASCADE` },
     ]);
 
     // TASK-1110: Add external_message_id to attachments for stable message linking
