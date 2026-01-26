@@ -12,10 +12,7 @@ import { autoLinkAllToTransaction } from "./services/messageMatchingService";
 import { autoLinkCommunicationsForContact } from "./services/autoLinkService";
 import { dbAll } from "./services/db/core/dbConnection";
 import { createEmail, getEmailByExternalId } from "./services/db/emailDbService";
-import {
-  createCommunication,
-  getCommunications,
-} from "./services/db/communicationDbService";
+import { createCommunication } from "./services/db/communicationDbService";
 import submissionService from "./services/submissionService";
 import submissionSyncService from "./services/submissionSyncService";
 import type { SubmissionProgress } from "./services/submissionService";
@@ -2629,33 +2626,12 @@ export const registerTransactionHandlers = (
               // Check for duplicates using the deduplication service
               const enrichedEmails = await gmailFetchService.checkDuplicates(userId, fetchedEmails);
 
-              // Get existing communications to avoid duplicates
-              // HOTFIX: Only skip if communication already has email_id (properly linked)
-              // Old communications without email_id need to be re-processed
-              const existingCommsGmail = await getCommunications({ user_id: userId });
-              const existingSubjectSentKeysGmail = new Set(
-                existingCommsGmail
-                  .filter((c) => c.email_id) // Only include properly linked emails
-                  .map((c) => {
-                    const sentAt = c.sent_at
-                      ? (c.sent_at instanceof Date ? c.sent_at.toISOString() : String(c.sent_at))
-                      : "";
-                    return `${(c.subject || "").toLowerCase()}|${sentAt}`;
-                  })
-              );
-
               // Store new emails
+              // BACKLOG-506: Deduplication is handled by getEmailByExternalId below
               for (const email of enrichedEmails) {
                 // Skip if already flagged as duplicate by deduplication service
                 if (email.duplicateOf) {
                   logService.debug(`Skipping duplicate email: ${email.subject}`, "Transactions");
-                  continue;
-                }
-
-                // Check if we already have this email properly linked (with email_id)
-                const emailKey = `${(email.subject || "").toLowerCase()}|${email.date ? new Date(email.date).toISOString() : ""}`;
-                if (existingSubjectSentKeysGmail.has(emailKey)) {
-                  logService.debug(`Skipping already-linked email: ${email.subject}`, "Transactions");
                   continue;
                 }
 
@@ -2694,7 +2670,6 @@ export const registerTransactionHandlers = (
                     is_false_positive: false,
                   });
                   emailsStored++;
-                  existingSubjectSentKeysGmail.add(emailKey);
                 } catch (storeError) {
                   logService.warn(`Failed to store email: ${email.subject}`, "Transactions", {
                     error: storeError instanceof Error ? storeError.message : "Unknown",
@@ -2745,29 +2720,10 @@ export const registerTransactionHandlers = (
               // Check for duplicates
               const enrichedEmails = await outlookFetchService.checkDuplicates(userId, relevantEmails);
 
-              // Get existing communications to avoid duplicates
-              // HOTFIX: Only skip if communication already has email_id (properly linked)
-              const existingCommsOutlook = await getCommunications({ user_id: userId });
-              const existingSubjectSentKeysOutlook = new Set(
-                existingCommsOutlook
-                  .filter((c) => c.email_id) // Only include properly linked emails
-                  .map((c) => {
-                    const sentAt = c.sent_at
-                      ? (c.sent_at instanceof Date ? c.sent_at.toISOString() : String(c.sent_at))
-                      : "";
-                    return `${(c.subject || "").toLowerCase()}|${sentAt}`;
-                  })
-              );
-
               // Store new emails
+              // BACKLOG-506: Deduplication is handled by getEmailByExternalId below
               for (const email of enrichedEmails) {
                 if (email.duplicateOf) {
-                  continue;
-                }
-
-                // Check if we already have this email properly linked (with email_id)
-                const emailKey = `${(email.subject || "").toLowerCase()}|${email.date ? new Date(email.date).toISOString() : ""}`;
-                if (existingSubjectSentKeysOutlook.has(emailKey)) {
                   continue;
                 }
 
@@ -2806,7 +2762,6 @@ export const registerTransactionHandlers = (
                     is_false_positive: false,
                   });
                   emailsStored++;
-                  existingSubjectSentKeysOutlook.add(emailKey);
                 } catch (storeError) {
                   logService.warn(`Failed to store email: ${email.subject}`, "Transactions", {
                     error: storeError instanceof Error ? storeError.message : "Unknown",
