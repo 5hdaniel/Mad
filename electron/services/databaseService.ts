@@ -788,6 +788,15 @@ class DatabaseService implements IDatabaseService {
     }
 
     // Migration 24 (BACKLOG-506): Recreate communications as clean junction table
+    // First, clean up any partial migration state (e.g., if previous run failed mid-migration)
+    const legacyTableExists = db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='communications_legacy'"
+    ).get();
+    if (legacyTableExists) {
+      await logService.info("Migration 24 (BACKLOG-506): Cleaning up partial migration - dropping communications_legacy", "DatabaseService");
+      runSafe(`DROP TABLE IF EXISTS communications_legacy`);
+    }
+
     // Check if legacy columns exist - if so, migrate to clean schema
     const commColumns = getColumns('communications');
     if (commColumns.includes('body_plain')) {
