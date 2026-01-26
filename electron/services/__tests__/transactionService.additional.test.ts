@@ -22,6 +22,18 @@ jest.mock("../outlookFetchService");
 jest.mock("../transactionExtractorService");
 jest.mock("../logService");
 
+// BACKLOG-506: Mock emailDbService for email content store
+jest.mock("../db/emailDbService", () => ({
+  createEmail: jest.fn().mockResolvedValue({
+    id: "mock-email-id",
+    user_id: "test-user-id",
+    external_id: "mock-external-id",
+    subject: "Test Subject",
+    sender: "test@example.com",
+  }),
+  getEmailByExternalId: jest.fn().mockResolvedValue(null), // No existing email by default
+}));
+
 // TASK-1031: Mock autoLinkService
 jest.mock("../autoLinkService", () => ({
   autoLinkCommunicationsForContact: jest.fn().mockResolvedValue({
