@@ -489,59 +489,134 @@ Add to redirect URLs:
 
 | Step | Agent Type | Agent ID | Tokens | Status |
 |------|------------|----------|--------|--------|
-| 1. Plan | Plan Agent | ___________ | ___K | ☐ Pending |
-| 2. SR Review | SR Engineer Agent | ___________ | ___K | ☐ Pending |
-| 3. User Review | (No agent) | N/A | N/A | ☐ Pending |
-| 4. Compact | (Context reset) | N/A | N/A | ☐ Pending |
-| 5. Implement | Engineer Agent | ___________ | ___K | ☐ Pending |
-| 6. PM Update | PM Agent | ___________ | ___K | ☐ Pending |
+| 1. Plan | Plan Agent | aa34e61 | ~12K | ✅ Complete |
+| 2. SR Review | SR Engineer Agent | ae2cc06 | ~10K | ✅ Complete |
+| 3. User Review | (No agent) | N/A | N/A | ✅ Approved |
+| 4. Compact | (Context reset) | N/A | N/A | ✅ Complete |
+| 5. Implement | PM (direct) | - | ~15K | ✅ Complete |
+| 6. PM Update | PM Agent | - | - | In Progress |
 
 ### Step 1: Plan Output
 
-*Plan Agent writes implementation plan here after Step 1*
+**Plan Agent ID:** `aa34e61`
+**Date:** 2026-01-26
 
-```
-[Plan to be written here]
-```
+#### Files to Create
+
+| File | Type | Description |
+|------|------|-------------|
+| `broker-portal/app/auth/desktop/layout.tsx` | Server Component | Metadata for SEO |
+| `broker-portal/app/auth/desktop/page.tsx` | Client Component | Login page with Google/Microsoft OAuth buttons |
+| `broker-portal/app/auth/desktop/callback/page.tsx` | Client Component | OAuth callback handler with deep link redirect |
+
+#### Implementation Order
+
+1. **Create Layout** - Metadata for title/description
+2. **Create Login Page** - Copy patterns from `/broker-portal/app/login/page.tsx`
+   - Redirect URL: `/auth/desktop/callback`
+   - Add `prompt: 'select_account'` to OAuth options
+   - Use inline SVG icons with brand colors
+   - Use Suspense boundary
+3. **Create Callback Page** - State machine: `loading` -> `redirecting` -> `success` or `error`
+   - Get session via `supabase.auth.getSession()`
+   - Build deep link: `magicaudit://callback?access_token=...&refresh_token=...`
+   - Redirect via `window.location.href`
+   - Fallback manual link after 2s timeout
+4. **Run Type Check and Lint**
+
+#### Key Architecture Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| Client components only | OAuth flow requires browser APIs |
+| No server route | Supabase SSR handles implicit grant client-side |
+| No role validation | Desktop app handles licensing (TASK-1504) |
+| Copy existing login patterns | Maintain consistency |
+| No middleware changes | `/auth/` routes already accessible |
+
+#### Risks Identified
+
+| Risk | Mitigation |
+|------|------------|
+| Browser blocks deep link | Fallback manual link |
+| Session not found | Clear error message with "Try Again" |
+| Token in URL | Standard practice for desktop OAuth; tokens ephemeral |
 
 ### Step 2: SR Review Notes
 
-*SR Engineer writes review notes here after Step 2*
+**SR Engineer Agent ID:** `ae2cc06`
+**Review Date:** 2026-01-26
+**Status:** APPROVED WITH CHANGES
 
-```
-[SR Review notes to be written here]
-```
+#### Required Changes (MUST DO)
+
+1. Add `queryParams: { prompt: 'select_account' }` to OAuth options (match `/login/page.tsx`)
+2. Add hash fragment error detection in callback page before `getSession()`
+
+#### Recommended Changes (SHOULD DO)
+
+3. Use dynamic import for Supabase client (match existing pattern)
+4. Add Suspense boundary to callback page for consistency
+5. Use official Google brand colors (`#4285F4`, `#34A853`, `#FBBC05`, `#EA4335`)
+
+#### Security Assessment
+
+- **Token handling:** ACCEPTABLE - Standard practice for desktop OAuth flows
+- **No secrets in code:** PASS - Uses env vars via Supabase client
+- **HTTPS enforced:** PASS - Supabase OAuth requires HTTPS
+- **XSS/CSRF:** PASS - React escaping, OAuth state handled by Supabase
+
+#### Architecture Impact
+
+- Clean separation in `/auth/desktop/` subdirectory
+- Correct integration with TASK-1500 deep link handler
+- No middleware changes needed
 
 ### Step 3: User Review
 
-- [ ] User reviewed plan
-- [ ] User approved plan
-- Date: _______________
+- [x] User reviewed plan
+- [x] User approved plan
+- Date: 2026-01-26
 
 ---
 
 ## Implementation Summary
 
-*To be completed by Engineer after Step 5*
+**Engineer Agent ID:** (PM session - direct implementation)
+**Date:** 2026-01-26
+**PR:** #627
 
-### Files Changed
-- [ ] List actual files modified
+### Files Created
+- [x] `broker-portal/app/auth/desktop/layout.tsx` - Server component with metadata
+- [x] `broker-portal/app/auth/desktop/page.tsx` - Client component login page
+- [x] `broker-portal/app/auth/desktop/callback/page.tsx` - Client component callback handler
 
 ### Approach Taken
-- [ ] Describe implementation decisions
+- Copied patterns from existing `/login/page.tsx` for consistency
+- Dynamic import for Supabase client (avoids SSR issues)
+- Hash fragment error detection before `getSession()` (SR requirement)
+- `queryParams: { prompt: 'select_account' }` for account picker (SR requirement)
+- Official Google brand colors in SVG icons (SR requirement)
+- Suspense boundaries on both pages (SR recommendation)
+- State machine in callback: loading -> redirecting -> success/error
+- 2-second timeout before showing manual link fallback
 
 ### Testing Done
-- [ ] List manual tests performed
-- [ ] Note any edge cases discovered
+- [x] TypeScript compilation passes (`npx tsc --noEmit`)
+- [x] ESLint passes (no errors on new files)
+- [ ] Manual test pending (requires TASK-1500 deep link handler + running app)
 
 ### Notes for SR Review
-- [ ] Any concerns or areas needing extra review
+- Implementation follows all SR Engineer required changes from Step 2
+- Styling matches existing `/login/page.tsx` for consistency
+- Error handling covers both hash fragment errors and API errors
+- No concerns - straightforward implementation
 
 ### Final Metrics
 
 | Metric | Estimated | Actual | Variance |
 |--------|-----------|--------|----------|
-| Plan tokens | ~5K | ___K | ___% |
-| SR Review tokens | ~5K | ___K | ___% |
-| Implement tokens | ~30K | ___K | ___% |
-| **Total** | ~40K | ___K | ___% |
+| Plan tokens | ~5K | ~12K | +140% |
+| SR Review tokens | ~5K | ~10K | +100% |
+| Implement tokens | ~30K | ~15K | -50% |
+| **Total** | ~40K | ~37K | -7.5% |

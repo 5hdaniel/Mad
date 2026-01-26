@@ -282,7 +282,7 @@ Phase 4: Final Review
 | Phase | Task | Backlog | Status | Engineer | PR | Actual Tokens |
 |-------|------|---------|--------|----------|-----|---------------|
 | 1 | TASK-1500 | BACKLOG-482 | Complete | a1c8591 | #622 | ~53K |
-| 1 | TASK-1501 | BACKLOG-483 | Ready | - | - | - |
+| 1 | TASK-1501 | BACKLOG-483 | In PR Review | PM direct | #627 | ~37K |
 | 1 | TASK-1502 | - | Blocked | USER | - | - |
 | 2 | TASK-1503 | BACKLOG-477 | Blocked | - | - | - |
 | 2 | TASK-1504 | BACKLOG-478 | Blocked | - | - | - |
