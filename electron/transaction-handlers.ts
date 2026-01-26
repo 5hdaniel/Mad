@@ -2656,20 +2656,36 @@ export const registerTransactionHandlers = (
                 }
 
                 try {
+                  // BACKLOG-506: Check if email exists (deduplication by provider ID)
+                  let emailRecord = await getEmailByExternalId(userId, email.id);
+
+                  if (!emailRecord) {
+                    // Create email in emails table (content store)
+                    emailRecord = await createEmail({
+                      user_id: userId,
+                      external_id: email.id,  // Gmail API message ID
+                      source: "gmail",
+                      thread_id: email.threadId,
+                      sender: email.from,
+                      recipients: email.to,
+                      cc: email.cc,
+                      subject: email.subject,
+                      body_html: email.body,
+                      body_plain: email.bodyPlain,
+                      sent_at: email.date ? new Date(email.date).toISOString() : undefined,
+                      has_attachments: email.hasAttachments || false,
+                      attachment_count: email.attachmentCount || 0,
+                    });
+                  }
+
+                  // Create junction link in communications (no content, just IDs)
                   await createCommunication({
                     user_id: userId,
+                    email_id: emailRecord.id,
                     communication_type: "email",
-                    source: "gmail",
-                    email_thread_id: email.threadId,
-                    sender: email.from,
-                    recipients: email.to,
-                    cc: email.cc,
-                    subject: email.subject,
-                    body: email.body || email.bodyPlain,
-                    body_plain: email.bodyPlain,
-                    sent_at: email.date ? new Date(email.date).toISOString() : undefined,
-                    has_attachments: email.hasAttachments || false,
-                    attachment_count: email.attachmentCount || 0,
+                    link_source: "scan",
+                    link_confidence: 0.9,
+                    has_attachments: false,
                     is_false_positive: false,
                   });
                   emailsStored++;
@@ -2747,20 +2763,36 @@ export const registerTransactionHandlers = (
                 }
 
                 try {
+                  // BACKLOG-506: Check if email exists (deduplication by provider ID)
+                  let emailRecord = await getEmailByExternalId(userId, email.id);
+
+                  if (!emailRecord) {
+                    // Create email in emails table (content store)
+                    emailRecord = await createEmail({
+                      user_id: userId,
+                      external_id: email.id,  // Outlook API message ID
+                      source: "outlook",
+                      thread_id: email.threadId,
+                      sender: email.from,
+                      recipients: email.to,
+                      cc: email.cc,
+                      subject: email.subject,
+                      body_html: email.body,
+                      body_plain: email.bodyPlain,
+                      sent_at: email.date ? new Date(email.date).toISOString() : undefined,
+                      has_attachments: email.hasAttachments || false,
+                      attachment_count: email.attachmentCount || 0,
+                    });
+                  }
+
+                  // Create junction link in communications (no content, just IDs)
                   await createCommunication({
                     user_id: userId,
+                    email_id: emailRecord.id,
                     communication_type: "email",
-                    source: "outlook",
-                    email_thread_id: email.threadId,
-                    sender: email.from,
-                    recipients: email.to,
-                    cc: email.cc,
-                    subject: email.subject,
-                    body: email.body || email.bodyPlain,
-                    body_plain: email.bodyPlain,
-                    sent_at: email.date ? new Date(email.date).toISOString() : undefined,
-                    has_attachments: email.hasAttachments || false,
-                    attachment_count: email.attachmentCount || 0,
+                    link_source: "scan",
+                    link_confidence: 0.9,
+                    has_attachments: false,
                     is_false_positive: false,
                   });
                   emailsStored++;
