@@ -842,98 +842,57 @@ BEGIN
 END;
 
 -- ============================================
--- COMMUNICATIONS TABLE (Junction table linking messages to transactions)
+-- COMMUNICATIONS TABLE (BACKLOG-506: Pure Junction Table)
 -- ============================================
--- TASK-975: Refactored as a junction/reference table.
+-- Links messages/emails to transactions. NO content columns.
+-- Content lives in messages table (texts) or emails table (emails).
 --
--- Architecture: messages (raw storage) -> communications (junction) -> transactions
+-- Architecture:
+-- - messages (texts/SMS/iMessage) -> communications -> transactions
+-- - emails (Gmail/Outlook)        -> communications -> transactions
 --
--- This table links messages to transactions, enabling:
--- - Both emails and texts to appear in transaction views
--- - Content stored once in 'messages', referenced here
--- - Link metadata (source, confidence, timestamp)
---
--- MIGRATION NOTE: Legacy content columns (subject, body, etc.) are preserved
--- for backward compatibility but new records should use message_id reference.
+-- One of message_id, email_id, or thread_id must be set.
 CREATE TABLE IF NOT EXISTS communications (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
-  transaction_id TEXT,
+  transaction_id TEXT,                     -- Nullable: may link content before transaction exists
 
-  -- TASK-975: Message reference (junction table pattern)
-  -- New communications should always set this to link to messages table
-  message_id TEXT,
+  -- Link to content (ONE of these should be set)
+  message_id TEXT,                         -- FK to messages (for texts)
+  email_id TEXT,                           -- FK to emails (for emails)
+  thread_id TEXT,                          -- For batch-linking all texts in a thread
 
-  -- BACKLOG-506: Email reference (link to emails table for email content)
-  email_id TEXT,
-
-  -- Link metadata (TASK-975)
+  -- Link metadata
   link_source TEXT CHECK (link_source IN ('auto', 'manual', 'scan')),
   link_confidence REAL,
   linked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
-  -- TASK-1114: Thread-based linking (SPRINT-042)
-  -- Primary mechanism for grouping messages by conversation thread
-  -- Enables unlink operations to work at thread level, not message level
-  thread_id TEXT,
-
-  -- Type & Source (legacy, use message_id for new records)
-  communication_type TEXT DEFAULT 'email' CHECK (communication_type IN ('email', 'text', 'imessage')),
-  source TEXT,
-
-  -- Email Threading (legacy, use message_id for new records)
-  email_thread_id TEXT,
-
-  -- Participants (legacy, use message_id for new records)
-  sender TEXT,
-  recipients TEXT,
-  cc TEXT,
-  bcc TEXT,
-
-  -- Content (legacy, use message_id for new records)
-  subject TEXT,
-  body TEXT,
-  body_plain TEXT,
-
-  -- Timestamps (legacy, use message_id for new records)
-  sent_at DATETIME,
-  received_at DATETIME,
-
-  -- Attachments (legacy, use message_id for new records)
-  has_attachments INTEGER DEFAULT 0,
-  attachment_count INTEGER DEFAULT 0,
-  attachment_metadata TEXT,                -- JSON
-
-  -- Analysis/Classification (legacy, use message_id for new records)
-  keywords_detected TEXT,                  -- JSON array
-  parties_involved TEXT,                   -- JSON array
-  communication_category TEXT,
-  relevance_score REAL,
-  is_compliance_related INTEGER DEFAULT 0,
-
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
+  -- Foreign keys
   FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
   FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL,
   FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
-  FOREIGN KEY (email_id) REFERENCES emails(id) ON DELETE CASCADE
+  FOREIGN KEY (email_id) REFERENCES emails(id) ON DELETE CASCADE,
+
+  -- Constraint: Must link to something
+  CHECK (message_id IS NOT NULL OR email_id IS NOT NULL OR thread_id IS NOT NULL)
 );
 
 -- Communications indexes
 CREATE INDEX IF NOT EXISTS idx_communications_user_id ON communications(user_id);
 CREATE INDEX IF NOT EXISTS idx_communications_transaction_id ON communications(transaction_id);
-CREATE INDEX IF NOT EXISTS idx_communications_sent_at ON communications(sent_at);
-CREATE INDEX IF NOT EXISTS idx_communications_sender ON communications(sender);
--- TASK-975: Junction table indexes for message_id lookups
 CREATE INDEX IF NOT EXISTS idx_communications_message_id ON communications(message_id);
-CREATE INDEX IF NOT EXISTS idx_communications_txn_msg ON communications(transaction_id, message_id);
--- TASK-975: Unique constraint to prevent duplicate message-transaction links
-CREATE UNIQUE INDEX IF NOT EXISTS idx_communications_msg_txn_unique ON communications(message_id, transaction_id) WHERE message_id IS NOT NULL;
--- TASK-1114: Thread-based linking indexes (SPRINT-042)
-CREATE INDEX IF NOT EXISTS idx_communications_thread_id ON communications(thread_id);
-CREATE INDEX IF NOT EXISTS idx_communications_thread_txn ON communications(thread_id, transaction_id);
--- BACKLOG-506: Email reference index
 CREATE INDEX IF NOT EXISTS idx_communications_email_id ON communications(email_id);
+CREATE INDEX IF NOT EXISTS idx_communications_thread_id ON communications(thread_id);
+
+-- Unique constraints to prevent duplicates
+CREATE UNIQUE INDEX IF NOT EXISTS idx_comm_msg_txn ON communications(message_id, transaction_id)
+  WHERE message_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_comm_email_txn ON communications(email_id, transaction_id)
+  WHERE email_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_comm_thread_txn ON communications(thread_id, transaction_id)
+  WHERE thread_id IS NOT NULL AND message_id IS NULL AND email_id IS NULL;
 
 -- ============================================
 -- IGNORED COMMUNICATIONS TABLE
@@ -1016,5 +975,5 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 
 -- Initialize schema version if not exists
--- Version 22: BACKLOG-506 emails table + email_id in communications
-INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 22);
+-- Version 23: BACKLOG-506 pure junction communications table (content columns removed)
+INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 23);
