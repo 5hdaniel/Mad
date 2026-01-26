@@ -18,6 +18,7 @@ import supabaseService from "./supabaseService";
 import { getContactNames } from "./contactsService";
 import { createCommunicationReference } from "./messageMatchingService";
 import { autoLinkCommunicationsForContact, AutoLinkResult } from "./autoLinkService";
+import { createEmail, getEmailByExternalId } from "./db/emailDbService";
 
 // Hybrid extraction imports
 import { HybridExtractorService } from "./extraction/hybridExtractorService";
@@ -659,23 +660,55 @@ class TransactionService {
         continue;
       }
 
+      // BACKLOG-506: Determine external ID for deduplication
+      // originalEmail comes from Gmail/Outlook fetch, check available identifiers
+      // Note: originalEmails is typed as any[], so handle defensively
+      const externalId = originalEmail.id ||  // Gmail/Outlook message ID
+        originalEmail.messageIdHeader ||      // RFC 5322 Message-ID header
+        `${analyzed.from}_${analyzed.subject}_${sentAt}`;  // Fallback composite key
+
+      // Defensive: Log if using composite fallback
+      if (!originalEmail.id && !originalEmail.messageIdHeader) {
+        await logService.warn(
+          "Using composite fallback for external_id - originalEmail missing id fields",
+          "TransactionService._saveCommunications",
+          { subject: analyzed.subject, from: analyzed.from },
+        );
+      }
+
+      // Check if email already exists
+      let emailRecord = await getEmailByExternalId(userId, externalId);
+
+      if (!emailRecord) {
+        // Create email in emails table (content store)
+        emailRecord = await createEmail({
+          user_id: userId,
+          external_id: externalId,
+          source: analyzed.from.includes("@gmail") ? "gmail" : "outlook",
+          thread_id: originalEmail.threadId,
+          sender: analyzed.from,
+          recipients: originalEmail.to,
+          cc: originalEmail.cc,
+          bcc: originalEmail.bcc,
+          subject: analyzed.subject,
+          body_html: originalEmail.body,
+          body_plain: originalEmail.bodyPlain,
+          sent_at: sentAt,
+          received_at: sentAt,
+          has_attachments: originalEmail.hasAttachments || false,
+          attachment_count: originalEmail.attachmentCount || 0,
+          message_id_header: originalEmail.messageIdHeader,  // RFC 5322 Message-ID
+        });
+      }
+
+      // Create junction in communications (no content, keep metadata)
       const commData: Partial<NewCommunication> = {
         user_id: userId,
         transaction_id: transactionId,
+        email_id: emailRecord.id,
         communication_type: "email",
-        source: analyzed.from.includes("@gmail") ? "gmail" : "outlook",
-        email_thread_id: originalEmail.threadId,
-        sender: analyzed.from,
-        recipients: originalEmail.to,
-        cc: originalEmail.cc,
-        bcc: originalEmail.bcc,
-        subject: analyzed.subject,
-        body: originalEmail.body,
-        body_plain: originalEmail.bodyPlain,
-        sent_at: sentAt,
-        received_at: sentAt,
-        has_attachments: originalEmail.hasAttachments || false,
-        attachment_count: originalEmail.attachmentCount || 0,
+        // BACKLOG-506: link_source and link_confidence for junction tracking
+        // Keep metadata fields (analysis results, not content)
         // Serialize arrays/objects for SQLite
         attachment_metadata: originalEmail.attachments
           ? JSON.stringify(originalEmail.attachments)
