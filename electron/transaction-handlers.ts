@@ -11,6 +11,7 @@ import logService from "./services/logService";
 import { autoLinkAllToTransaction } from "./services/messageMatchingService";
 import { autoLinkCommunicationsForContact } from "./services/autoLinkService";
 import { dbAll } from "./services/db/core/dbConnection";
+import { createEmail, getEmailByExternalId } from "./services/db/emailDbService";
 import {
   createCommunication,
   getCommunications,
@@ -1550,24 +1551,35 @@ export const registerTransactionHandlers = (
               for (const messageId of gmailIds) {
                 try {
                   const email = await gmailFetchService.getEmailById(messageId);
-                  // Save to communications table
+
+                  // BACKLOG-506: Check if email already exists (dedup by external_id)
+                  let emailRecord = await getEmailByExternalId(transaction.user_id, messageId);
+
+                  if (!emailRecord) {
+                    // Create email in emails table (content store)
+                    emailRecord = await createEmail({
+                      user_id: transaction.user_id,
+                      external_id: messageId,
+                      source: "gmail",
+                      thread_id: email.threadId,
+                      sender: email.from,
+                      recipients: email.to,
+                      cc: email.cc,
+                      subject: email.subject,
+                      body_html: email.body,
+                      body_plain: email.bodyPlain,
+                      sent_at: email.date ? new Date(email.date).toISOString() : undefined,
+                      has_attachments: email.hasAttachments || false,
+                      attachment_count: email.attachmentCount || 0,
+                    });
+                  }
+
+                  // Create junction link in communications table
                   await createCommunication({
                     user_id: transaction.user_id,
                     transaction_id: validatedTransactionId,
+                    email_id: emailRecord.id,
                     communication_type: "email",
-                    source: "gmail",
-                    email_thread_id: email.threadId,
-                    sender: email.from,
-                    recipients: email.to,
-                    cc: email.cc,
-                    subject: email.subject,
-                    // BACKLOG-413: Use correct field names from ParsedEmail interface
-                    // Gmail/Outlook services return 'body' (HTML) and 'bodyPlain' (plain text)
-                    body: email.body || email.bodyPlain,
-                    body_plain: email.bodyPlain,
-                    sent_at: email.date ? new Date(email.date).toISOString() : null,
-                    has_attachments: email.hasAttachments || false,
-                    attachment_count: email.attachmentCount || 0,
                     link_source: "manual",
                     link_confidence: 1.0,
                   });
@@ -1594,24 +1606,35 @@ export const registerTransactionHandlers = (
               for (const messageId of outlookIds) {
                 try {
                   const email = await outlookFetchService.getEmailById(messageId);
-                  // Save to communications table
+
+                  // BACKLOG-506: Check if email already exists (dedup by external_id)
+                  let emailRecord = await getEmailByExternalId(transaction.user_id, messageId);
+
+                  if (!emailRecord) {
+                    // Create email in emails table (content store)
+                    emailRecord = await createEmail({
+                      user_id: transaction.user_id,
+                      external_id: messageId,
+                      source: "outlook",
+                      thread_id: email.threadId,
+                      sender: email.from,
+                      recipients: email.to,
+                      cc: email.cc,
+                      subject: email.subject,
+                      body_html: email.body,
+                      body_plain: email.bodyPlain,
+                      sent_at: email.date ? new Date(email.date).toISOString() : undefined,
+                      has_attachments: email.hasAttachments || false,
+                      attachment_count: email.attachmentCount || 0,
+                    });
+                  }
+
+                  // Create junction link in communications table
                   await createCommunication({
                     user_id: transaction.user_id,
                     transaction_id: validatedTransactionId,
+                    email_id: emailRecord.id,
                     communication_type: "email",
-                    source: "outlook",
-                    email_thread_id: email.threadId,
-                    sender: email.from,
-                    recipients: email.to,
-                    cc: email.cc,
-                    subject: email.subject,
-                    // BACKLOG-413: Use correct field names from ParsedEmail interface
-                    // Gmail/Outlook services return 'body' (HTML) and 'bodyPlain' (plain text)
-                    body: email.body || email.bodyPlain,
-                    body_plain: email.bodyPlain,
-                    sent_at: email.date ? new Date(email.date).toISOString() : null,
-                    has_attachments: email.hasAttachments || false,
-                    attachment_count: email.attachmentCount || 0,
                     link_source: "manual",
                     link_confidence: 1.0,
                   });
