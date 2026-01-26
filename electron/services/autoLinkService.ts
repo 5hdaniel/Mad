@@ -222,9 +222,9 @@ async function findEmailsByContactEmails(
   }
 
   // Build email patterns for LIKE matching
-  // Match emails in sender or recipients fields of the communications table
+  // BACKLOG-506: Query emails table (content) and check communications (junction) for links
   const emailConditions = contactEmails
-    .map(() => "(LOWER(c.sender) LIKE ? OR LOWER(c.recipients) LIKE ?)")
+    .map(() => "(LOWER(e.sender) LIKE ? OR LOWER(e.recipients) LIKE ?)")
     .join(" OR ");
 
   const params: (string | number)[] = [userId, transactionId];
@@ -239,25 +239,30 @@ async function findEmailsByContactEmails(
   params.push(dateRange.end.toISOString());
   params.push(limit);
 
-  // Query the communications table for unlinked emails
-  // Emails are stored in communications table with communication_type='email'
+  // BACKLOG-506: Query emails table for content, check if already linked via communications
   const sql = `
-    SELECT c.id
-    FROM communications c
-    WHERE c.user_id = ?
-      AND c.communication_type = 'email'
-      AND (
-        c.transaction_id IS NULL
-        OR c.transaction_id != ?
-      )
+    SELECT e.id
+    FROM emails e
+    LEFT JOIN communications c ON c.email_id = e.id AND c.transaction_id = ?
+    WHERE e.user_id = ?
+      AND c.id IS NULL
       AND (${emailConditions})
-      AND c.sent_at >= ?
-      AND c.sent_at <= ?
-    ORDER BY c.sent_at DESC
+      AND e.sent_at >= ?
+      AND e.sent_at <= ?
+    ORDER BY e.sent_at DESC
     LIMIT ?
   `;
 
-  const results = dbAll<{ id: string }>(sql, params);
+  // Reorder params: transactionId for JOIN, userId for WHERE, then email patterns, then date range
+  const reorderedParams: (string | number)[] = [transactionId, userId];
+  for (const email of contactEmails) {
+    reorderedParams.push(`%${email}%`, `%${email}%`);
+  }
+  reorderedParams.push(dateRange.start.toISOString());
+  reorderedParams.push(dateRange.end.toISOString());
+  reorderedParams.push(limit);
+
+  const results = dbAll<{ id: string }>(sql, reorderedParams);
   return results.map((r) => r.id);
 }
 
@@ -307,9 +312,10 @@ async function findMessagesByContactPhones(
   params.push(dateRange.end.toISOString());
   params.push(limit);
 
-  // TASK-1115: Also select thread_id for thread-level linking
+  // TASK-1115: Select DISTINCT threads to avoid missing threads due to LIMIT
+  // Previously we limited messages which could miss threads if group chats filled the limit
   const sql = `
-    SELECT m.id, m.thread_id
+    SELECT DISTINCT m.thread_id, MIN(m.id) as id
     FROM messages m
     WHERE m.user_id = ?
       AND m.channel IN ('sms', 'imessage')
@@ -318,14 +324,15 @@ async function findMessagesByContactPhones(
         m.transaction_id IS NULL
         OR m.transaction_id != ?
       )
-      AND m.id NOT IN (
-        SELECT message_id FROM communications
-        WHERE transaction_id = ? AND message_id IS NOT NULL
+      AND m.thread_id NOT IN (
+        SELECT thread_id FROM communications
+        WHERE transaction_id = ? AND thread_id IS NOT NULL
       )
       AND (${phoneConditions})
       AND m.sent_at >= ?
       AND m.sent_at <= ?
-    ORDER BY m.sent_at DESC
+    GROUP BY m.thread_id
+    ORDER BY MAX(m.sent_at) DESC
     LIMIT ?
   `;
 

@@ -188,9 +188,9 @@ function formatDateRangeLabel(startDate: Date | null, endDate: Date | null): str
   if (startDate && endDate) {
     return `${formatDate(startDate)} - ${formatDate(endDate)}`;
   } else if (startDate) {
-    return `from ${formatDate(startDate)}`;
+    return `${formatDate(startDate)} - Ongoing`;
   } else if (endDate) {
-    return `until ${formatDate(endDate)}`;
+    return `Through ${formatDate(endDate)}`;
   }
   return "";
 }

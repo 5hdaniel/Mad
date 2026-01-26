@@ -230,13 +230,9 @@ export function TransactionEmailsTab({
     <div>
       {/* Action buttons and summary */}
       <div className="flex justify-between items-center mb-4">
-        <div className="text-sm text-gray-500">
-          {emailThreads.length} conversation
-          {emailThreads.length !== 1 ? "s" : ""}
-          {totalEmailCount !== emailThreads.length && (
-            <span className="ml-1">({totalEmailCount} emails total)</span>
-          )}
-        </div>
+        <h3 className="text-lg font-medium text-gray-900">
+          {emailThreads.length} conversation{emailThreads.length !== 1 ? "s" : ""} ({totalEmailCount} email{totalEmailCount !== 1 ? "s" : ""})
+        </h3>
 
         <div className="flex gap-2">
           {/* Attach Emails button */}

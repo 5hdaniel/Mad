@@ -1309,21 +1309,22 @@ export function registerSystemHandlers(): void {
           WHERE c.user_id = ? AND LOWER(ce.email) = LOWER(?)
         `).all(userId, emailAddress);
 
-        // Check communications table
+        // BACKLOG-506: Check emails table (communications is now junction only)
         const communications = db.prepare(`
-          SELECT id, sender, recipients, subject, sent_at, transaction_id
-          FROM communications
-          WHERE user_id = ?
-            AND communication_type = 'email'
-            AND (LOWER(sender) LIKE ? OR LOWER(recipients) LIKE ?)
-          ORDER BY sent_at DESC
+          SELECT e.id, e.sender, e.recipients, e.subject, e.sent_at,
+                 c.transaction_id
+          FROM emails e
+          LEFT JOIN communications c ON c.email_id = e.id
+          WHERE e.user_id = ?
+            AND (LOWER(e.sender) LIKE ? OR LOWER(e.recipients) LIKE ?)
+          ORDER BY e.sent_at DESC
           LIMIT 20
         `).all(userId, `%${emailAddress.toLowerCase()}%`, `%${emailAddress.toLowerCase()}%`);
 
         // Count total emails for this user
         const totalEmails = db.prepare(`
-          SELECT COUNT(*) as count FROM communications
-          WHERE user_id = ? AND communication_type = 'email'
+          SELECT COUNT(*) as count FROM emails
+          WHERE user_id = ?
         `).get(userId) as { count: number };
 
         return {

@@ -11,10 +11,8 @@ import logService from "./services/logService";
 import { autoLinkAllToTransaction } from "./services/messageMatchingService";
 import { autoLinkCommunicationsForContact } from "./services/autoLinkService";
 import { dbAll } from "./services/db/core/dbConnection";
-import {
-  createCommunication,
-  getCommunications,
-} from "./services/db/communicationDbService";
+import { createEmail, getEmailByExternalId } from "./services/db/emailDbService";
+import { createCommunication } from "./services/db/communicationDbService";
 import submissionService from "./services/submissionService";
 import submissionSyncService from "./services/submissionSyncService";
 import type { SubmissionProgress } from "./services/submissionService";
@@ -1550,24 +1548,35 @@ export const registerTransactionHandlers = (
               for (const messageId of gmailIds) {
                 try {
                   const email = await gmailFetchService.getEmailById(messageId);
-                  // Save to communications table
+
+                  // BACKLOG-506: Check if email already exists (dedup by external_id)
+                  let emailRecord = await getEmailByExternalId(transaction.user_id, messageId);
+
+                  if (!emailRecord) {
+                    // Create email in emails table (content store)
+                    emailRecord = await createEmail({
+                      user_id: transaction.user_id,
+                      external_id: messageId,
+                      source: "gmail",
+                      thread_id: email.threadId,
+                      sender: email.from,
+                      recipients: email.to,
+                      cc: email.cc,
+                      subject: email.subject,
+                      body_html: email.body,
+                      body_plain: email.bodyPlain,
+                      sent_at: email.date ? new Date(email.date).toISOString() : undefined,
+                      has_attachments: email.hasAttachments || false,
+                      attachment_count: email.attachmentCount || 0,
+                    });
+                  }
+
+                  // Create junction link in communications table
                   await createCommunication({
                     user_id: transaction.user_id,
                     transaction_id: validatedTransactionId,
+                    email_id: emailRecord.id,
                     communication_type: "email",
-                    source: "gmail",
-                    email_thread_id: email.threadId,
-                    sender: email.from,
-                    recipients: email.to,
-                    cc: email.cc,
-                    subject: email.subject,
-                    // BACKLOG-413: Use correct field names from ParsedEmail interface
-                    // Gmail/Outlook services return 'body' (HTML) and 'bodyPlain' (plain text)
-                    body: email.body || email.bodyPlain,
-                    body_plain: email.bodyPlain,
-                    sent_at: email.date ? new Date(email.date).toISOString() : null,
-                    has_attachments: email.hasAttachments || false,
-                    attachment_count: email.attachmentCount || 0,
                     link_source: "manual",
                     link_confidence: 1.0,
                   });
@@ -1594,24 +1603,35 @@ export const registerTransactionHandlers = (
               for (const messageId of outlookIds) {
                 try {
                   const email = await outlookFetchService.getEmailById(messageId);
-                  // Save to communications table
+
+                  // BACKLOG-506: Check if email already exists (dedup by external_id)
+                  let emailRecord = await getEmailByExternalId(transaction.user_id, messageId);
+
+                  if (!emailRecord) {
+                    // Create email in emails table (content store)
+                    emailRecord = await createEmail({
+                      user_id: transaction.user_id,
+                      external_id: messageId,
+                      source: "outlook",
+                      thread_id: email.threadId,
+                      sender: email.from,
+                      recipients: email.to,
+                      cc: email.cc,
+                      subject: email.subject,
+                      body_html: email.body,
+                      body_plain: email.bodyPlain,
+                      sent_at: email.date ? new Date(email.date).toISOString() : undefined,
+                      has_attachments: email.hasAttachments || false,
+                      attachment_count: email.attachmentCount || 0,
+                    });
+                  }
+
+                  // Create junction link in communications table
                   await createCommunication({
                     user_id: transaction.user_id,
                     transaction_id: validatedTransactionId,
+                    email_id: emailRecord.id,
                     communication_type: "email",
-                    source: "outlook",
-                    email_thread_id: email.threadId,
-                    sender: email.from,
-                    recipients: email.to,
-                    cc: email.cc,
-                    subject: email.subject,
-                    // BACKLOG-413: Use correct field names from ParsedEmail interface
-                    // Gmail/Outlook services return 'body' (HTML) and 'bodyPlain' (plain text)
-                    body: email.body || email.bodyPlain,
-                    body_plain: email.bodyPlain,
-                    sent_at: email.date ? new Date(email.date).toISOString() : null,
-                    has_attachments: email.hasAttachments || false,
-                    attachment_count: email.attachmentCount || 0,
                     link_source: "manual",
                     link_confidence: 1.0,
                   });
@@ -2095,10 +2115,10 @@ export const registerTransactionHandlers = (
         );
 
         // Update export tracking in database
+        // Note: export_format constraint doesn't include "folder", so we use NULL
         const db = require("./services/databaseService").default;
         await db.updateTransaction(validatedTransactionId, {
           export_status: "exported",
-          export_format: "folder",
           last_exported_on: new Date().toISOString(),
           export_count: (details.export_count || 0) + 1,
         });
@@ -2606,18 +2626,8 @@ export const registerTransactionHandlers = (
               // Check for duplicates using the deduplication service
               const enrichedEmails = await gmailFetchService.checkDuplicates(userId, fetchedEmails);
 
-              // Get existing communications to avoid duplicates
-              const existingCommsGmail = await getCommunications({ user_id: userId });
-              const existingSubjectSentKeysGmail = new Set(
-                existingCommsGmail.map((c) => {
-                  const sentAt = c.sent_at
-                    ? (c.sent_at instanceof Date ? c.sent_at.toISOString() : String(c.sent_at))
-                    : "";
-                  return `${(c.subject || "").toLowerCase()}|${sentAt}`;
-                })
-              );
-
               // Store new emails
+              // BACKLOG-506: Deduplication is handled by getEmailByExternalId below
               for (const email of enrichedEmails) {
                 // Skip if already flagged as duplicate by deduplication service
                 if (email.duplicateOf) {
@@ -2625,32 +2635,41 @@ export const registerTransactionHandlers = (
                   continue;
                 }
 
-                // Check if we already have this email (by subject + sent_at)
-                const emailKey = `${(email.subject || "").toLowerCase()}|${email.date ? new Date(email.date).toISOString() : ""}`;
-                if (existingSubjectSentKeysGmail.has(emailKey)) {
-                  logService.debug(`Skipping existing email: ${email.subject}`, "Transactions");
-                  continue;
-                }
-
                 try {
+                  // BACKLOG-506: Check if email exists (deduplication by provider ID)
+                  let emailRecord = await getEmailByExternalId(userId, email.id);
+
+                  if (!emailRecord) {
+                    // Create email in emails table (content store)
+                    emailRecord = await createEmail({
+                      user_id: userId,
+                      external_id: email.id,  // Gmail API message ID
+                      source: "gmail",
+                      thread_id: email.threadId,
+                      sender: email.from,
+                      recipients: email.to,
+                      cc: email.cc,
+                      subject: email.subject,
+                      body_html: email.body,
+                      body_plain: email.bodyPlain,
+                      sent_at: email.date ? new Date(email.date).toISOString() : undefined,
+                      has_attachments: email.hasAttachments || false,
+                      attachment_count: email.attachmentCount || 0,
+                    });
+                  }
+
+                  // Create junction link in communications (no content, just IDs)
                   await createCommunication({
                     user_id: userId,
+                    transaction_id: validatedTransactionId,  // HOTFIX: Link to transaction!
+                    email_id: emailRecord.id,
                     communication_type: "email",
-                    source: "gmail",
-                    email_thread_id: email.threadId,
-                    sender: email.from,
-                    recipients: email.to,
-                    cc: email.cc,
-                    subject: email.subject,
-                    body: email.body || email.bodyPlain,
-                    body_plain: email.bodyPlain,
-                    sent_at: email.date ? new Date(email.date).toISOString() : undefined,
+                    link_source: "scan",
+                    link_confidence: 0.9,
                     has_attachments: email.hasAttachments || false,
-                    attachment_count: email.attachmentCount || 0,
                     is_false_positive: false,
                   });
                   emailsStored++;
-                  existingSubjectSentKeysGmail.add(emailKey);
                 } catch (storeError) {
                   logService.warn(`Failed to store email: ${email.subject}`, "Transactions", {
                     error: storeError instanceof Error ? storeError.message : "Unknown",
@@ -2701,47 +2720,48 @@ export const registerTransactionHandlers = (
               // Check for duplicates
               const enrichedEmails = await outlookFetchService.checkDuplicates(userId, relevantEmails);
 
-              // Get existing communications to avoid duplicates
-              const existingCommsOutlook = await getCommunications({ user_id: userId });
-              const existingSubjectSentKeysOutlook = new Set(
-                existingCommsOutlook.map((c) => {
-                  const sentAt = c.sent_at
-                    ? (c.sent_at instanceof Date ? c.sent_at.toISOString() : String(c.sent_at))
-                    : "";
-                  return `${(c.subject || "").toLowerCase()}|${sentAt}`;
-                })
-              );
-
               // Store new emails
+              // BACKLOG-506: Deduplication is handled by getEmailByExternalId below
               for (const email of enrichedEmails) {
                 if (email.duplicateOf) {
                   continue;
                 }
 
-                const emailKey = `${(email.subject || "").toLowerCase()}|${email.date ? new Date(email.date).toISOString() : ""}`;
-                if (existingSubjectSentKeysOutlook.has(emailKey)) {
-                  continue;
-                }
-
                 try {
+                  // BACKLOG-506: Check if email exists (deduplication by provider ID)
+                  let emailRecord = await getEmailByExternalId(userId, email.id);
+
+                  if (!emailRecord) {
+                    // Create email in emails table (content store)
+                    emailRecord = await createEmail({
+                      user_id: userId,
+                      external_id: email.id,  // Outlook API message ID
+                      source: "outlook",
+                      thread_id: email.threadId,
+                      sender: email.from,
+                      recipients: email.to,
+                      cc: email.cc,
+                      subject: email.subject,
+                      body_html: email.body,
+                      body_plain: email.bodyPlain,
+                      sent_at: email.date ? new Date(email.date).toISOString() : undefined,
+                      has_attachments: email.hasAttachments || false,
+                      attachment_count: email.attachmentCount || 0,
+                    });
+                  }
+
+                  // Create junction link in communications (no content, just IDs)
                   await createCommunication({
                     user_id: userId,
+                    transaction_id: validatedTransactionId,  // HOTFIX: Link to transaction!
+                    email_id: emailRecord.id,
                     communication_type: "email",
-                    source: "outlook",
-                    email_thread_id: email.threadId,
-                    sender: email.from,
-                    recipients: email.to,
-                    cc: email.cc,
-                    subject: email.subject,
-                    body: email.body || email.bodyPlain,
-                    body_plain: email.bodyPlain,
-                    sent_at: email.date ? new Date(email.date).toISOString() : undefined,
+                    link_source: "scan",
+                    link_confidence: 0.9,
                     has_attachments: email.hasAttachments || false,
-                    attachment_count: email.attachmentCount || 0,
                     is_false_positive: false,
                   });
                   emailsStored++;
-                  existingSubjectSentKeysOutlook.add(emailKey);
                 } catch (storeError) {
                   logService.warn(`Failed to store email: ${email.subject}`, "Transactions", {
                     error: storeError instanceof Error ? storeError.message : "Unknown",

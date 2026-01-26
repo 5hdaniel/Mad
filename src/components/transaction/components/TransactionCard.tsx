@@ -205,7 +205,7 @@ function TransactionCard({
             )}
           </div>
           <div className="mt-2 flex items-center gap-3 text-xs text-gray-500">
-            {/* Messages count - clickable, LEFT position */}
+            {/* BACKLOG-510: Counters hidden until count accuracy is fixed
             <button
               onClick={onMessagesClick}
               className="flex items-center gap-1 hover:text-blue-600 transition-colors"
@@ -214,7 +214,6 @@ function TransactionCard({
               <MessagesIcon />
               <span>{textCount} {textCount === 1 ? "Text" : "Texts"}</span>
             </button>
-            {/* Emails count - clickable, RIGHT position */}
             <button
               onClick={onEmailsClick}
               className="flex items-center gap-1 hover:text-blue-600 transition-colors"
@@ -223,6 +222,7 @@ function TransactionCard({
               <EmailsIcon />
               <span>{emailCount} {emailCount === 1 ? "email thread" : "email threads"}</span>
             </button>
+            */}
             {transaction.extraction_confidence && (
               <span className="flex items-center gap-1">
                 <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">

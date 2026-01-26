@@ -26,9 +26,9 @@ function formatDateRangeLabel(startDate: Date | null, endDate: Date | null): str
   if (startDate && endDate) {
     return `${formatDate(startDate)} - ${formatDate(endDate)}`;
   } else if (startDate) {
-    return `from ${formatDate(startDate)}`;
+    return `${formatDate(startDate)} - Ongoing`;
   } else if (endDate) {
-    return `until ${formatDate(endDate)}`;
+    return `Through ${formatDate(endDate)}`;
   }
   return "";
 }
@@ -407,19 +407,13 @@ export function TransactionMessagesTab({
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="text-lg font-medium text-gray-900">
-            Texts ({filteredMessageCount})
-            {showAuditPeriodOnly && hasAuditDates && filteredMessageCount !== totalMessageCount && (
-              <span className="text-sm font-normal text-gray-500 ml-1">
-                of {totalMessageCount}
-              </span>
-            )}
+            {filteredConversationCount} conversation{filteredConversationCount !== 1 ? "s" : ""} ({filteredMessageCount} text message{filteredMessageCount !== 1 ? "s" : ""})
           </h3>
-          <p className="text-sm text-gray-500">
-            in {filteredConversationCount} conversation{filteredConversationCount !== 1 ? "s" : ""}
-            {showAuditPeriodOnly && hasAuditDates && filteredConversationCount !== totalConversationCount && (
-              <span className="ml-1">of {totalConversationCount}</span>
-            )}
-          </p>
+          {showAuditPeriodOnly && hasAuditDates && (filteredMessageCount !== totalMessageCount || filteredConversationCount !== totalConversationCount) && (
+            <p className="text-sm text-gray-500">
+              of {totalConversationCount} conversation{totalConversationCount !== 1 ? "s" : ""} ({totalMessageCount} messages)
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-4">

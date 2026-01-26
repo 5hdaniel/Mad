@@ -345,7 +345,9 @@ describe("Transactions", () => {
       expect(screen.getAllByText("$450,000").length).toBeGreaterThan(0);
     });
 
-    it("should display email count", async () => {
+    // BACKLOG-510: Email/text counters are hidden in UI until count accuracy is fixed
+    // See TransactionCard.tsx lines 208-225 where counters are commented out
+    it.skip("should display email count", async () => {
       renderWithProvider(
         <Transactions
           userId={mockUserId}
