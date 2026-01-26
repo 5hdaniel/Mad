@@ -853,6 +853,68 @@ class DatabaseService implements IDatabaseService {
       await logService.info("Migration 22: email_id column added to communications", "DatabaseService");
     }
 
+    // Migration 23: Recreate communications as pure junction table (BACKLOG-506 Phase 5)
+    // This removes all legacy content columns (subject, body_plain, sender, etc.)
+    // Content now lives in emails table (for emails) and messages table (for texts)
+    const currentSchemaVersion = (db.prepare("SELECT version FROM schema_version WHERE id = 1").get() as { version: number } | undefined)?.version || 0;
+    if (currentSchemaVersion < 23) {
+      await logService.info("Running migration 23: Recreate communications as pure junction table", "DatabaseService");
+
+      // Step 1: Create new table with clean schema (10 columns only)
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS communications_new (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          transaction_id TEXT,
+          message_id TEXT,
+          email_id TEXT,
+          thread_id TEXT,
+          link_source TEXT CHECK (link_source IN ('auto', 'manual', 'scan')),
+          link_confidence REAL,
+          linked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
+          FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL,
+          FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+          FOREIGN KEY (email_id) REFERENCES emails(id) ON DELETE CASCADE,
+          CHECK (message_id IS NOT NULL OR email_id IS NOT NULL OR thread_id IS NOT NULL)
+        )
+      `);
+
+      // Step 2: Copy data from old table (only junction fields)
+      // Filter: Only copy records that have at least one content reference
+      db.exec(`
+        INSERT INTO communications_new (
+          id, user_id, transaction_id, message_id, email_id, thread_id,
+          link_source, link_confidence, linked_at, created_at
+        )
+        SELECT
+          id, user_id, transaction_id, message_id, email_id, thread_id,
+          link_source, link_confidence, linked_at, created_at
+        FROM communications
+        WHERE message_id IS NOT NULL OR email_id IS NOT NULL OR thread_id IS NOT NULL
+      `);
+
+      // Step 3: Drop old table
+      db.exec(`DROP TABLE communications`);
+
+      // Step 4: Rename new table
+      db.exec(`ALTER TABLE communications_new RENAME TO communications`);
+
+      // Step 5: Recreate indexes
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_communications_user_id ON communications(user_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_communications_transaction_id ON communications(transaction_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_communications_message_id ON communications(message_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_communications_email_id ON communications(email_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_communications_thread_id ON communications(thread_id)`);
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_comm_msg_txn ON communications(message_id, transaction_id) WHERE message_id IS NOT NULL`);
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_comm_email_txn ON communications(email_id, transaction_id) WHERE email_id IS NOT NULL`);
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_comm_thread_txn ON communications(thread_id, transaction_id) WHERE thread_id IS NOT NULL AND message_id IS NULL AND email_id IS NULL`);
+
+      db.exec(`UPDATE schema_version SET version = 23, updated_at = CURRENT_TIMESTAMP WHERE id = 1`);
+      await logService.info("Migration 23 complete: communications is now pure junction table (10 columns)", "DatabaseService");
+    }
+
     // Finalize schema version (create table if missing for backwards compatibility)
     const schemaVersionExists = db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
@@ -865,12 +927,12 @@ class DatabaseService implements IDatabaseService {
           version INTEGER NOT NULL DEFAULT 1,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
-        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 22);
+        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 23);
       `);
     } else {
-      const currentVersion = (db.prepare("SELECT version FROM schema_version").get() as { version: number } | undefined)?.version || 0;
-      if (currentVersion < 22) {
-        db.exec("UPDATE schema_version SET version = 22");
+      const finalVersion = (db.prepare("SELECT version FROM schema_version").get() as { version: number } | undefined)?.version || 0;
+      if (finalVersion < 23) {
+        db.exec("UPDATE schema_version SET version = 23");
       }
     }
 
