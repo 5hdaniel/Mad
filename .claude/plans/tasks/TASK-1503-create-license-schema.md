@@ -39,9 +39,11 @@ Create `user_licenses` and `device_registrations` tables in Supabase to track us
 
 ### Files to Create
 
+**Note:** There is no local `supabase/migrations/` directory in this codebase. Use the Supabase MCP tool `mcp__supabase__apply_migration` to apply migrations directly, or apply via Supabase Dashboard SQL Editor.
+
 | File | Action | Description |
 |------|--------|-------------|
-| `supabase/migrations/XXXXXXXX_user_licenses.sql` | Create | Schema migration |
+| Supabase Migration | Apply via MCP | Use `mcp__supabase__apply_migration` tool |
 | `shared/types/license.ts` | Create | TypeScript interfaces |
 
 ---
@@ -84,7 +86,9 @@ CREATE TABLE IF NOT EXISTS user_licenses (
   ai_detection_enabled BOOLEAN DEFAULT false,
 
   -- Organization reference (for team licenses)
-  organization_id UUID REFERENCES organizations(id) ON DELETE SET NULL,
+  -- NOTE: FK constraint removed as organizations table may not exist yet
+  -- Can be added later when organizations feature is implemented
+  organization_id UUID,  -- References organizations(id) when table exists
 
   -- Subscription tracking (for paid users)
   subscription_status TEXT DEFAULT 'none'

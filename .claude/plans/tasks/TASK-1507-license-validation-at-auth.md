@@ -153,7 +153,16 @@ function focusMainWindow(): void {
 
 ### Step 2: Update Preload to Expose Auth Methods
 
-Update `electron/preload.ts`:
+**IMPORTANT:** The preload script uses bridge modules organized in `electron/preload/`. DO NOT add methods directly to `electron/preload.ts`. Instead, update the appropriate bridge modules.
+
+Current structure:
+- `electron/preload.ts` - imports and exposes bridges via `contextBridge`
+- `electron/preload/authBridge.ts` - auth-related IPC methods
+- `electron/preload/eventBridge.ts` - event listeners from main process
+
+Add new methods to the appropriate bridge files:
+
+In `electron/preload/authBridge.ts`:
 
 ```typescript
 import { contextBridge, ipcRenderer, shell } from 'electron';

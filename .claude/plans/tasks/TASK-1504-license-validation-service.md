@@ -63,7 +63,10 @@ Create `electron/services/licenseService.ts`:
  * Validates user licenses against Supabase and manages offline caching.
  */
 
-import { supabaseAdmin } from './supabaseAdmin';
+// Use existing supabaseService pattern from codebase
+// NOTE: The codebase uses supabaseService.ts, not supabaseAdmin.ts
+// Adapt the import based on existing patterns in electron/services/
+import supabaseService from './supabaseService';
 import { store } from './store';
 import type { UserLicense, LicenseStatus, LicenseType, TrialStatus } from '../../shared/types/license';
 
@@ -333,7 +336,8 @@ Create `electron/services/deviceService.ts`:
  * Manages device registration and tracking.
  */
 
-import { supabaseAdmin } from './supabaseAdmin';
+// Use existing supabaseService pattern from codebase
+import supabaseService from './supabaseService';
 import { machineIdSync } from 'node-machine-id';
 import { hostname, platform } from 'os';
 import type { DeviceRegistration, DeviceRegistrationResult, DevicePlatform } from '../../shared/types/license';

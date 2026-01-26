@@ -55,6 +55,18 @@ Integrate license validation into the app startup flow to check license status w
 
 ### Step 1: Update LicenseContext
 
+**IMPORTANT:** A `LicenseContext.tsx` already exists in `src/contexts/` with a different interface. This task UPDATES the existing context, not replaces it.
+
+Current interface:
+- `licenseType`, `hasAIAddon`, `organizationId` (computed from IPC)
+- No `userId` prop, no `isValid` flag, no trial tracking
+
+New interface needed:
+- Add `userId` prop to `LicenseProvider`
+- Add `isValid`, `blockReason`, `trialDaysRemaining` fields
+- Add trial status tracking
+- Keep backward-compatible computed flags (`canExport`, `canSubmit`, etc.)
+
 Update `src/contexts/LicenseContext.tsx` to fetch from Supabase:
 
 ```typescript
@@ -494,35 +506,57 @@ export function TrialStatusBanner() {
 
 ### Step 6: Update App.tsx
 
-Update `src/App.tsx` to include license gate:
+**IMPORTANT:** Current `App.tsx` is only 43 lines and follows a clean compositional pattern. DO NOT break this pattern.
 
+Current structure:
 ```typescript
-// Add to imports
-import { LicenseProvider } from './contexts/LicenseContext';
-import { LicenseGate } from './components/license/LicenseGate';
-import { TrialStatusBanner } from './components/license/TrialStatusBanner';
-
-// In the component, wrap authenticated content with license gate
 function App() {
-  const { user, isAuthenticated } = useAuth();
-
-  if (!isAuthenticated) {
-    return <LoginScreen />;
-  }
-
+  const app = useAppStateMachine();
   return (
-    <LicenseProvider userId={user?.id || null}>
-      <LicenseGate>
-        <TrialStatusBanner />
-        {/* Rest of the app content */}
-        <AppShell>
-          {/* ... */}
+    <NotificationProvider>
+      <LicenseProvider>
+        <AppShell app={app}>
+          <AppRouter app={app} />
+          <BackgroundServices app={app} />
+          <AppModals app={app} />
         </AppShell>
-      </LicenseGate>
-    </LicenseProvider>
+      </LicenseProvider>
+    </NotificationProvider>
   );
 }
 ```
+
+The `LicenseProvider` is ALREADY in place. To add the license gate:
+
+1. The `useAppStateMachine` hook provides user info via `app.state.user`
+2. Pass `userId` to the updated `LicenseProvider`
+3. Add `LicenseGate` inside `LicenseProvider` but outside `AppShell`
+4. Add `TrialStatusBanner` inside `AppShell` (at the top)
+
+Updated structure:
+
+```typescript
+function App() {
+  const app = useAppStateMachine();
+
+  return (
+    <NotificationProvider>
+      <LicenseProvider userId={app.state.user?.id || null}>
+        <LicenseGate>
+          <AppShell app={app}>
+            <TrialStatusBanner />
+            <AppRouter app={app} />
+            <BackgroundServices app={app} />
+            <AppModals app={app} />
+          </AppShell>
+        </LicenseGate>
+      </LicenseProvider>
+    </NotificationProvider>
+  );
+}
+```
+
+**Note:** This keeps App.tsx under 70 lines while adding the license gate functionality.
 
 ### Step 7: Update IPC Types
 
