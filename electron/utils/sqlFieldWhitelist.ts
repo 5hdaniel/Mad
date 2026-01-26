@@ -154,37 +154,19 @@ export const TABLE_FIELDS = {
     "rejection_reason",
   ]),
 
+  // BACKLOG-506: Communications is now a clean junction table.
+  // Content fields have been moved to the messages table.
   communications: new Set([
     "id",
     "user_id",
     "transaction_id",
     // TASK-975: Junction table fields
     "message_id",
+    "thread_id",
+    "communication_type",
     "link_source",
     "link_confidence",
     "linked_at",
-    // Legacy content fields
-    "communication_type",
-    "source",
-    "email_thread_id",
-    "sender",
-    "recipients",
-    "cc",
-    "bcc",
-    "subject",
-    "body",
-    "body_plain",
-    "sent_at",
-    "received_at",
-    "has_attachments",
-    "attachment_count",
-    "attachment_metadata",
-    "keywords_detected",
-    "parties_involved",
-    "communication_category",
-    "relevance_score",
-    "is_compliance_related",
-    "flagged_for_review",
     "created_at",
   ]),
 

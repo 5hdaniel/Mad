@@ -560,19 +560,20 @@ export async function getContactsSortedByActivity(
   propertyAddress?: string,
 ): Promise<ContactWithActivity[]> {
   // Get imported contacts with activity data
+  // BACKLOG-506: Join to messages table via communications junction table for content fields
   const sql = `
     SELECT
       c.*,
       c.display_name as name,
       ce_primary.email as email,
       cp_primary.phone_e164 as phone,
-      MAX(comm.sent_at) as last_communication_at,
+      MAX(m.sent_at) as last_communication_at,
       COUNT(DISTINCT comm.id) as communication_count,
       ${
         propertyAddress
           ? `
         SUM(CASE
-          WHEN comm.subject LIKE ? OR comm.body_plain LIKE ? OR comm.body LIKE ?
+          WHEN m.subject LIKE ? OR m.body_text LIKE ? OR m.body_html LIKE ?
           THEN 1 ELSE 0
         END) as address_mention_count
       `
@@ -583,10 +584,10 @@ export async function getContactsSortedByActivity(
     LEFT JOIN contact_emails ce_primary ON c.id = ce_primary.contact_id AND ce_primary.is_primary = 1
     LEFT JOIN contact_phones cp_primary ON c.id = cp_primary.contact_id AND cp_primary.is_primary = 1
     LEFT JOIN contact_emails ce_all ON c.id = ce_all.contact_id
-    LEFT JOIN communications comm ON (
+    LEFT JOIN communications comm ON comm.user_id = c.user_id
+    LEFT JOIN messages m ON comm.message_id = m.id AND (
       ce_all.email IS NOT NULL
-      AND (comm.sender = ce_all.email OR comm.recipients LIKE '%' || ce_all.email || '%')
-      AND comm.user_id = c.user_id
+      AND (m.participants_flat LIKE '%' || ce_all.email || '%')
     )
     WHERE c.user_id = ? AND c.is_imported = 1
     GROUP BY c.id
@@ -1109,6 +1110,7 @@ export function searchContactsForSelection(
 
   // Search imported contacts
   // Searches across display_name, all emails, phone, and company
+  // BACKLOG-506: Join to messages table via communications junction table for content fields
   const importedSql = `
     SELECT
       c.id,
@@ -1122,17 +1124,17 @@ export function searchContactsForSelection(
       c.source,
       c.is_imported,
       0 as is_message_derived,
-      MAX(comm.sent_at) as last_communication_at,
+      MAX(m.sent_at) as last_communication_at,
       COUNT(DISTINCT comm.id) as communication_count,
       0 as address_mention_count
     FROM contacts c
     LEFT JOIN contact_emails ce_primary ON c.id = ce_primary.contact_id AND ce_primary.is_primary = 1
     LEFT JOIN contact_phones cp_primary ON c.id = cp_primary.contact_id AND cp_primary.is_primary = 1
     LEFT JOIN contact_emails ce_all ON c.id = ce_all.contact_id
-    LEFT JOIN communications comm ON (
+    LEFT JOIN communications comm ON comm.user_id = c.user_id
+    LEFT JOIN messages m ON comm.message_id = m.id AND (
       ce_all.email IS NOT NULL
-      AND (comm.sender = ce_all.email OR comm.recipients LIKE '%' || ce_all.email || '%')
-      AND comm.user_id = c.user_id
+      AND (m.participants_flat LIKE '%' || ce_all.email || '%')
     )
     WHERE c.user_id = ? AND c.is_imported = 1
       AND (

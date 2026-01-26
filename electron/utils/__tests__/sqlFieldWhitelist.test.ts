@@ -140,20 +140,30 @@ describe("sqlFieldWhitelist", () => {
     });
 
     describe("communications table", () => {
-      it("should accept valid communication fields", () => {
+      // BACKLOG-506: Communications is now a clean junction table.
+      // Content fields (subject, body, etc.) have been moved to messages table.
+      it("should accept valid communication fields (junction table)", () => {
         expect(() => {
           validateFields("communications", [
             "transaction_id = ?",
-            "subject = ?",
-            "body = ?",
+            "message_id = ?",
+            "thread_id = ?",
+            "link_source = ?",
           ]);
         }).not.toThrow();
       });
 
       it("should reject invalid communication fields", () => {
         expect(() => {
-          validateFields("communications", ["subject = ?", "internal_notes = ?"]);
+          validateFields("communications", ["message_id = ?", "internal_notes = ?"]);
         }).toThrow('Invalid field "internal_notes" for table "communications"');
+      });
+
+      it("should reject legacy content fields that were moved to messages table", () => {
+        // These fields no longer exist in the communications table
+        expect(() => {
+          validateFields("communications", ["subject = ?"]);
+        }).toThrow('Invalid field "subject" for table "communications"');
       });
     });
 
