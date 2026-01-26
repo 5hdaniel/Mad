@@ -1595,6 +1595,26 @@ export interface WindowApi {
       error?: string;
     }>;
   };
+
+  // ==========================================
+  // DEEP LINK AUTH EVENTS (TASK-1500)
+  // ==========================================
+
+  /**
+   * Listen for deep link auth callback with tokens
+   * Fired when app receives magicaudit://callback?access_token=...&refresh_token=...
+   */
+  onDeepLinkAuthCallback: (
+    callback: (data: { accessToken: string; refreshToken: string }) => void,
+  ) => () => void;
+
+  /**
+   * Listen for deep link auth errors
+   * Fired when callback URL is invalid or missing tokens
+   */
+  onDeepLinkAuthError: (
+    callback: (data: { error: string; code: "MISSING_TOKENS" | "INVALID_URL" }) => void,
+  ) => () => void;
 }
 
 // Augment Window interface

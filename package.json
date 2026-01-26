@@ -132,6 +132,12 @@
   "build": {
     "appId": "com.realestate.archiveapp",
     "productName": "MagicAudit",
+    "protocols": [
+      {
+        "name": "Magic Audit",
+        "schemes": ["magicaudit"]
+      }
+    ],
     "publish": {
       "provider": "github",
       "owner": "5hdaniel",

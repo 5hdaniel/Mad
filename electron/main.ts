@@ -4,6 +4,34 @@ import {
   session,
 } from "electron";
 import path from "path";
+
+// ==========================================
+// DEEP LINK PROTOCOL REGISTRATION (TASK-1500)
+// ==========================================
+// Register magicaudit:// protocol handler at runtime
+// This is needed for development mode and as a fallback for production
+if (process.defaultApp) {
+  // In development, need to pass the script path
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('magicaudit', process.execPath, [path.resolve(process.argv[1])]);
+  }
+} else {
+  // In production, electron-builder handles registration via package.json protocols config
+  app.setAsDefaultProtocolClient('magicaudit');
+}
+
+// ==========================================
+// SINGLE INSTANCE LOCK (TASK-1500)
+// ==========================================
+// Ensure only one instance of the app is running
+// This is required for deep link handling on Windows
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  // Another instance is running, quit this one
+  // The other instance will handle the deep link via second-instance event
+  app.quit();
+}
 import { autoUpdater } from "electron-updater";
 import log from "electron-log";
 import dotenv from "dotenv";
@@ -66,6 +94,98 @@ process.on("unhandledRejection", (reason: unknown) => {
 });
 
 let mainWindow: BrowserWindow | null = null;
+
+// ==========================================
+// DEEP LINK HANDLER (TASK-1500)
+// ==========================================
+/**
+ * Handle incoming deep link authentication callback
+ * Parses the URL and sends tokens to the renderer process
+ *
+ * Expected URL format: magicaudit://callback?access_token=...&refresh_token=...
+ *
+ * @param url - The deep link URL to process
+ */
+function handleDeepLinkCallback(url: string): void {
+  try {
+    const parsed = new URL(url);
+
+    // Support multiple path formats: //callback, /callback, or host=callback
+    const isCallback =
+      parsed.pathname === "//callback" ||
+      parsed.pathname === "/callback" ||
+      parsed.host === "callback";
+
+    if (isCallback) {
+      const accessToken = parsed.searchParams.get("access_token");
+      const refreshToken = parsed.searchParams.get("refresh_token");
+
+      if (accessToken && refreshToken) {
+        // Send tokens to renderer (with destroyed check per SR review)
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("auth:deep-link-callback", {
+            accessToken,
+            refreshToken,
+          });
+
+          // Focus the window to bring app to foreground
+          if (mainWindow.isMinimized()) mainWindow.restore();
+          mainWindow.focus();
+        }
+      } else {
+        // Missing tokens - send error to renderer
+        log.error("[DeepLink] Callback URL missing tokens:", url);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("auth:deep-link-error", {
+            error: "Missing tokens in callback URL",
+            code: "MISSING_TOKENS",
+          });
+        }
+      }
+    }
+  } catch (error) {
+    // Invalid URL format
+    log.error("[DeepLink] Failed to parse URL:", error);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("auth:deep-link-error", {
+        error: "Invalid callback URL",
+        code: "INVALID_URL",
+      });
+    }
+  }
+}
+
+// ==========================================
+// MACOS DEEP LINK HANDLER (TASK-1500)
+// ==========================================
+// Handle deep links on macOS via open-url event
+// This fires when the app is already running and a deep link is clicked
+app.on("open-url", (event, url) => {
+  event.preventDefault();
+  log.info("[DeepLink] Received URL (macOS):", url);
+  handleDeepLinkCallback(url);
+});
+
+// ==========================================
+// WINDOWS DEEP LINK HANDLER (TASK-1500)
+// ==========================================
+// Handle deep links on Windows via second-instance event
+// On Windows, deep links are passed as command line args to a new instance
+// Since we have single-instance lock, the existing instance gets this event
+app.on("second-instance", (_event, commandLine) => {
+  // Find the deep link URL in command line args
+  const url = commandLine.find((arg) => arg.startsWith("magicaudit://"));
+  if (url) {
+    log.info("[DeepLink] Received URL (Windows):", url);
+    handleDeepLinkCallback(url);
+  }
+
+  // Focus main window when second instance is attempted
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  }
+});
 
 /**
  * Configure Content Security Policy for the application
@@ -220,6 +340,25 @@ app.whenReady().then(async () => {
   // 2. Clearing sessions/tokens for session-only OAuth
 
   createWindow();
+
+  // ==========================================
+  // COLD START DEEP LINK HANDLING (TASK-1500)
+  // ==========================================
+  // Handle deep link when app is cold started via URL
+  // On macOS: URL comes through 'open-url' event, not command line
+  // On Windows: URL is in process.argv
+  if (process.platform === "win32") {
+    const deepLinkUrl = process.argv.find((arg) => arg.startsWith("magicaudit://"));
+    if (deepLinkUrl) {
+      log.info("[DeepLink] Cold start with URL (Windows):", deepLinkUrl);
+      // Wait for window to be ready before processing
+      mainWindow?.webContents.once("did-finish-load", () => {
+        // Small delay to ensure renderer is fully initialized
+        setTimeout(() => handleDeepLinkCallback(deepLinkUrl), 100);
+      });
+    }
+  }
+  // On macOS, cold start URLs come through the 'open-url' event which is already registered
 
   // Register existing handler modules
   registerAuthHandlers(mainWindow!);

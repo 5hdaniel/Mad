@@ -253,4 +253,43 @@ export const eventBridge = {
     return () =>
       ipcRenderer.removeListener("backup:password-required", listener);
   },
+
+  // ==========================================
+  // DEEP LINK AUTH EVENTS (TASK-1500)
+  // ==========================================
+
+  /**
+   * Listens for deep link authentication callback events
+   * Fired when the app receives a magicaudit://callback URL with tokens
+   * @param callback - Callback function to handle auth tokens
+   * @returns Cleanup function to remove listener
+   */
+  onDeepLinkAuthCallback: (
+    callback: (data: { accessToken: string; refreshToken: string }) => void,
+  ) => {
+    const listener = (
+      _: IpcRendererEvent,
+      data: { accessToken: string; refreshToken: string },
+    ) => callback(data);
+    ipcRenderer.on("auth:deep-link-callback", listener);
+    return () =>
+      ipcRenderer.removeListener("auth:deep-link-callback", listener);
+  },
+
+  /**
+   * Listens for deep link authentication error events
+   * Fired when the app receives an invalid or incomplete callback URL
+   * @param callback - Callback function to handle auth errors
+   * @returns Cleanup function to remove listener
+   */
+  onDeepLinkAuthError: (
+    callback: (data: { error: string; code: string }) => void,
+  ) => {
+    const listener = (
+      _: IpcRendererEvent,
+      data: { error: string; code: string },
+    ) => callback(data);
+    ipcRenderer.on("auth:deep-link-error", listener);
+    return () => ipcRenderer.removeListener("auth:deep-link-error", listener);
+  },
 };

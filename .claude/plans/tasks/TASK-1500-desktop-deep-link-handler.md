@@ -42,8 +42,8 @@ Implement `magicaudit://` URL scheme handling so the desktop app can receive aut
 | File | Action | Description |
 |------|--------|-------------|
 | `electron/main.ts` | Modify | Add `open-url` and `second-instance` handlers |
-| `electron-builder.yml` | Modify | Register `magicaudit://` URL scheme |
-| `build/entitlements.mac.plist` | Modify | Add associated domains entitlement |
+| `package.json` | Modify | Register `magicaudit://` URL scheme in build.mac and build.win |
+| `build/entitlements.mac.plist` | No change needed | Custom URL schemes work without additional entitlements |
 | `electron/preload.ts` | Modify | Expose `auth:callback` listener to renderer |
 | `src/hooks/useDeepLinkAuth.ts` | Create | React hook to listen for auth callbacks |
 
@@ -51,30 +51,55 @@ Implement `magicaudit://` URL scheme handling so the desktop app can receive aut
 
 ## Implementation Notes
 
-### Step 1: Register URL Scheme (macOS)
+### Step 1: Register URL Scheme (macOS + Windows)
 
-In `electron-builder.yml`, add protocol registration:
+**IMPORTANT:** This project uses `package.json` for electron-builder config, NOT a separate `electron-builder.yml` file.
 
-```yaml
-# electron-builder.yml
-mac:
-  # ... existing config
-  protocols:
-    - name: "Magic Audit"
-      schemes:
-        - magicaudit
+In `package.json`, add protocol registration under the `build` key:
 
-win:
-  # ... existing config
-  protocols:
-    - name: "Magic Audit"
-      schemes:
-        - magicaudit
+```json
+{
+  "build": {
+    "mac": {
+      // ... existing config
+      "protocols": [
+        {
+          "name": "Magic Audit",
+          "schemes": ["magicaudit"]
+        }
+      ]
+    },
+    "win": {
+      // ... existing config
+      "protocols": [
+        {
+          "name": "Magic Audit",
+          "schemes": ["magicaudit"]
+        }
+      ]
+    }
+  }
+}
 ```
 
-### Step 2: Add macOS Entitlements
+Also add runtime protocol registration in `electron/main.ts` (for development mode where packaged config isn't applied):
 
-In `build/entitlements.mac.plist`, add (or update existing):
+```typescript
+// Register protocol handler at runtime (development + fallback)
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('magicaudit', process.execPath, [path.resolve(process.argv[1])]);
+  }
+} else {
+  app.setAsDefaultProtocolClient('magicaudit');
+}
+```
+
+### Step 2: Add macOS Entitlements (IF NEEDED)
+
+The current `build/entitlements.mac.plist` has basic entitlements. Associated domains are ONLY needed if implementing Universal Links (HTTPS -> app). For custom URL schemes (`magicaudit://`), no additional entitlements are required.
+
+**Only add if Universal Links are desired later:**
 
 ```xml
 <key>com.apple.developer.associated-domains</key>
@@ -82,6 +107,8 @@ In `build/entitlements.mac.plist`, add (or update existing):
   <string>applinks:app.magicaudit.com</string>
 </array>
 ```
+
+**Note:** For this sprint, the custom `magicaudit://` scheme works without this entitlement. Universal Links would be a future enhancement.
 
 ### Step 3: Handle Deep Link in Main Process
 

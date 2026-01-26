@@ -136,31 +136,21 @@ dependency_graph:
 ### Visual Dependency Flow
 
 ```
-Phase 1: Auth Infrastructure
-  TASK-1500 (Deep Link Handler)
+Phase 1: Auth Infrastructure          Phase 2: Licensing Backend
+  TASK-1500 (Deep Link Handler)         (Can start AFTER Phase 1 gate passes)
        |
-       v
-  TASK-1501 (Browser Auth Landing)
-       |
-       v
-  TASK-1502 [USER GATE] <---- User tests auth flow
-       |
-       +----------------------------------+
-       |                                  |
-       v                                  v
-Phase 2: Licensing Backend         (Parallel with Phase 2)
-  TASK-1503 (License Schema)
-       |
-       v
-  TASK-1504 (License Service)
-       |
-       v
-  TASK-1505 [USER GATE] <---- User tests license service
-       |
-       +----------------------------------+
-       |
-       v
-Phase 3: Integration
+       v                                TASK-1503 (License Schema)
+  TASK-1501 (Browser Auth Landing)           |
+       |                                     v
+       v                                TASK-1504 (License Service)
+  TASK-1502 [USER GATE]                      |
+       |                                     v
+       | (Phase 1 must pass)            TASK-1505 [USER GATE]
+       |                                     |
+       +------------------------------------>+
+                                             |
+                                             v
+Phase 3: Integration (requires BOTH Phase 1 AND Phase 2 gates to pass)
   TASK-1506 (License Check at App Start)
        |
        v
@@ -173,6 +163,8 @@ Phase 3: Integration
 Phase 4: Final Review
   TASK-1509 (SR Engineer Review)
 ```
+
+**Execution Note:** Phase 2 can technically run in parallel with Phase 1 since they don't share files, but Phase 2 is BLOCKED until Phase 1's USER GATE (TASK-1502) passes. This ensures auth works before building licensing on top of it.
 
 ---
 
@@ -330,6 +322,56 @@ Phase 4: Final Review
 - [ ] SR Engineer approves at TASK-1509
 - [ ] All PRs merged to project branch
 - [ ] Project branch ready for develop merge
+
+---
+
+---
+
+## SR Engineer Review Notes
+
+**Review Date:** 2026-01-26
+**Reviewer:** SR Engineer Agent
+**Status:** APPROVED WITH MINOR CHANGES
+
+### Issues Identified and Fixed
+
+| ID | Severity | Issue | Resolution |
+|----|----------|-------|------------|
+| A1 | HIGH | TASK-1500 referenced non-existent `electron-builder.yml` | Updated to use `package.json` build config |
+| A2 | MEDIUM | TASK-1503 FK to `organizations` table that may not exist | Made nullable, removed FK constraint |
+| A3 | MEDIUM | TASK-1504 referenced non-existent `supabaseAdmin` module | Updated to use existing `supabaseService` |
+| A4 | LOW | Dependency graph visual vs text inconsistency | Clarified in visual diagram |
+| S1 | INFO | Tokens in URL query params | Documented as known behavior |
+
+### Architecture Validation
+
+- [x] Phase sequencing is correct (Auth -> Licensing -> Integration)
+- [x] User gates at appropriate checkpoints
+- [x] Service layer follows existing patterns
+- [x] IPC channel additions documented
+
+### Security Validation
+
+- [x] RLS policies comprehensive
+- [x] Token handling secure (no logging)
+- [x] Offline grace period reasonable (24h)
+- [ ] Consider fragment (`#`) vs query params for tokens (documented)
+
+### Recommendations for Engineers
+
+1. **TASK-1500:** Add `app.setAsDefaultProtocolClient()` for development mode
+2. **TASK-1503:** Use `mcp__supabase__apply_migration` tool, not local files
+3. **TASK-1504:** Use existing `supabaseService.ts` patterns
+4. **TASK-1506:** Update existing `LicenseContext`, don't replace it
+5. **TASK-1507:** Update bridge modules in `electron/preload/`, not `preload.ts` directly
+
+### Missing IPC Channels to Implement
+
+```
+licenseBridge: validate, create, incrementTransactionCount, clearCache
+deviceBridge: register, list, deactivate, getCurrentId
+authBridge: openAuthInBrowser, onAuthSuccess, onAuthError, onLicenseBlocked, onDeviceLimit
+```
 
 ---
 

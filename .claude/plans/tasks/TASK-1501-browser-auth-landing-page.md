@@ -39,9 +39,13 @@ Create a web page in the broker-portal that handles OAuth authentication and red
 
 ### Files to Create
 
+**Note:** The `broker-portal/app/auth/` directory already exists with `callback/` and `logout/` subdirectories. You need to create the `desktop/` subdirectory structure.
+
 | File | Action | Description |
 |------|--------|-------------|
+| `broker-portal/app/auth/desktop/` | Create dir | New directory for desktop auth flow |
 | `broker-portal/app/auth/desktop/page.tsx` | Create | Login page with OAuth buttons |
+| `broker-portal/app/auth/desktop/callback/` | Create dir | Callback subdirectory |
 | `broker-portal/app/auth/desktop/callback/page.tsx` | Create | OAuth callback handler |
 | `broker-portal/app/auth/desktop/layout.tsx` | Create | Optional layout wrapper |
 
