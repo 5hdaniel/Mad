@@ -929,8 +929,8 @@ describe("TransactionMessagesTab", () => {
       const checkbox = screen.getByTestId("audit-period-filter-checkbox");
       expect(checkbox).toBeChecked();
 
-      // Should show filtered message count in header
-      expect(screen.getByText("Texts (2)")).toBeInTheDocument();
+      // Should show filtered message count in header (format: "X conversations (Y text messages)")
+      expect(screen.getByText(/conversation.*\(2 text message/)).toBeInTheDocument();
 
       // The info line should indicate showing 2 of 5 messages
       const infoLine = screen.getByTestId("audit-period-info");
@@ -956,8 +956,8 @@ describe("TransactionMessagesTab", () => {
       const checkbox = screen.getByTestId("audit-period-filter-checkbox");
       fireEvent.click(checkbox);
 
-      // Should show all messages
-      expect(screen.getByText("Texts (5)")).toBeInTheDocument();
+      // Should show all messages (format: "X conversations (Y text messages)")
+      expect(screen.getByText(/conversation.*\(5 text message/)).toBeInTheDocument();
 
       // Both threads should be visible
       const threadCards = screen.getAllByTestId("message-thread-card");
@@ -1013,8 +1013,8 @@ describe("TransactionMessagesTab", () => {
       // Toggle should be unchecked
       expect(screen.getByTestId("audit-period-filter-checkbox")).not.toBeChecked();
 
-      // Should show all messages now
-      expect(screen.getByText("Texts (5)")).toBeInTheDocument();
+      // Should show all messages now (format: "X conversations (Y text messages)")
+      expect(screen.getByText(/conversation.*\(5 text message/)).toBeInTheDocument();
     });
 
     it("should handle ongoing transaction with only start date", () => {
@@ -1032,7 +1032,7 @@ describe("TransactionMessagesTab", () => {
       expect(screen.getByTestId("audit-period-filter")).toBeInTheDocument();
 
       // Should show messages from Jan 15 onwards (4 messages)
-      expect(screen.getByText("Texts (4)")).toBeInTheDocument();
+      expect(screen.getByText(/conversation.*\(4 text message/)).toBeInTheDocument();
     });
 
     it("should update conversation count based on filter", () => {
@@ -1046,15 +1046,15 @@ describe("TransactionMessagesTab", () => {
         />
       );
 
-      // With filter on, only 1 conversation has messages in period
-      expect(screen.getByText(/in 1 conversation/)).toBeInTheDocument();
-      expect(screen.getByText(/of 2/)).toBeInTheDocument();
+      // With filter on, only 1 conversation has messages in period (format: "X conversations (Y text messages)")
+      expect(screen.getByText(/1 conversation/)).toBeInTheDocument();
+      expect(screen.getByText(/of 2 conversation/)).toBeInTheDocument();
 
       // Turn off filter
       fireEvent.click(screen.getByTestId("audit-period-filter-checkbox"));
 
       // Both conversations should show
-      expect(screen.getByText(/in 2 conversations/)).toBeInTheDocument();
+      expect(screen.getByText(/2 conversations/)).toBeInTheDocument();
     });
   });
 

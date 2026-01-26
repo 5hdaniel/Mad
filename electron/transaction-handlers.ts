@@ -2630,14 +2630,18 @@ export const registerTransactionHandlers = (
               const enrichedEmails = await gmailFetchService.checkDuplicates(userId, fetchedEmails);
 
               // Get existing communications to avoid duplicates
+              // HOTFIX: Only skip if communication already has email_id (properly linked)
+              // Old communications without email_id need to be re-processed
               const existingCommsGmail = await getCommunications({ user_id: userId });
               const existingSubjectSentKeysGmail = new Set(
-                existingCommsGmail.map((c) => {
-                  const sentAt = c.sent_at
-                    ? (c.sent_at instanceof Date ? c.sent_at.toISOString() : String(c.sent_at))
-                    : "";
-                  return `${(c.subject || "").toLowerCase()}|${sentAt}`;
-                })
+                existingCommsGmail
+                  .filter((c) => c.email_id) // Only include properly linked emails
+                  .map((c) => {
+                    const sentAt = c.sent_at
+                      ? (c.sent_at instanceof Date ? c.sent_at.toISOString() : String(c.sent_at))
+                      : "";
+                    return `${(c.subject || "").toLowerCase()}|${sentAt}`;
+                  })
               );
 
               // Store new emails
@@ -2648,10 +2652,10 @@ export const registerTransactionHandlers = (
                   continue;
                 }
 
-                // Check if we already have this email (by subject + sent_at)
+                // Check if we already have this email properly linked (with email_id)
                 const emailKey = `${(email.subject || "").toLowerCase()}|${email.date ? new Date(email.date).toISOString() : ""}`;
                 if (existingSubjectSentKeysGmail.has(emailKey)) {
-                  logService.debug(`Skipping existing email: ${email.subject}`, "Transactions");
+                  logService.debug(`Skipping already-linked email: ${email.subject}`, "Transactions");
                   continue;
                 }
 
@@ -2681,11 +2685,12 @@ export const registerTransactionHandlers = (
                   // Create junction link in communications (no content, just IDs)
                   await createCommunication({
                     user_id: userId,
+                    transaction_id: validatedTransactionId,  // HOTFIX: Link to transaction!
                     email_id: emailRecord.id,
                     communication_type: "email",
                     link_source: "scan",
                     link_confidence: 0.9,
-                    has_attachments: false,
+                    has_attachments: email.hasAttachments || false,
                     is_false_positive: false,
                   });
                   emailsStored++;
@@ -2741,14 +2746,17 @@ export const registerTransactionHandlers = (
               const enrichedEmails = await outlookFetchService.checkDuplicates(userId, relevantEmails);
 
               // Get existing communications to avoid duplicates
+              // HOTFIX: Only skip if communication already has email_id (properly linked)
               const existingCommsOutlook = await getCommunications({ user_id: userId });
               const existingSubjectSentKeysOutlook = new Set(
-                existingCommsOutlook.map((c) => {
-                  const sentAt = c.sent_at
-                    ? (c.sent_at instanceof Date ? c.sent_at.toISOString() : String(c.sent_at))
-                    : "";
-                  return `${(c.subject || "").toLowerCase()}|${sentAt}`;
-                })
+                existingCommsOutlook
+                  .filter((c) => c.email_id) // Only include properly linked emails
+                  .map((c) => {
+                    const sentAt = c.sent_at
+                      ? (c.sent_at instanceof Date ? c.sent_at.toISOString() : String(c.sent_at))
+                      : "";
+                    return `${(c.subject || "").toLowerCase()}|${sentAt}`;
+                  })
               );
 
               // Store new emails
@@ -2757,6 +2765,7 @@ export const registerTransactionHandlers = (
                   continue;
                 }
 
+                // Check if we already have this email properly linked (with email_id)
                 const emailKey = `${(email.subject || "").toLowerCase()}|${email.date ? new Date(email.date).toISOString() : ""}`;
                 if (existingSubjectSentKeysOutlook.has(emailKey)) {
                   continue;
@@ -2788,11 +2797,12 @@ export const registerTransactionHandlers = (
                   // Create junction link in communications (no content, just IDs)
                   await createCommunication({
                     user_id: userId,
+                    transaction_id: validatedTransactionId,  // HOTFIX: Link to transaction!
                     email_id: emailRecord.id,
                     communication_type: "email",
                     link_source: "scan",
                     link_confidence: 0.9,
-                    has_attachments: false,
+                    has_attachments: email.hasAttachments || false,
                     is_false_positive: false,
                   });
                   emailsStored++;

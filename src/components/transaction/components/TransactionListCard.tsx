@@ -199,7 +199,7 @@ export function TransactionListCard({
             )}
           </div>
           <div className="mt-2 flex items-center gap-3 text-xs text-gray-500">
-            {/* Messages count - clickable, LEFT position */}
+            {/* BACKLOG-510: Counters hidden until count accuracy is fixed
             <button
               onClick={(e) => onMessagesClick?.(transaction, e)}
               className="flex items-center gap-1 hover:text-blue-600 transition-colors"
@@ -208,7 +208,6 @@ export function TransactionListCard({
               <MessagesIcon />
               <span>{textCount} {textCount === 1 ? "text" : "texts"}</span>
             </button>
-            {/* Emails count - clickable, RIGHT position */}
             <button
               onClick={(e) => onEmailsClick?.(transaction, e)}
               className="flex items-center gap-1 hover:text-blue-600 transition-colors"
@@ -217,6 +216,7 @@ export function TransactionListCard({
               <EmailsIcon />
               <span>{emailCount} {emailCount === 1 ? "email thread" : "email threads"}</span>
             </button>
+            */}
             {transaction.extraction_confidence && (
               <span className="flex items-center gap-1">
                 <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">

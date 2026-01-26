@@ -559,7 +559,9 @@ export async function getCommunicationsWithMessages(
       c.id as communication_id,
       c.user_id,
       c.transaction_id,
-      c.message_id,
+      -- HOTFIX: For thread-linked messages, c.message_id is NULL but m.id has the actual message ID
+      -- This is needed for attachment lookup which uses message_id
+      COALESCE(c.message_id, m.id) as message_id,
       c.email_id,
       c.link_source,
       c.link_confidence,
