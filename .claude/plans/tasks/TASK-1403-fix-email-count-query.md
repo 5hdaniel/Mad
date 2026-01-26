@@ -212,62 +212,67 @@ This task's PR MUST pass:
 
 **REQUIRED: Record your agent_id immediately when the Task tool returns.**
 
-*Completed: <DATE>*
+*Completed: 2026-01-26*
 
 ### Agent ID
 
 **Record this immediately when Task tool returns:**
 ```
-Engineer Agent ID: <agent_id from Task tool output>
+Engineer Agent ID: 05d56f5
 ```
 
 ### Checklist
 
 ```
 Files modified:
-- [ ] electron/services/db/transactionDbService.ts
-- [ ] (tests)
+- [x] electron/services/db/transactionDbService.ts
+- [x] electron/services/db/__tests__/transactionDbService.test.ts
 
 Features implemented:
-- [ ] Email count query updated
-- [ ] NULL handling verified
-- [ ] Tests added/updated
+- [x] Email count query updated
+- [x] NULL handling verified
+- [x] Tests added/updated
 
 Verification:
-- [ ] npm run type-check passes
-- [ ] npm run lint passes
-- [ ] npm test passes
+- [x] npm run type-check passes
+- [x] npm run lint passes
+- [x] npm test passes
 ```
 
 ### Metrics (Auto-Captured)
 
-**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.csv`
+**From SubagentStop hook** - Run: `grep "05d56f5" .claude/metrics/tokens.csv`
 
 | Metric | Value |
 |--------|-------|
-| **Total Tokens** | X |
-| Duration | X seconds |
-| API Calls | X |
+| **Total Tokens** | TBD |
+| Duration | TBD |
+| API Calls | TBD |
 
-**Variance:** PM Est ~17.5K vs Actual ~XK (X% over/under)
+**Variance:** PM Est ~17.5K vs Actual TBD
 
 ### Notes
 
 **Planning notes:**
-<Key decisions from planning phase, revisions if any>
+- SR Engineer approved use of simpler `email_id IS NOT NULL` approach (no legacy email check needed)
+- Both `getTransactions()` and `getTransactionById()` needed updates
 
 **Deviations from plan:**
-<If you deviated from the approved plan, explain what and why. Use "DEVIATION:" prefix.>
-<If no deviations, write "None">
+None - Implemented exactly as specified in task file.
 
 **Design decisions:**
-<Document any design decisions you made and the reasoning>
+- Used `COUNT(DISTINCT c.email_id)` to ensure unique emails are counted
+- Added `email_id IS NOT NULL` filter to exclude NULL values
+- Kept the same subquery pattern as before for consistency
 
 **Issues encountered:**
-<Document any issues or challenges and how you resolved them>
+- Files were reverted by linter during initial implementation, requiring re-application of changes
+- Initially ended up on wrong branch (fix/task-1404-text-thread-count-tests) due to directory state, resolved by stashing changes and switching branches
 
 **Reviewer notes:**
-<Anything the reviewer should pay attention to>
+- The email count query is now simplified and no longer references the deprecated `communication_type` column
+- Tests verify both the SQL query structure and the expected behavior
+- 12 new tests added (30 total in test file)
 
 ### Estimate vs Actual Analysis
 
@@ -275,14 +280,14 @@ Verification:
 
 | Metric | PM Estimate | Actual | Variance |
 |--------|-------------|--------|----------|
-| **Tokens** | ~17.5K | ~XK | +/-X% |
-| Duration | - | X sec | - |
+| **Tokens** | ~17.5K | TBD | TBD |
+| Duration | - | TBD | - |
 
 **Root cause of variance:**
-<1-2 sentence explanation of why estimate was off>
+TBD (to be filled after session completes)
 
 **Suggestion for similar tasks:**
-<What should PM estimate differently next time?>
+TBD (to be filled after session completes)
 
 ---
 
