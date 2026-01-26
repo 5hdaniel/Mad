@@ -11,10 +11,12 @@ import path from "path";
 // Register magicaudit:// protocol handler at runtime
 // This is needed for development mode and as a fallback for production
 if (process.defaultApp) {
-  // In development, need to pass the script path
-  if (process.argv.length >= 2) {
-    app.setAsDefaultProtocolClient('magicaudit', process.execPath, [path.resolve(process.argv[1])]);
-  }
+  // In development, register with the full path to the project directory
+  // This ensures macOS can launch the app correctly via deep link
+  const appPath = path.resolve(__dirname, '..');
+  console.log('[DeepLink] Dev mode - registering protocol with path:', appPath);
+  console.log('[DeepLink] Electron binary:', process.execPath);
+  app.setAsDefaultProtocolClient('magicaudit', process.execPath, [appPath]);
 } else {
   // In production, electron-builder handles registration via package.json protocols config
   app.setAsDefaultProtocolClient('magicaudit');

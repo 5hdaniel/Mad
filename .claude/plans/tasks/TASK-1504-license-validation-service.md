@@ -7,6 +7,33 @@
 
 ---
 
+## ⚠️ MANDATORY WORKFLOW (6 Steps)
+
+**DO NOT SKIP ANY STEP. Each agent step requires recording the Agent ID.**
+
+```
+Step 1: PLAN        → Plan Agent creates implementation plan
+                      📋 Record: Plan Agent ID
+
+Step 2: SR REVIEW   → SR Engineer reviews and approves plan
+                      📋 Record: SR Engineer Agent ID
+
+Step 3: USER REVIEW → User reviews and approves plan
+                      ⏸️  GATE: Wait for user approval
+
+Step 4: COMPACT     → Context reset before implementation
+                      🔄 /compact or new session
+
+Step 5: IMPLEMENT   → Engineer implements approved plan
+                      📋 Record: Engineer Agent ID
+
+Step 6: PM UPDATE   → PM updates sprint/backlog/metrics
+```
+
+**Reference:** `.claude/docs/ENGINEER-WORKFLOW.md`
+
+---
+
 ## Branch Information
 
 **Branch From**: `project/licensing-and-auth-flow` (after TASK-1503 merged)
@@ -64,7 +91,7 @@ Create `electron/services/licenseService.ts`:
  */
 
 // Use existing supabaseService pattern from codebase
-// NOTE: The codebase uses supabaseService.ts, not supabaseAdmin.ts
+// NOTE: The codebase uses supabaseService.ts (singleton pattern with getClient() method)
 // Adapt the import based on existing patterns in electron/services/
 import supabaseService from './supabaseService';
 import { store } from './store';
@@ -123,7 +150,7 @@ export async function validateLicense(userId: string): Promise<LicenseStatus> {
  */
 async function fetchLicenseFromSupabase(userId: string): Promise<LicenseStatus> {
   // Fetch user license
-  const { data: license, error } = await supabaseAdmin
+  const { data: license, error } = await supabaseService.getClient()
     .from('user_licenses')
     .select('*')
     .eq('user_id', userId)
@@ -150,7 +177,7 @@ async function fetchLicenseFromSupabase(userId: string): Promise<LicenseStatus> 
   }
 
   // Count active devices
-  const { count: deviceCount } = await supabaseAdmin
+  const { count: deviceCount } = await supabaseService.getClient()
     .from('device_registrations')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', userId)
@@ -218,7 +245,7 @@ function calculateLicenseStatus(license: UserLicense, deviceCount: number): Lice
  * Create a trial license for a new user
  */
 export async function createUserLicense(userId: string): Promise<LicenseStatus> {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await supabaseService.getClient()
     .rpc('create_trial_license', { p_user_id: userId });
 
   if (error) {
@@ -233,7 +260,7 @@ export async function createUserLicense(userId: string): Promise<LicenseStatus> 
  * Increment transaction count (call when user creates a transaction)
  */
 export async function incrementTransactionCount(userId: string): Promise<number> {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await supabaseService.getClient()
     .rpc('increment_transaction_count', { p_user_id: userId });
 
   if (error) {
@@ -382,7 +409,7 @@ export async function registerDevice(userId: string): Promise<DeviceRegistration
 
   try {
     // Try to upsert device registration
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabaseService.getClient()
       .from('device_registrations')
       .upsert(
         {
@@ -439,7 +466,7 @@ export async function updateDeviceHeartbeat(userId: string): Promise<void> {
   const deviceId = getDeviceId();
 
   try {
-    await supabaseAdmin
+    await supabaseService.getClient()
       .from('device_registrations')
       .update({ last_seen_at: new Date().toISOString() })
       .eq('user_id', userId)
@@ -453,7 +480,7 @@ export async function updateDeviceHeartbeat(userId: string): Promise<void> {
  * Get all devices for a user
  */
 export async function getUserDevices(userId: string): Promise<DeviceRegistration[]> {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await supabaseService.getClient()
     .from('device_registrations')
     .select('*')
     .eq('user_id', userId)
@@ -470,7 +497,7 @@ export async function getUserDevices(userId: string): Promise<DeviceRegistration
  * Deactivate a device (for device management UI)
  */
 export async function deactivateDevice(userId: string, deviceId: string): Promise<void> {
-  const { error } = await supabaseAdmin
+  const { error } = await supabaseService.getClient()
     .from('device_registrations')
     .update({ is_active: false })
     .eq('user_id', userId)
@@ -485,7 +512,7 @@ export async function deactivateDevice(userId: string, deviceId: string): Promis
  * Delete a device registration
  */
 export async function deleteDevice(userId: string, deviceId: string): Promise<void> {
-  const { error } = await supabaseAdmin
+  const { error } = await supabaseService.getClient()
     .from('device_registrations')
     .delete()
     .eq('user_id', userId)
@@ -502,7 +529,7 @@ export async function deleteDevice(userId: string, deviceId: string): Promise<vo
 export async function isDeviceRegistered(userId: string): Promise<boolean> {
   const deviceId = getDeviceId();
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await supabaseService.getClient()
     .from('device_registrations')
     .select('id')
     .eq('user_id', userId)
@@ -768,9 +795,46 @@ Stop and ask PM if:
 
 ---
 
+## Workflow Progress
+
+### Agent ID Tracking (MANDATORY)
+
+| Step | Agent Type | Agent ID | Tokens | Status |
+|------|------------|----------|--------|--------|
+| 1. Plan | Plan Agent | ___________ | ___K | ☐ Pending |
+| 2. SR Review | SR Engineer Agent | ___________ | ___K | ☐ Pending |
+| 3. User Review | (No agent) | N/A | N/A | ☐ Pending |
+| 4. Compact | (Context reset) | N/A | N/A | ☐ Pending |
+| 5. Implement | Engineer Agent | ___________ | ___K | ☐ Pending |
+| 6. PM Update | PM Agent | ___________ | ___K | ☐ Pending |
+
+### Step 1: Plan Output
+
+*Plan Agent writes implementation plan here after Step 1*
+
+```
+[Plan to be written here]
+```
+
+### Step 2: SR Review Notes
+
+*SR Engineer writes review notes here after Step 2*
+
+```
+[SR Review notes to be written here]
+```
+
+### Step 3: User Review
+
+- [ ] User reviewed plan
+- [ ] User approved plan
+- Date: _______________
+
+---
+
 ## Implementation Summary
 
-*To be completed by Engineer after implementation*
+*To be completed by Engineer after Step 5*
 
 ### Files Changed
 - [ ] List actual files modified
@@ -784,3 +848,12 @@ Stop and ask PM if:
 
 ### Notes for SR Review
 - [ ] Any concerns or areas needing extra review
+
+### Final Metrics
+
+| Metric | Estimated | Actual | Variance |
+|--------|-----------|--------|----------|
+| Plan tokens | ~5K | ___K | ___% |
+| SR Review tokens | ~5K | ___K | ___% |
+| Implement tokens | ~30K | ___K | ___% |
+| **Total** | ~40K | ___K | ___% |

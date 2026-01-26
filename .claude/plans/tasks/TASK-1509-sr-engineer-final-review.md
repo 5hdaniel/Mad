@@ -7,6 +7,24 @@
 
 ---
 
+## ⚠️ SPECIAL TASK: This is the Final Sprint Review
+
+**This task is different** - it's a sprint-level SR review, not a single task review.
+
+The SR Engineer will:
+1. Review all completed task metrics
+2. Validate architecture across all tasks
+3. Check sprint-level quality gates
+4. Approve project branch for develop merge
+
+**Agent ID Tracking:**
+
+| Review Area | Agent ID | Tokens |
+|-------------|----------|--------|
+| Final Sprint Review | ___________ | ___K |
+
+---
+
 ## Purpose
 
 Final SR Engineer review of all SPRINT-062 work before merging the project branch to develop.

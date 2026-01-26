@@ -7,6 +7,33 @@
 
 ---
 
+## ⚠️ MANDATORY WORKFLOW (6 Steps)
+
+**DO NOT SKIP ANY STEP. Each agent step requires recording the Agent ID.**
+
+```
+Step 1: PLAN        → Plan Agent creates implementation plan
+                      📋 Record: Plan Agent ID
+
+Step 2: SR REVIEW   → SR Engineer reviews and approves plan
+                      📋 Record: SR Engineer Agent ID
+
+Step 3: USER REVIEW → User reviews and approves plan
+                      ⏸️  GATE: Wait for user approval
+
+Step 4: COMPACT     → Context reset before implementation
+                      🔄 /compact or new session
+
+Step 5: IMPLEMENT   → Engineer implements approved plan
+                      📋 Record: Engineer Agent ID
+
+Step 6: PM UPDATE   → PM updates sprint/backlog/metrics
+```
+
+**Reference:** `.claude/docs/ENGINEER-WORKFLOW.md`
+
+---
+
 ## Branch Information
 
 **Branch From**: `project/licensing-and-auth-flow` (after Phase 2 complete)
@@ -687,9 +714,46 @@ Stop and ask PM if:
 
 ---
 
+## Workflow Progress
+
+### Agent ID Tracking (MANDATORY)
+
+| Step | Agent Type | Agent ID | Tokens | Status |
+|------|------------|----------|--------|--------|
+| 1. Plan | Plan Agent | ___________ | ___K | ☐ Pending |
+| 2. SR Review | SR Engineer Agent | ___________ | ___K | ☐ Pending |
+| 3. User Review | (No agent) | N/A | N/A | ☐ Pending |
+| 4. Compact | (Context reset) | N/A | N/A | ☐ Pending |
+| 5. Implement | Engineer Agent | ___________ | ___K | ☐ Pending |
+| 6. PM Update | PM Agent | ___________ | ___K | ☐ Pending |
+
+### Step 1: Plan Output
+
+*Plan Agent writes implementation plan here after Step 1*
+
+```
+[Plan to be written here]
+```
+
+### Step 2: SR Review Notes
+
+*SR Engineer writes review notes here after Step 2*
+
+```
+[SR Review notes to be written here]
+```
+
+### Step 3: User Review
+
+- [ ] User reviewed plan
+- [ ] User approved plan
+- Date: _______________
+
+---
+
 ## Implementation Summary
 
-*To be completed by Engineer after implementation*
+*To be completed by Engineer after Step 5*
 
 ### Files Changed
 - [ ] List actual files modified
@@ -703,3 +767,12 @@ Stop and ask PM if:
 
 ### Notes for SR Review
 - [ ] Any concerns or areas needing extra review
+
+### Final Metrics
+
+| Metric | Estimated | Actual | Variance |
+|--------|-----------|--------|----------|
+| Plan tokens | ~5K | ___K | ___% |
+| SR Review tokens | ~5K | ___K | ___% |
+| Implement tokens | ~15K | ___K | ___% |
+| **Total** | ~25K | ___K | ___% |

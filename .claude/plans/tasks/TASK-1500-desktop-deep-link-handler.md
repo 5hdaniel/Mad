@@ -2,8 +2,35 @@
 
 **Sprint**: SPRINT-062
 **Backlog Item**: BACKLOG-482
-**Status**: Ready
+**Status**: Complete
 **Execution**: Sequential (Phase 1, Step 1)
+
+---
+
+## ⚠️ MANDATORY WORKFLOW (6 Steps)
+
+**DO NOT SKIP ANY STEP. Each agent step requires recording the Agent ID.**
+
+```
+Step 1: PLAN        → Plan Agent creates implementation plan
+                      📋 Record: Plan Agent ID
+
+Step 2: SR REVIEW   → SR Engineer reviews and approves plan
+                      📋 Record: SR Engineer Agent ID
+
+Step 3: USER REVIEW → User reviews and approves plan
+                      ⏸️  GATE: Wait for user approval
+
+Step 4: COMPACT     → Context reset before implementation
+                      🔄 /compact or new session
+
+Step 5: IMPLEMENT   → Engineer implements approved plan
+                      📋 Record: Engineer Agent ID
+
+Step 6: PM UPDATE   → PM updates sprint/backlog/metrics
+```
+
+**Reference:** `.claude/docs/ENGINEER-WORKFLOW.md`
 
 ---
 
@@ -388,9 +415,123 @@ None - this is the first task in Phase 1
 
 ---
 
+## Workflow Progress
+
+### Agent ID Tracking (MANDATORY)
+
+| Step | Agent Type | Agent ID | Tokens | Status |
+|------|------------|----------|--------|--------|
+| 1. Plan | Plan Agent | a7e4e89 | ~15K | ✅ Complete |
+| 2. SR Review | SR Engineer Agent | 9f2c1d7 | ~8K | ✅ Complete |
+| 3. User Review | (No agent) | N/A | N/A | ✅ Approved |
+| 4. Compact | (Context reset) | N/A | N/A | ✅ (Agent invocation) |
+| 5. Implement | Engineer Agent | a1c8591 | ~25K | ✅ Complete |
+| 6. PM Update | PM Agent | N/A | N/A | ✅ Complete |
+
+### Step 1: Plan Output
+
+**Plan Agent ID:** `a7e4e89`
+**Date:** 2026-01-26
+
+#### Files to Modify/Create
+
+| File | Action | Description |
+|------|--------|-------------|
+| `package.json` | Modify | Register `magicaudit://` protocol in build.mac and build.win |
+| `electron/main.ts` | Modify | Add protocol registration, single-instance lock, URL handlers |
+| `electron/preload/eventBridge.ts` | Modify | Add `onDeepLinkAuthCallback` and `onDeepLinkAuthError` |
+| `src/window.d.ts` | Modify | Add TypeScript types for new events |
+| `src/hooks/useDeepLinkAuth.ts` | Create | React hook for consuming auth callbacks |
+
+#### Implementation Order
+
+1. **package.json** - Add `protocols` config to `build.mac` and `build.win`
+2. **electron/main.ts** - Add:
+   - Runtime protocol registration (`app.setAsDefaultProtocolClient`)
+   - Single-instance lock (`app.requestSingleInstanceLock`)
+   - `second-instance` handler (Windows deep links)
+   - `open-url` handler (macOS deep links)
+   - `handleDeepLinkCallback()` function
+   - Cold start handling in `app.whenReady()`
+3. **electron/preload/eventBridge.ts** - Add event listeners following existing pattern
+4. **src/window.d.ts** - Add types to `MainAPI` interface
+5. **src/hooks/useDeepLinkAuth.ts** - Create hook following `useMacOSMessagesImport` pattern
+
+#### Key Architecture Decisions
+
+- **Event naming**: `auth:deep-link-callback` and `auth:deep-link-error`
+- **Error codes**: `MISSING_TOKENS`, `INVALID_URL` for programmatic handling
+- **Add to eventBridge.ts** (not authBridge) - these are events, not invoke methods
+- **URL path handling**: Support `//callback`, `/callback`, and `host === 'callback'`
+
+#### Risks Identified
+
+| Risk | Mitigation |
+|------|------------|
+| Single-instance lock conflicts | None found - safe to add |
+| Cold start timing | Use `setTimeout` + `browser-window-created` event |
+| URL parsing differences | Handle multiple pathname formats |
+
+#### Testing Plan
+
+```bash
+# macOS - App Running
+open "magicaudit://callback?access_token=test123&refresh_token=test456"
+
+# macOS - Cold Start (quit app first)
+open "magicaudit://callback?access_token=test123&refresh_token=test456"
+
+# Error - Missing Tokens
+open "magicaudit://callback"
+```
+
+### Step 2: SR Review Notes
+
+**SR Engineer Agent ID:** `9f2c1d7`
+**Review Date:** 2026-01-26
+**Review Status:** APPROVED WITH REQUIRED CHANGES
+
+#### Issues Found & Fixes Required
+
+| # | Severity | Issue | Fix |
+|---|----------|-------|-----|
+| 1 | MUST FIX | Protocol config nested under mac/win | Move `protocols` to top-level `build` object |
+| 2 | MUST FIX | Separate `app.on('ready')` handler | Integrate into existing `app.whenReady()` at line 173 |
+| 3 | SHOULD FIX | Missing window destroyed check | Add `!mainWindow.isDestroyed()` before IPC send |
+| 4 | SHOULD FIX | Using console.error | Use `log.error()` from electron-log |
+
+#### Correct Protocol Config (package.json)
+
+```json
+"build": {
+  "protocols": [{ "name": "Magic Audit", "schemes": ["magicaudit"] }],
+  "mac": { ... },
+  "win": { ... }
+}
+```
+
+#### Architecture Verified
+- ✅ eventBridge.ts pattern matches existing listeners
+- ✅ window.d.ts is correct type definition file
+- ✅ useDeepLinkAuth hook follows useMacOSMessagesImport pattern
+- ✅ IPC channel naming aligned with existing auth events
+
+#### Security Approved
+- ✅ Token handling via IPC is secure
+- ✅ No persistent URL logging
+- ✅ Token validation deferred to TASK-1504 (as designed)
+
+### Step 3: User Review
+
+- [x] User reviewed plan
+- [x] User approved plan
+- Date: 2026-01-26
+
+---
+
 ## Implementation Summary
 
-*To be completed by Engineer after implementation*
+*To be completed by Engineer after Step 5*
 
 ### Files Changed
 - [ ] List actual files modified
@@ -404,3 +545,16 @@ None - this is the first task in Phase 1
 
 ### Notes for SR Review
 - [ ] Any concerns or areas needing extra review
+
+### Final Metrics
+
+| Metric | Estimated | Actual | Variance |
+|--------|-----------|--------|----------|
+| Plan tokens | ~5K | ~15K | +200% |
+| SR Review (plan) | ~5K | ~8K | +60% |
+| SR Review (PR) | ~5K | ~5K | 0% |
+| Implement tokens | ~25K | ~25K | 0% |
+| **Total** | ~35K | ~53K | +51% |
+
+**PR:** #622 (MERGED)
+**Merge Commit:** `7d49c2a6`
