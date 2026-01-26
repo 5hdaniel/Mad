@@ -376,10 +376,43 @@ CREATE TABLE IF NOT EXISTS transactions (
 );
 
 -- ============================================
+-- TRANSACTION PARTICIPANTS (Contacts linked to transactions)
+-- ============================================
+-- Links contacts to transactions with roles
+CREATE TABLE IF NOT EXISTS transaction_participants (
+  id TEXT PRIMARY KEY,
+  transaction_id TEXT NOT NULL,
+  contact_id TEXT NOT NULL,
+
+  -- Role (standardized enum for consistency)
+  role TEXT CHECK (role IN (
+    'buyer', 'seller',
+    'buyer_agent', 'listing_agent',
+    'lender', 'loan_officer',
+    'escrow_officer', 'title_officer',
+    'inspector', 'appraiser',
+    'attorney', 'tc',
+    'other', 'unknown'
+  )),
+
+  -- Confidence & Source
+  confidence REAL,                       -- 0.0 - 1.0
+  role_source TEXT CHECK (role_source IN ('pattern', 'llm', 'user')),
+
+  is_primary INTEGER DEFAULT 0,          -- Primary contact for this role
+  notes TEXT,
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE,
+  FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE,
+  UNIQUE(transaction_id, contact_id)
+);
+
+-- ============================================
 -- TRANSACTION CONTACTS (Junction table for contacts in transactions)
 -- ============================================
--- NOTE: transaction_participants table was removed in BACKLOG-506 (Migration 23)
--- transaction_contacts provides the same functionality with more flexibility
 -- Links contacts to transactions with detailed role information
 CREATE TABLE IF NOT EXISTS transaction_contacts (
   id TEXT PRIMARY KEY,
@@ -645,6 +678,11 @@ CREATE INDEX IF NOT EXISTS idx_transactions_last_exported_on ON transactions(las
 CREATE INDEX IF NOT EXISTS idx_transactions_submission_status ON transactions(submission_status);
 CREATE INDEX IF NOT EXISTS idx_transactions_submission_id ON transactions(submission_id);
 
+-- Transaction Participants
+CREATE INDEX IF NOT EXISTS idx_transaction_participants_transaction ON transaction_participants(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_transaction_participants_contact ON transaction_participants(contact_id);
+CREATE INDEX IF NOT EXISTS idx_transaction_participants_role ON transaction_participants(role);
+
 -- Transaction Contacts
 CREATE INDEX IF NOT EXISTS idx_transaction_contacts_transaction ON transaction_contacts(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_transaction_contacts_contact ON transaction_contacts(contact_id);
@@ -709,6 +747,12 @@ BEGIN
   UPDATE transactions SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
 
+CREATE TRIGGER IF NOT EXISTS update_transaction_participants_timestamp
+AFTER UPDATE ON transaction_participants
+BEGIN
+  UPDATE transaction_participants SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+END;
+
 CREATE TRIGGER IF NOT EXISTS update_transaction_contacts_timestamp
 AFTER UPDATE ON transaction_contacts
 BEGIN
@@ -749,28 +793,58 @@ END;
 --
 -- MIGRATION NOTE: Legacy content columns (subject, body, etc.) are preserved
 -- for backward compatibility but new records should use message_id reference.
--- BACKLOG-506: Communications is now a clean junction table
--- Content is stored in messages table; this table only links messages to transactions
 CREATE TABLE IF NOT EXISTS communications (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   transaction_id TEXT,
 
-  -- Message reference (junction table pattern)
-  -- Links to messages table where content is stored
+  -- TASK-975: Message reference (junction table pattern)
+  -- New communications should always set this to link to messages table
   message_id TEXT,
 
-  -- Thread-based linking (TASK-1114)
-  -- Alternative to message_id for linking entire threads
-  thread_id TEXT,
-
-  -- Communication type hint (for display when JOIN fails)
-  communication_type TEXT DEFAULT 'email' CHECK (communication_type IN ('email', 'text', 'imessage')),
-
-  -- Link metadata
+  -- Link metadata (TASK-975)
   link_source TEXT CHECK (link_source IN ('auto', 'manual', 'scan')),
   link_confidence REAL,
   linked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  -- TASK-1114: Thread-based linking (SPRINT-042)
+  -- Primary mechanism for grouping messages by conversation thread
+  -- Enables unlink operations to work at thread level, not message level
+  thread_id TEXT,
+
+  -- Type & Source (legacy, use message_id for new records)
+  communication_type TEXT DEFAULT 'email' CHECK (communication_type IN ('email', 'text', 'imessage')),
+  source TEXT,
+
+  -- Email Threading (legacy, use message_id for new records)
+  email_thread_id TEXT,
+
+  -- Participants (legacy, use message_id for new records)
+  sender TEXT,
+  recipients TEXT,
+  cc TEXT,
+  bcc TEXT,
+
+  -- Content (legacy, use message_id for new records)
+  subject TEXT,
+  body TEXT,
+  body_plain TEXT,
+
+  -- Timestamps (legacy, use message_id for new records)
+  sent_at DATETIME,
+  received_at DATETIME,
+
+  -- Attachments (legacy, use message_id for new records)
+  has_attachments INTEGER DEFAULT 0,
+  attachment_count INTEGER DEFAULT 0,
+  attachment_metadata TEXT,                -- JSON
+
+  -- Analysis/Classification (legacy, use message_id for new records)
+  keywords_detected TEXT,                  -- JSON array
+  parties_involved TEXT,                   -- JSON array
+  communication_category TEXT,
+  relevance_score REAL,
+  is_compliance_related INTEGER DEFAULT 0,
 
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
@@ -782,12 +856,16 @@ CREATE TABLE IF NOT EXISTS communications (
 -- Communications indexes
 CREATE INDEX IF NOT EXISTS idx_communications_user_id ON communications(user_id);
 CREATE INDEX IF NOT EXISTS idx_communications_transaction_id ON communications(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_communications_sent_at ON communications(sent_at);
+CREATE INDEX IF NOT EXISTS idx_communications_sender ON communications(sender);
+-- TASK-975: Junction table indexes for message_id lookups
 CREATE INDEX IF NOT EXISTS idx_communications_message_id ON communications(message_id);
 CREATE INDEX IF NOT EXISTS idx_communications_txn_msg ON communications(transaction_id, message_id);
+-- TASK-975: Unique constraint to prevent duplicate message-transaction links
 CREATE UNIQUE INDEX IF NOT EXISTS idx_communications_msg_txn_unique ON communications(message_id, transaction_id) WHERE message_id IS NOT NULL;
+-- TASK-1114: Thread-based linking indexes (SPRINT-042)
 CREATE INDEX IF NOT EXISTS idx_communications_thread_id ON communications(thread_id);
 CREATE INDEX IF NOT EXISTS idx_communications_thread_txn ON communications(thread_id, transaction_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_communications_thread_txn_unique ON communications(thread_id, transaction_id) WHERE thread_id IS NOT NULL AND message_id IS NULL;
 
 -- ============================================
 -- IGNORED COMMUNICATIONS TABLE
@@ -854,7 +932,7 @@ SELECT
   t.message_count,
   t.attachment_count,
   t.confidence_score,
-  (SELECT COUNT(*) FROM transaction_contacts tc WHERE tc.transaction_id = t.id) as participant_count,
+  (SELECT COUNT(*) FROM transaction_participants tp WHERE tp.transaction_id = t.id) as participant_count,
   (SELECT COUNT(*) FROM audit_packages ap WHERE ap.transaction_id = t.id) as audit_count
 FROM transactions t;
 
@@ -870,5 +948,5 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 
 -- Initialize schema version if not exists
--- Version 24: BACKLOG-506 database architecture cleanup complete
-INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 24);
+-- Version 16: All migrations through BACKLOG-426 (license type support)
+INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 16);

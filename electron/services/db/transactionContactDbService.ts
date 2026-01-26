@@ -6,7 +6,7 @@
 import crypto from "crypto";
 import type { Contact } from "../../types";
 import { DatabaseError } from "../../types";
-import { dbGet, dbAll, dbRun, ensureDb, dbTransaction } from "./core/dbConnection";
+import { dbGet, dbAll, dbRun, ensureDb } from "./core/dbConnection";
 import { validateFields } from "../../utils/sqlFieldWhitelist";
 
 // Transaction contact association data
@@ -78,65 +78,60 @@ export async function linkContactToTransaction(
 /**
  * Assign contact to transaction with detailed role data
  * Uses INSERT OR REPLACE to handle duplicate assignments gracefully
- *
- * BACKLOG-506: Wrapped in transaction for atomicity
  */
 export async function assignContactToTransaction(
   transactionId: string,
   data: TransactionContactData,
 ): Promise<string> {
-  // BACKLOG-506: Wrap check-then-insert/update pattern in a transaction
-  return dbTransaction(() => {
-    // First check if this contact is already assigned to this transaction
-    const existingCheck = `
-      SELECT id FROM transaction_contacts
-      WHERE transaction_id = ? AND contact_id = ?
+  // First check if this contact is already assigned to this transaction
+  const existingCheck = `
+    SELECT id FROM transaction_contacts
+    WHERE transaction_id = ? AND contact_id = ?
+  `;
+  const existing = dbGet<{ id: string }>(existingCheck, [
+    transactionId,
+    data.contact_id,
+  ]);
+
+  if (existing) {
+    // Update the existing assignment instead of inserting
+    const updateSql = `
+      UPDATE transaction_contacts
+      SET role = ?, role_category = ?, specific_role = ?, is_primary = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
     `;
-    const existing = dbGet<{ id: string }>(existingCheck, [
-      transactionId,
-      data.contact_id,
-    ]);
-
-    if (existing) {
-      // Update the existing assignment instead of inserting
-      const updateSql = `
-        UPDATE transaction_contacts
-        SET role = ?, role_category = ?, specific_role = ?, is_primary = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `;
-      dbRun(updateSql, [
-        data.role || null,
-        data.role_category || null,
-        data.specific_role || null,
-        data.is_primary ? 1 : 0,
-        data.notes || null,
-        existing.id,
-      ]);
-      return existing.id;
-    }
-
-    // Insert new assignment
-    const id = crypto.randomUUID();
-    const sql = `
-      INSERT INTO transaction_contacts (
-        id, transaction_id, contact_id, role, role_category, specific_role, is_primary, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-
-    const params = [
-      id,
-      transactionId,
-      data.contact_id,
+    dbRun(updateSql, [
       data.role || null,
       data.role_category || null,
       data.specific_role || null,
       data.is_primary ? 1 : 0,
       data.notes || null,
-    ];
+      existing.id,
+    ]);
+    return existing.id;
+  }
 
-    dbRun(sql, params);
-    return id;
-  });
+  // Insert new assignment
+  const id = crypto.randomUUID();
+  const sql = `
+    INSERT INTO transaction_contacts (
+      id, transaction_id, contact_id, role, role_category, specific_role, is_primary, notes
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  const params = [
+    id,
+    transactionId,
+    data.contact_id,
+    data.role || null,
+    data.role_category || null,
+    data.specific_role || null,
+    data.is_primary ? 1 : 0,
+    data.notes || null,
+  ];
+
+  dbRun(sql, params);
+  return id;
 }
 
 /**

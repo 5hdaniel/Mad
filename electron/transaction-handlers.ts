@@ -14,11 +14,7 @@ import { dbAll } from "./services/db/core/dbConnection";
 import {
   createCommunication,
   getCommunications,
-  createCommunicationReference,
 } from "./services/db/communicationDbService";
-import {
-  createOrGetMessage,
-} from "./services/db/messageDbService";
 import submissionService from "./services/submissionService";
 import submissionSyncService from "./services/submissionSyncService";
 import type { SubmissionProgress } from "./services/submissionService";
@@ -1554,31 +1550,24 @@ export const registerTransactionHandlers = (
               for (const messageId of gmailIds) {
                 try {
                   const email = await gmailFetchService.getEmailById(messageId);
-                  // BACKLOG-506: Use new pattern - save to messages table, link via communications
-                  // Step 1: Create or get the message in the messages table
-                  const message = createOrGetMessage({
+                  // Save to communications table
+                  await createCommunication({
                     user_id: transaction.user_id,
-                    external_id: messageId,
-                    channel: "email",
-                    subject: email.subject,
-                    body_html: email.body,
-                    body_text: email.bodyPlain,
-                    participants: {
-                      from: email.from || "",
-                      to: email.to ? email.to.split(",").map((s: string) => s.trim()) : [],
-                      cc: email.cc ? email.cc.split(",").map((s: string) => s.trim()) : [],
-                    },
-                    thread_id: email.threadId,
-                    sent_at: email.date ? new Date(email.date).toISOString() : undefined,
-                    has_attachments: email.hasAttachments || false,
-                    metadata: { source: "gmail" },
-                  });
-
-                  // Step 2: Create communication reference linking message to transaction
-                  await createCommunicationReference({
-                    user_id: transaction.user_id,
-                    message_id: message.id,
                     transaction_id: validatedTransactionId,
+                    communication_type: "email",
+                    source: "gmail",
+                    email_thread_id: email.threadId,
+                    sender: email.from,
+                    recipients: email.to,
+                    cc: email.cc,
+                    subject: email.subject,
+                    // BACKLOG-413: Use correct field names from ParsedEmail interface
+                    // Gmail/Outlook services return 'body' (HTML) and 'bodyPlain' (plain text)
+                    body: email.body || email.bodyPlain,
+                    body_plain: email.bodyPlain,
+                    sent_at: email.date ? new Date(email.date).toISOString() : null,
+                    has_attachments: email.hasAttachments || false,
+                    attachment_count: email.attachmentCount || 0,
                     link_source: "manual",
                     link_confidence: 1.0,
                   });
@@ -1605,31 +1594,24 @@ export const registerTransactionHandlers = (
               for (const messageId of outlookIds) {
                 try {
                   const email = await outlookFetchService.getEmailById(messageId);
-                  // BACKLOG-506: Use new pattern - save to messages table, link via communications
-                  // Step 1: Create or get the message in the messages table
-                  const message = createOrGetMessage({
+                  // Save to communications table
+                  await createCommunication({
                     user_id: transaction.user_id,
-                    external_id: messageId,
-                    channel: "email",
-                    subject: email.subject,
-                    body_html: email.body,
-                    body_text: email.bodyPlain,
-                    participants: {
-                      from: email.from || "",
-                      to: email.to ? email.to.split(",").map((s: string) => s.trim()) : [],
-                      cc: email.cc ? email.cc.split(",").map((s: string) => s.trim()) : [],
-                    },
-                    thread_id: email.threadId,
-                    sent_at: email.date ? new Date(email.date).toISOString() : undefined,
-                    has_attachments: email.hasAttachments || false,
-                    metadata: { source: "outlook" },
-                  });
-
-                  // Step 2: Create communication reference linking message to transaction
-                  await createCommunicationReference({
-                    user_id: transaction.user_id,
-                    message_id: message.id,
                     transaction_id: validatedTransactionId,
+                    communication_type: "email",
+                    source: "outlook",
+                    email_thread_id: email.threadId,
+                    sender: email.from,
+                    recipients: email.to,
+                    cc: email.cc,
+                    subject: email.subject,
+                    // BACKLOG-413: Use correct field names from ParsedEmail interface
+                    // Gmail/Outlook services return 'body' (HTML) and 'bodyPlain' (plain text)
+                    body: email.body || email.bodyPlain,
+                    body_plain: email.bodyPlain,
+                    sent_at: email.date ? new Date(email.date).toISOString() : null,
+                    has_attachments: email.hasAttachments || false,
+                    attachment_count: email.attachmentCount || 0,
                     link_source: "manual",
                     link_confidence: 1.0,
                   });
@@ -2651,24 +2633,21 @@ export const registerTransactionHandlers = (
                 }
 
                 try {
-                  // BACKLOG-506: Use new pattern - save to messages table
-                  // During scan, we only create the message (no transaction link yet)
-                  createOrGetMessage({
+                  await createCommunication({
                     user_id: userId,
-                    external_id: email.id || `gmail-${email.threadId}-${Date.now()}`,
-                    channel: "email",
+                    communication_type: "email",
+                    source: "gmail",
+                    email_thread_id: email.threadId,
+                    sender: email.from,
+                    recipients: email.to,
+                    cc: email.cc,
                     subject: email.subject,
-                    body_html: email.body,
-                    body_text: email.bodyPlain,
-                    participants: {
-                      from: email.from || "",
-                      to: email.to ? email.to.split(",").map((s: string) => s.trim()) : [],
-                      cc: email.cc ? email.cc.split(",").map((s: string) => s.trim()) : [],
-                    },
-                    thread_id: email.threadId,
+                    body: email.body || email.bodyPlain,
+                    body_plain: email.bodyPlain,
                     sent_at: email.date ? new Date(email.date).toISOString() : undefined,
                     has_attachments: email.hasAttachments || false,
-                    metadata: { source: "gmail" },
+                    attachment_count: email.attachmentCount || 0,
+                    is_false_positive: false,
                   });
                   emailsStored++;
                   existingSubjectSentKeysGmail.add(emailKey);
@@ -2745,24 +2724,21 @@ export const registerTransactionHandlers = (
                 }
 
                 try {
-                  // BACKLOG-506: Use new pattern - save to messages table
-                  // During scan, we only create the message (no transaction link yet)
-                  createOrGetMessage({
+                  await createCommunication({
                     user_id: userId,
-                    external_id: email.id || `outlook-${email.threadId}-${Date.now()}`,
-                    channel: "email",
+                    communication_type: "email",
+                    source: "outlook",
+                    email_thread_id: email.threadId,
+                    sender: email.from,
+                    recipients: email.to,
+                    cc: email.cc,
                     subject: email.subject,
-                    body_html: email.body,
-                    body_text: email.bodyPlain,
-                    participants: {
-                      from: email.from || "",
-                      to: email.to ? email.to.split(",").map((s: string) => s.trim()) : [],
-                      cc: email.cc ? email.cc.split(",").map((s: string) => s.trim()) : [],
-                    },
-                    thread_id: email.threadId,
+                    body: email.body || email.bodyPlain,
+                    body_plain: email.bodyPlain,
                     sent_at: email.date ? new Date(email.date).toISOString() : undefined,
                     has_attachments: email.hasAttachments || false,
-                    metadata: { source: "outlook" },
+                    attachment_count: email.attachmentCount || 0,
+                    is_false_positive: false,
                   });
                   emailsStored++;
                   existingSubjectSentKeysOutlook.add(emailKey);
