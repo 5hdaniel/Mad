@@ -18,6 +18,14 @@ import { validateFields } from "../../utils/sqlFieldWhitelist";
 /**
  * Create a new communication (email)
  *
+ * @deprecated BACKLOG-506 TEMPORARY: This function takes NewCommunication (which is NewMessage)
+ * for backward compatibility. After TASK-1307 drops legacy columns, update this to use
+ * NewJunctionCommunication and remove all content column handling.
+ *
+ * For new email linking (TASK-1302), the caller should:
+ * 1. Create email in emails table via emailDbService.createEmail()
+ * 2. Call this function with only junction fields (email_id, user_id, transaction_id, etc.)
+ *
  * TASK-975: Now supports message_id for junction table pattern.
  * New communications should provide message_id to link to the messages table.
  * Legacy content fields (subject, body, etc.) are still supported for backward compatibility.
