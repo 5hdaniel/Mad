@@ -343,6 +343,7 @@ CREATE TABLE IF NOT EXISTS emails (
   -- Metadata
   labels TEXT,                         -- JSON: Gmail labels, Outlook categories
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
   FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
 );

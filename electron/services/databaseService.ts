@@ -822,6 +822,7 @@ class DatabaseService implements IDatabaseService {
           content_hash TEXT,
           labels TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
         )
       `);
