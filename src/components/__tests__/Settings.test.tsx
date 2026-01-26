@@ -430,6 +430,9 @@ describe("Settings", () => {
     });
 
     it("should call reindexDatabase when button is clicked", async () => {
+      // Mock window.confirm to return true (user confirms)
+      const confirmSpy = jest.spyOn(window, "confirm").mockReturnValue(true);
+
       window.api.system.reindexDatabase.mockResolvedValue({
         success: true,
         indexesRebuilt: 14,
@@ -446,9 +449,14 @@ describe("Settings", () => {
       await userEvent.click(reindexButton!);
 
       expect(window.api.system.reindexDatabase).toHaveBeenCalled();
+
+      confirmSpy.mockRestore();
     });
 
     it("should show success message after reindex", async () => {
+      // Mock window.confirm to return true (user confirms)
+      const confirmSpy = jest.spyOn(window, "confirm").mockReturnValue(true);
+
       window.api.system.reindexDatabase.mockResolvedValue({
         success: true,
         indexesRebuilt: 14,
@@ -467,9 +475,14 @@ describe("Settings", () => {
           screen.getByText(/database optimized.*14 indexes rebuilt/i),
         ).toBeInTheDocument();
       });
+
+      confirmSpy.mockRestore();
     });
 
     it("should show error message when reindex fails", async () => {
+      // Mock window.confirm to return true (user confirms)
+      const confirmSpy = jest.spyOn(window, "confirm").mockReturnValue(true);
+
       window.api.system.reindexDatabase.mockResolvedValue({
         success: false,
         indexesRebuilt: 0,
@@ -487,6 +500,8 @@ describe("Settings", () => {
       await waitFor(() => {
         expect(screen.getByText(/database is locked/i)).toBeInTheDocument();
       });
+
+      confirmSpy.mockRestore();
     });
   });
 

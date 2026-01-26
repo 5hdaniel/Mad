@@ -12,29 +12,32 @@ import type {
   NewIgnoredCommunication,
 } from "../../types";
 import { DatabaseError } from "../../types";
-import { dbGet, dbAll, dbRun, dbTransaction } from "./core/dbConnection";
+import { dbGet, dbAll, dbRun } from "./core/dbConnection";
 import { validateFields } from "../../utils/sqlFieldWhitelist";
 
 /**
- * Create a new communication (junction table record)
+ * Create a new communication (email)
  *
- * BACKLOG-506: Communications table is now a clean junction table.
- * Content is stored in messages table; this creates the link.
- * Use createCommunicationReference() for the preferred API.
- *
- * @deprecated Use createCommunicationReference() instead
+ * TASK-975: Now supports message_id for junction table pattern.
+ * New communications should provide message_id to link to the messages table.
+ * Legacy content fields (subject, body, etc.) are still supported for backward compatibility.
  */
 export async function createCommunication(
   communicationData: NewCommunication,
 ): Promise<Communication> {
   const id = crypto.randomUUID();
 
-  // BACKLOG-506: Clean junction table schema - only link metadata
   const sql = `
     INSERT INTO communications (
-      id, user_id, transaction_id, message_id, thread_id,
-      communication_type, link_source, link_confidence, linked_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      id, user_id, transaction_id, message_id,
+      link_source, link_confidence, linked_at,
+      communication_type, source,
+      email_thread_id, sender, recipients, cc, bcc,
+      subject, body, body_plain, sent_at, received_at,
+      has_attachments, attachment_count, attachment_metadata,
+      keywords_detected, parties_involved, communication_category,
+      relevance_score, is_compliance_related
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   const params = [
@@ -42,10 +45,35 @@ export async function createCommunication(
     communicationData.user_id,
     communicationData.transaction_id || null,
     communicationData.message_id || null,
-    communicationData.thread_id || null,
-    communicationData.communication_type || "email",
     communicationData.link_source || null,
     communicationData.link_confidence || null,
+    communicationData.linked_at || null,
+    communicationData.communication_type || "email",
+    communicationData.source || null,
+    communicationData.email_thread_id || null,
+    communicationData.sender || null,
+    communicationData.recipients || null,
+    communicationData.cc || null,
+    communicationData.bcc || null,
+    communicationData.subject || null,
+    communicationData.body || null,
+    communicationData.body_plain || null,
+    communicationData.sent_at || null,
+    communicationData.received_at || null,
+    communicationData.has_attachments ? 1 : 0,
+    communicationData.attachment_count || 0,
+    communicationData.attachment_metadata
+      ? JSON.stringify(communicationData.attachment_metadata)
+      : null,
+    communicationData.keywords_detected
+      ? JSON.stringify(communicationData.keywords_detected)
+      : null,
+    communicationData.parties_involved
+      ? JSON.stringify(communicationData.parties_involved)
+      : null,
+    communicationData.communication_category || null,
+    communicationData.relevance_score || null,
+    communicationData.is_compliance_related ? 1 : 0,
   ];
 
   dbRun(sql, params);
@@ -78,70 +106,58 @@ export async function getCommunicationById(
 
 /**
  * Get communications with filters
- *
- * BACKLOG-506: Now joins to messages table for content filtering
  */
 export async function getCommunications(
   filters?: CommunicationFilters,
 ): Promise<Communication[]> {
-  // Base query joins to messages for content access
-  let sql = `
-    SELECT c.*, m.sent_at, m.has_attachments, m.subject, m.body_text as body_plain
-    FROM communications c
-    LEFT JOIN messages m ON c.message_id = m.id
-    WHERE 1=1
-  `;
+  let sql = "SELECT * FROM communications WHERE 1=1";
   const params: unknown[] = [];
 
   if (filters?.user_id) {
-    sql += " AND c.user_id = ?";
+    sql += " AND user_id = ?";
     params.push(filters.user_id);
   }
 
   if (filters?.transaction_id) {
-    sql += " AND c.transaction_id = ?";
+    sql += " AND transaction_id = ?";
     params.push(filters.transaction_id);
   }
 
   if (filters?.communication_type) {
-    sql += " AND c.communication_type = ?";
+    sql += " AND communication_type = ?";
     params.push(filters.communication_type);
   }
 
   if (filters?.start_date) {
-    sql += " AND m.sent_at >= ?";
+    sql += " AND sent_at >= ?";
     params.push(filters.start_date);
   }
 
   if (filters?.end_date) {
-    sql += " AND m.sent_at <= ?";
+    sql += " AND sent_at <= ?";
     params.push(filters.end_date);
   }
 
   if (filters?.has_attachments !== undefined) {
-    sql += " AND m.has_attachments = ?";
+    sql += " AND has_attachments = ?";
     params.push(filters.has_attachments ? 1 : 0);
   }
 
-  sql += " ORDER BY COALESCE(m.sent_at, c.created_at) DESC";
+  sql += " ORDER BY sent_at DESC";
 
   return dbAll<Communication>(sql, params);
 }
 
 /**
  * Get communications for a transaction
- *
- * BACKLOG-506: Now joins to messages table for ordering
  */
 export async function getCommunicationsByTransaction(
   transactionId: string,
 ): Promise<Communication[]> {
   const sql = `
-    SELECT c.*, m.sent_at
-    FROM communications c
-    LEFT JOIN messages m ON c.message_id = m.id
-    WHERE c.transaction_id = ?
-    ORDER BY COALESCE(m.sent_at, c.created_at) DESC
+    SELECT * FROM communications
+    WHERE transaction_id = ?
+    ORDER BY sent_at DESC
   `;
   return dbAll<Communication>(sql, [transactionId]);
 }
@@ -149,21 +165,39 @@ export async function getCommunicationsByTransaction(
 /**
  * Update communication
  *
- * BACKLOG-506: Clean junction table - only link metadata fields allowed
+ * TASK-975: Now supports message_id and link metadata fields.
  */
 export async function updateCommunication(
   communicationId: string,
   updates: Partial<Communication>,
 ): Promise<void> {
-  // BACKLOG-506: Only junction table fields are allowed
   const allowedFields = [
     "transaction_id",
     "message_id",
-    "thread_id",
-    "communication_type",
     "link_source",
     "link_confidence",
     "linked_at",
+    "communication_type",
+    "source",
+    "email_thread_id",
+    "sender",
+    "recipients",
+    "cc",
+    "bcc",
+    "subject",
+    "body",
+    "body_plain",
+    "sent_at",
+    "received_at",
+    "has_attachments",
+    "attachment_count",
+    "attachment_metadata",
+    "keywords_detected",
+    "parties_involved",
+    "communication_category",
+    "relevance_score",
+    "flagged_for_review",
+    "is_compliance_related",
   ];
 
   const fields: string[] = [];
@@ -171,7 +205,17 @@ export async function updateCommunication(
 
   Object.keys(updates).forEach((key) => {
     if (allowedFields.includes(key)) {
-      const value = (updates as Record<string, unknown>)[key];
+      let value = (updates as Record<string, unknown>)[key];
+      if (
+        [
+          "attachment_metadata",
+          "keywords_detected",
+          "parties_involved",
+        ].includes(key) &&
+        typeof value === "object"
+      ) {
+        value = JSON.stringify(value);
+      }
       fields.push(`${key} = ?`);
       values.push(value);
     }
@@ -436,8 +480,6 @@ export interface CreateCommunicationReferenceData {
  * - transaction_id references the transactions table
  * - No content duplication - content stays in messages table
  *
- * BACKLOG-506: Wrapped in transaction for atomicity
- *
  * @param data - The reference data
  * @returns The created communication reference
  */
@@ -446,43 +488,37 @@ export async function createCommunicationReference(
 ): Promise<Communication> {
   const id = crypto.randomUUID();
 
-  // BACKLOG-506: Wrap multi-table operation in a transaction
-  const communication = dbTransaction(() => {
-    const sql = `
-      INSERT INTO communications (
-        id, user_id, message_id, transaction_id,
-        link_source, link_confidence, linked_at
-      ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `;
+  const sql = `
+    INSERT INTO communications (
+      id, user_id, message_id, transaction_id,
+      link_source, link_confidence, linked_at
+    ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+  `;
 
-    const params = [
-      id,
-      data.user_id,
-      data.message_id,
-      data.transaction_id,
-      data.link_source || 'auto',
-      data.link_confidence || null,
-    ];
+  const params = [
+    id,
+    data.user_id,
+    data.message_id,
+    data.transaction_id,
+    data.link_source || 'auto',
+    data.link_confidence || null,
+  ];
 
-    dbRun(sql, params);
+  dbRun(sql, params);
 
-    // BACKLOG-396: Check if the linked message is a text and update thread count
-    const message = dbGet<{ channel: string | null }>(
-      "SELECT channel FROM messages WHERE id = ?",
-      [data.message_id]
-    );
-    if (message?.channel &&
-        (message.channel === 'text' || message.channel === 'sms' || message.channel === 'imessage')) {
-      updateTransactionThreadCount(data.transaction_id);
-    }
-
-    // Fetch the created communication within the transaction
-    const sql2 = "SELECT * FROM communications WHERE id = ?";
-    return dbGet<Communication>(sql2, [id]);
-  });
-
+  const communication = await getCommunicationById(id);
   if (!communication) {
     throw new DatabaseError("Failed to create communication reference");
+  }
+
+  // BACKLOG-396: Check if the linked message is a text and update thread count
+  const message = dbGet<{ channel: string | null }>(
+    "SELECT channel FROM messages WHERE id = ?",
+    [data.message_id]
+  );
+  if (message?.channel &&
+      (message.channel === 'text' || message.channel === 'sms' || message.channel === 'imessage')) {
+    updateTransactionThreadCount(data.transaction_id);
   }
 
   return communication;
@@ -491,8 +527,9 @@ export async function createCommunicationReference(
 /**
  * Get communications for a transaction, joining to messages table for content.
  *
- * BACKLOG-506: Communications table is now a clean junction table.
- * All content comes from the messages table via JOIN.
+ * TASK-975: This retrieves communications with full message content from the
+ * messages table when message_id is set. Falls back to legacy content columns
+ * for records without message_id.
  *
  * TASK-992: Added direction field from messages table for proper bubble display.
  *
@@ -500,57 +537,70 @@ export async function createCommunicationReference(
  * but no message_id, returns all messages in the thread.
  *
  * @param transactionId - The transaction ID
- * @returns Communications with content from messages table
+ * @returns Communications with content from messages table when available
  */
 export async function getCommunicationsWithMessages(
   transactionId: string,
 ): Promise<Communication[]> {
-  // BACKLOG-506: Simplified query - content now only comes from messages table
-  // Query handles both message_id linking and thread_id linking
+  // Query 1: Records with message_id (legacy per-message linking)
+  // Query 2: Records with thread_id (new per-thread linking) - returns all messages in thread
   const sql = `
     SELECT
-      -- Use message ID when available for proper message lookup
+      -- TASK-1116: Use message ID when available for proper message lookup
       COALESCE(m.id, c.id) as id,
       c.id as communication_id,
       c.user_id,
       c.transaction_id,
       c.message_id,
-      c.thread_id as comm_thread_id,
       c.link_source,
       c.link_confidence,
       c.linked_at,
       c.created_at,
-      -- Content from messages table (no COALESCE fallback - clean schema)
+      -- Use message content when available, fall back to legacy columns
       COALESCE(m.channel, c.communication_type) as channel,
       COALESCE(m.channel, c.communication_type) as communication_type,
-      m.body_text as body_text,
-      m.body_text as body_plain,
-      m.body_html as body,
-      m.subject as subject,
-      json_extract(m.participants, '$.from') as sender,
-      (SELECT group_concat(value) FROM json_each(json_extract(m.participants, '$.to'))) as recipients,
-      m.sent_at as sent_at,
-      m.received_at as received_at,
-      m.has_attachments as has_attachments,
-      m.thread_id as email_thread_id,
+      COALESCE(m.body_text, c.body_plain) as body_text,
+      COALESCE(m.body_text, c.body_plain) as body_plain,
+      COALESCE(m.body_html, c.body) as body,
+      COALESCE(m.subject, c.subject) as subject,
+      COALESCE(json_extract(m.participants, '$.from'), c.sender) as sender,
+      COALESCE(
+        (SELECT group_concat(value) FROM json_each(json_extract(m.participants, '$.to'))),
+        c.recipients
+      ) as recipients,
+      COALESCE(m.sent_at, c.sent_at) as sent_at,
+      COALESCE(m.received_at, c.received_at) as received_at,
+      COALESCE(m.has_attachments, c.has_attachments) as has_attachments,
+      COALESCE(m.thread_id, c.email_thread_id) as email_thread_id,
       -- Thread ID for grouping messages into conversations
       m.thread_id as thread_id,
       -- Participants JSON for group chat detection and sender identification
       m.participants as participants,
-      -- Direction from messages table for bubble display
+      -- TASK-992: Direction from messages table for bubble display
       m.direction as direction,
       -- External ID (macOS GUID) for attachment lookup fallback
-      m.external_id as external_id
+      m.external_id as external_id,
+      -- Legacy columns preserved for backward compatibility
+      c.source,
+      c.cc,
+      c.bcc,
+      c.attachment_count,
+      c.attachment_metadata,
+      c.keywords_detected,
+      c.parties_involved,
+      c.communication_category,
+      c.relevance_score,
+      c.is_compliance_related
     FROM communications c
     LEFT JOIN messages m ON (
-      -- Join by message_id
+      -- Legacy: join by message_id
       (c.message_id IS NOT NULL AND c.message_id = m.id)
       OR
-      -- Thread-based linking - join by thread_id
+      -- TASK-1116: Thread-based linking - join by thread_id
       (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
     )
     WHERE c.transaction_id = ?
-    ORDER BY COALESCE(m.sent_at, c.created_at) DESC
+    ORDER BY COALESCE(m.sent_at, c.sent_at) DESC
   `;
 
   const results = dbAll<Communication>(sql, [transactionId]);
@@ -583,96 +633,7 @@ export async function getCommunicationsWithMessages(
     return true;
   });
 
-  // BACKLOG-506: Resolve phone numbers to contact names for text threads
-  const phonesToResolve = new Set<string>();
-  for (const comm of deduped) {
-    const participants = (comm as { participants?: string }).participants;
-    if (participants) {
-      try {
-        const parsed = typeof participants === 'string' ? JSON.parse(participants) : participants;
-        if (parsed.from && parsed.from !== 'me') phonesToResolve.add(parsed.from);
-        if (Array.isArray(parsed.to)) {
-          parsed.to.forEach((p: string) => { if (p !== 'me') phonesToResolve.add(p); });
-        }
-      } catch {
-        // Ignore parse errors
-      }
-    }
-  }
-
-  // Look up contact names for all phone numbers
-  const contactNames = resolvePhonesToContactNames(Array.from(phonesToResolve));
-
-  // Attach contact names to each communication
-  const withContactNames = deduped.map(comm => {
-    const participants = (comm as { participants?: string }).participants;
-    if (!participants) return comm;
-
-    try {
-      const parsed = typeof participants === 'string' ? JSON.parse(participants) : participants;
-      const senderName = parsed.from && parsed.from !== 'me'
-        ? contactNames[normalizePhone(parsed.from)] || null
-        : null;
-      const recipientNames = Array.isArray(parsed.to)
-        ? parsed.to
-            .filter((p: string) => p !== 'me')
-            .map((p: string) => contactNames[normalizePhone(p)] || null)
-            .filter(Boolean)
-        : [];
-
-      return {
-        ...comm,
-        sender_name: senderName,
-        recipient_names: recipientNames.length > 0 ? recipientNames.join(', ') : null,
-      };
-    } catch {
-      return comm;
-    }
-  });
-
-  return withContactNames;
-}
-
-/**
- * Normalize a phone number to last 10 digits for matching
- */
-function normalizePhone(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
-  return digits.slice(-10);
-}
-
-/**
- * Look up contact names for phone numbers
- *
- * BACKLOG-506: Used to resolve participant phone numbers to contact names
- */
-function resolvePhonesToContactNames(phones: string[]): Record<string, string> {
-  if (phones.length === 0) return {};
-
-  // Normalize all phones
-  const normalizedPhones = phones.map(normalizePhone);
-  if (normalizedPhones.length === 0) return {};
-
-  // Build query with placeholders
-  const placeholders = normalizedPhones.map(() => '?').join(',');
-  const sql = `
-    SELECT
-      cp.phone_e164,
-      c.display_name
-    FROM contact_phones cp
-    JOIN contacts c ON cp.contact_id = c.id
-    WHERE SUBSTR(REPLACE(REPLACE(cp.phone_e164, '+', ''), '-', ''), -10) IN (${placeholders})
-  `;
-
-  const results = dbAll<{ phone_e164: string; display_name: string }>(sql, normalizedPhones);
-
-  const nameMap: Record<string, string> = {};
-  for (const row of results) {
-    const normalized = normalizePhone(row.phone_e164);
-    nameMap[normalized] = row.display_name;
-  }
-
-  return nameMap;
+  return deduped;
 }
 
 /**
@@ -723,8 +684,6 @@ export async function getTransactionsForMessage(
  * Instead of creating one communication record per message, we create one per thread.
  * The messages table retains individual messages; this is just the linking junction.
  *
- * BACKLOG-506: Wrapped in transaction for atomicity
- *
  * @param threadId - The thread identifier (from messages.thread_id)
  * @param transactionId - The transaction to link to
  * @param userId - The user ID
@@ -741,32 +700,29 @@ export async function createThreadCommunicationReference(
 ): Promise<string> {
   const id = crypto.randomUUID();
 
-  // BACKLOG-506: Wrap multi-table operation in a transaction
-  dbTransaction(() => {
-    // BACKLOG-502: Set communication_type to 'text' for thread-based links.
-    // This ensures text messages display correctly even if the JOIN to
-    // messages table fails. The schema allows: 'email', 'text', 'imessage'.
-    const sql = `
-      INSERT INTO communications (
-        id, user_id, thread_id, transaction_id,
-        communication_type, link_source, link_confidence, linked_at
-      ) VALUES (?, ?, ?, ?, 'text', ?, ?, CURRENT_TIMESTAMP)
-    `;
+  // BACKLOG-502: Set communication_type to 'text' for thread-based links.
+  // This ensures text messages display correctly even if the JOIN to
+  // messages table fails. The schema allows: 'email', 'text', 'imessage'.
+  const sql = `
+    INSERT INTO communications (
+      id, user_id, thread_id, transaction_id,
+      communication_type, link_source, link_confidence, linked_at
+    ) VALUES (?, ?, ?, ?, 'text', ?, ?, CURRENT_TIMESTAMP)
+  `;
 
-    const params = [
-      id,
-      userId,
-      threadId,
-      transactionId,
-      linkSource,
-      linkConfidence,
-    ];
+  const params = [
+    id,
+    userId,
+    threadId,
+    transactionId,
+    linkSource,
+    linkConfidence,
+  ];
 
-    dbRun(sql, params);
+  dbRun(sql, params);
 
-    // BACKLOG-396: Thread-based linking is always for text messages, update count
-    updateTransactionThreadCount(transactionId);
-  });
+  // BACKLOG-396: Thread-based linking is always for text messages, update count
+  updateTransactionThreadCount(transactionId);
 
   return id;
 }
