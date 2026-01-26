@@ -78,6 +78,8 @@ Investigate why text and email thread counters on TransactionCard show incorrect
 | `src/components/transaction/components/TransactionCard.tsx` | Lines 117-120: How counts are used |
 | `src/components/transactionDetailsModule/components/TransactionMessagesTab.tsx` | Compare with card count logic |
 
+**Note (SR Engineer Review):** The grep for `communication_type` will show many hits in export services (`folderExportService.ts`, `enhancedExportService.ts`, `pdfExportService.ts`). These services get `communication_type` as a computed field from joined queries, not from the `communications` table directly. Verify these services still work correctly with the new architecture - they should be unaffected since they get the type from `messages.channel` via the join.
+
 ### Investigation Commands
 
 ```bash

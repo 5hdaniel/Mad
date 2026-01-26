@@ -475,6 +475,45 @@ Files will be identified during Phase 1 investigation.
 
 ---
 
+## SR Engineer Review Notes
+
+**Review Date:** 2026-01-26
+**Reviewer:** SR Engineer Agent
+**Status:** APPROVED with minor edits
+
+### Issues Found and Resolved
+
+| Issue | Severity | Resolution |
+|-------|----------|------------|
+| BACKLOG-510.md had wrong content (Gmail sync vs counters) | Critical | Fixed - rewrote file with correct counter bug content |
+| Missing BACKLOG-513.md | Moderate | Created new file |
+| Missing BACKLOG-514.md | Moderate | Created new file |
+| TASK-1400 missing note about export services | Low | Added note about communication_type usage in export services |
+
+### Architecture Verification
+
+- [x] File references verified against actual codebase
+- [x] Line numbers verified (TransactionCard.tsx lines 208-225 confirmed)
+- [x] Schema verified (`communications` table is pure junction - no `communication_type` column)
+- [x] Dependencies correctly identified in task files
+- [x] Phase structure is sound (investigation -> implementation -> verification)
+
+### Risk Assessment
+
+| Risk | Assessment |
+|------|------------|
+| Email count fix requires schema change | LOW - Query-only fix sufficient |
+| Export services affected by architecture change | LOW - They get type from joined `messages.channel` |
+| Thread deduplication requires data migration | MEDIUM - Investigation will determine |
+
+### Recommendations
+
+1. Investigation tasks (TASK-1400/1401/1402) should be run in parallel - no shared file modifications
+2. Export services (`folderExportService.ts`, `enhancedExportService.ts`, `pdfExportService.ts`) should be spot-checked after counter fixes to ensure no regression
+3. Consider adding a cleanup script for existing duplicate threads (if TASK-1402 investigation reveals data corruption)
+
+---
+
 ## End-of-Sprint Validation Checklist
 
 - [ ] All tasks merged to project branch
