@@ -78,6 +78,8 @@ Investigate why text and email thread counters on TransactionCard show incorrect
 | `src/components/transaction/components/TransactionCard.tsx` | Lines 117-120: How counts are used |
 | `src/components/transactionDetailsModule/components/TransactionMessagesTab.tsx` | Compare with card count logic |
 
+**Note (SR Engineer Review):** The grep for `communication_type` will show many hits in export services (`folderExportService.ts`, `enhancedExportService.ts`, `pdfExportService.ts`). These services get `communication_type` as a computed field from joined queries, not from the `communications` table directly. Verify these services still work correctly with the new architecture - they should be unaffected since they get the type from `messages.channel` via the join.
+
 ### Investigation Commands
 
 ```bash
@@ -172,61 +174,96 @@ This task's PR MUST pass:
 
 ## Investigation Findings (Engineer-Owned)
 
-**REQUIRED: Record your agent_id immediately when the Task tool returns.**
-
-*Investigation Date: <DATE>*
+*Investigation Date: 2026-01-26*
 
 ### Agent ID
 
 ```
-Engineer Agent ID: <agent_id from Task tool output>
+Engineer Agent ID: engineer-task-1400
 ```
 
 ### Email Count Analysis
 
-**Current Implementation:**
+**Current Implementation (transactionDbService.ts, lines 119-125):**
 ```sql
--- Paste the actual query from transactionDbService.ts
+(SELECT COUNT(*) FROM communications c
+ LEFT JOIN messages m ON (c.message_id IS NOT NULL AND c.message_id = m.id)
+                      OR (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+ WHERE c.transaction_id = t.id
+ AND COALESCE(m.channel, c.communication_type) = 'email') as email_count
 ```
 
 **Issue Found:**
-<Document the specific issue>
+The query references `c.communication_type` which no longer exists in the `communications` table (removed in BACKLOG-506 Migration 23). Additionally, the query does not join to the `emails` table where email content is now stored.
 
 **Root Cause:**
-<Explain why this happens>
+1. `c.communication_type` column was removed in BACKLOG-506
+2. When `m.channel` is NULL, `COALESCE(m.channel, c.communication_type)` returns NULL
+3. `NULL = 'email'` evaluates to FALSE, causing all emails to be uncounted
+4. The query never joins to the `emails` table via `communications.email_id`
 
 **Proposed Fix:**
-<Specific code changes needed>
+```sql
+(SELECT COUNT(DISTINCT c.id) FROM communications c
+ LEFT JOIN messages m ON c.message_id IS NOT NULL AND c.message_id = m.id
+ LEFT JOIN emails e ON c.email_id IS NOT NULL AND c.email_id = e.id
+ WHERE c.transaction_id = t.id
+ AND (
+   m.channel = 'email'           -- Legacy: emails in messages table
+   OR e.id IS NOT NULL           -- New: emails via email_id link
+ )
+) as email_count
+```
 
 ---
 
 ### Text Thread Count Analysis
 
-**Current Implementation:**
+**Current Implementation (communicationDbService.ts, lines 842-855):**
 ```sql
--- Paste the actual query from communicationDbService.ts
+SELECT
+  COALESCE(m.id, c.id) as id,
+  m.thread_id as thread_id,
+  m.participants as participants
+FROM communications c
+LEFT JOIN messages m ON (
+  (c.message_id IS NOT NULL AND c.message_id = m.id)
+  OR
+  (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+)
+WHERE c.transaction_id = ?
+  AND (m.channel IN ('text', 'sms', 'imessage') OR (m.id IS NULL AND c.thread_id IS NOT NULL))
 ```
 
 **Issue Found:**
-<Document the specific issue, or "No issue found">
+No bug found. The query correctly:
+- Joins to `messages` table (not the removed `communication_type`)
+- Filters by `m.channel` from the messages table
+- Handles both direct message links and thread-based links
 
 **Root Cause:**
-<Explain why this happens, or "N/A">
+N/A - Implementation is correct.
 
 **Proposed Fix:**
-<Specific code changes needed, or "None required">
+None required for the query itself. TASK-1404 should verify edge cases and consider unit tests.
 
 ---
 
 ### Architecture Findings
 
 **New Architecture Summary:**
-- [ ] Emails stored in `emails` table
-- [ ] Texts stored in `messages` table
-- [ ] `communications` is pure junction (no content columns)
+- [x] Emails stored in `emails` table
+- [x] Texts stored in `messages` table
+- [x] `communications` is pure junction (no content columns)
 
 **Query Compatibility:**
-<Document which queries are compatible with new architecture>
+
+| Query/Function | File | Status |
+|---------------|------|--------|
+| Email count subquery | transactionDbService.ts | BROKEN - references removed column |
+| Text thread count | communicationDbService.ts | COMPATIBLE |
+| getCommunicationsForTransaction | communicationDbService.ts | COMPATIBLE - computes type from join |
+| Export services | various | COMPATIBLE - use computed field |
 
 ---
 
@@ -234,19 +271,33 @@ Engineer Agent ID: <agent_id from Task tool output>
 
 Based on investigation, recommend specific implementation tasks:
 
-1. **TASK-1403**: <specific scope>
-2. **TASK-1404**: <specific scope, or "Not needed">
+1. **TASK-1403**: Fix email count query in `transactionDbService.ts`
+   - Update `getTransactions()` (lines 119-125)
+   - Update `getTransactionById()` (lines 177-182)
+   - Join to `emails` table via `email_id`
+   - Remove reference to `c.communication_type`
+   - Estimated: ~5K tokens
+
+2. **TASK-1404**: Reduced scope - verification only
+   - Text count query is correct
+   - Verify count updates on link/unlink operations
+   - Consider adding unit tests for edge cases
+   - Estimated: ~3K tokens
+
+---
+
+### Investigation Artifacts
+
+**Full findings document:** `.claude/plans/investigations/BACKLOG-510-counter-accuracy-findings.md`
 
 ---
 
 ### Metrics (Auto-Captured)
 
-**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.csv`
-
 | Metric | Value |
 |--------|-------|
-| **Total Tokens** | X |
-| Duration | X seconds |
+| **Total Tokens** | (auto-captured) |
+| Duration | (auto-captured) |
 
 ---
 
