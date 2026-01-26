@@ -377,6 +377,8 @@ class DatabaseService implements IDatabaseService {
       { name: 'sent_at', sql: `ALTER TABLE communications ADD COLUMN sent_at DATETIME` },
       { name: 'sender', sql: `ALTER TABLE communications ADD COLUMN sender TEXT` },
       { name: 'communication_type', sql: `ALTER TABLE communications ADD COLUMN communication_type TEXT DEFAULT 'email'` },
+      // BACKLOG-506: Email reference column (must be added before schema.sql creates index)
+      { name: 'email_id', sql: `ALTER TABLE communications ADD COLUMN email_id TEXT REFERENCES emails(id) ON DELETE CASCADE` },
     ]);
 
     // TASK-1110: Add external_message_id to attachments for stable message linking
@@ -788,6 +790,69 @@ class DatabaseService implements IDatabaseService {
       await logService.info("Migration 19: Legacy text communications cleaned up - duplicates should be resolved", "DatabaseService");
     }
 
+    // Migration 22: Create emails table and add email_id to communications (BACKLOG-506)
+    const emailsTableExists = db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='emails'"
+    ).get();
+
+    if (!emailsTableExists) {
+      await logService.info("Running migration 22: Create emails table", "DatabaseService");
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS emails (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          external_id TEXT,
+          source TEXT CHECK (source IN ('gmail', 'outlook')),
+          account_id TEXT,
+          direction TEXT CHECK (direction IN ('inbound', 'outbound')),
+          subject TEXT,
+          body_plain TEXT,
+          body_html TEXT,
+          sender TEXT,
+          recipients TEXT,
+          cc TEXT,
+          bcc TEXT,
+          thread_id TEXT,
+          in_reply_to TEXT,
+          references_header TEXT,
+          sent_at DATETIME,
+          received_at DATETIME,
+          has_attachments INTEGER DEFAULT 0,
+          attachment_count INTEGER DEFAULT 0,
+          message_id_header TEXT,
+          content_hash TEXT,
+          labels TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
+        )
+      `);
+
+      // Create indexes
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_emails_user_id ON emails(user_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_emails_thread_id ON emails(thread_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_emails_sent_at ON emails(sent_at)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_emails_sender ON emails(sender)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_emails_external_id ON emails(external_id)`);
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_emails_user_external ON emails(user_id, external_id) WHERE external_id IS NOT NULL`);
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_emails_message_id_header ON emails(user_id, message_id_header) WHERE message_id_header IS NOT NULL`);
+
+      await logService.info("Migration 22: emails table created", "DatabaseService");
+    }
+
+    // Add email_id column to communications table (if not exists)
+    const commEmailIdExists = db.prepare(`
+      SELECT COUNT(*) as count FROM pragma_table_info('communications') WHERE name='email_id'
+    `).get() as { count: number };
+
+    if (commEmailIdExists.count === 0) {
+      await logService.info("Migration 22: Adding email_id column to communications", "DatabaseService");
+      db.exec(`ALTER TABLE communications ADD COLUMN email_id TEXT REFERENCES emails(id) ON DELETE CASCADE`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_communications_email_id ON communications(email_id)`);
+      await logService.info("Migration 22: email_id column added to communications", "DatabaseService");
+    }
+
     // Finalize schema version (create table if missing for backwards compatibility)
     const schemaVersionExists = db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
@@ -800,12 +865,12 @@ class DatabaseService implements IDatabaseService {
           version INTEGER NOT NULL DEFAULT 1,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
-        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 21);
+        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 22);
       `);
     } else {
       const currentVersion = (db.prepare("SELECT version FROM schema_version").get() as { version: number } | undefined)?.version || 0;
-      if (currentVersion < 21) {
-        db.exec("UPDATE schema_version SET version = 21");
+      if (currentVersion < 22) {
+        db.exec("UPDATE schema_version SET version = 22");
       }
     }
 

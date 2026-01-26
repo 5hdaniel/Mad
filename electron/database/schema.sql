@@ -296,6 +296,68 @@ CREATE TABLE IF NOT EXISTS attachments (
 );
 
 -- ============================================
+-- EMAILS TABLE (BACKLOG-506)
+-- ============================================
+-- Stores email content separately from the communications junction table.
+-- communications.email_id links to this table for email content.
+CREATE TABLE IF NOT EXISTS emails (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+
+  -- Source identification
+  external_id TEXT,                    -- Gmail/Outlook message ID
+  source TEXT CHECK (source IN ('gmail', 'outlook')),
+  account_id TEXT,                     -- Which email account
+
+  -- Direction
+  direction TEXT CHECK (direction IN ('inbound', 'outbound')),
+
+  -- Content
+  subject TEXT,
+  body_plain TEXT,                     -- Plain text version
+  body_html TEXT,                      -- HTML version
+
+  -- Participants
+  sender TEXT,                         -- From address
+  recipients TEXT,                     -- To addresses (comma-separated)
+  cc TEXT,
+  bcc TEXT,
+
+  -- Threading
+  thread_id TEXT,                      -- Email thread/conversation ID
+  in_reply_to TEXT,                    -- Message-ID of parent
+  references_header TEXT,              -- References header for threading
+
+  -- Timestamps
+  sent_at DATETIME,
+  received_at DATETIME,
+
+  -- Attachments
+  has_attachments INTEGER DEFAULT 0,
+  attachment_count INTEGER DEFAULT 0,
+
+  -- Deduplication
+  message_id_header TEXT,              -- RFC 5322 Message-ID
+  content_hash TEXT,                   -- SHA-256 for dedup
+
+  -- Metadata
+  labels TEXT,                         -- JSON: Gmail labels, Outlook categories
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
+);
+
+-- Emails indexes (BACKLOG-506: Performance requirement)
+CREATE INDEX IF NOT EXISTS idx_emails_user_id ON emails(user_id);
+CREATE INDEX IF NOT EXISTS idx_emails_thread_id ON emails(thread_id);
+CREATE INDEX IF NOT EXISTS idx_emails_sent_at ON emails(sent_at);
+CREATE INDEX IF NOT EXISTS idx_emails_sender ON emails(sender);
+CREATE INDEX IF NOT EXISTS idx_emails_external_id ON emails(external_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_emails_user_external ON emails(user_id, external_id) WHERE external_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_emails_message_id_header ON emails(user_id, message_id_header) WHERE message_id_header IS NOT NULL;
+
+-- ============================================
 -- TRANSACTIONS TABLE (Real estate deals)
 -- ============================================
 CREATE TABLE IF NOT EXISTS transactions (
@@ -802,6 +864,9 @@ CREATE TABLE IF NOT EXISTS communications (
   -- New communications should always set this to link to messages table
   message_id TEXT,
 
+  -- BACKLOG-506: Email reference (link to emails table for email content)
+  email_id TEXT,
+
   -- Link metadata (TASK-975)
   link_source TEXT CHECK (link_source IN ('auto', 'manual', 'scan')),
   link_confidence REAL,
@@ -850,7 +915,8 @@ CREATE TABLE IF NOT EXISTS communications (
 
   FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
   FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL,
-  FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+  FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+  FOREIGN KEY (email_id) REFERENCES emails(id) ON DELETE CASCADE
 );
 
 -- Communications indexes
@@ -866,6 +932,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_communications_msg_txn_unique ON communica
 -- TASK-1114: Thread-based linking indexes (SPRINT-042)
 CREATE INDEX IF NOT EXISTS idx_communications_thread_id ON communications(thread_id);
 CREATE INDEX IF NOT EXISTS idx_communications_thread_txn ON communications(thread_id, transaction_id);
+-- BACKLOG-506: Email reference index
+CREATE INDEX IF NOT EXISTS idx_communications_email_id ON communications(email_id);
 
 -- ============================================
 -- IGNORED COMMUNICATIONS TABLE
@@ -948,5 +1016,5 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 
 -- Initialize schema version if not exists
--- Version 16: All migrations through BACKLOG-426 (license type support)
-INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 16);
+-- Version 22: BACKLOG-506 emails table + email_id in communications
+INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 22);
