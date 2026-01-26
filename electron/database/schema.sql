@@ -863,6 +863,9 @@ CREATE TABLE IF NOT EXISTS communications (
   -- New communications should always set this to link to messages table
   message_id TEXT,
 
+  -- BACKLOG-506: Email reference (link to emails table for email content)
+  email_id TEXT,
+
   -- Link metadata (TASK-975)
   link_source TEXT CHECK (link_source IN ('auto', 'manual', 'scan')),
   link_confidence REAL,
@@ -911,7 +914,8 @@ CREATE TABLE IF NOT EXISTS communications (
 
   FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
   FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL,
-  FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+  FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+  FOREIGN KEY (email_id) REFERENCES emails(id) ON DELETE CASCADE
 );
 
 -- Communications indexes
@@ -927,6 +931,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_communications_msg_txn_unique ON communica
 -- TASK-1114: Thread-based linking indexes (SPRINT-042)
 CREATE INDEX IF NOT EXISTS idx_communications_thread_id ON communications(thread_id);
 CREATE INDEX IF NOT EXISTS idx_communications_thread_txn ON communications(thread_id, transaction_id);
+-- BACKLOG-506: Email reference index
+CREATE INDEX IF NOT EXISTS idx_communications_email_id ON communications(email_id);
 
 -- ============================================
 -- IGNORED COMMUNICATIONS TABLE
