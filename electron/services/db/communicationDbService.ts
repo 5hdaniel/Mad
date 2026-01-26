@@ -29,7 +29,7 @@ export async function createCommunication(
 
   const sql = `
     INSERT INTO communications (
-      id, user_id, transaction_id, message_id,
+      id, user_id, transaction_id, message_id, email_id,
       link_source, link_confidence, linked_at,
       communication_type, source,
       email_thread_id, sender, recipients, cc, bcc,
@@ -37,7 +37,7 @@ export async function createCommunication(
       has_attachments, attachment_count, attachment_metadata,
       keywords_detected, parties_involved, communication_category,
       relevance_score, is_compliance_related
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   const params = [
@@ -45,6 +45,7 @@ export async function createCommunication(
     communicationData.user_id,
     communicationData.transaction_id || null,
     communicationData.message_id || null,
+    communicationData.email_id || null,
     communicationData.link_source || null,
     communicationData.link_confidence || null,
     communicationData.linked_at || null,
@@ -174,6 +175,7 @@ export async function updateCommunication(
   const allowedFields = [
     "transaction_id",
     "message_id",
+    "email_id",
     "link_source",
     "link_confidence",
     "linked_at",

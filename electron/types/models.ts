@@ -419,6 +419,10 @@ export interface Message {
   link_confidence?: number;
   /** When the link was created */
   linked_at?: Date | string;
+
+  // Email Link (BACKLOG-506)
+  /** ID of the email in the emails table (for email communications) */
+  email_id?: string;
 }
 
 // ============================================
