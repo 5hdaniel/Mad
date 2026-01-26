@@ -633,7 +633,7 @@ Stop and ask PM if:
 
 | Step | Agent Type | Agent ID | Tokens | Status |
 |------|------------|----------|--------|--------|
-| 1. Plan | Plan Agent | ___________ | ___K | ☐ Pending |
+| 1. Plan | Plan Agent | PM-062-plan-1503 | ~5K | ☑ Complete |
 | 2. SR Review | SR Engineer Agent | ___________ | ___K | ☐ Pending |
 | 3. User Review | (No agent) | N/A | N/A | ☐ Pending |
 | 4. Compact | (Context reset) | N/A | N/A | ☐ Pending |
@@ -642,11 +642,99 @@ Stop and ask PM if:
 
 ### Step 1: Plan Output
 
-*Plan Agent writes implementation plan here after Step 1*
+**Plan Agent ID:** PM-062-plan-1503
+**Planning Date:** 2026-01-26
 
+#### Discovery: Existing Schema
+
+Supabase already has licensing tables (discovered via MCP query):
+
+| Table | Columns | Rows | RLS |
+|-------|---------|------|-----|
+| `licenses` | id, user_id, license_key, max_devices, status, expires_at, activated_at | 0 | Yes |
+| `devices` | id, user_id, device_id, device_name, os, app_version, last_seen_at, activated_at | 407 | Yes |
+| `users` | subscription_tier, subscription_status, trial_ends_at | 4 | Yes |
+| `profiles` | license_type, ai_detection_enabled, organization_id | 1 | No |
+
+**Existing Migration:** `20260124191451_add_license_columns_to_profiles`
+
+#### Recommended Approach: Enhance Existing Tables
+
+Instead of creating duplicate `user_licenses` and `device_registrations` tables, we should enhance the existing `licenses` and `devices` tables.
+
+**Rationale:**
+1. Avoids data duplication
+2. Existing RLS policies already configured
+3. Less migration complexity
+4. 407 existing device records preserved
+
+#### Migration Plan
+
+**Step 1: Add Missing Columns to `licenses`**
+
+```sql
+ALTER TABLE licenses
+  ADD COLUMN IF NOT EXISTS transaction_count INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS transaction_limit INTEGER DEFAULT 5,
+  ADD COLUMN IF NOT EXISTS trial_status TEXT DEFAULT 'active'
+    CHECK (trial_status IN ('active', 'expired', 'converted')),
+  ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMPTZ DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS trial_expires_at TIMESTAMPTZ DEFAULT (now() + INTERVAL '14 days'),
+  ADD COLUMN IF NOT EXISTS license_type TEXT DEFAULT 'trial'
+    CHECK (license_type IN ('trial', 'individual', 'team')),
+  ADD COLUMN IF NOT EXISTS ai_detection_enabled BOOLEAN DEFAULT false;
 ```
-[Plan to be written here]
+
+**Step 2: Add Missing Columns to `devices`**
+
+```sql
+ALTER TABLE devices
+  ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true,
+  ADD COLUMN IF NOT EXISTS platform TEXT;
+
+-- Migrate existing os values to platform
+UPDATE devices SET platform = LOWER(os) WHERE platform IS NULL AND os IS NOT NULL;
 ```
+
+**Step 3: Create Convenience Functions**
+
+```sql
+-- create_trial_license(p_user_id UUID) RETURNS licenses
+-- increment_transaction_count(p_user_id UUID) RETURNS INTEGER
+-- is_trial_expired(p_user_id UUID) RETURNS BOOLEAN
+-- get_device_limit(p_user_id UUID) RETURNS INTEGER
+-- check_device_limit() TRIGGER
+```
+
+**Step 4: Verify RLS Policies**
+
+Confirm existing policies allow:
+- SELECT on own license/devices
+- INSERT on own devices
+- UPDATE on own license (limited)
+- DELETE on own devices
+
+**Step 5: TypeScript Types**
+
+Create `shared/types/license.ts` matching actual schema.
+
+#### Questions for SR Review
+
+1. **Table Naming:** Keep `licenses`/`devices` or rename to `user_licenses`/`device_registrations` for consistency with task spec?
+2. **License Key:** Existing `licenses.license_key` column - still needed?
+3. **Profiles Duplication:** `profiles.license_type` and `profiles.ai_detection_enabled` duplicate planned columns - consolidate?
+4. **Existing Data:** 407 device records - any migration concerns?
+
+#### Estimated Tokens
+
+| Step | Estimated |
+|------|-----------|
+| Migration SQL | ~3K |
+| Functions | ~5K |
+| RLS Verification | ~2K |
+| TypeScript Types | ~3K |
+| Testing | ~5K |
+| **Total** | ~18K |
 
 ### Step 2: SR Review Notes
 
