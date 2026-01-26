@@ -883,6 +883,8 @@ class DatabaseService implements IDatabaseService {
 
       // Step 2: Copy data from old table (only junction fields)
       // Filter: Only copy records that have at least one content reference
+      // IMPORTANT: Deduplicate to avoid unique constraint violations
+      // Use subqueries to get one row per unique combination
       db.exec(`
         INSERT INTO communications_new (
           id, user_id, transaction_id, message_id, email_id, thread_id,
@@ -892,7 +894,23 @@ class DatabaseService implements IDatabaseService {
           id, user_id, transaction_id, message_id, email_id, thread_id,
           link_source, link_confidence, linked_at, created_at
         FROM communications
-        WHERE message_id IS NOT NULL OR email_id IS NOT NULL OR thread_id IS NOT NULL
+        WHERE (message_id IS NOT NULL OR email_id IS NOT NULL OR thread_id IS NOT NULL)
+          AND id IN (
+            -- Get first ID for each unique email_id + transaction_id
+            SELECT MIN(id) FROM communications
+            WHERE email_id IS NOT NULL
+            GROUP BY email_id, transaction_id
+            UNION
+            -- Get first ID for each unique message_id + transaction_id
+            SELECT MIN(id) FROM communications
+            WHERE message_id IS NOT NULL
+            GROUP BY message_id, transaction_id
+            UNION
+            -- Get first ID for each unique thread_id + transaction_id (without message/email)
+            SELECT MIN(id) FROM communications
+            WHERE thread_id IS NOT NULL AND message_id IS NULL AND email_id IS NULL
+            GROUP BY thread_id, transaction_id
+          )
       `);
 
       // Step 3: Drop old table
