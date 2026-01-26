@@ -409,7 +409,7 @@ CREATE TABLE IF NOT EXISTS transactions (
 
   -- Export Tracking
   export_status TEXT DEFAULT 'not_exported' CHECK (export_status IN ('not_exported', 'exported', 're_export_needed')),
-  export_format TEXT CHECK (export_format IN ('pdf', 'csv', 'json', 'txt_eml', 'excel')),
+  export_format TEXT CHECK (export_format IN ('pdf', 'csv', 'json', 'txt_eml', 'excel', 'folder')),
   export_count INTEGER DEFAULT 0,
   last_exported_at DATETIME,
   last_exported_on DATETIME,             -- Legacy alias (migration 4), use last_exported_at for new code

@@ -2118,10 +2118,10 @@ export const registerTransactionHandlers = (
         );
 
         // Update export tracking in database
+        // Note: export_format constraint doesn't include "folder", so we use NULL
         const db = require("./services/databaseService").default;
         await db.updateTransaction(validatedTransactionId, {
           export_status: "exported",
-          export_format: "folder",
           last_exported_on: new Date().toISOString(),
           export_count: (details.export_count || 0) + 1,
         });
