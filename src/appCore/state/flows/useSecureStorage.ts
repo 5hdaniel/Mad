@@ -110,6 +110,7 @@ export function useSecureStorage(
   const isDeferredDbInit = selectIsDeferredDbInit(state);
 
   // initializeSecureStorage: saves preference AND triggers DB init for first-time macOS users
+  // After DB init succeeds, syncs any queued data (like phone type) to the database
   const initializeSecureStorage = useCallback(
     async (dontShowAgain: boolean): Promise<boolean> => {
       if (dontShowAgain) {
@@ -130,6 +131,25 @@ export function useSecureStorage(
             error: result.error,
           });
 
+          // After successful DB init, sync any queued phone type to the database
+          if (result.success && state.status === "onboarding" && state.selectedPhoneType) {
+            const userId = state.user.id;
+            const phoneType = state.selectedPhoneType;
+            try {
+              const userApi = window.api.user as {
+                setPhoneType: (
+                  userId: string,
+                  phoneType: "iphone" | "android"
+                ) => Promise<{ success: boolean; error?: string }>;
+              };
+              await userApi.setPhoneType(userId, phoneType);
+              console.log("[useSecureStorage] Synced queued phone type to DB:", phoneType);
+            } catch (syncError) {
+              // Log but don't fail - phone type is already in state
+              console.warn("[useSecureStorage] Failed to sync phone type to DB:", syncError);
+            }
+          }
+
           return result.success;
         } catch (error) {
           dispatch({
@@ -144,7 +164,7 @@ export function useSecureStorage(
       // For returning users or Windows, DB is already initialized
       return true;
     },
-    [dispatch, isDeferredDbInit]
+    [dispatch, isDeferredDbInit, state]
   );
 
   return {
