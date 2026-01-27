@@ -1,7 +1,7 @@
 # Sprint Plan: SPRINT-062 - Auth Flow + Licensing System
 
 **Created**: 2026-01-26
-**Updated**: 2026-01-26
+**Updated**: 2026-01-27 (PM: Added TASK-1507G - Unify User IDs architectural fix)
 **Status**: Ready
 **Goal**: Implement browser-based auth flow with Supabase licensing system
 **Branch**: `project/licensing-and-auth-flow`
@@ -31,7 +31,7 @@ Before starting sprint work, engineers must:
 
 ---
 
-## In Scope (9 Implementation Tasks + 1 SR Review)
+## In Scope (18 Implementation Tasks + 1 SR Review)
 
 ### Phase 1: Auth Infrastructure
 | Task ID | Backlog | Title | Est. Tokens | Execution |
@@ -53,6 +53,15 @@ Before starting sprint work, engineers must:
 |---------|---------|-------|-------------|-----------|
 | TASK-1506 | BACKLOG-480 | Add License Check at App Start | ~15K | Sequential |
 | TASK-1507 | BACKLOG-484 | Add License Validation at Auth | ~15K | Sequential |
+| TASK-1507B | - | Wire Deep Link Auth Success to Frontend (Bug Fix) | ~20K | Sequential |
+| TASK-1507C | - | Fix Deep Link Auth Not Setting currentUser (Bug Fix) | ~15K | Sequential |
+| TASK-1507D | - | Fix Local SQLite User Not Created (Bug Fix) | ~25K | Sequential |
+| TASK-1507E | - | Fix Existing Users Missing Local SQLite User (Bug Fix) | ~30K | Sequential |
+| TASK-1507F | - | Fix User ID Mismatch in Renderer Callback (Bug Fix) | ~15K | Sequential |
+| TASK-1507G | - | Unify User IDs Across Local SQLite and Supabase | ~50K | Sequential |
+| TASK-1508A | - | Fix URL Fragment Token Parsing (Bug Fix) | ~15K | Sequential |
+| TASK-1508B | - | Fix Env Vars for Packaged Builds (Bug Fix) | ~20K | Sequential |
+| TASK-1508C | - | Fix Google Maps API Key in Packaged Builds (Bug Fix) | ~10K | Parallel |
 | TASK-1508 | - | Manual Test Full Flow (USER GATE) | ~5K | User |
 
 ### Phase 4: Review
@@ -81,7 +90,7 @@ dependency_graph:
     - id: phase-3
       name: "Integration"
       requires: [phase-1, phase-2]
-      tasks: [TASK-1506, TASK-1507]
+      tasks: [TASK-1506, TASK-1507, TASK-1507B, TASK-1507C, TASK-1507D, TASK-1507E, TASK-1507F, TASK-1507G, TASK-1508A, TASK-1508B]
       gate: TASK-1508 (USER GATE)
 
     - id: phase-4
@@ -127,10 +136,46 @@ dependency_graph:
       to: TASK-1507
       reason: "App start check before auth callback integration"
 
-    # Phase 3 -> User Gate
     - from: TASK-1507
+      to: TASK-1507B
+      reason: "Wire deep link auth handler to frontend"
+
+    - from: TASK-1507B
+      to: TASK-1507C
+      reason: "Fix currentUser not being set after deep link auth"
+
+    - from: TASK-1507C
+      to: TASK-1507D
+      reason: "Fix local SQLite user creation after currentUser is set"
+
+    - from: TASK-1507D
+      to: TASK-1507E
+      reason: "Fix existing users missing local SQLite user (retroactive fix)"
+
+    - from: TASK-1507E
+      to: TASK-1507F
+      reason: "Fix user ID mismatch - send local ID to renderer"
+
+    - from: TASK-1507F
+      to: TASK-1507G
+      reason: "Unify user IDs - architectural fix for ID mismatch root cause"
+
+    - from: TASK-1507G
+      to: TASK-1508A
+      reason: "Fix URL fragment parsing bug discovered during testing"
+
+    - from: TASK-1508A
+      to: TASK-1508B
+      reason: "Fix env vars bug depends on auth flow working"
+
+    - from: TASK-1508B
+      to: TASK-1508C
+      reason: "Fix Google Maps API key (parallel, lower priority)"
+
+    # Phase 3 -> User Gate
+    - from: TASK-1508B
       to: TASK-1508
-      reason: "User validates full flow"
+      reason: "User validates full flow after bug fixes (TASK-1508C can be parallel)"
 
     # User Gate -> SR Review
     - from: TASK-1508
@@ -165,7 +210,33 @@ Phase 3: Integration (requires BOTH Phase 1 AND Phase 2 gates to pass)
   TASK-1507 (License Validation at Auth)
        |
        v
-  TASK-1508 [USER GATE] <---- User tests full flow
+  TASK-1507B (Wire Deep Link Auth to Frontend) <---- Bug fix: handler not wired
+       |
+       v
+  TASK-1507C (Fix currentUser Not Set) <---- Bug fix: login() not called
+       |
+       v
+  TASK-1507D (Fix Local SQLite User) <---- Bug fix: FK constraint failures (NEW auth)
+       |
+       v
+  TASK-1507E (Fix Existing Users) <---- Bug fix: FK failures for EXISTING users
+       |
+       v
+  TASK-1507F (Fix User ID Mismatch) <---- Bug fix: Send local ID to renderer
+       |
+       v
+  TASK-1507G (Unify User IDs) <---- Architectural fix: Use Supabase ID everywhere
+       |
+       v
+  TASK-1508A (Fix URL Fragment Parsing) <---- Bug fix: Supabase returns #access_token
+       |
+       v
+  TASK-1508B (Fix Env Vars for Packaged) <---- Bug fix: process.env undefined in prod
+       |
+       +----> TASK-1508C (Google Maps API Key) <---- Parallel, P2
+       |
+       v
+  TASK-1508 [USER GATE] <---- User tests full flow after bug fixes
        |
        v
 Phase 4: Final Review
@@ -283,9 +354,11 @@ Phase 4: Final Review
 | Phase 2: Licensing | TASK-1503, 1503B, 1504 | ~65K | Sequential |
 | Phase 2: Gate | TASK-1505 | ~5K | User testing |
 | Phase 3: Integration | TASK-1506, 1507 | ~30K | Sequential |
+| Phase 3: Bug Fixes | TASK-1507B, 1507C, 1507D, 1507E, 1507F, 1508A, 1508B, 1508C | ~150K | Sequential (discovered during testing) |
+| Phase 3: Architecture | TASK-1507G | ~50K | Unify user IDs |
 | Phase 3: Gate | TASK-1508 | ~5K | User testing |
 | Phase 4: Review | TASK-1509 | ~20K | SR Engineer |
-| **Total** | **11 tasks** | **~185K** | - |
+| **Total** | **20 tasks** | **~385K** | - |
 
 ---
 
@@ -298,12 +371,116 @@ Phase 4: Final Review
 | 1 | TASK-1502 | - | **PASSED** | USER | - | - |
 | 2 | TASK-1503 | BACKLOG-477 | **Complete** | PM direct | - | ~28K |
 | 2 | TASK-1503B | - | **Complete** | PM direct | - | ~3K |
-| 2 | TASK-1504 | BACKLOG-478 | **Ready** | - | - | - |
+| 2 | TASK-1504 | BACKLOG-478 | **Testing** | PM direct | #632 | ~45K |
 | 2 | TASK-1505 | - | Blocked | USER | - | - |
-| 3 | TASK-1506 | BACKLOG-480 | Blocked | - | - | - |
-| 3 | TASK-1507 | BACKLOG-484 | Blocked | - | - | - |
+| 3 | TASK-1506 | BACKLOG-480 | **Planning** | - | - | - |
+| 3 | TASK-1507 | BACKLOG-484 | **Complete** | PM direct | #634 | ~22K |
+| 3 | TASK-1507B | - | **Complete** | PM direct | #637 | - |
+| 3 | TASK-1507C | - | **Complete** | PM direct | #638 | - |
+| 3 | TASK-1507D | - | **Complete** | PM direct | #639 | - |
+| 3 | TASK-1507E | - | **Ready** | - | - | - |
+| 3 | TASK-1507F | - | **Ready** | - | - | - |
+| 3 | TASK-1507G | - | **Ready** | - | - | - |
+| 3 | TASK-1508A | - | **Complete** | PM direct | #636 | - |
+| 3 | TASK-1508B | - | Blocked | - | - | - |
+| 3 | TASK-1508C | - | **Ready** (P2) | - | - | - |
 | 3 | TASK-1508 | - | Blocked | USER | - | - |
 | 4 | TASK-1509 | - | Blocked | - | - | - |
+
+---
+
+## Bugs Discovered During Testing (2026-01-26, updated 2026-01-27)
+
+During TASK-1508 manual testing, multiple blocking bugs were discovered:
+
+**Bug 1: Deep Link Auth Not Wired to Frontend (TASK-1507B)**
+- **Error:** App stays on login screen after successful deep link auth
+- **Root Cause:** `Login.tsx` has `onDeepLinkAuthSuccess` prop but `AppRouter.tsx` never passes it
+- **Status:** Complete (PR #637)
+
+**Bug 2: Deep Link Auth Not Setting currentUser (TASK-1507C)**
+- **Error:** "Failed to start Google OAuth: undefined" when connecting email after deep link auth
+- **Root Cause:** `handleDeepLinkAuthSuccess` dispatches `LOGIN_SUCCESS` but does NOT call `login()` function
+- **Status:** Complete (PR #638)
+
+**Bug 3: Local SQLite User Not Created (TASK-1507D)**
+- **Error:** "FOREIGN KEY constraint failed" when connecting mailbox
+- **Root Cause:** Deep link auth creates user in Supabase but NOT in local SQLite database
+- **Status:** Complete (PR #639)
+
+**Bug 4: Existing Users Missing Local SQLite User (TASK-1507E)**
+- **Error:** FK constraint failures for users who authenticated before TASK-1507D fix
+- **Root Cause:** TASK-1507D only handles NEW auth flows, not existing sessions
+- **Status:** Ready
+
+**Bug 5: User ID Mismatch in Renderer Callback (TASK-1507F)**
+- **Error:** FK constraint failures persist even after local user created
+- **Root Cause:** `sendToRenderer()` sends Supabase UUID instead of local SQLite user ID
+- **File:** `electron/main.ts` lines 342-354
+- **Status:** Ready
+
+**Bug 6: URL Fragment Token Parsing (TASK-1508A)**
+- **Error:** "Missing tokens in callback URL"
+- **Root Cause:** Supabase OAuth returns tokens in URL fragment, code only reads query params
+- **Status:** Complete (PR #636)
+
+**Bug 7: Env Vars in Packaged App (TASK-1508B)**
+- **Error:** "Authentication not configured"
+- **Root Cause:** `process.env.SUPABASE_URL` undefined in packaged builds
+- **Status:** Blocked
+
+**Bug 8: Google Maps API Key Not Embedded (TASK-1508C)**
+- **Error:** "No Google Maps API key configured"
+- **Root Cause:** TASK-1508B only embeds Supabase vars, not Google Maps API key
+- **Status:** Ready (P2)
+
+**Architectural Issue: Dual User ID System (TASK-1507G)**
+- **Error:** FK constraint failures when local ID used for Supabase operations
+- **Root Cause:** App uses random UUID for local SQLite user ID, but Supabase Auth has its own UUID
+- **Impact:** Blocks ALL licensing functionality (licenses, devices use Supabase FK constraints)
+- **Solution:** Use Supabase Auth ID as canonical user ID everywhere
+- **Status:** Ready (P0 - blocks licensing)
+
+### P2/P3 Polish Bugs (discovered 2026-01-27)
+
+**Bug 9: Contacts Count Mismatch (BACKLOG-537)**
+- **Error:** Logs show "Found 27 imported contacts" but UI only displays 2 contacts
+- **Root Cause:** Data/filtering discrepancy between backend query and frontend display
+- **Impact:** P2 - Core feature showing incomplete data
+- **Status:** Deferred (not blocking license flow)
+
+**Bug 10: Email Connection State Not Synced to Dashboard (BACKLOG-538)**
+- **Error:** "Complete your account setup" banner shows even when Settings shows email "Connected"
+- **Root Cause:** Dashboard checks different state than Settings modal (same root cause as BACKLOG-536)
+- **Impact:** P2 - Confusing UX, shows incomplete setup when actually complete
+- **Related:** BACKLOG-536 (Settings modal refresh issue) - should be fixed together
+- **Status:** Deferred (not blocking license flow)
+
+**Bug 11: Settings Modal Doesn't Refresh After Email Connection (BACKLOG-536)**
+- **Error:** After connecting email, Settings modal still shows "Connect" until close/reopen
+- **Root Cause:** Email connection state not propagating to components after OAuth success
+- **Impact:** P3 - Minor UI polish
+- **Status:** Deferred (not blocking license flow)
+
+**Bug 12: Scan Lookback Period Not Persistent (BACKLOG-539)**
+- **Error:** Scan Lookback Period setting reverts to previous value after closing Settings modal
+- **Root Cause:** Setting value not being saved to user preferences
+- **Impact:** P2 - Functional bug, settings don't persist
+- **Status:** Deferred (not blocking license flow)
+
+**Bug 13: Settings Modal Needs Save Button (BACKLOG-540)**
+- **Error:** Settings modal shows only "Done" button, no indication changes will be saved
+- **Root Cause:** UX design - need explicit save button when settings are modified
+- **Impact:** P3 - UX enhancement
+- **Status:** Deferred (not blocking license flow)
+
+**Bug 14: Scan Lookback Period Default Should Be 3 Months (BACKLOG-541)**
+- **Error:** Lookback period defaults to wrong value (not 3 months)
+- **Root Cause:** Default value configuration
+- **Impact:** P3 - Default value tweak
+- **Status:** Deferred (not blocking license flow)
+
+**Settings Bundle Note:** Bugs 12, 13, 14 (BACKLOG-539, 540, 541) all affect the Settings modal and should be fixed together in a future sprint.
 
 ---
 

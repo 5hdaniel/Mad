@@ -766,8 +766,17 @@ export async function getContactNamesByPhones(
         result.set(phones[i], row.display_name);
       }
     }
-    // Also store by normalized form
+    // Store by multiple normalized variants to handle different lookup formats
+    // 1. Raw 10-digit (5551234567)
     result.set(rowNormalized, row.display_name);
+
+    // For US numbers (10 digits), also store with country code variants
+    if (rowNormalized.length === 10) {
+      // 2. With +1 prefix (+15551234567) - E.164 format
+      result.set(`+1${rowNormalized}`, row.display_name);
+      // 3. With 1 prefix (15551234567) - 11-digit format
+      result.set(`1${rowNormalized}`, row.display_name);
+    }
   }
 
   // Fallback: Check macOS Contacts for any unresolved phones
@@ -795,6 +804,11 @@ export async function getContactNamesByPhones(
           if (keyNormalized === normalized && keyNormalized.length >= 7) {
             result.set(phone, name);
             result.set(normalized, name);
+            // Also store with country code variants for US numbers
+            if (normalized.length === 10) {
+              result.set(`+1${normalized}`, name);
+              result.set(`1${normalized}`, name);
+            }
             break;
           }
         }

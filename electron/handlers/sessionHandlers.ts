@@ -468,7 +468,67 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
 
     sessionSecurityService.recordActivity(session.sessionToken);
 
-    const freshUser = await databaseService.getUserById(session.user.id);
+    // TASK-1507E: Ensure local SQLite user exists for existing sessions
+    // Users who authenticated before TASK-1507D have valid sessions but no local user,
+    // which causes FK constraint failures on mailbox connection, messages import, etc.
+    let freshUser = await databaseService.getUserById(session.user.id);
+
+    if (!freshUser && session.user.email) {
+      // Try to find user by email (handles case where session.user.id is Supabase UUID)
+      freshUser = await databaseService.getUserByEmail(session.user.email);
+    }
+
+    if (!freshUser && session.user.oauth_id && session.provider) {
+      // Try to find user by OAuth ID
+      freshUser = await databaseService.getUserByOAuthId(
+        session.provider,
+        session.user.oauth_id
+      );
+    }
+
+    if (!freshUser && session.user.email) {
+      // No local user exists - create one from session data
+      // This syncs existing Supabase users to local SQLite (retroactive TASK-1507D fix)
+      await logService.info(
+        "Creating local user from existing session (TASK-1507E)",
+        "SessionHandlers",
+        { email: session.user.email }
+      );
+
+      try {
+        freshUser = await databaseService.createUser({
+          email: session.user.email,
+          first_name: session.user.first_name,
+          last_name: session.user.last_name,
+          display_name:
+            session.user.display_name ||
+            session.user.email.split("@")[0],
+          avatar_url: session.user.avatar_url,
+          oauth_provider: session.provider || "google",
+          oauth_id: session.user.oauth_id || session.user.id,
+          subscription_tier: session.user.subscription_tier || "free",
+          subscription_status: session.user.subscription_status || "trial",
+          trial_ends_at: session.user.trial_ends_at,
+          is_active: true,
+        });
+
+        await logService.info(
+          "Local user created successfully from existing session",
+          "SessionHandlers",
+          { userId: freshUser.id }
+        );
+      } catch (createError) {
+        // Log but don't fail - auth should succeed even if local user creation fails
+        await logService.error(
+          "Failed to create local user from session",
+          "SessionHandlers",
+          {
+            error: createError instanceof Error ? createError.message : "Unknown error",
+          }
+        );
+      }
+    }
+
     const user = freshUser || session.user;
 
     setSyncUserId(user.id);

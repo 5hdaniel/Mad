@@ -42,6 +42,7 @@ export interface DeepLinkAuthData {
     email?: string;
     name?: string;
   };
+  provider?: string; // "google" | "azure" | etc from Supabase app_metadata
   licenseStatus?: {
     isValid: boolean;
     licenseType: "trial" | "individual" | "team";
