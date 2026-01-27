@@ -12,6 +12,7 @@ import React from "react";
 import type { AppStateMachine } from "./state/types";
 import { OfflineBanner, VersionPopup } from "./shell";
 import SystemHealthMonitor from "../components/SystemHealthMonitor";
+import { isOnboardingStep } from "./routing";
 
 // OAuthProvider type to match SystemHealthMonitor expectations
 type OAuthProvider = "google" | "microsoft";
@@ -46,7 +47,9 @@ export function AppShell({ app, children }: AppShellProps) {
   // PRIMARY DATABASE INITIALIZATION GATE
   // Block all content for authenticated users until database is ready
   // This prevents "Database is not initialized" errors from modal bypass
-  if (isAuthenticated && !isDatabaseInitialized) {
+  // EXCEPTION: Don't block during onboarding - DB init is deferred for first-time macOS users
+  // and will be initialized during the secure-storage/keychain step in onboarding
+  if (isAuthenticated && !isDatabaseInitialized && !isOnboardingStep(currentStep)) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
         <div className="text-center">
