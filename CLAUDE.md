@@ -463,3 +463,16 @@ npx prebuild-install --runtime=electron --target=35.7.5 --arch=x64 --platform=wi
 | Bug fix | `develop` | Traditional |
 | Hotfix | `main` + `develop` | Traditional |
 | Release | `main` (from develop) | Traditional |
+
+### Investigation-First Sprints
+
+For bug fix sprints with unclear root causes:
+
+1. **Start with parallel investigation tasks** (read-only, no file modifications)
+2. **Review findings before implementation** - PM checkpoint after Phase 1
+3. **Defer tasks if investigation shows no bug exists** - Don't implement unnecessary fixes
+4. **Update backlog status immediately** - Change to `deferred` with reason
+
+**Reference:** SPRINT-061 saved ~17K tokens by deferring TASK-1406 after investigation found the "bug" was already fixed.
+
+**Full documentation:** `.claude/skills/agentic-pm/modules/sprint-management.md` → "Investigation-First Pattern"
