@@ -591,7 +591,8 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
 async function handleOpenAuthInBrowser(): Promise<{ success: boolean; error?: string }> {
   try {
     // Use broker portal for provider selection page
-    const brokerPortalUrl = process.env.BROKER_PORTAL_URL || 'http://localhost:3001';
+    // Production: broker-portal-two.vercel.app, Dev: localhost:3001 (via .env.development)
+    const brokerPortalUrl = process.env.BROKER_PORTAL_URL || 'https://broker-portal-two.vercel.app';
     const authUrl = `${brokerPortalUrl}/auth/desktop`;
 
     await logService.info("Opening auth URL in browser", "AuthHandlers", {
