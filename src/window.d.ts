@@ -1328,6 +1328,113 @@ interface MainAPI {
       };
       error?: string;
     }>;
+
+    // ============================================
+    // SPRINT-062: License Validation Methods
+    // ============================================
+
+    /** Validates the user's license status */
+    validate: (userId: string) => Promise<{
+      isValid: boolean;
+      licenseType: "trial" | "individual" | "team";
+      trialStatus?: "active" | "expired" | "converted";
+      trialDaysRemaining?: number;
+      transactionCount: number;
+      transactionLimit: number;
+      canCreateTransaction: boolean;
+      deviceCount: number;
+      deviceLimit: number;
+      aiEnabled: boolean;
+      blockReason?: "expired" | "limit_reached" | "no_license" | "suspended";
+    }>;
+
+    /** Creates a trial license for a new user */
+    create: (userId: string) => Promise<{
+      isValid: boolean;
+      licenseType: "trial" | "individual" | "team";
+      trialStatus?: "active" | "expired" | "converted";
+      trialDaysRemaining?: number;
+      transactionCount: number;
+      transactionLimit: number;
+      canCreateTransaction: boolean;
+      deviceCount: number;
+      deviceLimit: number;
+      aiEnabled: boolean;
+      blockReason?: "expired" | "limit_reached" | "no_license" | "suspended";
+    }>;
+
+    /** Increments the user's transaction count */
+    incrementTransactionCount: (userId: string) => Promise<number>;
+
+    /** Clears the license cache (call on logout) */
+    clearCache: () => Promise<void>;
+
+    /** Checks if an action is allowed based on license status */
+    canPerformAction: (
+      status: {
+        isValid: boolean;
+        licenseType: "trial" | "individual" | "team";
+        transactionCount: number;
+        transactionLimit: number;
+        canCreateTransaction: boolean;
+        deviceCount: number;
+        deviceLimit: number;
+        aiEnabled: boolean;
+        blockReason?: "expired" | "limit_reached" | "no_license" | "suspended";
+      },
+      action: "create_transaction" | "use_ai" | "export"
+    ) => Promise<boolean>;
+
+    // ============================================
+    // SPRINT-062: Device Registration Methods
+    // ============================================
+
+    /** Registers the current device for the user */
+    registerDevice: (userId: string) => Promise<{
+      success: boolean;
+      device?: {
+        id: string;
+        user_id: string;
+        device_id: string;
+        device_name: string | null;
+        os: string | null;
+        platform: "macos" | "windows" | "linux" | null;
+        app_version: string | null;
+        is_active: boolean;
+        last_seen_at: string;
+        activated_at: string;
+      };
+      error?: "device_limit_reached" | "already_registered" | "unknown";
+    }>;
+
+    /** Lists all registered devices for a user */
+    listRegisteredDevices: (userId: string) => Promise<Array<{
+      id: string;
+      user_id: string;
+      device_id: string;
+      device_name: string | null;
+      os: string | null;
+      platform: "macos" | "windows" | "linux" | null;
+      app_version: string | null;
+      is_active: boolean;
+      last_seen_at: string;
+      activated_at: string;
+    }>>;
+
+    /** Deactivates a device */
+    deactivateDevice: (userId: string, deviceId: string) => Promise<void>;
+
+    /** Deletes a device registration */
+    deleteDevice: (userId: string, deviceId: string) => Promise<void>;
+
+    /** Gets the current device's ID */
+    getCurrentDeviceId: () => Promise<string>;
+
+    /** Checks if the current device is registered */
+    isDeviceRegistered: (userId: string) => Promise<boolean>;
+
+    /** Sends a heartbeat to update device last_seen_at */
+    deviceHeartbeat: (userId: string) => Promise<void>;
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
