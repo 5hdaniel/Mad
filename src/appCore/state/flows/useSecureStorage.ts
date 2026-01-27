@@ -15,10 +15,15 @@
  * This hook derives all state from the state machine.
  * The LoadingOrchestrator handles actual initialization.
  *
+ * For first-time macOS users, DB initialization is deferred until the
+ * onboarding secure-storage step. This hook's initializeSecureStorage
+ * function triggers the actual DB init for those users.
+ *
  * Requires the state machine feature flag to be enabled.
  * If disabled, throws an error - legacy code paths have been removed.
  */
 
+import { useCallback } from "react";
 import type { PendingOnboardingData, PendingEmailTokens } from "../types";
 import type { PendingOAuthData } from "../../../components/Login";
 import type { Subscription } from "../../../../electron/types/models";
@@ -27,6 +32,7 @@ import {
   selectIsDatabaseInitialized,
   selectIsCheckingSecureStorage,
   selectIsInitializingDatabase,
+  selectIsDeferredDbInit,
 } from "../machine";
 
 // Interface kept for API compatibility - callers still pass these props
@@ -97,19 +103,69 @@ export function useSecureStorage(
   const hasSecureStorageSetup =
     state.status !== "loading" || state.phase !== "checking-storage";
 
-  // initializeSecureStorage: saves user's "don't show again" preference
-  // Actual initialization is handled by LoadingOrchestrator
-  const initializeSecureStorage = async (
-    dontShowAgain: boolean
-  ): Promise<boolean> => {
-    if (dontShowAgain) {
-      localStorage.setItem("skipKeychainExplanation", "true");
-    }
-    // In state machine mode, initialization is handled by LoadingOrchestrator.
-    // This function is called from UI components (e.g., keychain explanation screen)
-    // but the actual DB initialization happens via the orchestrator.
-    return true;
-  };
+  const { dispatch } = machineState;
+
+  // Check if DB init was deferred (first-time macOS users)
+  // Use the dedicated selector for accurate detection
+  const isDeferredDbInit = selectIsDeferredDbInit(state);
+
+  // initializeSecureStorage: saves preference AND triggers DB init for first-time macOS users
+  // After DB init succeeds, syncs any queued data (like phone type) to the database
+  const initializeSecureStorage = useCallback(
+    async (dontShowAgain: boolean): Promise<boolean> => {
+      if (dontShowAgain) {
+        localStorage.setItem("skipKeychainExplanation", "true");
+      }
+
+      // For first-time macOS users with deferred DB init, trigger it now
+      // This is the point where the user has been informed about the Keychain prompt
+      if (isDeferredDbInit) {
+        try {
+          dispatch({ type: "DB_INIT_STARTED" });
+
+          const result = await window.api.system.initializeSecureStorage();
+
+          dispatch({
+            type: "DB_INIT_COMPLETE",
+            success: result.success,
+            error: result.error,
+          });
+
+          // After successful DB init, sync any queued phone type to the database
+          if (result.success && state.status === "onboarding" && state.selectedPhoneType) {
+            const userId = state.user.id;
+            const phoneType = state.selectedPhoneType;
+            try {
+              const userApi = window.api.user as {
+                setPhoneType: (
+                  userId: string,
+                  phoneType: "iphone" | "android"
+                ) => Promise<{ success: boolean; error?: string }>;
+              };
+              await userApi.setPhoneType(userId, phoneType);
+              console.log("[useSecureStorage] Synced queued phone type to DB:", phoneType);
+            } catch (syncError) {
+              // Log but don't fail - phone type is already in state
+              console.warn("[useSecureStorage] Failed to sync phone type to DB:", syncError);
+            }
+          }
+
+          return result.success;
+        } catch (error) {
+          dispatch({
+            type: "DB_INIT_COMPLETE",
+            success: false,
+            error: error instanceof Error ? error.message : "Database initialization failed",
+          });
+          return false;
+        }
+      }
+
+      // For returning users or Windows, DB is already initialized
+      return true;
+    },
+    [dispatch, isDeferredDbInit, state]
+  );
 
   return {
     hasSecureStorageSetup,

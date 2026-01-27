@@ -3,7 +3,7 @@
 // Permission checks, connection status, system health
 // ============================================
 
-import { ipcMain, shell } from "electron";
+import { ipcMain, shell, app } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 
 // Import services (TypeScript with default exports)
@@ -15,6 +15,7 @@ const macOSPermissionHelper =
 import { databaseEncryptionService } from "./services/databaseEncryptionService";
 import databaseService from "./services/databaseService";
 import { initializeDatabase } from "./auth-handlers";
+import { getAndClearPendingDeepLinkUser } from "./main";
 import os from "os";
 
 // Import validation utilities
@@ -235,6 +236,61 @@ export function registerSystemHandlers(): void {
           "Cleared login sessions (mailbox tokens preserved)",
           "SystemHandlers",
         );
+
+        // TASK-1507D: Create pending deep link user if exists
+        // This handles the case where deep link auth completed before DB was ready
+        const pendingUser = getAndClearPendingDeepLinkUser();
+        if (pendingUser) {
+          logService.info(
+            "Processing pending deep link user",
+            "SystemHandlers",
+            { email: pendingUser.email },
+          );
+          try {
+            // Check if user already exists
+            let localUser = await databaseService.getUserByEmail(pendingUser.email);
+            if (!localUser) {
+              localUser = await databaseService.getUserByOAuthId(
+                pendingUser.provider,
+                pendingUser.supabaseId,
+              );
+            }
+
+            if (!localUser) {
+              // TASK-1507G: Use Supabase Auth UUID as local user ID for unified IDs
+              await databaseService.createUser({
+                id: pendingUser.supabaseId,
+                email: pendingUser.email,
+                display_name: pendingUser.displayName || pendingUser.email.split("@")[0],
+                avatar_url: pendingUser.avatarUrl,
+                oauth_provider: pendingUser.provider,
+                oauth_id: pendingUser.supabaseId,
+                subscription_tier: pendingUser.subscriptionTier || "free",
+                subscription_status: pendingUser.subscriptionStatus || "trial",
+                trial_ends_at: pendingUser.trialEndsAt,
+                is_active: true,
+              });
+              logService.info(
+                "Created local user from pending deep link data",
+                "SystemHandlers",
+                { supabaseId: pendingUser.supabaseId },
+              );
+            } else {
+              logService.info(
+                "Local user already exists for pending deep link",
+                "SystemHandlers",
+                { email: pendingUser.email },
+              );
+            }
+          } catch (userError) {
+            // Log but don't fail initialization
+            logService.error(
+              "Failed to create pending deep link user",
+              "SystemHandlers",
+              { error: userError instanceof Error ? userError.message : String(userError) },
+            );
+          }
+        }
 
         initializationComplete = true;
         return {

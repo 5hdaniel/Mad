@@ -941,7 +941,8 @@ class DatabaseService implements IDatabaseService {
   // USER OPERATIONS (Delegate to userDbService)
   // ============================================
 
-  async createUser(userData: NewUser): Promise<User> {
+  // TASK-1507G: Accept optional ID to unify user IDs across local SQLite and Supabase
+  async createUser(userData: NewUser & { id?: string }): Promise<User> {
     return userDb.createUser(userData);
   }
 

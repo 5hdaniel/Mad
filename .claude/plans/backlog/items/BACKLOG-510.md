@@ -1,56 +1,62 @@
-# BACKLOG-510: Gmail Sync Freezes UI During Background Message Loading
+# BACKLOG-510: Fix Transaction Card Communication Counters
 
 ## Type
 bug
 
 ## Priority
-high
+medium
 
 ## Status
-backlog
+in_progress
+
+## Sprint
+SPRINT-061
 
 ## Description
 
-When connecting Gmail for the first time, the application freezes/becomes unresponsive while messages are being loaded in the background. The UI should remain responsive during sync operations.
+Text and email thread counters on TransactionCard show wrong counts. Counters are currently hidden (commented out in UI) until the counting logic is fixed to work with the new three-table architecture from BACKLOG-506.
 
-### Steps to Reproduce
-1. Delete database for fresh start
-2. Connect Gmail account
-3. Gmail connects successfully
-4. Messages start loading in background
-5. **UI becomes frozen/unresponsive**
+### Root Cause (Investigation Needed)
 
-### Expected Behavior
-- UI remains responsive during message sync
-- Loading indicator shows sync progress
-- User can navigate the app while sync happens in background
-- Sync operations don't block the main thread
+The email count query in `transactionDbService.ts` uses:
+```sql
+COALESCE(m.channel, c.communication_type) = 'email'
+```
 
-### Actual Behavior
-- UI freezes completely
-- Cannot interact with the application
-- Must wait for sync to complete (or kill the app)
+But `c.communication_type` was removed from the `communications` table in BACKLOG-506 (schema v23). The `communications` table is now a pure junction table.
 
-### Technical Investigation Needed
-- Is the sync happening on the main Electron thread?
-- Are database writes blocking the UI?
-- Is there a batch size issue (too many messages at once)?
-- Should sync use web workers or move to a background process?
+### Current Workaround
 
-### Potential Solutions
-1. **Move sync to background process** - Use Electron's background/utility process
-2. **Batch processing with yields** - Process messages in smaller batches with `setTimeout` breaks
-3. **Database write optimization** - Use transactions and batch inserts
-4. **Progress UI** - Show non-blocking progress indicator
-5. **Defer full sync** - Initial sync gets recent messages only, full sync happens later
+Counters are hidden in `TransactionCard.tsx` (lines 208-225) with comment:
+```tsx
+{/* BACKLOG-510: Counters hidden until count accuracy is fixed */}
+```
+
+### Technical Details
+
+**New Architecture (BACKLOG-506):**
+- `emails` table: stores email content
+- `messages` table: stores text message content
+- `communications` table: pure junction table linking content to transactions
+  - `email_id` FK -> emails (for email links)
+  - `message_id` FK -> messages (for text links)
+  - `thread_id` for batch text thread links
+  - NO `communication_type` column
+
+**Files Affected:**
+- `electron/services/db/transactionDbService.ts` - email count query (lines 119-125, 177-182)
+- `electron/services/db/communicationDbService.ts` - thread count logic
+- `src/components/transaction/components/TransactionCard.tsx` - counter display
 
 ## Acceptance Criteria
-- [ ] UI remains responsive during Gmail sync
-- [ ] User can see sync progress
-- [ ] User can cancel sync if needed
-- [ ] No perceived freezing even with large mailboxes
+
+- [ ] Email count correctly counts distinct emails linked via `communications.email_id`
+- [ ] Text thread count correctly counts distinct threads linked via `communications`
+- [ ] TransactionCard displays accurate counters (re-enable hidden UI)
+- [ ] Counts match between card view and transaction details view
 
 ## Related
-- Gmail integration
-- Message import services
-- Database write performance
+
+- BACKLOG-506: Database architecture cleanup (parent issue)
+- BACKLOG-396: Text thread count consistency
+- SPRINT-061: Communication Display Fixes

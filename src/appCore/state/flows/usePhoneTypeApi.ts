@@ -23,6 +23,7 @@ import {
   useOptionalMachineState,
   selectHasSelectedPhoneType,
   selectPhoneType,
+  selectIsDatabaseInitialized,
 } from "../machine";
 
 interface UsePhoneTypeApiOptions {
@@ -95,6 +96,9 @@ export function usePhoneTypeApi({
   }, []);
 
   // savePhoneType persists to API and dispatches onboarding step complete
+  // If DB is not initialized (deferred for first-time macOS users), we skip
+  // the DB save and just dispatch the step completion. The phone type will
+  // be synced to DB after secure-storage step initializes it.
   const savePhoneType = useCallback(
     async (phoneType: "iphone" | "android"): Promise<boolean> => {
       // userId comes from state machine
@@ -105,6 +109,26 @@ export function usePhoneTypeApi({
 
       if (!currentUserId) return false;
 
+      // Check if DB is initialized
+      const isDbReady = selectIsDatabaseInitialized(state);
+
+      if (!isDbReady) {
+        // DB not ready (first-time macOS user with deferred init)
+        // Just dispatch step completion - phone type stored in state machine
+        // Will be synced to DB after secure-storage step initializes it
+        console.log(
+          "[usePhoneTypeApi] DB not initialized, queuing phone type in state:",
+          phoneType
+        );
+        dispatch({
+          type: "ONBOARDING_STEP_COMPLETE",
+          step: "phone-type",
+          phoneType,
+        });
+        return true;
+      }
+
+      // DB is ready - persist to API then dispatch
       try {
         const userApi = window.api.user as {
           setPhoneType: (
