@@ -44,6 +44,7 @@ Before starting sprint work, engineers must:
 | Task ID | Backlog | Title | Est. Tokens | Execution |
 |---------|---------|-------|-------------|-----------|
 | TASK-1503 | BACKLOG-477 | Create User License Schema in Supabase | ~25K | Sequential |
+| TASK-1503B | - | Fix Licensing P0 Blockers (SR Review findings) | ~10K | Sequential |
 | TASK-1504 | BACKLOG-478 | Implement License Validation Service | ~30K | Sequential |
 | TASK-1505 | - | Manual Test License Service (USER GATE) | ~5K | User |
 
@@ -101,8 +102,12 @@ dependency_graph:
 
     # Phase 2 internal
     - from: TASK-1503
+      to: TASK-1503B
+      reason: "Fix P0 blockers before implementing service"
+
+    - from: TASK-1503B
       to: TASK-1504
-      reason: "License service needs schema first"
+      reason: "License service needs blockers fixed first"
 
     # Phase 2 -> User Gate
     - from: TASK-1504
@@ -142,10 +147,13 @@ Phase 1: Auth Infrastructure          Phase 2: Licensing Backend
        v                                TASK-1503 (License Schema)
   TASK-1501 (Browser Auth Landing)           |
        |                                     v
-       v                                TASK-1504 (License Service)
+       v                                TASK-1503B (Fix P0 Blockers)
   TASK-1502 [USER GATE]                      |
        |                                     v
-       | (Phase 1 must pass)            TASK-1505 [USER GATE]
+       | (Phase 1 must pass)            TASK-1504 (License Service)
+       |                                     |
+       |                                     v
+       |                                TASK-1505 [USER GATE]
        |                                     |
        +------------------------------------>+
                                              |
@@ -272,12 +280,12 @@ Phase 4: Final Review
 |-------|-------|-------------|-------|
 | Phase 1: Auth | TASK-1500, 1501 | ~55K | Sequential |
 | Phase 1: Gate | TASK-1502 | ~5K | User testing |
-| Phase 2: Licensing | TASK-1503, 1504 | ~55K | Sequential |
+| Phase 2: Licensing | TASK-1503, 1503B, 1504 | ~65K | Sequential |
 | Phase 2: Gate | TASK-1505 | ~5K | User testing |
 | Phase 3: Integration | TASK-1506, 1507 | ~30K | Sequential |
 | Phase 3: Gate | TASK-1508 | ~5K | User testing |
 | Phase 4: Review | TASK-1509 | ~20K | SR Engineer |
-| **Total** | **10 tasks** | **~175K** | - |
+| **Total** | **11 tasks** | **~185K** | - |
 
 ---
 
@@ -289,7 +297,8 @@ Phase 4: Final Review
 | 1 | TASK-1501 | BACKLOG-483 | Complete | PM direct | #627 | ~37K |
 | 1 | TASK-1502 | - | **PASSED** | USER | - | - |
 | 2 | TASK-1503 | BACKLOG-477 | **Complete** | PM direct | - | ~28K |
-| 2 | TASK-1504 | BACKLOG-478 | **Ready** | - | - | - |
+| 2 | TASK-1503B | - | **Ready** | - | - | - |
+| 2 | TASK-1504 | BACKLOG-478 | Blocked | - | - | - |
 | 2 | TASK-1505 | - | Blocked | USER | - | - |
 | 3 | TASK-1506 | BACKLOG-480 | Blocked | - | - | - |
 | 3 | TASK-1507 | BACKLOG-484 | Blocked | - | - | - |

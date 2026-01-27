@@ -463,3 +463,18 @@ BACKLOG-511,Support HEIC image attachments in text threads,enhancement,low,pendi
 BACKLOG-512,Auto-trigger email sync on contact list changes,enhancement,medium,pending,,,Backend,"When contacts are added/modified on a transaction, automatically trigger email sync instead of requiring manual 'Sync Communications' click."
 BACKLOG-513,Fix unknown contact name display in text threads,bug,medium,pending,,,UI,"When linking text threads to transactions, some 1:1 conversations display 'unknown' as contact name instead of actual contact. Contact lookup not finding phone number match."
 BACKLOG-514,Fix thread deduplication during message import,bug,medium,pending,,,Backend,"Same conversation appears as multiple separate threads in UI. Messages from same thread imported with different thread_ids or grouping logic not consolidating properly."
+BACKLOG-515,Add server-time validation for trial expiration,security,High,Pending,-,~20K,-,-,2026-01-26,,[BACKLOG-515.md](items/BACKLOG-515.md)
+BACKLOG-516,Encrypt offline license cache using Electron safeStorage,security,High,Pending,-,~15K,-,-,2026-01-26,,[BACKLOG-516.md](items/BACKLOG-516.md)
+BACKLOG-517,Add DB trigger for transaction count enforcement,security,High,Pending,-,~10K,-,-,2026-01-26,,[BACKLOG-517.md](items/BACKLOG-517.md)
+BACKLOG-518,Remove direct INSERT RLS policy on licenses table,security,High,Pending,-,~5K,-,-,2026-01-26,,[BACKLOG-518.md](items/BACKLOG-518.md)
+BACKLOG-519,Improve device fingerprinting with composite hash,security,High,Pending,-,~25K,-,-,2026-01-26,,[BACKLOG-519.md](items/BACKLOG-519.md)
+BACKLOG-520,Stripe payment integration for license purchases,feature,Medium,Pending,-,~80K,-,-,2026-01-26,,[BACKLOG-520.md](items/BACKLOG-520.md)
+BACKLOG-521,Admin dashboard for license management,feature,Medium,Pending,-,~60K,-,-,2026-01-26,,[BACKLOG-521.md](items/BACKLOG-521.md)
+BACKLOG-522,Upgrade/downgrade license flows,feature,Medium,Pending,-,~40K,-,-,2026-01-26,,[BACKLOG-522.md](items/BACKLOG-522.md)
+BACKLOG-523,Trial extension mechanism,feature,Medium,Pending,-,~25K,-,-,2026-01-26,,[BACKLOG-523.md](items/BACKLOG-523.md)
+BACKLOG-524,License audit logging,feature,Medium,Pending,-,~20K,-,-,2026-01-26,,[BACKLOG-524.md](items/BACKLOG-524.md)
+BACKLOG-525,UX - usage progress indicators and upgrade prompts,ui,Medium,Pending,-,~35K,-,-,2026-01-26,,[BACKLOG-525.md](items/BACKLOG-525.md)
+BACKLOG-526,Team/organization licensing model,feature,Low,Pending,-,~100K,-,-,2026-01-26,,[BACKLOG-526.md](items/BACKLOG-526.md)
+BACKLOG-527,Webhook support for license events,feature,Low,Pending,-,~30K,-,-,2026-01-26,,[BACKLOG-527.md](items/BACKLOG-527.md)
+BACKLOG-528,License monitoring and alerting,feature,Low,Pending,-,~25K,-,-,2026-01-26,,[BACKLOG-528.md](items/BACKLOG-528.md)
+BACKLOG-529,License transfer between accounts,feature,Low,Pending,-,~35K,-,-,2026-01-26,,[BACKLOG-529.md](items/BACKLOG-529.md)
