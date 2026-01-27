@@ -116,13 +116,15 @@ export async function getTransactions(
   // BACKLOG-390: Count emails using subquery for accurate count
   // BACKLOG-396: Use stored text_thread_count for texts (updated on link/unlink)
   // This ensures consistency between card view and details page
+  // BACKLOG-506/TASK-1307: communications is now a pure junction table without communication_type column.
+  // Email detection uses: email_id set OR message.channel = 'email'
   let sql = `SELECT t.*,
              (SELECT COUNT(*) FROM communications c WHERE c.transaction_id = t.id) as total_communications_count,
              (SELECT COUNT(*) FROM communications c
               LEFT JOIN messages m ON (c.message_id IS NOT NULL AND c.message_id = m.id)
                                    OR (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
               WHERE c.transaction_id = t.id
-              AND COALESCE(m.channel, c.communication_type) = 'email') as email_count
+              AND (c.email_id IS NOT NULL OR m.channel = 'email')) as email_count
              FROM transactions t WHERE 1=1`;
   const params: unknown[] = [];
 
@@ -174,12 +176,13 @@ export async function getTransactionById(
 ): Promise<Transaction | null> {
   // BACKLOG-446: Include email_count using same subquery as getTransactions
   // This ensures consistent email counts between list view and detail view
+  // BACKLOG-506/TASK-1307: communications is now a pure junction table without communication_type column.
   const sql = `SELECT t.*,
                (SELECT COUNT(*) FROM communications c
                 LEFT JOIN messages m ON (c.message_id IS NOT NULL AND c.message_id = m.id)
                                      OR (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
                 WHERE c.transaction_id = t.id
-                AND COALESCE(m.channel, c.communication_type) = 'email') as email_count
+                AND (c.email_id IS NOT NULL OR m.channel = 'email')) as email_count
                FROM transactions t WHERE t.id = ?`;
   const transaction = dbGet<Transaction>(sql, [transactionId]);
   return transaction || null;
