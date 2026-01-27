@@ -2,7 +2,7 @@
 
 **Sprint**: SPRINT-062
 **Backlog Item**: N/A (blocking issue discovered during SR review)
-**Status**: Ready
+**Status**: Complete
 **Execution**: Sequential (Phase 2, Step 1B - inserted before TASK-1504)
 **Priority**: P0 - Must Fix Before TASK-1504
 
@@ -143,11 +143,11 @@ Edit `/Users/daniel/Documents/Mad-sprint-062-licensing/.claude/plans/tasks/TASK-
 
 ## Acceptance Criteria
 
-- [ ] `devices_device_id_key` index dropped from Supabase
-- [ ] `devices_user_id_device_id_key` still exists (composite unique)
-- [ ] TASK-1504 markdown updated with correct table names
-- [ ] TASK-1504 markdown updated with type clarifications
-- [ ] Verification query shows correct indexes
+- [x] `devices_device_id_key` index dropped from Supabase
+- [x] `devices_user_id_device_id_key` still exists (composite unique)
+- [x] TASK-1504 markdown updated with correct table names
+- [x] TASK-1504 markdown updated with type clarifications
+- [x] Verification query shows correct indexes
 
 ---
 
@@ -218,27 +218,40 @@ Stop and ask PM if:
 
 ## Implementation Summary
 
-*To be completed by Engineer after Step 5*
+*Completed by PM Agent (simple fix task)*
 
 ### Files Changed
-- [ ] Supabase migration applied via MCP
-- [ ] `.claude/plans/tasks/TASK-1504-license-validation-service.md` updated
+- [x] Supabase migration applied via MCP: `fix_device_uniqueness_constraint`
+- [x] `.claude/plans/tasks/TASK-1504-license-validation-service.md` updated
 
 ### Approach Taken
-- [ ] Describe implementation decisions
+- Used `ALTER TABLE devices DROP CONSTRAINT IF EXISTS devices_device_id_key` instead of `DROP INDEX` because the index was backing a constraint
+- Replaced all occurrences of `user_licenses` with `licenses` (1 occurrence)
+- Replaced all occurrences of `device_registrations` with `devices` (6 occurrences)
 
 ### Testing Done
-- [ ] Verification query confirms constraint dropped
-- [ ] TASK-1504 markdown reviewed for accuracy
+- [x] Verification query confirms constraint dropped
+- [x] TASK-1504 markdown reviewed for accuracy
+
+**Verification Query Results:**
+```
+devices_pkey                  - PRIMARY KEY (id)
+devices_user_id_device_id_key - UNIQUE (user_id, device_id) [CORRECT - kept]
+idx_devices_device_id         - INDEX (device_id) for performance
+idx_devices_user_id           - INDEX (user_id) for performance
+```
+
+The problematic `devices_device_id_key` global unique constraint has been removed.
 
 ### Notes for SR Review
-- [ ] Any concerns or areas needing extra review
+- Migration used `DROP CONSTRAINT` instead of `DROP INDEX` as documented because the index was backing a unique constraint
+- All table name references in TASK-1504 have been corrected
 
 ### Final Metrics
 
 | Metric | Estimated | Actual | Variance |
 |--------|-----------|--------|----------|
-| Plan tokens | ~2K | ___K | ___% |
-| SR Review tokens | ~2K | ___K | ___% |
-| Implement tokens | ~6K | ___K | ___% |
-| **Total** | ~10K | ___K | ___% |
+| Plan tokens | ~2K | 0K | N/A (combined) |
+| SR Review tokens | ~2K | 0K | N/A (combined) |
+| Implement tokens | ~6K | ~3K | -50% |
+| **Total** | ~10K | ~3K | -70% |

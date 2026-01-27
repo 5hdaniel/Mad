@@ -151,7 +151,7 @@ export async function validateLicense(userId: string): Promise<LicenseStatus> {
 async function fetchLicenseFromSupabase(userId: string): Promise<LicenseStatus> {
   // Fetch user license
   const { data: license, error } = await supabaseService.getClient()
-    .from('user_licenses')
+    .from('licenses')
     .select('*')
     .eq('user_id', userId)
     .single();
@@ -178,7 +178,7 @@ async function fetchLicenseFromSupabase(userId: string): Promise<LicenseStatus> 
 
   // Count active devices
   const { count: deviceCount } = await supabaseService.getClient()
-    .from('device_registrations')
+    .from('devices')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', userId)
     .eq('is_active', true);
@@ -410,7 +410,7 @@ export async function registerDevice(userId: string): Promise<DeviceRegistration
   try {
     // Try to upsert device registration
     const { data, error } = await supabaseService.getClient()
-      .from('device_registrations')
+      .from('devices')
       .upsert(
         {
           user_id: userId,
@@ -467,7 +467,7 @@ export async function updateDeviceHeartbeat(userId: string): Promise<void> {
 
   try {
     await supabaseService.getClient()
-      .from('device_registrations')
+      .from('devices')
       .update({ last_seen_at: new Date().toISOString() })
       .eq('user_id', userId)
       .eq('device_id', deviceId);
@@ -481,7 +481,7 @@ export async function updateDeviceHeartbeat(userId: string): Promise<void> {
  */
 export async function getUserDevices(userId: string): Promise<DeviceRegistration[]> {
   const { data, error } = await supabaseService.getClient()
-    .from('device_registrations')
+    .from('devices')
     .select('*')
     .eq('user_id', userId)
     .order('last_seen_at', { ascending: false });
@@ -498,7 +498,7 @@ export async function getUserDevices(userId: string): Promise<DeviceRegistration
  */
 export async function deactivateDevice(userId: string, deviceId: string): Promise<void> {
   const { error } = await supabaseService.getClient()
-    .from('device_registrations')
+    .from('devices')
     .update({ is_active: false })
     .eq('user_id', userId)
     .eq('device_id', deviceId);
@@ -513,7 +513,7 @@ export async function deactivateDevice(userId: string, deviceId: string): Promis
  */
 export async function deleteDevice(userId: string, deviceId: string): Promise<void> {
   const { error } = await supabaseService.getClient()
-    .from('device_registrations')
+    .from('devices')
     .delete()
     .eq('user_id', userId)
     .eq('device_id', deviceId);
@@ -530,7 +530,7 @@ export async function isDeviceRegistered(userId: string): Promise<boolean> {
   const deviceId = getDeviceId();
 
   const { data, error } = await supabaseService.getClient()
-    .from('device_registrations')
+    .from('devices')
     .select('id')
     .eq('user_id', userId)
     .eq('device_id', deviceId)
