@@ -33,9 +33,12 @@ interface LoadingScreenProps {
 /**
  * Human-readable messages for each loading phase.
  * Some phases have platform-specific messages (handled separately).
+ * Note: awaiting-keychain is handled by LoadingOrchestrator with a dedicated UI,
+ * but included here for type completeness.
  */
 const PHASE_MESSAGES: Record<LoadingPhase, string> = {
   "checking-storage": "Checking secure storage...",
+  "awaiting-keychain": "Waiting for keychain access...", // macOS - shown by KeychainExplanation component
   "initializing-db": "Initializing secure database...", // Default, overridden by platform-specific
   "loading-auth": "Loading authentication...",
   "loading-user-data": "Loading your data...",
