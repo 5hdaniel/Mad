@@ -10,7 +10,7 @@ import {
   ConfidencePill,
   PendingReviewBadge,
 } from "./DetectionBadges";
-import { formatCommunicationCounts } from "./TransactionCard";
+// Note: formatCommunicationCounts is available in TransactionCard.tsx but UI uses inline JSX for thread labels
 import { SubmissionStatusBadge } from "../../transactionDetailsModule/components/SubmissionStatusBadge";
 import { LicenseGate } from "../../common/LicenseGate";
 
@@ -91,7 +91,9 @@ export function TransactionListCard({
   formatCurrency,
   formatDate,
 }: TransactionListCardProps): React.ReactElement {
-  const textCount = transaction.text_count || 0;
+  // BACKLOG-396: Use text_thread_count (stored) instead of text_count (computed dynamically)
+  // This ensures consistency between card view and details page
+  const textCount = transaction.text_thread_count || 0;
   const emailCount = transaction.email_count || 0;
   return (
     <div
@@ -199,14 +201,13 @@ export function TransactionListCard({
             )}
           </div>
           <div className="mt-2 flex items-center gap-3 text-xs text-gray-500">
-            {/* BACKLOG-510: Counters hidden until count accuracy is fixed
             <button
               onClick={(e) => onMessagesClick?.(transaction, e)}
               className="flex items-center gap-1 hover:text-blue-600 transition-colors"
               title="View messages"
             >
               <MessagesIcon />
-              <span>{textCount} {textCount === 1 ? "text" : "texts"}</span>
+              <span>{textCount} {textCount === 1 ? "Text thread" : "Text threads"}</span>
             </button>
             <button
               onClick={(e) => onEmailsClick?.(transaction, e)}
@@ -214,9 +215,8 @@ export function TransactionListCard({
               title="View emails"
             >
               <EmailsIcon />
-              <span>{emailCount} {emailCount === 1 ? "email thread" : "email threads"}</span>
+              <span>{emailCount} {emailCount === 1 ? "Email thread" : "Email threads"}</span>
             </button>
-            */}
             {transaction.extraction_confidence && (
               <span className="flex items-center gap-1">
                 <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
