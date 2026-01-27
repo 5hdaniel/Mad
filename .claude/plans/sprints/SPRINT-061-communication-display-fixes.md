@@ -395,7 +395,7 @@ The following MUST pass before merge:
 
 | Task | Source | Root Cause | Added Date | Est. Tokens | Actual Tokens |
 |------|--------|------------|------------|-------------|---------------|
-| - | - | - | - | - | - |
+| TASK-1410 | SR Review | Cleanup/test coverage after user testing | 2026-01-26 | ~15K | - |
 
 ---
 
@@ -438,6 +438,7 @@ The following MUST pass before merge:
 | 2 | TASK-1405 | Blocked | - | - | - | Awaiting TASK-1401 |
 | 2 | TASK-1406 | Blocked | - | - | - | Awaiting TASK-1402 |
 | 2 | TASK-1407 | Blocked | - | - | - | Awaiting TASK-1403, TASK-1404 |
+| 2 | TASK-1410 | Ready | - | - | - | SR review feedback fixes (BACKLOG-510/513) |
 | 3 | TASK-1408 | Blocked | USER | - | - | Manual testing (USER GATE) |
 | 3 | TASK-1409 | Blocked | - | - | - | SR Review + Merge to develop |
 
