@@ -72,6 +72,8 @@ import { LLMConfigService } from "./services/llm/llmConfigService";
 import { validateLicense, createUserLicense } from "./services/licenseService";
 import { registerDevice } from "./services/deviceService";
 import supabaseService from "./services/supabaseService";
+import databaseService from "./services/databaseService";
+import type { OAuthProvider, SubscriptionTier, SubscriptionStatus } from "./types";
 
 // Import extracted handlers from handlers/ directory
 import {
@@ -101,6 +103,88 @@ process.on("unhandledRejection", (reason: unknown) => {
 });
 
 let mainWindow: BrowserWindow | null = null;
+
+// ==========================================
+// PENDING DEEP LINK USER (TASK-1507D)
+// ==========================================
+// When deep link auth completes before database is initialized,
+// we store the user data here and create the local user after DB init.
+
+interface PendingDeepLinkUser {
+  supabaseId: string;
+  email: string;
+  displayName?: string;
+  avatarUrl?: string;
+  provider: OAuthProvider;
+  subscriptionTier?: SubscriptionTier;
+  subscriptionStatus?: SubscriptionStatus;
+  trialEndsAt?: string;
+}
+
+let pendingDeepLinkUser: PendingDeepLinkUser | null = null;
+
+/**
+ * Store pending deep link user data for later creation
+ * Used when deep link auth completes before database is initialized
+ */
+export function setPendingDeepLinkUser(data: PendingDeepLinkUser): void {
+  pendingDeepLinkUser = data;
+  log.info("[DeepLink] Stored pending user for later creation:", data.supabaseId);
+}
+
+/**
+ * Get and clear pending deep link user data
+ * Called after database initialization to create the user
+ */
+export function getAndClearPendingDeepLinkUser(): PendingDeepLinkUser | null {
+  const user = pendingDeepLinkUser;
+  pendingDeepLinkUser = null;
+  return user;
+}
+
+/**
+ * Create or update local SQLite user from deep link auth data (TASK-1507D)
+ *
+ * This ensures the local database has a user record after deep link auth,
+ * which is required for FK constraints (mailbox connection, audit logs, etc.)
+ *
+ * @param userData - User data from Supabase session
+ * @returns Promise<void>
+ */
+async function syncDeepLinkUserToLocalDb(userData: PendingDeepLinkUser): Promise<void> {
+  try {
+    // Check if user already exists by email (deep link users use Supabase ID as oauth_id)
+    // We check by email first since that's the unique identifier
+    let localUser = await databaseService.getUserByEmail(userData.email);
+
+    if (!localUser) {
+      // Also check by OAuth ID in case the user was created via a different flow
+      localUser = await databaseService.getUserByOAuthId(userData.provider, userData.supabaseId);
+    }
+
+    if (!localUser) {
+      // Create new user
+      await databaseService.createUser({
+        email: userData.email,
+        display_name: userData.displayName || userData.email.split("@")[0],
+        avatar_url: userData.avatarUrl,
+        oauth_provider: userData.provider,
+        oauth_id: userData.supabaseId,
+        subscription_tier: userData.subscriptionTier || "free",
+        subscription_status: userData.subscriptionStatus || "trial",
+        trial_ends_at: userData.trialEndsAt,
+        is_active: true,
+      });
+      log.info("[DeepLink] Created local SQLite user for:", userData.supabaseId);
+    } else {
+      log.info("[DeepLink] Local user already exists for:", userData.email);
+    }
+  } catch (error) {
+    log.error("[DeepLink] Failed to create local user:", error);
+    // Don't rethrow - auth should still succeed even if local user creation fails
+    // The user will be created on next database operation that requires it
+  }
+}
 
 // ==========================================
 // DEEP LINK HANDLER (TASK-1500, enhanced TASK-1507)
@@ -209,6 +293,48 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
         });
         focusMainWindow();
         return;
+      }
+
+      // TASK-1507D: Step 5.5 - Create local SQLite user
+      // This is required for FK constraints (mailbox connection, audit logs, contacts)
+      const provider = (user.app_metadata?.provider as OAuthProvider) || "google";
+
+      // Map license type to subscription tier
+      // licenseType: 'trial' | 'individual' | 'team' -> subscriptionTier: 'free' | 'pro' | 'enterprise'
+      const mapLicenseToTier = (lt: string): SubscriptionTier => {
+        if (lt === "individual") return "pro";
+        if (lt === "team") return "enterprise";
+        return "free"; // trial or unknown
+      };
+
+      // Map trial status to subscription status
+      // trialStatus: 'active' | 'expired' | 'converted' -> subscriptionStatus: 'trial' | 'active' | 'cancelled' | 'expired'
+      const mapTrialToStatus = (ts?: string, lt?: string): SubscriptionStatus => {
+        if (lt === "individual" || lt === "team") return "active"; // Paid plan
+        if (ts === "expired") return "expired";
+        if (ts === "converted") return "active";
+        return "trial"; // Default for trial license
+      };
+
+      const deepLinkUserData: PendingDeepLinkUser = {
+        supabaseId: user.id,
+        email: user.email || "",
+        displayName: user.user_metadata?.full_name,
+        avatarUrl: user.user_metadata?.avatar_url,
+        provider,
+        subscriptionTier: mapLicenseToTier(licenseStatus.licenseType),
+        subscriptionStatus: mapTrialToStatus(licenseStatus.trialStatus, licenseStatus.licenseType),
+      };
+
+      if (databaseService.isInitialized()) {
+        // Database is ready - create user now
+        log.info("[DeepLink] Database initialized, creating local user");
+        await syncDeepLinkUserToLocalDb(deepLinkUserData);
+      } else {
+        // Database not ready yet - store for later
+        // User will be created after DB initialization in system-handlers.ts
+        log.info("[DeepLink] Database not initialized, storing pending user");
+        setPendingDeepLinkUser(deepLinkUserData);
       }
 
       // TASK-1507: Step 6 - Success! Send all data to renderer
