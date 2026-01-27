@@ -11,6 +11,7 @@ import {
   selectIsInitializingDatabase,
   selectIsLoadingAuth,
   selectIsLoadingUserData,
+  selectIsDeferredDbInit,
 } from "./databaseSelectors";
 
 describe("databaseSelectors", () => {
@@ -79,6 +80,15 @@ describe("databaseSelectors", () => {
       expect(selectIsDatabaseInitialized(loadingAuth)).toBe(true);
     });
 
+    it("returns false when loading auth with deferredDbInit", () => {
+      const state: LoadingState = {
+        status: "loading",
+        phase: "loading-auth",
+        deferredDbInit: true,
+      };
+      expect(selectIsDatabaseInitialized(state)).toBe(false);
+    });
+
     it("returns true when loading user data (past db init)", () => {
       expect(selectIsDatabaseInitialized(loadingUserData)).toBe(true);
     });
@@ -91,12 +101,75 @@ describe("databaseSelectors", () => {
       expect(selectIsDatabaseInitialized(onboardingState)).toBe(true);
     });
 
+    it("returns false when onboarding with deferredDbInit", () => {
+      const state: OnboardingState = {
+        ...onboardingState,
+        deferredDbInit: true,
+      };
+      expect(selectIsDatabaseInitialized(state)).toBe(false);
+    });
+
     it("returns false when error", () => {
       expect(selectIsDatabaseInitialized(errorState)).toBe(false);
     });
 
     it("returns false when unauthenticated", () => {
       expect(selectIsDatabaseInitialized(unauthenticatedState)).toBe(false);
+    });
+
+    it("returns false when unauthenticated with deferredDbInit", () => {
+      const state: UnauthenticatedState = {
+        status: "unauthenticated",
+        deferredDbInit: true,
+      };
+      expect(selectIsDatabaseInitialized(state)).toBe(false);
+    });
+  });
+
+  describe("selectIsDeferredDbInit", () => {
+    it("returns true when loading with deferredDbInit", () => {
+      const state: LoadingState = {
+        status: "loading",
+        phase: "loading-auth",
+        deferredDbInit: true,
+      };
+      expect(selectIsDeferredDbInit(state)).toBe(true);
+    });
+
+    it("returns false when loading without deferredDbInit", () => {
+      expect(selectIsDeferredDbInit(loadingAuth)).toBe(false);
+    });
+
+    it("returns true when unauthenticated with deferredDbInit", () => {
+      const state: UnauthenticatedState = {
+        status: "unauthenticated",
+        deferredDbInit: true,
+      };
+      expect(selectIsDeferredDbInit(state)).toBe(true);
+    });
+
+    it("returns false when unauthenticated without deferredDbInit", () => {
+      expect(selectIsDeferredDbInit(unauthenticatedState)).toBe(false);
+    });
+
+    it("returns true when onboarding with deferredDbInit", () => {
+      const state: OnboardingState = {
+        ...onboardingState,
+        deferredDbInit: true,
+      };
+      expect(selectIsDeferredDbInit(state)).toBe(true);
+    });
+
+    it("returns false when onboarding without deferredDbInit", () => {
+      expect(selectIsDeferredDbInit(onboardingState)).toBe(false);
+    });
+
+    it("returns false when ready", () => {
+      expect(selectIsDeferredDbInit(readyState)).toBe(false);
+    });
+
+    it("returns false when error", () => {
+      expect(selectIsDeferredDbInit(errorState)).toBe(false);
     });
   });
 
