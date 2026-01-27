@@ -297,8 +297,8 @@ Phase 4: Final Review
 | 1 | TASK-1501 | BACKLOG-483 | Complete | PM direct | #627 | ~37K |
 | 1 | TASK-1502 | - | **PASSED** | USER | - | - |
 | 2 | TASK-1503 | BACKLOG-477 | **Complete** | PM direct | - | ~28K |
-| 2 | TASK-1503B | - | **Ready** | - | - | - |
-| 2 | TASK-1504 | BACKLOG-478 | Blocked | - | - | - |
+| 2 | TASK-1503B | - | **Complete** | PM direct | - | ~3K |
+| 2 | TASK-1504 | BACKLOG-478 | **Ready** | - | - | - |
 | 2 | TASK-1505 | - | Blocked | USER | - | - |
 | 3 | TASK-1506 | BACKLOG-480 | Blocked | - | - | - |
 | 3 | TASK-1507 | BACKLOG-484 | Blocked | - | - | - |
