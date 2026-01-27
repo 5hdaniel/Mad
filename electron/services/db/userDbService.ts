@@ -11,9 +11,15 @@ import { validateFields } from "../../utils/sqlFieldWhitelist";
 
 /**
  * Create a new user
+ *
+ * TASK-1507G: Accept optional ID parameter to unify user IDs across local SQLite and Supabase.
+ * When creating users via OAuth or deep link auth, pass the Supabase Auth UUID as the ID
+ * to ensure consistent IDs for FK constraints (licenses, devices, etc.)
+ *
+ * @param userData - User data including optional ID (Supabase Auth UUID when available)
  */
-export async function createUser(userData: NewUser): Promise<User> {
-  const id = crypto.randomUUID();
+export async function createUser(userData: NewUser & { id?: string }): Promise<User> {
+  const id = userData.id || crypto.randomUUID();
   const sql = `
     INSERT INTO users_local (
       id, email, first_name, last_name, display_name, avatar_url,

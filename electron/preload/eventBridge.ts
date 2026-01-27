@@ -253,4 +253,105 @@ export const eventBridge = {
     return () =>
       ipcRenderer.removeListener("backup:password-required", listener);
   },
+
+  // ==========================================
+  // DEEP LINK AUTH EVENTS (TASK-1500)
+  // ==========================================
+
+  /**
+   * Listens for deep link authentication callback events
+   * Fired when the app receives a magicaudit://callback URL with tokens
+   * @param callback - Callback function to handle auth tokens
+   * @returns Cleanup function to remove listener
+   */
+  onDeepLinkAuthCallback: (
+    callback: (data: { accessToken: string; refreshToken: string }) => void,
+  ) => {
+    const listener = (
+      _: IpcRendererEvent,
+      data: { accessToken: string; refreshToken: string },
+    ) => callback(data);
+    ipcRenderer.on("auth:deep-link-callback", listener);
+    return () =>
+      ipcRenderer.removeListener("auth:deep-link-callback", listener);
+  },
+
+  /**
+   * Listens for deep link authentication error events
+   * Fired when the app receives an invalid or incomplete callback URL
+   * @param callback - Callback function to handle auth errors
+   * @returns Cleanup function to remove listener
+   */
+  onDeepLinkAuthError: (
+    callback: (data: { error: string; code: string }) => void,
+  ) => {
+    const listener = (
+      _: IpcRendererEvent,
+      data: { error: string; code: string },
+    ) => callback(data);
+    ipcRenderer.on("auth:deep-link-error", listener);
+    return () => ipcRenderer.removeListener("auth:deep-link-error", listener);
+  },
+
+  // ==========================================
+  // DEEP LINK LICENSE EVENTS (TASK-1507)
+  // ==========================================
+
+  /**
+   * Listens for deep link license blocked events
+   * Fired when the user's license is expired, suspended, or otherwise invalid
+   * @param callback - Callback function to handle license blocked state
+   * @returns Cleanup function to remove listener
+   */
+  onDeepLinkLicenseBlocked: (
+    callback: (data: {
+      accessToken: string;
+      refreshToken: string;
+      userId: string;
+      blockReason: string;
+      licenseStatus: unknown;
+    }) => void,
+  ) => {
+    const listener = (
+      _: IpcRendererEvent,
+      data: {
+        accessToken: string;
+        refreshToken: string;
+        userId: string;
+        blockReason: string;
+        licenseStatus: unknown;
+      },
+    ) => callback(data);
+    ipcRenderer.on("auth:deep-link-license-blocked", listener);
+    return () =>
+      ipcRenderer.removeListener("auth:deep-link-license-blocked", listener);
+  },
+
+  /**
+   * Listens for deep link device limit events
+   * Fired when device registration fails due to license device limit
+   * @param callback - Callback function to handle device limit state
+   * @returns Cleanup function to remove listener
+   */
+  onDeepLinkDeviceLimit: (
+    callback: (data: {
+      accessToken: string;
+      refreshToken: string;
+      userId: string;
+      licenseStatus: unknown;
+    }) => void,
+  ) => {
+    const listener = (
+      _: IpcRendererEvent,
+      data: {
+        accessToken: string;
+        refreshToken: string;
+        userId: string;
+        licenseStatus: unknown;
+      },
+    ) => callback(data);
+    ipcRenderer.on("auth:deep-link-device-limit", listener);
+    return () =>
+      ipcRenderer.removeListener("auth:deep-link-device-limit", listener);
+  },
 };

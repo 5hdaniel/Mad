@@ -7,7 +7,7 @@
 
 import type { Conversation } from "../../hooks/useConversations";
 import type { Subscription } from "../../../electron/types/models";
-import type { PendingOAuthData } from "../../components/Login";
+import type { PendingOAuthData, DeepLinkAuthData } from "../../components/Login";
 import type { SyncStatus } from "../../hooks/useAutoRefresh";
 
 // Application navigation steps
@@ -240,6 +240,8 @@ export interface AppStateMachine {
     isNewUser: boolean,
   ) => void;
   handleLoginPending: (oauthData: PendingOAuthData) => void;
+  /** TASK-1507B: Handle deep link auth success from browser OAuth flow */
+  handleDeepLinkAuthSuccess: (data: DeepLinkAuthData) => void;
   handleLogout: () => Promise<void>;
 
   // ============================================
@@ -338,4 +340,4 @@ export interface AppStateMachine {
 }
 
 // Re-export types needed by consumers
-export type { Conversation, Subscription, PendingOAuthData };
+export type { Conversation, Subscription, PendingOAuthData, DeepLinkAuthData };

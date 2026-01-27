@@ -171,53 +171,86 @@ export function appStateReducer(
         return state; // Invalid transition
       }
 
-      if (action.hasKeyStore) {
-        // Key store exists, proceed to initialize DB
+      // Check if this is a first-time macOS user (no key store = new installation)
+      const isFirstTimeMacOS = !action.hasKeyStore && action.isMacOS;
+
+      if (isFirstTimeMacOS) {
+        // Skip DB init for first-time macOS users to avoid showing Keychain prompt
+        // before the login screen. DB will be initialized during onboarding
+        // secure-storage step after user has been properly informed.
         return {
           status: "loading",
-          phase: "initializing-db",
-        };
-      } else {
-        // No key store - still need to initialize (will create one)
-        // For new installs, we still go through db init
-        return {
-          status: "loading",
-          phase: "initializing-db",
+          phase: "loading-auth",
+          deferredDbInit: true,
         };
       }
+
+      // Normal flow: proceed to initialize DB
+      // (returning macOS users with key store, or Windows users)
+      return {
+        status: "loading",
+        phase: "initializing-db",
+      };
     }
 
     case "DB_INIT_STARTED": {
-      // Progress indicator - valid during initializing-db phase
-      if (state.status !== "loading" || state.phase !== "initializing-db") {
-        return state;
+      // Progress indicator - valid during initializing-db phase or onboarding with deferred init
+      if (state.status === "loading" && state.phase === "initializing-db") {
+        return { ...state, progress: 0 };
       }
-      return { ...state, progress: 0 };
+      // Also allow during onboarding for first-time macOS users (deferred DB init)
+      if (state.status === "onboarding" && state.deferredDbInit) {
+        return state; // No visible change needed, but action is valid
+      }
+      return state;
     }
 
     case "DB_INIT_COMPLETE": {
-      if (state.status !== "loading" || state.phase !== "initializing-db") {
-        return state;
-      }
+      // Handle during normal loading flow
+      if (state.status === "loading" && state.phase === "initializing-db") {
+        if (!action.success) {
+          // DB initialization failed - transition to error state
+          return {
+            status: "error",
+            error: {
+              code: "DB_INIT_FAILED",
+              message: action.error || "Failed to initialize database",
+            },
+            recoverable: true,
+            previousState: state,
+          };
+        }
 
-      if (!action.success) {
-        // DB initialization failed - transition to error state
+        // Success - proceed to load auth
         return {
-          status: "error",
-          error: {
-            code: "DB_INIT_FAILED",
-            message: action.error || "Failed to initialize database",
-          },
-          recoverable: true,
-          previousState: state,
+          status: "loading",
+          phase: "loading-auth",
         };
       }
 
-      // Success - proceed to load auth
-      return {
-        status: "loading",
-        phase: "loading-auth",
-      };
+      // Handle during onboarding for first-time macOS users (deferred DB init)
+      if (state.status === "onboarding" && state.deferredDbInit) {
+        if (!action.success) {
+          // DB initialization failed - transition to error state
+          return {
+            status: "error",
+            error: {
+              code: "DB_INIT_FAILED",
+              message: action.error || "Failed to initialize database",
+            },
+            recoverable: true,
+            previousState: state,
+          };
+        }
+
+        // Success - clear deferred flag, DB is now initialized
+        return {
+          ...state,
+          deferredDbInit: false,
+        };
+      }
+
+      return state;
     }
 
     case "AUTH_LOADED": {
@@ -225,9 +258,16 @@ export function appStateReducer(
         return state;
       }
 
+      // Preserve deferredDbInit flag from loading state
+      const loadingState = state as LoadingState;
+      const deferredDbInit = loadingState.deferredDbInit;
+
       if (!action.user) {
-        // No authenticated user
-        return { status: "unauthenticated" };
+        // No authenticated user - preserve deferredDbInit for after login
+        return {
+          status: "unauthenticated",
+          deferredDbInit,
+        };
       }
 
       if (action.isNewUser) {
@@ -247,6 +287,7 @@ export function appStateReducer(
           user: action.user,
           platform: action.platform,
           completedSteps: [],
+          deferredDbInit,
         };
       }
 
@@ -267,6 +308,9 @@ export function appStateReducer(
         return state; // Invalid transition
       }
 
+      // Preserve deferredDbInit flag from unauthenticated state
+      const deferredDbInit = state.deferredDbInit;
+
       if (action.isNewUser) {
         // New user - start onboarding immediately
         const firstStep = getNextOnboardingStep([], action.platform, {
@@ -283,6 +327,7 @@ export function appStateReducer(
           user: action.user,
           platform: action.platform,
           completedSteps: [],
+          deferredDbInit,
         };
       }
 

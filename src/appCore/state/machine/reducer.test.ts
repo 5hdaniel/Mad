@@ -198,9 +198,34 @@ describe("appStateReducer - Loading Phase Transitions", () => {
       });
     });
 
-    it("transitions to initializing-db even when hasKeyStore is false", () => {
+    it("transitions to initializing-db when hasKeyStore is false on Windows", () => {
       const state = INITIAL_APP_STATE;
-      const action: AppAction = { type: "STORAGE_CHECKED", hasKeyStore: false };
+      const action: AppAction = { type: "STORAGE_CHECKED", hasKeyStore: false, isMacOS: false };
+
+      const result = appStateReducer(state, action);
+
+      expect(result).toEqual({
+        status: "loading",
+        phase: "initializing-db",
+      });
+    });
+
+    it("defers DB init for first-time macOS users (no key store + isMacOS)", () => {
+      const state = INITIAL_APP_STATE;
+      const action: AppAction = { type: "STORAGE_CHECKED", hasKeyStore: false, isMacOS: true };
+
+      const result = appStateReducer(state, action);
+
+      expect(result).toEqual({
+        status: "loading",
+        phase: "loading-auth",
+        deferredDbInit: true,
+      });
+    });
+
+    it("does not defer DB init for returning macOS users (has key store)", () => {
+      const state = INITIAL_APP_STATE;
+      const action: AppAction = { type: "STORAGE_CHECKED", hasKeyStore: true, isMacOS: true };
 
       const result = appStateReducer(state, action);
 
@@ -305,6 +330,65 @@ describe("appStateReducer - Loading Phase Transitions", () => {
 
       expect(result).toBe(state);
     });
+
+    it("clears deferredDbInit during onboarding on success", () => {
+      const state: OnboardingState = {
+        status: "onboarding",
+        step: "secure-storage",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        completedSteps: ["phone-type"],
+        deferredDbInit: true,
+      };
+      const action: AppAction = { type: "DB_INIT_COMPLETE", success: true };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("onboarding");
+      if (result.status === "onboarding") {
+        expect(result.deferredDbInit).toBe(false);
+      }
+    });
+
+    it("transitions to error during onboarding on failure", () => {
+      const state: OnboardingState = {
+        status: "onboarding",
+        step: "secure-storage",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        completedSteps: ["phone-type"],
+        deferredDbInit: true,
+      };
+      const action: AppAction = {
+        type: "DB_INIT_COMPLETE",
+        success: false,
+        error: "Keychain access denied",
+      };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("error");
+      if (result.status === "error") {
+        expect(result.error.code).toBe("DB_INIT_FAILED");
+        expect(result.recoverable).toBe(true);
+      }
+    });
+
+    it("ignores during onboarding if deferredDbInit is not set", () => {
+      const state: OnboardingState = {
+        status: "onboarding",
+        step: "secure-storage",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        completedSteps: ["phone-type"],
+        // deferredDbInit not set
+      };
+      const action: AppAction = { type: "DB_INIT_COMPLETE", success: true };
+
+      const result = appStateReducer(state, action);
+
+      expect(result).toBe(state);
+    });
   });
 
   describe("AUTH_LOADED", () => {
@@ -319,7 +403,28 @@ describe("appStateReducer - Loading Phase Transitions", () => {
 
       const result = appStateReducer(state, action);
 
-      expect(result).toEqual({ status: "unauthenticated" });
+      expect(result.status).toBe("unauthenticated");
+    });
+
+    it("preserves deferredDbInit when transitioning to unauthenticated", () => {
+      const state: LoadingState = {
+        status: "loading",
+        phase: "loading-auth",
+        deferredDbInit: true,
+      };
+      const action: AppAction = {
+        type: "AUTH_LOADED",
+        user: null,
+        isNewUser: false,
+        platform: mockMacOSPlatform,
+      };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("unauthenticated");
+      if (result.status === "unauthenticated") {
+        expect(result.deferredDbInit).toBe(true);
+      }
     });
 
     it("transitions new user directly to onboarding", () => {
@@ -339,6 +444,27 @@ describe("appStateReducer - Loading Phase Transitions", () => {
         expect(result.platform).toEqual(mockMacOSPlatform);
         expect(result.step).toBe("phone-type");
         expect(result.completedSteps).toEqual([]);
+      }
+    });
+
+    it("preserves deferredDbInit when transitioning new user to onboarding", () => {
+      const state: LoadingState = {
+        status: "loading",
+        phase: "loading-auth",
+        deferredDbInit: true,
+      };
+      const action: AppAction = {
+        type: "AUTH_LOADED",
+        user: mockUser,
+        isNewUser: true,
+        platform: mockMacOSPlatform,
+      };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("onboarding");
+      if (result.status === "onboarding") {
+        expect(result.deferredDbInit).toBe(true);
       }
     });
 

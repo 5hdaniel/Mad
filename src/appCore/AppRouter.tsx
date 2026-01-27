@@ -39,7 +39,7 @@ export function AppRouter({ app }: AppRouterProps) {
     hasEmailConnected, showSetupPromptDismissed, exportResult, conversations,
     selectedConversationIds, outlookConnected,
     // Handlers
-    handleLoginSuccess, handleLoginPending, handleSelectIPhone, handleSelectAndroid,
+    handleLoginSuccess, handleLoginPending, handleDeepLinkAuthSuccess, handleSelectIPhone, handleSelectAndroid,
     handleAndroidGoBack, handleAndroidContinueWithEmail, handlePhoneTypeChange,
     handleAppleDriverSetupComplete, handleAppleDriverSetupSkip, handleEmailOnboardingComplete,
     handleEmailOnboardingSkip, handleEmailOnboardingBack, handleKeychainExplanationContinue,
@@ -77,6 +77,7 @@ export function AppRouter({ app }: AppRouterProps) {
       <Login
         onLoginSuccess={handleLoginSuccess}
         onLoginPending={handleLoginPending}
+        onDeepLinkAuthSuccess={handleDeepLinkAuthSuccess}
       />
     );
   }

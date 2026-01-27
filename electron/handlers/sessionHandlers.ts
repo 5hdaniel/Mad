@@ -3,7 +3,7 @@
  * Handles session management, validation, logout, terms acceptance, and email onboarding
  */
 
-import { ipcMain, IpcMainInvokeEvent } from "electron";
+import { ipcMain, IpcMainInvokeEvent, shell } from "electron";
 import type { User } from "../types/models";
 
 // Import services
@@ -468,7 +468,98 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
 
     sessionSecurityService.recordActivity(session.sessionToken);
 
-    const freshUser = await databaseService.getUserById(session.user.id);
+    // TASK-1507E: Ensure local SQLite user exists for existing sessions
+    // Users who authenticated before TASK-1507D have valid sessions but no local user,
+    // which causes FK constraint failures on mailbox connection, messages import, etc.
+    let freshUser = await databaseService.getUserById(session.user.id);
+
+    if (!freshUser && session.user.email) {
+      // Try to find user by email (handles case where session.user.id is Supabase UUID)
+      freshUser = await databaseService.getUserByEmail(session.user.email);
+    }
+
+    if (!freshUser && session.user.oauth_id && session.provider) {
+      // Try to find user by OAuth ID
+      freshUser = await databaseService.getUserByOAuthId(
+        session.provider,
+        session.user.oauth_id
+      );
+    }
+
+    if (!freshUser && session.user.email) {
+      // No local user exists - create one from session data
+      // This syncs existing Supabase users to local SQLite (retroactive TASK-1507D fix)
+      await logService.info(
+        "Creating local user from existing session (TASK-1507E)",
+        "SessionHandlers",
+        { email: session.user.email }
+      );
+
+      try {
+        freshUser = await databaseService.createUser({
+          email: session.user.email,
+          first_name: session.user.first_name,
+          last_name: session.user.last_name,
+          display_name:
+            session.user.display_name ||
+            session.user.email.split("@")[0],
+          avatar_url: session.user.avatar_url,
+          oauth_provider: session.provider || "google",
+          oauth_id: session.user.oauth_id || session.user.id,
+          subscription_tier: session.user.subscription_tier || "free",
+          subscription_status: session.user.subscription_status || "trial",
+          trial_ends_at: session.user.trial_ends_at,
+          is_active: true,
+        });
+
+        await logService.info(
+          "Local user created successfully from existing session",
+          "SessionHandlers",
+          { userId: freshUser.id }
+        );
+
+        // BACKLOG-546: Sync terms data from Supabase if user has already accepted
+        // This ensures returning users on new devices don't see T&C again
+        try {
+          const cloudUser = await supabaseService.getUserById(session.user.id);
+          if (cloudUser?.terms_accepted_at) {
+            await databaseService.updateUser(freshUser.id, {
+              terms_accepted_at: cloudUser.terms_accepted_at,
+              terms_version_accepted: cloudUser.terms_version_accepted,
+              privacy_policy_accepted_at: cloudUser.privacy_policy_accepted_at,
+              privacy_policy_version_accepted: cloudUser.privacy_policy_version_accepted,
+            });
+            // Re-fetch to get updated terms data
+            const updatedUser = await databaseService.getUserById(freshUser.id);
+            if (updatedUser) {
+              freshUser = updatedUser;
+            }
+            await logService.info(
+              "Synced terms data from Supabase to local user (BACKLOG-546)",
+              "SessionHandlers",
+              { userId: freshUser.id }
+            );
+          }
+        } catch (syncError) {
+          // Log but don't fail - terms can be re-accepted if needed
+          await logService.warn(
+            "Failed to sync terms from Supabase",
+            "SessionHandlers",
+            { error: syncError instanceof Error ? syncError.message : "Unknown error" }
+          );
+        }
+      } catch (createError) {
+        // Log but don't fail - auth should succeed even if local user creation fails
+        await logService.error(
+          "Failed to create local user from session",
+          "SessionHandlers",
+          {
+            error: createError instanceof Error ? createError.message : "Unknown error",
+          }
+        );
+      }
+    }
+
     const user = freshUser || session.user;
 
     setSyncUserId(user.id);
@@ -493,6 +584,34 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
 }
 
 /**
+ * Open broker portal auth page in the default browser
+ * TASK-1507: Used for deep-link authentication flow
+ * TASK-1510: Redirects to broker portal for provider selection (Google/Microsoft)
+ */
+async function handleOpenAuthInBrowser(): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Use broker portal for provider selection page
+    const brokerPortalUrl = process.env.BROKER_PORTAL_URL || 'http://localhost:3001';
+    const authUrl = `${brokerPortalUrl}/auth/desktop`;
+
+    await logService.info("Opening auth URL in browser", "AuthHandlers", {
+      url: authUrl,
+    });
+
+    await shell.openExternal(authUrl);
+    return { success: true };
+  } catch (error) {
+    await logService.error("Failed to open auth in browser", "AuthHandlers", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+/**
  * Register all session handlers
  */
 export function registerSessionHandlers(): void {
@@ -503,4 +622,6 @@ export function registerSessionHandlers(): void {
   ipcMain.handle("auth:check-email-onboarding", handleCheckEmailOnboarding);
   ipcMain.handle("auth:validate-session", handleValidateSession);
   ipcMain.handle("auth:get-current-user", handleGetCurrentUser);
+  // TASK-1507: Open browser for Supabase OAuth with deep-link callback
+  ipcMain.handle("auth:open-in-browser", handleOpenAuthInBrowser);
 }
