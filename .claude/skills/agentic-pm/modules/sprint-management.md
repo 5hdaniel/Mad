@@ -278,6 +278,51 @@ Future Sprint Adjustment:
 
 ---
 
+## Investigation-First Pattern (for Bug Fix Sprints)
+
+**Source:** SPRINT-061 - Saved ~17K tokens by avoiding unnecessary TASK-1406 implementation.
+
+### When to Use
+
+Use investigation-first for sprints where:
+- Root cause is unclear
+- Multiple possible causes exist
+- "Bugs" may already be fixed or not exist
+
+### Structure
+
+```
+Phase 1: Investigation (Parallel)
+  - TASK-X00: Investigate issue A
+  - TASK-X01: Investigate issue B
+  - TASK-X02: Investigate issue C
+
+Phase 2: Implementation (Based on Findings)
+  - TASK-X03: Fix for A (if investigation confirms bug)
+  - TASK-X04: Fix for B (if investigation confirms bug)
+  - etc.
+```
+
+### Key Rules
+
+1. **Investigation tasks are read-only** - No file modifications, safe to parallelize
+2. **Define implementation tasks tentatively** - Mark as "pending investigation"
+3. **Defer if no bug found** - Don't implement fixes for non-existent bugs
+4. **Update backlog immediately** - Change status to `deferred` with reason
+
+### PM Checkpoint After Investigation Phase
+
+Before starting implementation phase:
+1. Review all investigation findings
+2. For each planned implementation task, decide:
+   - **PROCEED**: Bug confirmed, fix needed
+   - **MODIFY**: Different fix needed (update task file)
+   - **SKIP**: No bug found, mark backlog item as `deferred`
+3. Update sprint file with decisions
+4. Notify user of any scope changes
+
+---
+
 ## Moving Tasks Between Sprints
 
 ### When to Move a Task

@@ -137,6 +137,44 @@ Token Cap: 140K (4x upper estimate)
 
 Example: `TASK-101-type-definitions.md`
 
+## Conditional Implementation Tasks
+
+**Source:** SPRINT-061 - Tasks dependent on investigation findings.
+
+When implementation depends on investigation findings, mark tasks as conditional:
+
+### Task File Header for Conditional Tasks
+
+```markdown
+## Prerequisites
+
+**Depends on:** TASK-X00 (investigation)
+**Conditional:** This task may be SKIPPED if investigation finds:
+- Bug doesn't exist
+- Already implemented correctly
+- Different root cause requiring different fix
+```
+
+### When to Use
+
+- Bug fix sprints with investigation phase
+- Tasks where scope depends on findings
+- Any task that might not be needed
+
+### PM Actions After Investigation
+
+1. Review investigation task findings
+2. For each conditional implementation task:
+   | Finding | Action |
+   |---------|--------|
+   | Bug confirmed | Remove conditional flag, proceed |
+   | Bug doesn't exist | Skip task, defer backlog item |
+   | Different root cause | Update task file with correct fix |
+3. Update backlog.csv status (`deferred` if skipping)
+4. Document decision in sprint file
+
+---
+
 ## Mid-sprint task updates
 
 If requirements change during a sprint:
