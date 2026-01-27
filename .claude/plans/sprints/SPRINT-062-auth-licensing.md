@@ -385,6 +385,7 @@ Phase 4: Final Review
 | 3 | TASK-1508B | - | Blocked | - | - | - |
 | 3 | TASK-1508C | - | **Ready** (P2) | - | - | - |
 | 3 | TASK-1508 | - | Blocked | USER | - | - |
+| 3 | TASK-1509A | BACKLOG-546 | **Complete** | engineer | #644 | ~8K |
 | 4 | TASK-1509 | - | Blocked | - | - | - |
 
 ---
@@ -481,6 +482,29 @@ During TASK-1508 manual testing, multiple blocking bugs were discovered:
 - **Status:** Deferred (not blocking license flow)
 
 **Settings Bundle Note:** Bugs 12, 13, 14 (BACKLOG-539, 540, 541) all affect the Settings modal and should be fixed together in a future sprint.
+
+**Bug 15: SMS and iMessage Threads Not Merged (BACKLOG-542)**
+- **Error:** Same contact appears twice in thread list - once for SMS, once for iMessage
+- **Root Cause:** Import logic creates separate thread_ids based on service type (SMS vs iMessage) instead of grouping by phone number/contact
+- **Expected:** Match iPhone behavior - one conversation per contact regardless of channel
+- **Impact:** P2 - Confusing UX, duplicate contacts in thread list
+- **Status:** Deferred (not blocking license flow)
+
+**Bug 16: Audit Period Not Displayed After Transaction Creation (BACKLOG-543)**
+- **Error:** Audit period doesn't show in Overview tab after creating a transaction
+- **Root Cause:** `started_at` field either not saved on initial creation, or UI not refreshing properly
+- **Workaround:** Click Edit, then Save - audit period then appears
+- **Expected:** Audit period should display immediately after creation (e.g., "Jan 1, 2026 - Ongoing")
+- **Impact:** P3 - Minor UX polish, data is there just needs edit/save to display
+- **Status:** Deferred (not blocking license flow)
+
+**Bug 17: Returning Users See T&C Screen Incorrectly (BACKLOG-546)** ✅ FIXED
+- **Error:** Returning users see "Welcome... please review and accept our terms" even though they already accepted
+- **Root Cause:** `sharedAuthHandlers.ts` uses `!localUser` for `isNewUser` instead of checking `terms_accepted_at` and version
+- **Impact:** P1 - Blocks returning user experience
+- **Fix:** Sync terms data from cloud when creating local user, use `needsToAcceptTerms(localUser)` for return value
+- **SR Review:** APPROVED
+- **Status:** Complete (PR #644 merged)
 
 ---
 

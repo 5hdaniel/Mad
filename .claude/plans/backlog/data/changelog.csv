@@ -202,3 +202,4 @@ date,action,details,items_affected
 2026-01-25,BACKLOG-462,status,Completed,"PRs #570, #592 - AI gating verification (Settings + Rejected filter)"
 2026-01-25,BACKLOG-081,deferred,Pending,Deferred from SPRINT-053 - AI consent in T&C
 2026-01-25,SPRINT-053,completed,Planning,Completed,"License Enhancement & AI Gating - 3 tasks merged (PRs #569, #570, #592)"
+2026-01-27,create,Created BACKLOG-544 - Background import process with progress indicator,BACKLOG-544

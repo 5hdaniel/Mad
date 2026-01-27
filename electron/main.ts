@@ -353,8 +353,34 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
         // The renderer will need to handle this case (existing flow before TASK-1507F)
       }
 
+      // BACKLOG-546: Check if user needs to accept terms
+      // Fetch from Supabase to get terms acceptance status
+      let needsTermsAcceptance = true; // Default to showing T&C
+      try {
+        const cloudUser = await supabaseService.getUserById(user.id);
+        if (cloudUser?.terms_accepted_at) {
+          // User has accepted terms - check if it's the current version
+          const currentTermsVersion = "1.0"; // Should match CURRENT_TERMS_VERSION
+          const currentPrivacyVersion = "1.0"; // Should match CURRENT_PRIVACY_POLICY_VERSION
+
+          // No version tracking (legacy) - they're good
+          if (!cloudUser.terms_version_accepted && !cloudUser.privacy_policy_version_accepted) {
+            needsTermsAcceptance = false;
+          } else {
+            // Check if versions match current
+            const termsOutdated = cloudUser.terms_version_accepted !== currentTermsVersion;
+            const privacyOutdated = cloudUser.privacy_policy_version_accepted !== currentPrivacyVersion;
+            needsTermsAcceptance = termsOutdated || privacyOutdated;
+          }
+        }
+        log.info("[DeepLink] Terms acceptance check:", { needsTermsAcceptance, termsAcceptedAt: cloudUser?.terms_accepted_at });
+      } catch (termsCheckError) {
+        log.warn("[DeepLink] Failed to check terms acceptance, defaulting to show T&C:", termsCheckError);
+      }
+
       // TASK-1507: Step 6 - Success! Send all data to renderer
       // TASK-1507F: Use local user ID instead of Supabase UUID for FK constraint compatibility
+      // BACKLOG-546: Include isNewUser based on terms acceptance, not transaction count
       log.info("[DeepLink] Auth complete, sending success event for user:", localUserId);
       sendToRenderer("auth:deep-link-callback", {
         accessToken,
@@ -368,6 +394,7 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
         provider: user.app_metadata?.provider,
         licenseStatus,
         device: deviceResult.device,
+        isNewUser: needsTermsAcceptance, // BACKLOG-546: Based on terms, not transactions
       });
 
       focusMainWindow();

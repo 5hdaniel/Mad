@@ -467,3 +467,4 @@ BACKLOG-515,User Identifiers Table for Contact Resolution,enhancement,medium,pen
 BACKLOG-542,Merge SMS and iMessage threads from same contact,bug,medium,pending,-,~30K,-,-,2026-01-27,,[BACKLOG-542.md](items/BACKLOG-542.md)
 BACKLOG-543,Audit period not displayed after transaction creation until edit/save,bug,low,pending,-,~15K,-,-,2026-01-27,,[BACKLOG-543.md](items/BACKLOG-543.md)
 BACKLOG-545,Attachments not exported in package,bug,P2,Pending,-,~40K,-,-,2026-01-27,,[BACKLOG-545.md](items/BACKLOG-545.md)
+BACKLOG-546,Returning users incorrectly see T&C acceptance screen,bug,P1,Pending,SPRINT-062,~15K,-,-,2026-01-27,,[BACKLOG-546.md](items/BACKLOG-546.md)
