@@ -352,7 +352,9 @@ export async function handleMicrosoftLogin(
         );
 
         if (!localUser) {
+          // TASK-1507G: Use Supabase Auth UUID as local user ID for unified IDs
           localUser = await databaseService.createUser({
+            id: cloudUser.id,
             email: userInfo.email,
             first_name: userInfo.given_name,
             last_name: userInfo.family_name,

@@ -257,7 +257,9 @@ export function registerSystemHandlers(): void {
             }
 
             if (!localUser) {
+              // TASK-1507G: Use Supabase Auth UUID as local user ID for unified IDs
               await databaseService.createUser({
+                id: pendingUser.supabaseId,
                 email: pendingUser.email,
                 display_name: pendingUser.displayName || pendingUser.email.split("@")[0],
                 avatar_url: pendingUser.avatarUrl,
