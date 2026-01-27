@@ -10,7 +10,7 @@ import {
   ConfidencePill,
   PendingReviewBadge,
 } from "./DetectionBadges";
-import { formatCommunicationCounts } from "./TransactionCard";
+// Note: formatCommunicationCounts is available in TransactionCard.tsx but UI uses inline JSX for thread labels
 import { SubmissionStatusBadge } from "../../transactionDetailsModule/components/SubmissionStatusBadge";
 import { LicenseGate } from "../../common/LicenseGate";
 
@@ -207,7 +207,7 @@ export function TransactionListCard({
               title="View messages"
             >
               <MessagesIcon />
-              <span>{textCount} {textCount === 1 ? "text" : "texts"}</span>
+              <span>{textCount} {textCount === 1 ? "Text thread" : "Text threads"}</span>
             </button>
             <button
               onClick={(e) => onEmailsClick?.(transaction, e)}
@@ -215,7 +215,7 @@ export function TransactionListCard({
               title="View emails"
             >
               <EmailsIcon />
-              <span>{emailCount} {emailCount === 1 ? "email thread" : "email threads"}</span>
+              <span>{emailCount} {emailCount === 1 ? "Email thread" : "Email threads"}</span>
             </button>
             {transaction.extraction_confidence && (
               <span className="flex items-center gap-1">

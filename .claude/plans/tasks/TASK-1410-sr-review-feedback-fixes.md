@@ -136,29 +136,56 @@ The function should:
 
 ## Implementation Summary
 
-**Status**: Not Started
+**Status**: Complete
 
 ### Changes Made
-<!-- Engineer fills this section after implementation -->
+
+1. **Resolved formatCommunicationCounts sync issue (AC1)**
+   - Removed unused import of `formatCommunicationCounts` from `TransactionListCard.tsx`
+   - The UI uses inline JSX for thread labels ("X Text threads", "Y Email threads")
+   - Function and its tests kept in `TransactionCard.tsx` for potential future use
+   - Added comment documenting the design decision
+
+2. **Added test coverage for extractPhoneFromThread (AC2)**
+   - Added 5 new test cases in "user identifier exclusion (BACKLOG-510/513)" describe block:
+     - `should exclude user's outbound 'from' field when extracting phone`
+     - `should exclude user's inbound 'to' field when extracting phone`
+     - `should use chat_members fallback when from/to are 'unknown'`
+     - `should correctly identify user across mixed inbound/outbound messages`
+     - `should not exclude valid external phones that happen to be in from field of inbound`
 
 ### Files Modified
-<!-- List actual files changed -->
+
+| File | Change |
+|------|--------|
+| `src/components/transaction/components/TransactionListCard.tsx` | Removed unused import, added explanatory comment |
+| `src/components/transactionDetailsModule/components/__tests__/MessageThreadCard.test.tsx` | Added 5 test cases for user identifier exclusion |
 
 ### Test Results
-<!-- Paste relevant test output -->
+
+```
+MessageThreadCard.test.tsx: 46 passed (was 41, added 5)
+TransactionCard.test.tsx: 9 passed
+```
 
 ### Decisions Made
-<!-- Document any implementation decisions -->
+
+1. **Keep formatCommunicationCounts function** - Although unused, the function is exported and has comprehensive tests. Keeping it for potential future reuse. Removed only the unused import.
+
+2. **Test coverage approach** - Added tests that verify the new BACKLOG-510/513 logic:
+   - User identification via outbound `from` and inbound `to` patterns
+   - Proper fallback to `chat_members` when handles are "unknown"
+   - Cross-message user identification in mixed threads
 
 ---
 
 ## PR Checklist
 
-- [ ] Branch created from project branch
-- [ ] All acceptance criteria met
-- [ ] Type-check passes
-- [ ] Lint passes
-- [ ] Tests pass (including new tests)
-- [ ] Commit message follows conventional commit format
-- [ ] PR created with proper description
-- [ ] Ready for SR Engineer review
+- [x] Branch created from project branch
+- [x] All acceptance criteria met
+- [x] Type-check passes
+- [x] Lint passes (pre-existing NotificationContext issue unrelated to changes)
+- [x] Tests pass (including new tests)
+- [x] Commit message follows conventional commit format
+- [x] PR created with proper description
+- [x] Ready for SR Engineer review

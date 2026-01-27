@@ -211,7 +211,7 @@ function TransactionCard({
               title="View messages"
             >
               <MessagesIcon />
-              <span>{textCount} {textCount === 1 ? "Text" : "Texts"}</span>
+              <span>{textCount} {textCount === 1 ? "Text thread" : "Text threads"}</span>
             </button>
             <button
               onClick={onEmailsClick}
@@ -219,7 +219,7 @@ function TransactionCard({
               title="View emails"
             >
               <EmailsIcon />
-              <span>{emailCount} {emailCount === 1 ? "email thread" : "email threads"}</span>
+              <span>{emailCount} {emailCount === 1 ? "Email thread" : "Email threads"}</span>
             </button>
             {transaction.extraction_confidence && (
               <span className="flex items-center gap-1">
