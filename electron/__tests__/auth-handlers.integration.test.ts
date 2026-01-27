@@ -96,6 +96,8 @@ const mockSupabaseService = {
   registerDevice: jest.fn(),
   trackEvent: jest.fn(),
   syncTermsAcceptance: jest.fn(),
+  // TASK-1507G: Add getAuthUserId for unified ID handling
+  getAuthUserId: jest.fn().mockReturnValue(null),
 };
 
 // Session-only OAuth: tokens stored directly in encrypted database, no separate tokenEncryptionService

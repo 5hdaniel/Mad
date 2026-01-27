@@ -421,6 +421,101 @@ async function handleValidateSession(
 }
 
 /**
+ * TASK-1507G: Migrate user from old random ID to Supabase Auth ID
+ * Updates all FK references in child tables
+ * @param oldUser - The user with the incorrect local ID
+ * @param newSupabaseId - The correct Supabase Auth UUID
+ * @returns The migrated user with the new ID
+ */
+async function migrateUserToSupabaseId(
+  oldUser: User,
+  newSupabaseId: string
+): Promise<User> {
+  // Check if user with Supabase ID already exists (edge case: concurrent migration)
+  const existingUser = await databaseService.getUserById(newSupabaseId);
+  if (existingUser) {
+    // User already migrated or created correctly - just return existing
+    await logService.info(
+      "TASK-1507G: User with Supabase ID already exists, skipping migration",
+      "SessionHandlers",
+      { supabaseId: newSupabaseId.substring(0, 8) + "..." }
+    );
+    return existingUser;
+  }
+
+  const db = databaseService.getRawDatabase();
+
+  // Transaction to ensure atomicity
+  const migrate = db.transaction(() => {
+    // 1. Create new user with Supabase ID (copy all data)
+    db.prepare(`
+      INSERT INTO users_local (
+        id, email, first_name, last_name, display_name, avatar_url,
+        oauth_provider, oauth_id, subscription_tier, subscription_status,
+        trial_ends_at, terms_accepted_at, terms_version_accepted,
+        privacy_policy_accepted_at, privacy_policy_version_accepted,
+        email_onboarding_completed_at, mobile_phone_type, timezone, theme,
+        license_type, ai_detection_enabled, organization_id,
+        created_at, updated_at
+      )
+      SELECT
+        ?, email, first_name, last_name, display_name, avatar_url,
+        oauth_provider, oauth_id, subscription_tier, subscription_status,
+        trial_ends_at, terms_accepted_at, terms_version_accepted,
+        privacy_policy_accepted_at, privacy_policy_version_accepted,
+        email_onboarding_completed_at, mobile_phone_type, timezone, theme,
+        license_type, ai_detection_enabled, organization_id,
+        created_at, CURRENT_TIMESTAMP
+      FROM users_local WHERE id = ?
+    `).run(newSupabaseId, oldUser.id);
+
+    // 2. Update FK references in all child tables (SR Engineer verified complete list)
+    const tables = [
+      'sessions',
+      'oauth_tokens',
+      'contacts',
+      'transactions',
+      'communications',
+      'emails',
+      'messages',
+      'llm_settings',
+      'audit_logs',
+      'classification_feedback',
+      'audit_packages',
+      'ignored_communications',
+    ];
+
+    for (const table of tables) {
+      try {
+        db.prepare(`UPDATE ${table} SET user_id = ? WHERE user_id = ?`)
+          .run(newSupabaseId, oldUser.id);
+      } catch {
+        // Table may not exist or have user_id column - ignore
+      }
+    }
+
+    // 3. Delete old user record
+    db.prepare('DELETE FROM users_local WHERE id = ?').run(oldUser.id);
+  });
+
+  migrate();
+
+  // Return the migrated user
+  const migratedUser = await databaseService.getUserById(newSupabaseId);
+  if (!migratedUser) {
+    throw new Error('User migration failed - could not find migrated user');
+  }
+
+  await logService.info(
+    "TASK-1507G: User migration complete",
+    "SessionHandlers",
+    { newId: newSupabaseId.substring(0, 8) + "..." }
+  );
+
+  return migratedUser;
+}
+
+/**
  * Get current user from saved session
  */
 async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
@@ -486,6 +581,24 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
       );
     }
 
+    // TASK-1507G: Check for ID mismatch - user exists but with wrong ID
+    // Get the authoritative Supabase UUID (session.user.id should be it, but verify via auth service)
+    const supabaseUserId = supabaseService.getAuthUserId() || session.user.id;
+
+    if (freshUser && freshUser.id !== supabaseUserId) {
+      await logService.info(
+        "TASK-1507G: ID mismatch detected, migrating user",
+        "SessionHandlers",
+        {
+          localId: freshUser.id.substring(0, 8) + "...",
+          supabaseId: supabaseUserId.substring(0, 8) + "...",
+        }
+      );
+
+      // Migrate user to Supabase ID
+      freshUser = await migrateUserToSupabaseId(freshUser, supabaseUserId);
+    }
+
     if (!freshUser && session.user.email) {
       // No local user exists - create one from session data
       // This syncs existing Supabase users to local SQLite (retroactive TASK-1507D fix)
@@ -496,7 +609,10 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
       );
 
       try {
+        // TASK-1507G: Pass Supabase Auth UUID as the user ID
+        // This ensures local SQLite user ID matches Supabase for FK integrity
         freshUser = await databaseService.createUser({
+          id: supabaseUserId,  // Use Supabase's authoritative UUID
           email: session.user.email,
           first_name: session.user.first_name,
           last_name: session.user.last_name,
