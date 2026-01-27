@@ -1,7 +1,7 @@
 # Sprint Plan: SPRINT-062 - Auth Flow + Licensing System
 
 **Created**: 2026-01-26
-**Updated**: 2026-01-27 (PM: Added TASK-1507G - Unify User IDs architectural fix)
+**Updated**: 2026-01-27 (PM: Added TASK-1510 - Browser auth landing page with provider selection)
 **Status**: Ready
 **Goal**: Implement browser-based auth flow with Supabase licensing system
 **Branch**: `project/licensing-and-auth-flow`
@@ -31,7 +31,7 @@ Before starting sprint work, engineers must:
 
 ---
 
-## In Scope (18 Implementation Tasks + 1 SR Review)
+## In Scope (19 Implementation Tasks + 1 SR Review)
 
 ### Phase 1: Auth Infrastructure
 | Task ID | Backlog | Title | Est. Tokens | Execution |
@@ -62,6 +62,7 @@ Before starting sprint work, engineers must:
 | TASK-1508A | - | Fix URL Fragment Token Parsing (Bug Fix) | ~15K | Sequential |
 | TASK-1508B | - | Fix Env Vars for Packaged Builds (Bug Fix) | ~20K | Sequential |
 | TASK-1508C | - | Fix Google Maps API Key in Packaged Builds (Bug Fix) | ~10K | Parallel |
+| TASK-1510 | BACKLOG-548 | Browser Auth Landing Page with Provider Selection | ~5K | Sequential |
 | TASK-1508 | - | Manual Test Full Flow (USER GATE) | ~5K | User |
 
 ### Phase 4: Review
@@ -90,7 +91,7 @@ dependency_graph:
     - id: phase-3
       name: "Integration"
       requires: [phase-1, phase-2]
-      tasks: [TASK-1506, TASK-1507, TASK-1507B, TASK-1507C, TASK-1507D, TASK-1507E, TASK-1507F, TASK-1507G, TASK-1508A, TASK-1508B]
+      tasks: [TASK-1506, TASK-1507, TASK-1507B, TASK-1507C, TASK-1507D, TASK-1507E, TASK-1507F, TASK-1507G, TASK-1508A, TASK-1508B, TASK-1510]
       gate: TASK-1508 (USER GATE)
 
     - id: phase-4
@@ -172,7 +173,15 @@ dependency_graph:
       to: TASK-1508C
       reason: "Fix Google Maps API key (parallel, lower priority)"
 
+    - from: TASK-1507
+      to: TASK-1510
+      reason: "Provider selection page needs deep link auth working first"
+
     # Phase 3 -> User Gate
+    - from: TASK-1510
+      to: TASK-1508
+      reason: "User validates full flow including provider selection"
+
     - from: TASK-1508B
       to: TASK-1508
       reason: "User validates full flow after bug fixes (TASK-1508C can be parallel)"
@@ -356,9 +365,10 @@ Phase 4: Final Review
 | Phase 3: Integration | TASK-1506, 1507 | ~30K | Sequential |
 | Phase 3: Bug Fixes | TASK-1507B, 1507C, 1507D, 1507E, 1507F, 1508A, 1508B, 1508C | ~150K | Sequential (discovered during testing) |
 | Phase 3: Architecture | TASK-1507G | ~50K | Unify user IDs |
+| Phase 3: Feature | TASK-1510 | ~5K | Provider selection redirect (uses existing broker portal) |
 | Phase 3: Gate | TASK-1508 | ~5K | User testing |
 | Phase 4: Review | TASK-1509 | ~20K | SR Engineer |
-| **Total** | **20 tasks** | **~385K** | - |
+| **Total** | **21 tasks** | **~390K** | - |
 
 ---
 
@@ -384,8 +394,9 @@ Phase 4: Final Review
 | 3 | TASK-1508A | - | **Complete** | PM direct | #636 | - |
 | 3 | TASK-1508B | - | Blocked | - | - | - |
 | 3 | TASK-1508C | - | **Ready** (P2) | - | - | - |
+| 3 | TASK-1510 | BACKLOG-548 | **Complete** | PM direct | #646 | - |
 | 3 | TASK-1508 | - | Blocked | USER | - | - |
-| 3 | TASK-1509A | BACKLOG-546 | **Complete** | engineer | #644 | ~8K |
+| 3 | TASK-1509A | BACKLOG-546 | **Complete** | engineer | #644, #645 | ~15K |
 | 4 | TASK-1509 | - | Blocked | - | - | - |
 
 ---
