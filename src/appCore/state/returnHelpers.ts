@@ -83,6 +83,7 @@ interface AuthFlowReturn {
   pendingOnboardingData: PendingOnboardingData;
   handleLoginSuccess: AppStateMachine["handleLoginSuccess"];
   handleLoginPending: AppStateMachine["handleLoginPending"];
+  handleDeepLinkAuthSuccess: AppStateMachine["handleDeepLinkAuthSuccess"];
   handleLogout: AppStateMachine["handleLogout"];
   handleAcceptTerms: AppStateMachine["handleAcceptTerms"];
   handleDeclineTerms: AppStateMachine["handleDeclineTerms"];
@@ -346,7 +347,7 @@ export function constructModalTransitions(
  */
 export function constructHandlers(
   nav: Pick<NavigationFlowReturn, "goToStep" | "goToEmailOnboarding" | "handleDismissSetupPrompt" | "setIsTourActive" | "getPageTitle">,
-  auth: Pick<AuthFlowReturn, "handleLoginSuccess" | "handleLoginPending" | "handleLogout" | "handleAcceptTerms" | "handleDeclineTerms">,
+  auth: Pick<AuthFlowReturn, "handleLoginSuccess" | "handleLoginPending" | "handleDeepLinkAuthSuccess" | "handleLogout" | "handleAcceptTerms" | "handleDeclineTerms">,
   permissions: Pick<PermissionsFlowReturn, "handlePermissionsGranted" | "checkPermissions">,
   phoneHandlers: PhoneHandlersReturn,
   emailHandlers: EmailHandlersReturn,
@@ -371,6 +372,7 @@ export function constructHandlers(
   | "goToEmailOnboarding"
   | "handleLoginSuccess"
   | "handleLoginPending"
+  | "handleDeepLinkAuthSuccess"
   | "handleLogout"
   | "handleAcceptTerms"
   | "handleDeclineTerms"
@@ -413,6 +415,7 @@ export function constructHandlers(
     // Auth handlers
     handleLoginSuccess: auth.handleLoginSuccess,
     handleLoginPending: auth.handleLoginPending,
+    handleDeepLinkAuthSuccess: auth.handleDeepLinkAuthSuccess,
     handleLogout: auth.handleLogout,
 
     // Terms handlers
