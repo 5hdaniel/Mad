@@ -180,4 +180,17 @@ export const authBridge = {
    */
   devResetOnboarding: (userId: string) =>
     ipcRenderer.invoke("auth:dev:reset-onboarding", userId),
+
+  // ==========================================
+  // DEEP LINK AUTH (TASK-1507)
+  // ==========================================
+
+  /**
+   * Opens the Supabase auth URL in the default browser
+   * Used for deep-link authentication flow where OAuth completes in browser
+   * and redirects back to app via magicaudit://callback
+   * @returns Success status
+   */
+  openAuthInBrowser: (): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke("auth:open-in-browser"),
 };

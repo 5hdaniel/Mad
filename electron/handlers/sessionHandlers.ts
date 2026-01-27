@@ -3,7 +3,7 @@
  * Handles session management, validation, logout, terms acceptance, and email onboarding
  */
 
-import { ipcMain, IpcMainInvokeEvent } from "electron";
+import { ipcMain, IpcMainInvokeEvent, shell } from "electron";
 import type { User } from "../types/models";
 
 // Import services
@@ -493,6 +493,40 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
 }
 
 /**
+ * Open Supabase auth URL in the default browser
+ * TASK-1507: Used for deep-link authentication flow
+ */
+async function handleOpenAuthInBrowser(): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    if (!supabaseUrl) {
+      await logService.error("SUPABASE_URL not configured", "AuthHandlers");
+      return { success: false, error: "Authentication not configured" };
+    }
+
+    const redirectUrl = "magicaudit://callback";
+    // Construct Supabase OAuth URL with Google provider
+    // Note: The provider can be changed or made configurable
+    const authUrl = `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectUrl)}`;
+
+    await logService.info("Opening auth URL in browser", "AuthHandlers", {
+      provider: "google",
+    });
+
+    await shell.openExternal(authUrl);
+    return { success: true };
+  } catch (error) {
+    await logService.error("Failed to open auth in browser", "AuthHandlers", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+/**
  * Register all session handlers
  */
 export function registerSessionHandlers(): void {
@@ -503,4 +537,6 @@ export function registerSessionHandlers(): void {
   ipcMain.handle("auth:check-email-onboarding", handleCheckEmailOnboarding);
   ipcMain.handle("auth:validate-session", handleValidateSession);
   ipcMain.handle("auth:get-current-user", handleGetCurrentUser);
+  // TASK-1507: Open browser for Supabase OAuth with deep-link callback
+  ipcMain.handle("auth:open-in-browser", handleOpenAuthInBrowser);
 }
