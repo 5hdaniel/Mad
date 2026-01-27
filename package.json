@@ -200,6 +200,7 @@
     "afterSign": "scripts/notarize.js",
     "files": [
       "dist/**/*",
+      "dist-electron/**/*",
       "electron/**/*"
     ],
     "directories": {
