@@ -95,7 +95,7 @@ Create `electron/services/licenseService.ts`:
 // Adapt the import based on existing patterns in electron/services/
 import supabaseService from './supabaseService';
 import { store } from './store';
-import type { UserLicense, LicenseStatus, LicenseType, TrialStatus } from '../../shared/types/license';
+import type { UserLicense, LicenseStatus, LicenseType, TrialStatus, LicenseValidationResult } from '../../shared/types/license';
 
 // Offline grace period (24 hours in milliseconds)
 const OFFLINE_GRACE_PERIOD_MS = 24 * 60 * 60 * 1000;
@@ -104,7 +104,7 @@ const OFFLINE_GRACE_PERIOD_MS = 24 * 60 * 60 * 1000;
 const LICENSE_CACHE_KEY = 'license_cache';
 
 interface LicenseCache {
-  status: LicenseStatus;
+  status: LicenseValidationResult;
   userId: string;
   cachedAt: number; // Unix timestamp
 }
@@ -112,7 +112,7 @@ interface LicenseCache {
 /**
  * Validate a user's license status
  */
-export async function validateLicense(userId: string): Promise<LicenseStatus> {
+export async function validateLicense(userId: string): Promise<LicenseValidationResult> {
   try {
     // Try to fetch from Supabase
     const status = await fetchLicenseFromSupabase(userId);
@@ -148,7 +148,7 @@ export async function validateLicense(userId: string): Promise<LicenseStatus> {
 /**
  * Fetch license status from Supabase
  */
-async function fetchLicenseFromSupabase(userId: string): Promise<LicenseStatus> {
+async function fetchLicenseFromSupabase(userId: string): Promise<LicenseValidationResult> {
   // Fetch user license
   const { data: license, error } = await supabaseService.getClient()
     .from('licenses')
@@ -190,7 +190,7 @@ async function fetchLicenseFromSupabase(userId: string): Promise<LicenseStatus> 
 /**
  * Calculate license status from database record
  */
-function calculateLicenseStatus(license: UserLicense, deviceCount: number): LicenseStatus {
+function calculateLicenseStatus(license: UserLicense, deviceCount: number): LicenseValidationResult {
   const licenseType = license.license_type as LicenseType;
   const trialStatus = license.trial_status as TrialStatus | null;
 
@@ -217,7 +217,7 @@ function calculateLicenseStatus(license: UserLicense, deviceCount: number): Lice
 
   // Determine validity
   let isValid = true;
-  let blockReason: LicenseStatus['blockReason'];
+  let blockReason: LicenseValidationResult['blockReason'];
 
   if (licenseType === 'trial' && isExpired) {
     isValid = false;
@@ -244,7 +244,7 @@ function calculateLicenseStatus(license: UserLicense, deviceCount: number): Lice
 /**
  * Create a trial license for a new user
  */
-export async function createUserLicense(userId: string): Promise<LicenseStatus> {
+export async function createUserLicense(userId: string): Promise<LicenseValidationResult> {
   const { data, error } = await supabaseService.getClient()
     .rpc('create_trial_license', { p_user_id: userId });
 
@@ -273,7 +273,7 @@ export async function incrementTransactionCount(userId: string): Promise<number>
 /**
  * Cache license status for offline use
  */
-function cacheLicenseStatus(userId: string, status: LicenseStatus): void {
+function cacheLicenseStatus(userId: string, status: LicenseValidationResult): void {
   try {
     const cache: LicenseCache = {
       status,
@@ -289,7 +289,7 @@ function cacheLicenseStatus(userId: string, status: LicenseStatus): void {
 /**
  * Get cached license status (for offline mode)
  */
-function getCachedLicense(userId: string): LicenseStatus | null {
+function getCachedLicense(userId: string): LicenseValidationResult | null {
   try {
     const cache = store.get(LICENSE_CACHE_KEY) as LicenseCache | undefined;
 
@@ -331,7 +331,7 @@ export function clearLicenseCache(): void {
  * Check if user can perform an action based on license
  */
 export function canPerformAction(
-  status: LicenseStatus,
+  status: LicenseValidationResult,
   action: 'create_transaction' | 'use_ai' | 'export'
 ): boolean {
   if (!status.isValid) {
@@ -569,16 +569,16 @@ import {
   deactivateDevice,
   getDeviceId,
 } from './services/deviceService';
-import type { LicenseStatus } from '../shared/types/license';
+import type { LicenseValidationResult } from '../shared/types/license';
 
 export function setupLicenseHandlers(): void {
   // Validate license
-  ipcMain.handle('license:validate', async (_event, userId: string): Promise<LicenseStatus> => {
+  ipcMain.handle('license:validate', async (_event, userId: string): Promise<LicenseValidationResult> => {
     return validateLicense(userId);
   });
 
   // Create trial license
-  ipcMain.handle('license:create', async (_event, userId: string): Promise<LicenseStatus> => {
+  ipcMain.handle('license:create', async (_event, userId: string): Promise<LicenseValidationResult> => {
     return createUserLicense(userId);
   });
 
@@ -590,7 +590,7 @@ export function setupLicenseHandlers(): void {
   // Check if action allowed
   ipcMain.handle('license:canPerformAction', async (
     _event,
-    status: LicenseStatus,
+    status: LicenseValidationResult,
     action: 'create_transaction' | 'use_ai' | 'export'
   ): Promise<boolean> => {
     return canPerformAction(status, action);
@@ -651,10 +651,10 @@ Create `electron/services/__tests__/licenseService.test.ts`:
 
 ```typescript
 import { canPerformAction } from '../licenseService';
-import type { LicenseStatus } from '../../../shared/types/license';
+import type { LicenseValidationResult } from '../../../shared/types/license';
 
 describe('canPerformAction', () => {
-  const baseStatus: LicenseStatus = {
+  const baseStatus: LicenseValidationResult = {
     isValid: true,
     licenseType: 'trial',
     transactionCount: 0,
