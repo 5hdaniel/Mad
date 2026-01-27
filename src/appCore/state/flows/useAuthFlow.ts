@@ -6,7 +6,7 @@
  */
 
 import { useState, useCallback, useMemo } from "react";
-import type { PendingOAuthData } from "../../../components/Login";
+import type { PendingOAuthData, DeepLinkAuthData } from "../../../components/Login";
 import type { Subscription } from "../../../../electron/types/models";
 import type { PendingOnboardingData, AppStep } from "../types";
 import type { User, PlatformInfo, AppAction } from "../machine/types";
@@ -79,6 +79,8 @@ export interface UseAuthFlowReturn {
     isNewUser: boolean,
   ) => void;
   handleLoginPending: (oauthData: PendingOAuthData) => void;
+  /** TASK-1507B: Handle deep link auth success from browser OAuth flow */
+  handleDeepLinkAuthSuccess: (data: DeepLinkAuthData) => void;
   handleLogout: () => Promise<void>;
   handleAcceptTerms: () => Promise<void>;
   handleDeclineTerms: () => Promise<void>;
@@ -155,6 +157,57 @@ export function useAuthFlow({
     [],
   );
 
+  /**
+   * TASK-1507B: Handle successful deep link authentication
+   * Called when browser OAuth completes and returns via deep link with license validation.
+   * NOTE: Token storage is already handled by the backend (setSession) - we just update UI state.
+   */
+  const handleDeepLinkAuthSuccess = useCallback(
+    (data: DeepLinkAuthData): void => {
+      console.log("[useAuthFlow] Deep link auth success", { userId: data.userId || data.user?.id });
+
+      // Clear any pending OAuth data
+      setPendingOAuthData(null);
+
+      // Determine if this is a new user based on license status
+      // New users have 0 transactions (haven't done anything yet)
+      const isNewUser = !data.licenseStatus || data.licenseStatus.transactionCount === 0;
+      setIsNewUserFlow(isNewUser);
+
+      // Dispatch LOGIN_SUCCESS to state machine if dispatch is available
+      // This transitions the state machine from unauthenticated to loading-user-data
+      if (stateMachineDispatch && platform && data.user) {
+        const stateMachineUser: User = {
+          id: data.user.id,
+          email: data.user.email || "",
+          displayName: data.user.name,
+        };
+
+        const platformInfo: PlatformInfo = {
+          isMacOS: platform.isMacOS,
+          isWindows: platform.isWindows,
+          hasIPhone: false, // Determined during onboarding
+        };
+
+        stateMachineDispatch({
+          type: "LOGIN_SUCCESS",
+          user: stateMachineUser,
+          platform: platformInfo,
+          isNewUser,
+        });
+      }
+
+      // Navigate to the appropriate step
+      // New users go to onboarding (phone type selection), returning users go to dashboard
+      if (isNewUser) {
+        onSetCurrentStep("phone-type-selection");
+      } else {
+        onSetCurrentStep("dashboard");
+      }
+    },
+    [stateMachineDispatch, platform, onSetCurrentStep],
+  );
+
   const handleLogout = useCallback(async (): Promise<void> => {
     await logout();
     // Dispatch LOGOUT to state machine to transition to "unauthenticated"
@@ -220,6 +273,7 @@ export function useAuthFlow({
       setPendingOnboardingData,
       handleLoginSuccess,
       handleLoginPending,
+      handleDeepLinkAuthSuccess,
       handleLogout,
       handleAcceptTerms,
       handleDeclineTerms,
@@ -230,6 +284,7 @@ export function useAuthFlow({
       pendingOnboardingData,
       handleLoginSuccess,
       handleLoginPending,
+      handleDeepLinkAuthSuccess,
       handleLogout,
       handleAcceptTerms,
       handleDeclineTerms,
