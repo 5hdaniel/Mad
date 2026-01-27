@@ -213,7 +213,8 @@
         "filter": [
           "**/*"
         ]
-      }
+      },
+      ".env.production"
     ]
   },
   "overrides": {

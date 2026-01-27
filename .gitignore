@@ -40,7 +40,8 @@ Thumbs.db
 .env
 .env.local
 .env.development
-.env.production
+# Note: .env.production is NOT ignored - it only contains public/publishable values
+# and needs to be included in the packaged app
 
 # Project management (using Linear)
 linear-import.csv
