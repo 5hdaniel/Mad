@@ -172,7 +172,6 @@ export function useAuthFlow({
       // BACKLOG-546: Use isNewUser from backend (based on terms acceptance)
       // Fallback to transaction count only if not provided (backwards compatibility)
       const isNewUser = data.isNewUser ?? (!data.licenseStatus || data.licenseStatus.transactionCount === 0);
-      console.log("[useAuthFlow] isNewUser determination:", { fromBackend: data.isNewUser, calculated: isNewUser });
       setIsNewUserFlow(isNewUser);
 
       // TASK-1507C: Call login() to set currentUser in AuthContext

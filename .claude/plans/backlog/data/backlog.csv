@@ -466,5 +466,5 @@ BACKLOG-514,Fix thread deduplication during message import,bug,medium,deferred,-
 BACKLOG-515,User Identifiers Table for Contact Resolution,enhancement,medium,pending,,,Backend,"Create user_identifiers table to store user email/phone identifiers. Improves contact resolution performance (indexed lookup vs O(n) message scan). Supports multiple emails/phones, future messaging platforms. Auto-populate from OAuth and message imports. SR Engineer approved architecture.",,,
 BACKLOG-542,Merge SMS and iMessage threads from same contact,bug,medium,pending,-,~30K,-,-,2026-01-27,,[BACKLOG-542.md](items/BACKLOG-542.md)
 BACKLOG-543,Audit period not displayed after transaction creation until edit/save,bug,low,pending,-,~15K,-,-,2026-01-27,,[BACKLOG-543.md](items/BACKLOG-543.md)
-BACKLOG-545,Attachments not exported in package,bug,P2,Pending,-,~40K,-,-,2026-01-27,,[BACKLOG-545.md](items/BACKLOG-545.md)
-BACKLOG-546,Returning users incorrectly see T&C acceptance screen,bug,P1,Pending,SPRINT-062,~15K,-,-,2026-01-27,,[BACKLOG-546.md](items/BACKLOG-546.md)
+BACKLOG-545,Attachments not exported in package,bug,High,Pending,-,~40K,-,-,2026-01-27,,[BACKLOG-545.md](items/BACKLOG-545.md)
+BACKLOG-546,Returning users incorrectly see T&C acceptance screen,bug,High,Pending,SPRINT-062,~15K,-,-,2026-01-27,,[BACKLOG-546.md](items/BACKLOG-546.md)

@@ -73,6 +73,10 @@ import { validateLicense, createUserLicense } from "./services/licenseService";
 import { registerDevice } from "./services/deviceService";
 import supabaseService from "./services/supabaseService";
 import databaseService from "./services/databaseService";
+import {
+  CURRENT_TERMS_VERSION,
+  CURRENT_PRIVACY_POLICY_VERSION,
+} from "./constants/legalVersions";
 import type { OAuthProvider, SubscriptionTier, SubscriptionStatus } from "./types";
 
 // Import extracted handlers from handlers/ directory
@@ -359,17 +363,13 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
       try {
         const cloudUser = await supabaseService.getUserById(user.id);
         if (cloudUser?.terms_accepted_at) {
-          // User has accepted terms - check if it's the current version
-          const currentTermsVersion = "1.0"; // Should match CURRENT_TERMS_VERSION
-          const currentPrivacyVersion = "1.0"; // Should match CURRENT_PRIVACY_POLICY_VERSION
-
           // No version tracking (legacy) - they're good
           if (!cloudUser.terms_version_accepted && !cloudUser.privacy_policy_version_accepted) {
             needsTermsAcceptance = false;
           } else {
-            // Check if versions match current
-            const termsOutdated = cloudUser.terms_version_accepted !== currentTermsVersion;
-            const privacyOutdated = cloudUser.privacy_policy_version_accepted !== currentPrivacyVersion;
+            // Check if versions match current (imported from constants)
+            const termsOutdated = cloudUser.terms_version_accepted !== CURRENT_TERMS_VERSION;
+            const privacyOutdated = cloudUser.privacy_policy_version_accepted !== CURRENT_PRIVACY_POLICY_VERSION;
             needsTermsAcceptance = termsOutdated || privacyOutdated;
           }
         }
