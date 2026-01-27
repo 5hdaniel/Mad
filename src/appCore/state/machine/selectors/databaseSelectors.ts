@@ -14,6 +14,10 @@ import type { AppState } from "../types";
  * Returns true if database is initialized.
  * In loading state, checks if we've passed the 'initializing-db' phase.
  *
+ * Note: For first-time macOS users, DB init is deferred until the onboarding
+ * secure-storage step. In this case, deferredDbInit flag is set and we
+ * return false even though we're past the initializing-db phase.
+ *
  * @param state - Current application state
  * @returns true if database is initialized
  *
@@ -28,13 +32,50 @@ import type { AppState } from "../types";
 export function selectIsDatabaseInitialized(state: AppState): boolean {
   switch (state.status) {
     case "loading":
+      // For first-time macOS users, DB init is deferred - return false
+      if (state.deferredDbInit) {
+        return false;
+      }
       // DB is initialized if we're past the initializing-db phase
       return !["checking-storage", "initializing-db"].includes(state.phase);
     case "ready":
+      return true;
     case "onboarding":
+      // For first-time macOS users, DB init is deferred until secure-storage step
+      if (state.deferredDbInit) {
+        return false;
+      }
       return true;
     case "unauthenticated":
+      // For first-time macOS users, DB init is deferred
+      if (state.deferredDbInit) {
+        return false;
+      }
+      return false;
     case "error":
+      return false;
+  }
+}
+
+/**
+ * Returns true if DB initialization was deferred for first-time macOS users.
+ * When true, the DB will be initialized during the onboarding secure-storage step.
+ *
+ * This flag is preserved through state transitions:
+ * loading -> unauthenticated -> onboarding
+ *
+ * @param state - Current application state
+ * @returns true if DB init is deferred
+ */
+export function selectIsDeferredDbInit(state: AppState): boolean {
+  switch (state.status) {
+    case "loading":
+      return state.deferredDbInit === true;
+    case "unauthenticated":
+      return state.deferredDbInit === true;
+    case "onboarding":
+      return state.deferredDbInit === true;
+    default:
       return false;
   }
 }

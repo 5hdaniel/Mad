@@ -65,6 +65,8 @@ export function LoadingOrchestrator({
 
     let cancelled = false;
 
+    const platform = platformRef.current;
+
     window.api.system
       .hasEncryptionKeyStore()
       .then((result) => {
@@ -72,6 +74,7 @@ export function LoadingOrchestrator({
         dispatch({
           type: "STORAGE_CHECKED",
           hasKeyStore: result.hasKeyStore,
+          isMacOS: platform.isMacOS,
         });
       })
       .catch((error: Error) => {
