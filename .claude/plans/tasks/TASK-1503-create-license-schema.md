@@ -633,12 +633,12 @@ Stop and ask PM if:
 
 | Step | Agent Type | Agent ID | Tokens | Status |
 |------|------------|----------|--------|--------|
-| 1. Plan | Plan Agent | PM-062-plan-1503 | ~5K | ☑ Complete |
-| 2. SR Review | SR Engineer Agent | ___________ | ___K | ☐ Pending |
-| 3. User Review | (No agent) | N/A | N/A | ☐ Pending |
-| 4. Compact | (Context reset) | N/A | N/A | ☐ Pending |
-| 5. Implement | Engineer Agent | ___________ | ___K | ☐ Pending |
-| 6. PM Update | PM Agent | ___________ | ___K | ☐ Pending |
+| 1. Plan | Plan Agent | PM-062-plan-1503 | ~5K | COMPLETE |
+| 2. SR Review | SR Engineer Agent | SR-062-review-1503 | ~8K | COMPLETE |
+| 3. User Review | (No agent) | N/A | N/A | COMPLETE |
+| 4. Compact | (Context reset) | N/A | N/A | COMPLETE |
+| 5. Implement | PM Agent (direct) | PM-062-impl-1503 | ~15K | COMPLETE |
+| 6. PM Update | PM Agent | PM-062-impl-1503 | ~2K | COMPLETE |
 
 ### Step 1: Plan Output
 
@@ -738,42 +738,146 @@ Create `shared/types/license.ts` matching actual schema.
 
 ### Step 2: SR Review Notes
 
-*SR Engineer writes review notes here after Step 2*
+**SR Engineer Agent ID:** SR-062-review-1503
+**Review Date:** 2026-01-26
+**Status:** APPROVED WITH REQUIRED MODIFICATIONS
 
+#### Discovery Summary
+
+Existing Supabase tables discovered:
+- `licenses` table (0 rows): id, user_id, license_key, max_devices, status, expires_at, activated_at
+- `devices` table (407 rows): id, user_id, device_id, device_name, os, app_version, last_seen_at, activated_at
+
+#### Required Modifications for Implementation
+
+| ID | Priority | Issue | Fix |
+|----|----------|-------|-----|
+| R1 | HIGH | RLS policies overly permissive (`qual = true`) | Drop permissive policies, add user-scoped policies |
+| R2 | HIGH | No UNIQUE constraint on `licenses.user_id` | Add UNIQUE constraint (one license per user) |
+| R3 | MEDIUM | `devices.os` has inconsistent values | Add CHECK constraint for valid platform values |
+| R4 | LOW | `profiles.license_type` and `profiles.ai_detection_enabled` duplicate data | Add deprecation comments (data lives in `licenses` now) |
+
+#### Migration Requirements
+
+**Migration 1: Fix RLS Policies**
+```sql
+-- Drop overly permissive policies
+DROP POLICY IF EXISTS "Service role has full access" ON licenses;
+DROP POLICY IF EXISTS "Service role has full access" ON devices;
+
+-- Add user-scoped policies for licenses
+CREATE POLICY "Users can read own license" ON licenses FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own license" ON licenses FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own license" ON licenses FOR UPDATE USING (auth.uid() = user_id);
+
+-- Add user-scoped policies for devices
+CREATE POLICY "Users can read own devices" ON devices FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own devices" ON devices FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own devices" ON devices FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own devices" ON devices FOR DELETE USING (auth.uid() = user_id);
 ```
-[SR Review notes to be written here]
+
+**Migration 2: Add Constraints**
+```sql
+-- One license per user
+ALTER TABLE licenses ADD CONSTRAINT licenses_user_id_unique UNIQUE (user_id);
+
+-- Normalize platform values
+ALTER TABLE devices ADD CONSTRAINT devices_platform_check
+  CHECK (os IS NULL OR os IN ('macos', 'windows', 'linux'));
 ```
+
+**Migration 3: Add Missing Columns to licenses**
+```sql
+ALTER TABLE licenses
+  ADD COLUMN IF NOT EXISTS license_type TEXT DEFAULT 'trial'
+    CHECK (license_type IN ('trial', 'individual', 'team')),
+  ADD COLUMN IF NOT EXISTS trial_status TEXT DEFAULT 'active'
+    CHECK (trial_status IN ('active', 'expired', 'converted')),
+  ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMPTZ DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS trial_expires_at TIMESTAMPTZ DEFAULT (now() + INTERVAL '14 days'),
+  ADD COLUMN IF NOT EXISTS transaction_count INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS transaction_limit INTEGER DEFAULT 5,
+  ADD COLUMN IF NOT EXISTS ai_detection_enabled BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+```
+
+**Migration 4: Add is_active to devices**
+```sql
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+```
+
+**Migration 5: Create Helper Functions**
+- `create_trial_license(p_user_id UUID) RETURNS licenses`
+- `increment_transaction_count(p_user_id UUID) RETURNS INTEGER`
+- `is_trial_expired(p_user_id UUID) RETURNS BOOLEAN`
+- `get_device_limit(p_user_id UUID) RETURNS INTEGER`
+- `check_device_limit()` TRIGGER function
+
+#### Architecture Notes
+
+1. Keep existing table names (`licenses`, `devices`) - no need to rename
+2. `license_key` column can remain for future manual license assignment
+3. TypeScript types should reflect actual column names
 
 ### Step 3: User Review
 
-- [ ] User reviewed plan
-- [ ] User approved plan
-- Date: _______________
+- [x] User reviewed plan
+- [x] User approved plan
+- Date: 2026-01-26
 
 ---
 
 ## Implementation Summary
 
-*To be completed by Engineer after Step 5*
+*Completed by PM Agent on 2026-01-27*
 
 ### Files Changed
-- [ ] List actual files modified
+- [x] `shared/types/license.ts` - Created TypeScript interfaces for License, Device, and related types
+- [x] `shared/types/index.ts` - Updated to export license types
+
+### Supabase Migrations Applied (7 total)
+| Migration | Description |
+|-----------|-------------|
+| `20260127004525_fix_licenses_devices_rls_policies` | Dropped permissive RLS policies, added user-scoped policies |
+| `20260127004623_add_licenses_user_unique_constraint` | Added UNIQUE constraint on licenses.user_id |
+| `20260127004634_add_devices_platform_column` | Added platform column, populated from os values, added is_active |
+| `20260127005623_add_licenses_trial_tracking_columns` | Added license_type, trial_status, trial dates, transaction tracking, ai_detection_enabled |
+| `20260127005811_add_license_helper_functions` | Created helper functions and triggers |
+| `20260127005818_deprecate_profiles_license_columns` | Added deprecation comments to profiles.license_type and profiles.ai_detection_enabled |
+| `20260127010234_fix_function_search_paths` | Fixed function search_path for security |
 
 ### Approach Taken
-- [ ] Describe implementation decisions
+1. **Enhanced existing tables** instead of creating new ones (licenses, devices already existed)
+2. **Fixed critical RLS security issue** - removed overly permissive policies (`qual = true`)
+3. **Added UNIQUE constraint** on licenses.user_id to enforce one license per user
+4. **Normalized platform values** - added `platform` column derived from `os` (407 records migrated)
+5. **Added trial tracking columns** to licenses table for SPRINT-062 requirements
+6. **Created helper functions** with SECURITY DEFINER and explicit search_path
+7. **Added device limit enforcement** via trigger function
 
 ### Testing Done
-- [ ] List manual tests performed
-- [ ] Note any edge cases discovered
+- [x] Verified all 7 migrations applied successfully via `mcp__supabase__list_migrations`
+- [x] Verified licenses table has all new columns (16 total)
+- [x] Verified devices table has platform (macos: 187, windows: 220) and is_active columns
+- [x] Verified RLS policies are user-scoped (no more permissive policies on licenses/devices)
+- [x] Verified UNIQUE constraint on licenses.user_id
+- [x] Verified all 6 helper functions exist
+- [x] Verified TypeScript types compile without errors
+- [x] Ran Supabase security advisor - licenses/devices no longer flagged
 
 ### Notes for SR Review
-- [ ] Any concerns or areas needing extra review
+1. **Existing data preserved** - 407 device records untouched, platform values populated from os
+2. **license_key column retained** - kept for potential manual license assignment in future
+3. **CHECK constraint on devices.os** - not added (existing values include version numbers like "darwin 24.6.0"), using platform column instead
+4. **Function search_path** - all functions now have explicit `SET search_path = public`
+5. **profiles deprecation** - comments added but columns not removed (backwards compatibility)
 
 ### Final Metrics
 
 | Metric | Estimated | Actual | Variance |
 |--------|-----------|--------|----------|
-| Plan tokens | ~5K | ___K | ___% |
-| SR Review tokens | ~5K | ___K | ___% |
-| Implement tokens | ~25K | ___K | ___% |
-| **Total** | ~35K | ___K | ___% |
+| Plan tokens | ~5K | ~5K | 0% |
+| SR Review tokens | ~5K | ~8K | +60% |
+| Implement tokens | ~25K | ~15K | -40% |
+| **Total** | ~35K | ~28K | -20% |
