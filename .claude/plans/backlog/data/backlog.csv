@@ -434,14 +434,14 @@ BACKLOG-463,Single-Screen Contact Management Flow,ux,High,Pending,SPRINT-055b,~4
 BACKLOG-464,OAuth Reconnect Popup Not Opening,bug,Critical,Completed,SPRINT-052,~20K,-,-,2026-01-24,,[BACKLOG-464.md](items/BACKLOG-464.md)
 BACKLOG-475,Verify Auto-Updater End-to-End,infrastructure,High,Pending,SPRINT-056,~15K,-,-,2026-01-24,,[BACKLOG-475.md](items/BACKLOG-475.md)
 BACKLOG-476,Complete Signed Release Cycle Test,infrastructure,Medium,Pending,SPRINT-056,~5K,-,-,2026-01-24,,[BACKLOG-476.md](items/BACKLOG-476.md)
-BACKLOG-477,User License Schema in Supabase,schema,Critical,In Progress,SPRINT-062,~25K,-,-,2026-01-24,,[BACKLOG-477.md](items/BACKLOG-477.md)
-BACKLOG-478,License Validation Service,service,Critical,In Progress,SPRINT-062,~30K,-,-,2026-01-24,,[BACKLOG-478.md](items/BACKLOG-478.md)
-BACKLOG-479,Device Registration Service,service,High,Pending,SPRINT-062,~20K,-,-,2026-01-24,,[BACKLOG-479.md](items/BACKLOG-479.md)
-BACKLOG-480,License Check at App Start,service,Critical,In Progress,SPRINT-062,~15K,-,-,2026-01-24,,[BACKLOG-480.md](items/BACKLOG-480.md)
-BACKLOG-481,Trial Limit Enforcement UI,ui,High,Deferred,-,~10K,-,-,2026-01-24,,[BACKLOG-481.md](items/BACKLOG-481.md)
-BACKLOG-482,Desktop Deep Link Handler,infrastructure,Critical,Completed,SPRINT-062,~25K,~53K,+112%,2026-01-24,2026-01-26,[BACKLOG-482.md](items/BACKLOG-482.md)
-BACKLOG-483,Browser Auth Landing Page,ui,Critical,Completed,SPRINT-062,~30K,~37K,+23%,2026-01-24,2026-01-26,[BACKLOG-483.md](items/BACKLOG-483.md)
-BACKLOG-484,License Validation at Auth,service,Critical,In Progress,SPRINT-062,~15K,-,-,2026-01-24,,[BACKLOG-484.md](items/BACKLOG-484.md)
+BACKLOG-477,User License Schema in Supabase,schema,Critical,Pending,SPRINT-057,~25K,-,-,2026-01-24,,[BACKLOG-477.md](items/BACKLOG-477.md)
+BACKLOG-478,License Validation Service,service,Critical,Pending,SPRINT-057,~30K,-,-,2026-01-24,,[BACKLOG-478.md](items/BACKLOG-478.md)
+BACKLOG-479,Device Registration Service,service,High,Pending,SPRINT-057,~20K,-,-,2026-01-24,,[BACKLOG-479.md](items/BACKLOG-479.md)
+BACKLOG-480,License Check at App Start,service,Critical,Pending,SPRINT-057,~15K,-,-,2026-01-24,,[BACKLOG-480.md](items/BACKLOG-480.md)
+BACKLOG-481,Trial Limit Enforcement UI,ui,High,Pending,SPRINT-057,~10K,-,-,2026-01-24,,[BACKLOG-481.md](items/BACKLOG-481.md)
+BACKLOG-482,Desktop Deep Link Handler,infrastructure,Critical,Pending,SPRINT-058,~25K,-,-,2026-01-24,,[BACKLOG-482.md](items/BACKLOG-482.md)
+BACKLOG-483,Browser Auth Landing Page,ui,Critical,Pending,SPRINT-058,~30K,-,-,2026-01-24,,[BACKLOG-483.md](items/BACKLOG-483.md)
+BACKLOG-484,License Validation at Auth,service,Critical,Pending,SPRINT-058,~15K,-,-,2026-01-24,,[BACKLOG-484.md](items/BACKLOG-484.md)
 BACKLOG-485,Deprecate OAuth Popup Flow,refactor,Medium,Pending,SPRINT-058,~10K,-,-,2026-01-24,,[BACKLOG-485.md](items/BACKLOG-485.md)
 BACKLOG-486,PostHog SDK Integration,infrastructure,Critical,Pending,SPRINT-059,~15K,-,-,2026-01-24,,[BACKLOG-486.md](items/BACKLOG-486.md)
 BACKLOG-487,Core Lifecycle Events,service,Critical,Pending,SPRINT-059,~10K,-,-,2026-01-24,,[BACKLOG-487.md](items/BACKLOG-487.md)
@@ -458,35 +458,9 @@ BACKLOG-506,Database Architecture Cleanup - Eliminate Dual-Storage Pattern,refac
 BACKLOG-507,Database Maintenance Button in Settings,feature,Medium,Pending,-,~50K,-,-,2026-01-25,,[BACKLOG-507.md](items/BACKLOG-507.md)
 BACKLOG-508,Add Progress Bar for Message Import,ui,Low,Pending,-,~5K,-,-,2026-01-26,,[BACKLOG-508.md](items/BACKLOG-508.md)
 BACKLOG-509,Email embedded images blocked by CSP,bug,low,pending,,,UI,cid: URLs for inline email images blocked by Content Security Policy. Need to either add cid: to img-src or strip/replace with placeholders.
-BACKLOG-510,Fix transaction card communication counters,bug,medium,pending,,,UI,Text and email thread counters on TransactionCard show wrong counts. Counters hidden until fixed. Need to recalculate counts based on new junction table architecture.
+BACKLOG-510,Fix transaction card communication counters,bug,medium,completed,SPRINT-061,,UI,Text and email thread counters on TransactionCard show wrong counts. Counters hidden until fixed. Need to recalculate counts based on new junction table architecture.
 BACKLOG-511,Support HEIC image attachments in text threads,enhancement,low,pending,,,UI,HEIC images from iPhone don't display in text thread preview. Need to convert to displayable format or show placeholder.
 BACKLOG-512,Auto-trigger email sync on contact list changes,enhancement,medium,pending,,,Backend,"When contacts are added/modified on a transaction, automatically trigger email sync instead of requiring manual 'Sync Communications' click."
-BACKLOG-513,Fix unknown contact name display in text threads,bug,medium,pending,,,UI,"When linking text threads to transactions, some 1:1 conversations display 'unknown' as contact name instead of actual contact. Contact lookup not finding phone number match."
-BACKLOG-514,Fix thread deduplication during message import,bug,medium,pending,,,Backend,"Same conversation appears as multiple separate threads in UI. Messages from same thread imported with different thread_ids or grouping logic not consolidating properly."
-BACKLOG-515,Add server-time validation for trial expiration,security,High,Pending,-,~20K,-,-,2026-01-26,,[BACKLOG-515.md](items/BACKLOG-515.md)
-BACKLOG-516,Encrypt offline license cache using Electron safeStorage,security,High,Pending,-,~15K,-,-,2026-01-26,,[BACKLOG-516.md](items/BACKLOG-516.md)
-BACKLOG-517,Add DB trigger for transaction count enforcement,security,High,Pending,-,~10K,-,-,2026-01-26,,[BACKLOG-517.md](items/BACKLOG-517.md)
-BACKLOG-518,Remove direct INSERT RLS policy on licenses table,security,High,Pending,-,~5K,-,-,2026-01-26,,[BACKLOG-518.md](items/BACKLOG-518.md)
-BACKLOG-519,Improve device fingerprinting with composite hash,security,High,Pending,-,~25K,-,-,2026-01-26,,[BACKLOG-519.md](items/BACKLOG-519.md)
-BACKLOG-520,Stripe payment integration for license purchases,feature,Medium,Pending,-,~80K,-,-,2026-01-26,,[BACKLOG-520.md](items/BACKLOG-520.md)
-BACKLOG-521,Admin dashboard for license management,feature,Medium,Pending,-,~60K,-,-,2026-01-26,,[BACKLOG-521.md](items/BACKLOG-521.md)
-BACKLOG-522,Upgrade/downgrade license flows,feature,Medium,Pending,-,~40K,-,-,2026-01-26,,[BACKLOG-522.md](items/BACKLOG-522.md)
-BACKLOG-523,Trial extension mechanism,feature,Medium,Pending,-,~25K,-,-,2026-01-26,,[BACKLOG-523.md](items/BACKLOG-523.md)
-BACKLOG-524,License audit logging,feature,Medium,Pending,-,~20K,-,-,2026-01-26,,[BACKLOG-524.md](items/BACKLOG-524.md)
-BACKLOG-525,UX - usage progress indicators and upgrade prompts,ui,Medium,Pending,-,~35K,-,-,2026-01-26,,[BACKLOG-525.md](items/BACKLOG-525.md)
-BACKLOG-526,Team/organization licensing model,feature,Low,Pending,-,~100K,-,-,2026-01-26,,[BACKLOG-526.md](items/BACKLOG-526.md)
-BACKLOG-527,Webhook support for license events,feature,Low,Pending,-,~30K,-,-,2026-01-26,,[BACKLOG-527.md](items/BACKLOG-527.md)
-BACKLOG-528,License monitoring and alerting,feature,Low,Pending,-,~25K,-,-,2026-01-26,,[BACKLOG-528.md](items/BACKLOG-528.md)
-BACKLOG-529,License transfer between accounts,feature,Low,Pending,-,~35K,-,-,2026-01-26,,[BACKLOG-529.md](items/BACKLOG-529.md)
-BACKLOG-530,Remove Service Role Key from Client App,security,Critical,Pending,-,~80K,-,-,2026-01-27,,[BACKLOG-530.md](items/BACKLOG-530.md)
-BACKLOG-531,Enable RLS on All Critical Tables,security,High,Pending,-,~10K,-,-,2026-01-27,,[BACKLOG-531.md](items/BACKLOG-531.md)
-BACKLOG-532,Enable Leaked Password Protection in Supabase Auth,security,High,Pending,-,~2K,-,-,2026-01-27,,[BACKLOG-532.md](items/BACKLOG-532.md)
-BACKLOG-533,Standardize Foreign Key References to auth.users,database,High,Pending,-,~30K,-,-,2026-01-27,,[BACKLOG-533.md](items/BACKLOG-533.md)
-BACKLOG-534,Fix Fail-Open Security Patterns in Supabase Service,security,High,Pending,-,~15K,-,-,2026-01-27,,[BACKLOG-534.md](items/BACKLOG-534.md)
-BACKLOG-535,Encrypt Session File with safeStorage,security,Medium,Pending,-,~20K,-,-,2026-01-27,,[BACKLOG-535.md](items/BACKLOG-535.md)
-BACKLOG-536,Settings modal does not refresh after email connection,ui,P3,Pending,SPRINT-062,~15K,-,-,2026-01-27,,[BACKLOG-536.md](items/BACKLOG-536.md)
-BACKLOG-537,Contacts count mismatch - backend shows 27 UI shows 2,bug,P2,Pending,SPRINT-062,~20K,-,-,2026-01-27,,[BACKLOG-537.md](items/BACKLOG-537.md)
-BACKLOG-538,Email connection state not synced to dashboard,bug,P2,Pending,SPRINT-062,~25K,-,-,2026-01-27,,[BACKLOG-538.md](items/BACKLOG-538.md)
-BACKLOG-539,Scan Lookback Period setting not persistent,bug,P2,Pending,SPRINT-062,~15K,-,-,2026-01-27,,[BACKLOG-539.md](items/BACKLOG-539.md)
-BACKLOG-540,Settings modal needs Save button when changes made,ui,P3,Pending,SPRINT-062,~10K,-,-,2026-01-27,,[BACKLOG-540.md](items/BACKLOG-540.md)
-BACKLOG-541,Scan Lookback Period default should be 3 months,ui,P3,Pending,SPRINT-062,~5K,-,-,2026-01-27,,[BACKLOG-541.md](items/BACKLOG-541.md)
+BACKLOG-513,Fix unknown contact name display in text threads,bug,medium,completed,SPRINT-061,,UI,"When linking text threads to transactions, some 1:1 conversations display 'unknown' as contact name instead of actual contact. Contact lookup not finding phone number match."
+BACKLOG-514,Fix thread deduplication during message import,bug,medium,deferred,-,,Backend,"Same conversation appears as multiple separate threads in UI. Messages from same thread imported with different thread_ids or grouping logic not consolidating properly."
+BACKLOG-515,User Identifiers Table for Contact Resolution,enhancement,medium,pending,,,Backend,"Create user_identifiers table to store user email/phone identifiers. Improves contact resolution performance (indexed lookup vs O(n) message scan). Supports multiple emails/phones, future messaging platforms. Auto-populate from OAuth and message imports. SR Engineer approved architecture."
