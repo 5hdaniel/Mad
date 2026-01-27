@@ -3,8 +3,10 @@
  *
  * This is the root component that composes the application from modular pieces:
  * - NotificationProvider: Unified notification system (toasts)
- * - LicenseProvider: License type and AI addon state
+ * - LicenseProvider: License type, AI addon state, and validation (SPRINT-062)
+ * - LicenseGate: Blocks app when license invalid (SPRINT-062)
  * - AppShell: Layout structure (title bar, offline banner, version info)
+ * - TrialStatusBanner: Shows trial days remaining (SPRINT-062)
  * - AppRouter: Screen routing based on current step
  * - AppModals: Modal dialogs (profile, settings, etc.)
  * - BackgroundServices: Background monitors and notifications
@@ -23,18 +25,22 @@ import {
 } from "./appCore";
 import { NotificationProvider } from "./contexts/NotificationContext";
 import { LicenseProvider } from "./contexts/LicenseContext";
+import { LicenseGate, TrialStatusBanner } from "./components/license";
 
 function App() {
   const app = useAppStateMachine();
 
   return (
     <NotificationProvider>
-      <LicenseProvider>
-        <AppShell app={app}>
-          <AppRouter app={app} />
-          <BackgroundServices app={app} />
-          <AppModals app={app} />
-        </AppShell>
+      <LicenseProvider userId={app.currentUser?.id ?? null}>
+        <LicenseGate>
+          <AppShell app={app}>
+            <TrialStatusBanner />
+            <AppRouter app={app} />
+            <BackgroundServices app={app} />
+            <AppModals app={app} />
+          </AppShell>
+        </LicenseGate>
       </LicenseProvider>
     </NotificationProvider>
   );
