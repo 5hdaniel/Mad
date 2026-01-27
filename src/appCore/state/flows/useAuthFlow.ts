@@ -174,6 +174,25 @@ export function useAuthFlow({
       const isNewUser = !data.licenseStatus || data.licenseStatus.transactionCount === 0;
       setIsNewUserFlow(isNewUser);
 
+      // TASK-1507C: Call login() to set currentUser in AuthContext
+      // This is required for downstream handlers (email connection) to work
+      if (data.user) {
+        const user = {
+          id: data.user.id,
+          email: data.user.email || "",
+          display_name: data.user.name,
+        };
+        // Provider: Deep link auth uses Supabase which currently only supports Google
+        // Subscription: Not available in deep link data, will be fetched separately
+        login(
+          user,
+          data.accessToken,
+          "google",
+          undefined,
+          isNewUser
+        );
+      }
+
       // Dispatch LOGIN_SUCCESS to state machine if dispatch is available
       // This transitions the state machine from unauthenticated to loading-user-data
       if (stateMachineDispatch && platform && data.user) {
@@ -205,7 +224,7 @@ export function useAuthFlow({
         onSetCurrentStep("dashboard");
       }
     },
-    [stateMachineDispatch, platform, onSetCurrentStep],
+    [login, stateMachineDispatch, platform, onSetCurrentStep],
   );
 
   const handleLogout = useCallback(async (): Promise<void> => {
