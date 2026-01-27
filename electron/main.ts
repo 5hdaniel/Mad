@@ -8,9 +8,15 @@ import { autoUpdater } from "electron-updater";
 import log from "electron-log";
 import dotenv from "dotenv";
 
-// Load environment files: .env.development first (OAuth credentials), then .env.local for overrides
-dotenv.config({ path: path.join(__dirname, "../.env.development") });
-dotenv.config({ path: path.join(__dirname, "../.env.local") });
+// Load environment files based on packaging state
+// In packaged builds: load from resources directory (only public values)
+// In development: load .env.development first, then .env.local for overrides
+if (app.isPackaged) {
+  dotenv.config({ path: path.join(process.resourcesPath, '.env.production') });
+} else {
+  dotenv.config({ path: path.join(__dirname, "../.env.development") });
+  dotenv.config({ path: path.join(__dirname, "../.env.local") });
+}
 
 // Import constants
 import {
