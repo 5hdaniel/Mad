@@ -12,6 +12,25 @@ import logService from "./services/logService";
 import supabaseService from "./services/supabaseService";
 import type { LicenseType, UserLicense } from "./types/models";
 
+// SPRINT-062: License validation service imports
+import {
+  validateLicense,
+  createUserLicense,
+  incrementTransactionCount,
+  clearLicenseCache,
+  canPerformAction,
+} from "./services/licenseService";
+import {
+  registerDevice,
+  getUserDevices,
+  deactivateDevice,
+  deleteDevice,
+  getDeviceId,
+  isDeviceRegistered,
+  updateDeviceHeartbeat,
+} from "./services/deviceService";
+import type { LicenseValidationResult } from "../shared/types/license";
+
 // Type definitions
 interface LicenseResponse {
   success: boolean;
@@ -208,6 +227,144 @@ export function registerLicenseHandlers(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
+    }
+  );
+
+  // ============================================
+  // SPRINT-062: License Validation Service Handlers
+  // ============================================
+
+  // Validate license status (trial limits, transaction counts, etc.)
+  ipcMain.handle(
+    "license:validate",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string
+    ): Promise<LicenseValidationResult> => {
+      logService.debug("[License] Validating license", "License", { userId });
+      return validateLicense(userId);
+    }
+  );
+
+  // Create trial license for new user
+  ipcMain.handle(
+    "license:create",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string
+    ): Promise<LicenseValidationResult> => {
+      logService.debug("[License] Creating license", "License", { userId });
+      return createUserLicense(userId);
+    }
+  );
+
+  // Increment transaction count
+  ipcMain.handle(
+    "license:incrementTransactionCount",
+    async (_event: IpcMainInvokeEvent, userId: string): Promise<number> => {
+      logService.debug("[License] Incrementing transaction count", "License", {
+        userId,
+      });
+      return incrementTransactionCount(userId);
+    }
+  );
+
+  // Check if action is allowed based on license
+  ipcMain.handle(
+    "license:canPerformAction",
+    async (
+      _event: IpcMainInvokeEvent,
+      status: LicenseValidationResult,
+      action: "create_transaction" | "use_ai" | "export"
+    ): Promise<boolean> => {
+      return canPerformAction(status, action);
+    }
+  );
+
+  // Clear license cache (call on logout)
+  ipcMain.handle(
+    "license:clearCache",
+    async (_event: IpcMainInvokeEvent): Promise<void> => {
+      logService.debug("[License] Clearing license cache", "License");
+      await clearLicenseCache();
+    }
+  );
+
+  // ============================================
+  // SPRINT-062: Device Registration Handlers
+  // ============================================
+
+  // Register current device
+  ipcMain.handle(
+    "device:register",
+    async (_event: IpcMainInvokeEvent, userId: string) => {
+      logService.debug("[Device] Registering device", "License", { userId });
+      return registerDevice(userId);
+    }
+  );
+
+  // Get all user devices
+  ipcMain.handle(
+    "device:list",
+    async (_event: IpcMainInvokeEvent, userId: string) => {
+      logService.debug("[Device] Listing devices", "License", { userId });
+      return getUserDevices(userId);
+    }
+  );
+
+  // Deactivate a device
+  ipcMain.handle(
+    "device:deactivate",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+      deviceId: string
+    ) => {
+      logService.debug("[Device] Deactivating device", "License", {
+        userId,
+        deviceId: deviceId.substring(0, 8) + "...",
+      });
+      return deactivateDevice(userId, deviceId);
+    }
+  );
+
+  // Delete a device
+  ipcMain.handle(
+    "device:delete",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+      deviceId: string
+    ) => {
+      logService.debug("[Device] Deleting device", "License", {
+        userId,
+        deviceId: deviceId.substring(0, 8) + "...",
+      });
+      return deleteDevice(userId, deviceId);
+    }
+  );
+
+  // Get current device ID
+  ipcMain.handle(
+    "device:getCurrentId",
+    async (_event: IpcMainInvokeEvent): Promise<string> => {
+      return getDeviceId();
+    }
+  );
+
+  // Check if current device is registered
+  ipcMain.handle(
+    "device:isRegistered",
+    async (_event: IpcMainInvokeEvent, userId: string): Promise<boolean> => {
+      return isDeviceRegistered(userId);
+    }
+  );
+
+  // Update device heartbeat
+  ipcMain.handle(
+    "device:heartbeat",
+    async (_event: IpcMainInvokeEvent, userId: string): Promise<void> => {
+      await updateDeviceHeartbeat(userId);
     }
   );
 
