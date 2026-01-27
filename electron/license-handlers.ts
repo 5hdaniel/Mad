@@ -303,11 +303,13 @@ export function registerLicenseHandlers(): void {
     }
   );
 
-  // Get all user devices
+  // Get all user's registered devices (for licensing)
+  // Note: Uses "device:listRegistered" to avoid conflict with device:list in device-handlers.ts
+  // which lists iOS devices for backup purposes
   ipcMain.handle(
-    "device:list",
+    "device:listRegistered",
     async (_event: IpcMainInvokeEvent, userId: string) => {
-      logService.debug("[Device] Listing devices", "License", { userId });
+      logService.debug("[Device] Listing registered devices", "License", { userId });
       return getUserDevices(userId);
     }
   );
