@@ -326,25 +326,41 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
         subscriptionStatus: mapTrialToStatus(licenseStatus.trialStatus, licenseStatus.licenseType),
       };
 
+      // TASK-1507F: Track local user ID for renderer callback
+      // The renderer needs the LOCAL SQLite user ID (not Supabase UUID) for FK constraints
+      let localUserId = user.id; // Default to Supabase UUID as fallback
+
       if (databaseService.isInitialized()) {
         // Database is ready - create user now
         log.info("[DeepLink] Database initialized, creating local user");
         await syncDeepLinkUserToLocalDb(deepLinkUserData);
+
+        // TASK-1507F: Get the local user ID after creation/sync
+        const localUser = await databaseService.getUserByEmail(user.email || "");
+        if (localUser) {
+          localUserId = localUser.id;
+          log.info("[DeepLink] Using local user ID:", localUserId);
+        } else {
+          log.warn("[DeepLink] Local user not found after sync, using Supabase ID");
+        }
       } else {
         // Database not ready yet - store for later
         // User will be created after DB initialization in system-handlers.ts
         log.info("[DeepLink] Database not initialized, storing pending user");
         setPendingDeepLinkUser(deepLinkUserData);
+        // Note: localUserId remains as Supabase UUID since we can't query local DB yet
+        // The renderer will need to handle this case (existing flow before TASK-1507F)
       }
 
       // TASK-1507: Step 6 - Success! Send all data to renderer
-      log.info("[DeepLink] Auth complete, sending success event for user:", user.id);
+      // TASK-1507F: Use local user ID instead of Supabase UUID for FK constraint compatibility
+      log.info("[DeepLink] Auth complete, sending success event for user:", localUserId);
       sendToRenderer("auth:deep-link-callback", {
         accessToken,
         refreshToken,
-        userId: user.id,
+        userId: localUserId,
         user: {
-          id: user.id,
+          id: localUserId,
           email: user.email,
           name: user.user_metadata?.full_name,
         },
