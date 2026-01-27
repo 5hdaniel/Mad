@@ -13,7 +13,7 @@ import type {
   Device,
   DevicePlatform,
   DeviceRegistrationResult,
-} from "../../shared/types/license";
+} from "../types/license";
 
 /**
  * Get unique device identifier

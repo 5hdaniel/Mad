@@ -15,10 +15,10 @@ import type {
   LicenseType,
   TrialStatus,
   LicenseValidationResult,
-} from "../../shared/types/license";
+} from "../types/license";
 
-// Import the constant from shared types
-import { OFFLINE_GRACE_PERIOD_HOURS as GRACE_PERIOD_HOURS } from "../../shared/types/license";
+// Import the constant from electron types
+import { OFFLINE_GRACE_PERIOD_HOURS as GRACE_PERIOD_HOURS } from "../types/license";
 
 // Convert grace period to milliseconds
 const OFFLINE_GRACE_PERIOD_MS = GRACE_PERIOD_HOURS * 60 * 60 * 1000;

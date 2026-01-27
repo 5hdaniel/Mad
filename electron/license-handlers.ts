@@ -29,7 +29,7 @@ import {
   isDeviceRegistered,
   updateDeviceHeartbeat,
 } from "./services/deviceService";
-import type { LicenseValidationResult } from "../shared/types/license";
+import type { LicenseValidationResult } from "./types/license";
 
 // Type definitions
 interface LicenseResponse {
