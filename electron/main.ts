@@ -163,8 +163,9 @@ async function syncDeepLinkUserToLocalDb(userData: PendingDeepLinkUser): Promise
     }
 
     if (!localUser) {
-      // Create new user
+      // TASK-1507G: Use Supabase Auth UUID as local user ID for unified IDs
       await databaseService.createUser({
+        id: userData.supabaseId,
         email: userData.email,
         display_name: userData.displayName || userData.email.split("@")[0],
         avatar_url: userData.avatarUrl,
