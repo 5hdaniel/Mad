@@ -55,6 +55,7 @@ export interface DeepLinkAuthData {
     aiEnabled: boolean;
     blockReason?: string;
   };
+  isNewUser?: boolean; // BACKLOG-546: Based on terms acceptance, not transaction count
 }
 
 interface LoginProps {

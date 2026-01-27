@@ -73,6 +73,10 @@ import { validateLicense, createUserLicense } from "./services/licenseService";
 import { registerDevice } from "./services/deviceService";
 import supabaseService from "./services/supabaseService";
 import databaseService from "./services/databaseService";
+import {
+  CURRENT_TERMS_VERSION,
+  CURRENT_PRIVACY_POLICY_VERSION,
+} from "./constants/legalVersions";
 import type { OAuthProvider, SubscriptionTier, SubscriptionStatus } from "./types";
 
 // Import extracted handlers from handlers/ directory
@@ -353,8 +357,30 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
         // The renderer will need to handle this case (existing flow before TASK-1507F)
       }
 
+      // BACKLOG-546: Check if user needs to accept terms
+      // Fetch from Supabase to get terms acceptance status
+      let needsTermsAcceptance = true; // Default to showing T&C
+      try {
+        const cloudUser = await supabaseService.getUserById(user.id);
+        if (cloudUser?.terms_accepted_at) {
+          // No version tracking (legacy) - they're good
+          if (!cloudUser.terms_version_accepted && !cloudUser.privacy_policy_version_accepted) {
+            needsTermsAcceptance = false;
+          } else {
+            // Check if versions match current (imported from constants)
+            const termsOutdated = cloudUser.terms_version_accepted !== CURRENT_TERMS_VERSION;
+            const privacyOutdated = cloudUser.privacy_policy_version_accepted !== CURRENT_PRIVACY_POLICY_VERSION;
+            needsTermsAcceptance = termsOutdated || privacyOutdated;
+          }
+        }
+        log.info("[DeepLink] Terms acceptance check:", { needsTermsAcceptance, termsAcceptedAt: cloudUser?.terms_accepted_at });
+      } catch (termsCheckError) {
+        log.warn("[DeepLink] Failed to check terms acceptance, defaulting to show T&C:", termsCheckError);
+      }
+
       // TASK-1507: Step 6 - Success! Send all data to renderer
       // TASK-1507F: Use local user ID instead of Supabase UUID for FK constraint compatibility
+      // BACKLOG-546: Include isNewUser based on terms acceptance, not transaction count
       log.info("[DeepLink] Auth complete, sending success event for user:", localUserId);
       sendToRenderer("auth:deep-link-callback", {
         accessToken,
@@ -368,6 +394,7 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
         provider: user.app_metadata?.provider,
         licenseStatus,
         device: deviceResult.device,
+        isNewUser: needsTermsAcceptance, // BACKLOG-546: Based on terms, not transactions
       });
 
       focusMainWindow();

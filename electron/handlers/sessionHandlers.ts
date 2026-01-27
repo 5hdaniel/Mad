@@ -517,6 +517,37 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
           "SessionHandlers",
           { userId: freshUser.id }
         );
+
+        // BACKLOG-546: Sync terms data from Supabase if user has already accepted
+        // This ensures returning users on new devices don't see T&C again
+        try {
+          const cloudUser = await supabaseService.getUserById(session.user.id);
+          if (cloudUser?.terms_accepted_at) {
+            await databaseService.updateUser(freshUser.id, {
+              terms_accepted_at: cloudUser.terms_accepted_at,
+              terms_version_accepted: cloudUser.terms_version_accepted,
+              privacy_policy_accepted_at: cloudUser.privacy_policy_accepted_at,
+              privacy_policy_version_accepted: cloudUser.privacy_policy_version_accepted,
+            });
+            // Re-fetch to get updated terms data
+            const updatedUser = await databaseService.getUserById(freshUser.id);
+            if (updatedUser) {
+              freshUser = updatedUser;
+            }
+            await logService.info(
+              "Synced terms data from Supabase to local user (BACKLOG-546)",
+              "SessionHandlers",
+              { userId: freshUser.id }
+            );
+          }
+        } catch (syncError) {
+          // Log but don't fail - terms can be re-accepted if needed
+          await logService.warn(
+            "Failed to sync terms from Supabase",
+            "SessionHandlers",
+            { error: syncError instanceof Error ? syncError.message : "Unknown error" }
+          );
+        }
       } catch (createError) {
         // Log but don't fail - auth should succeed even if local user creation fails
         await logService.error(
