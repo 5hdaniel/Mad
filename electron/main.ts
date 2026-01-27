@@ -68,6 +68,11 @@ import { registerLLMHandlers } from "./llm-handlers";
 import { registerLicenseHandlers } from "./license-handlers";
 import { LLMConfigService } from "./services/llm/llmConfigService";
 
+// Import license and device services for deep link auth validation (TASK-1507)
+import { validateLicense, createUserLicense } from "./services/licenseService";
+import { registerDevice } from "./services/deviceService";
+import supabaseService from "./services/supabaseService";
+
 // Import extracted handlers from handlers/ directory
 import {
   registerPermissionHandlers,
@@ -98,17 +103,19 @@ process.on("unhandledRejection", (reason: unknown) => {
 let mainWindow: BrowserWindow | null = null;
 
 // ==========================================
-// DEEP LINK HANDLER (TASK-1500)
+// DEEP LINK HANDLER (TASK-1500, enhanced TASK-1507)
 // ==========================================
 /**
  * Handle incoming deep link authentication callback
- * Parses the URL and sends tokens to the renderer process
+ * Parses the URL, validates license, registers device, and sends result to renderer
+ *
+ * TASK-1507: Enhanced to validate license and register device before completing auth
  *
  * Expected URL format: magicaudit://callback?access_token=...&refresh_token=...
  *
  * @param url - The deep link URL to process
  */
-function handleDeepLinkCallback(url: string): void {
+async function handleDeepLinkCallback(url: string): Promise<void> {
   try {
     const parsed = new URL(url);
 
@@ -122,38 +129,123 @@ function handleDeepLinkCallback(url: string): void {
       const accessToken = parsed.searchParams.get("access_token");
       const refreshToken = parsed.searchParams.get("refresh_token");
 
-      if (accessToken && refreshToken) {
-        // Send tokens to renderer (with destroyed check per SR review)
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send("auth:deep-link-callback", {
-            accessToken,
-            refreshToken,
-          });
-
-          // Focus the window to bring app to foreground
-          if (mainWindow.isMinimized()) mainWindow.restore();
-          mainWindow.focus();
-        }
-      } else {
+      if (!accessToken || !refreshToken) {
         // Missing tokens - send error to renderer
         log.error("[DeepLink] Callback URL missing tokens:", url);
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send("auth:deep-link-error", {
-            error: "Missing tokens in callback URL",
-            code: "MISSING_TOKENS",
-          });
-        }
+        sendToRenderer("auth:deep-link-error", {
+          error: "Missing tokens in callback URL",
+          code: "MISSING_TOKENS",
+        });
+        return;
       }
+
+      // TASK-1507: Step 1 - Verify tokens and establish session using setSession()
+      // Per SR Engineer review: Use setSession() instead of getUser() for proper session establishment
+      log.info("[DeepLink] Setting session with tokens...");
+      const { data: sessionData, error: sessionError } = await supabaseService
+        .getClient()
+        .auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+
+      if (sessionError || !sessionData?.user) {
+        log.error("[DeepLink] Failed to set session:", sessionError);
+        sendToRenderer("auth:deep-link-error", {
+          error: "Invalid authentication tokens",
+          code: "INVALID_TOKENS",
+        });
+        return;
+      }
+
+      const user = sessionData.user;
+      log.info("[DeepLink] Session established for user:", user.id);
+
+      // TASK-1507: Step 2 - Validate license
+      log.info("[DeepLink] Validating license for user:", user.id);
+      let licenseStatus = await validateLicense(user.id);
+
+      // TASK-1507: Step 3 - Create trial license if needed
+      if (licenseStatus.blockReason === "no_license") {
+        log.info("[DeepLink] Creating trial license for new user:", user.id);
+        licenseStatus = await createUserLicense(user.id);
+      }
+
+      // TASK-1507: Step 4 - Check if license blocks access (expired/suspended)
+      if (!licenseStatus.isValid && licenseStatus.blockReason !== "no_license") {
+        log.warn("[DeepLink] License blocked for user:", user.id, "reason:", licenseStatus.blockReason);
+        sendToRenderer("auth:deep-link-license-blocked", {
+          accessToken,
+          refreshToken,
+          userId: user.id,
+          blockReason: licenseStatus.blockReason,
+          licenseStatus,
+        });
+        focusMainWindow();
+        return;
+      }
+
+      // TASK-1507: Step 5 - Register device
+      log.info("[DeepLink] Registering device for user:", user.id);
+      const deviceResult = await registerDevice(user.id);
+
+      if (!deviceResult.success && deviceResult.error === "device_limit_reached") {
+        log.warn("[DeepLink] Device limit reached for user:", user.id);
+        sendToRenderer("auth:deep-link-device-limit", {
+          accessToken,
+          refreshToken,
+          userId: user.id,
+          licenseStatus,
+        });
+        focusMainWindow();
+        return;
+      }
+
+      // TASK-1507: Step 6 - Success! Send all data to renderer
+      log.info("[DeepLink] Auth complete, sending success event for user:", user.id);
+      sendToRenderer("auth:deep-link-callback", {
+        accessToken,
+        refreshToken,
+        userId: user.id,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.user_metadata?.full_name,
+        },
+        licenseStatus,
+        device: deviceResult.device,
+      });
+
+      focusMainWindow();
     }
   } catch (error) {
-    // Invalid URL format
-    log.error("[DeepLink] Failed to parse URL:", error);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("auth:deep-link-error", {
-        error: "Invalid callback URL",
-        code: "INVALID_URL",
-      });
-    }
+    // Invalid URL format or unexpected error
+    log.error("[DeepLink] Failed to handle callback:", error);
+    sendToRenderer("auth:deep-link-error", {
+      error: "Authentication failed",
+      code: "UNKNOWN_ERROR",
+    });
+  }
+}
+
+/**
+ * Helper: Send event to renderer process safely
+ * @param channel - IPC channel name
+ * @param data - Data to send
+ */
+function sendToRenderer(channel: string, data: unknown): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(channel, data);
+  }
+}
+
+/**
+ * Helper: Focus the main window (brings app to foreground)
+ */
+function focusMainWindow(): void {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
   }
 }
 

@@ -292,4 +292,66 @@ export const eventBridge = {
     ipcRenderer.on("auth:deep-link-error", listener);
     return () => ipcRenderer.removeListener("auth:deep-link-error", listener);
   },
+
+  // ==========================================
+  // DEEP LINK LICENSE EVENTS (TASK-1507)
+  // ==========================================
+
+  /**
+   * Listens for deep link license blocked events
+   * Fired when the user's license is expired, suspended, or otherwise invalid
+   * @param callback - Callback function to handle license blocked state
+   * @returns Cleanup function to remove listener
+   */
+  onDeepLinkLicenseBlocked: (
+    callback: (data: {
+      accessToken: string;
+      refreshToken: string;
+      userId: string;
+      blockReason: string;
+      licenseStatus: unknown;
+    }) => void,
+  ) => {
+    const listener = (
+      _: IpcRendererEvent,
+      data: {
+        accessToken: string;
+        refreshToken: string;
+        userId: string;
+        blockReason: string;
+        licenseStatus: unknown;
+      },
+    ) => callback(data);
+    ipcRenderer.on("auth:deep-link-license-blocked", listener);
+    return () =>
+      ipcRenderer.removeListener("auth:deep-link-license-blocked", listener);
+  },
+
+  /**
+   * Listens for deep link device limit events
+   * Fired when device registration fails due to license device limit
+   * @param callback - Callback function to handle device limit state
+   * @returns Cleanup function to remove listener
+   */
+  onDeepLinkDeviceLimit: (
+    callback: (data: {
+      accessToken: string;
+      refreshToken: string;
+      userId: string;
+      licenseStatus: unknown;
+    }) => void,
+  ) => {
+    const listener = (
+      _: IpcRendererEvent,
+      data: {
+        accessToken: string;
+        refreshToken: string;
+        userId: string;
+        licenseStatus: unknown;
+      },
+    ) => callback(data);
+    ipcRenderer.on("auth:deep-link-device-limit", listener);
+    return () =>
+      ipcRenderer.removeListener("auth:deep-link-device-limit", listener);
+  },
 };

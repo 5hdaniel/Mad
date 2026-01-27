@@ -21,10 +21,11 @@ interface DeepLinkAuthData {
 
 /**
  * Auth error data received from deep link
+ * TASK-1507: Added INVALID_TOKENS and UNKNOWN_ERROR codes
  */
 interface DeepLinkAuthError {
   error: string;
-  code: "MISSING_TOKENS" | "INVALID_URL";
+  code: "MISSING_TOKENS" | "INVALID_URL" | "INVALID_TOKENS" | "UNKNOWN_ERROR";
 }
 
 interface UseDeepLinkAuthOptions {

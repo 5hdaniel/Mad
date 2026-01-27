@@ -8,7 +8,7 @@
  * to show the keychain explanation screen before completing the login.
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import type { User, Subscription } from "../../electron/types/models";
 
 // Type for pending OAuth data
@@ -32,6 +32,30 @@ export interface PendingOAuthData {
   subscription?: { tier?: string; status?: string; trial_ends_at?: string };
 }
 
+// TASK-1507: Deep link auth callback data types
+export interface DeepLinkAuthData {
+  accessToken: string;
+  refreshToken: string;
+  userId?: string;
+  user?: {
+    id: string;
+    email?: string;
+    name?: string;
+  };
+  licenseStatus?: {
+    isValid: boolean;
+    licenseType: "trial" | "individual" | "team";
+    trialDaysRemaining?: number;
+    transactionCount: number;
+    transactionLimit: number;
+    canCreateTransaction: boolean;
+    deviceCount: number;
+    deviceLimit: number;
+    aiEnabled: boolean;
+    blockReason?: string;
+  };
+}
+
 interface LoginProps {
   onLoginSuccess: (
     user: User,
@@ -41,15 +65,173 @@ interface LoginProps {
     isNewUser: boolean,
   ) => void;
   onLoginPending?: (oauthData: PendingOAuthData) => void;
+  /** TASK-1507: Called when deep link auth succeeds with license/device validation */
+  onDeepLinkAuthSuccess?: (data: DeepLinkAuthData) => void;
+  /** TASK-1507: Called when license is blocked (expired/suspended) */
+  onLicenseBlocked?: (data: { userId: string; blockReason: string }) => void;
+  /** TASK-1507: Called when device limit is reached */
+  onDeviceLimitReached?: (data: { userId: string; deviceCount: number; deviceLimit: number }) => void;
 }
 
-const Login = ({ onLoginSuccess, onLoginPending }: LoginProps) => {
+const Login = ({
+  onLoginSuccess,
+  onLoginPending,
+  onDeepLinkAuthSuccess,
+  onLicenseBlocked,
+  onDeviceLimitReached,
+}: LoginProps) => {
   const [loading, setLoading] = useState(false);
   const [authUrl, setAuthUrl] = useState<string | null>(null);
   const [authCode, setAuthCode] = useState("");
-  const [provider, setProvider] = useState<"google" | "microsoft" | null>(null);
+  const [provider, setProvider] = useState<"google" | "microsoft" | "browser" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [popupCancelled, setPopupCancelled] = useState(false);
+  // TASK-1507: Track when browser auth is in progress
+  const [browserAuthInProgress, setBrowserAuthInProgress] = useState(false);
+
+  // ==========================================
+  // TASK-1507: Deep Link Event Handlers
+  // ==========================================
+
+  /**
+   * Handle successful deep link auth callback
+   * Called when browser OAuth completes and returns via magicaudit://callback
+   */
+  const handleDeepLinkSuccess = useCallback((data: DeepLinkAuthData) => {
+    console.log("[Login] Deep link auth success:", data.userId);
+    setBrowserAuthInProgress(false);
+    setLoading(false);
+    setProvider(null);
+
+    if (onDeepLinkAuthSuccess) {
+      onDeepLinkAuthSuccess(data);
+    }
+  }, [onDeepLinkAuthSuccess]);
+
+  /**
+   * Handle deep link auth error
+   * Called when browser OAuth fails or returns invalid tokens
+   */
+  const handleDeepLinkError = useCallback((data: { error: string; code: string }) => {
+    console.error("[Login] Deep link auth error:", data);
+    setBrowserAuthInProgress(false);
+    setLoading(false);
+    setProvider(null);
+    setError(data.error || "Browser authentication failed");
+  }, []);
+
+  /**
+   * Handle license blocked event
+   * Called when user authenticates but license is expired/suspended
+   */
+  const handleLicenseBlocked = useCallback((data: {
+    userId: string;
+    blockReason: string;
+    licenseStatus: unknown;
+  }) => {
+    console.warn("[Login] License blocked:", data.blockReason);
+    setBrowserAuthInProgress(false);
+    setLoading(false);
+    setProvider(null);
+
+    if (onLicenseBlocked) {
+      onLicenseBlocked({ userId: data.userId, blockReason: data.blockReason });
+    } else {
+      // Default handling if no callback provided
+      setError(`Your license is ${data.blockReason}. Please contact support.`);
+    }
+  }, [onLicenseBlocked]);
+
+  /**
+   * Handle device limit reached event
+   * Called when user authenticates but device registration fails
+   */
+  const handleDeviceLimit = useCallback((data: {
+    userId: string;
+    licenseStatus: {
+      deviceCount: number;
+      deviceLimit: number;
+    };
+  }) => {
+    console.warn("[Login] Device limit reached");
+    setBrowserAuthInProgress(false);
+    setLoading(false);
+    setProvider(null);
+
+    if (onDeviceLimitReached) {
+      onDeviceLimitReached({
+        userId: data.userId,
+        deviceCount: data.licenseStatus.deviceCount,
+        deviceLimit: data.licenseStatus.deviceLimit,
+      });
+    } else {
+      // Default handling if no callback provided
+      setError(`Device limit reached (${data.licenseStatus.deviceCount}/${data.licenseStatus.deviceLimit}). Please deactivate a device first.`);
+    }
+  }, [onDeviceLimitReached]);
+
+  /**
+   * Set up deep link event listeners
+   * Per SR Engineer review: Add listeners directly to Login.tsx, not a separate hook
+   */
+  useEffect(() => {
+    // Set up listeners for deep link events
+    const cleanups: (() => void)[] = [];
+
+    if (window.api.onDeepLinkAuthCallback) {
+      cleanups.push(window.api.onDeepLinkAuthCallback(handleDeepLinkSuccess));
+    }
+
+    if (window.api.onDeepLinkAuthError) {
+      cleanups.push(window.api.onDeepLinkAuthError(handleDeepLinkError));
+    }
+
+    if (window.api.onDeepLinkLicenseBlocked) {
+      cleanups.push(window.api.onDeepLinkLicenseBlocked(handleLicenseBlocked));
+    }
+
+    if (window.api.onDeepLinkDeviceLimit) {
+      cleanups.push(window.api.onDeepLinkDeviceLimit(handleDeviceLimit));
+    }
+
+    // Cleanup on unmount
+    return () => {
+      cleanups.forEach((cleanup) => cleanup());
+    };
+  }, [handleDeepLinkSuccess, handleDeepLinkError, handleLicenseBlocked, handleDeviceLimit]);
+
+  /**
+   * Handle Browser Sign In (Deep Link Flow)
+   * TASK-1507: Opens Supabase auth in default browser, returns via deep link
+   */
+  const handleBrowserLogin = async () => {
+    setLoading(true);
+    setError(null);
+    setProvider("browser");
+    setBrowserAuthInProgress(true);
+    setPopupCancelled(false);
+
+    try {
+      const result = await window.api.auth.openAuthInBrowser();
+
+      if (!result.success) {
+        setError(result.error || "Failed to open browser for authentication");
+        setLoading(false);
+        setProvider(null);
+        setBrowserAuthInProgress(false);
+      }
+      // If success, we wait for deep link callback event
+      // Loading state will be cleared by the event handler
+    } catch (err) {
+      console.error("Browser login error:", err);
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to start browser login";
+      setError(errorMessage);
+      setLoading(false);
+      setProvider(null);
+      setBrowserAuthInProgress(false);
+    }
+  };
 
   /**
    * Handle Google Sign In (Redirect Flow)
@@ -317,6 +499,7 @@ const Login = ({ onLoginSuccess, onLoginPending }: LoginProps) => {
     setProvider(null);
     setError(null);
     setPopupCancelled(false);
+    setBrowserAuthInProgress(false);
   };
 
   return (
@@ -501,9 +684,32 @@ const Login = ({ onLoginSuccess, onLoginPending }: LoginProps) => {
           </div>
         )}
 
+        {/* Browser Authentication in Progress (TASK-1507) */}
+        {provider === "browser" && browserAuthInProgress && (
+          <div className="mb-6">
+            <div className="p-6 bg-gradient-to-br from-green-50 to-teal-50 border-2 border-green-200 rounded-lg text-center">
+              <div className="flex flex-col items-center">
+                <div className="w-12 h-12 border-4 border-green-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                <p className="text-sm text-green-900 font-semibold mb-2">
+                  Authenticating in Browser...
+                </p>
+                <p className="text-xs text-green-700 mb-4">
+                  Complete sign-in in your default browser. The app will update automatically when finished.
+                </p>
+                <button
+                  onClick={handleCancel}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Initial Login Buttons */}
         {!authUrl &&
-          !((provider === "microsoft" || provider === "google") && loading) && (
+          !((provider === "microsoft" || provider === "google" || provider === "browser") && loading) && (
             <div>
               {/* Google Sign In */}
               <button
@@ -536,7 +742,7 @@ const Login = ({ onLoginSuccess, onLoginPending }: LoginProps) => {
               <button
                 onClick={handleMicrosoftLogin}
                 disabled={loading}
-                className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-300 text-gray-700 py-3 px-4 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors"
+                className="w-full mb-3 flex items-center justify-center gap-3 bg-white border-2 border-gray-300 text-gray-700 py-3 px-4 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors"
               >
                 <svg className="w-5 h-5" viewBox="0 0 23 23">
                   <path fill="#f35325" d="M0 0h11v11H0z" />
@@ -547,10 +753,37 @@ const Login = ({ onLoginSuccess, onLoginPending }: LoginProps) => {
                 <span className="font-medium">Sign in with Microsoft</span>
               </button>
 
+              {/* Divider */}
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-white text-gray-500">or</span>
+                </div>
+              </div>
+
+              {/* TASK-1507: Browser Sign In (Deep Link Flow) */}
+              <button
+                onClick={handleBrowserLogin}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-green-500 to-teal-500 text-white py-3 px-4 rounded-lg hover:from-green-600 hover:to-teal-600 disabled:from-gray-300 disabled:to-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
+                  />
+                </svg>
+                <span className="font-medium">Sign in with Browser</span>
+              </button>
+
               {/* Trial Info */}
               <div className="mt-6 text-center">
                 <p className="text-xs text-gray-500">
-                  🎉 Start your 14-day free trial
+                  Start your 14-day free trial
                 </p>
               </div>
             </div>

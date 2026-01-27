@@ -683,6 +683,13 @@ export interface WindowApi {
         scopes: string;
       };
     }) => Promise<{ success: boolean; error?: string }>;
+
+    // TASK-1507: Deep link browser auth
+    /**
+     * Opens Supabase auth URL in the default browser
+     * Used for deep-link authentication flow
+     */
+    openAuthInBrowser: () => Promise<{ success: boolean; error?: string }>;
   };
 
   // System methods
@@ -1704,23 +1711,86 @@ export interface WindowApi {
   };
 
   // ==========================================
-  // DEEP LINK AUTH EVENTS (TASK-1500)
+  // DEEP LINK AUTH EVENTS (TASK-1500, enhanced TASK-1507)
   // ==========================================
 
   /**
-   * Listen for deep link auth callback with tokens
-   * Fired when app receives magicaudit://callback?access_token=...&refresh_token=...
+   * Listen for deep link auth callback with tokens and license status
+   * Fired when app receives magicaudit://callback and auth/license validation succeeds
+   * TASK-1507: Enhanced to include user, license, and device data
    */
   onDeepLinkAuthCallback: (
-    callback: (data: { accessToken: string; refreshToken: string }) => void,
+    callback: (data: {
+      accessToken: string;
+      refreshToken: string;
+      userId?: string;
+      user?: {
+        id: string;
+        email?: string;
+        name?: string;
+      };
+      licenseStatus?: {
+        isValid: boolean;
+        licenseType: "trial" | "individual" | "team";
+        trialDaysRemaining?: number;
+        transactionCount: number;
+        transactionLimit: number;
+        canCreateTransaction: boolean;
+        deviceCount: number;
+        deviceLimit: number;
+        aiEnabled: boolean;
+        blockReason?: string;
+      };
+      device?: {
+        id: string;
+        device_id: string;
+        device_name: string | null;
+      };
+    }) => void,
   ) => () => void;
 
   /**
    * Listen for deep link auth errors
-   * Fired when callback URL is invalid or missing tokens
+   * Fired when callback URL is invalid, tokens are missing, or auth fails
    */
   onDeepLinkAuthError: (
-    callback: (data: { error: string; code: "MISSING_TOKENS" | "INVALID_URL" }) => void,
+    callback: (data: { error: string; code: "MISSING_TOKENS" | "INVALID_URL" | "INVALID_TOKENS" | "UNKNOWN_ERROR" }) => void,
+  ) => () => void;
+
+  /**
+   * Listen for deep link license blocked events (TASK-1507)
+   * Fired when user authenticates successfully but license is expired/suspended
+   */
+  onDeepLinkLicenseBlocked: (
+    callback: (data: {
+      accessToken: string;
+      refreshToken: string;
+      userId: string;
+      blockReason: string;
+      licenseStatus: {
+        isValid: boolean;
+        licenseType: "trial" | "individual" | "team";
+        blockReason?: string;
+      };
+    }) => void,
+  ) => () => void;
+
+  /**
+   * Listen for deep link device limit events (TASK-1507)
+   * Fired when user authenticates successfully but device registration fails due to limit
+   */
+  onDeepLinkDeviceLimit: (
+    callback: (data: {
+      accessToken: string;
+      refreshToken: string;
+      userId: string;
+      licenseStatus: {
+        isValid: boolean;
+        licenseType: "trial" | "individual" | "team";
+        deviceCount: number;
+        deviceLimit: number;
+      };
+    }) => void,
   ) => () => void;
 }
 
