@@ -222,6 +222,7 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
           email: user.email,
           name: user.user_metadata?.full_name,
         },
+        provider: user.app_metadata?.provider,
         licenseStatus,
         device: deviceResult.device,
       });

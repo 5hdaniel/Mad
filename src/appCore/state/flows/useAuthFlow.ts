@@ -182,12 +182,12 @@ export function useAuthFlow({
           email: data.user.email || "",
           display_name: data.user.name,
         };
-        // Provider: Deep link auth uses Supabase which currently only supports Google
+        // Provider from Supabase app_metadata (google, azure, etc), fallback to google
         // Subscription: Not available in deep link data, will be fetched separately
         login(
           user,
           data.accessToken,
-          "google",
+          data.provider || "google",
           undefined,
           isNewUser
         );
