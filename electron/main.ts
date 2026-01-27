@@ -126,8 +126,18 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
       parsed.host === "callback";
 
     if (isCallback) {
-      const accessToken = parsed.searchParams.get("access_token");
-      const refreshToken = parsed.searchParams.get("refresh_token");
+      // TASK-1508A: Parse tokens from both query params AND URL fragment
+      // Supabase OAuth returns tokens in fragment (#access_token=...) not query params (?access_token=...)
+      // URL fragments are not sent to servers, only processed client-side (OAuth implicit flow security)
+      const hashParams = parsed.hash ? new URLSearchParams(parsed.hash.slice(1)) : null;
+      const accessToken = parsed.searchParams.get("access_token") || hashParams?.get("access_token");
+      const refreshToken = parsed.searchParams.get("refresh_token") || hashParams?.get("refresh_token");
+
+      // Log which format was detected for debugging
+      log.info("[DeepLink] Parsing callback URL", {
+        hasQueryParams: !!parsed.searchParams.get("access_token"),
+        hasHashParams: !!hashParams?.get("access_token"),
+      });
 
       if (!accessToken || !refreshToken) {
         // Missing tokens - send error to renderer
