@@ -13,6 +13,7 @@ import React, {
   useMemo,
 } from "react";
 import type { OAuthProvider, Subscription } from "../../electron/types/models";
+import { authService } from "../services";
 
 // User interface
 export interface User {
@@ -83,38 +84,35 @@ export function AuthProvider({
    * Check for existing session on mount
    */
   const checkSession = useCallback(async () => {
-    if (window.api?.auth?.getCurrentUser) {
-      try {
-        const result = await window.api.auth.getCurrentUser();
-        if (result.success && result.user) {
-          // Convert user to ensure terms_accepted_at is string or undefined
-          const user: User = {
-            id: result.user.id,
-            email: result.user.email,
-            display_name: result.user.display_name,
-            avatar_url: result.user.avatar_url,
-            terms_accepted_at:
-              result.user.terms_accepted_at instanceof Date
-                ? result.user.terms_accepted_at.toISOString()
-                : result.user.terms_accepted_at,
-          };
-          setState({
-            isAuthenticated: true,
-            isLoading: false,
-            currentUser: user,
-            sessionToken: result.sessionToken ?? null,
-            authProvider: (result.provider ?? null) as OAuthProvider | null,
-            subscription: result.subscription ?? undefined,
-            needsTermsAcceptance: result.isNewUser ?? false,
-          });
-        } else {
-          setState((prev) => ({ ...prev, isLoading: false }));
-        }
-      } catch {
-        // Session check failed silently - user will need to log in
+    try {
+      const result = await authService.getCurrentUser();
+      if (result.success && result.data) {
+        const { user, sessionToken, subscription, provider, isNewUser } = result.data;
+        // Convert user to ensure terms_accepted_at is string or undefined
+        const convertedUser: User = {
+          id: user.id,
+          email: user.email,
+          display_name: user.display_name,
+          avatar_url: user.avatar_url,
+          terms_accepted_at:
+            user.terms_accepted_at instanceof Date
+              ? user.terms_accepted_at.toISOString()
+              : user.terms_accepted_at,
+        };
+        setState({
+          isAuthenticated: true,
+          isLoading: false,
+          currentUser: convertedUser,
+          sessionToken: sessionToken ?? null,
+          authProvider: (provider ?? null) as OAuthProvider | null,
+          subscription: subscription ?? undefined,
+          needsTermsAcceptance: isNewUser ?? false,
+        });
+      } else {
         setState((prev) => ({ ...prev, isLoading: false }));
       }
-    } else {
+    } catch {
+      // Session check failed silently - user will need to log in
       setState((prev) => ({ ...prev, isLoading: false }));
     }
   }, []);
@@ -152,9 +150,9 @@ export function AuthProvider({
    * Handle logout
    */
   const logout = useCallback(async () => {
-    if (state.sessionToken && window.api?.auth?.logout) {
+    if (state.sessionToken) {
       try {
-        await window.api.auth.logout(state.sessionToken);
+        await authService.logout(state.sessionToken);
       } catch {
         // Logout error is handled server-side, continue with local cleanup
       }
@@ -171,10 +169,14 @@ export function AuthProvider({
    * Accept terms and conditions
    */
   const acceptTerms = useCallback(async () => {
-    if (state.currentUser && window.api?.auth?.acceptTerms) {
+    if (state.currentUser) {
       try {
-        await window.api.auth.acceptTerms(state.currentUser.id);
-        setState((prev) => ({ ...prev, needsTermsAcceptance: false }));
+        const result = await authService.acceptTerms(state.currentUser.id);
+        if (result.success) {
+          setState((prev) => ({ ...prev, needsTermsAcceptance: false }));
+        } else {
+          throw new Error(result.error || "Failed to accept terms");
+        }
       } catch (error) {
         console.error("Failed to accept terms:", error);
         throw error;

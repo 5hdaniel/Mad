@@ -9,7 +9,7 @@
  * - TransactionContactsTab: Contacts tab with AI suggestions
  * - Various modal dialogs
  */
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import type { Transaction } from "@/types";
 import ExportModal from "./ExportModal";
 import AuditTransactionModal from "./AuditTransactionModal";
@@ -28,16 +28,23 @@ import {
   TransactionHeader,
   TransactionTabs,
   TransactionDetailsTab,
-  TransactionContactsTab,
+  TransactionEmailsTab,
   TransactionMessagesTab,
   TransactionAttachmentsTab,
-  ExportSuccessMessage,
-  ArchivePromptModal,
   DeleteConfirmModal,
   UnlinkEmailModal,
   EmailViewModal,
   RejectReasonModal,
+  EditContactsModal,
 } from "./transactionDetailsModule";
+// Import ReviewNotesPanel for displaying broker feedback (BACKLOG-395)
+import { ReviewNotesPanel } from "./transactionDetailsModule/components/ReviewNotesPanel";
+// Import Submit for Review components (BACKLOG-391)
+import { SubmitForReviewModal } from "./transactionDetailsModule/components/modals/SubmitForReviewModal";
+import { useSubmitForReview } from "./transactionDetailsModule/hooks/useSubmitForReview";
+import type { AutoLinkResult } from "./transactionDetailsModule/components/modals/EditContactsModal";
+
+import type { TransactionTab } from "./transactionDetailsModule/types";
 
 interface TransactionDetailsComponentProps {
   transaction: Transaction;
@@ -51,6 +58,8 @@ interface TransactionDetailsComponentProps {
   onShowSuccess?: (message: string) => void;
   /** Toast handler for error messages - if provided, uses parent's toast system */
   onShowError?: (message: string) => void;
+  /** Initial tab to display when opening TransactionDetails */
+  initialTab?: TransactionTab;
 }
 
 /**
@@ -58,14 +67,24 @@ interface TransactionDetailsComponentProps {
  * Shows full details of a single transaction
  */
 function TransactionDetails({
-  transaction,
+  transaction: transactionProp,
   onClose,
   onTransactionUpdated,
   isPendingReview = false,
   userId,
   onShowSuccess,
   onShowError,
+  initialTab = "overview",
 }: TransactionDetailsComponentProps) {
+  // Local state to track transaction - allows updates from edit modal
+  // without requiring parent to re-render
+  const [transaction, setTransaction] = useState(transactionProp);
+
+  // Sync with prop when parent updates (e.g., list refresh)
+  useEffect(() => {
+    setTransaction(transactionProp);
+  }, [transactionProp]);
+
   // Toast notifications - use props if provided, otherwise use local fallback
   const localToast = useToast();
   const showSuccess = onShowSuccess || localToast.showSuccess;
@@ -83,8 +102,8 @@ function TransactionDetails({
     updateSuggestedContacts,
   } = useTransactionDetails(transaction);
 
-  // Tab state hook
-  const { activeTab, setActiveTab } = useTransactionTabs();
+  // Tab state hook - use initialTab prop
+  const { activeTab, setActiveTab } = useTransactionTabs(initialTab);
 
   // Communications hook
   const {
@@ -125,47 +144,74 @@ function TransactionDetails({
   const { state: statusState, approve, reject, restore } = useTransactionStatusUpdate(userId);
   const { isApproving, isRejecting, isRestoring } = statusState;
 
-  // Filter emails only for Details tab (exclude SMS/iMessage)
+  // Filter emails only for Details tab
+  // Must explicitly check for 'email' to match the SQL count query
+  // which uses: communication_type = 'email'
   const emailCommunications = useMemo(() => {
     return communications.filter((comm) => {
       const channel = comm.channel || comm.communication_type;
-      // Exclude SMS and iMessage - only show emails
-      return channel !== 'sms' && channel !== 'imessage';
+      // Only include emails - exclude sms, imessage, text, and undefined
+      return channel === 'email';
     });
   }, [communications]);
 
+  // Note: conversation/message count for tabs now uses transaction.text_thread_count
+  // (stored count) instead of computing from dynamically loaded textMessages array.
+  // This ensures correct counts display even before data loads (BACKLOG-415).
+
   // Modal states
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
-  const [exportSuccess, setExportSuccess] = useState<string | null>(null);
-  const [showArchivePrompt, setShowArchivePrompt] = useState<boolean>(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
   const [showRejectReasonModal, setShowRejectReasonModal] = useState<boolean>(false);
   const [rejectReason, setRejectReason] = useState<string>("");
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
+  const [showEditContactsModal, setShowEditContactsModal] = useState<boolean>(false);
+  const [syncingCommunications, setSyncingCommunications] = useState<boolean>(false);
+  const [showSubmitModal, setShowSubmitModal] = useState<boolean>(false);
+
+  // Submit for Review hook (BACKLOG-391)
+  const isResubmit = transaction.submission_status === "needs_changes";
+  const {
+    isSubmitting,
+    progress: submitProgress,
+    error: submitError,
+    submit: handleSubmitForReview,
+    reset: resetSubmit,
+  } = useSubmitForReview({
+    transactionId: transaction.id,
+    isResubmit,
+    onSuccess: (submissionId) => {
+      showSuccess(`Transaction submitted successfully! ID: ${submissionId.slice(0, 8)}...`);
+      // Refresh transaction data
+      loadDetails();
+      onTransactionUpdated?.();
+    },
+    onError: (error) => {
+      showError(`Submission failed: ${error}`);
+    },
+  });
 
   // Check if transaction was rejected
   const isRejected = transaction.detection_status === "rejected";
 
   // Export handlers
-  const handleExportComplete = (result: unknown): void => {
-    const exportResult = result as { path?: string };
+  const handleExportComplete = async (_result: unknown): Promise<void> => {
     setShowExportModal(false);
-    setExportSuccess(exportResult.path || "Export completed successfully!");
-    setTimeout(() => setExportSuccess(null), 5000);
+    // The ExportModal now shows its own success screen (step 5) with buttons
+    // No need to show a separate success bar in TransactionDetails
 
-    if (transaction.status === "active") {
-      setShowArchivePrompt(true);
-    }
-  };
-
-  const handleArchive = async (): Promise<void> => {
+    // Refresh transaction data to reflect any date changes made during export
     try {
-      await window.api.transactions.update(transaction.id, { status: "closed" });
-      setShowArchivePrompt(false);
-      onTransactionUpdated?.();
+      const refreshed = await window.api.transactions.getDetails(transaction.id);
+      if (refreshed.success && refreshed.transaction) {
+        setTransaction(refreshed.transaction as Transaction);
+        loadDetails();
+        onTransactionUpdated?.();
+      }
     } catch (err) {
-      console.error("Failed to archive transaction:", err);
+      console.error("Failed to refresh transaction after export:", err);
     }
+    // Note: Close transaction prompt is now handled within ExportModal (step 4)
   };
 
   const handleDelete = async (): Promise<void> => {
@@ -264,9 +310,69 @@ function TransactionDetails({
     });
   }, [handleAcceptAll, resolvedSuggestions, suggestionCallbacks, setResolvedSuggestions]);
 
+  // Sync communications handler - fetches from provider and auto-links
+  // BACKLOG-457: Now fetches NEW emails from Gmail/Outlook, not just local DB
+  const handleSyncCommunications = useCallback(async () => {
+    setSyncingCommunications(true);
+    try {
+      // Cast to access syncAndFetchEmails - method is defined in preload but window.d.ts augmentation has issues with tsc
+      const result = await (window.api.transactions as typeof window.api.transactions & {
+        syncAndFetchEmails: (transactionId: string) => Promise<{
+          success: boolean;
+          provider?: "gmail" | "outlook";
+          emailsFetched?: number;
+          emailsStored?: number;
+          totalEmailsLinked?: number;
+          totalMessagesLinked?: number;
+          totalAlreadyLinked?: number;
+          totalErrors?: number;
+          error?: string;
+          message?: string;
+        }>;
+      }).syncAndFetchEmails(transaction.id);
+      if (result.success) {
+        const emailsFetched = result.emailsFetched || 0;
+        const emailsStored = result.emailsStored || 0;
+        const totalLinked = (result.totalEmailsLinked || 0) + (result.totalMessagesLinked || 0);
+
+        if (emailsStored > 0 || totalLinked > 0) {
+          const parts: string[] = [];
+          if (emailsStored > 0) {
+            parts.push(`${emailsStored} new email${emailsStored !== 1 ? "s" : ""} fetched`);
+          }
+          if (result.totalEmailsLinked && result.totalEmailsLinked > 0) {
+            parts.push(`${result.totalEmailsLinked} email${result.totalEmailsLinked !== 1 ? "s" : ""} linked`);
+          }
+          if (result.totalMessagesLinked && result.totalMessagesLinked > 0) {
+            parts.push(`${result.totalMessagesLinked} message thread${result.totalMessagesLinked !== 1 ? "s" : ""} linked`);
+          }
+          showSuccess(parts.join(", "));
+          // Refresh to show newly fetched/linked communications
+          loadDetails();
+          refreshMessages();
+        } else if (emailsFetched > 0 && emailsStored === 0) {
+          showSuccess(`Checked ${emailsFetched} emails - all already in database`);
+        } else if (result.totalAlreadyLinked && result.totalAlreadyLinked > 0) {
+          showSuccess(`All communications already linked (${result.totalAlreadyLinked} found)`);
+        } else if (result.message) {
+          showSuccess(result.message);
+        } else {
+          showSuccess("No new communications found");
+        }
+      } else {
+        showError(result.error || "Failed to sync communications");
+      }
+    } catch (err) {
+      console.error("Failed to sync communications:", err);
+      showError("Failed to sync communications. Please try again.");
+    } finally {
+      setSyncingCommunications(false);
+    }
+  }, [transaction.id, showSuccess, showError, loadDetails, refreshMessages]);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[70vh] max-h-[90vh] flex flex-col">
         {/* Header */}
         <TransactionHeader
           transaction={transaction}
@@ -275,6 +381,7 @@ function TransactionDetails({
           isApproving={isApproving}
           isRejecting={isRejecting}
           isRestoring={isRestoring}
+          isSubmitting={isSubmitting}
           onClose={onClose}
           onShowRejectReasonModal={() => setShowRejectReasonModal(true)}
           onShowEditModal={() => setShowEditModal(true)}
@@ -282,45 +389,66 @@ function TransactionDetails({
           onRestore={handleRestore}
           onShowExportModal={() => setShowExportModal(true)}
           onShowDeleteConfirm={() => setShowDeleteConfirm(true)}
+          onShowSubmitModal={() => setShowSubmitModal(true)}
         />
-
-        {/* Export Success Message */}
-        {exportSuccess && <ExportSuccessMessage message={exportSuccess} />}
 
         {/* Tabs */}
         <TransactionTabs
           activeTab={activeTab}
-          contactCount={contactAssignments.length}
-          messageCount={textMessages.length}
+          conversationCount={transaction.text_thread_count || 0}
+          emailCount={transaction.email_count || 0}
           attachmentCount={attachmentCount}
           onTabChange={setActiveTab}
         />
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          {activeTab === "details" && (
-            <TransactionDetailsTab
-              transaction={transaction}
-              communications={emailCommunications}
-              loading={loading}
-              unlinkingCommId={unlinkingCommId}
-              onViewEmail={setViewingEmail}
-              onShowUnlinkConfirm={setShowUnlinkConfirm}
+          {/* Review Notes Panel - shown when broker requests changes (BACKLOG-395) */}
+          {transaction.submission_status === "needs_changes" && transaction.last_review_notes && (
+            <ReviewNotesPanel
+              reviewNotes={transaction.last_review_notes}
+              onResubmit={() => {
+                // Will be handled by TransactionHeader submit button
+                // This is just a visual shortcut
+              }}
             />
           )}
 
-          {activeTab === "contacts" && (
-            <TransactionContactsTab
-              resolvedSuggestions={resolvedSuggestions}
+          {activeTab === "overview" && (
+            <TransactionDetailsTab
+              transaction={transaction}
               contactAssignments={contactAssignments}
               loading={loading}
+              onEditContacts={() => setShowEditContactsModal(true)}
+              resolvedSuggestions={resolvedSuggestions}
               processingContactId={processingContactId}
               processingAll={processingAll}
               onAcceptSuggestion={handleAcceptSuggestionWithCallbacks}
               onRejectSuggestion={handleRejectSuggestionWithCallbacks}
               onAcceptAll={handleAcceptAllWithCallbacks}
+              onSyncCommunications={handleSyncCommunications}
+              syncingCommunications={syncingCommunications}
             />
           )}
+
+          {activeTab === "emails" && (
+            <TransactionEmailsTab
+              communications={emailCommunications}
+              loading={loading}
+              unlinkingCommId={unlinkingCommId}
+              onViewEmail={setViewingEmail}
+              onShowUnlinkConfirm={setShowUnlinkConfirm}
+              onSyncCommunications={handleSyncCommunications}
+              syncingCommunications={syncingCommunications}
+              hasContacts={contactAssignments.length > 0}
+              userId={userId}
+              transactionId={transaction.id}
+              propertyAddress={transaction.property_address}
+              onEmailsChanged={loadDetails}
+              onShowSuccess={showSuccess}
+            />
+          )}
+
 
           {activeTab === "messages" && (
             <TransactionMessagesTab
@@ -333,6 +461,8 @@ function TransactionDetails({
               onMessagesChanged={refreshMessages}
               onShowSuccess={showSuccess}
               onShowError={showError}
+              auditStartDate={transaction.started_at}
+              auditEndDate={transaction.closed_at}
             />
           )}
 
@@ -353,14 +483,6 @@ function TransactionDetails({
           userId={transaction.user_id}
           onClose={() => setShowExportModal(false)}
           onExportComplete={handleExportComplete}
-        />
-      )}
-
-      {/* Archive Prompt */}
-      {showArchivePrompt && (
-        <ArchivePromptModal
-          onKeepActive={() => setShowArchivePrompt(false)}
-          onArchive={handleArchive}
         />
       )}
 
@@ -414,12 +536,70 @@ function TransactionDetails({
         <AuditTransactionModal
           userId={transaction.user_id}
           onClose={() => setShowEditModal(false)}
-          onSuccess={() => {
+          onSuccess={(updatedTransaction) => {
             setShowEditModal(false);
+            // Update local transaction state with fresh data from save
+            setTransaction(updatedTransaction);
             loadDetails();
             onTransactionUpdated?.();
           }}
           editTransaction={transaction}
+        />
+      )}
+
+      {/* Edit Contacts Modal - Direct access to contact assignment */}
+      {showEditContactsModal && (
+        <EditContactsModal
+          transaction={transaction}
+          onClose={() => setShowEditContactsModal(false)}
+          onSave={(autoLinkResults?: AutoLinkResult[]) => {
+            loadDetails();
+            onTransactionUpdated?.();
+            // TASK-1126: Show detailed toast with auto-link results
+            if (autoLinkResults && autoLinkResults.length > 0) {
+              const totalEmails = autoLinkResults.reduce(
+                (sum, r) => sum + r.emailsLinked,
+                0
+              );
+              const totalMessages = autoLinkResults.reduce(
+                (sum, r) => sum + r.messagesLinked,
+                0
+              );
+              if (totalEmails > 0 || totalMessages > 0) {
+                const parts: string[] = [];
+                if (totalEmails > 0) {
+                  parts.push(`${totalEmails} email${totalEmails !== 1 ? "s" : ""}`);
+                }
+                if (totalMessages > 0) {
+                  parts.push(
+                    `${totalMessages} message thread${totalMessages !== 1 ? "s" : ""}`
+                  );
+                }
+                showSuccess(`Contacts updated. Linked ${parts.join(" and ")}.`);
+              } else {
+                showSuccess("Contacts updated successfully");
+              }
+            } else {
+              showSuccess("Contacts updated successfully");
+            }
+          }}
+        />
+      )}
+
+      {/* Submit for Review Modal (BACKLOG-391) */}
+      {showSubmitModal && (
+        <SubmitForReviewModal
+          transaction={transaction}
+          messageCount={emailCommunications.length + textMessages.length}
+          attachmentCount={attachmentCount}
+          isSubmitting={isSubmitting}
+          progress={submitProgress}
+          error={submitError}
+          onCancel={() => {
+            setShowSubmitModal(false);
+            resetSubmit();
+          }}
+          onSubmit={handleSubmitForReview}
         />
       )}
 

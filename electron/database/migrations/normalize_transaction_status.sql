@@ -2,36 +2,36 @@
 -- Purpose: Normalize legacy transaction status values to canonical values
 --
 -- This migration ensures all existing status values conform to the
--- TransactionStatus enum: 'active', 'closed', 'archived'
+-- TransactionStatus enum: 'pending', 'active', 'closed', 'rejected'
 --
 -- Status Value Mapping:
 -- Legacy Value    ->  Canonical Value
 -- -----------------------------------------
 -- "completed"     ->  "closed"
--- "pending"       ->  "active"
 -- "open"          ->  "active"
 -- null/undefined  ->  "active"
 -- ""              ->  "active"
--- "cancelled"     ->  "archived"
+-- "cancelled"     ->  "closed"
+-- "archived"      ->  "closed"
 --
--- Note: The schema.sql already has CHECK (status IN ('active', 'closed', 'archived'))
+-- Note: The schema.sql has CHECK (status IN ('pending', 'active', 'closed', 'rejected'))
 -- This migration fixes existing data that predates the constraint.
 
 -- Step 1: Normalize 'completed' to 'closed'
 UPDATE transactions SET status = 'closed' WHERE status = 'completed';
 
--- Step 2: Normalize 'pending' to 'active'
-UPDATE transactions SET status = 'active' WHERE status = 'pending';
-
--- Step 3: Normalize 'open' to 'active'
+-- Step 2: Normalize 'open' to 'active'
 UPDATE transactions SET status = 'active' WHERE status = 'open';
 
--- Step 4: Normalize null or empty to 'active'
+-- Step 3: Normalize null or empty to 'active'
 UPDATE transactions SET status = 'active' WHERE status IS NULL OR status = '';
 
--- Step 5: Normalize 'cancelled' to 'archived'
-UPDATE transactions SET status = 'archived' WHERE status = 'cancelled';
+-- Step 4: Normalize 'cancelled' to 'closed'
+UPDATE transactions SET status = 'closed' WHERE status = 'cancelled';
+
+-- Step 5: Normalize 'archived' to 'closed' (archived was a legacy status)
+UPDATE transactions SET status = 'closed' WHERE status = 'archived';
 
 -- Verification query (run manually to verify):
 -- SELECT DISTINCT status, COUNT(*) as count FROM transactions GROUP BY status;
--- Should only show: active, closed, archived
+-- Should only show: pending, active, closed, rejected

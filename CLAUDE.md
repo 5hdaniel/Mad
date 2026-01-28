@@ -209,6 +209,40 @@ Do NOT move on to other work until the fix is merged. Unmerged fix branches beco
 git branch -d fix/<branch-name>
 ```
 
+### Orphan PR Prevention (MANDATORY)
+
+> **Incident Reference:** SPRINT-051/052 had 20+ PRs created but never merged, causing fixes to be "lost" and reimplemented multiple times.
+
+**Full lifecycle reference:** `.claude/docs/shared/pr-lifecycle.md`
+
+**The Rule:** A PR is NOT complete until MERGED. Creating a PR is step 3 of 4, not the final step.
+
+```
+1. CREATE   → Branch + commits pushed
+2. OPEN     → PR created
+3. APPROVE  → CI passes + review approved
+4. MERGE    → PR merged ← COMPLETION HAPPENS HERE
+```
+
+**After every PR merge, verify:**
+```bash
+gh pr view <PR-NUMBER> --json state --jq '.state'
+# Must show: MERGED (not OPEN, not CLOSED)
+```
+
+**Session-End Check (MANDATORY):**
+```bash
+# Before ending ANY session, check for orphaned PRs
+gh pr list --state open --author @me
+
+# If any approved PRs are open, MERGE THEM NOW
+```
+
+**Do NOT:**
+- Mark tasks complete before verifying merge
+- Move to next task before verifying merge
+- End session with approved-but-unmerged PRs
+
 ## Starting New Work
 
 ### Step 1: Create Feature Branch
@@ -257,7 +291,20 @@ Use conventional commits:
 - `chore:` - Maintenance tasks
 - `ci:` - CI/CD changes
 
-### Step 4: Push and Create PR
+### Step 4: Sync with Develop (MANDATORY before PR)
+
+```bash
+git fetch origin
+git merge origin/develop
+
+# If conflicts exist, resolve them MANUALLY (see .claude/docs/shared/git-branching.md)
+# NEVER use 'git checkout --theirs' blindly - it discards your branch's changes!
+
+npm run type-check
+npm test
+```
+
+### Step 5: Push and Create PR
 
 ```bash
 git push -u origin feature/your-feature-name
@@ -266,14 +313,14 @@ git push -u origin feature/your-feature-name
 gh pr create --base develop --title "feat: your feature" --body "Description..."
 ```
 
-### Step 5: Wait for CI
+### Step 6: Wait for CI
 
 Required checks:
 - Test & Lint (macOS/Windows, Node 18/20)
 - Security Audit
 - Build Application
 
-### Step 6: Merge
+### Step 7: Merge
 
 After CI passes, merge with traditional merge (not squash):
 
@@ -392,6 +439,7 @@ npx prebuild-install --runtime=electron --target=35.7.5 --arch=x64 --platform=wi
 
 | Topic | Location |
 |-------|----------|
+| **PR Lifecycle** | `.claude/docs/shared/pr-lifecycle.md` |
 | Plan-First Protocol | `.claude/docs/shared/plan-first-protocol.md` |
 | Metrics Templates | `.claude/docs/shared/metrics-templates.md` |
 | Architecture Guardrails | `.claude/docs/shared/architecture-guardrails.md` |
@@ -415,3 +463,16 @@ npx prebuild-install --runtime=electron --target=35.7.5 --arch=x64 --platform=wi
 | Bug fix | `develop` | Traditional |
 | Hotfix | `main` + `develop` | Traditional |
 | Release | `main` (from develop) | Traditional |
+
+### Investigation-First Sprints
+
+For bug fix sprints with unclear root causes:
+
+1. **Start with parallel investigation tasks** (read-only, no file modifications)
+2. **Review findings before implementation** - PM checkpoint after Phase 1
+3. **Defer tasks if investigation shows no bug exists** - Don't implement unnecessary fixes
+4. **Update backlog status immediately** - Change to `deferred` with reason
+
+**Reference:** SPRINT-061 saved ~17K tokens by deferring TASK-1406 after investigation found the "bug" was already fixed.
+
+**Full documentation:** `.claude/skills/agentic-pm/modules/sprint-management.md` → "Investigation-First Pattern"

@@ -14,6 +14,10 @@ coverage/
 out/
 dist-electron/
 
+# Broker Portal (Next.js)
+broker-portal/.next/
+broker-portal/.env.local
+
 # Logs
 *.log
 npm-debug.log*
@@ -36,7 +40,8 @@ Thumbs.db
 .env
 .env.local
 .env.development
-.env.production
+# Note: .env.production is NOT ignored - it only contains public/publishable values
+# and needs to be included in the packaged app
 
 # Project management (using Linear)
 linear-import.csv
@@ -50,3 +55,4 @@ resources/win/apple-drivers/*.msi
 # Temporary build files
 temp-itunes-extract/
 nul
+.claude/metrics/tokens.jsonl

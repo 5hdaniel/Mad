@@ -22,7 +22,8 @@ import auditService from "../services/auditService";
 import logService from "../services/logService";
 
 // Import validation utilities
-import { ValidationError, validateUserId, validateAuthCode } from "../utils/validation";
+import { ValidationError, validateAuthCode } from "../utils/validation";
+import { getValidUserId } from "../utils/userIdHelper";
 
 // Import constants
 import {
@@ -125,15 +126,14 @@ export async function handleGoogleLogin(
       "AuthHandlers"
     );
 
-    // Create a popup window for auth with webSecurity disabled to allow Google's scripts
+    // Create a popup window for auth
     const authWindow = new BrowserWindow({
       width: 500,
       height: 700,
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        webSecurity: false,
-        allowRunningInsecureContent: true,
+        // webSecurity defaults to true - do not disable
       },
       autoHideMenuBar: true,
       title: "Sign in with Google",
@@ -261,6 +261,12 @@ export async function handleGoogleLogin(
         // Exchange code for tokens
         const { tokens, userInfo } = await googleAuthService.exchangeCodeForTokens(code);
 
+        // BACKLOG-390: Sign in with Supabase Auth for RLS support
+        // This creates a Supabase session so auth.uid() works in RLS policies
+        if (tokens.id_token) {
+          await supabaseService.signInWithIdToken("google", tokens.id_token);
+        }
+
         // Sync user to Supabase
         const cloudUser = await supabaseService.syncUser({
           email: userInfo.email,
@@ -306,7 +312,9 @@ export async function handleGoogleLogin(
         const isNewUser = !localUser;
 
         if (!localUser) {
+          // TASK-1507G: Use Supabase Auth UUID as local user ID for unified IDs
           localUser = await databaseService.createUser({
+            id: cloudUser.id,
             email: userInfo.email,
             first_name: userInfo.given_name,
             last_name: userInfo.family_name,
@@ -323,6 +331,15 @@ export async function handleGoogleLogin(
 
         // Create session
         const sessionToken = await databaseService.createSession(localUser.id);
+
+        // Save session to disk for persistence across app restarts
+        await sessionService.saveSession({
+          user: localUser,
+          sessionToken,
+          provider: "google",
+          expiresAt: Date.now() + sessionService.getSessionExpirationMs(),
+          createdAt: Date.now(),
+        });
 
         // Determine subscription status
         const subscription = {
@@ -401,6 +418,11 @@ export async function handleGoogleCompleteLogin(
     const { tokens, userInfo } =
       await googleAuthService.exchangeCodeForTokens(validatedAuthCode);
 
+    // BACKLOG-390: Sign in with Supabase Auth for RLS support
+    if (tokens.id_token) {
+      await supabaseService.signInWithIdToken("google", tokens.id_token);
+    }
+
     // Session-only OAuth: no keychain encryption needed
     const accessToken = tokens.access_token;
     const refreshToken = tokens.refresh_token || null;
@@ -423,7 +445,9 @@ export async function handleGoogleCompleteLogin(
     );
 
     if (!localUser) {
+      // TASK-1507G: Use Supabase Auth UUID as local user ID for unified IDs
       localUser = await databaseService.createUser({
+        id: cloudUser.id,
         email: userInfo.email,
         first_name: userInfo.given_name,
         last_name: userInfo.family_name,
@@ -519,6 +543,15 @@ export async function handleGoogleCompleteLogin(
     // Create session
     const sessionToken = await databaseService.createSession(localUser.id);
 
+    // Save session to disk for persistence across app restarts
+    await sessionService.saveSession({
+      user: localUser,
+      sessionToken,
+      provider: "google",
+      expiresAt: Date.now() + sessionService.getSessionExpirationMs(),
+      createdAt: Date.now(),
+    });
+
     // Validate subscription
     const subscription = await supabaseService.validateSubscription(
       cloudUser.id
@@ -609,8 +642,14 @@ export async function handleGoogleConnectMailbox(
       "AuthHandlers"
     );
 
-    // Validate input
-    const validatedUserId = validateUserId(userId)!;
+    // BACKLOG-551: Validate user ID exists in local DB (handles Supabase auth.uid() mismatch)
+    const validatedUserId = await getValidUserId(userId, "GoogleAuth");
+    if (!validatedUserId) {
+      return {
+        success: false,
+        error: "No user found in database. Please log in first.",
+      };
+    }
 
     // Get user info to use as login hint
     const user = await databaseService.getUserById(validatedUserId);
@@ -632,8 +671,7 @@ export async function handleGoogleConnectMailbox(
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        webSecurity: false,
-        allowRunningInsecureContent: true,
+        // webSecurity defaults to true - do not disable
       },
       autoHideMenuBar: true,
       title: "Connect to Gmail",
@@ -754,7 +792,7 @@ export async function handleGoogleConnectMailbox(
         );
 
         // Save mailbox token
-        await databaseService.saveOAuthToken(userId, "google", "mailbox", {
+        await databaseService.saveOAuthToken(validatedUserId, "google", "mailbox", {
           access_token: accessToken,
           refresh_token: refreshToken ?? undefined,
           token_expires_at: tokens.expires_at ?? undefined,
@@ -768,12 +806,12 @@ export async function handleGoogleConnectMailbox(
         await logService.info(
           "Google mailbox connection completed",
           "AuthHandlers",
-          { userId, email: userInfo.email }
+          { userId: validatedUserId, email: userInfo.email }
         );
 
         // Audit log
         await auditService.log({
-          userId,
+          userId: validatedUserId,
           action: "MAILBOX_CONNECT",
           resourceType: "MAILBOX",
           metadata: { provider: "google", email: userInfo.email },
@@ -792,13 +830,13 @@ export async function handleGoogleConnectMailbox(
           "Google mailbox connection failed",
           "AuthHandlers",
           {
-            userId,
+            userId: validatedUserId,
             error: error instanceof Error ? error.message : "Unknown error",
           }
         );
 
         await auditService.log({
-          userId,
+          userId: validatedUserId,
           action: "MAILBOX_CONNECT",
           resourceType: "MAILBOX",
           metadata: { provider: "google" },
@@ -867,8 +905,7 @@ export async function handleGoogleConnectMailboxPending(
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        webSecurity: false,
-        allowRunningInsecureContent: true,
+        // webSecurity defaults to true - do not disable
       },
       autoHideMenuBar: true,
       title: "Connect to Gmail",

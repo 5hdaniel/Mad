@@ -46,21 +46,34 @@ Read the full task file before starting.
 6. Run all CI checks locally
 7. Open PR targeting `<branch>` with Agent ID noted
 8. Have senior-engineer-pr-lead agent review the PR
+9. **After SR approval, MERGE the PR** (`gh pr merge <PR> --merge`)
+10. **Verify merge succeeded** (`gh pr view <PR> --json state` must show `MERGED`)
+
+**CRITICAL:** Creating a PR is step 7 of 10, not the final step. Task is NOT complete until PR is MERGED.
+
+**PR Lifecycle Reference:** `.claude/docs/shared/pr-lifecycle.md`
 
 ## Completion Reporting (REQUIRED)
 
-After your task is complete and PR is merged, report:
+**After PR is MERGED (not just approved)**, report:
 
 ```
 ## Task Completion Report: TASK-XXX
 
 **Status:** Complete
 **PR:** #<number>
+**Merge Verified:** Yes (state: MERGED)
 **Engineer Agent ID:** <your_agent_id>
+
+### Merge Verification
+```bash
+gh pr view <PR-NUMBER> --json state --jq '.state'
+# Output: MERGED
+```
 
 ### Metrics (Auto-Captured)
 
-Run: `grep "<your_agent_id>" .claude/metrics/tokens.jsonl | jq '.'`
+Run: `grep "<your_agent_id>" .claude/metrics/tokens.csv`
 
 | Metric | Value |
 |--------|-------|
@@ -72,6 +85,8 @@ Run: `grep "<your_agent_id>" .claude/metrics/tokens.jsonl | jq '.'`
 (if significantly different from estimate of ~<X>K tokens)
 <explanation>
 ```
+
+**Do NOT report task complete until you have verified the merge state shows `MERGED`.**
 
 Metrics are auto-captured via SubagentStop hook. The PM will lookup metrics using your Agent ID.
 

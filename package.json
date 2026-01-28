@@ -1,21 +1,28 @@
 {
   "name": "magic-audit",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "description": "Magic Audit - Export and archive iMessage conversations and emails",
   "main": "electron/main.js",
   "engines": {
     "node": ">=20.0.0"
   },
+  "workspaces": [
+    "broker-portal"
+  ],
   "scripts": {
-    "start": "npm run build:preload && npm run build:electron && concurrently \"npm run dev:react\" \"npm run dev:electron\" \"npm run watch:electron\"",
+    "portal:dev": "npm run dev -w broker-portal",
+    "portal:build": "npm run build -w broker-portal",
+    "portal:lint": "npm run lint -w broker-portal",
+    "start": "npm run build:electron && npm run build:preload:dev && concurrently \"npm run dev:react\" \"npm run dev:electron\" \"npm run watch:electron\" \"npm run watch:preload\"",
     "predev": "node scripts/rebuild-native.js",
-    "dev": "npm run build:preload && npm run build:electron && concurrently \"npm run dev:react\" \"npm run dev:electron\" \"npm run watch:electron\"",
+    "dev": "npm run build:electron && npm run build:preload:dev && concurrently \"npm run dev:react\" \"npm run dev:electron\" \"npm run watch:electron\" \"npm run watch:preload\"",
     "dev:react": "vite",
     "dev:electron": "wait-on http://localhost:5173 && electron .",
     "watch:electron": "tsc -p tsconfig.electron.json --watch",
-    "build:preload": "esbuild electron/preload.ts --bundle --platform=node --outfile=electron/preload.js --external:electron",
-    "watch:preload": "esbuild electron/preload.ts --bundle --platform=node --outfile=electron/preload.js --external:electron --watch",
-    "build": "npm run build:preload && npm run build:react && npm run build:electron",
+    "build:preload": "esbuild electron/preload.ts --bundle --platform=node --outfile=dist-electron/preload.js --external:electron --define:__DEV__=false --minify",
+    "build:preload:dev": "esbuild electron/preload.ts --bundle --platform=node --outfile=dist-electron/preload.js --external:electron --define:__DEV__=true",
+    "watch:preload": "esbuild electron/preload.ts --bundle --platform=node --outfile=dist-electron/preload.js --external:electron --define:__DEV__=true --watch",
+    "build": "npm run build:react && npm run build:electron && npm run build:preload",
     "build:react": "vite build",
     "build:electron": "tsc -p tsconfig.electron.json && npm run copy:database",
     "copy:database": "node scripts/copy-database.js",
@@ -36,7 +43,8 @@
     "type-check:watch": "tsc --noEmit --watch",
     "deps:check": "depcheck",
     "deps:check-ci": "depcheck --json | node -e \"const d=JSON.parse(require('fs').readFileSync(0,'utf-8')); if(d.dependencies.length||d.missing&&Object.keys(d.missing).length){console.error('Unused or missing deps found'); process.exit(1)}\"",
-    "prepare": "husky"
+    "prepare": "husky",
+    "prestart": "node scripts/rebuild-native.js"
   },
   "keywords": [
     "electron",
@@ -62,6 +70,7 @@
     "@types/cli-progress": "^3.11.6",
     "@types/dompurify": "^3.0.5",
     "@types/jest": "^29.5.14",
+    "@types/mime-types": "^3.0.1",
     "@types/node": "^22.19.1",
     "@types/react": "^19.2.6",
     "@types/react-dom": "^19.2.3",
@@ -111,7 +120,10 @@
     "googleapis": "^128.0.0",
     "imessage-parser": "^0.1.0",
     "isomorphic-fetch": "^3.0.0",
+    "mime-types": "^3.0.2",
+    "node-machine-id": "^1.1.12",
     "openai": "^6.14.0",
+    "pdf-lib": "^1.17.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-joyride": "^2.9.2",
@@ -121,6 +133,14 @@
   "build": {
     "appId": "com.realestate.archiveapp",
     "productName": "MagicAudit",
+    "protocols": [
+      {
+        "name": "Magic Audit",
+        "schemes": [
+          "magicaudit"
+        ]
+      }
+    ],
     "publish": {
       "provider": "github",
       "owner": "5hdaniel",
@@ -180,6 +200,7 @@
     "afterSign": "scripts/notarize.js",
     "files": [
       "dist/**/*",
+      "dist-electron/**/*",
       "electron/**/*"
     ],
     "directories": {
@@ -192,7 +213,11 @@
         "filter": [
           "**/*"
         ]
-      }
+      },
+      ".env.production"
     ]
+  },
+  "overrides": {
+    "diff": ">=8.0.3"
   }
 }

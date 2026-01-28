@@ -29,11 +29,14 @@ All sprint tasks require metrics tracking for:
 
 **How to access:**
 ```bash
-# View all metrics
-cat .claude/metrics/tokens.jsonl | jq '.'
+# View metrics summary
+python .claude/skills/log-metrics/log_metrics.py --summary
+
+# View CSV directly
+cat .claude/metrics/tokens.csv
 
 # Find specific agent's data
-grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'
+grep "<agent_id>" .claude/metrics/tokens.csv
 ```
 
 ---
@@ -95,7 +98,7 @@ Engineer Agent ID: <agent_id from Task tool output>
 
 ### Metrics (Auto-Captured)
 
-**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'`
+**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.csv`
 
 | Metric | Value |
 |--------|-------|
@@ -125,7 +128,7 @@ SR Engineer Agent ID: <agent_id from Task tool output>
 
 ### Metrics (Auto-Captured)
 
-**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'`
+**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.csv`
 
 | Metric | Value |
 |--------|-------|
@@ -239,9 +242,12 @@ Previously used:
 This was inaccurate (observed ~100x variance) and replaced by auto-captured metrics.
 </details>
 
-<details>
-<summary>Legacy: Phase Breakdown (Deprecated)</summary>
+### Phase Breakdown (Optional)
 
-Previously tracked Planning/Implementation/Debugging phases separately.
-Auto-captured metrics provide total only; phase breakdown is no longer required.
-</details>
+Track turns and tokens per phase for visibility into where effort is spent:
+
+| Phase | Turns | Tokens | Notes |
+|-------|-------|--------|-------|
+| Planning | X | ~XK | |
+| Implementation | X | ~XK | |
+| Testing | X | ~XK | |

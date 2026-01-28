@@ -15,6 +15,7 @@ import type { MessageInput } from '../extraction/types';
 import type { Message } from '../../types';
 import logService from '../logService';
 import databaseService from '../databaseService';
+import { contentSanitizer } from './contentSanitizer';
 
 // ============================================================================
 // Types
@@ -231,9 +232,10 @@ export function createBatches(
 
 /**
  * Format a batch of emails into an LLM prompt.
+ * TASK-1075: All content is sanitized to mask PII before sending to LLM.
  *
  * @param batch - Batch of emails to format
- * @returns Formatted prompt string
+ * @returns Formatted prompt string with PII masked
  */
 export function formatBatchPrompt(batch: EmailBatch): string {
   const lines: string[] = [];
@@ -251,13 +253,23 @@ export function formatBatchPrompt(batch: EmailBatch): string {
   lines.push(``);
 
   batch.emails.forEach((email, index) => {
+    // TASK-1075: Sanitize all email content to mask PII before sending to LLM
+    const sanitizedSubject = contentSanitizer.sanitize(email.subject || '').sanitizedContent;
+    const sanitizedSender = contentSanitizer.sanitize(email.sender || '').sanitizedContent;
+    const sanitizedRecipients = email.recipients.map(
+      (r) => contentSanitizer.sanitize(r).sanitizedContent
+    );
+    const sanitizedBody = contentSanitizer.sanitize(
+      (email.body || '').substring(0, MAX_BODY_PREVIEW)
+    ).sanitizedContent;
+
     lines.push(`--- EMAIL ${index + 1} (ID: ${email.id}) ---`);
-    lines.push(`Subject: ${email.subject || '(no subject)'}`);
-    lines.push(`From: ${email.sender || 'unknown'}`);
-    lines.push(`To: ${email.recipients.join(', ') || 'unknown'}`);
+    lines.push(`Subject: ${sanitizedSubject || '(no subject)'}`);
+    lines.push(`From: ${sanitizedSender || 'unknown'}`);
+    lines.push(`To: ${sanitizedRecipients.join(', ') || 'unknown'}`);
     lines.push(`Date: ${email.date || 'unknown'}`);
     lines.push(`Body:`);
-    lines.push((email.body || '').substring(0, MAX_BODY_PREVIEW));
+    lines.push(sanitizedBody);
     lines.push(``);
   });
 

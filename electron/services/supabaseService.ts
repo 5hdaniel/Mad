@@ -9,9 +9,6 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { User, SubscriptionTier, Subscription } from "../types/models";
 import type { AuditLogEntry } from "./auditService";
 import logService from "./logService";
-import * as dotenv from "dotenv";
-
-dotenv.config({ path: ".env.development" });
 
 /**
  * User data for sync operations
@@ -79,12 +76,28 @@ interface TierLimits {
   enterprise: number;
 }
 
+/**
+ * Supabase Auth Session (BACKLOG-390)
+ * Stores the current authenticated session for RLS
+ */
+interface SupabaseAuthSession {
+  userId: string;
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt?: Date;
+}
+
 class SupabaseService {
   private client: SupabaseClient | null = null;
   private initialized = false;
+  /** BACKLOG-390: Store Supabase Auth session for RLS-enabled queries */
+  private authSession: SupabaseAuthSession | null = null;
 
   /**
    * Initialize Supabase client
+   * Uses SUPABASE_ANON_KEY (public/publishable key) for client operations.
+   * This is safe to include in packaged builds as it's meant for public use.
+   * RLS policies provide security at the database level.
    */
   initialize(): void {
     if (this.initialized) {
@@ -92,11 +105,13 @@ class SupabaseService {
     }
 
     const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_KEY; // Using service_role for now
+    // Use anon key (public/publishable) - safe for packaged builds
+    // Falls back to service key for backward compatibility during development
+    const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
       logService.error(
-        "[Supabase] Missing credentials. Check .env.development file.",
+        "[Supabase] Missing credentials. Check .env.development or .env.production file.",
         "Supabase"
       );
       throw new Error("Supabase credentials not configured");
@@ -113,6 +128,184 @@ class SupabaseService {
 
     this.initialized = true;
     logService.debug("[Supabase] Initialized successfully", "Supabase");
+  }
+
+  // ============================================
+  // SUPABASE AUTH (BACKLOG-390: B2B Portal)
+  // ============================================
+
+  /**
+   * Sign in with ID token from direct OAuth (Google/Microsoft)
+   *
+   * BACKLOG-390: After existing OAuth completes, call this to create a Supabase
+   * Auth session so RLS policies work correctly with auth.uid().
+   *
+   * This method is "additive" - it doesn't change the existing OAuth flow,
+   * just tells Supabase about the authenticated user.
+   *
+   * @param provider - OAuth provider ('google' or 'azure' for Microsoft)
+   * @param idToken - The ID token from the OAuth flow
+   * @returns Session info or null if auth failed (graceful fallback)
+   */
+  async signInWithIdToken(
+    provider: "google" | "azure",
+    idToken: string
+  ): Promise<SupabaseAuthSession | null> {
+    const client = this._ensureClient();
+
+    try {
+      logService.info(
+        `[Supabase] Signing in with ID token (provider: ${provider})`,
+        "Supabase"
+      );
+
+      const { data, error } = await client.auth.signInWithIdToken({
+        provider,
+        token: idToken,
+      });
+
+      if (error) {
+        // Log but don't throw - graceful fallback to service key
+        logService.warn(
+          `[Supabase] signInWithIdToken failed: ${error.message}`,
+          "Supabase",
+          { provider, error: error.message }
+        );
+        return null;
+      }
+
+      if (!data.session || !data.user) {
+        logService.warn(
+          "[Supabase] signInWithIdToken returned no session/user",
+          "Supabase"
+        );
+        return null;
+      }
+
+      // Store session for RLS queries
+      this.authSession = {
+        userId: data.user.id,
+        accessToken: data.session.access_token,
+        refreshToken: data.session.refresh_token,
+        expiresAt: data.session.expires_at
+          ? new Date(data.session.expires_at * 1000)
+          : undefined,
+      };
+
+      logService.info(
+        "[Supabase] Successfully signed in with ID token",
+        "Supabase",
+        { userId: data.user.id, provider }
+      );
+
+      return this.authSession;
+    } catch (error) {
+      // Graceful fallback - log warning and continue with service key
+      logService.warn(
+        "[Supabase] signInWithIdToken exception (falling back to service key)",
+        "Supabase",
+        { error: error instanceof Error ? error.message : "Unknown error" }
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Sign out from Supabase Auth
+   * Clears the auth session (service key still works for admin operations)
+   */
+  async signOut(): Promise<void> {
+    const client = this._ensureClient();
+
+    try {
+      const { error } = await client.auth.signOut();
+      if (error) {
+        logService.warn(
+          `[Supabase] signOut failed: ${error.message}`,
+          "Supabase"
+        );
+      }
+      this.authSession = null;
+      logService.info("[Supabase] Signed out from Supabase Auth", "Supabase");
+    } catch (error) {
+      this.authSession = null;
+      logService.warn("[Supabase] signOut exception", "Supabase", {
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  /**
+   * Get current Supabase Auth session
+   * @returns The auth session or null if not authenticated
+   */
+  getAuthSession(): SupabaseAuthSession | null {
+    return this.authSession;
+  }
+
+  /**
+   * Get current authenticated user ID from Supabase Auth
+   * @returns User UUID or null if not authenticated
+   */
+  getAuthUserId(): string | null {
+    return this.authSession?.userId ?? null;
+  }
+
+  /**
+   * Check if authenticated with Supabase Auth (not just service key)
+   * @returns true if signed in with user credentials
+   */
+  isAuthenticated(): boolean {
+    return this.authSession !== null;
+  }
+
+  /**
+   * Get active organization membership for a user
+   * Used to determine team license status
+   * @param userId - User UUID to check
+   * @returns Organization membership data or null if not a team member
+   */
+  async getActiveOrganizationMembership(
+    userId: string
+  ): Promise<{ organization_id: string; organization_name?: string } | null> {
+    try {
+      const client = this._ensureClient();
+      const { data, error } = await client
+        .from("organization_members")
+        .select("organization_id, organizations(name)")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (error) {
+        logService.warn(
+          `[Supabase] Failed to get org membership: ${error.message}`,
+          "SupabaseService"
+        );
+        return null;
+      }
+
+      if (!data) {
+        return null;
+      }
+
+      return {
+        organization_id: data.organization_id,
+        organization_name: (data.organizations as { name?: string } | null)?.name,
+      };
+    } catch (err) {
+      logService.error("[Supabase] Error checking org membership", "SupabaseService", { err });
+      return null;
+    }
+  }
+
+  /**
+   * Get the Supabase client (public access for storage service)
+   * BACKLOG-393: Needed by supabaseStorageService for file uploads
+   * @returns Initialized Supabase client
+   * @throws {Error} If client cannot be initialized
+   */
+  getClient(): SupabaseClient {
+    return this._ensureClient();
   }
 
   /**
@@ -143,17 +336,52 @@ class SupabaseService {
     const client = this._ensureClient();
 
     try {
-      // Check if user exists
-      const { data: existingUser, error: fetchError } = await client
+      // BACKLOG-551: Get auth.uid() to use as canonical user ID
+      const { data: sessionData } = await client.auth.getSession();
+      const authUserId = sessionData?.session?.user?.id;
+      if (!authUserId) {
+        throw new Error("No authenticated session - cannot sync user");
+      }
+
+      // First check if user exists by auth.uid() (canonical ID)
+      let existingUser: User | null = null;
+      const { data: userById, error: byIdError } = await client
         .from("users")
         .select("*")
-        .eq("oauth_provider", userData.oauth_provider)
-        .eq("oauth_id", userData.oauth_id)
+        .eq("id", authUserId)
         .single();
 
-      if (fetchError && fetchError.code !== "PGRST116") {
-        // PGRST116 = not found, which is OK
-        throw fetchError;
+      if (!byIdError) {
+        existingUser = userById as User;
+      } else if (byIdError.code !== "PGRST116") {
+        throw byIdError;
+      }
+
+      // If not found by ID, check by oauth_provider/oauth_id (legacy lookup)
+      if (!existingUser) {
+        const { data: userByOAuth, error: fetchError } = await client
+          .from("users")
+          .select("*")
+          .eq("oauth_provider", userData.oauth_provider)
+          .eq("oauth_id", userData.oauth_id)
+          .single();
+
+        if (fetchError && fetchError.code !== "PGRST116") {
+          throw fetchError;
+        }
+
+        if (userByOAuth) {
+          // Found user with wrong ID - needs migration
+          existingUser = userByOAuth as User;
+          if (existingUser.id !== authUserId) {
+            logService.info("[Supabase] User ID mismatch detected, will migrate", "Supabase", {
+              oldId: existingUser.id.substring(0, 8) + "...",
+              newId: authUserId.substring(0, 8) + "...",
+            });
+            // Migration: Create new user with correct ID, then delete old
+            existingUser = await this._migrateUserToAuthId(existingUser, authUserId);
+          }
+        }
       }
 
       let result: User;
@@ -188,10 +416,11 @@ class SupabaseService {
         result = data as User;
         logService.info("[Supabase] User updated:", "Supabase", { userId: result.id });
       } else {
-        // Create new user
+        // BACKLOG-551: Create new user with auth.uid() as canonical ID
         const { data, error } = await client
           .from("users")
           .insert({
+            id: authUserId, // Use auth.uid() as canonical ID
             email: userData.email,
             first_name: userData.first_name,
             last_name: userData.last_name,
@@ -219,6 +448,95 @@ class SupabaseService {
       return result;
     } catch (error) {
       logService.error("[Supabase] Failed to sync user:", "Supabase", { error });
+      throw error;
+    }
+  }
+
+  /**
+   * BACKLOG-551: Migrate user from old auto-generated ID to auth.uid()
+   * This handles the case where a user was created with a random UUID
+   * instead of the canonical auth.uid().
+   *
+   * @param oldUser - User with wrong ID
+   * @param authUserId - The correct auth.uid() to migrate to
+   * @returns Migrated user with correct ID
+   */
+  private async _migrateUserToAuthId(oldUser: User, authUserId: string): Promise<User> {
+    const client = this._ensureClient();
+
+    try {
+      logService.info("[Supabase] Migrating user to auth.uid()", "Supabase", {
+        oldId: oldUser.id.substring(0, 8) + "...",
+        newId: authUserId.substring(0, 8) + "...",
+      });
+
+      // 1. Create new user record with correct ID
+      const { data: newUser, error: insertError } = await client
+        .from("users")
+        .insert({
+          id: authUserId,
+          email: oldUser.email,
+          first_name: oldUser.first_name,
+          last_name: oldUser.last_name,
+          display_name: oldUser.display_name,
+          avatar_url: oldUser.avatar_url,
+          oauth_provider: oldUser.oauth_provider,
+          oauth_id: oldUser.oauth_id,
+          subscription_tier: oldUser.subscription_tier,
+          subscription_status: oldUser.subscription_status,
+          trial_ends_at: oldUser.trial_ends_at,
+          terms_accepted_at: oldUser.terms_accepted_at,
+          terms_version_accepted: oldUser.terms_version_accepted,
+          privacy_policy_accepted_at: oldUser.privacy_policy_accepted_at,
+          privacy_policy_version_accepted: oldUser.privacy_policy_version_accepted,
+          email_onboarding_completed_at: oldUser.email_onboarding_completed_at,
+          login_count: (oldUser as unknown as Record<string, unknown>).login_count as number || 0,
+          last_login_at: new Date().toISOString(),
+          signup_source: (oldUser as unknown as Record<string, unknown>).signup_source as string || "desktop_app",
+          created_at: oldUser.created_at,
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        throw insertError;
+      }
+
+      // 2. Update FK references in child tables
+      // Note: These updates may fail if user has no records in these tables,
+      // which is OK - we just need to update what exists
+      const tablesToUpdate = ["devices", "user_licenses", "api_usage", "analytics_events"];
+      for (const table of tablesToUpdate) {
+        try {
+          await client
+            .from(table)
+            .update({ user_id: authUserId })
+            .eq("user_id", oldUser.id);
+        } catch {
+          // Table may not have records for this user - that's OK
+        }
+      }
+
+      // 3. Delete old user record
+      const { error: deleteError } = await client
+        .from("users")
+        .delete()
+        .eq("id", oldUser.id);
+
+      if (deleteError) {
+        logService.warn("[Supabase] Failed to delete old user record", "Supabase", {
+          error: deleteError.message,
+        });
+        // Don't throw - migration succeeded even if cleanup failed
+      }
+
+      logService.info("[Supabase] User migration complete", "Supabase", {
+        newId: authUserId.substring(0, 8) + "...",
+      });
+
+      return newUser as User;
+    } catch (error) {
+      logService.error("[Supabase] User migration failed", "Supabase", { error });
       throw error;
     }
   }
@@ -381,11 +699,17 @@ class SupabaseService {
     const client = this._ensureClient();
 
     try {
+      // TASK-1507G: Use auth.uid() for RLS compliance
+      // The devices table RLS requires user_id = auth.uid()
+      // The passed userId may be from public.users which has a different ID
+      const { data: sessionData } = await client.auth.getSession();
+      const authUserId = sessionData?.session?.user?.id || userId;
+
       // Check if device already registered
       const { data: existing, error: fetchError } = await client
         .from("devices")
         .select("*")
-        .eq("user_id", userId)
+        .eq("user_id", authUserId)
         .eq("device_id", deviceInfo.device_id)
         .single();
 
@@ -415,7 +739,7 @@ class SupabaseService {
         const { data, error } = await client
           .from("devices")
           .insert({
-            user_id: userId,
+            user_id: authUserId,  // Use auth.uid() for RLS compliance
             device_id: deviceInfo.device_id,
             device_name: deviceInfo.device_name,
             os: deviceInfo.os,

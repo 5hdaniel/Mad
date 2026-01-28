@@ -1,37 +1,69 @@
 # Engineer Workflow Checklist
 
-**MANDATORY**: Follow these steps for every task. SR Engineer will verify completion before approving PR.
+**MANDATORY**: Follow these steps for every task. Each agent step requires recording the Agent ID for metrics collection.
 
 ---
 
-## Quick Reference
+## Quick Reference: 5-Step Task Cycle
 
 ```
-1. BRANCH   → Create from develop
-2. PLAN     → Invoke Plan agent (MANDATORY)
-3. AGENT_ID → Record immediately (for auto-captured metrics)
-4. IMPLEMENT → Do the work
-5. SUMMARIZE → Complete task file Implementation Summary
-6. PR       → Create when ready for review
-7. SR REVIEW → Wait for SR Engineer
-8. PM       → SR passes to PM for next task
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  STEP 1: PLAN        → Plan Agent creates implementation plan               │
+│                         📋 Record: Plan Agent ID                            │
+│                                                                             │
+│  STEP 2: SR REVIEW   → SR Engineer reviews and approves plan                │
+│                         📋 Record: SR Engineer Agent ID                     │
+│                                                                             │
+│  STEP 3: USER REVIEW → User reviews and approves plan                       │
+│                         ⏸️  GATE: Wait for user approval                    │
+│                                                                             │
+│  STEP 4: COMPACT     → Context reset before implementation                  │
+│                         🔄 Fresh context for clean implementation           │
+│                                                                             │
+│  STEP 5: IMPLEMENT   → Engineer implements approved plan                    │
+│                         📋 Record: Engineer Agent ID                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**CRITICAL:**
+- Each agent invocation MUST record its Agent ID immediately
+- NO implementation before Steps 1-3 complete
+- User approval is a BLOCKING gate
+
+---
+
+## Agent ID Tracking Table (Per Task)
+
+**Copy this to your task file and fill in as you progress:**
+
+| Step | Agent Type | Agent ID | Tokens | Status |
+|------|------------|----------|--------|--------|
+| 1. Plan | Plan Agent | ___________ | ___K | ☐ |
+| 2. SR Review | SR Engineer Agent | ___________ | ___K | ☐ |
+| 3. User Review | (No agent) | N/A | N/A | ☐ |
+| 4. Compact | (Context reset) | N/A | N/A | ☐ |
+| 5. Implement | Engineer Agent | ___________ | ___K | ☐ |
+
+**After task completion, collect metrics:**
+```bash
+grep "<plan_agent_id>" .claude/metrics/tokens.csv
+grep "<sr_engineer_agent_id>" .claude/metrics/tokens.csv
+grep "<engineer_agent_id>" .claude/metrics/tokens.csv
 ```
 
 ---
 
-## Step 1: Create Branch
+## Pre-Work: Create Branch
 
-**Before writing any code:**
+**Before starting the 5-step cycle:**
 
 ```bash
-# Always start from develop
-git checkout develop
-git pull origin develop
+# Always start from the sprint branch (or develop)
+git checkout project/licensing-and-auth-flow  # or develop
+git pull origin project/licensing-and-auth-flow
 
 # Create feature branch with task ID
-git checkout -b fix/task-XXX-description
-# or: feature/task-XXX-description
-# or: claude/task-XXX-description
+git checkout -b feature/task-XXX-description
 ```
 
 **Naming Convention:**
@@ -41,119 +73,182 @@ git checkout -b fix/task-XXX-description
 
 ---
 
-## Step 2: Plan-First Protocol (MANDATORY)
+## Step 1: PLAN (Plan Agent)
 
-**Full reference:** `.claude/docs/shared/plan-first-protocol.md`
+**Purpose:** Create a detailed implementation plan before any code is written.
 
-**Before ANY implementation**, invoke the Plan agent to create an implementation plan.
+**Who:** Plan Agent (invoke via Task tool with `subagent_type="Plan"`)
 
-**Quick Steps:**
-1. Invoke Plan agent with task context
-2. Review plan for feasibility
-3. Only proceed after plan is approved
+**Actions:**
+1. Read the task file (`.claude/plans/tasks/TASK-XXX.md`)
+2. Explore relevant codebase files
+3. Identify all files to modify/create
+4. Create step-by-step implementation plan
+5. Document any risks or concerns
 
-**BLOCKING**: Do NOT start implementation until you have an approved plan.
+**Deliverable:** Implementation plan written to task file or separate plan file
 
----
-
-## Step 3: Prepare for Metrics Capture
-
-**IMPORTANT:** Metrics are now auto-captured via SubagentStop hook.
-
-Your only responsibility:
-1. **Record your agent_id immediately** when the Task tool returns
-2. After completion, retrieve metrics using the grep command
-
-```bash
-# After agent completes, find your metrics:
-grep "<your_agent_id>" .claude/metrics/tokens.jsonl | jq '.'
+**IMMEDIATELY RECORD:**
+```
+Plan Agent ID: <agent_id from Task tool output>
 ```
 
-The hook automatically captures:
-- Total tokens (input + output + cache)
-- Duration (seconds)
-- API calls
+**Exit Criteria:**
+- [ ] Plan covers all acceptance criteria
+- [ ] Files to modify are identified
+- [ ] Risks are documented
+- [ ] Plan Agent ID recorded
 
 ---
 
-## Step 4: Implement the Task
+## Step 2: SR REVIEW (SR Engineer Agent)
 
-1. Read the task file (`.claude/plans/tasks/TASK-XXX.md`)
-2. Understand requirements and acceptance criteria
-3. Implement the solution following your approved plan
-4. Run tests locally: `npm test`
-5. Run type check: `npm run type-check`
-6. Run lint: `npm run lint`
+**Purpose:** Technical validation of the plan before user review.
+
+**Who:** SR Engineer Agent (invoke via Task tool with `subagent_type="senior-engineer-pr-lead"`)
+
+**Actions:**
+1. Review the implementation plan from Step 1
+2. Validate architectural approach
+3. Check for security concerns
+4. Verify plan aligns with codebase patterns
+5. Approve or request changes
+
+**IMMEDIATELY RECORD:**
+```
+SR Engineer Agent ID: <agent_id from Task tool output>
+```
+
+**Exit Criteria:**
+- [ ] Plan technically validated
+- [ ] No architectural concerns
+- [ ] SR Engineer Agent ID recorded
+- [ ] SR approval documented
+
+---
+
+## Step 3: USER REVIEW (Blocking Gate)
+
+**Purpose:** User approves the plan before any implementation begins.
+
+**Who:** User (human)
+
+**Actions:**
+1. Present plan to user
+2. Explain approach and any tradeoffs
+3. Answer user questions
+4. Get explicit approval
+
+**⚠️ BLOCKING GATE:**
+- Do NOT proceed to Step 4 without user approval
+- If user requests changes, go back to Step 1
+
+**Exit Criteria:**
+- [ ] User has reviewed the plan
+- [ ] User has explicitly approved
+- [ ] Any user feedback incorporated
+
+---
+
+## Step 4: COMPACT (Context Reset)
+
+**Purpose:** Reset context for clean implementation with fresh token budget.
+
+**Who:** System (user triggers `/compact` or starts new session)
+
+**Actions:**
+1. User runs `/compact` command OR
+2. User starts a new Claude session
+3. Implementation begins with fresh context
+
+**Why Compact?**
+- Planning and review consume tokens
+- Fresh context = more tokens for implementation
+- Reduces confusion from planning exploration
+
+**Exit Criteria:**
+- [ ] Context compacted or new session started
+- [ ] Ready for implementation
+
+---
+
+## Step 5: IMPLEMENT (Engineer Agent)
+
+**Purpose:** Execute the approved plan.
+
+**Who:** Engineer Agent (invoke via Task tool with `subagent_type="engineer"`)
+
+**Actions:**
+1. Read the approved plan
+2. Implement exactly as specified
+3. Run tests: `npm test`
+4. Run type check: `npm run type-check`
+5. Run lint: `npm run lint`
+6. Create PR
+7. Wait for CI
+8. Request SR review for merge
+9. Merge and verify
+
+**IMMEDIATELY RECORD:**
+```
+Engineer Agent ID: <agent_id from Task tool output>
+```
+
+**Exit Criteria:**
+- [ ] Code implemented per plan
+- [ ] All tests pass
+- [ ] PR created and merged
+- [ ] Engineer Agent ID recorded
 
 **STOP if you encounter blockers** - ask PM before proceeding.
 
 ---
 
-## Step 5: Complete Task File Summary (MANDATORY)
+## Step 6: PM UPDATE (After Task Completion)
 
-**Before creating PR**, update the task file's Implementation Summary with your agent_id and auto-captured metrics.
+**Purpose:** PM updates tracking files after task passes testing and is merged.
 
-**BLOCKING**: SR Engineer will reject PRs with incomplete task file summaries.
+**Who:** PM Agent or PM (human)
 
-```markdown
-## Implementation Summary (Engineer-Owned)
+**Actions:**
+1. Update sprint plan status (task marked complete)
+2. Update backlog CSV (BACKLOG-XXX status)
+3. Record actual metrics vs estimates
+4. Log metrics to `tokens.csv`
 
-*Completed: YYYY-MM-DD*
+**Files Updated:**
+- `.claude/plans/sprints/SPRINT-XXX.md` - Task status → Complete
+- `.claude/backlog/backlog.csv` - Item status → Done
+- `.claude/metrics/tokens.csv` - Actual token usage logged
 
-### Agent ID
+**PM Metrics to Record:**
 
-**Record this immediately when Task tool returns:**
-```
-Engineer Agent ID: <agent_id from Task tool output>
-```
+| Metric | Source | Location |
+|--------|--------|----------|
+| Plan Agent tokens | `grep "<plan_agent_id>" tokens.csv` | Sprint plan |
+| SR Review tokens | `grep "<sr_agent_id>" tokens.csv` | Sprint plan |
+| Engineer tokens | `grep "<engineer_agent_id>" tokens.csv` | Sprint plan |
+| Total task tokens | Sum of above | Sprint plan |
+| Variance | Estimated vs Actual | Sprint plan |
 
-### Checklist
-[Mark all items complete]
-
-### Metrics (Auto-Captured)
-
-**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'`
-
-| Metric | Value |
-|--------|-------|
-| **Total Tokens** | X |
-| Duration | X seconds |
-| API Calls | X |
-
-**Variance:** PM Est ~XK vs Actual ~XK (X% over/under)
-
-### Notes
-**Deviations from plan:** [explain any changes from approved plan]
-**Issues encountered:** [document challenges, blockers, unexpected complexity]
-```
-
-**Why This Matters:**
-- PM uses these metrics for estimation calibration
-- Auto-captured data is objective (no self-reporting errors)
-- Pattern analysis requires documented deviations
-
-**Required Fields Summary:**
-
-| Field | Required | Used For |
-|-------|----------|----------|
-| Agent ID | Yes | Metrics lookup |
-| Total Tokens | Yes | Resource tracking |
-| Variance | Yes | Estimation calibration |
-| Deviations from plan | Yes | Pattern analysis |
-| Issues encountered | Yes | Quality tracking |
+**Exit Criteria:**
+- [ ] Sprint plan updated with task completion
+- [ ] Backlog CSV updated
+- [ ] Metrics logged and variance calculated
 
 ---
 
-## Step 6: Create PR with Metrics
+## Implementation Details (Within Step 5)
 
-**Metrics format:** `.claude/docs/shared/metrics-templates.md`
+The following details apply during Step 5 (IMPLEMENT):
+
+### PR Creation
 
 **Only create PR when:**
-- [ ] Plan agent approved and metrics recorded
+- [ ] Code implemented per approved plan
 - [ ] All tests pass locally
 - [ ] Type check passes
 - [ ] Lint passes
-- [ ] Task file summary is complete
 
 **Create PR:**
 ```bash
@@ -165,14 +260,10 @@ git commit -m "type(scope): description
 Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 
 git push -u origin your-branch-name
-gh pr create --base develop --title "..." --body "..."
+gh pr create --base project/licensing-and-auth-flow --title "..." --body "..."
 ```
 
-**PR Description MUST include Engineer Metrics** - see the metrics templates doc for exact format.
-
----
-
-## Step 7: Wait for CI and Debug Failures
+### CI and Debug Failures
 
 1. **Wait for CI to complete:**
    ```bash
@@ -180,62 +271,43 @@ gh pr create --base develop --title "..." --body "..."
    ```
 
 2. **If CI fails - Debug and Fix:**
-
-   This is part of your work! Track debugging separately from implementation.
-
    ```bash
-   # View failure details
    gh run view <RUN-ID> --log-failed
-
-   # Or check on GitHub Actions tab
    ```
-
-   **Common CI failures:**
    - Test failures → Run `npm test` locally, fix, push
    - Type errors → Run `npm run type-check`, fix, push
    - Lint errors → Run `npm run lint --fix`, commit, push
-   - Build failures → Check logs, often dependency issues
 
-   **Note:** All debugging effort is automatically captured in your total metrics via SubagentStop hook.
-
-   **After fixing, wait for CI again:**
-   ```bash
-   gh pr checks <PR-NUMBER> --watch
-   ```
-
-3. **Once ALL checks pass, request SR review:**
+3. **Once ALL checks pass, request SR review for merge:**
    - Use the `senior-engineer-pr-lead` agent
-   - Provide PR URL and task summary
-   - Include your Engineer Metrics
+   - This is a PR review, different from the plan review in Step 2
 
-**Example SR Review Request:**
-```
-Please review PR #XXX for merge readiness.
+### Merge and Verify
 
-**PR URL:** https://github.com/org/repo/pull/XXX
-**Task:** TASK-XXX
-**Summary:** [what was done]
-**Engineer Agent ID:** [your agent_id]
-**Estimated Tokens:** ~XK
+**CRITICAL: A PR is NOT complete until MERGED.**
 
-Please verify, review code, approve and merge.
-Metrics are auto-captured via SubagentStop hook.
+```bash
+# Merge after SR approval
+gh pr merge <PR-NUMBER> --merge
+
+# Verify merge state - MUST show "MERGED"
+gh pr view <PR-NUMBER> --json state --jq '.state'
 ```
 
----
+| Result | Meaning | Action |
+|--------|---------|--------|
+| `MERGED` | Success - notify PM | Proceed to Step 6 |
+| `OPEN` | Merge failed | Investigate and retry |
+| `CLOSED` | PR closed without merge | Work is LOST - escalate |
 
-## Step 8: SR Engineer Reviews and Merges
+### Session-End Check
 
-The SR Engineer will:
-1. Verify Engineer Metrics are present
-2. Review code quality
-3. Add SR Engineer Metrics to PR
-4. Approve and merge
-5. **Pass to PM for next task assignment**
+Before ending any session:
+```bash
+gh pr list --state open --author @me
+```
 
-**You are done when:**
-- PR is merged
-- SR Engineer has notified PM
+If any approved PRs are still open, merge them NOW.
 
 ---
 
@@ -343,39 +415,63 @@ If a parallel task exceeds **2x estimated tokens** in first 10% of work:
 Copy this to your task file or notes:
 
 ```
-## Engineer Checklist: TASK-XXX
+## Task Checklist: TASK-XXX
 
 ### Pre-Work
-- [ ] Created branch from develop
+- [ ] Created branch from sprint branch (or worktree for parallel work)
 - [ ] Read task file
 
-### Plan-First (MANDATORY)
-- [ ] Invoked Plan agent with task context
-- [ ] Reviewed plan from Engineer perspective
-- [ ] Plan approved (or revised and re-approved)
+### Step 1: PLAN
+- [ ] Invoked Plan agent
+- [ ] Plan Agent ID: _______________
+- [ ] Plan covers all acceptance criteria
+- [ ] Files to modify identified
+- [ ] Plan written to task file
 
-### Implementation
-- [ ] Code complete (following approved plan)
-- [ ] Tests pass locally
-- [ ] Type check passes
-- [ ] Lint passes
+### Step 2: SR REVIEW
+- [ ] Invoked SR Engineer agent to review plan
+- [ ] SR Engineer Agent ID: _______________
+- [ ] Plan technically validated
+- [ ] SR approval documented
 
-### Metrics (Auto-Captured)
-- [ ] Agent ID recorded immediately when Task tool returned
-- [ ] Metrics retrieved: grep "<agent_id>" .claude/metrics/tokens.jsonl
-- [ ] Variance calculated (PM Est vs Actual)
-- [ ] Deviations from plan documented
-- [ ] Issues encountered documented
+### Step 3: USER REVIEW (BLOCKING GATE)
+- [ ] Plan presented to user
+- [ ] User questions answered
+- [ ] User explicitly approved plan
+- [ ] Ready for implementation
 
-### PR Submission
-- [ ] Task file summary updated with agent_id and metrics
+### Step 4: COMPACT
+- [ ] Context compacted (or new session started)
+- [ ] Ready for clean implementation
+
+### Step 5: IMPLEMENT
+- [ ] Invoked Engineer agent
+- [ ] Engineer Agent ID: _______________
+- [ ] Code implemented per approved plan
+- [ ] Tests pass (npm test)
+- [ ] Type check passes (npm run type-check)
+- [ ] Lint passes (npm run lint)
 - [ ] PR created
 - [ ] CI passes
-- [ ] SR Engineer review requested
+- [ ] SR Engineer PR review requested
+- [ ] PR merged and verified
 
-### Completion
-- [ ] SR Engineer approved and merged
-- [ ] PM notified for next task
+### Step 6: PM UPDATE
+- [ ] PM notified of completion
+- [ ] Sprint plan updated
+- [ ] Backlog CSV updated
+- [ ] Metrics logged
+
+### Agent ID Summary (for metrics collection)
+
+| Step | Agent ID | Tokens |
+|------|----------|--------|
+| Plan | _________ | ___K |
+| SR Review | _________ | ___K |
+| Implement | _________ | ___K |
+| **TOTAL** | - | ___K |
+
+**Variance:** PM Est ~___K vs Actual ~___K (___% over/under)
 ```
 
 ---
@@ -384,57 +480,65 @@ Copy this to your task file or notes:
 
 This workflow is **technically enforced** through multiple mechanisms:
 
-### 1. CI Validation (Automated)
+### 1. Blocking Gates
 
-The `pr-metrics-check.yml` workflow automatically validates PRs:
+| Gate | Enforced By | Cannot Proceed Without |
+|------|-------------|------------------------|
+| Step 1 → Step 2 | System | Plan Agent ID recorded |
+| Step 2 → Step 3 | SR Engineer | SR approval documented |
+| Step 3 → Step 4 | User | Explicit user approval |
+| Step 5 → Step 6 | System | PR merged (state = MERGED) |
+
+### 2. Agent ID Verification
+
+All three Agent IDs (Plan, SR Review, Implement) must be recorded:
+
+| Check | When Verified | Consequence if Missing |
+|-------|---------------|------------------------|
+| Plan Agent ID | Before Step 2 | SR Engineer blocks review |
+| SR Engineer Agent ID | Before Step 3 | User gate blocked |
+| Engineer Agent ID | Before Step 6 | PM rejects task completion |
+
+### 3. CI Validation (Automated)
+
+The `pr-metrics-check.yml` workflow validates PRs:
 
 | Check | Validation | Failure Action |
 |-------|------------|----------------|
-| Engineer Metrics section | Must be present | PR blocked |
-| Plan-First Protocol section | Must be present | PR blocked |
-| Metrics table structure | Must have correct format | PR blocked |
-| Planning (Plan) row | Must exist | PR blocked |
-| Estimated vs Actual | Must be present | PR blocked |
+| Agent ID Summary table | Must be present | PR blocked |
+| All three Agent IDs | Must be filled (not blank) | PR blocked |
+| Variance calculation | Must be present | PR blocked |
 
-**Bypassing CI (emergency only):**
-- Add `[skip-metrics]` to PR title
-- Dependabot PRs are automatically exempt
-- **WARNING:** Manual bypasses are logged and reviewed
-
-### 2. SR Engineer Verification (Manual)
-
-The SR Engineer performs additional verification beyond CI:
-
-- **Plan-First Protocol checkboxes** - Must be checked, not empty
-- **Metrics values** - Must be real numbers, not "X" placeholders
-- **Planning Notes** - Must document any plan revisions
-- **Implementation Summary** - Must be complete in task file
-
-### 3. Workflow Violations
+### 4. Workflow Violations
 
 | Violation | Detection Method | Consequence |
 |-----------|------------------|-------------|
-| Missing Engineer Metrics | CI automation | PR auto-blocked |
-| Missing Plan-First Protocol | CI automation | PR auto-blocked |
-| Placeholder metrics ("X") | SR Engineer review | PR rejected |
-| Skipped planning phase | SR Engineer review | PR rejected, must retroactively plan |
-| Incomplete Implementation Summary | SR Engineer review | PR rejected |
+| Skipped Step 1 (Plan) | Missing Plan Agent ID | PR rejected |
+| Skipped Step 2 (SR Review) | Missing SR Agent ID | User gate blocked |
+| Skipped Step 3 (User Review) | No user approval | Implementation blocked |
+| Missing Agent IDs | CI/SR check | PR rejected |
+| Incomplete metrics | PM review | Task not marked complete |
 
-### 4. Violation Recovery
+### 5. Violation Recovery
 
 If you violate the workflow:
 
-1. **Skipped Plan-First Protocol:**
+1. **Skipped Plan step:**
+   - STOP implementation
    - Invoke Plan agent retroactively
    - Document as "DEVIATION: Plan created post-implementation"
-   - Include retroactive plan metrics
+   - Include retroactive Plan Agent ID
 
-2. **Missing Metrics:**
-   - Calculate from your session history
+2. **Skipped SR Review:**
+   - STOP and invoke SR Engineer for plan review
+   - Document deviation
+
+3. **Missing Agent IDs:**
+   - Check `.claude/metrics/tokens.csv` for session IDs
    - Document estimation method in notes
 
-3. **CI Blocking PR:**
-   - Update PR description with required sections
+4. **CI Blocking PR:**
+   - Update PR description with Agent ID Summary table
    - Push any additional commits
    - Wait for CI to re-run
 

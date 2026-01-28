@@ -14,6 +14,7 @@ import {
   getRoleDisplayName,
 } from "../../../utils/transactionRoleUtils";
 import ContactSelectModal from "../../ContactSelectModal";
+import { ContactsProvider, useContacts } from "../../../contexts/ContactsContext";
 
 // ============================================
 // TYPES
@@ -74,15 +75,15 @@ export function EditTransactionModal({
   const [formData, setFormData] = useState({
     property_address: transaction.property_address || "",
     transaction_type: transaction.transaction_type || "purchase",
-    representation_start_date: transaction.representation_start_date
-      ? typeof transaction.representation_start_date === "string"
-        ? transaction.representation_start_date
-        : transaction.representation_start_date.toISOString().split("T")[0]
+    started_at: transaction.started_at
+      ? typeof transaction.started_at === "string"
+        ? transaction.started_at
+        : transaction.started_at.toISOString().split("T")[0]
       : "",
-    closing_date: transaction.closing_date
-      ? typeof transaction.closing_date === "string"
-        ? transaction.closing_date
-        : transaction.closing_date.toISOString().split("T")[0]
+    closed_at: transaction.closed_at
+      ? typeof transaction.closed_at === "string"
+        ? transaction.closed_at
+        : transaction.closed_at.toISOString().split("T")[0]
       : "",
     sale_price: transaction.sale_price || "",
     listing_price: transaction.listing_price || "",
@@ -174,6 +175,11 @@ export function EditTransactionModal({
       return;
     }
 
+    if (!formData.started_at) {
+      setError("Representation start date is required");
+      return;
+    }
+
     setSaving(true);
     setError(null);
 
@@ -182,8 +188,8 @@ export function EditTransactionModal({
       const updates = {
         property_address: formData.property_address.trim(),
         transaction_type: formData.transaction_type,
-        representation_start_date: formData.representation_start_date || null,
-        closing_date: formData.closing_date || null,
+        started_at: formData.started_at || null,
+        closed_at: formData.closed_at || null,
         sale_price: formData.sale_price
           ? parseFloat(formData.sale_price as string)
           : null,
@@ -230,6 +236,8 @@ export function EditTransactionModal({
           operations.push({
             action: "remove",
             contactId: existing.contact_id,
+            role: role,
+            specificRole: role,
           });
         }
       }
@@ -389,16 +397,30 @@ export function EditTransactionModal({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Representation Start Date
+                    Representation Start Date *
+                    <span
+                      className="ml-1 text-gray-400 cursor-help text-xs"
+                      title="The date you officially started representing this client in this transaction"
+                    >
+                      (?)
+                    </span>
                   </label>
                   <input
                     type="date"
-                    value={formData.representation_start_date}
+                    value={formData.started_at}
                     onChange={(e) =>
-                      handleChange("representation_start_date", e.target.value)
+                      handleChange("started_at", e.target.value)
                     }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      !formData.started_at
+                        ? "border-red-300 bg-red-50"
+                        : "border-gray-300"
+                    }`}
+                    required
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Required - When you began representing this client
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -406,9 +428,9 @@ export function EditTransactionModal({
                   </label>
                   <input
                     type="date"
-                    value={formData.closing_date}
+                    value={formData.closed_at}
                     onChange={(e) =>
-                      handleChange("closing_date", e.target.value)
+                      handleChange("closed_at", e.target.value)
                     }
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
@@ -455,14 +477,19 @@ export function EditTransactionModal({
                   <p className="text-gray-600 mt-4">Loading contacts...</p>
                 </div>
               ) : (
-                <EditContactAssignments
-                  transactionType={formData.transaction_type}
-                  contactAssignments={contactAssignments}
-                  onAssignContact={handleAssignContact}
-                  onRemoveContact={handleRemoveContact}
+                <ContactsProvider
                   userId={transaction.user_id}
                   propertyAddress={formData.property_address}
-                />
+                >
+                  <EditContactAssignments
+                    transactionType={formData.transaction_type}
+                    contactAssignments={contactAssignments}
+                    onAssignContact={handleAssignContact}
+                    onRemoveContact={handleRemoveContact}
+                    userId={transaction.user_id}
+                    propertyAddress={formData.property_address}
+                  />
+                </ContactsProvider>
               )}
             </div>
           )}
@@ -494,6 +521,14 @@ export function EditTransactionModal({
 }
 
 // ============================================
+// CONTACTS CONTEXT INTEGRATION
+// ============================================
+
+// useContactsLoader has been replaced by ContactsContext
+// See: src/contexts/ContactsContext.tsx
+// This eliminates duplicate API calls when multiple modals use contacts
+
+// ============================================
 // EDIT CONTACT ASSIGNMENTS COMPONENT
 // ============================================
 
@@ -519,7 +554,7 @@ interface EditContactAssignmentsProps {
 
 /**
  * Edit Contact Assignments Component
- * Reusable component for editing contact assignments
+ * Loads contacts once and passes to all children (was N calls, now 1)
  */
 function EditContactAssignments({
   transactionType,
@@ -529,8 +564,27 @@ function EditContactAssignments({
   userId,
   propertyAddress,
 }: EditContactAssignmentsProps): React.ReactElement {
+  // Use shared ContactsContext - single API call for all modals
+  const { contacts, loading: contactsLoading, error: contactsError, refreshContacts } =
+    useContacts();
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      {/* Loading overlay - prevents layout shift by covering content */}
+      {contactsLoading && (
+        <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-sm text-gray-600">Loading contacts...</span>
+          </div>
+        </div>
+      )}
+      {contactsError && (
+        <div className="text-sm text-red-600 text-center py-2">
+          {contactsError}
+        </div>
+      )}
+
       {AUDIT_WORKFLOW_STEPS.map(
         (
           step: { title: string; description: string; roles: RoleConfig[] },
@@ -559,6 +613,8 @@ function EditContactAssignments({
                     assignments={contactAssignments[roleConfig.role] || []}
                     onAssign={onAssignContact}
                     onRemove={onRemoveContact}
+                    contacts={contacts}
+                    onRefreshContacts={refreshContacts}
                     userId={userId}
                     propertyAddress={propertyAddress}
                     transactionType={transactionType}
@@ -603,13 +659,20 @@ interface EditRoleAssignmentProps {
     }
   ) => void;
   onRemove: (role: string, contactId: string) => void;
+  /** Contacts loaded by parent, passed as prop */
+  contacts: ExtendedContact[];
+  /** Callback to refresh contacts (e.g., after import) */
+  onRefreshContacts: () => void;
+  /** User ID for import functionality in ContactSelectModal */
   userId: string;
+  /** Property address for relevance sorting in ContactSelectModal */
   propertyAddress: string;
   transactionType: "purchase" | "sale" | "other";
 }
 
 /**
  * Edit Single Role Assignment Component
+ * Now receives contacts as props from parent (no internal loading)
  */
 function EditRoleAssignment({
   role,
@@ -618,42 +681,14 @@ function EditRoleAssignment({
   assignments,
   onAssign,
   onRemove,
+  contacts,
+  onRefreshContacts,
   userId,
   propertyAddress,
   transactionType,
 }: EditRoleAssignmentProps): React.ReactElement {
-  const [contacts, setContacts] = React.useState<ExtendedContact[]>([]);
-  const [_loading, setLoading] = React.useState<boolean>(true);
-  const [_error, setError] = React.useState<string | null>(null);
   const [showContactSelect, setShowContactSelect] =
     React.useState<boolean>(false);
-
-  React.useEffect(() => {
-    loadContacts();
-  }, [propertyAddress]);
-
-  const loadContacts = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Use sorted API when property address is available, otherwise use regular API
-      const result = propertyAddress
-        ? await window.api.contacts.getSortedByActivity(userId, propertyAddress)
-        : await window.api.contacts.getAll(userId);
-
-      if (result.success) {
-        setContacts(result.contacts || []);
-      } else {
-        setError(result.error || "Failed to load contacts");
-      }
-    } catch (err) {
-      console.error("Failed to load contacts:", err);
-      setError("Unable to load contacts");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleContactSelected = (selectedContacts: ExtendedContact[]) => {
     selectedContacts.forEach((contact: ExtendedContact) => {
@@ -756,6 +791,8 @@ function EditRoleAssignment({
           onSelect={handleContactSelected}
           onClose={() => setShowContactSelect(false)}
           propertyAddress={propertyAddress}
+          userId={userId}
+          onRefreshContacts={onRefreshContacts}
         />
       )}
     </div>

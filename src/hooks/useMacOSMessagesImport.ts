@@ -4,12 +4,39 @@
  * Handles automatic import of messages from macOS Messages app on startup.
  * Only runs on macOS when Full Disk Access permission is granted.
  *
+ * TASK-1113: Uses module-level guard to prevent duplicate sync triggers.
+ * This is necessary because:
+ * 1. React StrictMode causes effects to run twice in development
+ * 2. Component remounts reset refs but not module-level state
+ * 3. Multiple components using this hook would each get their own ref
+ *
  * @module hooks/useMacOSMessagesImport
  */
 
 import { useEffect, useRef, useCallback } from "react";
 import { usePlatform } from "../contexts/PlatformContext";
 import { shouldSkipMessagesSync } from "./useAutoRefresh";
+
+// Module-level flag to track if import has been triggered this session.
+// This persists across component remounts and React StrictMode double-mounts.
+// TASK-1113: Fixes duplicate sync on dashboard load for returning users.
+let hasTriggeredImport = false;
+
+/**
+ * Reset the import trigger flag.
+ * Used for testing and logout scenarios.
+ */
+export function resetMessagesImportTrigger(): void {
+  hasTriggeredImport = false;
+}
+
+/**
+ * Check if messages import has been triggered this session.
+ * Used by useAutoRefresh to avoid duplicate message syncs on macOS.
+ */
+export function hasMessagesImportTriggered(): boolean {
+  return hasTriggeredImport;
+}
 
 interface UseMacOSMessagesImportOptions {
   /** User ID to associate messages with */
@@ -49,7 +76,8 @@ export function useMacOSMessagesImport({
   isOnboarding = false,
 }: UseMacOSMessagesImportOptions): UseMacOSMessagesImportReturn {
   const { isMacOS } = usePlatform();
-  const hasImportedRef = useRef(false);
+  // Component-scoped ref for tracking import state during this render cycle
+  // Note: hasTriggeredImport (module-level) prevents duplicate triggers across remounts
   const isImportingRef = useRef(false);
 
   const triggerImport = useCallback(async () => {
@@ -77,6 +105,8 @@ export function useMacOSMessagesImport({
   }, [userId]);
 
   // Auto-import on startup (runs once per app session)
+  // TASK-1113: Uses module-level hasTriggeredImport to prevent duplicate triggers
+  // across component remounts and React StrictMode double-mounts
   useEffect(() => {
     // Skip if any conditions not met
     if (!isMacOS) return;
@@ -84,19 +114,22 @@ export function useMacOSMessagesImport({
     if (!hasPermissions) return;
     if (!isDatabaseInitialized) return;
     if (isOnboarding) return;
-    if (hasImportedRef.current) return;
+    // TASK-1113: Use module-level flag instead of component-scoped ref
+    // This ensures import only triggers once per app session, regardless of remounts
+    if (hasTriggeredImport) return;
 
     // Check if we just imported during onboarding - skip to avoid duplicate import
     // Note: shouldSkipMessagesSync() also clears the flag, but useSyncStatus.runAutoSync
     // will also check and clear it - the first one to run will clear it
     if (shouldSkipMessagesSync()) {
       console.log("[useMacOSMessagesImport] Skipping import - just completed onboarding import");
-      hasImportedRef.current = true; // Mark as done to prevent future attempts this session
+      hasTriggeredImport = true; // Mark as done to prevent future attempts this session
       return;
     }
 
     // Mark as imported to prevent duplicate runs
-    hasImportedRef.current = true;
+    // TASK-1113: Module-level flag persists across remounts
+    hasTriggeredImport = true;
 
     // Run import in background (non-blocking)
     // Small delay to let the app finish rendering first

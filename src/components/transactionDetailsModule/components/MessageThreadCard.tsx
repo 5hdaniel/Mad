@@ -25,6 +25,10 @@ export interface MessageThreadCardProps {
   onUnlink?: (threadId: string) => void;
   /** Map of phone number -> contact name for resolving senders */
   contactNames?: Record<string, string>;
+  /** Audit period start date for filtering (TASK-1157) */
+  auditStartDate?: Date | string | null;
+  /** Audit period end date for filtering (TASK-1157) */
+  auditEndDate?: Date | string | null;
 }
 
 /**
@@ -37,6 +41,149 @@ function getAvatarInitial(contactName?: string, phoneNumber?: string): string {
   }
   // If phone number, just show hash
   return "#";
+}
+
+/**
+ * Get all unique participants from a thread (excluding the user).
+ * Returns an array of phone numbers/identifiers.
+ *
+ * Collects from multiple sources to ensure all participants are found:
+ * 1. chat_members (from Apple's chat_handle_join) - authoritative list
+ * 2. from/to fields - catches participants missed by chat_members
+ */
+function getThreadParticipants(messages: MessageLike[]): string[] {
+  const participants = new Set<string>();
+
+  for (const msg of messages) {
+    try {
+      if (msg.participants) {
+        const parsed =
+          typeof msg.participants === "string"
+            ? JSON.parse(msg.participants)
+            : msg.participants;
+
+        // Collect from chat_members (authoritative, doesn't include user)
+        if (parsed.chat_members && Array.isArray(parsed.chat_members)) {
+          parsed.chat_members.forEach((m: string) => {
+            if (m && m !== "unknown") participants.add(m);
+          });
+        }
+
+        // Also collect from from/to fields to catch any missed participants
+        // For inbound messages, the sender (from) is the other person
+        if (msg.direction === "inbound" && parsed.from) {
+          const from = parsed.from;
+          if (from !== "me" && from !== "unknown") {
+            participants.add(from);
+          }
+        }
+        // For outbound messages, the recipient (to) is the other person
+        if (msg.direction === "outbound" && parsed.to) {
+          const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
+          toList.forEach((p: string) => {
+            if (p && p !== "me" && p !== "unknown") participants.add(p);
+          });
+        }
+      }
+    } catch {
+      // Continue to next message
+    }
+  }
+
+  return Array.from(participants);
+}
+
+/**
+ * Check if a thread is a group chat (more than one unique external participant).
+ * Considers resolved contact names to avoid treating one contact with multiple
+ * phone numbers as a group chat.
+ */
+function isGroupChat(
+  messages: MessageLike[],
+  contactNames: Record<string, string> = {}
+): boolean {
+  const participants = getThreadParticipants(messages);
+
+  // Resolve phone numbers to names and deduplicate
+  const normalizePhone = (phone: string): string => {
+    const digits = phone.replace(/\D/g, "");
+    return digits.length >= 10 ? digits.slice(-10) : digits;
+  };
+
+  const resolvedNames = new Set<string>();
+  for (const p of participants) {
+    // Try direct lookup
+    if (contactNames[p]) {
+      resolvedNames.add(contactNames[p]);
+      continue;
+    }
+    // Try normalized phone lookup
+    const normalized = normalizePhone(p);
+    let found = false;
+    for (const [phone, name] of Object.entries(contactNames)) {
+      if (normalizePhone(phone) === normalized) {
+        resolvedNames.add(name);
+        found = true;
+        break;
+      }
+    }
+    // If no name found, use phone as unique identifier
+    if (!found) {
+      resolvedNames.add(p);
+    }
+  }
+
+  return resolvedNames.size > 1;
+}
+
+/**
+ * Format participant names for display.
+ * Uses contactNames map to resolve phone numbers to names.
+ * Sorts resolved names first, unresolved phone numbers last.
+ */
+function formatParticipantNames(
+  participants: string[],
+  contactNames: Record<string, string>,
+  maxShow: number = 3
+): string {
+  const normalizePhone = (phone: string): string => {
+    const digits = phone.replace(/\D/g, "");
+    return digits.length >= 10 ? digits.slice(-10) : digits;
+  };
+
+  // Check if a string looks like a phone number (starts with + or is mostly digits)
+  const isPhoneNumber = (s: string): boolean => {
+    return s.startsWith("+") || /^\d[\d\s\-()]{6,}$/.test(s);
+  };
+
+  const names = participants.map((p) => {
+    // Try direct lookup first
+    if (contactNames[p]) return contactNames[p];
+    // Try normalized phone lookup
+    const normalized = normalizePhone(p);
+    for (const [phone, name] of Object.entries(contactNames)) {
+      if (normalizePhone(phone) === normalized) return name;
+    }
+    // Fall back to phone number
+    return p;
+  });
+
+  // Deduplicate names (same contact may have multiple phone numbers)
+  const uniqueNames = [...new Set(names)];
+
+  // Sort: resolved names first, phone numbers last
+  uniqueNames.sort((a, b) => {
+    const aIsPhone = isPhoneNumber(a);
+    const bIsPhone = isPhoneNumber(b);
+    if (aIsPhone && !bIsPhone) return 1;  // a is phone, b is name → b first
+    if (!aIsPhone && bIsPhone) return -1; // a is name, b is phone → a first
+    return 0; // preserve original order within same type
+  });
+
+  if (uniqueNames.length <= maxShow) {
+    return uniqueNames.join(", ");
+  }
+  return `${uniqueNames.slice(0, maxShow).join(", ")} +${uniqueNames.length - maxShow} more`;
 }
 
 /**
@@ -74,7 +221,8 @@ function normalizePhoneForLookup(phone: string): string {
 
 /**
  * MessageThreadCard component for displaying a conversation thread.
- * Shows a header with contact info. Clicking "View" opens a popup modal.
+ * Redesigned for TASK-1156: Compact single-line layout with date range.
+ * Format: "ContactName (+1234567890)    Jan 1 - Jan 6    View Full ->"
  */
 export function MessageThreadCard({
   threadId,
@@ -83,54 +231,104 @@ export function MessageThreadCard({
   phoneNumber,
   onUnlink,
   contactNames = {},
+  auditStartDate,
+  auditEndDate,
 }: MessageThreadCardProps): React.ReactElement {
   const [showModal, setShowModal] = useState(false);
+
+  // Detect group chat (using contactNames to resolve duplicates)
+  const participants = getThreadParticipants(messages);
+  const isGroup = isGroupChat(messages, contactNames);
   const avatarInitial = getAvatarInitial(contactName, phoneNumber);
 
-  // Get preview of last message
-  const lastMessage = messages[messages.length - 1];
-  const previewText = lastMessage
-    ? (lastMessage.body_text || lastMessage.body_plain || lastMessage.body || "")?.slice(0, 60)
-    : "";
+  // Get date range for the conversation
+  const getDateRange = (): string => {
+    if (messages.length === 0) return "";
+    const first = messages[0];
+    const last = messages[messages.length - 1];
+    const firstDate = new Date(first.sent_at || first.received_at || 0);
+    const lastDate = new Date(last.sent_at || last.received_at || 0);
+    const formatDate = (d: Date) =>
+      d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    if (firstDate.toDateString() === lastDate.toDateString()) {
+      return formatDate(firstDate);
+    }
+    return `${formatDate(firstDate)} - ${formatDate(lastDate)}`;
+  };
 
   return (
     <>
       <div
-        className="bg-white rounded-lg border border-gray-200 mb-4 overflow-hidden"
+        className="bg-white rounded-lg border border-gray-200 mb-3 overflow-hidden hover:bg-gray-50 transition-colors"
         data-testid="message-thread-card"
         data-thread-id={threadId}
       >
-        {/* Thread Header */}
-        <div className="bg-gray-50 px-4 py-3 flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
-            {avatarInitial}
-          </div>
-          <div className="min-w-0 flex-1">
-            <h4 className="font-semibold text-gray-900 truncate" data-testid="thread-contact-name">
-              {contactName || phoneNumber}
-            </h4>
-            {contactName && phoneNumber && (
-              <p className="text-sm text-gray-500 truncate" data-testid="thread-phone-number">
-                {phoneNumber}
-              </p>
+        {/* Compact single-line layout */}
+        <div className="bg-gray-50 px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            {/* Avatar - Purple for group, Green for 1:1 */}
+            {isGroup ? (
+              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-purple-100">
+                <svg
+                  className="w-4 h-4 text-purple-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                  />
+                </svg>
+              </div>
+            ) : (
+              <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
+                {avatarInitial}
+              </div>
             )}
-            {/* Preview of last message */}
-            {previewText && (
-              <p className="text-sm text-gray-400 truncate mt-1" data-testid="thread-preview">
-                {previewText}{previewText.length >= 60 ? "..." : ""}
-              </p>
-            )}
+
+            {/* Contact info: Name on first line, phone/recipients on second line */}
+            <div className="min-w-0 flex-1">
+              {isGroup ? (
+                <div data-testid="thread-contact-name">
+                  <span className="font-semibold text-gray-900 block">
+                    Group Chat
+                  </span>
+                  <span
+                    className="font-normal text-gray-500 text-sm block truncate"
+                    title={formatParticipantNames(participants, contactNames, 999)}
+                  >
+                    {formatParticipantNames(participants, contactNames, 3)}
+                  </span>
+                </div>
+              ) : (
+                <div data-testid="thread-contact-name">
+                  <span className="font-semibold text-gray-900 block">
+                    {contactName || phoneNumber}
+                  </span>
+                  {contactName && phoneNumber && (
+                    <span className="font-normal text-gray-500 text-sm block">
+                      {phoneNumber}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="inline-block px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded-full">
-              {messages.length} {messages.length === 1 ? "message" : "messages"}
+
+          {/* Date range and action buttons */}
+          <div className="flex items-center gap-4 flex-shrink-0">
+            <span className="text-sm text-gray-500 hidden sm:inline">
+              {getDateRange()}
             </span>
             <button
               onClick={() => setShowModal(true)}
-              className="px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-all"
+              className="text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors whitespace-nowrap"
               data-testid="toggle-thread-button"
             >
-              View
+              View Full &rarr;
             </button>
             {onUnlink && (
               <button
@@ -165,6 +363,8 @@ export function MessageThreadCard({
           contactName={contactName}
           phoneNumber={phoneNumber}
           contactNames={contactNames}
+          auditStartDate={auditStartDate}
+          auditEndDate={auditEndDate}
           onClose={() => setShowModal(false)}
         />
       )}
@@ -270,20 +470,70 @@ export function groupMessagesByThread(
 /**
  * Utility function to extract phone number from thread messages.
  * Looks at participants to find the external phone number.
+ *
+ * Priority order:
+ * 1. from/to fields (for 1:1 messages with valid handle)
+ * 2. chat_members array (for group chats or when handle_id was null)
+ * 3. Legacy sender field
+ * 4. "Unknown" fallback
  */
 export function extractPhoneFromThread(messages: MessageLike[]): string {
+  // First, identify the user's own identifiers to exclude them
+  // The user is "from" in outbound messages, and "to" in inbound messages
+  const userIdentifiers = new Set<string>();
+  for (const msg of messages) {
+    if (msg.participants) {
+      try {
+        const parsed = JSON.parse(msg.participants as string);
+        // For outbound, user is in "from"
+        if (msg.direction === "outbound" && parsed.from && parsed.from !== "me" && parsed.from !== "unknown") {
+          userIdentifiers.add(parsed.from.toLowerCase());
+        }
+        // For inbound, user is in "to"
+        if (msg.direction === "inbound" && parsed.to) {
+          const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
+          for (const t of toList) {
+            if (t && t !== "me" && t !== "unknown") {
+              userIdentifiers.add(t.toLowerCase());
+            }
+          }
+        }
+      } catch { /* ignore */ }
+    }
+  }
+
+  // Helper to check if identifier belongs to user
+  const isUserIdentifier = (id: string): boolean => {
+    if (!id) return true;
+    const lower = id.toLowerCase();
+    return userIdentifiers.has(lower) || lower === "me" || lower === "unknown";
+  };
+
   for (const msg of messages) {
     // Try to parse participants JSON
     if (msg.participants) {
       try {
         const participants = JSON.parse(msg.participants as string);
+
         // For inbound messages, "from" is the external phone
-        // For outbound messages, "to" contains the external phone
-        if (msg.direction === "inbound" && participants.from) {
+        if (msg.direction === "inbound" && participants.from && !isUserIdentifier(participants.from)) {
           return participants.from;
         }
-        if (msg.direction === "outbound" && participants.to?.length > 0) {
+        // For outbound messages, "to" contains the external phone
+        if (msg.direction === "outbound" && participants.to?.length > 0 && !isUserIdentifier(participants.to[0])) {
           return participants.to[0];
+        }
+
+        // Fallback to chat_members for group chats or when from/to are "unknown"
+        // chat_members contains all participants except "me"
+        if (participants.chat_members && participants.chat_members.length > 0) {
+          // Return first non-user member
+          const validMember = participants.chat_members.find(
+            (m: string) => !isUserIdentifier(m)
+          );
+          if (validMember) {
+            return validMember;
+          }
         }
       } catch {
         // Parsing failed, continue to fallback
@@ -291,7 +541,8 @@ export function extractPhoneFromThread(messages: MessageLike[]): string {
     }
 
     // Fallback to legacy sender field (only on Communication type)
-    if ("sender" in msg && msg.sender) {
+    // But not if it's the user's own identifier
+    if ("sender" in msg && msg.sender && !isUserIdentifier(msg.sender)) {
       return msg.sender;
     }
   }

@@ -15,13 +15,13 @@ import type { Contact, Transaction } from "./types/models";
 // Import validation utilities
 import {
   ValidationError,
-  validateUserId,
   validateContactId,
   validateContactData,
   validateString,
   sanitizeObject,
 } from "./utils/validation";
 import { normalizePhoneNumber } from "./utils/phoneNormalization";
+import { getValidUserId } from "./utils/userIdHelper";
 
 // Import handler types
 import type {
@@ -65,10 +65,13 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           userId,
         });
 
-        // Validate input
-        const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
+        // BACKLOG-551: Validate user ID exists in local DB
+        const validatedUserId = await getValidUserId(userId, "Contacts");
         if (!validatedUserId) {
-          throw new ValidationError("User ID validation failed", "userId");
+          return {
+            success: false,
+            error: "No valid user found in database",
+          };
         }
 
         // Get only imported contacts from database
@@ -118,10 +121,13 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           { userId },
         );
 
-        // Validate input
-        const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
+        // BACKLOG-551: Validate user ID exists in local DB
+        const validatedUserId = await getValidUserId(userId, "Contacts");
         if (!validatedUserId) {
-          throw new ValidationError("User ID validation failed", "userId");
+          return {
+            success: false,
+            error: "No valid user found in database",
+          };
         }
 
         // Get contacts from macOS Contacts app
@@ -281,14 +287,24 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           // Mark this contact's identifiers as seen
           markAsSeen(dbContact);
 
+          // Try to find additional data from macOS Contacts by matching name
+          const macOsMatch = phoneToContactInfo
+            ? Object.values(phoneToContactInfo).find(
+                (c) => c.name?.toLowerCase() === dbContact.display_name?.toLowerCase()
+              )
+            : null;
+
           availableContacts.push({
             id: dbContact.id, // Use actual DB ID so we can mark as imported
             name: dbContact.name || dbContact.display_name,
             phone: dbContact.phone || null,
-            email: dbContact.email || null,
+            email: dbContact.email || macOsMatch?.emails?.[0] || null,
             company: dbContact.company || null,
             source: dbContact.source || "contacts_app",
             isFromDatabase: true, // Flag to distinguish from macOS Contacts app
+            // Include all phones/emails from macOS Contacts for backfilling
+            allPhones: macOsMatch?.phones || [],
+            allEmails: macOsMatch?.emails || [],
           });
         }
 
@@ -397,10 +413,13 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           count: contactsToImport.length,
         });
 
-        // Validate inputs
-        const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
+        // BACKLOG-551: Validate user ID exists in local DB
+        const validatedUserId = await getValidUserId(userId, "Contacts");
         if (!validatedUserId) {
-          throw new ValidationError("User ID validation failed", "userId");
+          return {
+            success: false,
+            error: "No valid user found in database",
+          };
         }
 
         // Validate contacts array
@@ -460,9 +479,18 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
 
         let processed = 0;
 
-        // Mark existing DB contacts as imported
-        for (const { id } of existingDbContacts) {
+        // Mark existing DB contacts as imported and backfill any missing emails/phones
+        for (const { id, contact } of existingDbContacts) {
           await databaseService.markContactAsImported(id);
+
+          // Backfill emails/phones from macOS Contacts if available
+          if (contact.allEmails && contact.allEmails.length > 0) {
+            await databaseService.backfillContactEmails(id, contact.allEmails);
+          }
+          if (contact.allPhones && contact.allPhones.length > 0) {
+            await databaseService.backfillContactPhones(id, contact.allPhones);
+          }
+
           const updatedContact = await databaseService.getContactById(id);
           if (updatedContact) {
             importedContacts.push(updatedContact);
@@ -549,10 +577,13 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           { userId, propertyAddress },
         );
 
-        // Validate inputs
-        const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
+        // BACKLOG-551: Validate user ID exists in local DB
+        const validatedUserId = await getValidUserId(userId, "Contacts");
         if (!validatedUserId) {
-          throw new ValidationError("User ID validation failed", "userId");
+          return {
+            success: false,
+            error: "No valid user found in database",
+          };
         }
 
         // Validate propertyAddress (optional)
@@ -606,10 +637,13 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
       contactData: unknown,
     ): Promise<ContactResponse> => {
       try {
-        // Validate inputs
-        const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
+        // BACKLOG-551: Validate user ID exists in local DB
+        const validatedUserId = await getValidUserId(userId, "Contacts");
         if (!validatedUserId) {
-          throw new ValidationError("User ID validation failed", "userId");
+          return {
+            success: false,
+            error: "No valid user found in database",
+          };
         }
         const validatedData = validateContactData(contactData, false);
 
@@ -911,6 +945,91 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
       } catch (error) {
         logService.error("[Main] Remove contact failed:", "Contacts", {
           contactId,
+          error,
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Search contacts (database-level search for contact selection)
+  // This fixes the LIMIT 200 issue where contacts beyond position 200 were unsearchable
+  ipcMain.handle(
+    "contacts:search",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+      query: string,
+    ): Promise<ContactResponse> => {
+      try {
+        // BACKLOG-551: Validate user ID exists in local DB
+        const validatedUserId = await getValidUserId(userId, "Contacts");
+        if (!validatedUserId) {
+          return {
+            success: false,
+            error: "No valid user found in database",
+          };
+        }
+
+        // For empty/short queries, return the default sorted list
+        if (!query || query.length < 2) {
+          logService.info(
+            "[Main] Short query, returning sorted contacts",
+            "Contacts",
+            { userId, queryLength: query?.length || 0 },
+          );
+          const contacts = await databaseService.getContactsSortedByActivity(validatedUserId);
+          return {
+            success: true,
+            contacts,
+          };
+        }
+
+        // Validate and sanitize query
+        const validatedQuery = validateString(query, "query", {
+          required: true,
+          maxLength: 200,
+        });
+
+        if (!validatedQuery) {
+          throw new ValidationError("Query validation failed", "query");
+        }
+
+        logService.info(
+          "[Main] Searching contacts in database",
+          "Contacts",
+          { userId, query: validatedQuery },
+        );
+
+        // Perform database-level search
+        const contacts = databaseService.searchContactsForSelection(
+          validatedUserId,
+          validatedQuery,
+        );
+
+        logService.info(
+          `[Main] Found ${contacts.length} contacts matching query`,
+          "Contacts",
+          { userId, resultCount: contacts.length },
+        );
+
+        return {
+          success: true,
+          contacts,
+        };
+      } catch (error) {
+        logService.error("[Main] Search contacts failed:", "Contacts", {
+          userId,
+          query,
           error,
         });
         if (error instanceof ValidationError) {

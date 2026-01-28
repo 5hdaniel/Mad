@@ -4,6 +4,7 @@
 export { TransactionHeader } from "./TransactionHeader";
 export { TransactionTabs } from "./TransactionTabs";
 export { TransactionDetailsTab } from "./TransactionDetailsTab";
+export { TransactionEmailsTab } from "./TransactionEmailsTab";
 export { TransactionContactsTab } from "./TransactionContactsTab";
 export { TransactionMessagesTab } from "./TransactionMessagesTab";
 export { TransactionAttachmentsTab } from "./TransactionAttachmentsTab";
@@ -16,4 +17,6 @@ export {
   extractPhoneFromThread,
   sortThreadsByRecent,
 } from "./MessageThreadCard";
+export { SubmissionStatusBadge } from "./SubmissionStatusBadge";
+export { ReviewNotesPanel } from "./ReviewNotesPanel";
 export * from "./modals";

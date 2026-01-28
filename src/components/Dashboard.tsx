@@ -4,6 +4,9 @@ import { useTour } from "../hooks/useTour";
 import { usePendingTransactionCount } from "../hooks/usePendingTransactionCount";
 import { SyncStatusIndicator } from "./dashboard/index";
 import StartNewAuditModal from "./StartNewAuditModal";
+import { LicenseGate } from "./common/LicenseGate";
+import { AlertBanner, AlertIcons } from "./common/AlertBanner";
+import { useLicense } from "../contexts/LicenseContext";
 import {
   getDashboardTourSteps,
   JOYRIDE_STYLES,
@@ -63,6 +66,9 @@ function Dashboard({
   // Fetch pending auto-detected transaction count
   const { pendingCount, isLoading: isPendingLoading } =
     usePendingTransactionCount();
+
+  // License status for transaction limit check
+  const { canCreateTransaction, transactionCount, transactionLimit } = useLicense();
 
   // Handle viewing pending transactions - navigates to transactions view
   const handleViewPending = useCallback(() => {
@@ -134,78 +140,45 @@ function Dashboard({
       <div className="max-w-5xl w-full">
         {/* Continue Setup Banner */}
         {showSetupPrompt && onContinueSetup && (
-          <div className="mb-8 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4 shadow-md">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
-                  <svg
-                    className="w-5 h-5 text-amber-600"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                    />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-amber-900">
-                    Complete your account setup
-                  </h3>
-                  <p className="text-xs text-amber-700">
-                    Connect your email to export communications with your audits
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={onContinueSetup}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
-                >
-                  Continue Setup
-                </button>
-                {onDismissSetupPrompt && (
-                  <button
-                    onClick={onDismissSetupPrompt}
-                    className="p-2 text-amber-600 hover:text-amber-800 hover:bg-amber-100 rounded-lg transition-colors"
-                    title="Dismiss"
-                  >
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
+          <AlertBanner
+            icon={AlertIcons.email}
+            title="Complete your account setup"
+            description="Connect your email to export communications with your audits"
+            actionText="Continue Setup"
+            onAction={onContinueSetup}
+            dismissible={!!onDismissSetupPrompt}
+            onDismiss={onDismissSetupPrompt}
+            testId="setup-prompt-banner"
+          />
+        )}
+
+        {/* Transaction Limit Warning Banner */}
+        {!canCreateTransaction && (
+          <AlertBanner
+            icon={AlertIcons.warning}
+            title="Transaction Limit Reached"
+            description={`You've used ${transactionCount} of ${transactionLimit} transactions. Upgrade to create more.`}
+            actionText="Upgrade"
+            onAction={() => window.open("https://broker-portal-two.vercel.app/beta", "_blank")}
+            testId="transaction-limit-banner"
+          />
         )}
 
         {/* Unified Sync Status - shows progress during sync, completion after */}
-        {syncStatus && (
-          <div data-tour="ai-detection-status">
-            <SyncStatusIndicator
-              status={syncStatus}
-              isAnySyncing={isAnySyncing}
-              currentMessage={currentSyncMessage}
-              pendingCount={pendingCount}
-              onViewPending={handleViewPending}
-            />
-          </div>
-        )}
+        {/* AI Detection status - only visible with AI add-on */}
+        <LicenseGate requires="ai_addon">
+          {syncStatus && (
+            <div data-tour="ai-detection-status">
+              <SyncStatusIndicator
+                status={syncStatus}
+                isAnySyncing={isAnySyncing}
+                currentMessage={currentSyncMessage}
+                pendingCount={pendingCount}
+                onViewPending={handleViewPending}
+              />
+            </div>
+          )}
+        </LicenseGate>
 
         {/* Header */}
         <div className="text-center mb-12">
@@ -222,17 +195,17 @@ function Dashboard({
           {/* Start New Audit Card */}
           <button
             onClick={handleStartNewAuditClick}
-            className={`group relative bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 p-8 text-left border-2 transform hover:scale-105 ${
+            className={`group bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 p-6 text-left border-2 transform hover:scale-105 ${
               pendingCount > 0
                 ? "border-indigo-500 ring-2 ring-indigo-300 ring-offset-2 hover:border-indigo-600"
                 : "border-transparent hover:border-blue-500"
             }`}
             data-tour="new-audit-card"
           >
-            <div className="absolute top-6 right-6">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all">
                 <svg
-                  className="w-8 h-8 text-white"
+                  className="w-7 h-7 text-white"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -245,25 +218,21 @@ function Dashboard({
                   />
                 </svg>
               </div>
-            </div>
-
-            <div className="pr-24">
-              <div className="flex items-center gap-2 mb-3">
-                <h2 className="text-2xl font-bold text-gray-900">
-                  Start New Audit
+              <div className="flex-1">
+                <h2 className="text-xl font-bold text-gray-900">
+                  New Audit
                 </h2>
+              </div>
+              {/* Pending count badge - AI add-on only */}
+              <LicenseGate requires="ai_addon">
                 {pendingCount > 0 && (
                   <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-sm font-semibold bg-indigo-100 text-indigo-800 animate-pulse">
                     {pendingCount} new
                   </span>
                 )}
-              </div>
-            </div>
-
-            <div className="mt-6 flex items-center gap-2 text-blue-600 font-semibold group-hover:gap-4 transition-all">
-              <span>Start Audit</span>
+              </LicenseGate>
               <svg
-                className="w-5 h-5"
+                className="w-5 h-5 text-blue-600 group-hover:translate-x-1 transition-transform"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -281,13 +250,13 @@ function Dashboard({
           {/* Browse Transactions Card */}
           <button
             onClick={onViewTransactions}
-            className="group relative bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 p-8 text-left border-2 border-transparent hover:border-green-500 transform hover:scale-105"
+            className="group bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 p-6 text-left border-2 border-transparent hover:border-green-500 transform hover:scale-105"
             data-tour="transactions-card"
           >
-            <div className="absolute top-6 right-6">
-              <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 bg-gradient-to-br from-green-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all">
                 <svg
-                  className="w-8 h-8 text-white"
+                  className="w-7 h-7 text-white"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -300,18 +269,13 @@ function Dashboard({
                   />
                 </svg>
               </div>
-            </div>
-
-            <div className="pr-24">
-              <h2 className="text-2xl font-bold text-gray-900 mb-3">
-                Browse Transactions
-              </h2>
-            </div>
-
-            <div className="mt-6 flex items-center gap-2 text-green-600 font-semibold group-hover:gap-4 transition-all">
-              <span>View All</span>
+              <div className="flex-1">
+                <h2 className="text-xl font-bold text-gray-900">
+                  All Audits
+                </h2>
+              </div>
               <svg
-                className="w-5 h-5"
+                className="w-5 h-5 text-green-600 group-hover:translate-x-1 transition-transform"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -353,7 +317,7 @@ function Dashboard({
               </div>
               <div className="flex-1">
                 <h3 className="text-lg font-bold text-gray-900 mb-1">
-                  Manage Contacts
+                  Contacts
                 </h3>
               </div>
               <svg

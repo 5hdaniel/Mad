@@ -9,6 +9,13 @@ import transactionService from "./services/transactionService";
 import auditService from "./services/auditService";
 import logService from "./services/logService";
 import { autoLinkAllToTransaction } from "./services/messageMatchingService";
+import { autoLinkCommunicationsForContact } from "./services/autoLinkService";
+import { dbAll } from "./services/db/core/dbConnection";
+import { createEmail, getEmailByExternalId } from "./services/db/emailDbService";
+import { createCommunication } from "./services/db/communicationDbService";
+import submissionService from "./services/submissionService";
+import submissionSyncService from "./services/submissionSyncService";
+import type { SubmissionProgress } from "./services/submissionService";
 import type {
   Transaction,
   NewTransaction,
@@ -17,10 +24,12 @@ import type {
 } from "./types/models";
 
 // Services (still JS - to be migrated)
-const pdfExportService = require("./services/pdfExportService").default;
 const enhancedExportService =
   require("./services/enhancedExportService").default;
 const folderExportService = require("./services/folderExportService").default;
+const databaseService = require("./services/databaseService").default;
+const gmailFetchService = require("./services/gmailFetchService").default;
+const outlookFetchService = require("./services/outlookFetchService").default;
 
 // Import validation utilities
 import {
@@ -59,6 +68,14 @@ interface ExportOptions {
   exportFormat?: string;
   [key: string]: unknown;
 }
+
+/**
+ * Cleanup transaction handlers (call on app quit)
+ */
+export const cleanupTransactionHandlers = (): void => {
+  // Stop submission sync service
+  submissionSyncService.stopPeriodicSync();
+};
 
 /**
  * Register all transaction-related IPC handlers
@@ -370,8 +387,9 @@ export const registerTransactionHandlers = (
             "transactionId",
           );
         }
+        const sanitizedUpdates = sanitizeObject(updates || {});
         const validatedUpdates = validateTransactionData(
-          sanitizeObject(updates || {}),
+          sanitizedUpdates,
           true,
         );
 
@@ -825,8 +843,57 @@ export const registerTransactionHandlers = (
           },
         );
 
+        // TASK-1126: Auto-link communications for each added contact
+        const autoLinkResults: Array<{
+          contactId: string;
+          emailsLinked: number;
+          messagesLinked: number;
+          alreadyLinked: number;
+          errors: number;
+        }> = [];
+
+        const addOperations = validatedOperations.filter(
+          (op) => op.action === "add"
+        );
+
+        for (const op of addOperations) {
+          try {
+            const result = await autoLinkCommunicationsForContact({
+              contactId: op.contactId,
+              transactionId: validatedTransactionId as string,
+            });
+
+            autoLinkResults.push({
+              contactId: op.contactId,
+              ...result,
+            });
+
+            logService.debug(
+              "Auto-link complete for contact",
+              "Transactions",
+              {
+                contactId: op.contactId,
+                emailsLinked: result.emailsLinked,
+                messagesLinked: result.messagesLinked,
+                alreadyLinked: result.alreadyLinked,
+              }
+            );
+          } catch (error) {
+            // Log but don't fail the entire operation
+            logService.warn(
+              `Auto-link failed for contact ${op.contactId}`,
+              "Transactions",
+              {
+                error: error instanceof Error ? error.message : "Unknown",
+              }
+            );
+          }
+        }
+
         return {
           success: true,
+          autoLinkResults:
+            autoLinkResults.length > 0 ? autoLinkResults : undefined,
         };
       } catch (error) {
         logService.error(
@@ -1001,10 +1068,10 @@ export const registerTransactionHandlers = (
 
         // Use provided output path or generate default one
         const pdfPath =
-          validatedPath || pdfExportService.getDefaultExportPath(details);
+          validatedPath || folderExportService.getDefaultExportPath(details).replace(/\/$/, "") + ".pdf";
 
-        // Generate PDF
-        const generatedPath = await pdfExportService.generateTransactionPDF(
+        // Generate combined PDF using folder export service
+        const generatedPath = await folderExportService.exportTransactionToCombinedPDF(
           details,
           (details as any).communications || [],
           pdfPath,
@@ -1314,7 +1381,7 @@ export const registerTransactionHandlers = (
     },
   );
 
-  // Get unlinked emails (not attached to any transaction)
+  // Get unlinked emails - fetches directly from email provider (Gmail/Outlook)
   ipcMain.handle(
     "transactions:get-unlinked-emails",
     async (
@@ -1322,24 +1389,289 @@ export const registerTransactionHandlers = (
       userId: string,
     ): Promise<TransactionResponse> => {
       try {
-        logService.info("Getting unlinked emails", "Transactions", { userId });
+        logService.info("Fetching emails from provider", "Transactions", { userId });
 
         const validatedUserId = validateUserId(userId);
         if (!validatedUserId) {
           throw new ValidationError("User ID validation failed", "userId");
         }
 
-        const emails = await transactionService.getUnlinkedEmails(validatedUserId);
+        // Check which provider the user is authenticated with
+        const googleToken = await databaseService.getOAuthToken(validatedUserId, "google", "mailbox");
+        const microsoftToken = await databaseService.getOAuthToken(validatedUserId, "microsoft", "mailbox");
+
+        let emails: Array<{
+          id: string;
+          subject: string | null;
+          sender: string | null;
+          sent_at: string | null;
+          body_preview?: string | null;
+          provider: "gmail" | "outlook";
+        }> = [];
+
+        // Fetch from Gmail if authenticated
+        if (googleToken) {
+          try {
+            const isReady = await gmailFetchService.initialize(validatedUserId);
+            if (isReady) {
+              // Fetch recent emails (last 100)
+              const gmailEmails = await gmailFetchService.searchEmails({
+                maxResults: 100,
+              });
+              emails = gmailEmails.map((email: { id: string; subject: string | null; from: string | null; date: string | null; plainBody: string | null }) => ({
+                id: `gmail:${email.id}`,
+                subject: email.subject,
+                sender: email.from,
+                sent_at: email.date ? new Date(email.date).toISOString() : null,
+                body_preview: email.plainBody?.substring(0, 200) || null,
+                provider: "gmail" as const,
+              }));
+              logService.info(`Fetched ${emails.length} emails from Gmail`, "Transactions");
+            }
+          } catch (gmailError) {
+            logService.warn("Failed to fetch from Gmail", "Transactions", {
+              error: gmailError instanceof Error ? gmailError.message : "Unknown",
+            });
+          }
+        }
+
+        // Fetch from Outlook if authenticated (and no Gmail emails)
+        if (microsoftToken && emails.length === 0) {
+          try {
+            const isReady = await outlookFetchService.initialize(validatedUserId);
+            if (isReady) {
+              // Fetch recent emails (last 100)
+              const outlookEmails = await outlookFetchService.searchEmails({
+                maxResults: 100,
+              });
+              emails = outlookEmails.map((email: { id: string; subject: string | null; from: string | null; date: string | null; plainBody: string | null }) => ({
+                id: `outlook:${email.id}`,
+                subject: email.subject,
+                sender: email.from,
+                sent_at: email.date ? new Date(email.date).toISOString() : null,
+                body_preview: email.plainBody?.substring(0, 200) || null,
+                provider: "outlook" as const,
+              }));
+              logService.info(`Fetched ${emails.length} emails from Outlook`, "Transactions");
+            }
+          } catch (outlookError) {
+            logService.warn("Failed to fetch from Outlook", "Transactions", {
+              error: outlookError instanceof Error ? outlookError.message : "Unknown",
+            });
+          }
+        }
+
+        if (emails.length === 0 && !googleToken && !microsoftToken) {
+          return {
+            success: false,
+            error: "No email account connected. Please connect Gmail or Outlook in Settings.",
+          };
+        }
 
         return {
           success: true,
           emails,
         };
       } catch (error) {
-        logService.error("Get unlinked emails failed", "Transactions", {
+        logService.error("Get emails from provider failed", "Transactions", {
           userId,
           error: error instanceof Error ? error.message : "Unknown error",
         });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Link emails to a transaction - fetches full email from provider and saves to database
+  ipcMain.handle(
+    "transactions:link-emails",
+    async (
+      event: IpcMainInvokeEvent,
+      emailIds: string[],
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Linking emails to transaction", "Transactions", {
+          emailCount: emailIds?.length || 0,
+          transactionId,
+        });
+
+        // Validate transaction ID
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        // Validate email IDs
+        if (!Array.isArray(emailIds) || emailIds.length === 0) {
+          throw new ValidationError(
+            "Email IDs must be a non-empty array",
+            "emailIds",
+          );
+        }
+
+        // Get transaction to get user_id
+        const transaction = await transactionService.getTransactionDetails(validatedTransactionId);
+        if (!transaction) {
+          throw new ValidationError("Transaction not found", "transactionId");
+        }
+
+        // Import the function we need
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { createCommunication } = require("./services/db/communicationDbService");
+
+        // Group emails by provider
+        const gmailIds: string[] = [];
+        const outlookIds: string[] = [];
+        for (const emailId of emailIds) {
+          if (!emailId || typeof emailId !== "string") continue;
+          if (emailId.startsWith("gmail:")) {
+            gmailIds.push(emailId.replace("gmail:", ""));
+          } else if (emailId.startsWith("outlook:")) {
+            outlookIds.push(emailId.replace("outlook:", ""));
+          }
+        }
+
+        let linkedCount = 0;
+
+        // Fetch and save Gmail emails
+        if (gmailIds.length > 0) {
+          try {
+            const isReady = await gmailFetchService.initialize(transaction.user_id);
+            if (isReady) {
+              for (const messageId of gmailIds) {
+                try {
+                  const email = await gmailFetchService.getEmailById(messageId);
+
+                  // BACKLOG-506: Check if email already exists (dedup by external_id)
+                  let emailRecord = await getEmailByExternalId(transaction.user_id, messageId);
+
+                  if (!emailRecord) {
+                    // Create email in emails table (content store)
+                    emailRecord = await createEmail({
+                      user_id: transaction.user_id,
+                      external_id: messageId,
+                      source: "gmail",
+                      thread_id: email.threadId,
+                      sender: email.from,
+                      recipients: email.to,
+                      cc: email.cc,
+                      subject: email.subject,
+                      body_html: email.body,
+                      body_plain: email.bodyPlain,
+                      sent_at: email.date ? new Date(email.date).toISOString() : undefined,
+                      has_attachments: email.hasAttachments || false,
+                      attachment_count: email.attachmentCount || 0,
+                    });
+                  }
+
+                  // Create junction link in communications table
+                  await createCommunication({
+                    user_id: transaction.user_id,
+                    transaction_id: validatedTransactionId,
+                    email_id: emailRecord.id,
+                    communication_type: "email",
+                    link_source: "manual",
+                    link_confidence: 1.0,
+                  });
+                  linkedCount++;
+                } catch (emailError) {
+                  logService.warn(`Failed to fetch Gmail email ${messageId}`, "Transactions", {
+                    error: emailError instanceof Error ? emailError.message : "Unknown",
+                  });
+                }
+              }
+            }
+          } catch (gmailError) {
+            logService.error("Gmail fetch failed", "Transactions", {
+              error: gmailError instanceof Error ? gmailError.message : "Unknown",
+            });
+          }
+        }
+
+        // Fetch and save Outlook emails
+        if (outlookIds.length > 0) {
+          try {
+            const isReady = await outlookFetchService.initialize(transaction.user_id);
+            if (isReady) {
+              for (const messageId of outlookIds) {
+                try {
+                  const email = await outlookFetchService.getEmailById(messageId);
+
+                  // BACKLOG-506: Check if email already exists (dedup by external_id)
+                  let emailRecord = await getEmailByExternalId(transaction.user_id, messageId);
+
+                  if (!emailRecord) {
+                    // Create email in emails table (content store)
+                    emailRecord = await createEmail({
+                      user_id: transaction.user_id,
+                      external_id: messageId,
+                      source: "outlook",
+                      thread_id: email.threadId,
+                      sender: email.from,
+                      recipients: email.to,
+                      cc: email.cc,
+                      subject: email.subject,
+                      body_html: email.body,
+                      body_plain: email.bodyPlain,
+                      sent_at: email.date ? new Date(email.date).toISOString() : undefined,
+                      has_attachments: email.hasAttachments || false,
+                      attachment_count: email.attachmentCount || 0,
+                    });
+                  }
+
+                  // Create junction link in communications table
+                  await createCommunication({
+                    user_id: transaction.user_id,
+                    transaction_id: validatedTransactionId,
+                    email_id: emailRecord.id,
+                    communication_type: "email",
+                    link_source: "manual",
+                    link_confidence: 1.0,
+                  });
+                  linkedCount++;
+                } catch (emailError) {
+                  logService.warn(`Failed to fetch Outlook email ${messageId}`, "Transactions", {
+                    error: emailError instanceof Error ? emailError.message : "Unknown",
+                  });
+                }
+              }
+            }
+          } catch (outlookError) {
+            logService.error("Outlook fetch failed", "Transactions", {
+              error: outlookError instanceof Error ? outlookError.message : "Unknown",
+            });
+          }
+        }
+
+        logService.info("Emails linked successfully", "Transactions", {
+          requestedCount: emailIds.length,
+          linkedCount,
+          transactionId: validatedTransactionId,
+        });
+
+        return {
+          success: true,
+          linkedCount,
+        };
+      } catch (error) {
+        logService.error("Link emails failed", "Transactions", {
+          emailCount: emailIds?.length || 0,
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",
@@ -1496,10 +1828,12 @@ export const registerTransactionHandlers = (
     async (
       event: IpcMainInvokeEvent,
       messageIds: string[],
+      transactionId?: string,
     ): Promise<TransactionResponse> => {
       try {
         logService.info("Unlinking messages from transaction", "Transactions", {
           messageCount: messageIds?.length || 0,
+          transactionId,
         });
 
         // Validate message IDs
@@ -1517,7 +1851,8 @@ export const registerTransactionHandlers = (
           }
         }
 
-        await transactionService.unlinkMessages(messageIds);
+        // TASK-1116: Pass transactionId for thread-based unlinking
+        await transactionService.unlinkMessages(messageIds, transactionId);
 
         logService.info("Messages unlinked successfully", "Transactions", {
           messageCount: messageIds.length,
@@ -1732,10 +2067,36 @@ export const registerTransactionHandlers = (
           };
         }
 
+        // Filter communications by date range if transaction has dates set
+        let communications = (details as any).communications || [];
+        const startDate = details.started_at;
+        const endDate = details.closed_at;
+
+        if (startDate || endDate) {
+          const start = startDate ? new Date(startDate as string) : null;
+          const end = endDate ? new Date(endDate as string) : null;
+          // Add a day to end date to include messages on the closing day
+          if (end) end.setDate(end.getDate() + 1);
+
+          communications = communications.filter((comm: any) => {
+            const commDate = new Date(comm.sent_at || comm.received_at);
+            if (start && commDate < start) return false;
+            if (end && commDate > end) return false;
+            return true;
+          });
+
+          logService.info("Filtered communications by date range", "Transactions", {
+            original: ((details as any).communications || []).length,
+            filtered: communications.length,
+            startDate: startDate,
+            endDate: endDate,
+          });
+        }
+
         // Export to folder structure
         const exportPath = await folderExportService.exportTransactionToFolder(
           details,
-          (details as any).communications || [],
+          communications,
           {
             transactionId: validatedTransactionId,
             includeEmails: sanitizedOptions.includeEmails ?? true,
@@ -1754,10 +2115,10 @@ export const registerTransactionHandlers = (
         );
 
         // Update export tracking in database
+        // Note: export_format constraint doesn't include "folder", so we use NULL
         const db = require("./services/databaseService").default;
         await db.updateTransaction(validatedTransactionId, {
           export_status: "exported",
-          export_format: "folder",
           last_exported_on: new Date().toISOString(),
           export_count: (details.export_count || 0) + 1,
         });
@@ -1786,6 +2147,780 @@ export const registerTransactionHandlers = (
         };
       } catch (error) {
         logService.error("Folder export failed", "Transactions", {
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // ============================================
+  // SUBMISSION HANDLERS (BACKLOG-391)
+  // ============================================
+
+  // Submit transaction to broker portal for review
+  ipcMain.handle(
+    "transactions:submit",
+    async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Submitting transaction for broker review", "Transactions", {
+          transactionId,
+        });
+
+        // Validate transaction ID
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        // Track progress via IPC events
+        const result = await submissionService.submitTransaction(
+          validatedTransactionId,
+          (progress: SubmissionProgress) => {
+            if (mainWindow) {
+              mainWindow.webContents.send("transactions:submit-progress", progress);
+            }
+          }
+        );
+
+        if (result.success) {
+          // Audit log submission
+          const transaction = await transactionService.getTransactionDetails(
+            validatedTransactionId
+          );
+          await auditService.log({
+            userId: transaction?.user_id || "unknown",
+            action: "TRANSACTION_SUBMIT",
+            resourceType: "SUBMISSION",
+            resourceId: result.submissionId || validatedTransactionId,
+            metadata: {
+              propertyAddress: transaction?.property_address,
+              messagesCount: result.messagesCount,
+              attachmentsCount: result.attachmentsCount,
+            },
+            success: true,
+          });
+
+          logService.info("Transaction submitted successfully", "Transactions", {
+            transactionId: validatedTransactionId,
+            submissionId: result.submissionId,
+            messagesCount: result.messagesCount,
+            attachmentsCount: result.attachmentsCount,
+          });
+        }
+
+        return {
+          success: result.success,
+          submissionId: result.submissionId,
+          messagesCount: result.messagesCount,
+          attachmentsCount: result.attachmentsCount,
+          attachmentsFailed: result.attachmentsFailed,
+          error: result.error,
+        };
+      } catch (error) {
+        logService.error("Submit transaction failed", "Transactions", {
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Resubmit transaction (creates new version)
+  ipcMain.handle(
+    "transactions:resubmit",
+    async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Resubmitting transaction for broker review", "Transactions", {
+          transactionId,
+        });
+
+        // Validate transaction ID
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        // Track progress via IPC events
+        const result = await submissionService.resubmitTransaction(
+          validatedTransactionId,
+          (progress: SubmissionProgress) => {
+            if (mainWindow) {
+              mainWindow.webContents.send("transactions:submit-progress", progress);
+            }
+          }
+        );
+
+        if (result.success) {
+          logService.info("Transaction resubmitted successfully", "Transactions", {
+            transactionId: validatedTransactionId,
+            submissionId: result.submissionId,
+          });
+        }
+
+        return {
+          success: result.success,
+          submissionId: result.submissionId,
+          messagesCount: result.messagesCount,
+          attachmentsCount: result.attachmentsCount,
+          attachmentsFailed: result.attachmentsFailed,
+          error: result.error,
+        };
+      } catch (error) {
+        logService.error("Resubmit transaction failed", "Transactions", {
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Get submission status from cloud
+  ipcMain.handle(
+    "transactions:get-submission-status",
+    async (
+      event: IpcMainInvokeEvent,
+      submissionId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        if (!submissionId || typeof submissionId !== "string") {
+          throw new ValidationError(
+            "Submission ID is required",
+            "submissionId",
+          );
+        }
+
+        const status = await submissionService.getSubmissionStatus(submissionId);
+
+        if (!status) {
+          return {
+            success: false,
+            error: "Submission not found",
+          };
+        }
+
+        return {
+          success: true,
+          status: status.status,
+          reviewNotes: status.review_notes,
+          reviewedBy: status.reviewed_by,
+          reviewedAt: status.reviewed_at,
+        };
+      } catch (error) {
+        logService.error("Get submission status failed", "Transactions", {
+          submissionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Re-sync auto-link communications for all contacts on a transaction
+  // Use when contacts have been updated and user wants to re-link communications
+  ipcMain.handle(
+    "transactions:resync-auto-link",
+    async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Re-syncing auto-link for transaction", "Transactions", {
+          transactionId,
+        });
+
+        // Validate transaction ID
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        // Get transaction with contacts
+        const transactionDetails = await transactionService.getTransactionWithContacts(
+          validatedTransactionId,
+        );
+
+        if (!transactionDetails) {
+          return {
+            success: false,
+            error: "Transaction not found",
+          };
+        }
+
+        const contactAssignments = (transactionDetails as any).contact_assignments || [];
+
+        if (contactAssignments.length === 0) {
+          return {
+            success: true,
+            message: "No contacts to sync",
+            totalEmailsLinked: 0,
+            totalMessagesLinked: 0,
+            totalAlreadyLinked: 0,
+          };
+        }
+
+        // Auto-link communications for each contact
+        const results: Array<{
+          contactId: string;
+          emailsLinked: number;
+          messagesLinked: number;
+          alreadyLinked: number;
+          errors: number;
+        }> = [];
+
+        let totalEmailsLinked = 0;
+        let totalMessagesLinked = 0;
+        let totalAlreadyLinked = 0;
+        let totalErrors = 0;
+
+        for (const assignment of contactAssignments) {
+          try {
+            const result = await autoLinkCommunicationsForContact({
+              contactId: assignment.contact_id,
+              transactionId: validatedTransactionId,
+            });
+
+            results.push({
+              contactId: assignment.contact_id,
+              ...result,
+            });
+
+            totalEmailsLinked += result.emailsLinked;
+            totalMessagesLinked += result.messagesLinked;
+            totalAlreadyLinked += result.alreadyLinked;
+            totalErrors += result.errors;
+
+            logService.debug(
+              "Re-sync auto-link complete for contact",
+              "Transactions",
+              {
+                contactId: assignment.contact_id,
+                emailsLinked: result.emailsLinked,
+                messagesLinked: result.messagesLinked,
+                alreadyLinked: result.alreadyLinked,
+              }
+            );
+          } catch (error) {
+            totalErrors++;
+            logService.warn(
+              `Re-sync auto-link failed for contact ${assignment.contact_id}`,
+              "Transactions",
+              {
+                error: error instanceof Error ? error.message : "Unknown",
+              }
+            );
+          }
+        }
+
+        logService.info("Re-sync auto-link complete", "Transactions", {
+          transactionId: validatedTransactionId,
+          contactsProcessed: contactAssignments.length,
+          totalEmailsLinked,
+          totalMessagesLinked,
+          totalAlreadyLinked,
+          totalErrors,
+        });
+
+        return {
+          success: true,
+          contactsProcessed: contactAssignments.length,
+          totalEmailsLinked,
+          totalMessagesLinked,
+          totalAlreadyLinked,
+          totalErrors,
+          results,
+        };
+      } catch (error) {
+        logService.error("Re-sync auto-link failed", "Transactions", {
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // ============================================
+  // SYNC FROM PROVIDER HANDLER (BACKLOG-457)
+  // ============================================
+
+  // Sync emails from email provider (Gmail/Outlook) for a transaction
+  // This fetches NEW emails from the provider, stores them, then runs auto-link
+  ipcMain.handle(
+    "transactions:sync-and-fetch-emails",
+    async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Sync and fetch emails for transaction", "Transactions", {
+          transactionId,
+        });
+
+        // Validate transaction ID
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        // Get transaction with contacts
+        const transactionDetails = await transactionService.getTransactionWithContacts(
+          validatedTransactionId,
+        );
+
+        if (!transactionDetails) {
+          return {
+            success: false,
+            error: "Transaction not found",
+          };
+        }
+
+        const userId = transactionDetails.user_id;
+        const contactAssignments = (transactionDetails as any).contact_assignments || [];
+
+        if (contactAssignments.length === 0) {
+          return {
+            success: true,
+            message: "No contacts to sync",
+            emailsFetched: 0,
+            emailsStored: 0,
+            totalEmailsLinked: 0,
+            totalMessagesLinked: 0,
+          };
+        }
+
+        // Collect all contact emails
+        const contactEmails: string[] = [];
+        for (const assignment of contactAssignments) {
+          // Get contact's email addresses from contact_emails table
+          const emails = dbAll<{ email: string }>(
+            "SELECT email FROM contact_emails WHERE contact_id = ?",
+            [assignment.contact_id]
+          );
+          for (const e of emails) {
+            if (e.email && !contactEmails.includes(e.email.toLowerCase())) {
+              contactEmails.push(e.email.toLowerCase());
+            }
+          }
+        }
+
+        if (contactEmails.length === 0) {
+          // No contact emails, just run the regular auto-link
+          return {
+            success: true,
+            message: "No contact emails found, running local auto-link only",
+            emailsFetched: 0,
+            emailsStored: 0,
+            totalEmailsLinked: 0,
+            totalMessagesLinked: 0,
+          };
+        }
+
+        // Determine date range from transaction (or default to 6 months)
+        const startDate = transactionDetails.started_at
+          ? new Date(transactionDetails.started_at)
+          : new Date(Date.now() - 6 * 30 * 24 * 60 * 60 * 1000); // 6 months ago
+        const endDate = transactionDetails.closed_at
+          ? new Date(transactionDetails.closed_at)
+          : new Date();
+        // Add buffer days after closing
+        endDate.setDate(endDate.getDate() + 30);
+
+        // Build search query for contact emails
+        // Gmail: "from:email1 OR from:email2 OR to:email1 OR to:email2"
+        // Outlook: Similar but uses $filter
+        const gmailQuery = contactEmails
+          .map((email) => `from:${email} OR to:${email}`)
+          .join(" OR ");
+
+        logService.info("Fetching emails from provider", "Transactions", {
+          contactEmailCount: contactEmails.length,
+          gmailQuery: gmailQuery.substring(0, 100) + "...",
+          dateRange: { start: startDate.toISOString(), end: endDate.toISOString() },
+        });
+
+        let emailsFetched = 0;
+        let emailsStored = 0;
+        let providerUsed: "gmail" | "outlook" | null = null;
+
+        // createCommunication and getCommunications are imported at the top
+
+        // Check which provider the user is authenticated with
+        const googleToken = await databaseService.getOAuthToken(userId, "google", "mailbox");
+        const microsoftToken = await databaseService.getOAuthToken(userId, "microsoft", "mailbox");
+
+        // Try Gmail first
+        if (googleToken) {
+          try {
+            const isReady = await gmailFetchService.initialize(userId);
+            if (isReady) {
+              providerUsed = "gmail";
+              const fetchedEmails = await gmailFetchService.searchEmails({
+                query: gmailQuery,
+                after: startDate,
+                before: endDate,
+                maxResults: 100,
+              });
+              emailsFetched = fetchedEmails.length;
+
+              // Check for duplicates using the deduplication service
+              const enrichedEmails = await gmailFetchService.checkDuplicates(userId, fetchedEmails);
+
+              // Store new emails
+              // BACKLOG-506: Deduplication is handled by getEmailByExternalId below
+              for (const email of enrichedEmails) {
+                // Skip if already flagged as duplicate by deduplication service
+                if (email.duplicateOf) {
+                  logService.debug(`Skipping duplicate email: ${email.subject}`, "Transactions");
+                  continue;
+                }
+
+                try {
+                  // BACKLOG-506: Check if email exists (deduplication by provider ID)
+                  let emailRecord = await getEmailByExternalId(userId, email.id);
+
+                  if (!emailRecord) {
+                    // Create email in emails table (content store)
+                    emailRecord = await createEmail({
+                      user_id: userId,
+                      external_id: email.id,  // Gmail API message ID
+                      source: "gmail",
+                      thread_id: email.threadId,
+                      sender: email.from,
+                      recipients: email.to,
+                      cc: email.cc,
+                      subject: email.subject,
+                      body_html: email.body,
+                      body_plain: email.bodyPlain,
+                      sent_at: email.date ? new Date(email.date).toISOString() : undefined,
+                      has_attachments: email.hasAttachments || false,
+                      attachment_count: email.attachmentCount || 0,
+                    });
+                  }
+
+                  // Create junction link in communications (no content, just IDs)
+                  await createCommunication({
+                    user_id: userId,
+                    transaction_id: validatedTransactionId,  // HOTFIX: Link to transaction!
+                    email_id: emailRecord.id,
+                    communication_type: "email",
+                    link_source: "scan",
+                    link_confidence: 0.9,
+                    has_attachments: email.hasAttachments || false,
+                    is_false_positive: false,
+                  });
+                  emailsStored++;
+                } catch (storeError) {
+                  logService.warn(`Failed to store email: ${email.subject}`, "Transactions", {
+                    error: storeError instanceof Error ? storeError.message : "Unknown",
+                  });
+                }
+              }
+              logService.info(`Gmail: Fetched ${emailsFetched}, stored ${emailsStored}`, "Transactions");
+            }
+          } catch (gmailError) {
+            logService.warn("Failed to fetch from Gmail", "Transactions", {
+              error: gmailError instanceof Error ? gmailError.message : "Unknown",
+            });
+          }
+        }
+
+        // Try Outlook if Gmail didn't work
+        if (!providerUsed && microsoftToken) {
+          try {
+            const isReady = await outlookFetchService.initialize(userId);
+            if (isReady) {
+              providerUsed = "outlook";
+              // Outlook uses OData filter, so we need to format the query differently
+              // Build a query that searches for contact emails in subject or body
+              // The searchEmails method handles the filtering
+              const fetchedEmails = await outlookFetchService.searchEmails({
+                // Outlook's search is less flexible, so just use date range
+                // and filter by contact emails client-side
+                after: startDate,
+                before: endDate,
+                maxResults: 200, // Fetch more since we'll filter client-side
+              });
+
+              // Filter to only emails involving our contacts
+              const relevantEmails = fetchedEmails.filter((email: { from?: string | null; to?: string | null; cc?: string | null }) => {
+                const fromEmail = email.from?.toLowerCase() || "";
+                const toEmails = email.to?.toLowerCase() || "";
+                const ccEmails = email.cc?.toLowerCase() || "";
+                return contactEmails.some(
+                  (contactEmail) =>
+                    fromEmail.includes(contactEmail) ||
+                    toEmails.includes(contactEmail) ||
+                    ccEmails.includes(contactEmail)
+                );
+              });
+
+              emailsFetched = relevantEmails.length;
+
+              // Check for duplicates
+              const enrichedEmails = await outlookFetchService.checkDuplicates(userId, relevantEmails);
+
+              // Store new emails
+              // BACKLOG-506: Deduplication is handled by getEmailByExternalId below
+              for (const email of enrichedEmails) {
+                if (email.duplicateOf) {
+                  continue;
+                }
+
+                try {
+                  // BACKLOG-506: Check if email exists (deduplication by provider ID)
+                  let emailRecord = await getEmailByExternalId(userId, email.id);
+
+                  if (!emailRecord) {
+                    // Create email in emails table (content store)
+                    emailRecord = await createEmail({
+                      user_id: userId,
+                      external_id: email.id,  // Outlook API message ID
+                      source: "outlook",
+                      thread_id: email.threadId,
+                      sender: email.from,
+                      recipients: email.to,
+                      cc: email.cc,
+                      subject: email.subject,
+                      body_html: email.body,
+                      body_plain: email.bodyPlain,
+                      sent_at: email.date ? new Date(email.date).toISOString() : undefined,
+                      has_attachments: email.hasAttachments || false,
+                      attachment_count: email.attachmentCount || 0,
+                    });
+                  }
+
+                  // Create junction link in communications (no content, just IDs)
+                  await createCommunication({
+                    user_id: userId,
+                    transaction_id: validatedTransactionId,  // HOTFIX: Link to transaction!
+                    email_id: emailRecord.id,
+                    communication_type: "email",
+                    link_source: "scan",
+                    link_confidence: 0.9,
+                    has_attachments: email.hasAttachments || false,
+                    is_false_positive: false,
+                  });
+                  emailsStored++;
+                } catch (storeError) {
+                  logService.warn(`Failed to store email: ${email.subject}`, "Transactions", {
+                    error: storeError instanceof Error ? storeError.message : "Unknown",
+                  });
+                }
+              }
+              logService.info(`Outlook: Fetched ${emailsFetched}, stored ${emailsStored}`, "Transactions");
+            }
+          } catch (outlookError) {
+            logService.warn("Failed to fetch from Outlook", "Transactions", {
+              error: outlookError instanceof Error ? outlookError.message : "Unknown",
+            });
+          }
+        }
+
+        if (!providerUsed) {
+          return {
+            success: false,
+            error: "No email account connected. Please connect Gmail or Outlook in Settings.",
+          };
+        }
+
+        // Now run auto-link to link the newly fetched emails to this transaction
+        let totalEmailsLinked = 0;
+        let totalMessagesLinked = 0;
+        let totalAlreadyLinked = 0;
+        let totalErrors = 0;
+
+        for (const assignment of contactAssignments) {
+          try {
+            const result = await autoLinkCommunicationsForContact({
+              contactId: assignment.contact_id,
+              transactionId: validatedTransactionId,
+            });
+
+            totalEmailsLinked += result.emailsLinked;
+            totalMessagesLinked += result.messagesLinked;
+            totalAlreadyLinked += result.alreadyLinked;
+            totalErrors += result.errors;
+          } catch (error) {
+            totalErrors++;
+            logService.warn(
+              `Auto-link failed for contact ${assignment.contact_id}`,
+              "Transactions",
+              {
+                error: error instanceof Error ? error.message : "Unknown",
+              }
+            );
+          }
+        }
+
+        logService.info("Sync and fetch emails complete", "Transactions", {
+          transactionId: validatedTransactionId,
+          provider: providerUsed,
+          emailsFetched,
+          emailsStored,
+          totalEmailsLinked,
+          totalMessagesLinked,
+          totalAlreadyLinked,
+          totalErrors,
+        });
+
+        return {
+          success: true,
+          provider: providerUsed,
+          emailsFetched,
+          emailsStored,
+          totalEmailsLinked,
+          totalMessagesLinked,
+          totalAlreadyLinked,
+          totalErrors,
+        };
+      } catch (error) {
+        logService.error("Sync and fetch emails failed", "Transactions", {
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // ============================================
+  // SYNC HANDLERS (BACKLOG-395)
+  // ============================================
+
+  // Set main window reference for sync service and start periodic sync
+  if (mainWindow) {
+    submissionSyncService.setMainWindow(mainWindow);
+    // Start periodic sync with 1 minute interval
+    // Sync will only query for transactions that have been submitted but not in terminal states
+    submissionSyncService.startPeriodicSync(60000);
+  }
+
+  // Sync all submission statuses from cloud
+  ipcMain.handle(
+    "transactions:sync-submissions",
+    async (): Promise<TransactionResponse> => {
+      try {
+        logService.info("Manual sync triggered", "SubmissionSync");
+
+        const result = await submissionSyncService.syncAllSubmissions();
+
+        logService.info("Manual sync complete", "SubmissionSync", {
+          updated: result.updated,
+          failed: result.failed,
+        });
+
+        return {
+          success: true,
+          updated: result.updated,
+          failed: result.failed,
+          details: result.details,
+        };
+      } catch (error) {
+        logService.error("Manual sync failed", "SubmissionSync", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Sync a specific transaction's submission status
+  ipcMain.handle(
+    "transactions:sync-submission",
+    async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        const wasUpdated = await submissionSyncService.syncSubmission(validatedTransactionId);
+
+        return {
+          success: true,
+          updated: wasUpdated,
+        };
+      } catch (error) {
+        logService.error("Single sync failed", "SubmissionSync", {
           transactionId,
           error: error instanceof Error ? error.message : "Unknown error",
         });

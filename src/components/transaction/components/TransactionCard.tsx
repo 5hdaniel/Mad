@@ -3,39 +3,66 @@ import type { Transaction } from "@/types";
 import { ManualEntryBadge } from "./TransactionStatusWrapper";
 
 // ============================================
+// SVG ICONS (matching TransactionTabs)
+// ============================================
+
+/** Chat bubble icon for messages/texts - matches TransactionTabs */
+const MessagesIcon = (): React.ReactElement => (
+  <svg
+    className="w-4 h-4"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+    />
+  </svg>
+);
+
+/** Envelope icon for emails - matches TransactionTabs */
+const EmailsIcon = (): React.ReactElement => (
+  <svg
+    className="w-4 h-4"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+    />
+  </svg>
+);
+
+// ============================================
 // UTILITY FUNCTIONS
 // ============================================
 
 /**
  * Formats email and text counts into a human-readable string.
- * Handles singular/plural grammar and omits zero counts.
+ * Handles singular/plural grammar. Always shows both counts for design consistency.
  *
  * @example
- * formatCommunicationCounts(5, 0) // "5 emails"
- * formatCommunicationCounts(0, 3) // "3 texts"
- * formatCommunicationCounts(8, 4) // "8 emails, 4 texts"
- * formatCommunicationCounts(1, 1) // "1 email, 1 text"
- * formatCommunicationCounts(0, 0) // "No communications"
+ * formatCommunicationCounts(5, 0) // "5 email threads, 0 Texts"
+ * formatCommunicationCounts(0, 3) // "0 email threads, 3 Texts"
+ * formatCommunicationCounts(8, 4) // "8 email threads, 4 Texts"
+ * formatCommunicationCounts(1, 1) // "1 email thread, 1 Text"
+ * formatCommunicationCounts(0, 0) // "0 email threads, 0 Texts"
  */
 export function formatCommunicationCounts(
   emailCount: number,
   textCount: number
 ): string {
-  const parts: string[] = [];
+  const emailPart = `${emailCount} ${emailCount === 1 ? "email thread" : "email threads"}`;
+  const textPart = `${textCount} ${textCount === 1 ? "Text" : "Texts"}`;
 
-  if (emailCount > 0) {
-    parts.push(`${emailCount} ${emailCount === 1 ? "email" : "emails"}`);
-  }
-
-  if (textCount > 0) {
-    parts.push(`${textCount} ${textCount === 1 ? "text" : "texts"}`);
-  }
-
-  if (parts.length === 0) {
-    return "No communications";
-  }
-
-  return parts.join(", ");
+  return `${emailPart}, ${textPart}`;
 }
 
 // ============================================
@@ -53,6 +80,10 @@ export interface TransactionCardProps {
   onTransactionClick: () => void;
   /** Handler for clicking the selection checkbox */
   onCheckboxClick: (e: React.MouseEvent) => void;
+  /** Handler for clicking the messages count - opens transaction on Messages tab */
+  onMessagesClick?: (e: React.MouseEvent) => void;
+  /** Handler for clicking the emails count - opens transaction on Emails tab */
+  onEmailsClick?: (e: React.MouseEvent) => void;
   /** Function to format currency values */
   formatCurrency: (amount: number | null | undefined) => string;
   /** Function to format date values */
@@ -78,9 +109,15 @@ function TransactionCard({
   isSelected,
   onTransactionClick,
   onCheckboxClick,
+  onMessagesClick,
+  onEmailsClick,
   formatCurrency,
   formatDate,
 }: TransactionCardProps): React.ReactElement {
+  // BACKLOG-396: Use text_thread_count (stored) instead of text_count (computed dynamically)
+  // This ensures consistency between card view and details page
+  const textCount = transaction.text_thread_count || 0;
+  const emailCount = transaction.email_count || 0;
   return (
     <div
       className={`bg-white p-6 hover:shadow-xl transition-all cursor-pointer ${
@@ -148,7 +185,7 @@ function TransactionCard({
                 {formatCurrency(transaction.sale_price)}
               </span>
             )}
-            {transaction.closing_date && (
+            {transaction.closed_at && (
               <span className="flex items-center gap-1">
                 <svg
                   className="w-4 h-4"
@@ -163,30 +200,27 @@ function TransactionCard({
                     d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
                   />
                 </svg>
-                Closed: {formatDate(transaction.closing_date)}
+                Closed: {formatDate(transaction.closed_at)}
               </span>
             )}
           </div>
-          <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
-            <span className="flex items-center gap-1">
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                />
-              </svg>
-              {formatCommunicationCounts(
-                transaction.email_count || 0,
-                transaction.text_count || 0
-              )}
-            </span>
+          <div className="mt-2 flex items-center gap-3 text-xs text-gray-500">
+            <button
+              onClick={onMessagesClick}
+              className="flex items-center gap-1 hover:text-blue-600 transition-colors"
+              title="View messages"
+            >
+              <MessagesIcon />
+              <span>{textCount} {textCount === 1 ? "Text thread" : "Text threads"}</span>
+            </button>
+            <button
+              onClick={onEmailsClick}
+              className="flex items-center gap-1 hover:text-blue-600 transition-colors"
+              title="View emails"
+            >
+              <EmailsIcon />
+              <span>{emailCount} {emailCount === 1 ? "Email thread" : "Email threads"}</span>
+            </button>
             {transaction.extraction_confidence && (
               <span className="flex items-center gap-1">
                 <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">

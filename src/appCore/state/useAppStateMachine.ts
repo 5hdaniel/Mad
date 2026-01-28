@@ -33,7 +33,7 @@ import {
   constructModalTransitions,
   constructHandlers,
 } from "./returnHelpers";
-import type { AppStateMachine, PendingEmailTokens } from "./types";
+import type { AppStateMachine } from "./types";
 
 export function useAppStateMachine(): AppStateMachine {
   // ============================================
@@ -68,11 +68,6 @@ export function useAppStateMachine(): AppStateMachine {
   // ============================================
   const machineState = useOptionalMachineState();
 
-  // ============================================
-  // PENDING EMAIL TOKENS STATE
-  // ============================================
-  const [pendingEmailTokens, setPendingEmailTokens] =
-    useState<PendingEmailTokens | null>(null);
 
   // ============================================
   // MODAL FLOW
@@ -125,7 +120,6 @@ export function useAppStateMachine(): AppStateMachine {
     isMacOS,
     pendingOAuthData: auth.pendingOAuthData,
     pendingOnboardingData: auth.pendingOnboardingData,
-    pendingEmailTokens,
     isAuthenticated,
     login,
     onPendingOAuthClear: () => auth.setPendingOAuthData(null),
@@ -136,7 +130,6 @@ export function useAppStateMachine(): AppStateMachine {
         emailConnected: false,
         emailProvider: null,
       }),
-    onPendingEmailTokensClear: () => setPendingEmailTokens(null),
     onPhoneTypeSet: phoneTypeApi.setHasSelectedPhoneType,
     onEmailOnboardingComplete: (completed, connected) => {
       emailOnboardingApi.setHasCompletedEmailOnboarding(completed);
@@ -182,10 +175,9 @@ export function useAppStateMachine(): AppStateMachine {
 
   // ============================================
   // EMAIL HANDLERS
+  // TASK-1603: Simplified after flow reorder (no more pending email tokens)
   // ============================================
   const emailHandlers = useEmailHandlers({
-    pendingOAuthData: auth.pendingOAuthData,
-    isAuthenticated,
     currentUserId: currentUser?.id,
     currentUserEmail: currentUser?.email,
     isMacOS,
@@ -193,7 +185,6 @@ export function useAppStateMachine(): AppStateMachine {
     selectedPhoneType: phoneTypeApi.selectedPhoneType,
     needsDriverSetup: phoneTypeApi.needsDriverSetup,
     hasPermissions: permissions.hasPermissions,
-    setPendingEmailTokens,
     setPendingOnboardingData: auth.setPendingOnboardingData,
     setHasEmailConnected: emailOnboardingApi.setHasEmailConnected,
     setCurrentStep: nav.setCurrentStep,
@@ -293,7 +284,6 @@ export function useAppStateMachine(): AppStateMachine {
         emailOnboardingApi,
         phoneTypeApi,
         auth,
-        pendingEmailTokens,
         exportFlow,
         modal,
         autoSync,
@@ -320,7 +310,6 @@ export function useAppStateMachine(): AppStateMachine {
       emailOnboardingApi,
       phoneTypeApi,
       auth,
-      pendingEmailTokens,
       exportFlow,
       modal,
       autoSync,

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import type { Transaction, OAuthProvider } from "@/types";
+import type { TransactionTab } from "./transactionDetailsModule/types";
 import AuditTransactionModal from "./AuditTransactionModal";
 import ExportModal from "./ExportModal";
 import TransactionDetails from "./TransactionDetails";
@@ -90,6 +91,9 @@ function TransactionList({
     null,
   );
 
+  // Initial tab state for TransactionDetails
+  const [initialTab, setInitialTab] = useState<TransactionTab>("overview");
+
   // Selection state for bulk operations
   const {
     selectedIds,
@@ -104,7 +108,6 @@ function TransactionList({
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [showBulkExportModal, setShowBulkExportModal] = useState(false);
   const [showStatusInfo, setShowStatusInfo] = useState(false);
-  const [bulkActionSuccess, setBulkActionSuccess] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
 
   // Bulk action handlers via hook
@@ -117,15 +120,12 @@ function TransactionList({
     isBulkDeleting,
     isBulkExporting,
     isBulkUpdating,
+    bulkActionSuccess,
     handleBulkDelete,
     handleBulkExport,
     handleBulkStatusChange,
   } = useBulkActions(selectedIds, selectedCount, {
     onComplete: loadTransactions,
-    showSuccess: (msg) => {
-      setBulkActionSuccess(msg);
-      setTimeout(() => setBulkActionSuccess(null), 5000);
-    },
     showError: setError,
     exitSelectionMode: handleExitSelectionMode,
     closeBulkDeleteModal: () => setShowBulkDeleteConfirm(false),
@@ -216,9 +216,38 @@ function TransactionList({
       toggleSelection(transaction.id);
     } else if (transaction.detection_status === "pending" || transaction.status === "pending") {
       // Pending transactions open in review mode with approve/reject/edit buttons
+      setInitialTab("overview");
       setPendingReviewTransaction(transaction);
     } else {
+      setInitialTab("overview");
       setSelectedTransaction(transaction);
+    }
+  };
+
+  // Create handlers that include the transaction context for communication count clicks
+  const createMessagesClickHandler = (transaction: Transaction) => (e: React.MouseEvent): void => {
+    e.stopPropagation();
+    if (!selectionMode) {
+      if (transaction.detection_status === "pending" || transaction.status === "pending") {
+        setInitialTab("messages");
+        setPendingReviewTransaction(transaction);
+      } else {
+        setInitialTab("messages");
+        setSelectedTransaction(transaction);
+      }
+    }
+  };
+
+  const createEmailsClickHandler = (transaction: Transaction) => (e: React.MouseEvent): void => {
+    e.stopPropagation();
+    if (!selectionMode) {
+      if (transaction.detection_status === "pending" || transaction.status === "pending") {
+        setInitialTab("emails");
+        setPendingReviewTransaction(transaction);
+      } else {
+        setInitialTab("emails");
+        setSelectedTransaction(transaction);
+      }
     }
   };
 
@@ -234,7 +263,7 @@ function TransactionList({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col">
+    <div className="h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col overflow-hidden">
       {/* Header and Toolbar */}
       <TransactionToolbar
         transactionCount={transactions.length}
@@ -259,7 +288,7 @@ function TransactionList({
       />
 
       {/* Transactions List */}
-      <div className="flex-1 overflow-y-auto p-6 max-w-7xl mx-auto w-full">
+      <div className="flex-1 min-h-0 overflow-y-auto p-6 max-w-7xl mx-auto w-full">
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
@@ -347,6 +376,8 @@ function TransactionList({
                     isSelected={isSelected(transaction.id)}
                     onTransactionClick={() => handleTransactionClick(transaction)}
                     onCheckboxClick={(e) => handleCheckboxClick(e, transaction.id)}
+                    onMessagesClick={createMessagesClickHandler(transaction)}
+                    onEmailsClick={createEmailsClickHandler(transaction)}
                     formatCurrency={formatCurrency}
                     formatDate={formatDate}
                   />
@@ -366,6 +397,7 @@ function TransactionList({
           userId={userId}
           onShowSuccess={showSuccess}
           onShowError={showError}
+          initialTab={initialTab}
         />
       )}
 
@@ -379,6 +411,7 @@ function TransactionList({
           userId={userId}
           onShowSuccess={showSuccess}
           onShowError={showError}
+          initialTab={initialTab}
         />
       )}
 

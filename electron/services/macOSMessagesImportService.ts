@@ -49,6 +49,7 @@ export interface MacOSImportResult {
   messagesImported: number;
   messagesSkipped: number;
   attachmentsImported: number;
+  attachmentsUpdated: number; // TASK-1122: Count of attachments with updated message_id after re-sync
   attachmentsSkipped: number;
   duration: number;
   error?: string;
@@ -73,9 +74,18 @@ const DELETE_BATCH_SIZE = 5000; // Messages per delete batch (larger for efficie
 const YIELD_INTERVAL = 1; // Yield every N batches (reduced from 2 for better UI responsiveness)
 const QUERY_BATCH_SIZE = 10000; // Messages per query batch (for pagination)
 
-// Attachment constants (TASK-1012)
-const SUPPORTED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".heic"];
-const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024; // 50MB max per attachment
+// Attachment constants (TASK-1012, expanded TASK-1122 to include videos)
+const SUPPORTED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".heic", ".webp", ".bmp", ".tiff", ".tif"];
+const SUPPORTED_VIDEO_EXTENSIONS = [".mp4", ".mov", ".m4v", ".avi", ".mkv", ".webm"];
+const SUPPORTED_AUDIO_EXTENSIONS = [".mp3", ".m4a", ".aac", ".wav", ".caf"]; // caf = Core Audio Format (iOS voice messages)
+const SUPPORTED_DOCUMENT_EXTENSIONS = [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".rtf"];
+const ALL_SUPPORTED_EXTENSIONS = [
+  ...SUPPORTED_IMAGE_EXTENSIONS,
+  ...SUPPORTED_VIDEO_EXTENSIONS,
+  ...SUPPORTED_AUDIO_EXTENSIONS,
+  ...SUPPORTED_DOCUMENT_EXTENSIONS,
+];
+const MAX_ATTACHMENT_SIZE = 100 * 1024 * 1024; // 100MB max per attachment (increased for videos)
 const ATTACHMENTS_DIR = "message-attachments"; // Directory name in app data
 
 /**
@@ -137,6 +147,14 @@ interface ChatMemberRow {
 }
 
 /**
+ * Chat account info - maps chat to user's identifier (phone/Apple ID)
+ */
+interface ChatAccountRow {
+  chat_id: number;
+  account_login: string | null;
+}
+
+/**
  * Raw attachment from macOS Messages database (TASK-1012)
  */
 interface RawMacAttachment {
@@ -152,7 +170,17 @@ interface RawMacAttachment {
 }
 
 /**
- * Check if a file extension is a supported image type
+ * Check if a file extension is a supported media type
+ * TASK-1122: Expanded to include videos, audio, and documents
+ */
+function isSupportedMediaType(filename: string | null): boolean {
+  if (!filename) return false;
+  const ext = path.extname(filename).toLowerCase();
+  return ALL_SUPPORTED_EXTENSIONS.includes(ext);
+}
+
+/**
+ * Check if a file extension is a supported image type (for inline display)
  */
 function isSupportedImageType(filename: string | null): boolean {
   if (!filename) return false;
@@ -162,15 +190,44 @@ function isSupportedImageType(filename: string | null): boolean {
 
 /**
  * Get MIME type from filename
+ * TASK-1122: Expanded to support videos, audio, and documents
  */
 function getMimeTypeFromFilename(filename: string): string {
   const ext = path.extname(filename).toLowerCase();
   const mimeTypes: Record<string, string> = {
+    // Images
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
     ".png": "image/png",
     ".gif": "image/gif",
     ".heic": "image/heic",
+    ".webp": "image/webp",
+    ".bmp": "image/bmp",
+    ".tiff": "image/tiff",
+    ".tif": "image/tiff",
+    // Videos
+    ".mp4": "video/mp4",
+    ".mov": "video/quicktime",
+    ".m4v": "video/x-m4v",
+    ".avi": "video/x-msvideo",
+    ".mkv": "video/x-matroska",
+    ".webm": "video/webm",
+    // Audio
+    ".mp3": "audio/mpeg",
+    ".m4a": "audio/mp4",
+    ".aac": "audio/aac",
+    ".wav": "audio/wav",
+    ".caf": "audio/x-caf",
+    // Documents
+    ".pdf": "application/pdf",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xls": "application/vnd.ms-excel",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".ppt": "application/vnd.ms-powerpoint",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".txt": "text/plain",
+    ".rtf": "application/rtf",
   };
   return mimeTypes[ext] || "application/octet-stream";
 }
@@ -225,6 +282,7 @@ class MacOSMessagesImportService {
         messagesImported: 0,
         messagesSkipped: 0,
         attachmentsImported: 0,
+        attachmentsUpdated: 0,
         attachmentsSkipped: 0,
         duration: 0,
         error: "Force reimport in progress",
@@ -269,6 +327,7 @@ class MacOSMessagesImportService {
         messagesImported: 0,
         messagesSkipped: 0,
         attachmentsImported: 0,
+        attachmentsUpdated: 0,
         attachmentsSkipped: 0,
         duration: 0,
         error: "Import already in progress",
@@ -320,6 +379,7 @@ class MacOSMessagesImportService {
         messagesImported: 0,
         messagesSkipped: 0,
         attachmentsImported: 0,
+        attachmentsUpdated: 0,
         attachmentsSkipped: 0,
         duration: Date.now() - startTime,
         error: "macOS Messages import is only available on macOS",
@@ -334,6 +394,7 @@ class MacOSMessagesImportService {
         messagesImported: 0,
         messagesSkipped: 0,
         attachmentsImported: 0,
+        attachmentsUpdated: 0,
         attachmentsSkipped: 0,
         duration: Date.now() - startTime,
         error:
@@ -415,6 +476,39 @@ class MacOSMessagesImportService {
 
         await yieldToEventLoop();
 
+        // Query chat account_login to get user's identifier (phone/Apple ID) for each chat
+        // This tells us which of the user's identifiers they're using in each conversation
+        const chatAccountRows = await dbAll<ChatAccountRow>(`
+          SELECT
+            ROWID as chat_id,
+            account_login
+          FROM chat
+          WHERE account_login IS NOT NULL
+        `);
+
+        // Build a map of chat_id -> user's account_login (phone number or email)
+        // account_login has prefixes: "P:" for phone, "E:" for email - strip them
+        const chatAccountMap = new Map<number, string>();
+        for (const row of chatAccountRows) {
+          if (row.account_login) {
+            // Strip "P:" or "E:" prefix from account_login
+            let identifier = row.account_login;
+            if (identifier.startsWith("P:") || identifier.startsWith("E:")) {
+              identifier = identifier.substring(2);
+            }
+            if (identifier) {
+              chatAccountMap.set(row.chat_id, identifier);
+            }
+          }
+        }
+
+        logService.info(
+          `Loaded ${chatAccountMap.size} chat account mappings`,
+          MacOSMessagesImportService.SERVICE_NAME
+        );
+
+        await yieldToEventLoop();
+
         // Fetch messages using cursor-based pagination to avoid loading all 600K+ at once
         // This prevents the UI from freezing during the initial query
         const allMessages: RawMacMessage[] = [];
@@ -438,6 +532,7 @@ class MacOSMessagesImportService {
               messagesImported: 0,
               messagesSkipped: 0,
               attachmentsImported: 0,
+              attachmentsUpdated: 0,
               attachmentsSkipped: 0,
               duration: Date.now() - startTime,
               error: "Import cancelled",
@@ -516,18 +611,38 @@ class MacOSMessagesImportService {
         );
 
         // Store messages to app database
-        const messageResult = await this.storeMessages(userId, allMessages, chatMembersMap, onProgress);
+        const messageResult = await this.storeMessages(userId, allMessages, chatMembersMap, chatAccountMap, onProgress);
 
         // Store attachments (TASK-1012)
         const attachmentResult = await this.storeAttachments(userId, attachments, messageResult.messageIdMap, onProgress);
 
         const duration = Date.now() - startTime;
 
+        // TASK-1050: Enhanced summary logging with thread_id validation stats
+        // TASK-1122: Include attachments updated count for re-sync scenarios
         logService.info(
-          `Import complete: ${messageResult.stored} messages imported, ${messageResult.skipped} skipped, ${attachmentResult.stored} attachments imported, ${attachmentResult.skipped} skipped`,
+          "Import summary",
           MacOSMessagesImportService.SERVICE_NAME,
-          { duration }
+          {
+            totalMessages: messageResult.stored + messageResult.skipped,
+            imported: messageResult.stored,
+            skipped: messageResult.skipped,
+            nullThreadIdCount: messageResult.nullThreadIdCount,
+            attachmentsImported: attachmentResult.stored,
+            attachmentsUpdated: attachmentResult.updated,
+            attachmentsSkipped: attachmentResult.skipped,
+            duration,
+          }
         );
+
+        // Log warning if significant NULL thread_id count
+        if (messageResult.nullThreadIdCount > 0) {
+          const percentNull = ((messageResult.nullThreadIdCount / (messageResult.stored + messageResult.skipped)) * 100).toFixed(2);
+          logService.warn(
+            `Import found ${messageResult.nullThreadIdCount} messages with NULL thread_id (${percentNull}% of total)`,
+            MacOSMessagesImportService.SERVICE_NAME
+          );
+        }
 
         // Send final 100% progress to update UI
         onProgress?.({
@@ -542,6 +657,7 @@ class MacOSMessagesImportService {
           messagesImported: messageResult.stored,
           messagesSkipped: messageResult.skipped,
           attachmentsImported: attachmentResult.stored,
+          attachmentsUpdated: attachmentResult.updated,
           attachmentsSkipped: attachmentResult.skipped,
           duration,
         };
@@ -565,6 +681,7 @@ class MacOSMessagesImportService {
         messagesImported: 0,
         messagesSkipped: 0,
         attachmentsImported: 0,
+        attachmentsUpdated: 0,
         attachmentsSkipped: 0,
         duration,
         error: errorMessage,
@@ -580,17 +697,19 @@ class MacOSMessagesImportService {
     userId: string,
     messages: RawMacMessage[],
     chatMembersMap: Map<number, string[]>,
+    chatAccountMap: Map<number, string>,
     onProgress?: ImportProgressCallback
-  ): Promise<{ stored: number; skipped: number; messageIdMap: Map<string, string> }> {
+  ): Promise<{ stored: number; skipped: number; nullThreadIdCount: number; messageIdMap: Map<string, string> }> {
     // Map of macOS message GUID -> internal message ID (TASK-1012)
     const messageIdMap = new Map<string, string>();
 
     if (messages.length === 0) {
-      return { stored: 0, skipped: 0, messageIdMap };
+      return { stored: 0, skipped: 0, nullThreadIdCount: 0, messageIdMap };
     }
 
     let stored = 0;
     let skipped = 0;
+    let nullThreadIdCount = 0;
 
     // Get database instance
     const db = databaseService.getRawDatabase();
@@ -706,6 +825,21 @@ class MacOSMessagesImportService {
           // Build thread ID from chat
           const threadId = msg.chat_id ? `macos-chat-${msg.chat_id}` : null;
 
+          // TASK-1050: Track messages with NULL thread_id for debugging
+          if (!threadId) {
+            nullThreadIdCount++;
+            logService.warn(
+              "Message has NULL chat_id, will have NULL thread_id",
+              MacOSMessagesImportService.SERVICE_NAME,
+              {
+                messageGuid: msg.guid,
+                handleId: msg.handle_id,
+                sentAt: macTimestampToDate(msg.date).toISOString(),
+                // Don't log text content for privacy
+              }
+            );
+          }
+
           // Convert Mac timestamp to ISO date
           const sentAt = macTimestampToDate(msg.date);
 
@@ -719,10 +853,15 @@ class MacOSMessagesImportService {
           // Get actual chat members for this chat (for group chats)
           const chatMembers = msg.chat_id ? chatMembersMap.get(msg.chat_id) : undefined;
 
+          // Get user's identifier for this chat (phone number or Apple ID like "magicauditwa")
+          // This is what the user actually appears as in the conversation
+          const userAccountLogin = msg.chat_id ? chatAccountMap.get(msg.chat_id) : undefined;
+
           // Build participants JSON with actual chat members
+          // For outbound messages, use the user's actual identifier instead of "me"
           const participantsObj = {
-            from: msg.is_from_me === 1 ? "me" : sanitizedHandle,
-            to: msg.is_from_me === 1 ? [sanitizedHandle] : ["me"],
+            from: msg.is_from_me === 1 ? (userAccountLogin || "me") : sanitizedHandle,
+            to: msg.is_from_me === 1 ? [sanitizedHandle] : [(userAccountLogin || "me")],
             // Include actual chat members for group chats (more than 1 member)
             ...(chatMembers && chatMembers.length > 1 ? { chat_members: chatMembers } : {}),
           };
@@ -826,7 +965,7 @@ class MacOSMessagesImportService {
     // Stop progress bar
     msgProgressBar.stop();
 
-    return { stored, skipped, messageIdMap };
+    return { stored, skipped, nullThreadIdCount, messageIdMap };
   }
 
   /**
@@ -839,13 +978,14 @@ class MacOSMessagesImportService {
     attachments: RawMacAttachment[],
     messageIdMap: Map<string, string>,
     onProgress?: ImportProgressCallback
-  ): Promise<{ stored: number; skipped: number }> {
+  ): Promise<{ stored: number; skipped: number; updated: number }> {
     if (attachments.length === 0) {
-      return { stored: 0, skipped: 0 };
+      return { stored: 0, skipped: 0, updated: 0 };
     }
 
     let stored = 0;
     let skipped = 0;
+    let updated = 0;
 
     // Get database instance
     const db = databaseService.getRawDatabase();
@@ -854,7 +994,7 @@ class MacOSMessagesImportService {
     const attachmentsDir = path.join(app.getPath("userData"), ATTACHMENTS_DIR);
     await fs.promises.mkdir(attachmentsDir, { recursive: true });
 
-    // Load existing attachment hashes for deduplication
+    // Load existing attachment hashes for deduplication (file content)
     const existingHashes = new Set<string>();
     const existingHashRows = db
       .prepare(`SELECT storage_path FROM attachments WHERE storage_path IS NOT NULL`)
@@ -866,6 +1006,31 @@ class MacOSMessagesImportService {
       existingHashes.add(filename);
     }
 
+    // Load existing attachment records for deduplication (message_id + filename)
+    const existingAttachmentRecords = new Set<string>();
+    const existingAttachRows = db
+      .prepare(`SELECT message_id, filename FROM attachments WHERE message_id IS NOT NULL`)
+      .all() as { message_id: string; filename: string }[];
+
+    for (const row of existingAttachRows) {
+      existingAttachmentRecords.add(`${row.message_id}:${row.filename}`);
+    }
+
+    // TASK-1122: Load existing attachments by external_message_id for stable deduplication
+    // This allows us to find and UPDATE attachments with stale message_ids after re-sync
+    const existingByExternalId = new Map<string, { id: string; message_id: string }>();
+    const existingExternalRows = db
+      .prepare(`SELECT id, message_id, external_message_id, filename FROM attachments WHERE external_message_id IS NOT NULL`)
+      .all() as { id: string; message_id: string; external_message_id: string; filename: string }[];
+
+    for (const row of existingExternalRows) {
+      // Key: external_message_id:filename for unique identification
+      existingByExternalId.set(`${row.external_message_id}:${row.filename}`, {
+        id: row.id,
+        message_id: row.message_id,
+      });
+    }
+
     logService.info(
       `Processing ${attachments.length} attachments, ${existingHashes.size} already stored`,
       MacOSMessagesImportService.SERVICE_NAME
@@ -875,11 +1040,16 @@ class MacOSMessagesImportService {
     const attachProgressBar = createProgressBar("Attachments");
     attachProgressBar.start(attachments.length, 0);
 
-    // Prepare insert statement
+    // Prepare insert statement (TASK-1110: include external_message_id for stable linking)
     const insertAttachmentStmt = db.prepare(`
       INSERT OR IGNORE INTO attachments (
-        id, message_id, filename, mime_type, file_size_bytes, storage_path, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        id, message_id, external_message_id, filename, mime_type, file_size_bytes, storage_path, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `);
+
+    // TASK-1122: Prepare update statement for fixing stale message_ids
+    const updateMessageIdStmt = db.prepare(`
+      UPDATE attachments SET message_id = ? WHERE id = ?
     `);
 
     // Also need to query existing message IDs from DB for messages imported in previous runs
@@ -907,9 +1077,9 @@ class MacOSMessagesImportService {
       }
 
       try {
-        // Skip non-image attachments
+        // Skip unsupported attachment types (TASK-1122: expanded to include videos, audio, documents)
         const filename = attachment.transfer_name || attachment.filename;
-        if (!isSupportedImageType(filename)) {
+        if (!isSupportedMediaType(filename)) {
           skipped++;
           processed++;
           continue;
@@ -971,22 +1141,59 @@ class MacOSMessagesImportService {
         // Generate content hash for deduplication (async)
         const contentHash = await generateContentHash(sourcePath);
 
+        // Check if attachment record already exists for this message + filename
+        const attachmentKey = `${internalMessageId}:${filename}`;
+        if (existingAttachmentRecords.has(attachmentKey)) {
+          // Attachment record already exists with correct message_id, skip
+          skipped++;
+          processed++;
+          continue;
+        }
+
+        // TASK-1122: Check if attachment exists by external_message_id (stable identifier)
+        // If so, update its message_id to the new internal ID (fixes stale references after re-sync)
+        const externalKey = `${attachment.message_guid}:${filename}`;
+        const existingByExternal = existingByExternalId.get(externalKey);
+        if (existingByExternal) {
+          // Attachment exists but may have stale message_id
+          if (existingByExternal.message_id !== internalMessageId) {
+            // Update the stale message_id to the new internal ID
+            updateMessageIdStmt.run(internalMessageId, existingByExternal.id);
+            updated++;
+            logService.debug(
+              `Updated stale attachment message_id: ${existingByExternal.id}`,
+              MacOSMessagesImportService.SERVICE_NAME,
+              { oldMessageId: existingByExternal.message_id, newMessageId: internalMessageId }
+            );
+          } else {
+            // message_id is already correct, count as skipped
+            skipped++;
+          }
+          // Update our tracking sets
+          existingAttachmentRecords.add(attachmentKey);
+          processed++;
+          continue;
+        }
+
         // Skip if we already have this content
         if (existingHashes.has(contentHash)) {
           // File already exists - just link to existing file
           const ext = path.extname(filename!);
           const existingPath = path.join(attachmentsDir, `${contentHash}${ext}`);
 
-          // Still create a new attachment record linking to existing file
+          // Create attachment record linking to existing file
+          // TASK-1110: Include external_message_id (macOS message GUID) for stable linking
           const attachmentId = crypto.randomUUID();
           insertAttachmentStmt.run(
             attachmentId,
             internalMessageId,
+            attachment.message_guid, // external_message_id for stable linking
             filename,
             attachment.mime_type || getMimeTypeFromFilename(filename!),
             attachment.total_bytes,
             existingPath
           );
+          existingAttachmentRecords.add(attachmentKey);
           stored++;
           processed++;
           continue;
@@ -998,16 +1205,19 @@ class MacOSMessagesImportService {
         await fs.promises.copyFile(sourcePath, destPath);
 
         // Insert attachment record
+        // TASK-1110: Include external_message_id (macOS message GUID) for stable linking
         const attachmentId = crypto.randomUUID();
         insertAttachmentStmt.run(
           attachmentId,
           internalMessageId,
+          attachment.message_guid, // external_message_id for stable linking
           filename,
           attachment.mime_type || getMimeTypeFromFilename(filename!),
           attachment.total_bytes,
           destPath
         );
 
+        existingAttachmentRecords.add(attachmentKey);
         stored++;
         processed++;
         existingHashes.add(contentHash);
@@ -1050,11 +1260,11 @@ class MacOSMessagesImportService {
     attachProgressBar.stop();
 
     logService.info(
-      `Attachments: ${stored} imported, ${skipped} skipped`,
+      `Attachments: ${stored} imported, ${updated} updated, ${skipped} skipped`,
       MacOSMessagesImportService.SERVICE_NAME
     );
 
-    return { stored, skipped };
+    return { stored, skipped, updated };
   }
 
   /**
@@ -1098,7 +1308,8 @@ class MacOSMessagesImportService {
     });
 
     // Delete attachments first (in one go - usually much fewer than messages)
-    const attachResult = db
+    // Delete by message_id for currently-linked attachments
+    const attachResult1 = db
       .prepare(
         `
       DELETE FROM attachments
@@ -1109,8 +1320,22 @@ class MacOSMessagesImportService {
       )
       .run(userId);
 
+    // Also delete orphaned attachments by external_message_id
+    // This catches attachments from previous imports where message_id is now stale
+    const attachResult2 = db
+      .prepare(
+        `
+      DELETE FROM attachments
+      WHERE external_message_id IN (
+        SELECT external_id FROM messages WHERE user_id = ? AND external_id IS NOT NULL
+      )
+    `
+      )
+      .run(userId);
+
+    const attachmentsDeleted = attachResult1.changes + attachResult2.changes;
     logService.info(
-      `Deleted ${attachResult.changes} attachments`,
+      `Deleted ${attachmentsDeleted} attachments (${attachResult1.changes} by message_id, ${attachResult2.changes} by external_id)`,
       MacOSMessagesImportService.SERVICE_NAME
     );
 
@@ -1232,10 +1457,13 @@ class MacOSMessagesImportService {
 
   /**
    * Get attachments for a specific message (TASK-1012)
+   * TASK-1110: Query by both message_id and external_message_id for backward compatibility
    */
   getAttachmentsByMessageId(messageId: string): MessageAttachment[] {
     const db = databaseService.getRawDatabase();
-    const rows = db
+
+    // First try direct message_id lookup
+    let rows = db
       .prepare(
         `
         SELECT id, message_id, filename, mime_type, file_size_bytes, storage_path
@@ -1244,11 +1472,46 @@ class MacOSMessagesImportService {
       `
       )
       .all(messageId) as MessageAttachment[];
+
+    // If no results and this is a valid message, try external_message_id fallback
+    // TASK-1110: This handles the case where attachments have stale message_id but valid external_message_id
+    if (rows.length === 0) {
+      // Look up the message's external_id (macOS GUID)
+      const message = db
+        .prepare(`SELECT external_id FROM messages WHERE id = ?`)
+        .get(messageId) as { external_id: string } | undefined;
+
+      if (message?.external_id) {
+        rows = db
+          .prepare(
+            `
+            SELECT id, message_id, filename, mime_type, file_size_bytes, storage_path
+            FROM attachments
+            WHERE external_message_id = ?
+          `
+          )
+          .all(message.external_id) as MessageAttachment[];
+
+        // If found via external_message_id, update the message_id for future queries
+        if (rows.length > 0) {
+          logService.info(
+            `[Attachments] Found ${rows.length} attachments via external_message_id fallback, updating message_id`,
+            MacOSMessagesImportService.SERVICE_NAME
+          );
+          const updateStmt = db.prepare(`UPDATE attachments SET message_id = ? WHERE external_message_id = ?`);
+          updateStmt.run(messageId, message.external_id);
+          // Update the returned rows to reflect the corrected message_id
+          rows = rows.map(row => ({ ...row, message_id: messageId }));
+        }
+      }
+    }
+
     return rows;
   }
 
   /**
    * Get attachments for multiple messages at once (TASK-1012)
+   * TASK-1110: Query by both message_id and external_message_id for backward compatibility
    */
   getAttachmentsByMessageIds(messageIds: string[]): Map<string, MessageAttachment[]> {
     if (messageIds.length === 0) {
@@ -1256,8 +1519,18 @@ class MacOSMessagesImportService {
     }
 
     const db = databaseService.getRawDatabase();
+    const result = new Map<string, MessageAttachment[]>();
+
+    // Debug: Log total attachments in DB and sample message_ids
+    const totalCount = db.prepare(`SELECT COUNT(*) as count FROM attachments`).get() as { count: number };
+    logService.debug(
+      `[Attachments Debug] Total: ${totalCount.count}, Querying: ${messageIds.length} IDs`,
+      MacOSMessagesImportService.SERVICE_NAME
+    );
+
+    // First, try direct message_id lookup
     const placeholders = messageIds.map(() => "?").join(", ");
-    const rows = db
+    const directRows = db
       .prepare(
         `
         SELECT id, message_id, filename, mime_type, file_size_bytes, storage_path
@@ -1267,13 +1540,96 @@ class MacOSMessagesImportService {
       )
       .all(...messageIds) as MessageAttachment[];
 
-    // Group by message_id
-    const result = new Map<string, MessageAttachment[]>();
-    for (const row of rows) {
+    // Group direct results by message_id
+    for (const row of directRows) {
       const existing = result.get(row.message_id) || [];
       existing.push(row);
       result.set(row.message_id, existing);
     }
+
+    // TASK-1110: For messages without direct results, try external_message_id fallback
+    const missingMessageIds = messageIds.filter(id => !result.has(id));
+
+    if (missingMessageIds.length > 0) {
+      // Look up external_ids for messages that didn't have direct matches
+      const missingPlaceholders = missingMessageIds.map(() => "?").join(", ");
+      const messageExternalIds = db
+        .prepare(
+          `SELECT id, external_id FROM messages WHERE id IN (${missingPlaceholders}) AND external_id IS NOT NULL`
+        )
+        .all(...missingMessageIds) as { id: string; external_id: string }[];
+
+      if (messageExternalIds.length > 0) {
+        // Query attachments by external_message_id
+        const externalIds = messageExternalIds.map(m => m.external_id);
+        const externalPlaceholders = externalIds.map(() => "?").join(", ");
+        const fallbackRows = db
+          .prepare(
+            `
+            SELECT id, message_id, external_message_id, filename, mime_type, file_size_bytes, storage_path
+            FROM attachments
+            WHERE external_message_id IN (${externalPlaceholders})
+          `
+          )
+          .all(...externalIds) as (MessageAttachment & { external_message_id: string })[];
+
+        // Build a map of external_id -> internal message id for updating
+        const externalToInternalMap = new Map<string, string>();
+        for (const msg of messageExternalIds) {
+          externalToInternalMap.set(msg.external_id, msg.id);
+        }
+
+        // Group fallback results and update stale message_ids
+        const attachmentsToUpdate: { attachmentId: string; newMessageId: string; externalMessageId: string }[] = [];
+
+        for (const row of fallbackRows) {
+          const internalMessageId = externalToInternalMap.get(row.external_message_id);
+          if (internalMessageId) {
+            // Update the row's message_id to the correct internal ID
+            const correctedRow: MessageAttachment = {
+              id: row.id,
+              message_id: internalMessageId,
+              filename: row.filename,
+              mime_type: row.mime_type,
+              file_size_bytes: row.file_size_bytes,
+              storage_path: row.storage_path,
+            };
+
+            const existing = result.get(internalMessageId) || [];
+            existing.push(correctedRow);
+            result.set(internalMessageId, existing);
+
+            // Track for batch update
+            attachmentsToUpdate.push({
+              attachmentId: row.id,
+              newMessageId: internalMessageId,
+              externalMessageId: row.external_message_id,
+            });
+          }
+        }
+
+        // Batch update stale message_ids for future queries
+        if (attachmentsToUpdate.length > 0) {
+          logService.info(
+            `[Attachments] Found ${attachmentsToUpdate.length} attachments via external_message_id fallback, updating message_ids`,
+            MacOSMessagesImportService.SERVICE_NAME
+          );
+          const updateStmt = db.prepare(`UPDATE attachments SET message_id = ? WHERE id = ?`);
+          const updateMany = db.transaction((updates: typeof attachmentsToUpdate) => {
+            for (const update of updates) {
+              updateStmt.run(update.newMessageId, update.attachmentId);
+            }
+          });
+          updateMany(attachmentsToUpdate);
+        }
+      }
+    }
+
+    logService.debug(
+      `[Attachments Debug] Found ${Array.from(result.values()).reduce((sum, arr) => sum + arr.length, 0)} attachments total`,
+      MacOSMessagesImportService.SERVICE_NAME
+    );
+
     return result;
   }
 
@@ -1295,6 +1651,151 @@ class MacOSMessagesImportService {
       );
       return null;
     }
+  }
+
+  /**
+   * Repair attachment message_id mappings without full re-import.
+   * Looks up correct message IDs via external_id (iMessage GUID) from macOS Messages DB.
+   * @returns Stats on repaired/orphaned attachments
+   */
+  async repairAttachmentMessageIds(): Promise<{
+    total: number;
+    repaired: number;
+    orphaned: number;
+    alreadyCorrect: number;
+  }> {
+    const db = databaseService.getRawDatabase();
+    const stats = { total: 0, repaired: 0, orphaned: 0, alreadyCorrect: 0 };
+
+    // Get all attachments with their storage paths
+    const attachments = db
+      .prepare(`SELECT id, message_id, storage_path FROM attachments`)
+      .all() as { id: string; message_id: string; storage_path: string | null }[];
+
+    stats.total = attachments.length;
+
+    if (attachments.length === 0) {
+      logService.info(
+        `[Repair] No attachments to repair`,
+        MacOSMessagesImportService.SERVICE_NAME
+      );
+      return stats;
+    }
+
+    // Build message external_id -> internal id map
+    const messageMap = new Map<string, string>();
+    const messageRows = db
+      .prepare(`SELECT id, external_id FROM messages WHERE external_id IS NOT NULL`)
+      .all() as { id: string; external_id: string }[];
+    for (const row of messageRows) {
+      messageMap.set(row.external_id, row.id);
+    }
+
+    logService.info(
+      `[Repair] Checking ${attachments.length} attachments against ${messageMap.size} messages`,
+      MacOSMessagesImportService.SERVICE_NAME
+    );
+
+    // Query macOS Messages DB to get attachment -> message_guid mapping
+    const messagesDbPath = path.join(process.env.HOME!, "Library/Messages/chat.db");
+    if (!fs.existsSync(messagesDbPath)) {
+      logService.error(
+        `[Repair] Cannot access macOS Messages database`,
+        MacOSMessagesImportService.SERVICE_NAME
+      );
+      return stats;
+    }
+
+    try {
+      // Open macOS Messages database using sqlite3 (same as import)
+      const macDb = new sqlite3.Database(messagesDbPath, sqlite3.OPEN_READONLY);
+      const dbAll = promisify(macDb.all.bind(macDb)) as <T>(sql: string) => Promise<T[]>;
+
+      // Build attachment filename -> message_guid map from macOS Messages DB
+      const macAttachments = await dbAll<{ filename: string; message_guid: string }>(`
+        SELECT
+          attachment.filename,
+          message.guid as message_guid
+        FROM attachment
+        JOIN message_attachment_join ON attachment.ROWID = message_attachment_join.attachment_id
+        JOIN message ON message.ROWID = message_attachment_join.message_id
+        WHERE attachment.filename IS NOT NULL AND message.guid IS NOT NULL
+      `);
+
+      // Map by basename for matching (our storage uses content hash, but original filename is in the path)
+      const filenameToGuid = new Map<string, string>();
+      for (const att of macAttachments) {
+        // Extract just the filename from the full path
+        const basename = path.basename(att.filename);
+        filenameToGuid.set(basename, att.message_guid);
+      }
+
+      logService.info(
+        `[Repair] Found ${filenameToGuid.size} attachment mappings in macOS Messages DB`,
+        MacOSMessagesImportService.SERVICE_NAME
+      );
+
+      // Close macOS database
+      await promisify(macDb.close.bind(macDb))();
+
+      // Prepare update statement
+      const updateStmt = db.prepare(`UPDATE attachments SET message_id = ? WHERE id = ?`);
+
+      // Check each attachment
+      for (const att of attachments) {
+        // First check if current message_id is valid
+        const currentMsgExists = db
+          .prepare(`SELECT 1 FROM messages WHERE id = ?`)
+          .get(att.message_id);
+
+        if (currentMsgExists) {
+          stats.alreadyCorrect++;
+          continue;
+        }
+
+        // Current message_id is invalid - try to find correct one
+        // Extract original filename from storage path (stored files keep original name in metadata)
+        // Our storage uses hash as filename, so we need to look at the attachment record's original filename
+        const originalFilename = db
+          .prepare(`SELECT filename FROM attachments WHERE id = ?`)
+          .get(att.id) as { filename: string } | undefined;
+
+        if (!originalFilename?.filename) {
+          stats.orphaned++;
+          continue;
+        }
+
+        // Look up the message GUID for this attachment
+        const messageGuid = filenameToGuid.get(originalFilename.filename);
+        if (!messageGuid) {
+          stats.orphaned++;
+          continue;
+        }
+
+        // Look up our internal message ID
+        const internalId = messageMap.get(messageGuid);
+        if (!internalId) {
+          stats.orphaned++;
+          continue;
+        }
+
+        // Update the attachment's message_id
+        updateStmt.run(internalId, att.id);
+        stats.repaired++;
+      }
+
+      logService.info(
+        `[Repair] Complete: ${stats.repaired} repaired, ${stats.alreadyCorrect} already correct, ${stats.orphaned} orphaned`,
+        MacOSMessagesImportService.SERVICE_NAME
+      );
+    } catch (error) {
+      logService.error(
+        `[Repair] Error: ${error instanceof Error ? error.message : "Unknown"}`,
+        MacOSMessagesImportService.SERVICE_NAME
+      );
+    }
+
+    return stats;
   }
 }
 

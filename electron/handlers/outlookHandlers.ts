@@ -41,6 +41,37 @@ let handlersRegistered = false;
 let outlookService: OutlookService | null = null;
 
 /**
+ * BACKLOG-551: Helper to get a valid user ID from the database
+ * Handles cases where the renderer passes an invalid/stale userId
+ * or no userId at all (legacy bridge compatibility)
+ */
+async function getValidUserId(providedUserId?: string): Promise<string | null> {
+  // If provided, verify it exists
+  if (providedUserId) {
+    const user = await databaseService.getUserById(providedUserId);
+    if (user) {
+      return providedUserId;
+    }
+    logService.warn("[OutlookHandlers] Provided userId not found, looking up correct ID", "OutlookHandlers", {
+      providedId: providedUserId.substring(0, 8) + "...",
+    });
+  }
+
+  // Look up any user in the database (single-user app)
+  const db = databaseService.getRawDatabase();
+  const anyUser = db.prepare("SELECT id FROM users_local LIMIT 1").get() as { id: string } | undefined;
+  if (anyUser) {
+    logService.info("[OutlookHandlers] Using user ID from database", "OutlookHandlers", {
+      userId: anyUser.id.substring(0, 8) + "...",
+    });
+    return anyUser.id;
+  }
+
+  logService.error("[OutlookHandlers] No user found in database", "OutlookHandlers");
+  return null;
+}
+
+/**
  * Register Outlook integration IPC handlers
  */
 export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
@@ -68,17 +99,21 @@ export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
   // Authenticate with Outlook using redirect-based OAuth
   ipcMain.handle(
     "outlook-authenticate",
-    async (event: IpcMainInvokeEvent, userId: string) => {
+    async (event: IpcMainInvokeEvent, providedUserId?: string) => {
       try {
         logService.info("Starting Outlook authentication with redirect flow", "OutlookHandlers");
 
+        // BACKLOG-551: Get valid user ID (handles missing/stale IDs)
+        const userId = await getValidUserId(providedUserId);
+        if (!userId) {
+          return { success: false, error: "No user found in database" };
+        }
+
         // Get user info to use as login hint
         let loginHint: string | undefined = undefined;
-        if (userId) {
-          const user = await databaseService.getUserById(userId);
-          if (user) {
-            loginHint = user.email;
-          }
+        const user = await databaseService.getUserById(userId);
+        if (user) {
+          loginHint = user.email;
         }
 
         // Start auth flow - returns authUrl and a promise for the code
@@ -146,8 +181,10 @@ export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
   // Check if authenticated
   ipcMain.handle(
     "outlook-is-authenticated",
-    async (event: IpcMainInvokeEvent, userId: string) => {
+    async (event: IpcMainInvokeEvent, providedUserId?: string) => {
       try {
+        // BACKLOG-551: Get valid user ID (handles missing/stale IDs)
+        const userId = await getValidUserId(providedUserId);
         if (!userId) return false;
 
         const token = await databaseService.getOAuthToken(
@@ -173,12 +210,14 @@ export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
   // Get user email
   ipcMain.handle(
     "outlook-get-user-email",
-    async (event: IpcMainInvokeEvent, userId: string) => {
+    async (event: IpcMainInvokeEvent, providedUserId?: string) => {
       try {
+        // BACKLOG-551: Get valid user ID (handles missing/stale IDs)
+        const userId = await getValidUserId(providedUserId);
         if (!userId) {
           return {
             success: false,
-            error: "User ID required",
+            error: "No user found in database",
           };
         }
 

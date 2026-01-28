@@ -18,6 +18,7 @@ import supabaseService from "./supabaseService";
 import { getContactNames } from "./contactsService";
 import { createCommunicationReference } from "./messageMatchingService";
 import { autoLinkCommunicationsForContact, AutoLinkResult } from "./autoLinkService";
+import { createEmail, getEmailByExternalId } from "./db/emailDbService";
 
 // Hybrid extraction imports
 import { HybridExtractorService } from "./extraction/hybridExtractorService";
@@ -139,6 +140,9 @@ interface AuditedTransactionData {
   property_coordinates?: string;
   transaction_type?: "purchase" | "sale";
   contact_assignments?: ContactAssignment[];
+  started_at?: string;
+  closed_at?: string;
+  closing_deadline?: string;
 }
 
 interface ContactRoleUpdate {
@@ -587,7 +591,7 @@ class TransactionService {
       transaction_type: summary.transactionType,
       transaction_status: "completed",
       status: "active",
-      closing_date: toISOString(summary.closingDate),
+      closed_at: toISOString(summary.closingDate),
       closing_date_verified: false,
       communications_scanned: summary.communicationsCount || 0,
       extraction_confidence: summary.confidence,
@@ -656,23 +660,55 @@ class TransactionService {
         continue;
       }
 
+      // BACKLOG-506: Determine external ID for deduplication
+      // originalEmail comes from Gmail/Outlook fetch, check available identifiers
+      // Note: originalEmails is typed as any[], so handle defensively
+      const externalId = originalEmail.id ||  // Gmail/Outlook message ID
+        originalEmail.messageIdHeader ||      // RFC 5322 Message-ID header
+        `${analyzed.from}_${analyzed.subject}_${sentAt}`;  // Fallback composite key
+
+      // Defensive: Log if using composite fallback
+      if (!originalEmail.id && !originalEmail.messageIdHeader) {
+        await logService.warn(
+          "Using composite fallback for external_id - originalEmail missing id fields",
+          "TransactionService._saveCommunications",
+          { subject: analyzed.subject, from: analyzed.from },
+        );
+      }
+
+      // Check if email already exists
+      let emailRecord = await getEmailByExternalId(userId, externalId);
+
+      if (!emailRecord) {
+        // Create email in emails table (content store)
+        emailRecord = await createEmail({
+          user_id: userId,
+          external_id: externalId,
+          source: analyzed.from.includes("@gmail") ? "gmail" : "outlook",
+          thread_id: originalEmail.threadId,
+          sender: analyzed.from,
+          recipients: originalEmail.to,
+          cc: originalEmail.cc,
+          bcc: originalEmail.bcc,
+          subject: analyzed.subject,
+          body_html: originalEmail.body,
+          body_plain: originalEmail.bodyPlain,
+          sent_at: sentAt,
+          received_at: sentAt,
+          has_attachments: originalEmail.hasAttachments || false,
+          attachment_count: originalEmail.attachmentCount || 0,
+          message_id_header: originalEmail.messageIdHeader,  // RFC 5322 Message-ID
+        });
+      }
+
+      // Create junction in communications (no content, keep metadata)
       const commData: Partial<NewCommunication> = {
         user_id: userId,
         transaction_id: transactionId,
+        email_id: emailRecord.id,
         communication_type: "email",
-        source: analyzed.from.includes("@gmail") ? "gmail" : "outlook",
-        email_thread_id: originalEmail.threadId,
-        sender: analyzed.from,
-        recipients: originalEmail.to,
-        cc: originalEmail.cc,
-        bcc: originalEmail.bcc,
-        subject: analyzed.subject,
-        body: originalEmail.body,
-        body_plain: originalEmail.bodyPlain,
-        sent_at: sentAt,
-        received_at: sentAt,
-        has_attachments: originalEmail.hasAttachments || false,
-        attachment_count: originalEmail.attachmentCount || 0,
+        // BACKLOG-506: link_source and link_confidence for junction tracking
+        // Keep metadata fields (analysis results, not content)
         // Serialize arrays/objects for SQLite
         attachment_metadata: originalEmail.attachments
           ? JSON.stringify(originalEmail.attachments)
@@ -1017,7 +1053,7 @@ class TransactionService {
         transaction_type: txType,
         transaction_status: "pending", // New from AI detection
         status: "active",
-        closing_date: toISOString(detected.dateRange?.end),
+        closed_at: toISOString(detected.dateRange?.end),
         closing_date_verified: false,
         extraction_confidence: Math.round(detected.confidence * 100),
         first_communication_date: toISOString(detected.dateRange?.start),
@@ -1128,8 +1164,8 @@ class TransactionService {
       transaction_type: transactionData.transaction_type,
       transaction_status: "pending",
       status: transactionData.status || "active",
-      representation_start_date: transactionData.representation_start_date,
-      closing_date: transactionData.closing_date,
+      started_at: transactionData.started_at,
+      closed_at: transactionData.closed_at,
       closing_date_verified: false,
       representation_start_confidence: undefined,
       closing_date_confidence: undefined,
@@ -1163,6 +1199,9 @@ class TransactionService {
         property_coordinates,
         transaction_type,
         contact_assignments,
+        started_at,
+        closed_at,
+        closing_deadline,
       } = data;
 
       // Create the transaction
@@ -1177,6 +1216,9 @@ class TransactionService {
         transaction_type,
         transaction_status: "pending",
         status: "active",
+        started_at,
+        closed_at,
+        closing_deadline,
         closing_date_verified: property_coordinates ? true : false,
         export_status: "not_exported",
         export_count: 0,
@@ -1434,17 +1476,6 @@ class TransactionService {
     // Delete the communication from the database
     await databaseService.deleteCommunication(communicationId);
 
-    // Update the transaction's communication count
-    const transaction = await databaseService.getTransactionById(
-      communication.transaction_id,
-    );
-    if (transaction) {
-      const newCount = Math.max(0, (transaction.total_communications_count || 0) - 1);
-      await databaseService.updateTransaction(communication.transaction_id, {
-        total_communications_count: newCount,
-      });
-    }
-
     await logService.info(
       "Communication unlinked from transaction",
       "TransactionService.unlinkCommunication",
@@ -1504,8 +1535,9 @@ class TransactionService {
 
   /**
    * Get unlinked emails for a user
+   * Returns emails from communications table that have no transaction_id
    */
-  async getUnlinkedEmails(userId: string): Promise<Message[]> {
+  async getUnlinkedEmails(userId: string): Promise<Communication[]> {
     const emails = await databaseService.getUnlinkedEmails(userId);
 
     await logService.info(
@@ -1635,20 +1667,53 @@ class TransactionService {
   /**
    * Unlink messages from a transaction (sets transaction_id to null)
    * Does NOT add to ignored communications - simply removes the link
+   *
+   * TASK-1116: Now operates at thread level. When any message in a thread
+   * is unlinked, the entire thread is unlinked from the transaction.
+   * This matches user expectations where threads are displayed as units.
    */
-  async unlinkMessages(messageIds: string[]): Promise<void> {
-    // Get transaction IDs for updating counts later
+  async unlinkMessages(messageIds: string[], passedTransactionId?: string): Promise<void> {
+    // Get transaction IDs and thread IDs for updating counts later
     const transactionCounts = new Map<string, number>();
+    // Map of transactionId -> Set of threadIds to delete
+    const transactionThreads = new Map<string, Set<string>>();
 
     for (const messageId of messageIds) {
       const message = await databaseService.getMessageById(messageId);
-      if (message?.transaction_id) {
-        const count = transactionCounts.get(message.transaction_id) || 0;
-        transactionCounts.set(message.transaction_id, count + 1);
+
+      // TASK-1116: Use passed transactionId for thread-based linking,
+      // fall back to message.transaction_id for legacy per-message linking
+      const transactionId = passedTransactionId || message?.transaction_id;
+
+      if (transactionId) {
+        const count = transactionCounts.get(transactionId) || 0;
+        transactionCounts.set(transactionId, count + 1);
+
+        // TASK-1116: Collect thread_ids for thread-level communication deletion
+        if (message?.thread_id) {
+          let threads = transactionThreads.get(transactionId);
+          if (!threads) {
+            threads = new Set<string>();
+            transactionThreads.set(transactionId, threads);
+          }
+          threads.add(message.thread_id);
+        }
       }
 
-      // Remove the transaction link from messages table
-      await databaseService.unlinkMessageFromTransaction(messageId);
+      // Remove the transaction link from messages table (legacy per-message linking)
+      if (message?.transaction_id) {
+        await databaseService.unlinkMessageFromTransaction(messageId);
+      }
+
+      // Also delete any per-message communication records (legacy linking)
+      await databaseService.deleteCommunicationByMessageId(messageId);
+    }
+
+    // TASK-1116: Delete communications by thread (one record per thread)
+    for (const [transactionId, threadIds] of transactionThreads) {
+      for (const threadId of threadIds) {
+        await databaseService.deleteCommunicationByThread(threadId, transactionId);
+      }
     }
 
     // Update transaction message counts
@@ -1666,8 +1731,8 @@ class TransactionService {
       "Messages unlinked from transaction",
       "TransactionService.unlinkMessages",
       {
-        messageIds,
         unlinkedCount: messageIds.length,
+        threadsUnlinked: Array.from(transactionThreads.values()).reduce((sum, threads) => sum + threads.size, 0),
       },
     );
   }

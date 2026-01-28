@@ -1,0 +1,205 @@
+date,action,details,items_affected
+2024-12-15,create,"Created index, added BACKLOG-058 to 070",BACKLOG-058
+2024-12-15,assign,"Assigned BACKLOG-058, 059, 060 to SPRINT-002",BACKLOG-058
+2025-12-16,complete,"SPRINT-002 completed - marked BACKLOG-058, 059, 060 as complete",BACKLOG-058
+2025-12-16,create,Added sprint review document (SPRINT-002-tech-debt-review.md),
+2025-12-16,merge,"PRs merged: #134 (tests), #135 (email bugs), #136 (Windows login), #137 (db split), #138 (native modules)",
+2025-12-16,create,Added BACKLOG-072 (Workflow Enforcement) - Critical priority from SPRINT-002 audit,BACKLOG-072
+2025-12-16,create,"Created SPRINT-003 (Process & Data Integrity) - assigned BACKLOG-072, 038, 039, 035",BACKLOG-072
+2025-12-16,create,Added AI MVP backlog items (BACKLOG-073 through BACKLOG-079) - 7 phases across 3 sprints,BACKLOG-073;BACKLOG-079
+2025-12-16,status_change,Marked BACKLOG-066 as Obsolete (covered by AI MVP project),BACKLOG-066
+2025-12-16,update,SR Engineer + PM reviewed AI MVP plan - 40% schema reduction due to existing implementations,
+2025-12-16,update,"Planned SPRINT-004 (AI Foundation), SPRINT-005 (AI Core), SPRINT-006 (AI Polish)",
+2025-12-16,create,"Created SPRINT-004 plan and 14 task files (TASK-301 to TASK-314) for BACKLOG-073, BACKLOG-074",BACKLOG-073;BACKLOG-074
+2025-12-17,complete,BACKLOG-072 (TASK-201) completed - Workflow Enforcement (PR #139 merged),BACKLOG-072
+2025-12-17,complete,"SPRINT-003 completed - All 4 tasks merged (PRs #139, #140, #141, #142)",
+2025-12-17,complete,BACKLOG-038 (TASK-202) completed - Contacts display_name (PR #141 merged),BACKLOG-038
+2025-12-17,complete,BACKLOG-039 (TASK-203) completed - Transaction status (PR #140 merged),BACKLOG-039
+2025-12-17,complete,BACKLOG-035 (TASK-204) completed - Orphaned tables + closing_date fix (PR #142 merged),BACKLOG-035
+2025-12-17,incident,*INCIDENT*: Parallel agent execution burned ~14M tokens before manual intervention,
+2025-12-20,complete,BACKLOG-044 (Multiple Contacts Per Role) marked complete - already implemented in UI + backend,BACKLOG-044
+2025-12-20,complete,BACKLOG-045 (Block Contact Deletion) marked complete - getTransactionsByContact + tests exist,BACKLOG-045
+2025-12-17,lesson,"Lesson learned: Database schema tasks must be SEQUENTIAL, never parallel",
+2025-12-17,create,Added Category column and Variance tracking to INDEX.md for estimation accuracy analysis,
+2025-12-18,complete,SPRINT-004 completed - All 14 tasks merged (TASK-301 to TASK-314),
+2025-12-18,complete,SPRINT-005 completed - All 10 tasks merged to develop (PR #169),
+2025-12-18,complete,"BACKLOG-075, 076 marked complete (AI Analysis Tools + Hybrid Pipeline)",BACKLOG-075
+2025-12-18,create,"Created SPRINT-006 plan for AI MVP Polish (BACKLOG-077, 078, 079)",BACKLOG-077
+2025-12-18,create,Created 14 task files (TASK-401 to TASK-414) for SPRINT-006,
+2025-12-18,update,Integration branch strategy: int/ai-polish for SPRINT-006,
+2025-12-19,complete,"SPRINT-006 completed - All 14 tasks merged (PRs #170-183), int/ai-polish merged to develop",
+2025-12-19,complete,"BACKLOG-077, 078, 079 marked complete (AI MVP Polish complete)",BACKLOG-077
+2025-12-19,create,"Added BACKLOG-084, 085, 086, 087, 088 (Cost Optimization + ML + UX)",BACKLOG-084
+2025-12-20,complete,"SPRINT-007 completed - All 12 tasks merged (PRs #185-197), 97% LLM cost reduction achieved",
+2025-12-20,complete,"BACKLOG-084, 085 marked complete (Thread-based detection + validation)",BACKLOG-084
+2025-12-24,create,Created SPRINT-008 (TransactionList Refactoring) - 8 tasks (TASK-513 to TASK-520),
+2025-12-24,update,"SPRINT-008 targets: Toast fix, component extraction (3), hook extraction (3), directory structure",
+2025-12-24,update,"Estimates: 39-54 turns, ~186K tokens, 5-7 hours total",
+2025-12-24,complete,"TASK-513 (Toast Fix) completed - PR #200 merged, 2 turns, ~16K tokens, 20m",
+2025-12-24,complete,"TASK-514 (Extract TransactionStatusWrapper) completed - PR #201 merged, 4 turns, ~16K tokens, 12m",
+2025-12-24,complete,"TASK-515 (Extract TransactionCard) completed - PR #202 merged, 1 turn, ~12K tokens, 7m",
+2025-12-24,complete,"TASK-516 (Extract TransactionToolbar) completed - PR #203 merged, 5 turns, ~20K tokens, 23m",
+2025-12-24,complete,Phase 3 (Component Extraction) complete - TransactionList reduced to ~625 lines,
+2025-12-24,complete,"TASK-517 (Extract useTransactionList hook) completed - PR #204 merged, 4 turns, ~26K tokens, 12m",
+2025-12-24,complete,"TASK-518 (Extract useTransactionScan hook) completed - PR #205 merged, 5 turns, ~24K tokens, 20m",
+2025-12-24,complete,"TASK-519 (Extract useBulkActions hook) completed - PR #206 merged, 4 turns, ~24K tokens, 15m",
+2025-12-24,complete,Phase 4 (Hook Extraction) complete - TransactionList reduced to ~431 lines,
+2025-12-24,complete,"TASK-520 (Directory structure) completed - PR #207 merged, 1 turn, ~8K tokens, 15m",
+2025-12-24,complete,"**SPRINT-008 COMPLETE** - TransactionList: 1,357 to 431 lines (-68%), 9 files extracted",
+2025-12-24,complete,"TASK-521 (Expand bulk status to all 4 statuses) completed - PR #208 merged, 2 turns, ~12K tokens, 7m",
+2025-12-24,create,Created SPRINT-009 (Codebase Standards Remediation) - 18 tasks (TASK-600 to TASK-617),
+2025-12-24,update,"SPRINT-009 based on SR Engineer codebase audit: 2 CRITICAL (security), 8 HIGH (architecture), 4 MEDIUM (types), 4 LOW (cleanup)",
+2025-12-24,update,"SPRINT-009 targets: main.ts <500 lines, preload.ts <400 lines, Transactions.tsx <600 lines, 114 any types to <10",
+2025-12-28,complete,SPRINT-009 completed - All 20 tasks merged (PRs #212-239),
+2025-12-28,complete,"Security hardening complete, architecture violations fixed, type safety improved",
+2025-12-27,create,Added BACKLOG-092 through BACKLOG-102 (component organization and refactoring items),BACKLOG-092;BACKLOG-102
+2025-12-27,complete,"INDEX.md major update - corrected sprint statuses, archived completed task files",
+2025-12-27,complete,"BACKLOG-061, 062, 063, 065 marked complete (addressed by SPRINT-009)",BACKLOG-061
+2025-12-27,update,"Task files archived: SPRINT-006 (14), SPRINT-007 (12), SPRINT-009 (21)",
+2025-12-28,create,Created SPRINT-010 (Core Polish & Text Messages) - 6 tasks (TASK-700 to TASK-705),
+2025-12-28,create,"Added BACKLOG-103 (Contact Selection Fix), BACKLOG-104 (Dashboard AI Display), BACKLOG-105 (Text Messages Tab)",BACKLOG-103;BACKLOG-104;BACKLOG-105
+2025-12-28,update,"SPRINT-010 covers: bug fix, HTML email rendering, text messages feature, dashboard enhancement",
+2025-12-28,create,Added BACKLOG-107 through BACKLOG-115 (9 items from SR Engineer findings for SPRINT-012+),BACKLOG-107;BACKLOG-115
+2025-12-28,update,"New items: 2 CRITICAL (useAppStateMachine split, flaky test), 3 HIGH (AppRouter, AppShell, service migration), 4 MEDIUM (test coverage, any types)",
+2025-12-28,create,"Added BACKLOG-116 (Google Login Feature Parity) - Medium priority, from SR Engineer review of PR #242",BACKLOG-116
+2025-12-28,create,"Added BACKLOG-117 (Sprint 009 Auth Regressions) - Critical priority, preload sandbox + Google login flow regression",BACKLOG-117
+2025-12-28,create,"Added BACKLOG-118 (OnboardingFlow Hooks Bug) - High priority, React hooks order violation fixed",BACKLOG-118
+2025-12-28,complete,BACKLOG-118 completed - useCallback moved before early return to fix hooks order,BACKLOG-118
+2025-12-28,create,Created TASK-900 for BACKLOG-117 implementation,BACKLOG-117
+2025-12-28,complete,BACKLOG-117 completed - PR #242 merged (preload sandbox + Google login + timeout protection),BACKLOG-117
+2025-12-28,update,CI workflow fix - fetch base branch for PR comparison,
+2025-12-28,create,"Added BACKLOG-119 (OAuth Handler Parity Audit) - Low priority, prevents future Google/Microsoft handler drift",BACKLOG-119
+2025-12-30,create,"Added BACKLOG-120 (CI Testing Infrastructure Gaps) - Medium priority, tracks testing gaps from TASK-704 CI debugging",BACKLOG-120
+2025-12-31,complete,TASK-804 (BACKLOG-108) completed - Fix flaky appleDriverService test (PR #256 merged),BACKLOG-108
+2025-12-31,complete,TASK-800 types completed - Email fixture types (PR #257 merged),
+2025-12-31,complete,TASK-803 (BACKLOG-014) completed - Joyride demo update for AI detection (PR #258 merged),BACKLOG-014
+2025-12-31,complete,"TASK-801 fixtures completed - 203 messages, 52 contacts, iOS backup services (PR #259 merged)",
+2025-12-31,complete,TASK-802 completed - Integration testing framework with sandbox and mock providers (PR #260 merged),
+2025-12-31,complete,"**SPRINT-011 COMPLETE** - All 5 tasks merged (PRs #256-260), testing infrastructure established",
+2026-01-01,create,"Added BACKLOG-121 (Generator Approach Guidance) - High priority, from SPRINT-011 retrospective (32K token limit lesson)",BACKLOG-121
+2026-01-01,create,"Added BACKLOG-122 (Engineer Worktree Instructions) - Medium priority, from SPRINT-011 retrospective (worktree confusion)",BACKLOG-122
+2026-01-01,create,"Added BACKLOG-123 (Test Category Estimation Multiplier) - Low priority, from SPRINT-011 retrospective (-28% avg variance)",BACKLOG-123
+2026-01-01,create,"BACKLOG-122 completed - Engineer worktree instructions added to engineer.md and git-branching.md (2 turns, ~8K tokens)",BACKLOG-122
+2026-01-01,complete,"**SPRINT-010 retroactive update** - All 7 tasks were merged 2025-12-29 but sprint file was never updated. Fixed sprint file, marked BACKLOG-054, 103, 104, 105 as Completed.",BACKLOG-054
+2026-01-01,create,"Added BACKLOG-124 (Sprint Completion Checklist) - Medium priority, from SPRINT-010 retrospective (stale sprint file)",BACKLOG-124
+2026-01-01,create,"Added BACKLOG-125 (Enforce Metrics Collection) - Low priority, from SPRINT-010 retrospective (missing metrics)",BACKLOG-125
+2026-01-01,create,"Added BACKLOG-127, 128, 129 from SPRINT-010/011 retro action items (sprint capacity, type verification, CI troubleshooting)",BACKLOG-127
+2026-01-01,update,"Updated BACKLOG-126 title to ""Enforce Debugging Metrics with Commit Verification"" (refined SOP)",BACKLOG-126
+2026-01-01,create,"Added BACKLOG-126 (Incident/Blocker Tracking) - **High priority**, from TASK-704 CI incident (22h undocumented debugging)",BACKLOG-126
+2026-01-01,create,Added TASK-704 to variance breakdown - actual ~24 turns vs estimated 10-14 (+100% variance due to CI incident),
+2026-01-01,incident,"Updated SPRINT-010 with ""Major Incident"" section documenting the 22-hour CI debugging",
+2026-01-01,create,Created SPRINT-012 (Process & Documentation Improvements) - 5 tasks (TASK-805 to TASK-809),
+2026-01-01,assign,"Assigned BACKLOG-126, 124, 127, 128, 129 to SPRINT-012 (all docs category from retrospectives)",BACKLOG-126
+2026-01-01,create,**INCIDENT** BACKLOG-130 created - Sub-agent permission auto-denial burned ~9.6M tokens across 5 parallel engineer agents,BACKLOG-130
+2026-01-01,lesson,Lesson learned: Background agents cannot prompt for Write/Edit permissions - need pre-approval or foreground execution,
+2026-01-02,create,"Added BACKLOG-131 (PR Metrics Validation Shell Escaping Bug) - Medium priority, CI workflow bug discovered during SPRINT-012 PR #262",BACKLOG-131
+2026-01-02,complete,"**SPRINT-012 COMPLETE** - All 6 tasks merged (PR #262): BACKLOG-124, 126, 127, 128, 129, 130 marked complete",BACKLOG-124
+2026-01-02,lesson,Lesson learned: Permission pre-approval via settings.json `permissions.allow` prevents background agent blocks,
+2026-01-02,complete,"**SPRINT-013 COMPLETE** - Architecture Cleanup: 3 tasks merged (PRs #263-265), BACKLOG-107, 109, 110 marked complete",BACKLOG-107
+2026-01-02,update,"useAppStateMachine split: 1130→422 lines + 8 flow hooks, AppRouter: 359→229 lines, AppShell: 190→110 lines",
+2026-01-02,update,"Sprint-013 efficiency: 12 turns (est 22-30), -57% variance - refactor tasks continue to be overestimated",
+2026-01-02,create,Created SPRINT-014 (Feature/Performance) - 9 tasks (TASK-904 to TASK-912),
+2026-01-02,update,"SPRINT-014 scope: BACKLOG-032 (full), BACKLOG-090 (full), BACKLOG-091 (Phase 1 only - schema + Gmail Message-ID)",BACKLOG-032;BACKLOG-090;BACKLOG-091
+2026-01-02,update,BACKLOG-091 Phase 2 (Outlook + content hash + full dedup) deferred to SPRINT-015,BACKLOG-091
+2026-01-02,complete,"**SPRINT-014 COMPLETE** - All 9 tasks merged (PRs #266-274): Sync status service, dedup schema, incremental sync (Gmail/Outlook/iPhone), Message-ID extraction, sync lock UI, LLM filter, integration te",
+2026-01-02,complete,"BACKLOG-032 (Handle Backup in Progress), 090 (Incremental Sync), 091 Phase 1 (Gmail Message-ID) marked complete",BACKLOG-032
+2026-01-02,create,"Added BACKLOG-135 (window.d.ts Type Definitions) - Medium priority, from TASK-910 token overrun (~6M tokens due to type debugging)",BACKLOG-135
+2026-01-02,complete,**SPRINT-014 RETROSPECTIVE** completed - identified 3 major incidents:,
+2026-01-02,update,**Token efficiency for SPRINT-014:** ~0.4% of tokens produced mergeable work,
+2026-01-02,update,"Service category now has data: 5 tasks, -45% avg variance (suggested multiplier: 0.55x)",
+2026-01-02,complete,"BACKLOG-132 (Mandatory Worktree Enforcement) completed - TASK-913, PR #274 merged (3 turns, ~23K tokens, 10m)",BACKLOG-132
+2026-01-02,create,Updated BACKLOG-132 variance to +360% (total tokens vs impl-only estimate); added SR Review Overhead table to PM Estimation Guidelines,BACKLOG-132
+2026-01-02,create,Added data quality warning to Estimation Accuracy Analysis; marked all tasks with ✓/⚠️/❌ for complete/incomplete/incident metrics; only 8 of 30 tasks have complete lifecycle data,
+2026-01-02,complete,"**SPRINT-015 COMPLETE** - Infrastructure Stabilization (7 tasks: TASK-913 to TASK-919, PRs #275-281 + hotfix #278)",
+2026-01-02,incident,Key incident: TASK-914/915 consumed ~100x estimated tokens (~1.6-2.2M vs ~15-18K),
+2026-01-02,complete,"Phase 3 (email dedup) completed efficiently: 9 turns, ~40K tokens (vs estimated 12-17 turns, ~58K tokens)",
+2026-01-02,update,Service category adjustment confirmed at 0.50x (TASK-917/918/919 avg -31% variance),
+2026-01-02,create,SPRINT-016 (Component Refactoring) plan created and ready to start,
+2026-01-03,complete,**BACKLOG-137 COMPLETE** - Automatic Token Tracking Tooling implemented:,BACKLOG-137
+2026-01-03,update,**METRICS FORMAT ALIGNMENT** - Templates aligned with auto-captured data:,
+2026-01-03,create,"Added BACKLOG-138 (Turns/Metrics Cleanup) - Remove remaining ~600+ ""turns"" references from active docs",BACKLOG-138
+2026-01-03,complete,**BACKLOG-138 COMPLETE** - PR #282 merged:,BACKLOG-138
+2026-01-03,complete,**SPRINT-017 COMPLETE** - Metrics Workflow Test:,
+2026-01-03,complete,**SPRINT-018 COMPLETE** - Token Accounting Clarity:,
+2026-01-03,create,Added BACKLOG-139 (Database Init Gate) - Critical fix for recurring bug:,BACKLOG-139
+2026-01-03,complete,**SPRINT-019 COMPLETE** - Database Initialization Gate:,
+2026-01-03,create,Added BACKLOG-140 (Duplicate Transaction Re-Import Prevention) - High priority,BACKLOG-140
+2026-01-03,create,"Added BACKLOG-141 (Onboarding Flicker Quick Fix) - Medium priority, will be superseded by BACKLOG-142",BACKLOG-141;BACKLOG-142
+2026-01-03,create,"**Created BACKLOG-142 (State Coordination Overhaul)** - Critical, multi-phase initiative:",BACKLOG-142
+2026-01-03,complete,"**SPRINT-020 COMPLETE** - State Coordination Foundation (7 tasks: TASK-927 to TASK-933, PRs #287-294)",
+2026-01-03,create,Added BACKLOG-143 (Prevent Duplicate Contact Imports) - Medium priority:,BACKLOG-143
+2026-01-04,complete,**BACKLOG-142 (State Coordination Overhaul) COMPLETE**,BACKLOG-142
+2026-01-04,create,**Added BACKLOG-148 to BACKLOG-152** from SR Engineer architecture review:,BACKLOG-148;BACKLOG-152
+2026-01-04,update,**SPRINT-023 (Architecture Debt Reduction) PLANNED**,
+2026-01-04,update,**Backlog Audit & Status Reconciliation**,
+2026-01-04,create,Added BACKLOG-156 (Auto-Refresh Data Sources on App Load) - High priority,BACKLOG-156
+2026-01-04,update,**SPRINT-024 Planned (Quality & Coverage)**,
+2026-01-05,update,**Retroactive Documentation for PR #353 (Contact-First AttachMessagesModal)**,
+2026-01-05,create,**SPRINT-027 (Messages & Contacts Polish) Created**,
+2026-01-09,complete,**SPRINT-027 (Messages & Contacts Polish) COMPLETE**,
+2026-01-09,update,**Retroactive Documentation - Permissions Step Bugs (SPRINT-027)**,
+2026-01-10,complete,**SPRINT-028 (Stability & UX Polish) COMPLETE**,
+2026-01-10,update,**SPRINT-029 (UX Improvements) Ready**,
+2026-01-10,create,**Codebase Health Review - New Backlog Items Created**,
+2026-01-10,create,**SPRINT-031 (Codebase Health) Created**,
+2026-01-14,update,**Comprehensive Backlog Index Update**,
+2026-01-14,update,**Identified Potential Duplicates/Consolidations**,
+2026-01-15,complete,**SPRINT-037 (Test Coverage) COMPLETE**,
+2026-01-15,update,**High Priority Items for Next Sprint**,
+2026-01-15,update,**Codebase Audit Findings Consolidated (7 SR Engineer Audits)**,
+2026-01-17,update,**SPRINT-040 (UI Design System) CLOSED**,
+2026-01-17,update,**SPRINT-041 (Bug Fixes) CLOSED**,
+2026-01-17,update,**BACKLOG-220 REOPENED**,BACKLOG-220
+2026-01-17,update,**SPRINT-042 (Database Schema Alignment) PLANNED**,
+2026-01-17,create,**Added BACKLOG-298 and BACKLOG-299** (SPRINT-041 testing findings),BACKLOG-298;BACKLOG-299
+2026-01-18,BACKLOG-247,status,Pending,Completed,SPRINT-043 security hardening
+2026-01-18,BACKLOG-248,status,Pending,Completed,SPRINT-043 security hardening
+2026-01-18,BACKLOG-249,status,Pending,Completed,SPRINT-043 security hardening
+2026-01-18,BACKLOG-220,status,Reopened,Completed,SPRINT-042 database schema alignment
+2026-01-18,BACKLOG-296,status,In Progress,Completed,SPRINT-042 database schema alignment
+2026-01-18,BACKLOG-303,created,n/a,Pending,Centralize dotenv in supabaseService
+2026-01-18,BACKLOG-303,status,Pending,Completed,PR #466
+2026-01-18,BACKLOG-304,created,n/a,Pending,ESLint rule warning fix
+2026-01-18,BACKLOG-305,created,n/a,Pending,autoDetection test failure fix
+2026-01-18,BACKLOG-304,status,Pending,Completed,PR #468 - removed unused eslint-disable
+2026-01-18,BACKLOG-305,status,Pending,Completed,PR #468 - fixed test button selector
+2026-01-18,BACKLOG-292,status,Pending,Completed,PR #438 - preload __DEV__ fix
+2026-01-18,BACKLOG-221,status,In Sprint,Completed,PR #471 - iMessage attachments fix
+2026-01-18,BACKLOG-229,status,In Sprint,Completed,Already done in TASK-1071 (PR #431)
+2026-01-18,BACKLOG-293,status,In Sprint,Completed,Already done in TASK-1113 (SPRINT-041)
+2026-01-18,BACKLOG-299,status,In Sprint,Completed,PR #470 - group chat detection fix
+2026-01-18,BACKLOG-306,created,n/a,Pending,Hide phone/email in contact modal
+2026-01-18,BACKLOG-307,created,n/a,Pending,Contact select missing message-derived contacts
+2026-01-18,BACKLOG-207,status,Completed,Reopened,Auto-link not working as expected
+2026-01-18,SPRINT-044,completed,Planning,Completed,2 tasks: PR #470 #471 (~77K tokens)
+2026-01-18,BACKLOG-309,created,n/a,Pending,Import contact flow - auto-select and refresh issues
+2026-01-18,BACKLOG-306,status,Pending,Completed,PR #472 - hide phone/email in modal
+2026-01-18,BACKLOG-307,status,Pending,Completed,PR #473 - message-derived contacts
+2026-01-18,BACKLOG-309,status,Pending,Completed,PR #474 - import auto-select
+2026-01-18,BACKLOG-207,status,Reopened,Completed,PR #475 - wire auto-link
+2026-01-18,SPRINT-045,completed,Planning,Completed,4 tasks: PRs #472-475 (~88K tokens)
+2026-01-18,BACKLOG-310,created,n/a,Pending,Remove debug console logs from NotificationContext
+2026-01-19,BACKLOG-311,created,n/a,Pending,EditContactsModal Performance - Lift Contact Loading
+2026-01-19,BACKLOG-318,created,n/a,In Sprint,Fix Loading State Layout Shift in EditContactsModal
+2026-01-19,TASK-1128,completed,In Progress,Merged,Filter nameless contacts from selection - PR #479
+2026-01-19,TASK-1129,completed,In Progress,Merged,Database-level contact search - PR #481
+2026-01-19,TASK-1130,completed,In Progress,Merged,Modal fixed size for loading stability - PR #482
+2026-01-19,TASK-1131,completed,In Progress,Merged,Message contacts toggle - PR #483
+2026-01-19,TASK-1132,completed,In Progress,Merged,Loading overlay spinner - PR #484
+2026-01-19,BACKLOG-311,status,Pending,Done,"PRs #477, #478 - lift contact loading + fix N+1 query"
+2026-01-19,BACKLOG-318,status,In Sprint,Done,PR #484 - loading overlay spinner
+2026-01-19,SPRINT-045,wrap-up,In Progress,Completed,"Final wrap-up: 11 PRs merged (#472-475, #477-484), ~180K tokens"
+2026-01-20,BACKLOG-206,reopened,completed→reopened,UI freeze during force reimport still occurring - previous fix incomplete
+2026-01-20,BACKLOG-344,created,new,Add Audit Package as Default Export Format Option
+2026-01-21,BACKLOG-345,created,"Added: Verify PDF Export Uses Audit Package as Foundation - consolidate export logic"
+2026-01-21,BACKLOG-346,created,"SR Engineer rec: Test coverage for folderExportService.ts"
+2026-01-21,BACKLOG-347,created,"SR Engineer rec: Branch protection rules on develop"
+2026-01-21,BACKLOG-348,created,"SR Engineer rec: Consolidate field allowlists"
+2026-01-21,BACKLOG-349,created,"SR Engineer rec: Share FolderExportProgress type"
+2026-01-21,BACKLOG-350,created,"SR Engineer rec: Refactor folderExportService.ts"
+2026-01-21,BACKLOG-351,created,"SR Engineer rec: Add logging to empty catch blocks"
+2026-01-25,BACKLOG-459,status,Completed,PR #569 - Team license export button
+2026-01-25,BACKLOG-462,status,Completed,"PRs #570, #592 - AI gating verification (Settings + Rejected filter)"
+2026-01-25,BACKLOG-081,deferred,Pending,Deferred from SPRINT-053 - AI consent in T&C
+2026-01-25,SPRINT-053,completed,Planning,Completed,"License Enhancement & AI Gating - 3 tasks merged (PRs #569, #570, #592)"
+2026-01-27,create,Created BACKLOG-544 - Background import process with progress indicator,BACKLOG-544

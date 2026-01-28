@@ -9,8 +9,14 @@
  * - DetectionBadges (DetectionSourceBadge, ConfidencePill, PendingReviewBadge)
  * - TransactionDetails (modal for viewing/editing transaction details)
  * - EditTransactionModal (modal for editing transactions)
+ *
+ * State management via custom hooks:
+ * - useTransactionList: transactions, loading, error, filtering
+ * - useTransactionScan: scanning, scanProgress, startScan, stopScan
+ * - useBulkActions: bulk delete/export/status change operations
+ * - useTransactionModals: modal visibility and selected items
  */
-import React, { useState, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 import AuditTransactionModal from "./AuditTransactionModal";
 import ExportModal from "./ExportModal";
 import {
@@ -18,7 +24,10 @@ import {
   BulkDeleteConfirmModal,
   BulkExportModal,
 } from "./BulkActionBar";
+import { BulkSubmitModal } from "./BulkSubmitModal";
 import { useSelection } from "../hooks/useSelection";
+import { useBulkSubmit } from "../hooks/useBulkSubmit";
+import { useSubmissionSync } from "../hooks/useSubmissionSync";
 import { useAppStateMachine } from "../appCore";
 import { useToast } from "../hooks/useToast";
 import { ToastContainer } from "./Toast";
@@ -27,16 +36,19 @@ import {
   TransactionListCard,
   TransactionsToolbar,
 } from "./transaction";
+import {
+  useTransactionList,
+  useTransactionScan,
+  useBulkActions,
+  useTransactionModals,
+  type TransactionFilter,
+} from "./transaction/hooks";
 import type { Transaction } from "../../electron/types/models";
+import type { TransactionTab } from "./transactionDetailsModule/types";
 
 // ============================================
 // TYPES
 // ============================================
-
-interface ScanProgress {
-  step: string;
-  message: string;
-}
 
 interface TransactionsProps {
   userId: string;
@@ -88,24 +100,66 @@ function Transactions({
   // Toast notifications
   const { toasts, showSuccess, showError, removeToast } = useToast();
 
-  // Core state
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [scanning, setScanning] = useState<boolean>(false);
-  const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
+  // UI state (local to component)
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [selectedTransaction, setSelectedTransaction] =
-    useState<Transaction | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<"active" | "closed" | "all">(
     "active"
   );
-  const [showAuditCreate, setShowAuditCreate] = useState<boolean>(false);
-  const [quickExportTransaction, setQuickExportTransaction] =
-    useState<Transaction | null>(null);
-  const [quickExportSuccess, setQuickExportSuccess] = useState<string | null>(
-    null
+  const [selectionMode, setSelectionMode] = useState(false);
+
+  // Map component's statusFilter to TransactionFilter type
+  // The useTransactionList hook uses TransactionFilter which includes "pending" and "rejected"
+  // but this component only uses "active", "closed", "all"
+  const transactionFilter: TransactionFilter = statusFilter;
+
+  // Transaction list data and operations
+  const {
+    transactions,
+    filteredTransactions,
+    loading,
+    error,
+    refetch,
+    setError,
+  } = useTransactionList(userId, transactionFilter, searchQuery);
+
+  // Scan operations
+  const { scanning, scanProgress, startScan, stopScan } = useTransactionScan(
+    userId,
+    refetch,
+    setError
   );
+
+  // Submission sync - listens for status changes from cloud (BACKLOG-395)
+  useSubmissionSync({
+    onStatusChange: () => {
+      // Refresh transaction list when status changes
+      refetch();
+    },
+    showToasts: true,
+  });
+
+  // Modal states
+  const {
+    showAuditCreate,
+    openAuditCreate,
+    closeAuditCreate,
+    quickExportTransaction,
+    openQuickExport,
+    closeQuickExport,
+    quickExportSuccess,
+    setQuickExportSuccess,
+    showBulkDeleteConfirm,
+    openBulkDeleteConfirm,
+    closeBulkDeleteConfirm,
+    showBulkExportModal,
+    openBulkExportModal,
+    closeBulkExportModal,
+    selectedTransaction,
+    setSelectedTransaction,
+  } = useTransactionModals();
+
+  // Initial tab state for TransactionDetails
+  const [initialTab, setInitialTab] = useState<TransactionTab>("overview");
 
   // Selection state for bulk operations
   const {
@@ -117,34 +171,86 @@ function Transactions({
     count: selectedCount,
   } = useSelection();
 
-  // Bulk action state
-  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
-  const [showBulkExportModal, setShowBulkExportModal] = useState(false);
-  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
-  const [isBulkExporting, setIsBulkExporting] = useState(false);
-  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
-  const [bulkActionSuccess, setBulkActionSuccess] = useState<string | null>(
-    null
-  );
-  const [selectionMode, setSelectionMode] = useState(false);
+  // Exit selection mode helper
+  const exitSelectionMode = useCallback(() => {
+    deselectAll();
+    setSelectionMode(false);
+  }, [deselectAll]);
 
-  // ============================================
-  // DATA LOADING
-  // ============================================
+  // Bulk actions (bulkActionSuccess auto-clears after 5 seconds)
+  const {
+    isBulkDeleting,
+    isBulkExporting,
+    isBulkUpdating,
+    bulkActionSuccess,
+    handleBulkDelete,
+    handleBulkExport,
+    handleBulkStatusChange,
+  } = useBulkActions(selectedIds, selectedCount, {
+    onComplete: refetch,
+    showError: setError,
+    exitSelectionMode,
+    closeBulkDeleteModal: closeBulkDeleteConfirm,
+    closeBulkExportModal,
+  });
 
-  useEffect(() => {
-    loadTransactions();
+  // Bulk submit state (BACKLOG-392)
+  const [showBulkSubmitModal, setShowBulkSubmitModal] = useState(false);
+  const {
+    isSubmitting: isBulkSubmitting,
+    progress: bulkSubmitProgress,
+    startBulkSubmit,
+    cancelSubmission: cancelBulkSubmission,
+    reset: resetBulkSubmit,
+  } = useBulkSubmit();
 
-    // Listen for scan progress
-    let cleanup: (() => void) | undefined;
-    if (window.api?.onTransactionScanProgress) {
-      cleanup = window.api.onTransactionScanProgress(handleScanProgress);
-    }
+  // Get transactions eligible for submission
+  const getSubmittableTransactions = useCallback(() => {
+    return filteredTransactions.filter((t) => {
+      if (!selectedIds.has(t.id)) return false;
+      const status = t.submission_status;
+      return (
+        status === undefined ||
+        status === "not_submitted" ||
+        status === "needs_changes" ||
+        status === "rejected"
+      );
+    });
+  }, [filteredTransactions, selectedIds]);
 
-    return () => {
-      if (cleanup) cleanup();
-    };
+  // Handle opening bulk submit modal
+  const handleOpenBulkSubmitModal = useCallback(() => {
+    setShowBulkSubmitModal(true);
   }, []);
+
+  // Handle closing bulk submit modal
+  const handleCloseBulkSubmitModal = useCallback(() => {
+    setShowBulkSubmitModal(false);
+    resetBulkSubmit();
+  }, [resetBulkSubmit]);
+
+  // Handle bulk submit
+  const handleBulkSubmit = useCallback(async () => {
+    const submittable = getSubmittableTransactions();
+    if (submittable.length === 0) return;
+
+    await startBulkSubmit(submittable.map((t) => ({
+      id: t.id,
+      property_address: t.property_address,
+      submission_status: t.submission_status,
+      message_count: t.message_count,
+      attachment_count: t.attachment_count,
+    })));
+
+    // Refresh transactions to get updated statuses
+    await refetch();
+  }, [getSubmittableTransactions, startBulkSubmit, refetch]);
+
+  // Handle closing after completion
+  const handleBulkSubmitComplete = useCallback(() => {
+    handleCloseBulkSubmitModal();
+    exitSelectionMode();
+  }, [handleCloseBulkSubmitModal, exitSelectionMode]);
 
   // DEFENSIVE CHECK: Return loading state if database not initialized
   // Should never trigger if AppShell gate works, but prevents errors if bypassed
@@ -158,85 +264,6 @@ function Transactions({
       </div>
     );
   }
-
-  const loadTransactions = async () => {
-    try {
-      setLoading(true);
-      const result = await window.api.transactions.getAll(userId);
-
-      if (result.success) {
-        setTransactions((result.transactions as Transaction[]) || []);
-      } else {
-        setError(result.error || "Failed to load transactions");
-      }
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Failed to load transactions";
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ============================================
-  // SCAN HANDLERS
-  // ============================================
-
-  const handleScanProgress = (progress: unknown) => {
-    setScanProgress(progress as ScanProgress);
-  };
-
-  const startScan = async () => {
-    try {
-      setScanning(true);
-      setError(null);
-      setScanProgress({ step: "starting", message: "Starting scan..." });
-
-      const result = await window.api.transactions.scan(userId, {});
-
-      if (result.success) {
-        setScanProgress({
-          step: "complete",
-          message: `Found ${result.transactionsFound} transactions from ${result.emailsScanned} emails!`,
-        });
-        await loadTransactions();
-      } else {
-        setError(result.error || "Scan failed");
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Scan failed";
-      if (!errorMessage.includes("cancelled")) {
-        setError(errorMessage);
-      }
-    } finally {
-      setScanning(false);
-      setTimeout(() => setScanProgress(null), 3000);
-    }
-  };
-
-  const stopScan = async () => {
-    try {
-      await window.api.transactions.cancelScan(userId);
-      setScanProgress(null);
-    } catch (err) {
-      console.error("Failed to stop scan:", err);
-    }
-  };
-
-  // ============================================
-  // FILTERING
-  // ============================================
-
-  const filteredTransactions = transactions.filter((t: Transaction) => {
-    const matchesSearch = t.property_address
-      ?.toLowerCase()
-      .includes(searchQuery.toLowerCase());
-    const matchesStatus =
-      statusFilter === "all" ||
-      (statusFilter === "active" && t.status === "active") ||
-      (statusFilter === "closed" && t.status === "closed");
-    return matchesSearch && matchesStatus;
-  });
 
   // ============================================
   // SELECTION HANDLERS
@@ -260,6 +287,7 @@ function Transactions({
     if (selectionMode) {
       toggleSelection(transaction.id);
     } else {
+      setInitialTab("overview");
       setSelectedTransaction(transaction);
     }
   };
@@ -273,135 +301,40 @@ function Transactions({
     selectAll(filteredTransactions);
   };
 
+  // Handlers for clicking on communication counts
+  const handleMessagesClick = (transaction: Transaction, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!selectionMode) {
+      setInitialTab("messages");
+      setSelectedTransaction(transaction);
+    }
+  };
+
+  const handleEmailsClick = (transaction: Transaction, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!selectionMode) {
+      setInitialTab("emails");
+      setSelectedTransaction(transaction);
+    }
+  };
+
   // ============================================
   // EXPORT HANDLERS
   // ============================================
 
   const handleQuickExport = (transaction: Transaction, e: React.MouseEvent) => {
     e.stopPropagation();
-    setQuickExportTransaction(transaction);
+    openQuickExport(transaction);
   };
 
   const handleQuickExportComplete = (result: unknown) => {
     const exportResult = result as { path?: string };
-    setQuickExportTransaction(null);
+    closeQuickExport();
     setQuickExportSuccess(
       exportResult.path || "Export completed successfully!"
     );
     setTimeout(() => setQuickExportSuccess(null), 5000);
-    loadTransactions();
-  };
-
-  // ============================================
-  // BULK ACTION HANDLERS
-  // ============================================
-
-  const handleBulkDelete = async () => {
-    if (selectedCount === 0) return;
-
-    setIsBulkDeleting(true);
-    try {
-      const result = await window.api.transactions.bulkDelete(
-        Array.from(selectedIds)
-      );
-
-      if (result.success) {
-        setBulkActionSuccess(
-          `Successfully deleted ${result.deletedCount || selectedCount} transaction${(result.deletedCount || selectedCount) > 1 ? "s" : ""}`
-        );
-        deselectAll();
-        setSelectionMode(false);
-        await loadTransactions();
-      } else {
-        setError(result.error || "Failed to delete transactions");
-      }
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Failed to delete transactions";
-      setError(errorMessage);
-    } finally {
-      setIsBulkDeleting(false);
-      setShowBulkDeleteConfirm(false);
-      setTimeout(() => setBulkActionSuccess(null), 5000);
-    }
-  };
-
-  const handleBulkExport = async (format: string) => {
-    if (selectedCount === 0) return;
-
-    setIsBulkExporting(true);
-    try {
-      const selectedTransactionIds = Array.from(selectedIds);
-      let successCount = 0;
-      const errors: string[] = [];
-
-      for (const transactionId of selectedTransactionIds) {
-        try {
-          const result = await window.api.transactions.exportEnhanced(
-            transactionId,
-            { exportFormat: format }
-          );
-          if (result.success) {
-            successCount++;
-          } else {
-            errors.push(result.error || `Failed to export transaction`);
-          }
-        } catch (err) {
-          errors.push(err instanceof Error ? err.message : "Export failed");
-        }
-      }
-
-      if (successCount > 0) {
-        setBulkActionSuccess(
-          `Successfully exported ${successCount} transaction${successCount > 1 ? "s" : ""}${errors.length > 0 ? ` (${errors.length} failed)` : ""}`
-        );
-        deselectAll();
-        setSelectionMode(false);
-        await loadTransactions();
-      } else {
-        setError("Failed to export transactions");
-      }
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Failed to export transactions";
-      setError(errorMessage);
-    } finally {
-      setIsBulkExporting(false);
-      setShowBulkExportModal(false);
-      setTimeout(() => setBulkActionSuccess(null), 5000);
-    }
-  };
-
-  const handleBulkStatusChange = async (
-    status: "pending" | "active" | "closed" | "rejected"
-  ) => {
-    if (selectedCount === 0) return;
-
-    setIsBulkUpdating(true);
-    try {
-      const result = await window.api.transactions.bulkUpdateStatus(
-        Array.from(selectedIds),
-        status
-      );
-
-      if (result.success) {
-        setBulkActionSuccess(
-          `Successfully updated ${result.updatedCount || selectedCount} transaction${(result.updatedCount || selectedCount) > 1 ? "s" : ""} to ${status}`
-        );
-        deselectAll();
-        setSelectionMode(false);
-        await loadTransactions();
-      } else {
-        setError(result.error || "Failed to update transactions");
-      }
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Failed to update transactions";
-      setError(errorMessage);
-    } finally {
-      setIsBulkUpdating(false);
-      setTimeout(() => setBulkActionSuccess(null), 5000);
-    }
+    refetch();
   };
 
   // ============================================
@@ -449,7 +382,7 @@ function Transactions({
         onSearchChange={setSearchQuery}
         selectionMode={selectionMode}
         onToggleSelectionMode={handleToggleSelectionMode}
-        onNewTransaction={() => setShowAuditCreate(true)}
+        onNewTransaction={openAuditCreate}
         onStartScan={startScan}
         onStopScan={stopScan}
         scanning={scanning}
@@ -460,7 +393,7 @@ function Transactions({
       />
 
       {/* Transactions List */}
-      <div className="flex-1 overflow-y-auto p-6 max-w-7xl mx-auto w-full">
+      <div className="flex-1 min-h-0 overflow-y-auto p-6 max-w-7xl mx-auto w-full">
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
@@ -494,7 +427,7 @@ function Transactions({
               )}
               {!searchQuery && (
                 <button
-                  onClick={() => setShowAuditCreate(true)}
+                  onClick={openAuditCreate}
                   className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all font-semibold shadow-md hover:shadow-lg"
                 >
                   <svg
@@ -526,6 +459,8 @@ function Transactions({
                 onTransactionClick={handleTransactionClick}
                 onCheckboxClick={handleCheckboxClick}
                 onQuickExport={handleQuickExport}
+                onMessagesClick={handleMessagesClick}
+                onEmailsClick={handleEmailsClick}
                 formatCurrency={formatCurrency}
                 formatDate={formatDate}
               />
@@ -539,9 +474,10 @@ function Transactions({
         <TransactionDetails
           transaction={selectedTransaction}
           onClose={() => setSelectedTransaction(null)}
-          onTransactionUpdated={loadTransactions}
+          onTransactionUpdated={refetch}
           onShowSuccess={showSuccess}
           onShowError={showError}
+          initialTab={initialTab}
         />
       )}
 
@@ -550,10 +486,10 @@ function Transactions({
         <AuditTransactionModal
           userId={userId}
           provider={provider}
-          onClose={() => setShowAuditCreate(false)}
+          onClose={closeAuditCreate}
           onSuccess={() => {
-            setShowAuditCreate(false);
-            loadTransactions();
+            closeAuditCreate();
+            refetch();
           }}
         />
       )}
@@ -563,7 +499,7 @@ function Transactions({
         <ExportModal
           transaction={quickExportTransaction}
           userId={quickExportTransaction.user_id}
-          onClose={() => setQuickExportTransaction(null)}
+          onClose={closeQuickExport}
           onExportComplete={handleQuickExportComplete}
         />
       )}
@@ -575,13 +511,15 @@ function Transactions({
           totalCount={filteredTransactions.length}
           onSelectAll={handleSelectAll}
           onDeselectAll={deselectAll}
-          onBulkDelete={() => setShowBulkDeleteConfirm(true)}
-          onBulkExport={() => setShowBulkExportModal(true)}
+          onBulkDelete={openBulkDeleteConfirm}
+          onBulkExport={openBulkExportModal}
           onBulkStatusChange={handleBulkStatusChange}
+          onBulkSubmit={handleOpenBulkSubmitModal}
           onClose={handleCloseBulkEdit}
           isDeleting={isBulkDeleting}
           isExporting={isBulkExporting}
           isUpdating={isBulkUpdating}
+          isSubmitting={isBulkSubmitting}
           selectedTransactions={filteredTransactions.filter((t) =>
             selectedIds.has(t.id)
           )}
@@ -593,7 +531,7 @@ function Transactions({
         <BulkDeleteConfirmModal
           selectedCount={selectedCount}
           onConfirm={handleBulkDelete}
-          onCancel={() => setShowBulkDeleteConfirm(false)}
+          onCancel={closeBulkDeleteConfirm}
           isDeleting={isBulkDeleting}
         />
       )}
@@ -603,8 +541,29 @@ function Transactions({
         <BulkExportModal
           selectedCount={selectedCount}
           onConfirm={handleBulkExport}
-          onCancel={() => setShowBulkExportModal(false)}
+          onCancel={closeBulkExportModal}
           isExporting={isBulkExporting}
+        />
+      )}
+
+      {/* Bulk Submit Modal (BACKLOG-392) */}
+      {showBulkSubmitModal && (
+        <BulkSubmitModal
+          transactions={getSubmittableTransactions().map((t) => ({
+            id: t.id,
+            property_address: t.property_address,
+            submission_status: t.submission_status,
+            message_count: t.message_count,
+            attachment_count: t.attachment_count,
+            email_count: t.email_count,
+            text_count: t.text_count,
+          }))}
+          isSubmitting={isBulkSubmitting}
+          progress={bulkSubmitProgress}
+          onSubmit={handleBulkSubmit}
+          onCancel={handleCloseBulkSubmitModal}
+          onCancelRemaining={cancelBulkSubmission}
+          onClose={handleBulkSubmitComplete}
         />
       )}
 

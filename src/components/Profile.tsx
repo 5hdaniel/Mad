@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import type { Subscription } from "../../electron/types/models";
+import { useLicense } from "@/contexts/LicenseContext";
 
 interface User {
   id: string;
@@ -55,6 +56,23 @@ function Profile({
     google: { connected: false, email: null },
     microsoft: { connected: false, email: null },
   });
+
+  // Get license information for display
+  const { licenseType, hasAIAddon, isLoading: licenseLoading } = useLicense();
+
+  // Format license type for display
+  const formatLicenseType = (type: string): string => {
+    switch (type) {
+      case "individual":
+        return "Individual";
+      case "team":
+        return "Team";
+      case "enterprise":
+        return "Enterprise";
+      default:
+        return type.charAt(0).toUpperCase() + type.slice(1);
+    }
+  };
 
   const handleLogoutClick = (): void => {
     setShowConfirmLogout(true);
@@ -272,6 +290,28 @@ function Profile({
                       Trial: {subscription.trialDaysRemaining} days remaining
                     </p>
                   )}
+                {/* License Type Display (BACKLOG-465) */}
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200">
+                  <span className="text-sm font-medium text-gray-700">
+                    License
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {licenseLoading ? (
+                      <span className="text-xs text-gray-400">Loading...</span>
+                    ) : (
+                      <>
+                        <span className="text-sm text-gray-600">
+                          {formatLicenseType(licenseType)}
+                        </span>
+                        {hasAIAddon && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                            + AI
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 

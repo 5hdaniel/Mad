@@ -1,6 +1,34 @@
 import { SPECIFIC_ROLES, ROLE_DISPLAY_NAMES } from "../constants/contactRoles";
 
 /**
+ * Format a role string as a human-readable label.
+ *
+ * First attempts to look up the role in ROLE_DISPLAY_NAMES.
+ * If not found, formats the string by splitting on underscores
+ * and title-casing each word.
+ *
+ * Examples:
+ *   "seller_agent" -> "Seller Agent"
+ *   "buyer_agent" -> "Buyer Agent"
+ *   "inspector" -> "Inspector"
+ *
+ * @param role - The role string (e.g., "seller_agent", "buyer_agent")
+ * @returns Human-readable label (e.g., "Seller Agent", "Buyer Agent")
+ */
+export function formatRoleLabel(role: string): string {
+  // First check if we have a known display name
+  if (role in ROLE_DISPLAY_NAMES) {
+    return ROLE_DISPLAY_NAMES[role as keyof typeof ROLE_DISPLAY_NAMES];
+  }
+
+  // Fallback: format the role string by splitting on underscores and title-casing
+  return role
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
+/**
  * Transaction Role Utilities
  * Helper functions for filtering and managing transaction contact roles
  */
@@ -142,8 +170,8 @@ export function validateRoleAssignments(
  * Get role display name based on transaction type
  *
  * For CLIENT role:
- * - Purchase: "Client (Buyer)" - agent represents the buyer
- * - Sale: "Client (Seller)" - agent represents the seller
+ * - Purchase: "Buyer (Client)" - agent represents the buyer
+ * - Sale: "Seller (Client)" - agent represents the seller
  *
  * @param role - The specific role constant
  * @param transactionType - 'purchase' or 'sale'
@@ -156,12 +184,12 @@ export function getRoleDisplayName(
   // Special handling for CLIENT role - changes based on transaction type
   if (role === SPECIFIC_ROLES.CLIENT) {
     if (transactionType === "purchase") {
-      return "Client (Buyer)";
+      return "Buyer (Client)";
     } else if (transactionType === "sale") {
-      return "Client (Seller)";
+      return "Seller (Client)";
     }
   }
 
-  // For all other roles, use the standard display name
-  return ROLE_DISPLAY_NAMES[role] || role;
+  // For all other roles, use the standard display name or format the role string
+  return ROLE_DISPLAY_NAMES[role] || formatRoleLabel(role);
 }

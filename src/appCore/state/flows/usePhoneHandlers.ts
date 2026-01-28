@@ -3,11 +3,20 @@
  *
  * Manages phone type selection and driver setup handlers.
  * Handles iPhone/Android selection and Apple driver setup flows.
+ *
+ * IMPORTANT: When USE_NEW_ONBOARDING is enabled, these handlers should NOT
+ * call setCurrentStep() - navigation is handled by OnboardingFlow's
+ * useOnboardingFlow hook which respects the step order defined in macosFlow.ts.
+ * The handlers should only update state (phone type, etc.).
+ *
+ * TASK-1612: Migrated to use authService instead of direct window.api calls.
  */
 
 import { useCallback, useMemo } from "react";
+import { authService } from "@/services";
 import type { AppStep, PendingOnboardingData } from "../types";
 import type { PendingOAuthData } from "../../../components/Login";
+import { USE_NEW_ONBOARDING } from "../../routing/routeConfig";
 
 export interface UsePhoneHandlersOptions {
   // Auth state
@@ -65,7 +74,11 @@ export function usePhoneHandlers({
     if (pendingOAuthData && !isAuthenticated) {
       setSelectedPhoneType("iphone");
       setPendingOnboardingData((prev) => ({ ...prev, phoneType: "iphone" }));
-      setCurrentStep("email-onboarding");
+      // When new onboarding is enabled, don't call setCurrentStep - let OnboardingFlow handle navigation
+      // This ensures the step order from macosFlow.ts is respected (phone-type -> email-connect -> secure-storage -> permissions)
+      if (!USE_NEW_ONBOARDING) {
+        setCurrentStep("email-onboarding");
+      }
       return;
     }
 
@@ -75,9 +88,19 @@ export function usePhoneHandlers({
     if (success) {
       setHasSelectedPhoneType(true);
       // Windows flow: Phone Type -> Email -> Driver Setup -> Dashboard
-      // macOS flow: Phone Type -> Email -> Permissions -> Dashboard
-      // Both start with email onboarding after phone type
-      setCurrentStep("email-onboarding");
+      // macOS flow: Phone Type -> Email -> Secure Storage -> Permissions -> Dashboard
+      // When new onboarding is enabled, don't call setCurrentStep - let OnboardingFlow handle navigation
+      if (!USE_NEW_ONBOARDING) {
+        setCurrentStep("email-onboarding");
+      }
+    } else {
+      // DB not initialized (first-time macOS user after auth) - store in pending data
+      // and let OnboardingFlow handle navigation. DB will be initialized at secure-storage step.
+      setSelectedPhoneType("iphone");
+      setPendingOnboardingData((prev) => ({ ...prev, phoneType: "iphone" }));
+      if (!USE_NEW_ONBOARDING) {
+        setCurrentStep("email-onboarding");
+      }
     }
   }, [
     pendingOAuthData,
@@ -104,7 +127,10 @@ export function usePhoneHandlers({
   const handleAndroidContinueWithEmail = useCallback(async (): Promise<void> => {
     if (pendingOAuthData && !isAuthenticated) {
       setPendingOnboardingData((prev) => ({ ...prev, phoneType: "android" }));
-      setCurrentStep("email-onboarding");
+      // When new onboarding is enabled, don't call setCurrentStep - let OnboardingFlow handle navigation
+      if (!USE_NEW_ONBOARDING) {
+        setCurrentStep("email-onboarding");
+      }
       return;
     }
 
@@ -113,7 +139,17 @@ export function usePhoneHandlers({
     const success = await savePhoneType("android");
     if (success) {
       setHasSelectedPhoneType(true);
-      setCurrentStep("email-onboarding");
+      // When new onboarding is enabled, don't call setCurrentStep - let OnboardingFlow handle navigation
+      if (!USE_NEW_ONBOARDING) {
+        setCurrentStep("email-onboarding");
+      }
+    } else {
+      // DB not initialized (first-time macOS user after auth) - store in pending data
+      setSelectedPhoneType("android");
+      setPendingOnboardingData((prev) => ({ ...prev, phoneType: "android" }));
+      if (!USE_NEW_ONBOARDING) {
+        setCurrentStep("email-onboarding");
+      }
     }
   }, [
     pendingOAuthData,
@@ -156,12 +192,11 @@ export function usePhoneHandlers({
     // On Windows, driver setup is the last step - now navigate to dashboard
     if (pendingOAuthData && !isAuthenticated) {
       // Pre-DB flow: need to initialize database before going to dashboard
-      try {
-        await window.api.auth.completePendingLogin(pendingOAuthData);
-      } catch (error) {
+      const result = await authService.completePendingLogin(pendingOAuthData);
+      if (!result.success) {
         console.error(
           "[usePhoneHandlers] Failed to complete pending login:",
-          error,
+          result.error,
         );
       }
     }
@@ -182,12 +217,11 @@ export function usePhoneHandlers({
 
     // Same logic as complete - driver setup is the last onboarding step on Windows
     if (pendingOAuthData && !isAuthenticated) {
-      try {
-        await window.api.auth.completePendingLogin(pendingOAuthData);
-      } catch (error) {
+      const result = await authService.completePendingLogin(pendingOAuthData);
+      if (!result.success) {
         console.error(
           "[usePhoneHandlers] Failed to complete pending login:",
-          error,
+          result.error,
         );
       }
     }

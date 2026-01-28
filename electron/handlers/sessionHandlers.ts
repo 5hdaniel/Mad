@@ -3,7 +3,7 @@
  * Handles session management, validation, logout, terms acceptance, and email onboarding
  */
 
-import { ipcMain, IpcMainInvokeEvent } from "electron";
+import { ipcMain, IpcMainInvokeEvent, shell } from "electron";
 import type { User } from "../types/models";
 
 // Import services
@@ -274,6 +274,13 @@ async function handleCompleteEmailOnboarding(
 
 /**
  * Check email onboarding status
+ *
+ * IMPORTANT: This checks for a valid mailbox token FIRST, regardless of the
+ * email_onboarding_completed flag. This fixes a state mismatch bug (TASK-1039)
+ * where users could have a valid token but the flag not set (race condition,
+ * error, or interrupted flow), causing confusing UI states.
+ *
+ * If a token exists but the flag is false, we auto-correct the flag.
  */
 async function handleCheckEmailOnboarding(
   _event: IpcMainInvokeEvent,
@@ -282,33 +289,46 @@ async function handleCheckEmailOnboarding(
   try {
     const validatedUserId = validateUserId(userId)!;
 
+    // Check for valid mailbox token FIRST, regardless of flag
+    // This is the source of truth for whether email is actually connected
+    const googleToken = await databaseService.getOAuthToken(
+      validatedUserId,
+      "google",
+      "mailbox"
+    );
+    const microsoftToken = await databaseService.getOAuthToken(
+      validatedUserId,
+      "microsoft",
+      "mailbox"
+    );
+    const hasValidMailboxToken = !!(googleToken || microsoftToken);
+
+    // Check the flag for comparison/logging
     const onboardingCompleted =
       await databaseService.hasCompletedEmailOnboarding(validatedUserId);
 
-    let hasValidMailboxToken = false;
-    if (onboardingCompleted) {
-      const googleToken = await databaseService.getOAuthToken(
-        validatedUserId,
-        "google",
-        "mailbox"
+    // Auto-correct inconsistent state: token exists but flag is false
+    if (hasValidMailboxToken && !onboardingCompleted) {
+      await logService.info(
+        "Auto-correcting inconsistent email onboarding state: token exists but flag was false",
+        "AuthHandlers",
+        { userId: validatedUserId.substring(0, 8) + "..." }
       );
-      const microsoftToken = await databaseService.getOAuthToken(
-        validatedUserId,
-        "microsoft",
-        "mailbox"
-      );
-      hasValidMailboxToken = !!(googleToken || microsoftToken);
-
-      if (!hasValidMailboxToken) {
-        await logService.info(
-          "Email onboarding was completed but no mailbox token found",
-          "AuthHandlers",
-          { userId: validatedUserId.substring(0, 8) + "..." }
-        );
-      }
+      await databaseService.completeEmailOnboarding(validatedUserId);
     }
 
-    const completed = onboardingCompleted && hasValidMailboxToken;
+    // Also handle the reverse: flag is true but no token
+    if (onboardingCompleted && !hasValidMailboxToken) {
+      await logService.info(
+        "Email onboarding flag is true but no valid mailbox token found",
+        "AuthHandlers",
+        { userId: validatedUserId.substring(0, 8) + "..." }
+      );
+    }
+
+    // The completed status is based on having a valid token
+    // (token is the source of truth, not the flag)
+    const completed = hasValidMailboxToken;
 
     await logService.info("Email onboarding check", "AuthHandlers", {
       userId: validatedUserId.substring(0, 8) + "...",
@@ -401,6 +421,101 @@ async function handleValidateSession(
 }
 
 /**
+ * TASK-1507G: Migrate user from old random ID to Supabase Auth ID
+ * Updates all FK references in child tables
+ * @param oldUser - The user with the incorrect local ID
+ * @param newSupabaseId - The correct Supabase Auth UUID
+ * @returns The migrated user with the new ID
+ */
+async function migrateUserToSupabaseId(
+  oldUser: User,
+  newSupabaseId: string
+): Promise<User> {
+  // Check if user with Supabase ID already exists (edge case: concurrent migration)
+  const existingUser = await databaseService.getUserById(newSupabaseId);
+  if (existingUser) {
+    // User already migrated or created correctly - just return existing
+    await logService.info(
+      "TASK-1507G: User with Supabase ID already exists, skipping migration",
+      "SessionHandlers",
+      { supabaseId: newSupabaseId.substring(0, 8) + "..." }
+    );
+    return existingUser;
+  }
+
+  const db = databaseService.getRawDatabase();
+
+  // Transaction to ensure atomicity
+  const migrate = db.transaction(() => {
+    // 1. Create new user with Supabase ID (copy all data)
+    db.prepare(`
+      INSERT INTO users_local (
+        id, email, first_name, last_name, display_name, avatar_url,
+        oauth_provider, oauth_id, subscription_tier, subscription_status,
+        trial_ends_at, terms_accepted_at, terms_version_accepted,
+        privacy_policy_accepted_at, privacy_policy_version_accepted,
+        email_onboarding_completed_at, mobile_phone_type, timezone, theme,
+        license_type, ai_detection_enabled, organization_id,
+        created_at, updated_at
+      )
+      SELECT
+        ?, email, first_name, last_name, display_name, avatar_url,
+        oauth_provider, oauth_id, subscription_tier, subscription_status,
+        trial_ends_at, terms_accepted_at, terms_version_accepted,
+        privacy_policy_accepted_at, privacy_policy_version_accepted,
+        email_onboarding_completed_at, mobile_phone_type, timezone, theme,
+        license_type, ai_detection_enabled, organization_id,
+        created_at, CURRENT_TIMESTAMP
+      FROM users_local WHERE id = ?
+    `).run(newSupabaseId, oldUser.id);
+
+    // 2. Update FK references in all child tables (SR Engineer verified complete list)
+    const tables = [
+      'sessions',
+      'oauth_tokens',
+      'contacts',
+      'transactions',
+      'communications',
+      'emails',
+      'messages',
+      'llm_settings',
+      'audit_logs',
+      'classification_feedback',
+      'audit_packages',
+      'ignored_communications',
+    ];
+
+    for (const table of tables) {
+      try {
+        db.prepare(`UPDATE ${table} SET user_id = ? WHERE user_id = ?`)
+          .run(newSupabaseId, oldUser.id);
+      } catch {
+        // Table may not exist or have user_id column - ignore
+      }
+    }
+
+    // 3. Delete old user record
+    db.prepare('DELETE FROM users_local WHERE id = ?').run(oldUser.id);
+  });
+
+  migrate();
+
+  // Return the migrated user
+  const migratedUser = await databaseService.getUserById(newSupabaseId);
+  if (!migratedUser) {
+    throw new Error('User migration failed - could not find migrated user');
+  }
+
+  await logService.info(
+    "TASK-1507G: User migration complete",
+    "SessionHandlers",
+    { newId: newSupabaseId.substring(0, 8) + "..." }
+  );
+
+  return migratedUser;
+}
+
+/**
  * Get current user from saved session
  */
 async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
@@ -448,7 +563,119 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
 
     sessionSecurityService.recordActivity(session.sessionToken);
 
-    const freshUser = await databaseService.getUserById(session.user.id);
+    // TASK-1507E: Ensure local SQLite user exists for existing sessions
+    // Users who authenticated before TASK-1507D have valid sessions but no local user,
+    // which causes FK constraint failures on mailbox connection, messages import, etc.
+    let freshUser = await databaseService.getUserById(session.user.id);
+
+    if (!freshUser && session.user.email) {
+      // Try to find user by email (handles case where session.user.id is Supabase UUID)
+      freshUser = await databaseService.getUserByEmail(session.user.email);
+    }
+
+    if (!freshUser && session.user.oauth_id && session.provider) {
+      // Try to find user by OAuth ID
+      freshUser = await databaseService.getUserByOAuthId(
+        session.provider,
+        session.user.oauth_id
+      );
+    }
+
+    // TASK-1507G: Check for ID mismatch - user exists but with wrong ID
+    // Get the authoritative Supabase UUID (session.user.id should be it, but verify via auth service)
+    const supabaseUserId = supabaseService.getAuthUserId() || session.user.id;
+
+    if (freshUser && freshUser.id !== supabaseUserId) {
+      await logService.info(
+        "TASK-1507G: ID mismatch detected, migrating user",
+        "SessionHandlers",
+        {
+          localId: freshUser.id.substring(0, 8) + "...",
+          supabaseId: supabaseUserId.substring(0, 8) + "...",
+        }
+      );
+
+      // Migrate user to Supabase ID
+      freshUser = await migrateUserToSupabaseId(freshUser, supabaseUserId);
+    }
+
+    if (!freshUser && session.user.email) {
+      // No local user exists - create one from session data
+      // This syncs existing Supabase users to local SQLite (retroactive TASK-1507D fix)
+      await logService.info(
+        "Creating local user from existing session (TASK-1507E)",
+        "SessionHandlers",
+        { email: session.user.email }
+      );
+
+      try {
+        // TASK-1507G: Pass Supabase Auth UUID as the user ID
+        // This ensures local SQLite user ID matches Supabase for FK integrity
+        freshUser = await databaseService.createUser({
+          id: supabaseUserId,  // Use Supabase's authoritative UUID
+          email: session.user.email,
+          first_name: session.user.first_name,
+          last_name: session.user.last_name,
+          display_name:
+            session.user.display_name ||
+            session.user.email.split("@")[0],
+          avatar_url: session.user.avatar_url,
+          oauth_provider: session.provider || "google",
+          oauth_id: session.user.oauth_id || session.user.id,
+          subscription_tier: session.user.subscription_tier || "free",
+          subscription_status: session.user.subscription_status || "trial",
+          trial_ends_at: session.user.trial_ends_at,
+          is_active: true,
+        });
+
+        await logService.info(
+          "Local user created successfully from existing session",
+          "SessionHandlers",
+          { userId: freshUser.id }
+        );
+
+        // BACKLOG-546: Sync terms data from Supabase if user has already accepted
+        // This ensures returning users on new devices don't see T&C again
+        try {
+          const cloudUser = await supabaseService.getUserById(session.user.id);
+          if (cloudUser?.terms_accepted_at) {
+            await databaseService.updateUser(freshUser.id, {
+              terms_accepted_at: cloudUser.terms_accepted_at,
+              terms_version_accepted: cloudUser.terms_version_accepted,
+              privacy_policy_accepted_at: cloudUser.privacy_policy_accepted_at,
+              privacy_policy_version_accepted: cloudUser.privacy_policy_version_accepted,
+            });
+            // Re-fetch to get updated terms data
+            const updatedUser = await databaseService.getUserById(freshUser.id);
+            if (updatedUser) {
+              freshUser = updatedUser;
+            }
+            await logService.info(
+              "Synced terms data from Supabase to local user (BACKLOG-546)",
+              "SessionHandlers",
+              { userId: freshUser.id }
+            );
+          }
+        } catch (syncError) {
+          // Log but don't fail - terms can be re-accepted if needed
+          await logService.warn(
+            "Failed to sync terms from Supabase",
+            "SessionHandlers",
+            { error: syncError instanceof Error ? syncError.message : "Unknown error" }
+          );
+        }
+      } catch (createError) {
+        // Log but don't fail - auth should succeed even if local user creation fails
+        await logService.error(
+          "Failed to create local user from session",
+          "SessionHandlers",
+          {
+            error: createError instanceof Error ? createError.message : "Unknown error",
+          }
+        );
+      }
+    }
+
     const user = freshUser || session.user;
 
     setSyncUserId(user.id);
@@ -473,6 +700,35 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
 }
 
 /**
+ * Open broker portal auth page in the default browser
+ * TASK-1507: Used for deep-link authentication flow
+ * TASK-1510: Redirects to broker portal for provider selection (Google/Microsoft)
+ */
+async function handleOpenAuthInBrowser(): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Use broker portal for provider selection page
+    // Production: broker-portal-two.vercel.app, Dev: localhost:3001 (via .env.development)
+    const brokerPortalUrl = process.env.BROKER_PORTAL_URL || 'https://broker-portal-two.vercel.app';
+    const authUrl = `${brokerPortalUrl}/auth/desktop`;
+
+    await logService.info("Opening auth URL in browser", "AuthHandlers", {
+      url: authUrl,
+    });
+
+    await shell.openExternal(authUrl);
+    return { success: true };
+  } catch (error) {
+    await logService.error("Failed to open auth in browser", "AuthHandlers", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+/**
  * Register all session handlers
  */
 export function registerSessionHandlers(): void {
@@ -483,4 +739,6 @@ export function registerSessionHandlers(): void {
   ipcMain.handle("auth:check-email-onboarding", handleCheckEmailOnboarding);
   ipcMain.handle("auth:validate-session", handleValidateSession);
   ipcMain.handle("auth:get-current-user", handleGetCurrentUser);
+  // TASK-1507: Open browser for Supabase OAuth with deep-link callback
+  ipcMain.handle("auth:open-in-browser", handleOpenAuthInBrowser);
 }

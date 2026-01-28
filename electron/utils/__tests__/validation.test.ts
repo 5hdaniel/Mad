@@ -105,20 +105,20 @@ describe("Transaction Validation", () => {
   });
 
   describe("validateTransactionData - Date Fields", () => {
-    it("should accept and validate representation_start_date", () => {
+    it("should accept and validate started_at", () => {
       const data = {
-        representation_start_date: "2024-01-15",
+        started_at: "2024-01-15",
       };
       const validated = validateTransactionData(data, true);
-      expect(validated.representation_start_date).toBe("2024-01-15");
+      expect(validated.started_at).toBe("2024-01-15");
     });
 
-    it("should accept and validate closing_date", () => {
+    it("should accept and validate closed_at", () => {
       const data = {
-        closing_date: "2024-03-30",
+        closed_at: "2024-03-30",
       };
       const validated = validateTransactionData(data, true);
-      expect(validated.closing_date).toBe("2024-03-30");
+      expect(validated.closed_at).toBe("2024-03-30");
     });
 
     it("should accept and validate closing_date_verified", () => {
@@ -129,27 +129,27 @@ describe("Transaction Validation", () => {
       expect(validated.closing_date_verified).toBe(1);
     });
 
-    it("should reject invalid date formats for representation_start_date", () => {
+    it("should reject invalid date formats for started_at", () => {
       const data = {
-        representation_start_date: "01/15/2024", // Wrong format
+        started_at: "01/15/2024", // Wrong format
       };
       expect(() => validateTransactionData(data, true)).toThrow(
         ValidationError,
       );
       expect(() => validateTransactionData(data, true)).toThrow(
-        "Representation start date must be in YYYY-MM-DD format",
+        "Started at date must be in YYYY-MM-DD format",
       );
     });
 
-    it("should reject invalid date formats for closing_date", () => {
+    it("should reject invalid date formats for closed_at", () => {
       const data = {
-        closing_date: "03/30/2024", // Wrong format
+        closed_at: "03/30/2024", // Wrong format
       };
       expect(() => validateTransactionData(data, true)).toThrow(
         ValidationError,
       );
       expect(() => validateTransactionData(data, true)).toThrow(
-        "Closing date must be in YYYY-MM-DD format",
+        "Closed at date must be in YYYY-MM-DD format",
       );
     });
 
@@ -167,14 +167,14 @@ describe("Transaction Validation", () => {
 
     it("should allow null values for date fields", () => {
       const data = {
-        representation_start_date: null,
-        closing_date: null,
+        started_at: null,
+        closed_at: null,
         closing_date_verified: null,
       };
       const validated = validateTransactionData(data, true);
       // Null values should not be included in validated object
-      expect(validated.representation_start_date).toBeUndefined();
-      expect(validated.closing_date).toBeUndefined();
+      expect(validated.started_at).toBeUndefined();
+      expect(validated.closed_at).toBeUndefined();
       expect(validated.closing_date_verified).toBeUndefined();
     });
   });
@@ -237,8 +237,8 @@ describe("Transaction Validation", () => {
         property_address: "123 Main St, Anytown, CA 12345",
         transaction_type: "purchase",
         status: "active",
-        representation_start_date: "2024-01-15",
-        closing_date: "2024-03-30",
+        started_at: "2024-01-15",
+        closed_at: "2024-03-30",
         closing_date_verified: 1,
         sale_price: 500000,
         listing_price: 525000,
@@ -250,8 +250,8 @@ describe("Transaction Validation", () => {
       expect(validated.property_address).toBe("123 Main St, Anytown, CA 12345");
       expect(validated.transaction_type).toBe("purchase");
       expect(validated.status).toBe("active");
-      expect(validated.representation_start_date).toBe("2024-01-15");
-      expect(validated.closing_date).toBe("2024-03-30");
+      expect(validated.started_at).toBe("2024-01-15");
+      expect(validated.closed_at).toBe("2024-03-30");
       expect(validated.closing_date_verified).toBe(1);
       expect(validated.sale_price).toBe(500000);
       expect(validated.listing_price).toBe(525000);
@@ -260,15 +260,15 @@ describe("Transaction Validation", () => {
 
     it("should validate partial update with only dates", () => {
       const data = {
-        representation_start_date: "2024-01-15",
-        closing_date: "2024-03-30",
+        started_at: "2024-01-15",
+        closed_at: "2024-03-30",
         closing_date_verified: 1,
       };
 
       const validated = validateTransactionData(data, true);
 
-      expect(validated.representation_start_date).toBe("2024-01-15");
-      expect(validated.closing_date).toBe("2024-03-30");
+      expect(validated.started_at).toBe("2024-01-15");
+      expect(validated.closed_at).toBe("2024-03-30");
       expect(validated.closing_date_verified).toBe(1);
       // Other fields should not be present
       expect(validated.property_address).toBeUndefined();
@@ -280,21 +280,21 @@ describe("Transaction Validation", () => {
     it("should NOT strip out date fields during validation (regression test)", () => {
       // This test ensures the bug where dates were being stripped is fixed
       const updateData = {
-        representation_start_date: "2024-01-15",
-        closing_date: "2024-03-30",
+        started_at: "2024-01-15",
+        closed_at: "2024-03-30",
         closing_date_verified: 1,
       };
 
       const validated = validateTransactionData(updateData, true);
 
       // These fields MUST be present in the validated object
-      expect(validated).toHaveProperty("representation_start_date");
-      expect(validated).toHaveProperty("closing_date");
+      expect(validated).toHaveProperty("started_at");
+      expect(validated).toHaveProperty("closed_at");
       expect(validated).toHaveProperty("closing_date_verified");
 
       // And they must have the correct values
-      expect(validated.representation_start_date).toBe("2024-01-15");
-      expect(validated.closing_date).toBe("2024-03-30");
+      expect(validated.started_at).toBe("2024-01-15");
+      expect(validated.closed_at).toBe("2024-03-30");
       expect(validated.closing_date_verified).toBe(1);
     });
 

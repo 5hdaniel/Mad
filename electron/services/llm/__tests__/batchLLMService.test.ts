@@ -207,9 +207,90 @@ describe('batchLLMService', () => {
       expect(prompt).toContain('Analyze the following 1 emails');
       expect(prompt).toContain('EMAIL 1 (ID: email-1)');
       expect(prompt).toContain('Subject: Property at 123 Main St');
-      expect(prompt).toContain('From: agent@realty.com');
-      expect(prompt).toContain('To: client@email.com');
+      // TASK-1075: Emails are now sanitized, so check for masked format
+      expect(prompt).toContain('[EMAIL:');
       expect(prompt).toContain('Interested in this property?');
+    });
+
+    // TASK-1075: PII sanitization tests
+    it('should sanitize PII in email content before formatting', () => {
+      const batch = {
+        batchId: 'test-batch',
+        emails: [
+          createEmail({
+            id: 'email-1',
+            subject: 'Call me at 555-123-4567',
+            sender: 'john.doe@company.com',
+            recipients: ['jane.doe@client.org'],
+            date: '2024-01-15T10:00:00Z',
+            body: 'My SSN is 123-45-6789. Please wire to account 987654321098.',
+          }),
+        ],
+        estimatedTokens: 200,
+      };
+
+      const prompt = formatBatchPrompt(batch);
+
+      // Should mask phone in subject
+      expect(prompt).toContain('[PHONE:');
+      // Should mask email addresses
+      expect(prompt).toContain('[EMAIL:');
+      // Should mask SSN
+      expect(prompt).toContain('[SSN:');
+      // Should NOT contain raw PII
+      expect(prompt).not.toContain('john.doe@company.com');
+      expect(prompt).not.toContain('jane.doe@client.org');
+      expect(prompt).not.toContain('123-45-6789');
+      expect(prompt).not.toContain('555-123-4567');
+    });
+
+    it('should preserve property addresses in email content', () => {
+      const batch = {
+        batchId: 'test-batch',
+        emails: [
+          createEmail({
+            id: 'email-1',
+            subject: 'Listing at 456 Oak Avenue',
+            sender: 'agent@realty.com',
+            body: 'Property at 789 Pine Street is listed for $500,000',
+          }),
+        ],
+        estimatedTokens: 150,
+      };
+
+      const prompt = formatBatchPrompt(batch);
+
+      // Property addresses should be preserved for real estate context
+      expect(prompt).toContain('456 Oak Avenue');
+      expect(prompt).toContain('789 Pine Street');
+      expect(prompt).toContain('$500,000');
+    });
+
+    it('should sanitize multiple recipients', () => {
+      const batch = {
+        batchId: 'test-batch',
+        emails: [
+          createEmail({
+            id: 'email-1',
+            subject: 'Test',
+            sender: 'sender@test.com',
+            recipients: ['a@test.com', 'b@test.com', 'c@test.com'],
+            body: 'Test body',
+          }),
+        ],
+        estimatedTokens: 100,
+      };
+
+      const prompt = formatBatchPrompt(batch);
+
+      // All recipients should be sanitized
+      expect(prompt).not.toContain('a@test.com');
+      expect(prompt).not.toContain('b@test.com');
+      expect(prompt).not.toContain('c@test.com');
+      // Should contain masked versions (3 [EMAIL: entries in To line)
+      const toMatch = prompt.match(/To: .+/);
+      expect(toMatch).toBeTruthy();
+      expect(toMatch![0]).toContain('[EMAIL:');
     });
 
     it('should handle multiple emails in batch', () => {

@@ -39,6 +39,11 @@ function AuditTransactionModal({
     contactAssignments,
     showAddressAutocomplete,
     addressSuggestions,
+    // Contact loading (lifted to parent level to prevent duplicate API calls)
+    contacts,
+    contactsLoading,
+    contactsError,
+    refreshContacts,
     setAddressData,
     handleAddressChange,
     selectAddress,
@@ -75,12 +80,18 @@ function AuditTransactionModal({
         <div className="flex-shrink-0 bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <div>
             <h2 className="text-xl font-bold text-white">
-              {isEditing ? "Edit Transaction" : "Audit New Transaction"}
+              {isEditing ? "Edit Transaction Details" : "Audit New Transaction"}
             </h2>
             <p className="text-indigo-100 text-sm">
-              {step === 1 && "Step 1: Transaction Details"}
-              {step === 2 && "Step 2: Assign Client & Agents"}
-              {step === 3 && "Step 3: Assign Professional Services"}
+              {isEditing ? (
+                "Update property address and transaction dates"
+              ) : (
+                <>
+                  {step === 1 && "Step 1: Transaction Details"}
+                  {step === 2 && "Step 2: Assign Client & Agents"}
+                  {step === 3 && "Step 3: Assign Professional Services"}
+                </>
+              )}
             </p>
           </div>
           <button
@@ -103,31 +114,33 @@ function AuditTransactionModal({
           </button>
         </div>
 
-        {/* Progress Bar */}
-        <div className="flex-shrink-0 bg-gray-100 px-3 sm:px-6 py-3">
-          <div className="flex items-center justify-center gap-1 sm:gap-2 mb-2 max-w-md mx-auto">
-            {[1, 2, 3].map((s: number) => (
-              <React.Fragment key={s}>
-                <div
-                  className={`w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-sm sm:text-base font-semibold transition-all ${
-                    s < step
-                      ? "bg-green-500 text-white"
-                      : s === step
-                        ? "bg-indigo-500 text-white"
-                        : "bg-gray-300 text-gray-600"
-                  }`}
-                >
-                  {s < step ? "✓" : s}
-                </div>
-                {s < 3 && (
+        {/* Progress Bar - Only show for new transactions */}
+        {!isEditing && (
+          <div className="flex-shrink-0 bg-gray-100 px-3 sm:px-6 py-3">
+            <div className="flex items-center justify-center gap-1 sm:gap-2 mb-2 max-w-md mx-auto">
+              {[1, 2, 3].map((s: number) => (
+                <React.Fragment key={s}>
                   <div
-                    className={`flex-1 h-1 transition-all ${s < step ? "bg-green-500" : "bg-gray-300"}`}
-                  ></div>
-                )}
-              </React.Fragment>
-            ))}
+                    className={`w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-sm sm:text-base font-semibold transition-all ${
+                      s < step
+                        ? "bg-green-500 text-white"
+                        : s === step
+                          ? "bg-indigo-500 text-white"
+                          : "bg-gray-300 text-gray-600"
+                    }`}
+                  >
+                    {s < step ? "✓" : s}
+                  </div>
+                  {s < 3 && (
+                    <div
+                      className={`flex-1 h-1 transition-all ${s < step ? "bg-green-500" : "bg-gray-300"}`}
+                    ></div>
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Error Message */}
         {error && (
@@ -143,13 +156,16 @@ function AuditTransactionModal({
               addressData={addressData}
               onAddressChange={handleAddressChange}
               onTransactionTypeChange={(type) =>
-                setAddressData({ ...addressData, transaction_type: type })
+                setAddressData(prev => ({ ...prev, transaction_type: type }))
               }
               onStartDateChange={(date) =>
-                setAddressData({ ...addressData, started_at: date })
+                setAddressData(prev => ({ ...prev, started_at: date }))
+              }
+              onClosingDateChange={(date) =>
+                setAddressData(prev => ({ ...prev, closing_deadline: date }))
               }
               onEndDateChange={(date) =>
-                setAddressData({ ...addressData, closed_at: date })
+                setAddressData(prev => ({ ...prev, closed_at: date }))
               }
               showAutocomplete={showAddressAutocomplete}
               suggestions={addressSuggestions}
@@ -166,6 +182,11 @@ function AuditTransactionModal({
               userId={userId}
               transactionType={addressData.transaction_type}
               propertyAddress={addressData.property_address}
+              // Contacts loaded at parent level to prevent duplicate API calls
+              contacts={contacts}
+              contactsLoading={contactsLoading}
+              contactsError={contactsError}
+              onRefreshContacts={refreshContacts}
             />
           )}
 
@@ -178,6 +199,11 @@ function AuditTransactionModal({
               userId={userId}
               transactionType={addressData.transaction_type}
               propertyAddress={addressData.property_address}
+              // Contacts loaded at parent level to prevent duplicate API calls
+              contacts={contacts}
+              contactsLoading={contactsLoading}
+              contactsError={contactsError}
+              onRefreshContacts={refreshContacts}
             />
           )}
         </div>
@@ -214,8 +240,10 @@ function AuditTransactionModal({
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                   {isEditing ? "Saving..." : "Creating..."}
                 </span>
+              ) : isEditing ? (
+                "Save Changes"
               ) : step === 3 ? (
-                isEditing ? "Save Changes" : "Create Transaction"
+                "Create Transaction"
               ) : (
                 "Continue →"
               )}

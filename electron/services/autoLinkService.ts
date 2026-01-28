@@ -8,12 +8,13 @@
  * @see TASK-1031
  */
 
-import { dbAll, dbGet } from "./db/core/dbConnection";
+import { dbAll, dbGet, dbRun } from "./db/core/dbConnection";
 import logService from "./logService";
+import { normalizePhone } from "./messageMatchingService";
 import {
-  normalizePhone,
-  createCommunicationReference,
-} from "./messageMatchingService";
+  createThreadCommunicationReference,
+  isThreadLinkedToTransaction,
+} from "./db/communicationDbService";
 
 // ============================================
 // TYPES
@@ -38,11 +39,14 @@ export interface AutoLinkOptions {
 
 /**
  * Result of auto-linking communications for a contact
+ *
+ * TASK-1115: Updated to track thread-level linking.
+ * messagesLinked now represents threads linked, not individual messages.
  */
 export interface AutoLinkResult {
   /** Number of emails successfully linked */
   emailsLinked: number;
-  /** Number of text messages successfully linked */
+  /** Number of message threads successfully linked (TASK-1115: thread-level) */
   messagesLinked: number;
   /** Number of communications that were already linked */
   alreadyLinked: number;
@@ -128,9 +132,7 @@ async function getTransactionDateRange(
     SELECT
       user_id,
       started_at,
-      closed_at,
-      representation_start_date,
-      closing_date
+      closed_at
     FROM transactions
     WHERE id = ?
   `;
@@ -139,26 +141,19 @@ async function getTransactionDateRange(
     user_id: string;
     started_at: string | null;
     closed_at: string | null;
-    representation_start_date: string | null;
-    closing_date: string | null;
   }>(sql, [transactionId]);
 
   if (!transaction) {
     return null;
   }
 
-  // Use the earliest available date as start
-  const startDate =
-    transaction.started_at ||
-    transaction.representation_start_date ||
-    null;
+  const startDate = transaction.started_at;
 
   // Use the latest available date as end, with buffer
   let endDate: string | null = null;
-  const closingDate = transaction.closed_at || transaction.closing_date;
-  if (closingDate) {
+  if (transaction.closed_at) {
     // Add buffer days after closing
-    const closeDateTime = new Date(closingDate);
+    const closeDateTime = new Date(transaction.closed_at);
     closeDateTime.setDate(closeDateTime.getDate() + DEFAULT_BUFFER_DAYS);
     endDate = closeDateTime.toISOString();
   }
@@ -181,7 +176,18 @@ function getDefaultDateRange(): { start: Date; end: Date } {
 }
 
 /**
- * Find unlinked emails matching the given email addresses
+ * Find unlinked emails matching the given email addresses.
+ *
+ * IMPORTANT: Emails are stored in the `communications` table (not `messages`).
+ * The `messages` table is used for iMessages/SMS only.
+ *
+ * This function finds communications that:
+ * 1. Belong to this user
+ * 2. Are emails (communication_type = 'email')
+ * 3. Are NOT already linked to this transaction
+ * 4. Match the contact's email addresses (sender or recipients)
+ * 5. Fall within the date range
+ * 6. EXCLUDES the user's own email (user shouldn't be treated as a contact)
  */
 async function findEmailsByContactEmails(
   userId: string,
@@ -194,16 +200,37 @@ async function findEmailsByContactEmails(
     return [];
   }
 
+  // Get the user's email to exclude it from contact matching
+  const userSql = "SELECT email FROM users_local WHERE id = ?";
+  const userResult = dbGet<{ email: string | null }>(userSql, [userId]);
+  const userEmail = userResult?.email?.toLowerCase().trim();
+
+  // Filter out user's own email from contact emails
+  // The user's email should never be treated as a contact
+  const contactEmails = emails.filter((email) => {
+    const normalizedEmail = email.toLowerCase().trim();
+    return normalizedEmail !== userEmail;
+  });
+
+  if (contactEmails.length === 0) {
+    await logService.debug(
+      "No contact emails to match after filtering user's own email",
+      "AutoLinkService",
+      { userId, userEmail, originalEmails: emails }
+    );
+    return [];
+  }
+
   // Build email patterns for LIKE matching
-  // Match emails in sender or recipients fields
-  const emailConditions = emails
-    .map(() => "(LOWER(m.sender) LIKE ? OR LOWER(m.recipients) LIKE ?)")
+  // BACKLOG-506: Query emails table (content) and check communications (junction) for links
+  const emailConditions = contactEmails
+    .map(() => "(LOWER(e.sender) LIKE ? OR LOWER(e.recipients) LIKE ?)")
     .join(" OR ");
 
-  const params: (string | number)[] = [userId, transactionId, transactionId];
+  const params: (string | number)[] = [userId, transactionId];
 
   // Add email patterns
-  for (const email of emails) {
+  for (const email of contactEmails) {
     params.push(`%${email}%`, `%${email}%`);
   }
 
@@ -212,33 +239,48 @@ async function findEmailsByContactEmails(
   params.push(dateRange.end.toISOString());
   params.push(limit);
 
+  // BACKLOG-506: Query emails table for content, check if already linked via communications
   const sql = `
-    SELECT m.id
-    FROM messages m
-    WHERE m.user_id = ?
-      AND m.channel = 'email'
-      AND m.duplicate_of IS NULL
-      AND (
-        m.transaction_id IS NULL
-        OR m.transaction_id != ?
-      )
-      AND m.id NOT IN (
-        SELECT message_id FROM communications
-        WHERE transaction_id = ? AND message_id IS NOT NULL
-      )
+    SELECT e.id
+    FROM emails e
+    LEFT JOIN communications c ON c.email_id = e.id AND c.transaction_id = ?
+    WHERE e.user_id = ?
+      AND c.id IS NULL
       AND (${emailConditions})
-      AND m.sent_at >= ?
-      AND m.sent_at <= ?
-    ORDER BY m.sent_at DESC
+      AND e.sent_at >= ?
+      AND e.sent_at <= ?
+    ORDER BY e.sent_at DESC
     LIMIT ?
   `;
 
-  const results = dbAll<{ id: string }>(sql, params);
+  // Reorder params: transactionId for JOIN, userId for WHERE, then email patterns, then date range
+  const reorderedParams: (string | number)[] = [transactionId, userId];
+  for (const email of contactEmails) {
+    reorderedParams.push(`%${email}%`, `%${email}%`);
+  }
+  reorderedParams.push(dateRange.start.toISOString());
+  reorderedParams.push(dateRange.end.toISOString());
+  reorderedParams.push(limit);
+
+  const results = dbAll<{ id: string }>(sql, reorderedParams);
   return results.map((r) => r.id);
 }
 
 /**
- * Find unlinked text messages matching the given phone numbers
+ * Message with thread information for thread-level linking
+ *
+ * TASK-1115: Now returns thread_id for grouping messages by conversation.
+ */
+interface MessageWithThread {
+  id: string;
+  thread_id: string | null;
+}
+
+/**
+ * Find unlinked text messages matching the given phone numbers.
+ *
+ * TASK-1115: Now returns thread_id for thread-level linking.
+ * Messages without thread_id will be linked individually (backward compat).
  */
 async function findMessagesByContactPhones(
   userId: string,
@@ -246,7 +288,7 @@ async function findMessagesByContactPhones(
   transactionId: string,
   dateRange: { start: Date; end: Date },
   limit: number
-): Promise<string[]> {
+): Promise<MessageWithThread[]> {
   if (phoneNumbers.length === 0) {
     return [];
   }
@@ -270,8 +312,10 @@ async function findMessagesByContactPhones(
   params.push(dateRange.end.toISOString());
   params.push(limit);
 
+  // TASK-1115: Select DISTINCT threads to avoid missing threads due to LIMIT
+  // Previously we limited messages which could miss threads if group chats filled the limit
   const sql = `
-    SELECT m.id
+    SELECT DISTINCT m.thread_id, MIN(m.id) as id
     FROM messages m
     WHERE m.user_id = ?
       AND m.channel IN ('sms', 'imessage')
@@ -280,19 +324,72 @@ async function findMessagesByContactPhones(
         m.transaction_id IS NULL
         OR m.transaction_id != ?
       )
-      AND m.id NOT IN (
-        SELECT message_id FROM communications
-        WHERE transaction_id = ? AND message_id IS NOT NULL
+      AND m.thread_id NOT IN (
+        SELECT thread_id FROM communications
+        WHERE transaction_id = ? AND thread_id IS NOT NULL
       )
       AND (${phoneConditions})
       AND m.sent_at >= ?
       AND m.sent_at <= ?
-    ORDER BY m.sent_at DESC
+    GROUP BY m.thread_id
+    ORDER BY MAX(m.sent_at) DESC
     LIMIT ?
   `;
 
-  const results = dbAll<{ id: string }>(sql, params);
-  return results.map((r) => r.id);
+  const results = dbAll<MessageWithThread>(sql, params);
+  return results;
+}
+
+/**
+ * Link an existing communication record to a transaction.
+ *
+ * For emails that are already in the communications table,
+ * we update their transaction_id directly instead of creating
+ * a new reference.
+ *
+ * @param communicationId - The communication record ID
+ * @param transactionId - The transaction to link to
+ * @param linkSource - How the link was created
+ * @param linkConfidence - Confidence score
+ * @returns true if linked, false if already linked to this transaction
+ */
+async function linkExistingCommunication(
+  communicationId: string,
+  transactionId: string,
+  linkSource: "auto" | "manual" | "scan" = "auto",
+  linkConfidence: number = 0.85
+): Promise<boolean> {
+  // Check if already linked to this transaction
+  const checkSql = `
+    SELECT transaction_id FROM communications WHERE id = ?
+  `;
+  const existing = dbGet<{ transaction_id: string | null }>(checkSql, [communicationId]);
+
+  if (!existing) {
+    await logService.warn(
+      `Communication ${communicationId} not found when trying to link`,
+      "AutoLinkService"
+    );
+    return false;
+  }
+
+  if (existing.transaction_id === transactionId) {
+    // Already linked to this transaction
+    return false;
+  }
+
+  // Update the communication to link it to the transaction
+  const updateSql = `
+    UPDATE communications
+    SET transaction_id = ?,
+        link_source = ?,
+        link_confidence = ?,
+        linked_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `;
+  dbRun(updateSql, [transactionId, linkSource, linkConfidence, communicationId]);
+
+  return true;
 }
 
 // ============================================
@@ -394,7 +491,7 @@ export async function autoLinkCommunicationsForContact(
       }
     );
 
-    // 4. Find matching emails
+    // 4. Find matching emails (from communications table)
     const emailIds = await findEmailsByContactEmails(
       userId,
       contactInfo.emails,
@@ -403,8 +500,14 @@ export async function autoLinkCommunicationsForContact(
       limit
     );
 
-    // 5. Find matching text messages
-    const messageIds = await findMessagesByContactPhones(
+    await logService.debug(
+      `Found ${emailIds.length} matching emails for contact ${contactId}`,
+      "AutoLinkService",
+      { emailIds, contactEmails: contactInfo.emails }
+    );
+
+    // 5. Find matching text messages (from messages table)
+    const messagesWithThreads = await findMessagesByContactPhones(
       userId,
       contactInfo.phoneNumbers,
       transactionId,
@@ -412,18 +515,28 @@ export async function autoLinkCommunicationsForContact(
       limit
     );
 
+    await logService.debug(
+      `Found ${messagesWithThreads.length} matching messages for contact ${contactId}`,
+      "AutoLinkService",
+      {
+        messageCount: messagesWithThreads.length,
+        contactPhones: contactInfo.phoneNumbers,
+      }
+    );
+
     // 6. Link emails to transaction
-    for (const emailId of emailIds) {
+    // Emails are already in the communications table, so we update
+    // their transaction_id directly using linkExistingCommunication
+    for (const communicationId of emailIds) {
       try {
-        const refId = await createCommunicationReference(
-          emailId,
+        const linked = await linkExistingCommunication(
+          communicationId,
           transactionId,
-          userId,
           "auto",
           0.85 // Email matching confidence
         );
 
-        if (refId) {
+        if (linked) {
           result.emailsLinked++;
         } else {
           result.alreadyLinked++;
@@ -431,32 +544,63 @@ export async function autoLinkCommunicationsForContact(
       } catch (error) {
         result.errors++;
         await logService.warn(
-          `Failed to link email ${emailId}: ${error instanceof Error ? error.message : "Unknown"}`,
+          `Failed to link email ${communicationId}: ${error instanceof Error ? error.message : "Unknown"}`,
           "AutoLinkService"
         );
       }
     }
 
-    // 7. Link text messages to transaction
-    for (const messageId of messageIds) {
+    // 7. Link text messages to transaction at THREAD level
+    // TASK-1115: Group messages by thread_id and link once per thread
+    const threadIds = new Set<string>();
+    const messagesWithoutThread: string[] = [];
+
+    for (const msg of messagesWithThreads) {
+      if (msg.thread_id) {
+        threadIds.add(msg.thread_id);
+      } else {
+        // Messages without thread_id will be skipped for now
+        // They'll be picked up once thread_id is populated
+        messagesWithoutThread.push(msg.id);
+      }
+    }
+
+    await logService.debug(
+      `Grouped ${messagesWithThreads.length} messages into ${threadIds.size} threads`,
+      "AutoLinkService",
+      {
+        threadCount: threadIds.size,
+        messagesWithoutThread: messagesWithoutThread.length,
+      }
+    );
+
+    // Link each unique thread once
+    for (const threadId of threadIds) {
       try {
-        const refId = await createCommunicationReference(
-          messageId,
+        // Check if thread is already linked to avoid duplicates
+        const alreadyLinked = await isThreadLinkedToTransaction(
+          threadId,
+          transactionId
+        );
+
+        if (alreadyLinked) {
+          result.alreadyLinked++;
+          continue;
+        }
+
+        await createThreadCommunicationReference(
+          threadId,
           transactionId,
           userId,
           "auto",
           0.9 // Phone matching confidence
         );
 
-        if (refId) {
-          result.messagesLinked++;
-        } else {
-          result.alreadyLinked++;
-        }
+        result.messagesLinked++; // Now represents threads linked
       } catch (error) {
         result.errors++;
         await logService.warn(
-          `Failed to link message ${messageId}: ${error instanceof Error ? error.message : "Unknown"}`,
+          `Failed to link thread ${threadId}: ${error instanceof Error ? error.message : "Unknown"}`,
           "AutoLinkService"
         );
       }

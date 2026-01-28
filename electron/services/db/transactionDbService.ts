@@ -113,10 +113,16 @@ export async function createTransaction(
 export async function getTransactions(
   filters?: TransactionFilters,
 ): Promise<Transaction[]> {
+  // BACKLOG-390: Count emails using subquery for accurate count
+  // BACKLOG-396: Use stored text_thread_count for texts (updated on link/unlink)
+  // TASK-1403: Updated email_count to use email_id IS NOT NULL (new three-table architecture)
+  // This ensures consistency between card view and details page
   let sql = `SELECT t.*,
              (SELECT COUNT(*) FROM communications c WHERE c.transaction_id = t.id) as total_communications_count,
-             (SELECT COUNT(*) FROM communications c WHERE c.transaction_id = t.id AND c.communication_type = 'email') as email_count,
-             (SELECT COUNT(*) FROM communications c WHERE c.transaction_id = t.id AND c.communication_type IN ('text', 'imessage')) as text_count
+             (SELECT COUNT(DISTINCT c.email_id)
+              FROM communications c
+              WHERE c.transaction_id = t.id
+              AND c.email_id IS NOT NULL) as email_count
              FROM transactions t WHERE 1=1`;
   const params: unknown[] = [];
 
@@ -166,7 +172,15 @@ export async function getTransactions(
 export async function getTransactionById(
   transactionId: string,
 ): Promise<Transaction | null> {
-  const sql = "SELECT * FROM transactions WHERE id = ?";
+  // BACKLOG-446: Include email_count using same subquery as getTransactions
+  // TASK-1403: Updated email_count to use email_id IS NOT NULL (new three-table architecture)
+  // This ensures consistent email counts between list view and detail view
+  const sql = `SELECT t.*,
+               (SELECT COUNT(DISTINCT c.email_id)
+                FROM communications c
+                WHERE c.transaction_id = t.id
+                AND c.email_id IS NOT NULL) as email_count
+               FROM transactions t WHERE t.id = ?`;
   const transaction = dbGet<Transaction>(sql, [transactionId]);
   return transaction || null;
 }
@@ -292,8 +306,9 @@ export async function updateTransaction(
     "property_coordinates",
     "transaction_type",
     "status",
+    "started_at",
+    "closed_at",
     "closing_deadline",
-    "representation_start_date",
     "closing_date_verified",
     "representation_start_confidence",
     "closing_date_confidence",
@@ -323,6 +338,11 @@ export async function updateTransaction(
     "key_dates",
     "message_count",
     "attachment_count",
+    // B2B Submission Tracking (BACKLOG-390)
+    "submission_status",
+    "submission_id",
+    "submitted_at",
+    "last_review_notes",
   ];
 
   // Validate status if it's being updated

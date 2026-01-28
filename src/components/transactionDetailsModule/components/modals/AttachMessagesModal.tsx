@@ -85,7 +85,7 @@ function getThreadDateRange(messages: MessageLike[]): string {
   const firstDate = new Date(dates[0]);
   const lastDate = new Date(dates[dates.length - 1]);
 
-  const formatOpts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+  const formatOpts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
   const first = firstDate.toLocaleDateString(undefined, formatOpts);
   const last = lastDate.toLocaleDateString(undefined, formatOpts);
 
@@ -130,7 +130,10 @@ function getThreadParticipants(messages: MessageLike[], selectedContact: string)
     }
   }
 
-  // Fallback: collect from/to from individual messages (legacy behavior)
+  // Fallback: use message direction to identify the OTHER person
+  // For 1:1 chats, we need to identify who is NOT the user
+  // - Inbound messages: `from` is the other person
+  // - Outbound messages: `to` is the other person
   const participants = new Set<string>();
 
   for (const msg of messages) {
@@ -140,10 +143,20 @@ function getThreadParticipants(messages: MessageLike[], selectedContact: string)
           ? JSON.parse(msg.participants)
           : msg.participants;
 
-        if (parsed.from) participants.add(parsed.from);
-        if (parsed.to) {
+        // Use message direction to identify the OTHER person
+        if (msg.direction === 'inbound' && parsed.from) {
+          const from = parsed.from;
+          if (from !== 'me' && from !== 'unknown') {
+            participants.add(from);
+          }
+        }
+        if (msg.direction === 'outbound' && parsed.to) {
           const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
-          toList.forEach((p: string) => participants.add(p));
+          toList.forEach((p: string) => {
+            if (p && p !== 'me' && p !== 'unknown') {
+              participants.add(p);
+            }
+          });
         }
       }
     } catch {
@@ -151,9 +164,15 @@ function getThreadParticipants(messages: MessageLike[], selectedContact: string)
     }
   }
 
-  // Remove the selected contact and "me" from the list
+  // Remove the selected contact from the list
   participants.delete(selectedContact);
-  participants.delete('me');
+  // Also try normalized phone comparison
+  const selectedNormalized = normalizePhone(selectedContact);
+  for (const p of participants) {
+    if (normalizePhone(p) === selectedNormalized) {
+      participants.delete(p);
+    }
+  }
 
   return Array.from(participants);
 }
@@ -242,80 +261,100 @@ export function AttachMessagesModal({
   const [attaching, setAttaching] = useState(false);
 
   // Load contacts on mount
+  // PERF FIX (TASK-1112): Defer data load to allow loading UI to render first
+  // This prevents UI freeze by ensuring the spinner is visible before any heavy operations
   useEffect(() => {
-    async function loadContacts() {
-      setLoadingContacts(true);
-      setError(null);
-      try {
-        // Load both message contacts and all contacts in parallel
-        const [messageContactsResult, allContactsResult] = await Promise.all([
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (window.api.transactions as any).getMessageContacts(userId) as Promise<{
-            success: boolean;
-            contacts?: ContactInfo[];
-            error?: string;
-          }>,
-          // Get all contacts for name resolution
-          window.api.contacts.getAll(userId) as Promise<{
-            success: boolean;
-            contacts?: Array<{ id: string; name?: string; phone?: string }>;
-            error?: string;
-          }>,
-        ]);
+    // Ensure loading state is set synchronously before any async work
+    setLoadingContacts(true);
+    setError(null);
 
-        if (messageContactsResult.success && messageContactsResult.contacts) {
-          setContacts(messageContactsResult.contacts);
-        } else {
-          setError(messageContactsResult.error || "Failed to load contacts");
-        }
+    // Use setTimeout to defer the actual data fetch
+    // This allows the loading spinner to render before the main thread is blocked
+    const timeoutId = setTimeout(() => {
+      async function loadContacts() {
+        try {
+          // Load both message contacts and all contacts in parallel
+          const [messageContactsResult, allContactsResult] = await Promise.all([
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (window.api.transactions as any).getMessageContacts(userId) as Promise<{
+              success: boolean;
+              contacts?: ContactInfo[];
+              error?: string;
+            }>,
+            // Get all contacts for name resolution
+            window.api.contacts.getAll(userId) as Promise<{
+              success: boolean;
+              contacts?: Array<{ id: string; name?: string; phone?: string }>;
+              error?: string;
+            }>,
+          ]);
 
-        // Build phone-to-name lookup from all contacts
-        if (allContactsResult.success && allContactsResult.contacts) {
-          const phoneLookup: Array<{ phone: string; name: string }> = [];
-          for (const c of allContactsResult.contacts) {
-            if (c.name && c.phone) {
-              phoneLookup.push({ phone: c.phone, name: c.name });
-            }
+          if (messageContactsResult.success && messageContactsResult.contacts) {
+            setContacts(messageContactsResult.contacts);
+          } else {
+            setError(messageContactsResult.error || "Failed to load contacts");
           }
-          setAllContacts(phoneLookup);
+
+          // Build phone-to-name lookup from all contacts
+          if (allContactsResult.success && allContactsResult.contacts) {
+            const phoneLookup: Array<{ phone: string; name: string }> = [];
+            for (const c of allContactsResult.contacts) {
+              if (c.name && c.phone) {
+                phoneLookup.push({ phone: c.phone, name: c.name });
+              }
+            }
+            setAllContacts(phoneLookup);
+          }
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Failed to load contacts");
+        } finally {
+          setLoadingContacts(false);
         }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load contacts");
-      } finally {
-        setLoadingContacts(false);
       }
-    }
-    loadContacts();
+      loadContacts();
+    }, 0);
+
+    // Cleanup on unmount
+    return () => clearTimeout(timeoutId);
   }, [userId]);
 
   // Load threads when contact is selected
+  // PERF FIX (TASK-1112): Defer data load to allow loading UI to render first
   useEffect(() => {
     if (!selectedContact) return;
 
-    async function loadContactMessages() {
-      setLoadingThreads(true);
-      setError(null);
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const result = await (window.api.transactions as any).getMessagesByContact(userId, selectedContact) as {
-          success: boolean;
-          messages?: MessageLike[];
-          error?: string;
-        };
-        if (result.success && result.messages) {
-          const grouped = groupMessagesByThread(result.messages);
-          setThreads(grouped);
-          setView("threads");
-        } else {
-          setError(result.error || "Failed to load messages");
+    // Ensure loading state is set synchronously
+    setLoadingThreads(true);
+    setError(null);
+
+    // Use setTimeout to defer the fetch and allow loading UI to render
+    const timeoutId = setTimeout(() => {
+      async function loadContactMessages() {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const result = await (window.api.transactions as any).getMessagesByContact(userId, selectedContact) as {
+            success: boolean;
+            messages?: MessageLike[];
+            error?: string;
+          };
+          if (result.success && result.messages) {
+            const grouped = groupMessagesByThread(result.messages);
+            setThreads(grouped);
+            setView("threads");
+          } else {
+            setError(result.error || "Failed to load messages");
+          }
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Failed to load messages");
+        } finally {
+          setLoadingThreads(false);
         }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load messages");
-      } finally {
-        setLoadingThreads(false);
       }
-    }
-    loadContactMessages();
+      loadContactMessages();
+    }, 0);
+
+    // Cleanup on unmount or contact change
+    return () => clearTimeout(timeoutId);
   }, [userId, selectedContact]);
 
   // Filter contacts by search (name or phone number)
@@ -603,9 +642,15 @@ export function AttachMessagesModal({
                 <div className="grid gap-3">
                   {sortedThreads.map(([threadId, messages]) => {
                     const isSelected = selectedThreadIds.has(threadId);
-                    const isGroup = isGroupChat(messages);
                     const otherParticipants = getThreadParticipants(messages, selectedContact || "");
                     const dateRange = getThreadDateRange(messages);
+
+                    // Resolve names and deduplicate (same person may have multiple phones)
+                    const uniqueParticipantNames = [...new Set(
+                      otherParticipants.map(p => resolveParticipantName(p))
+                    )];
+                    // It's a group chat if there are multiple unique participants (not the same person with 2 phones)
+                    const isGroup = uniqueParticipantNames.length > 1;
 
                     return (
                       <div
@@ -659,16 +704,16 @@ export function AttachMessagesModal({
                               </h4>
                               {isGroup && (
                                 <span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">
-                                  {otherParticipants.length + 1} people
+                                  {uniqueParticipantNames.length + 1} people
                                 </span>
                               )}
                             </div>
 
                             {/* Other participants in group */}
-                            {isGroup && otherParticipants.length > 0 && (
+                            {isGroup && uniqueParticipantNames.length > 0 && (
                               <p className="text-xs text-gray-500 mt-1">
-                                Also includes: {otherParticipants.slice(0, 3).map(p => resolveParticipantName(p)).join(", ")}
-                                {otherParticipants.length > 3 && ` +${otherParticipants.length - 3} more`}
+                                Also includes: {uniqueParticipantNames.slice(0, 3).join(", ")}
+                                {uniqueParticipantNames.length > 3 && ` +${uniqueParticipantNames.length - 3} more`}
                               </p>
                             )}
 

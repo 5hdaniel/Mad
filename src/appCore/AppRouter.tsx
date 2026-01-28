@@ -35,19 +35,19 @@ export function AppRouter({ app }: AppRouterProps) {
     // State
     currentStep, isMacOS, isWindows, isOnline, isChecking, connectionError,
     isAuthenticated, currentUser, authProvider, pendingOAuthData, pendingOnboardingData,
-    pendingEmailTokens, isInitializingDatabase, skipKeychainExplanation, selectedPhoneType,
+    isInitializingDatabase, skipKeychainExplanation, selectedPhoneType,
     hasEmailConnected, showSetupPromptDismissed, exportResult, conversations,
     selectedConversationIds, outlookConnected,
     // Handlers
-    handleLoginSuccess, handleLoginPending, handleSelectIPhone, handleSelectAndroid,
+    handleLoginSuccess, handleLoginPending, handleDeepLinkAuthSuccess, handleSelectIPhone, handleSelectAndroid,
     handleAndroidGoBack, handleAndroidContinueWithEmail, handlePhoneTypeChange,
     handleAppleDriverSetupComplete, handleAppleDriverSetupSkip, handleEmailOnboardingComplete,
     handleEmailOnboardingSkip, handleEmailOnboardingBack, handleKeychainExplanationContinue,
     handleKeychainBack, handleMicrosoftLogin, handleMicrosoftSkip, handleConnectOutlook,
     handlePermissionsGranted, checkPermissions, handleExportComplete, handleOutlookExport,
     handleOutlookCancel, handleStartOver, setExportResult, handleRetryConnection,
-    openAuditTransaction, openTransactions, openContacts, goToStep, goToEmailOnboarding,
-    handleDismissSetupPrompt, setIsTourActive, openIPhoneSync,
+    openAuditTransaction, openTransactions, openContacts, goToStep,
+    handleDismissSetupPrompt, setIsTourActive, openIPhoneSync, openSettings,
   } = app;
 
   // New onboarding architecture (when enabled)
@@ -77,6 +77,7 @@ export function AppRouter({ app }: AppRouterProps) {
       <Login
         onLoginSuccess={handleLoginSuccess}
         onLoginPending={handleLoginPending}
+        onDeepLinkAuthSuccess={handleDeepLinkAuthSuccess}
       />
     );
   }
@@ -140,6 +141,24 @@ export function AppRouter({ app }: AppRouterProps) {
     // Show iPhone sync button for Windows + iPhone users
     const showIPhoneSyncButton = isWindows && selectedPhoneType === "iphone";
 
+    // Handler to open Settings and scroll to Email Connections section
+    const handleContinueSetup = () => {
+      openSettings();
+      // Scroll to and highlight email connections section after modal opens
+      setTimeout(() => {
+        const emailSection = document.getElementById("email-connections");
+        if (emailSection) {
+          emailSection.scrollIntoView({ behavior: "smooth", block: "start" });
+          // Add highlight effect
+          emailSection.classList.add("ring-2", "ring-amber-400", "ring-offset-2", "rounded-lg");
+          // Remove highlight after 3 seconds
+          setTimeout(() => {
+            emailSection.classList.remove("ring-2", "ring-amber-400", "ring-offset-2", "rounded-lg");
+          }, 3000);
+        }
+      }, 150);
+    };
+
     return (
       <Dashboard
         onAuditNew={openAuditTransaction}
@@ -148,7 +167,7 @@ export function AppRouter({ app }: AppRouterProps) {
         onSyncPhone={showIPhoneSyncButton ? openIPhoneSync : undefined}
         onTourStateChange={setIsTourActive}
         showSetupPrompt={!hasEmailConnected && !showSetupPromptDismissed}
-        onContinueSetup={goToEmailOnboarding}
+        onContinueSetup={handleContinueSetup}
         onDismissSetupPrompt={handleDismissSetupPrompt}
         syncStatus={app.syncStatus}
         isAnySyncing={app.isAnySyncing}

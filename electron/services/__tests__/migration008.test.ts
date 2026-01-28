@@ -10,7 +10,7 @@
  * - TASK-301: AI detection fields for transactions
  * - TASK-302: llm_settings table
  * - TASK-303: llm_analysis column for messages
- * - TASK-305: Schema version increment to 8
+ * - TASK-305: Schema version increment to 16
  */
 
 import { jest } from "@jest/globals";
@@ -19,6 +19,7 @@ import { jest } from "@jest/globals";
 const executedStatements: string[] = [];
 
 // Mock PRAGMA results for column checks
+// This simulates an existing database that needs migration (missing AI detection columns)
 const mockColumnResults: Record<string, { name: string }[]> = {
   transactions: [
     { name: "id" },
@@ -26,6 +27,11 @@ const mockColumnResults: Record<string, { name: string }[]> = {
     { name: "status" },
   ],
   messages: [{ name: "id" }, { name: "subject" }],
+  contacts: [{ name: "id" }, { name: "display_name" }, { name: "source" }],
+  users_local: [{ name: "id" }, { name: "email" }],
+  communications: [{ name: "id" }, { name: "transaction_id" }],
+  attachments: [{ name: "id" }, { name: "message_id" }],
+  transaction_contacts: [{ name: "id" }, { name: "transaction_id" }],
 };
 
 // Mock schema version (starts at 7)
@@ -44,12 +50,21 @@ const mockStatement = {
       return { version: mockSchemaVersion };
     }
 
-    // llm_settings table existence
-    if (
-      sql.includes("SELECT name FROM sqlite_master") &&
-      sql.includes("llm_settings")
-    ) {
-      return mockLlmSettingsExists ? { name: "llm_settings" } : undefined;
+    // Table existence checks
+    if (sql.includes("SELECT name FROM sqlite_master") && sql.includes("type='table'")) {
+      // llm_settings table existence
+      if (sql.includes("llm_settings")) {
+        return mockLlmSettingsExists ? { name: "llm_settings" } : undefined;
+      }
+      // For migration tests, assume transactions and messages tables exist
+      // so that the migration logic checks their columns and adds missing ones
+      if (sql.includes("transactions") || sql.includes("messages") ||
+          sql.includes("contacts") || sql.includes("users_local") ||
+          sql.includes("communications") || sql.includes("attachments") ||
+          sql.includes("transaction_contacts") || sql.includes("schema_version") ||
+          sql.includes("audit_logs")) {
+        return { name: "table" };
+      }
     }
 
     return undefined;
@@ -64,6 +79,21 @@ const mockStatement = {
     if (sql.includes("PRAGMA table_info(messages)")) {
       return mockColumnResults.messages;
     }
+    if (sql.includes("PRAGMA table_info(contacts)")) {
+      return mockColumnResults.contacts;
+    }
+    if (sql.includes("PRAGMA table_info(users_local)")) {
+      return mockColumnResults.users_local;
+    }
+    if (sql.includes("PRAGMA table_info(communications)")) {
+      return mockColumnResults.communications;
+    }
+    if (sql.includes("PRAGMA table_info(attachments)")) {
+      return mockColumnResults.attachments;
+    }
+    if (sql.includes("PRAGMA table_info(transaction_contacts)")) {
+      return mockColumnResults.transaction_contacts;
+    }
 
     return [];
   }),
@@ -72,8 +102,8 @@ const mockStatement = {
     executedStatements.push(sql);
 
     // Track state changes
-    if (sql.includes("UPDATE schema_version SET version = 8")) {
-      mockSchemaVersion = 8;
+    if (sql.includes("UPDATE schema_version SET version = 16")) {
+      mockSchemaVersion = 16;
     }
     if (sql.includes("CREATE TABLE") && sql.includes("llm_settings")) {
       mockLlmSettingsExists = true;
@@ -97,7 +127,27 @@ const mockStatement = {
 
 const mockDb = {
   pragma: jest.fn().mockReturnValue([]),
-  exec: jest.fn(),
+  exec: jest.fn((sql: string) => {
+    // Capture exec statements for verification
+    executedStatements.push(sql);
+
+    // Track state changes from exec calls
+    if (sql.includes("UPDATE schema_version SET version = 16")) {
+      mockSchemaVersion = 16;
+    }
+    if (sql.includes("CREATE TABLE") && sql.includes("llm_settings")) {
+      mockLlmSettingsExists = true;
+    }
+    if (sql.includes("ALTER TABLE transactions ADD COLUMN detection_source")) {
+      mockColumnResults.transactions.push({ name: "detection_source" });
+    }
+    if (sql.includes("ALTER TABLE transactions ADD COLUMN detection_status")) {
+      mockColumnResults.transactions.push({ name: "detection_status" });
+    }
+    if (sql.includes("ALTER TABLE messages ADD COLUMN llm_analysis")) {
+      mockColumnResults.messages.push({ name: "llm_analysis" });
+    }
+  }),
   prepare: jest.fn((sql: string) => {
     (mockStatement as unknown as { _sql: string })._sql = sql;
     return mockStatement;
@@ -295,18 +345,18 @@ describe("Migration 008: AI Detection Support Schema", () => {
   });
 
   describe("TASK-305: Schema version increment", () => {
-    it("should increment schema version to 8", async () => {
+    it("should increment schema version to 16", async () => {
       await databaseService.initialize();
 
       const hasVersionUpdate = executedStatements.some((sql) =>
-        sql.includes("UPDATE schema_version SET version = 8")
+        sql.includes("UPDATE schema_version SET version = 16")
       );
       expect(hasVersionUpdate).toBe(true);
     });
 
-    it("should only increment version when current version < 8", async () => {
+    it("should only increment version when current version < 16", async () => {
       // Set version to 8 (already migrated)
-      mockSchemaVersion = 8;
+      mockSchemaVersion = 16;
 
       // Also mark all columns/tables as existing to skip migrations
       mockLlmSettingsExists = true;
@@ -325,7 +375,7 @@ describe("Migration 008: AI Detection Support Schema", () => {
 
       // Should not update version again
       const versionUpdates = executedStatements.filter((sql) =>
-        sql.includes("UPDATE schema_version SET version = 8")
+        sql.includes("UPDATE schema_version SET version = 16")
       );
       expect(versionUpdates.length).toBe(0);
     });
@@ -340,7 +390,7 @@ describe("Migration 008: AI Detection Support Schema", () => {
       );
       mockColumnResults.messages.push({ name: "llm_analysis" });
       mockLlmSettingsExists = true;
-      mockSchemaVersion = 8;
+      mockSchemaVersion = 16;
 
       await databaseService.initialize();
 
@@ -376,7 +426,7 @@ describe("Migration 008: AI Detection Support Schema", () => {
         sql.includes("llm_analysis")
       );
       const versionUpdateIdx = executedStatements.findIndex((sql) =>
-        sql.includes("UPDATE schema_version SET version = 8")
+        sql.includes("UPDATE schema_version SET version = 16")
       );
 
       // Version update should come after all other migrations

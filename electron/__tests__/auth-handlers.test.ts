@@ -72,6 +72,7 @@ jest.mock("../services/databaseService", () => ({
     deleteSession: jest.fn(),
     acceptTerms: jest.fn(),
     hasCompletedEmailOnboarding: jest.fn(),
+    completeEmailOnboarding: jest.fn().mockResolvedValue(undefined),
     getOAuthToken: jest.fn(),
   },
 }));
@@ -110,6 +111,8 @@ jest.mock("../services/supabaseService", () => ({
     registerDevice: jest.fn(),
     trackEvent: jest.fn(),
     syncTermsAcceptance: jest.fn(),
+    // TASK-1507G: Add getAuthUserId for unified ID handling
+    getAuthUserId: jest.fn().mockReturnValue(null),
   },
 }));
 
@@ -160,6 +163,7 @@ jest.mock("../services/logService", () => ({
     info: jest.fn().mockResolvedValue(undefined),
     error: jest.fn().mockResolvedValue(undefined),
     warn: jest.fn().mockResolvedValue(undefined),
+    debug: jest.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -243,7 +247,7 @@ describe("Auth Handlers", () => {
         mockDatabaseService,
         mockSupabaseService,
       );
-      expect(mockLogService.info).toHaveBeenCalledWith(
+      expect(mockLogService.debug).toHaveBeenCalledWith(
         "Database initialized",
         "AuthHandlers",
       );
@@ -592,6 +596,11 @@ describe("Auth Handlers", () => {
     beforeEach(() => {
       mockDatabaseService.hasCompletedEmailOnboarding.mockReset();
       mockDatabaseService.getOAuthToken.mockReset();
+      // Add completeEmailOnboarding mock for auto-correction tests
+      (mockDatabaseService as jest.Mocked<typeof databaseService> & {
+        completeEmailOnboarding: jest.Mock;
+      }).completeEmailOnboarding =
+        jest.fn().mockResolvedValue(undefined);
     });
 
     it("should return completed=true when onboarding done and mailbox token exists", async () => {
@@ -617,22 +626,23 @@ describe("Auth Handlers", () => {
       expect(result.success).toBe(true);
       expect(result.completed).toBe(false);
       expect(mockLogService.info).toHaveBeenCalledWith(
-        "Email onboarding was completed but no mailbox token found",
+        "Email onboarding flag is true but no valid mailbox token found",
         "AuthHandlers",
         expect.any(Object),
       );
     });
 
-    it("should return completed=false when onboarding not done", async () => {
+    it("should return completed=false when onboarding not done and no token", async () => {
       mockDatabaseService.hasCompletedEmailOnboarding.mockResolvedValue(false);
+      mockDatabaseService.getOAuthToken.mockResolvedValue(null);
 
       const handler = registeredHandlers.get("auth:check-email-onboarding");
       const result = await handler(mockEvent, TEST_USER_ID);
 
       expect(result.success).toBe(true);
       expect(result.completed).toBe(false);
-      // Should not check for tokens if onboarding not completed
-      expect(mockDatabaseService.getOAuthToken).not.toHaveBeenCalled();
+      // Now we always check for tokens first (TASK-1039 fix)
+      expect(mockDatabaseService.getOAuthToken).toHaveBeenCalled();
     });
 
     it("should handle invalid user ID", async () => {
@@ -651,6 +661,53 @@ describe("Auth Handlers", () => {
       await handler(mockEvent, TEST_USER_ID);
 
       // Should check for both providers
+      expect(mockDatabaseService.getOAuthToken).toHaveBeenCalledWith(
+        TEST_USER_ID,
+        "google",
+        "mailbox",
+      );
+      expect(mockDatabaseService.getOAuthToken).toHaveBeenCalledWith(
+        TEST_USER_ID,
+        "microsoft",
+        "mailbox",
+      );
+    });
+
+    // TASK-1039: Token-first logic and auto-correction tests
+    it("should return completed=true and auto-correct flag when token exists but flag is false (TASK-1039)", async () => {
+      // This is the bug scenario: user has token but flag wasn't set
+      mockDatabaseService.hasCompletedEmailOnboarding.mockResolvedValue(false);
+      mockDatabaseService.getOAuthToken.mockResolvedValue({
+        access_token: "test-token",
+      });
+
+      const handler = registeredHandlers.get("auth:check-email-onboarding");
+      const result = await handler(mockEvent, TEST_USER_ID);
+
+      expect(result.success).toBe(true);
+      // Should return completed=true because token exists (token is source of truth)
+      expect(result.completed).toBe(true);
+      // Should auto-correct the flag
+      expect(
+        (mockDatabaseService as jest.Mocked<typeof databaseService> & {
+          completeEmailOnboarding: jest.Mock;
+        }).completeEmailOnboarding,
+      ).toHaveBeenCalledWith(TEST_USER_ID);
+      expect(mockLogService.info).toHaveBeenCalledWith(
+        "Auto-correcting inconsistent email onboarding state: token exists but flag was false",
+        "AuthHandlers",
+        expect.any(Object),
+      );
+    });
+
+    it("should check tokens before checking flag (TASK-1039)", async () => {
+      mockDatabaseService.hasCompletedEmailOnboarding.mockResolvedValue(false);
+      mockDatabaseService.getOAuthToken.mockResolvedValue(null);
+
+      const handler = registeredHandlers.get("auth:check-email-onboarding");
+      await handler(mockEvent, TEST_USER_ID);
+
+      // Tokens are checked first, regardless of flag status
       expect(mockDatabaseService.getOAuthToken).toHaveBeenCalledWith(
         TEST_USER_ID,
         "google",
@@ -1487,6 +1544,130 @@ describe("Auth Handlers", () => {
       expect(mockAuthWindow.on).toHaveBeenCalledWith(
         "closed",
         expect.any(Function),
+      );
+    });
+  });
+
+  describe("OAuth Popup Window Security Configuration", () => {
+    const { BrowserWindow } = require("electron");
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      // Track BrowserWindow constructor calls
+      BrowserWindow.mockClear();
+    });
+
+    it("should create Google login popup without webSecurity: false", async () => {
+      mockGoogleAuthService.authenticateForLogin.mockResolvedValue({
+        authUrl: "https://accounts.google.com/oauth",
+        codePromise: new Promise<string>(() => {}),
+        scopes: ["email", "profile"],
+      });
+
+      const handler = registeredHandlers.get("auth:google:login");
+      await handler(mockEvent);
+
+      // Verify BrowserWindow was called
+      expect(BrowserWindow).toHaveBeenCalled();
+
+      // Get the configuration passed to BrowserWindow
+      const callArgs = BrowserWindow.mock.calls[0][0];
+
+      // Verify webSecurity is NOT set to false
+      expect(callArgs.webPreferences?.webSecurity).not.toBe(false);
+      // Verify allowRunningInsecureContent is NOT set to true
+      expect(callArgs.webPreferences?.allowRunningInsecureContent).not.toBe(
+        true,
+      );
+      // Verify other security settings are correct
+      expect(callArgs.webPreferences?.nodeIntegration).toBe(false);
+      expect(callArgs.webPreferences?.contextIsolation).toBe(true);
+    });
+
+    it("should create Microsoft login popup without webSecurity: false", async () => {
+      mockMicrosoftAuthService.authenticateForLogin.mockResolvedValue({
+        authUrl: "https://login.microsoftonline.com/oauth",
+        codePromise: new Promise<string>(() => {}),
+        codeVerifier: "verifier-123",
+        scopes: ["User.Read"],
+      });
+
+      const handler = registeredHandlers.get("auth:microsoft:login");
+      await handler(mockEvent);
+
+      // Verify BrowserWindow was called
+      expect(BrowserWindow).toHaveBeenCalled();
+
+      // Get the configuration passed to BrowserWindow
+      const callArgs = BrowserWindow.mock.calls[0][0];
+
+      // Verify webSecurity is NOT set to false
+      expect(callArgs.webPreferences?.webSecurity).not.toBe(false);
+      // Verify allowRunningInsecureContent is NOT set to true
+      expect(callArgs.webPreferences?.allowRunningInsecureContent).not.toBe(
+        true,
+      );
+      // Verify other security settings are correct
+      expect(callArgs.webPreferences?.nodeIntegration).toBe(false);
+      expect(callArgs.webPreferences?.contextIsolation).toBe(true);
+    });
+
+    it("should create Google mailbox popup without webSecurity: false", async () => {
+      mockDatabaseService.getUserById.mockResolvedValue({
+        id: TEST_USER_ID,
+        email: "test@example.com",
+      });
+
+      mockGoogleAuthService.authenticateForMailbox.mockResolvedValue({
+        authUrl: "https://accounts.google.com/oauth/mailbox",
+        codePromise: new Promise<string>(() => {}),
+        scopes: ["gmail.readonly"],
+      });
+
+      const handler = registeredHandlers.get("auth:google:connect-mailbox");
+      await handler(mockEvent, TEST_USER_ID);
+
+      // Verify BrowserWindow was called
+      expect(BrowserWindow).toHaveBeenCalled();
+
+      // Get the configuration passed to BrowserWindow
+      const callArgs = BrowserWindow.mock.calls[0][0];
+
+      // Verify webSecurity is NOT set to false
+      expect(callArgs.webPreferences?.webSecurity).not.toBe(false);
+      // Verify allowRunningInsecureContent is NOT set to true
+      expect(callArgs.webPreferences?.allowRunningInsecureContent).not.toBe(
+        true,
+      );
+    });
+
+    it("should create Microsoft mailbox popup without webSecurity: false", async () => {
+      mockDatabaseService.getUserById.mockResolvedValue({
+        id: TEST_USER_ID,
+        email: "test@example.com",
+      });
+
+      mockMicrosoftAuthService.authenticateForMailbox.mockResolvedValue({
+        authUrl: "https://login.microsoftonline.com/oauth/mailbox",
+        codePromise: new Promise<string>(() => {}),
+        codeVerifier: "verifier-456",
+        scopes: ["Mail.Read"],
+      });
+
+      const handler = registeredHandlers.get("auth:microsoft:connect-mailbox");
+      await handler(mockEvent, TEST_USER_ID);
+
+      // Verify BrowserWindow was called
+      expect(BrowserWindow).toHaveBeenCalled();
+
+      // Get the configuration passed to BrowserWindow
+      const callArgs = BrowserWindow.mock.calls[0][0];
+
+      // Verify webSecurity is NOT set to false
+      expect(callArgs.webPreferences?.webSecurity).not.toBe(false);
+      // Verify allowRunningInsecureContent is NOT set to true
+      expect(callArgs.webPreferences?.allowRunningInsecureContent).not.toBe(
+        true,
       );
     });
   });

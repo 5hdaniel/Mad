@@ -20,10 +20,11 @@ import databaseService from "../services/databaseService";
 import supabaseService from "../services/supabaseService";
 import auditService from "../services/auditService";
 import logService from "../services/logService";
+import sessionService from "../services/sessionService";
 import { setSyncUserId } from "../sync-handlers";
 
 // Import validation utilities
-import { ValidationError, validateUserId } from "../utils/validation";
+import { getValidUserId } from "../utils/userIdHelper";
 
 // Import constants
 import {
@@ -42,6 +43,36 @@ interface LoginCompleteResponse extends AuthResponse {
   sessionToken?: string;
   subscription?: Subscription;
   isNewUser?: boolean;
+}
+
+/**
+ * Check if user needs to accept or re-accept terms
+ * BACKLOG-546: Copied from sessionHandlers.ts to determine isNewUser correctly
+ */
+function needsToAcceptTerms(user: User): boolean {
+  if (!user.terms_accepted_at) {
+    return true;
+  }
+
+  if (!user.terms_version_accepted && !user.privacy_policy_version_accepted) {
+    return false;
+  }
+
+  if (
+    user.terms_version_accepted &&
+    user.terms_version_accepted !== CURRENT_TERMS_VERSION
+  ) {
+    return true;
+  }
+
+  if (
+    user.privacy_policy_version_accepted &&
+    user.privacy_policy_version_accepted !== CURRENT_PRIVACY_POLICY_VERSION
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -96,7 +127,9 @@ export async function handleCompletePendingLogin(
     const isNewUser = !localUser;
 
     if (!localUser) {
+      // TASK-1507G: Use Supabase Auth UUID as local user ID for unified IDs
       localUser = await databaseService.createUser({
+        id: cloudUser.id,
         email: userInfo.email,
         first_name: userInfo.given_name,
         last_name: userInfo.family_name,
@@ -109,6 +142,21 @@ export async function handleCompletePendingLogin(
         trial_ends_at: cloudUser.trial_ends_at,
         is_active: true,
       });
+
+      // BACKLOG-546: Sync terms data from cloud if user has already accepted
+      if (cloudUser.terms_accepted_at) {
+        await databaseService.updateUser(localUser.id, {
+          terms_accepted_at: cloudUser.terms_accepted_at,
+          terms_version_accepted: cloudUser.terms_version_accepted,
+          privacy_policy_accepted_at: cloudUser.privacy_policy_accepted_at,
+          privacy_policy_version_accepted: cloudUser.privacy_policy_version_accepted,
+        });
+        // Re-fetch to get updated terms data
+        const updatedUser = await databaseService.getUserById(localUser.id);
+        if (updatedUser) {
+          localUser = updatedUser;
+        }
+      }
     } else {
       await databaseService.updateUser(localUser.id, {
         email: userInfo.email,
@@ -190,6 +238,16 @@ export async function handleCompletePendingLogin(
 
     const sessionToken = await databaseService.createSession(localUser.id);
 
+    // Save session to file for persistence across app restarts
+    await sessionService.saveSession({
+      user: localUser,
+      sessionToken,
+      provider,
+      subscription,
+      expiresAt: Date.now() + sessionService.getSessionExpirationMs(),
+      createdAt: Date.now(),
+    });
+
     const deviceInfo = {
       device_id: crypto.randomUUID(),
       device_name: os.hostname(),
@@ -223,12 +281,13 @@ export async function handleCompletePendingLogin(
 
     setSyncUserId(localUser.id);
 
+    // BACKLOG-546: Use needsToAcceptTerms instead of isNewUser to determine if T&C screen needed
     return {
       success: true,
       user: localUser,
       sessionToken,
       subscription,
-      isNewUser,
+      isNewUser: needsToAcceptTerms(localUser),
     };
   } catch (error) {
     await logService.error("Failed to complete pending login", "AuthHandlers", {
@@ -265,7 +324,14 @@ export async function handleSavePendingMailboxTokens(
       { userId: data.userId, email: data.email }
     );
 
-    const validatedUserId = validateUserId(data.userId)!;
+    // BACKLOG-551: Validate user ID exists in local DB (handles Supabase auth.uid() mismatch)
+    const validatedUserId = await getValidUserId(data.userId, "SharedAuth");
+    if (!validatedUserId) {
+      return {
+        success: false,
+        error: "No user found in database. Please log in first.",
+      };
+    }
 
     await databaseService.saveOAuthToken(
       validatedUserId,
@@ -284,7 +350,7 @@ export async function handleSavePendingMailboxTokens(
     await logService.info(
       `Pending ${data.provider} mailbox tokens saved`,
       "AuthHandlers",
-      { userId: data.userId }
+      { userId: validatedUserId }
     );
 
     await auditService.log({
@@ -324,7 +390,14 @@ export async function handleDisconnectMailbox(
       { userId }
     );
 
-    const validatedUserId = validateUserId(userId)!;
+    // BACKLOG-551: Validate user ID exists in local DB (handles Supabase auth.uid() mismatch)
+    const validatedUserId = await getValidUserId(userId, "SharedAuth");
+    if (!validatedUserId) {
+      return {
+        success: false,
+        error: "No user found in database. Please log in first.",
+      };
+    }
 
     await databaseService.deleteOAuthToken(
       validatedUserId,
@@ -335,7 +408,7 @@ export async function handleDisconnectMailbox(
     await logService.info(
       `${provider} mailbox disconnected successfully`,
       "AuthHandlers",
-      { userId }
+      { userId: validatedUserId }
     );
 
     await auditService.log({
@@ -363,8 +436,9 @@ export async function handleDisconnectMailbox(
       }
     );
 
+    // Use original userId for error logging since validatedUserId may not exist
     await auditService.log({
-      userId,
+      userId: userId || "unknown",
       action: "MAILBOX_DISCONNECT",
       resourceType: "MAILBOX",
       metadata: { provider },
@@ -394,5 +468,68 @@ export function registerSharedAuthHandlers(
 
   ipcMain.handle("auth:microsoft:disconnect-mailbox", (event, userId: string) =>
     handleDisconnectMailbox(mainWindow, userId, "microsoft")
+  );
+
+  // DEV ONLY: Expire a mailbox token for testing Connection Issue state
+  // This invalidates both access and refresh tokens to prevent auto-refresh
+  ipcMain.handle(
+    "auth:dev:expire-mailbox-token",
+    async (_event, userId: string, provider: "google" | "microsoft") => {
+      try {
+        const token = await databaseService.getOAuthToken(userId, provider, "mailbox");
+        if (!token) {
+          return { success: false, error: "No token found" };
+        }
+        // Set expiry to 1 hour ago and clear refresh token to prevent auto-refresh
+        const expiredTime = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+        await databaseService.updateOAuthToken(token.id, {
+          token_expires_at: expiredTime,
+          refresh_token: "INVALIDATED_FOR_TESTING",
+          access_token: "EXPIRED_FOR_TESTING",
+        });
+        await logService.info(
+          `[DEV] Expired ${provider} mailbox token for testing (refresh invalidated)`,
+          "SharedAuthHandlers",
+          { userId, expiredTime }
+        );
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: String(error) };
+      }
+    }
+  );
+
+  // DEV ONLY: Reset onboarding for testing the onboarding flow
+  // This clears email_onboarding_completed_at and mobile_phone_type
+  ipcMain.handle(
+    "auth:dev:reset-onboarding",
+    async (_event, userId: string) => {
+      try {
+        await logService.info(
+          `[Auth] DEV: Resetting onboarding for user ${userId}`,
+          "AuthHandlers"
+        );
+
+        // Use raw SQL to set fields to NULL (updateUser doesn't support null values)
+        const db = databaseService.getRawDatabase();
+        db.prepare(
+          "UPDATE users_local SET email_onboarding_completed_at = NULL, mobile_phone_type = NULL WHERE id = ?"
+        ).run(userId);
+
+        await logService.info(
+          `[Auth] DEV: Onboarding reset complete for user ${userId}`,
+          "AuthHandlers"
+        );
+
+        return { success: true };
+      } catch (error) {
+        await logService.error(
+          "[Auth] DEV: Failed to reset onboarding",
+          "AuthHandlers",
+          { error: String(error) }
+        );
+        return { success: false, error: String(error) };
+      }
+    }
   );
 }

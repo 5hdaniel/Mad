@@ -21,6 +21,7 @@ import {
   detectPlatform,
   autoInitializesStorage,
 } from "./utils/platformInit";
+import { useAuth } from "../../../contexts";
 import type { PlatformInfo, User, UserData } from "./types";
 
 interface LoadingOrchestratorProps {
@@ -38,6 +39,7 @@ export function LoadingOrchestrator({
   children,
 }: LoadingOrchestratorProps): React.ReactElement {
   const { state, dispatch, loadingPhase } = useAppState();
+  const { login } = useAuth();
 
   // Track auth data across phases (needed for USER_DATA_LOADED context)
   const authDataRef = useRef<{
@@ -65,6 +67,8 @@ export function LoadingOrchestrator({
 
     let cancelled = false;
 
+    const platform = platformRef.current;
+
     window.api.system
       .hasEncryptionKeyStore()
       .then((result) => {
@@ -72,6 +76,7 @@ export function LoadingOrchestrator({
         dispatch({
           type: "STORAGE_CHECKED",
           hasKeyStore: result.hasKeyStore,
+          isMacOS: platform.isMacOS,
         });
       })
       .catch((error: Error) => {
@@ -204,6 +209,21 @@ export function LoadingOrchestrator({
           // Store for USER_DATA_LOADED phase
           authDataRef.current = { user, platform };
 
+          // Sync to AuthContext so currentUser is available in UI
+          const authContextUser = {
+            id: apiUser.id,
+            email: apiUser.email,
+            display_name: apiUser.display_name,
+            avatar_url: apiUser.avatar_url,
+          };
+          login(
+            authContextUser,
+            result.sessionToken ?? "",
+            result.provider ?? "",
+            result.subscription,
+            result.isNewUser ?? false,
+          );
+
           dispatch({
             type: "AUTH_LOADED",
             user,
@@ -235,7 +255,7 @@ export function LoadingOrchestrator({
     return () => {
       cancelled = true;
     };
-  }, [state.status, loadingPhase, dispatch, getPlatformInfo]);
+  }, [state.status, loadingPhase, dispatch, getPlatformInfo, login]);
 
   // ============================================
   // PHASE 4: Load user data (if authenticated)

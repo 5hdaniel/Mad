@@ -4,6 +4,88 @@ This module covers backlog cleanup, task archiving, and housekeeping procedures.
 
 ---
 
+## Backlog CSV Maintenance (MANDATORY)
+
+**CRITICAL: The backlog.csv file is the source of truth for the dashboard. It MUST be updated in real-time.**
+
+### Location
+
+```
+.claude/plans/backlog/data/backlog.csv
+```
+
+### Status Values
+
+Use these exact status values:
+
+| Status | Meaning | When to Use |
+|--------|---------|-------------|
+| `Pending` | Not started | Default for new items |
+| `In Progress` | Active development | Engineer has started |
+| `Implemented` | Code done, needs testing | Code merged but not QA verified |
+| `Testing` | In QA/verification | QA session in progress |
+| `Completed` | Fully done and verified | QA passed, sprint closed |
+| `Blocked` | Cannot proceed | Has unresolved dependency |
+| `Deferred` | Intentionally postponed | Not doing this sprint |
+| `Obsolete` | No longer relevant | Superseded by other work |
+
+### When to Update the CSV
+
+| Event | CSV Update Required |
+|-------|---------------------|
+| New backlog item created | Add row with `Pending` status |
+| Item assigned to sprint | Set `sprint` column |
+| Engineer starts work | Set status to `In Progress` |
+| PR merged | Set status to `Implemented` |
+| QA passed | Set status to `Completed`, set `completed_at` |
+| Sprint closed | Verify all items have correct status |
+
+### CSV Columns
+
+```
+id,title,category,priority,status,sprint,est_tokens,actual_tokens,variance,created_at,completed_at,file
+```
+
+### Example Updates
+
+**New item created:**
+```csv
+BACKLOG-460,New Feature,feature,High,Pending,-,~30K,-,-,2026-01-23,,[BACKLOG-460.md](items/BACKLOG-460.md)
+```
+
+**Item assigned to sprint:**
+```csv
+BACKLOG-460,New Feature,feature,High,Pending,SPRINT-052,~30K,-,-,2026-01-23,,[BACKLOG-460.md](items/BACKLOG-460.md)
+```
+
+**Implementation complete, not yet tested:**
+```csv
+BACKLOG-460,New Feature,feature,High,Implemented,SPRINT-052,~30K,~35K,+17%,2026-01-23,,[BACKLOG-460.md](items/BACKLOG-460.md)
+```
+
+**Fully complete:**
+```csv
+BACKLOG-460,New Feature,feature,High,Completed,SPRINT-052,~30K,~35K,+17%,2026-01-23,2026-01-25,[BACKLOG-460.md](items/BACKLOG-460.md)
+```
+
+### Dashboard Regeneration
+
+After updating the CSV, regenerate the dashboard:
+
+```bash
+python .claude/plans/backlog/scripts/generate_dashboard.py
+open backlog-dashboard.html
+```
+
+### Common Mistakes to Avoid
+
+1. **Creating backlog items without adding to CSV** - Dashboard won't show them
+2. **Using non-standard status values** - Dashboard filters won't work
+3. **Not updating sprint column** - Can't track sprint velocity
+4. **Marking as Completed before QA** - Use `Implemented` instead
+
+---
+
 ## Task Archiving
 
 ### When to Archive

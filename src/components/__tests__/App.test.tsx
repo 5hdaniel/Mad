@@ -19,6 +19,33 @@ jest.mock("../../appCore", () => ({
   useAppStateMachine: () => mockUseAppStateMachine(),
 }));
 
+// Mock the LicenseContext for LicenseGate
+jest.mock("../../contexts/LicenseContext", () => ({
+  LicenseProvider: ({ children }: { children: React.ReactNode }) => children,
+  useLicense: () => ({
+    licenseType: "individual" as const,
+    hasAIAddon: true, // Enable AI features for testing
+    organizationId: null,
+    canExport: true,
+    canSubmit: false,
+    canAutoDetect: true,
+    isLoading: false,
+    refresh: jest.fn(),
+  }),
+}));
+
+// Mock useEmailOnboardingApi used by AppModals
+jest.mock("../../appCore/state/flows", () => ({
+  ...jest.requireActual("../../appCore/state/flows"),
+  useEmailOnboardingApi: () => ({
+    hasCompletedEmailOnboarding: true,
+    hasEmailConnected: true,
+    isCheckingEmailOnboarding: false,
+    setHasEmailConnected: jest.fn(),
+    setHasCompletedEmailOnboarding: jest.fn(),
+  }),
+}));
+
 // Default mock user data
 const mockUser = {
   id: "user-123",
@@ -102,7 +129,7 @@ const createAppStateMock = (overrides: Partial<AppStateMachine> = {}): AppStateM
     emailConnected: false,
     emailProvider: null,
   },
-  pendingEmailTokens: null,
+  // TASK-1603: pendingEmailTokens removed after flow reorder
 
   // Export
   exportResult: null,

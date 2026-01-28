@@ -121,6 +121,9 @@ interface ElectronAPI {
   onTransactionScanProgress: (
     callback: (progress: unknown) => void,
   ) => () => void;
+  onExportFolderProgress: (
+    callback: (progress: { stage: string; current: number; total: number; message: string }) => void,
+  ) => () => void;
 
   // File System
   openFolder: (folderPath: string) => Promise<{ success: boolean }>;
@@ -434,6 +437,13 @@ interface MainAPI {
         scopes: string;
       };
     }) => Promise<{ success: boolean; error?: string }>;
+
+    // TASK-1507: Deep link browser auth
+    /**
+     * Opens Supabase auth URL in the default browser
+     * Used for deep-link authentication flow
+     */
+    openAuthInBrowser: () => Promise<{ success: boolean; error?: string }>;
   };
   system: {
     // Platform detection (migrated from window.electron.platform)
@@ -488,8 +498,26 @@ interface MainAPI {
     }>;
     checkAllConnections: (userId: string) => Promise<{
       success: boolean;
-      google?: { connected: boolean; email?: string };
-      microsoft?: { connected: boolean; email?: string };
+      google?: {
+        connected: boolean;
+        email?: string;
+        error?: {
+          type: string;
+          userMessage: string;
+          action?: string;
+          actionHandler?: string;
+        } | null;
+      };
+      microsoft?: {
+        connected: boolean;
+        email?: string;
+        error?: {
+          type: string;
+          userMessage: string;
+          action?: string;
+          actionHandler?: string;
+        } | null;
+      };
       error?: string;
     }>;
     healthCheck: (
@@ -529,6 +557,13 @@ interface MainAPI {
     }>;
     showInFolder: (filePath: string) => Promise<{
       success: boolean;
+      error?: string;
+    }>;
+    /** Reindex database for performance optimization */
+    reindexDatabase: () => Promise<{
+      success: boolean;
+      indexesRebuilt?: number;
+      durationMs?: number;
       error?: string;
     }>;
   };
@@ -868,6 +903,76 @@ interface MainAPI {
     onError: (callback: (error: { message: string }) => void) => () => void;
   };
 
+  // Contacts API
+  contacts: {
+    getAll: (userId: string) => Promise<{
+      success: boolean;
+      contacts?: unknown[];
+      error?: string;
+    }>;
+    getAvailable: (userId: string) => Promise<{
+      success: boolean;
+      contacts?: unknown[];
+      contactsStatus?: unknown;
+      error?: string;
+    }>;
+    import: (userId: string, contactsToImport: unknown[]) => Promise<{
+      success: boolean;
+      contacts?: unknown[];
+      error?: string;
+    }>;
+    getSortedByActivity: (userId: string, propertyAddress?: string) => Promise<{
+      success: boolean;
+      contacts?: unknown[];
+      error?: string;
+    }>;
+    create: (userId: string, contactData: unknown) => Promise<{
+      success: boolean;
+      contact?: unknown;
+      error?: string;
+    }>;
+    update: (contactId: string, updates: unknown) => Promise<{
+      success: boolean;
+      contact?: unknown;
+      error?: string;
+    }>;
+    checkCanDelete: (contactId: string) => Promise<{
+      success: boolean;
+      canDelete?: boolean;
+      transactions?: unknown[];
+      count?: number;
+      error?: string;
+    }>;
+    delete: (contactId: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    remove: (contactId: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    getNamesByPhones: (phones: string[]) => Promise<{
+      success: boolean;
+      names: Record<string, string>;
+      error?: string;
+    }>;
+    /**
+     * Search contacts at database level (for selection modal)
+     * Enables searching beyond the initial LIMIT 200 contacts
+     * @param userId - User ID to search contacts for
+     * @param query - Search query (name, email, phone, company)
+     * @returns Matching contacts sorted by relevance
+     */
+    searchContacts: (userId: string, query: string) => Promise<{
+      success: boolean;
+      contacts?: unknown[];
+      error?: string;
+    }>;
+    onImportProgress: (
+      callback: (progress: { current: number; total: number; percent: number }) => void
+    ) => () => void;
+  };
+
   // Transactions API
   transactions: {
     getAll: (
@@ -999,7 +1104,15 @@ interface MainAPI {
     }>;
     exportEnhanced: (
       transactionId: string,
-      options: Record<string, unknown>,
+      options: {
+        exportFormat?: string;
+        contentType?: "text" | "email" | "both";
+        representationStartDate?: string;
+        closingDate?: string;
+        startDate?: string;
+        endDate?: string;
+        summaryOnly?: boolean;
+      },
     ) => Promise<{
       success: boolean;
       filePath?: string;
@@ -1062,12 +1175,390 @@ interface MainAPI {
       success: boolean;
       error?: string;
     }>;
+    /**
+     * Re-syncs auto-link communications for all contacts on a transaction.
+     * Useful when contacts have been updated with new email/phone info.
+     */
+    resyncAutoLink: (transactionId: string) => Promise<{
+      success: boolean;
+      contactsProcessed?: number;
+      totalEmailsLinked?: number;
+      totalMessagesLinked?: number;
+      totalAlreadyLinked?: number;
+      totalErrors?: number;
+      error?: string;
+    }>;
+
+    // ============================================
+    // SUBMISSION METHODS (BACKLOG-391)
+    // ============================================
+
+    /**
+     * Submit transaction to broker portal for review
+     */
+    submit: (transactionId: string) => Promise<{
+      success: boolean;
+      submissionId?: string;
+      messagesCount?: number;
+      attachmentsCount?: number;
+      attachmentsFailed?: number;
+      error?: string;
+    }>;
+
+    /**
+     * Resubmit transaction (creates new version)
+     */
+    resubmit: (transactionId: string) => Promise<{
+      success: boolean;
+      submissionId?: string;
+      messagesCount?: number;
+      attachmentsCount?: number;
+      attachmentsFailed?: number;
+      error?: string;
+    }>;
+
+    /**
+     * Get submission status from cloud
+     */
+    getSubmissionStatus: (submissionId: string) => Promise<{
+      success: boolean;
+      status?: string;
+      reviewNotes?: string;
+      reviewedBy?: string;
+      reviewedAt?: string;
+      error?: string;
+    }>;
+
+    /**
+     * Listen for submission progress updates
+     */
+    onSubmitProgress: (callback: (progress: {
+      stage: string;
+      stageProgress: number;
+      overallProgress: number;
+      currentItem?: string;
+    }) => void) => () => void;
+
+    // ============================================
+    // SYNC METHODS (BACKLOG-395)
+    // ============================================
+
+    /**
+     * Trigger manual sync of submission statuses
+     */
+    syncSubmissions: () => Promise<{
+      success: boolean;
+      updated?: number;
+      failed?: number;
+      details?: Array<{
+        transactionId: string;
+        propertyAddress: string;
+        oldStatus: string;
+        newStatus: string;
+        reviewNotes?: string;
+      }>;
+      error?: string;
+    }>;
+
+    /**
+     * Sync a specific transaction's submission status
+     */
+    syncSubmission: (transactionId: string) => Promise<{
+      success: boolean;
+      updated?: boolean;
+      error?: string;
+    }>;
+
+    /**
+     * Listen for submission status change events
+     */
+    onSubmissionStatusChanged: (callback: (data: {
+      transactionId: string;
+      propertyAddress: string;
+      oldStatus: string;
+      newStatus: string;
+      reviewNotes?: string;
+      title: string;
+      message: string;
+    }) => void) => () => void;
   };
 
   // Transaction scan progress event
   onTransactionScanProgress: (
     callback: (progress: { step: string; message: string }) => void,
   ) => () => void;
+
+  // Folder export progress event
+  onExportFolderProgress: (
+    callback: (progress: { stage: string; current: number; total: number; message: string }) => void,
+  ) => () => void;
+
+  // ==========================================
+  // DEEP LINK AUTH EVENTS (TASK-1500, enhanced TASK-1507)
+  // ==========================================
+
+  /**
+   * Listen for deep link auth callback with tokens and license status
+   * Fired when app receives magicaudit://callback and auth/license validation succeeds
+   * TASK-1507: Enhanced to include user, license, and device data
+   */
+  onDeepLinkAuthCallback: (
+    callback: (data: {
+      accessToken: string;
+      refreshToken: string;
+      userId?: string;
+      user?: {
+        id: string;
+        email?: string;
+        name?: string;
+      };
+      licenseStatus?: {
+        isValid: boolean;
+        licenseType: "trial" | "individual" | "team";
+        trialDaysRemaining?: number;
+        transactionCount: number;
+        transactionLimit: number;
+        canCreateTransaction: boolean;
+        deviceCount: number;
+        deviceLimit: number;
+        aiEnabled: boolean;
+        blockReason?: string;
+      };
+      device?: {
+        id: string;
+        device_id: string;
+        device_name: string | null;
+      };
+    }) => void,
+  ) => () => void;
+
+  /**
+   * Listen for deep link auth errors
+   * Fired when callback URL is invalid, tokens are missing, or auth fails
+   */
+  onDeepLinkAuthError: (
+    callback: (data: { error: string; code: "MISSING_TOKENS" | "INVALID_URL" | "INVALID_TOKENS" | "UNKNOWN_ERROR" }) => void,
+  ) => () => void;
+
+  /**
+   * Listen for deep link license blocked events (TASK-1507)
+   * Fired when user authenticates successfully but license is expired/suspended
+   */
+  onDeepLinkLicenseBlocked: (
+    callback: (data: {
+      accessToken: string;
+      refreshToken: string;
+      userId: string;
+      blockReason: string;
+      licenseStatus: {
+        isValid: boolean;
+        licenseType: "trial" | "individual" | "team";
+        blockReason?: string;
+      };
+    }) => void,
+  ) => () => void;
+
+  /**
+   * Listen for deep link device limit events (TASK-1507)
+   * Fired when user authenticates successfully but device registration fails due to limit
+   */
+  onDeepLinkDeviceLimit: (
+    callback: (data: {
+      accessToken: string;
+      refreshToken: string;
+      userId: string;
+      licenseStatus: {
+        isValid: boolean;
+        licenseType: "trial" | "individual" | "team";
+        deviceCount: number;
+        deviceLimit: number;
+      };
+    }) => void,
+  ) => () => void;
+
+  // User preferences API
+  user: {
+    /**
+     * Gets user's mobile phone type preference from local database
+     * @param userId - User ID to get phone type for
+     * @returns Phone type result
+     */
+    getPhoneType: (
+      userId: string
+    ) => Promise<{
+      success: boolean;
+      phoneType: "iphone" | "android" | null;
+      error?: string;
+    }>;
+
+    /**
+     * Sets user's mobile phone type preference in local database
+     * @param userId - User ID to set phone type for
+     * @param phoneType - Phone type ('iphone' | 'android')
+     * @returns Set result
+     */
+    setPhoneType: (
+      userId: string,
+      phoneType: "iphone" | "android"
+    ) => Promise<{ success: boolean; error?: string }>;
+
+    /**
+     * Gets user's phone type from Supabase cloud storage
+     * TASK-1600: Pre-DB phone type retrieval (available before local DB init)
+     * @param userId - User ID to get phone type for
+     * @returns Phone type result from Supabase user_preferences
+     */
+    getPhoneTypeCloud: (
+      userId: string
+    ) => Promise<{
+      success: boolean;
+      phoneType?: "iphone" | "android";
+      error?: string;
+    }>;
+
+    /**
+     * Sets user's phone type in Supabase cloud storage
+     * TASK-1600: Pre-DB phone type storage (always available after auth)
+     * @param userId - User ID to set phone type for
+     * @param phoneType - Phone type ('iphone' | 'android')
+     * @returns Set result
+     */
+    setPhoneTypeCloud: (
+      userId: string,
+      phoneType: "iphone" | "android"
+    ) => Promise<{ success: boolean; error?: string }>;
+  };
+
+  // License API
+  license: {
+    /** Get current user's license information */
+    get: () => Promise<{
+      success: boolean;
+      license?: {
+        license_type: "individual" | "team" | "enterprise";
+        ai_detection_enabled: boolean;
+        organization_id?: string;
+      };
+      error?: string;
+    }>;
+    /** Refresh license data from database */
+    refresh: () => Promise<{
+      success: boolean;
+      license?: {
+        license_type: "individual" | "team" | "enterprise";
+        ai_detection_enabled: boolean;
+        organization_id?: string;
+      };
+      error?: string;
+    }>;
+
+    // ============================================
+    // SPRINT-062: License Validation Methods
+    // ============================================
+
+    /** Validates the user's license status */
+    validate: (userId: string) => Promise<{
+      isValid: boolean;
+      licenseType: "trial" | "individual" | "team";
+      trialStatus?: "active" | "expired" | "converted";
+      trialDaysRemaining?: number;
+      transactionCount: number;
+      transactionLimit: number;
+      canCreateTransaction: boolean;
+      deviceCount: number;
+      deviceLimit: number;
+      aiEnabled: boolean;
+      blockReason?: "expired" | "limit_reached" | "no_license" | "suspended";
+    }>;
+
+    /** Creates a trial license for a new user */
+    create: (userId: string) => Promise<{
+      isValid: boolean;
+      licenseType: "trial" | "individual" | "team";
+      trialStatus?: "active" | "expired" | "converted";
+      trialDaysRemaining?: number;
+      transactionCount: number;
+      transactionLimit: number;
+      canCreateTransaction: boolean;
+      deviceCount: number;
+      deviceLimit: number;
+      aiEnabled: boolean;
+      blockReason?: "expired" | "limit_reached" | "no_license" | "suspended";
+    }>;
+
+    /** Increments the user's transaction count */
+    incrementTransactionCount: (userId: string) => Promise<number>;
+
+    /** Clears the license cache (call on logout) */
+    clearCache: () => Promise<void>;
+
+    /** Checks if an action is allowed based on license status */
+    canPerformAction: (
+      status: {
+        isValid: boolean;
+        licenseType: "trial" | "individual" | "team";
+        transactionCount: number;
+        transactionLimit: number;
+        canCreateTransaction: boolean;
+        deviceCount: number;
+        deviceLimit: number;
+        aiEnabled: boolean;
+        blockReason?: "expired" | "limit_reached" | "no_license" | "suspended";
+      },
+      action: "create_transaction" | "use_ai" | "export"
+    ) => Promise<boolean>;
+
+    // ============================================
+    // SPRINT-062: Device Registration Methods
+    // ============================================
+
+    /** Registers the current device for the user */
+    registerDevice: (userId: string) => Promise<{
+      success: boolean;
+      device?: {
+        id: string;
+        user_id: string;
+        device_id: string;
+        device_name: string | null;
+        os: string | null;
+        platform: "macos" | "windows" | "linux" | null;
+        app_version: string | null;
+        is_active: boolean;
+        last_seen_at: string;
+        activated_at: string;
+      };
+      error?: "device_limit_reached" | "already_registered" | "unknown";
+    }>;
+
+    /** Lists all registered devices for a user */
+    listRegisteredDevices: (userId: string) => Promise<Array<{
+      id: string;
+      user_id: string;
+      device_id: string;
+      device_name: string | null;
+      os: string | null;
+      platform: "macos" | "windows" | "linux" | null;
+      app_version: string | null;
+      is_active: boolean;
+      last_seen_at: string;
+      activated_at: string;
+    }>>;
+
+    /** Deactivates a device */
+    deactivateDevice: (userId: string, deviceId: string) => Promise<void>;
+
+    /** Deletes a device registration */
+    deleteDevice: (userId: string, deviceId: string) => Promise<void>;
+
+    /** Gets the current device's ID */
+    getCurrentDeviceId: () => Promise<string>;
+
+    /** Checks if the current device is registered */
+    isDeviceRegistered: (userId: string) => Promise<boolean>;
+
+    /** Sends a heartbeat to update device last_seen_at */
+    deviceHeartbeat: (userId: string) => Promise<void>;
+  };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any; // Allow other properties for backwards compatibility

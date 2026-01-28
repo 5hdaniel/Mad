@@ -1,6 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import type { ExtendedContact } from "../types/components";
-import { ImportContactsModal } from "./contact";
+import { ImportContactsModal, ContactFormModal } from "./contact";
+
+// Debounce delay for search (ms)
+const SEARCH_DEBOUNCE_MS = 300;
 
 interface ContactSelectModalProps {
   contacts: ExtendedContact[];
@@ -28,6 +31,9 @@ interface ContactSelectModalProps {
  * - Displays last communication date
  * - Checkbox-based selection with visual feedback
  */
+// LocalStorage key for toggle persistence
+const SHOW_MESSAGE_CONTACTS_KEY = "contactModal.showMessageContacts";
+
 function ContactSelectModal({
   contacts,
   excludeIds = [],
@@ -41,6 +47,97 @@ function ContactSelectModal({
 }: ContactSelectModalProps) {
   const [searchQuery, setSearchQuery] = React.useState("");
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showAddContactModal, setShowAddContactModal] = useState(false);
+  // Track IDs to auto-select after import (cleared once contacts refresh)
+  const [pendingAutoSelectIds, setPendingAutoSelectIds] = useState<string[]>([]);
+
+  // Toggle for showing message-derived contacts (default: hide them)
+  const [showMessageContacts, setShowMessageContacts] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem(SHOW_MESSAGE_CONTACTS_KEY);
+      return stored === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  // Persist toggle state to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(SHOW_MESSAGE_CONTACTS_KEY, String(showMessageContacts));
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, [showMessageContacts]);
+
+  // Database search state
+  const [searchResults, setSearchResults] = useState<ExtendedContact[] | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounced database search
+  const performDatabaseSearch = useCallback(async (query: string) => {
+    if (!userId) {
+      setSearchResults(null);
+      return;
+    }
+
+    // For short queries, clear search results and use client-side filter
+    if (query.length < 2) {
+      setSearchResults(null);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      // Use the contacts:search IPC handler via the bridge
+      // Type assertion needed because window.d.ts types may be out of sync with contactBridge
+      const contactsApi = window.api.contacts as unknown as {
+        searchContacts: (userId: string, query: string) => Promise<{
+          success: boolean;
+          contacts?: ExtendedContact[];
+          error?: string;
+        }>;
+      };
+      const result = await contactsApi.searchContacts(userId, query);
+      if (result.success && result.contacts) {
+        setSearchResults(result.contacts);
+      } else {
+        // On error, fall back to client-side filtering
+        setSearchResults(null);
+      }
+    } catch (error) {
+      console.error("Database search failed:", error);
+      setSearchResults(null);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [userId]);
+
+  // Handle search input change with debounce
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchQuery(value);
+
+    // Clear existing timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // Set new debounced search
+    searchTimeoutRef.current = setTimeout(() => {
+      performDatabaseSearch(value);
+    }, SEARCH_DEBOUNCE_MS);
+  }, [performDatabaseSearch]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Create a set of valid contact IDs for O(1) lookup
   const validContactIds = React.useMemo(
@@ -62,17 +159,63 @@ function ContactSelectModal({
   const initialIdsKey = validInitialIds.join(',');
   React.useEffect(() => {
     setSelectedIds(validInitialIds);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- using stable string key intentionally
   }, [initialIdsKey]);
+
+  // Auto-select imported contacts once they appear in the contacts list
+  // This runs after import completes and contacts are refreshed
+  React.useEffect(() => {
+    if (pendingAutoSelectIds.length > 0) {
+      // Check which pending IDs are now available in the contacts list
+      const idsToSelect = pendingAutoSelectIds.filter((id) =>
+        validContactIds.has(id)
+      );
+
+      if (idsToSelect.length > 0) {
+        // Add the imported contacts to selected (using Set to avoid duplicates)
+        setSelectedIds((prev) => [...new Set([...prev, ...idsToSelect])]);
+        // Clear pending IDs that were successfully selected
+        setPendingAutoSelectIds((prev) =>
+          prev.filter((id) => !validContactIds.has(id))
+        );
+      }
+    }
+  }, [pendingAutoSelectIds, validContactIds]);
 
   const availableContacts = contacts.filter((c) => !excludeIds.includes(c.id));
 
-  const filteredContacts = availableContacts.filter(
-    (c) =>
-      c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.company?.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  // Helper to check if a contact is message-derived
+  const isMessageDerived = (contact: ExtendedContact): boolean => {
+    // is_message_derived can be number (1) or boolean (true)
+    return contact.is_message_derived === 1 || contact.is_message_derived === true;
+  };
+
+  // Use database search results if available, otherwise filter client-side
+  const filteredContacts = React.useMemo(() => {
+    let result: ExtendedContact[];
+
+    if (searchResults !== null) {
+      // Database search results - filter out excluded IDs
+      result = searchResults.filter((c) => !excludeIds.includes(c.id));
+    } else if (!searchQuery) {
+      // No search query - use all available contacts
+      result = availableContacts;
+    } else {
+      // Client-side filtering for short queries
+      result = availableContacts.filter(
+        (c) =>
+          c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          c.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          c.company?.toLowerCase().includes(searchQuery.toLowerCase()),
+      );
+    }
+
+    // Apply message-derived filter if toggle is off
+    if (!showMessageContacts) {
+      result = result.filter((c) => !isMessageDerived(c));
+    }
+
+    return result;
+  }, [searchResults, searchQuery, availableContacts, excludeIds, showMessageContacts]);
 
   const handleToggleContact = (contactId: string) => {
     if (multiple) {
@@ -93,7 +236,7 @@ function ContactSelectModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl h-[70vh] max-h-[80vh] flex flex-col">
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-purple-500 to-pink-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <div>
@@ -134,24 +277,57 @@ function ContactSelectModal({
                 type="text"
                 placeholder="Search contacts by name, email, or company..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 autoFocus
               />
-              <svg
-                className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
+              {/* Search icon - shows spinner when searching */}
+              {isSearching ? (
+                <svg
+                  className="w-5 h-5 text-purple-500 absolute left-3 top-2.5 animate-spin"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+              ) : (
+                <svg
+                  className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+              )}
             </div>
+            {/* Toggle for message-derived contacts */}
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none flex-shrink-0 whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={showMessageContacts}
+                onChange={(e) => setShowMessageContacts(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+              />
+              <span>Include message contacts</span>
+            </label>
             {/* Import Contacts Button */}
             {userId && (
               <button
@@ -273,9 +449,6 @@ function ContactSelectModal({
                             )}
                         </div>
                         <div className="text-sm text-gray-600 space-y-0.5">
-                          {contact.email && (
-                            <p className="truncate">{contact.email}</p>
-                          )}
                           {contact.company && (
                             <p className="truncate">{contact.company}</p>
                           )}
@@ -324,14 +497,31 @@ function ContactSelectModal({
         <ImportContactsModal
           userId={userId}
           onClose={() => setShowImportModal(false)}
-          onSuccess={() => {
+          onSuccess={(importedContactIds) => {
             setShowImportModal(false);
+            // Store imported IDs for auto-selection after refresh
+            setPendingAutoSelectIds(importedContactIds);
+            // Refresh contacts list to include newly imported contacts
             onRefreshContacts?.();
           }}
           onAddManually={() => {
-            // For now, just close the import modal
-            // The user can add contacts manually from the Contacts page
+            // Close import modal and open contact form modal
             setShowImportModal(false);
+            setShowAddContactModal(true);
+          }}
+        />
+      )}
+
+      {/* Add Contact Form Modal */}
+      {showAddContactModal && userId && (
+        <ContactFormModal
+          userId={userId}
+          contact={undefined}
+          onClose={() => setShowAddContactModal(false)}
+          onSuccess={() => {
+            setShowAddContactModal(false);
+            // Refresh contacts list to include newly created contact
+            onRefreshContacts?.();
           }}
         />
       )}

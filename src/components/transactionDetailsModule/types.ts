@@ -52,12 +52,18 @@ export interface TransactionDetailsProps {
   onShowSuccess?: (message: string) => void;
   /** Toast handler for error messages - if provided, uses parent's toast system */
   onShowError?: (message: string) => void;
+  /** Initial tab to display when opening TransactionDetails */
+  initialTab?: TransactionTab;
 }
 
 /**
  * Tab types for transaction details view
+ * - overview: Audit dates, AI suggestions, and contacts summary (default)
+ * - messages: Text conversations
+ * - emails: Email threads
+ * - attachments: File attachments (hidden)
  */
-export type TransactionTab = "details" | "contacts" | "messages" | "attachments";
+export type TransactionTab = "overview" | "messages" | "emails" | "attachments";
 
 /**
  * Communication type for local use

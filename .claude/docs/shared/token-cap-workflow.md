@@ -22,7 +22,7 @@ This is a **soft cap**: engineers report and wait, they don't crash.
 ### Tracking Your Token Usage
 
 1. Note the estimated tokens from the task file
-2. Monitor your token usage via SubagentStop hook data in `.claude/metrics/tokens.jsonl`
+2. Monitor your token usage via SubagentStop hook data in `.claude/metrics/tokens.csv` (or use `/log-metrics --summary`)
 3. Be aware of token-heavy operations:
    - Long file reads (~2-5K tokens each)
    - Verbose command output

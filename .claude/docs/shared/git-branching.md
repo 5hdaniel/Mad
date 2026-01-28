@@ -204,7 +204,7 @@ Before creating a PR, always sync with target branch:
 git fetch origin
 git merge origin/develop  # or origin/main for hotfixes
 
-# If conflicts exist, resolve them NOW
+# If conflicts exist, resolve them NOW (see Merge Conflict Resolution below)
 # Run tests locally
 npm run type-check
 npm test
@@ -212,6 +212,76 @@ npm test
 # Then push
 git push
 ```
+
+---
+
+## Merge Conflict Resolution (CRITICAL)
+
+> **Incident Reference:** SPRINT-054 Phase 0 - Multiple fixes from PR #573 were lost when `git checkout --theirs` was used to resolve conflicts, discarding all changes from the feature branch.
+
+### Never Use `--theirs` or `--ours` Blindly
+
+When resolving merge conflicts, **DO NOT** blindly accept one side:
+
+```bash
+# DANGEROUS - loses all your branch's changes to this file
+git checkout --theirs path/to/file.tsx
+
+# DANGEROUS - loses all incoming changes from develop
+git checkout --ours path/to/file.tsx
+```
+
+### When `--theirs`/`--ours` IS Acceptable
+
+| Situation | Acceptable? | Example |
+|-----------|-------------|---------|
+| File was only changed on one branch | Yes | Config file updated on develop, not touched in feature |
+| Your changes are obsolete/replaced | Yes | Develop has a complete rewrite of a component you lightly modified |
+| You're intentionally discarding your work | Yes | Abandoning an approach that didn't work |
+
+### Proper Conflict Resolution Process
+
+1. **Examine the conflict markers** - understand what both sides changed:
+   ```
+   <<<<<<< HEAD (your branch)
+   // Your changes
+   =======
+   // Incoming changes from develop
+   >>>>>>> origin/develop
+   ```
+
+2. **Merge manually** - keep changes from BOTH sides where appropriate
+
+3. **Test after resolution**:
+   ```bash
+   npm run type-check
+   npm test
+   npm run dev  # Manual smoke test
+   ```
+
+4. **Review the diff before committing**:
+   ```bash
+   git diff --cached  # See what you're about to commit
+   ```
+
+### Common Merge Conflict Scenarios
+
+| Scenario | Resolution Approach |
+|----------|---------------------|
+| Both sides added imports | Keep all imports (remove duplicates) |
+| Both sides modified same function | Manually integrate both changes |
+| Develop refactored, you added feature | Apply your feature to the refactored code |
+| Both sides added to same list/array | Include items from both sides |
+
+### Post-Merge Verification Checklist
+
+After resolving conflicts, verify no fixes were lost:
+
+- [ ] All features from your branch still work
+- [ ] All features from develop still work
+- [ ] Run full test suite
+- [ ] Manual smoke test of affected functionality
+- [ ] Review git log to confirm your commits are present
 
 ---
 

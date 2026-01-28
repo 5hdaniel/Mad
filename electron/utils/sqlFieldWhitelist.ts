@@ -44,6 +44,10 @@ export const TABLE_FIELDS = {
     "mobile_phone_type",
     "last_cloud_sync_at",
     "email_onboarding_completed_at",
+    // License fields (BACKLOG-426)
+    "license_type",
+    "ai_detection_enabled",
+    "organization_id",
   ]),
 
   oauth_tokens: new Set([
@@ -119,7 +123,6 @@ export const TABLE_FIELDS = {
     "created_at",
     "updated_at",
     // Extended fields used in application (from migrations/updates)
-    "representation_start_date",
     "closing_date_verified",
     "representation_start_confidence",
     "closing_date_confidence",

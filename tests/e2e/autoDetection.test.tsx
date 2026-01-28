@@ -54,7 +54,7 @@ const mockPendingTransaction = {
   transaction_type: 'purchase' as const,
   status: 'active' as const,
   sale_price: 450000,
-  closing_date: '2024-03-15',
+  closed_at: '2024-03-15',
   total_communications_count: 25,
   extraction_confidence: 85,
   detection_source: 'auto' as const,
@@ -85,7 +85,7 @@ const mockConfirmedTransaction = {
   transaction_type: 'sale' as const,
   status: 'active' as const,
   sale_price: 325000,
-  closing_date: '2024-01-20',
+  closed_at: '2024-01-20',
   total_communications_count: 18,
   extraction_confidence: 92,
   detection_source: 'auto' as const,
@@ -114,7 +114,7 @@ const mockRejectedTransaction = {
   transaction_type: 'purchase' as const,
   status: 'active' as const,
   sale_price: 275000,
-  closing_date: null,
+  closed_at: null,
   total_communications_count: 5,
   extraction_confidence: 45,
   detection_source: 'auto' as const,
@@ -528,14 +528,9 @@ describe('Auto-Detection E2E Flow', () => {
       await user.clear(addressInput);
       await user.type(addressInput, '456 Updated Street, San Francisco, CA 94102');
 
-      // Click continue to proceed through steps
-      const continueButton = screen.getByRole('button', { name: /continue/i });
-      await user.click(continueButton);
-
-      // Wait for step 2
-      await waitFor(() => {
-        expect(screen.getByText(/step 2/i)).toBeInTheDocument();
-      });
+      // In edit mode, Save Changes is shown directly (no multi-step flow)
+      const saveButton = screen.getByRole('button', { name: /save changes/i });
+      await user.click(saveButton);
     });
   });
 

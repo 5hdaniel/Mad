@@ -3,10 +3,13 @@
  *
  * Manages authentication-related state and handlers.
  * Handles login success, pending OAuth, logout, and terms acceptance.
+ *
+ * TASK-1612: Migrated to use authService instead of direct window.api calls.
  */
 
 import { useState, useCallback, useMemo } from "react";
-import type { PendingOAuthData } from "../../../components/Login";
+import { authService } from "@/services";
+import type { PendingOAuthData, DeepLinkAuthData } from "../../../components/Login";
 import type { Subscription } from "../../../../electron/types/models";
 import type { PendingOnboardingData, AppStep } from "../types";
 import type { User, PlatformInfo, AppAction } from "../machine/types";
@@ -79,6 +82,8 @@ export interface UseAuthFlowReturn {
     isNewUser: boolean,
   ) => void;
   handleLoginPending: (oauthData: PendingOAuthData) => void;
+  /** TASK-1507B: Handle deep link auth success from browser OAuth flow */
+  handleDeepLinkAuthSuccess: (data: DeepLinkAuthData) => void;
   handleLogout: () => Promise<void>;
   handleAcceptTerms: () => Promise<void>;
   handleDeclineTerms: () => Promise<void>;
@@ -155,25 +160,94 @@ export function useAuthFlow({
     [],
   );
 
+  /**
+   * TASK-1507B: Handle successful deep link authentication
+   * Called when browser OAuth completes and returns via deep link with license validation.
+   * NOTE: Token storage is already handled by the backend (setSession) - we just update UI state.
+   */
+  const handleDeepLinkAuthSuccess = useCallback(
+    (data: DeepLinkAuthData): void => {
+      console.log("[useAuthFlow] Deep link auth success", { userId: data.userId || data.user?.id });
+
+      // Clear any pending OAuth data
+      setPendingOAuthData(null);
+
+      // BACKLOG-546: Use isNewUser from backend (based on terms acceptance)
+      // Fallback to transaction count only if not provided (backwards compatibility)
+      const isNewUser = data.isNewUser ?? (!data.licenseStatus || data.licenseStatus.transactionCount === 0);
+      setIsNewUserFlow(isNewUser);
+
+      // TASK-1507C: Call login() to set currentUser in AuthContext
+      // This is required for downstream handlers (email connection) to work
+      if (data.user) {
+        const user = {
+          id: data.user.id,
+          email: data.user.email || "",
+          display_name: data.user.name,
+        };
+        // Provider from Supabase app_metadata (google, azure, etc), fallback to google
+        // Subscription: Not available in deep link data, will be fetched separately
+        login(
+          user,
+          data.accessToken,
+          data.provider || "google",
+          undefined,
+          isNewUser
+        );
+      }
+
+      // Dispatch LOGIN_SUCCESS to state machine if dispatch is available
+      // This transitions the state machine from unauthenticated to loading-user-data
+      if (stateMachineDispatch && platform && data.user) {
+        const stateMachineUser: User = {
+          id: data.user.id,
+          email: data.user.email || "",
+          displayName: data.user.name,
+        };
+
+        const platformInfo: PlatformInfo = {
+          isMacOS: platform.isMacOS,
+          isWindows: platform.isWindows,
+          hasIPhone: false, // Determined during onboarding
+        };
+
+        stateMachineDispatch({
+          type: "LOGIN_SUCCESS",
+          user: stateMachineUser,
+          platform: platformInfo,
+          isNewUser,
+        });
+      }
+
+      // Navigate to the appropriate step
+      // New users go to onboarding (phone type selection), returning users go to dashboard
+      if (isNewUser) {
+        onSetCurrentStep("phone-type-selection");
+      } else {
+        onSetCurrentStep("dashboard");
+      }
+    },
+    [login, stateMachineDispatch, platform, onSetCurrentStep],
+  );
+
   const handleLogout = useCallback(async (): Promise<void> => {
     await logout();
+    // Dispatch LOGOUT to state machine to transition to "unauthenticated"
+    // This ensures the UI reflects the logged-out state (redirects to login screen)
+    if (stateMachineDispatch) {
+      stateMachineDispatch({ type: "LOGOUT" });
+    }
     onCloseProfile();
     setIsNewUserFlow(false);
     onSetHasSelectedPhoneType(false);
     onSetSelectedPhoneType(null);
     onSetCurrentStep("login");
-  }, [logout, onCloseProfile, onSetHasSelectedPhoneType, onSetSelectedPhoneType, onSetCurrentStep]);
+  }, [logout, stateMachineDispatch, onCloseProfile, onSetHasSelectedPhoneType, onSetSelectedPhoneType, onSetCurrentStep]);
 
   const handleAcceptTerms = useCallback(async (): Promise<void> => {
     try {
       if (pendingOAuthData && !isAuthenticated) {
-        const authApi = window.api.auth as typeof window.api.auth & {
-          acceptTermsToSupabase: (userId: string) => Promise<{
-            success: boolean;
-            error?: string;
-          }>;
-        };
-        const result = await authApi.acceptTermsToSupabase(
+        const result = await authService.acceptTermsToSupabase(
           pendingOAuthData.cloudUser.id,
         );
         if (result.success) {
@@ -215,6 +289,7 @@ export function useAuthFlow({
       setPendingOnboardingData,
       handleLoginSuccess,
       handleLoginPending,
+      handleDeepLinkAuthSuccess,
       handleLogout,
       handleAcceptTerms,
       handleDeclineTerms,
@@ -225,6 +300,7 @@ export function useAuthFlow({
       pendingOnboardingData,
       handleLoginSuccess,
       handleLoginPending,
+      handleDeepLinkAuthSuccess,
       handleLogout,
       handleAcceptTerms,
       handleDeclineTerms,

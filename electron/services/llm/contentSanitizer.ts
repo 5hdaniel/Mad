@@ -34,6 +34,9 @@ interface PatternConfig {
 }
 
 // PII detection patterns
+// IMPORTANT: Order matters! More specific patterns should come before general ones.
+// Bank account pattern comes first because it has contextual keywords that distinguish
+// it from generic number sequences that might be caught by phone/SSN patterns.
 const PII_PATTERNS: PatternConfig[] = [
   // Email addresses
   {
@@ -47,23 +50,20 @@ const PII_PATTERNS: PatternConfig[] = [
       return `[EMAIL:${maskedLocal}@${maskedDomain}]`;
     },
   },
-  // Phone numbers (various formats)
+  // Bank account numbers with context awareness (TASK-1075)
+  // MUST come before phone/SSN to prevent false matches on account numbers
+  // Requires preceding keywords to avoid false positives on IDs, timestamps, etc.
   {
-    pattern: /(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}/g,
-    type: 'phone',
-    maskFn: (phone) => {
-      // Keep last 4 digits for context
-      const digits = phone.replace(/\D/g, '');
-      return `[PHONE:***-***-${digits.slice(-4)}]`;
+    pattern: /(?:account|acct|routing|aba)(?:\s*(?:number|num|no|#|:))?\s*[:# ]?\s*(\d{8,17})\b/gi,
+    type: 'bank_account',
+    maskFn: (match) => {
+      // Extract just the digits from the full match
+      const digits = match.replace(/\D/g, '');
+      return match.replace(/\d{8,17}/, `[ACCOUNT:****${digits.slice(-4)}]`);
     },
   },
-  // SSN
-  {
-    pattern: /\b\d{3}[-\s]?\d{2}[-\s]?\d{4}\b/g,
-    type: 'ssn',
-    maskFn: () => '[SSN:***-**-****]',
-  },
-  // Credit card numbers
+  // Credit card numbers (16 digits with optional separators)
+  // MUST come before phone to prevent partial matches
   {
     pattern: /\b(?:\d{4}[-\s]?){3}\d{4}\b/g,
     type: 'credit_card',
@@ -72,12 +72,20 @@ const PII_PATTERNS: PatternConfig[] = [
       return `[CARD:****-****-****-${digits.slice(-4)}]`;
     },
   },
-  // Bank account numbers (basic pattern - 8-17 digits)
+  // SSN (9 digits in specific format)
   {
-    pattern: /\b\d{8,17}\b/g,
-    type: 'bank_account',
-    maskFn: (account) => {
-      return `[ACCOUNT:****${account.slice(-4)}]`;
+    pattern: /\b\d{3}[-\s]?\d{2}[-\s]?\d{4}\b/g,
+    type: 'ssn',
+    maskFn: () => '[SSN:***-**-****]',
+  },
+  // Phone numbers (various formats)
+  {
+    pattern: /(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}/g,
+    type: 'phone',
+    maskFn: (phone) => {
+      // Keep last 4 digits for context
+      const digits = phone.replace(/\D/g, '');
+      return `[PHONE:***-***-${digits.slice(-4)}]`;
     },
   },
   // IP addresses

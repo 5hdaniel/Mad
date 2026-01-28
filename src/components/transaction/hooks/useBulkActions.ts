@@ -2,7 +2,7 @@
  * Custom hook for managing bulk transaction actions
  * Handles bulk delete, export, and status change operations
  */
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 
 /**
  * Return type for useBulkActions hook
@@ -14,6 +14,8 @@ export interface UseBulkActionsResult {
   isBulkExporting: boolean;
   /** Whether bulk status update is in progress */
   isBulkUpdating: boolean;
+  /** Success message from last bulk action (auto-clears after 5 seconds) */
+  bulkActionSuccess: string | null;
   /** Handle bulk delete of selected transactions */
   handleBulkDelete: () => Promise<void>;
   /** Handle bulk export of selected transactions */
@@ -28,8 +30,6 @@ export interface UseBulkActionsResult {
 export interface UseBulkActionsCallbacks {
   /** Callback after successful bulk action (to refresh transactions) */
   onComplete: () => Promise<void>;
-  /** Callback to show success message */
-  showSuccess: (message: string) => void;
   /** Callback to show error message */
   showError: (message: string | null) => void;
   /** Callback to exit selection mode */
@@ -55,10 +55,34 @@ export function useBulkActions(
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [isBulkExporting, setIsBulkExporting] = useState(false);
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+  const [bulkActionSuccess, setBulkActionSuccess] = useState<string | null>(null);
+
+  // Ref for auto-clear timeout
+  const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (successTimeoutRef.current) {
+        clearTimeout(successTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Internal helper to show success with auto-clear after 5 seconds
+  const showSuccessWithAutoClear = useCallback((message: string) => {
+    // Clear any existing timeout
+    if (successTimeoutRef.current) {
+      clearTimeout(successTimeoutRef.current);
+    }
+    setBulkActionSuccess(message);
+    successTimeoutRef.current = setTimeout(() => {
+      setBulkActionSuccess(null);
+    }, 5000);
+  }, []);
 
   const {
     onComplete,
-    showSuccess,
     showError,
     exitSelectionMode,
     closeBulkDeleteModal,
@@ -78,7 +102,7 @@ export function useBulkActions(
       );
 
       if (result.success) {
-        showSuccess(
+        showSuccessWithAutoClear(
           `Successfully deleted ${result.deletedCount || selectedCount} transaction${(result.deletedCount || selectedCount) > 1 ? "s" : ""}`
         );
         exitSelectionMode();
@@ -96,7 +120,7 @@ export function useBulkActions(
     selectedIds,
     selectedCount,
     onComplete,
-    showSuccess,
+    showSuccessWithAutoClear,
     showError,
     exitSelectionMode,
     closeBulkDeleteModal,
@@ -132,7 +156,7 @@ export function useBulkActions(
         }
 
         if (successCount > 0) {
-          showSuccess(
+          showSuccessWithAutoClear(
             `Successfully exported ${successCount} transaction${successCount > 1 ? "s" : ""}${errors.length > 0 ? ` (${errors.length} failed)` : ""}`
           );
           exitSelectionMode();
@@ -151,7 +175,7 @@ export function useBulkActions(
       selectedIds,
       selectedCount,
       onComplete,
-      showSuccess,
+      showSuccessWithAutoClear,
       showError,
       exitSelectionMode,
       closeBulkExportModal,
@@ -173,7 +197,7 @@ export function useBulkActions(
         );
 
         if (result.success) {
-          showSuccess(
+          showSuccessWithAutoClear(
             `Successfully updated ${result.updatedCount || selectedCount} transaction${(result.updatedCount || selectedCount) > 1 ? "s" : ""} to ${status}`
           );
           exitSelectionMode();
@@ -187,13 +211,14 @@ export function useBulkActions(
         setIsBulkUpdating(false);
       }
     },
-    [selectedIds, selectedCount, onComplete, showSuccess, showError, exitSelectionMode]
+    [selectedIds, selectedCount, onComplete, showSuccessWithAutoClear, showError, exitSelectionMode]
   );
 
   return {
     isBulkDeleting,
     isBulkExporting,
     isBulkUpdating,
+    bulkActionSuccess,
     handleBulkDelete,
     handleBulkExport,
     handleBulkStatusChange,

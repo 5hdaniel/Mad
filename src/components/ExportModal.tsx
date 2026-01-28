@@ -18,23 +18,37 @@ function ExportModal({
   onClose,
   onExportComplete,
 }: ExportModalProps) {
-  const [step, setStep] = useState(1); // 1: Date Verification, 2: Export Options, 3: Exporting
-  const [representationStartDate, setRepresentationStartDate] = useState(
-    transaction.representation_start_date
-      ? typeof transaction.representation_start_date === "string"
-        ? transaction.representation_start_date
-        : transaction.representation_start_date.toISOString().split("T")[0]
+  const [step, setStep] = useState(1); // 1: Date Verification, 2: Export Options, 3: Exporting, 4: Close Prompt, 5: Success
+
+  // Start Date (started_at) - when agent began working on transaction
+  const [startDate, setStartDate] = useState(
+    transaction.started_at
+      ? typeof transaction.started_at === "string"
+        ? transaction.started_at.split("T")[0]
+        : transaction.started_at.toISOString().split("T")[0]
       : "",
   );
+
+  // Closing Date (closing_deadline) - scheduled/expected closing date
   const [closingDate, setClosingDate] = useState(
-    transaction.closing_date
-      ? typeof transaction.closing_date === "string"
-        ? transaction.closing_date
-        : transaction.closing_date.toISOString().split("T")[0]
+    transaction.closing_deadline
+      ? typeof transaction.closing_deadline === "string"
+        ? transaction.closing_deadline.split("T")[0]
+        : transaction.closing_deadline.toISOString().split("T")[0]
       : "",
   );
+
+  // End Date (closed_at) - when transaction actually ended (for filtering)
+  const [endDate, setEndDate] = useState(
+    transaction.closed_at
+      ? typeof transaction.closed_at === "string"
+        ? transaction.closed_at.split("T")[0]
+        : transaction.closed_at.toISOString().split("T")[0]
+      : "",
+  );
+
   const [contentType, setContentType] = useState("both"); // text, email, both
-  const [exportFormat, setExportFormat] = useState("pdf"); // pdf, excel, csv, json, txt_eml, folder
+  const [exportFormat, setExportFormat] = useState("folder"); // folder, pdf, excel, csv, json, txt_eml
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exportProgress, setExportProgress] = useState<{
@@ -43,6 +57,10 @@ function ExportModal({
     total: number;
     message: string;
   } | null>(null);
+  const [exportedPath, setExportedPath] = useState<string | null>(null);
+
+  // Formats that are currently implemented
+  const implementedFormats = ["pdf", "folder"];
 
   // Load user preferences to set default export format
   useEffect(() => {
@@ -54,13 +72,14 @@ function ExportModal({
             const prefs = result.preferences as {
               export?: { defaultFormat?: string };
             };
-            if (prefs.export?.defaultFormat) {
+            // Only use saved preference if it's an implemented format
+            if (prefs.export?.defaultFormat && implementedFormats.includes(prefs.export.defaultFormat)) {
               setExportFormat(prefs.export.defaultFormat);
             }
           }
         } catch (error) {
           console.error("Failed to load export format preference:", error);
-          // If loading fails, keep the default 'pdf' format
+          // If loading fails, keep the default 'folder' format
         }
       }
     };
@@ -68,9 +87,24 @@ function ExportModal({
     loadDefaultFormat();
   }, [userId]);
 
+  // Listen for folder export progress events
+  useEffect(() => {
+    if (exporting && exportFormat === "folder") {
+      const cleanup = window.api.onExportFolderProgress((progress) => {
+        setExportProgress(progress);
+      });
+      return cleanup;
+    }
+  }, [exporting, exportFormat]);
+
   const handleDateVerification = () => {
-    if (!representationStartDate || !closingDate) {
-      setError("Please provide both dates to continue");
+    if (!startDate || !endDate) {
+      setError("Please provide Start Date and End Date to continue");
+      return;
+    }
+    // Validate end date is after start date
+    if (startDate > endDate) {
+      setError("End Date must be after Start Date");
       return;
     }
     setError(null);
@@ -85,11 +119,21 @@ function ExportModal({
 
     try {
       // Update transaction dates first
-      await window.api.transactions.update(transaction.id, {
-        representation_start_date: representationStartDate,
-        closing_date: closingDate,
+      const updateData = {
+        started_at: startDate,
+        closing_deadline: closingDate || null,
+        closed_at: endDate,
         closing_date_verified: 1,
-      });
+      };
+
+      const updateResult = await window.api.transactions.update(transaction.id, updateData);
+
+      if (!updateResult.success) {
+        setError(`Failed to save dates: ${updateResult.error}`);
+        setStep(1);
+        setExporting(false);
+        return;
+      }
 
       let result;
 
@@ -97,23 +141,42 @@ function ExportModal({
         // Use folder export for comprehensive audit package
         // Note: Type cast needed due to type inference issue with window.d.ts
         const exportFolderFn = (window.api.transactions as unknown as {
-          exportFolder: (id: string, opts: { includeEmails: boolean; includeTexts: boolean; includeAttachments: boolean }) => Promise<{ success: boolean; path?: string; error?: string }>;
+          exportFolder: (id: string, opts: { includeEmails: boolean; includeTexts: boolean; includeAttachments: boolean; startDate?: string; endDate?: string }) => Promise<{ success: boolean; path?: string; error?: string }>;
         }).exportFolder;
         result = await exportFolderFn(transaction.id, {
           includeEmails: contentType === "email" || contentType === "both",
           includeTexts: contentType === "text" || contentType === "both",
           includeAttachments: true,
+          startDate,
+          endDate,
         });
       } else {
         // Use enhanced export for single-file formats
+        // Pass dates to enable date range filtering for PDF exports
+        // summaryOnly: true for "pdf" format means only report + indexes (no full content)
         result = await window.api.transactions.exportEnhanced(
           transaction.id,
-          { exportFormat },
+          {
+            exportFormat,
+            startDate,
+            endDate,
+            summaryOnly: exportFormat === "pdf",
+          } as Parameters<typeof window.api.transactions.exportEnhanced>[1],
         );
       }
 
       if (result.success) {
-        onExportComplete(result);
+        // Store the exported path for the success screen
+        // Handle both 'path' (folder export) and 'filePath' (PDF export) response shapes
+        const exportPath = result.path || (result as { filePath?: string }).filePath || null;
+        setExportedPath(exportPath);
+
+        // Check if transaction is already closed - if so, skip to success
+        if (transaction.status === "closed") {
+          setStep(5); // Go directly to success
+        } else {
+          setStep(4); // Go to close prompt
+        }
       } else {
         setError(result.error || "Export failed");
         setStep(2);
@@ -126,6 +189,31 @@ function ExportModal({
       setExporting(false);
       setExportProgress(null);
     }
+  };
+
+  // Handle closing transaction after export
+  const handleCloseTransaction = async (shouldClose: boolean) => {
+    if (shouldClose) {
+      try {
+        await window.api.transactions.update(transaction.id, { status: "closed" });
+      } catch (err) {
+        console.error("Failed to close transaction:", err);
+        // Continue to success screen even if closing fails
+      }
+    }
+    setStep(5); // Move to success screen
+  };
+
+  // Handle opening the exported file in Finder
+  const handleOpenInFinder = () => {
+    if (exportedPath) {
+      window.api.shell.openFolder(exportedPath);
+    }
+  };
+
+  // Handle final dismissal - call onExportComplete and close
+  const handleDismissSuccess = () => {
+    onExportComplete({ success: true, path: exportedPath });
   };
 
   const formatConfidence = (confidence?: number) => {
@@ -187,16 +275,17 @@ function ExportModal({
                   Verify Transaction Dates
                 </h4>
                 <p className="text-sm text-gray-600 mb-6">
-                  These dates will be used to filter communications included in
-                  your audit export.
+                  Communications will be filtered to only include those between
+                  Start Date and End Date.
                 </p>
               </div>
 
               <div className="space-y-4">
+                {/* Start Date */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="block text-sm font-medium text-gray-700">
-                      Representation Start Date *
+                      Start Date *
                     </label>
                     {transaction.representation_start_confidence &&
                       formatConfidence(
@@ -216,8 +305,8 @@ function ExportModal({
                   </div>
                   <input
                     type="date"
-                    value={representationStartDate}
-                    onChange={(e) => setRepresentationStartDate(e.target.value)}
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                   />
                   <p className="mt-1 text-xs text-gray-500">
@@ -226,10 +315,11 @@ function ExportModal({
                   </p>
                 </div>
 
+                {/* Closing Date (optional) */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="block text-sm font-medium text-gray-700">
-                      Closing Date *
+                      Closing Date
                     </label>
                     {transaction.closing_date_confidence &&
                       formatConfidence(transaction.closing_date_confidence) && (
@@ -252,7 +342,25 @@ function ExportModal({
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                   />
                   <p className="mt-1 text-xs text-gray-500">
-                    When did the transaction officially close?
+                    Scheduled closing date (optional)
+                  </p>
+                </div>
+
+                {/* End Date */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      End Date *
+                    </label>
+                  </div>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    When did the transaction end? (Used to filter communications)
                   </p>
                 </div>
               </div>
@@ -296,108 +404,10 @@ function ExportModal({
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Content Type
-                </label>
-                <div className="grid grid-cols-3 gap-3">
-                  <button
-                    onClick={() => setContentType("text")}
-                    className={`px-4 py-3 rounded-lg font-medium transition-all ${
-                      contentType === "text"
-                        ? "bg-purple-500 text-white shadow-md"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    Text Only
-                  </button>
-                  <button
-                    onClick={() => setContentType("email")}
-                    className={`px-4 py-3 rounded-lg font-medium transition-all ${
-                      contentType === "email"
-                        ? "bg-purple-500 text-white shadow-md"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    Email Only
-                  </button>
-                  <button
-                    onClick={() => setContentType("both")}
-                    className={`px-4 py-3 rounded-lg font-medium transition-all ${
-                      contentType === "both"
-                        ? "bg-purple-500 text-white shadow-md"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    Both
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
                   Export Format
                 </label>
                 <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => setExportFormat("pdf")}
-                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
-                      exportFormat === "pdf"
-                        ? "bg-purple-500 text-white shadow-md"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    <div className="font-semibold">PDF Report</div>
-                    <div className="text-xs opacity-80">
-                      Transaction report only
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => setExportFormat("excel")}
-                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
-                      exportFormat === "excel"
-                        ? "bg-purple-500 text-white shadow-md"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    <div className="font-semibold">Excel (.xlsx)</div>
-                    <div className="text-xs opacity-80">Spreadsheet format</div>
-                  </button>
-                  <button
-                    onClick={() => setExportFormat("csv")}
-                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
-                      exportFormat === "csv"
-                        ? "bg-purple-500 text-white shadow-md"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    <div className="font-semibold">CSV</div>
-                    <div className="text-xs opacity-80">
-                      Comma-separated values
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => setExportFormat("json")}
-                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
-                      exportFormat === "json"
-                        ? "bg-purple-500 text-white shadow-md"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    <div className="font-semibold">JSON</div>
-                    <div className="text-xs opacity-80">Structured data</div>
-                  </button>
-                  <button
-                    onClick={() => setExportFormat("txt_eml")}
-                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
-                      exportFormat === "txt_eml"
-                        ? "bg-purple-500 text-white shadow-md"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    <div className="font-semibold">TXT + EML Files</div>
-                    <div className="text-xs opacity-80">
-                      Text files and email files
-                    </div>
-                  </button>
+                  {/* Active export formats */}
                   <button
                     onClick={() => setExportFormat("folder")}
                     className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
@@ -406,10 +416,63 @@ function ExportModal({
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                     }`}
                   >
-                    <div className="font-semibold">Audit Package</div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">Audit Package</span>
+                      <span className={`text-xs px-2 py-0.5 rounded ${
+                        exportFormat === "folder"
+                          ? "bg-purple-400 text-white"
+                          : "bg-green-100 text-green-700"
+                      }`}>Recommended</span>
+                    </div>
                     <div className="text-xs opacity-80">
                       Folder with individual PDFs
                     </div>
+                  </button>
+                  <button
+                    onClick={() => setExportFormat("pdf")}
+                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
+                      exportFormat === "pdf"
+                        ? "bg-purple-500 text-white shadow-md"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    <div className="font-semibold">Summary PDF</div>
+                    <div className="text-xs opacity-80">
+                      Transaction report only
+                    </div>
+                  </button>
+                  {/* One PDF - Coming Soon */}
+                  <button
+                    disabled
+                    className="px-4 py-3 rounded-lg font-medium text-left bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">One PDF</span>
+                      <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded">Coming Soon</span>
+                    </div>
+                    <div className="text-xs opacity-80">Combined PDF with all content</div>
+                  </button>
+                  {/* Emails Only - Coming Soon */}
+                  <button
+                    disabled
+                    className="px-4 py-3 rounded-lg font-medium text-left bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">Emails Only</span>
+                      <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded">Coming Soon</span>
+                    </div>
+                    <div className="text-xs opacity-80">Export only email communications</div>
+                  </button>
+                  {/* Texts Only - Coming Soon */}
+                  <button
+                    disabled
+                    className="px-4 py-3 rounded-lg font-medium text-left bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">Texts Only</span>
+                      <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded">Coming Soon</span>
+                    </div>
+                    <div className="text-xs opacity-80">Export only text messages</div>
                   </button>
                 </div>
                 {exportFormat === "folder" && (
@@ -439,27 +502,81 @@ function ExportModal({
                   ? exportProgress.message
                   : "Creating your compliance audit export. This may take a moment."}
               </p>
-              {exportProgress && exportFormat === "folder" && (
-                <div className="mt-4 max-w-xs mx-auto">
-                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-purple-600 transition-all duration-300"
-                      style={{
-                        width: `${Math.round((exportProgress.current / exportProgress.total) * 100)}%`,
-                      }}
-                    />
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    {exportProgress.current} / {exportProgress.total}
-                  </p>
-                </div>
-              )}
+              {/* Progress bar removed for cleaner UX - spinner and message are sufficient */}
+            </div>
+          )}
+
+          {/* Step 4: Close Transaction Prompt */}
+          {step === 4 && (
+            <div className="py-8 text-center">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h4 className="text-lg font-semibold text-gray-900 mb-2">
+                Export Complete!
+              </h4>
+              <p className="text-sm text-gray-600 mb-6">
+                Would you like to mark this transaction as closed?
+              </p>
+              <div className="flex justify-center gap-4">
+                <button
+                  onClick={() => handleCloseTransaction(false)}
+                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-all"
+                >
+                  No, Keep Open
+                </button>
+                <button
+                  onClick={() => handleCloseTransaction(true)}
+                  className="px-6 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-lg font-semibold hover:from-purple-600 hover:to-indigo-700 shadow-md hover:shadow-lg transition-all"
+                >
+                  Yes, Close Transaction
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 5: Success with Finder Link */}
+          {step === 5 && (
+            <div className="py-8 text-center">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h4 className="text-lg font-semibold text-gray-900 mb-2">
+                Export Complete!
+              </h4>
+              <p className="text-sm text-gray-600 mb-6">
+                Your {exportFormat === "folder" ? "Audit Package" : "export"} has been saved successfully.
+              </p>
+              {/* Buttons side by side */}
+              <div className="flex justify-center gap-4">
+                {exportedPath && (
+                  <button
+                    onClick={handleOpenInFinder}
+                    className="px-6 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-lg font-semibold hover:from-purple-600 hover:to-indigo-700 shadow-md hover:shadow-lg transition-all inline-flex items-center gap-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+                    </svg>
+                    Open in Finder
+                  </button>
+                )}
+                <button
+                  onClick={handleDismissSuccess}
+                  className="px-8 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-lg font-semibold hover:from-purple-600 hover:to-indigo-700 shadow-md hover:shadow-lg transition-all"
+                >
+                  Done
+                </button>
+              </div>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        {step !== 3 && (
+        {step !== 3 && step !== 4 && step !== 5 && (
           <div className="px-6 py-4 bg-gray-50 rounded-b-xl flex items-center justify-between">
             <button
               onClick={step === 1 ? onClose : () => setStep(1)}
@@ -471,10 +588,10 @@ function ExportModal({
             <button
               onClick={step === 1 ? handleDateVerification : handleExport}
               disabled={
-                step === 1 && (!representationStartDate || !closingDate)
+                step === 1 && (!startDate || !endDate)
               }
               className={`px-6 py-2 rounded-lg font-semibold transition-all ${
-                step === 1 && (!representationStartDate || !closingDate)
+                step === 1 && (!startDate || !endDate)
                   ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                   : "bg-gradient-to-r from-purple-500 to-indigo-600 text-white hover:from-purple-600 hover:to-indigo-700 shadow-md hover:shadow-lg"
               }`}

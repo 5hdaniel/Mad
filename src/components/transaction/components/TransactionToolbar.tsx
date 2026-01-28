@@ -1,4 +1,6 @@
 import React from "react";
+import { LicenseGate } from "@/components/common/LicenseGate";
+import { useLicense } from "@/contexts/LicenseContext";
 
 // ============================================
 // TYPES AND INTERFACES
@@ -92,6 +94,8 @@ function TransactionToolbar({
   quickExportSuccess,
   bulkActionSuccess,
 }: TransactionToolbarProps): React.ReactElement {
+  const { hasAIAddon } = useLicense();
+
   return (
     <>
       {/* Header */}
@@ -140,21 +144,24 @@ function TransactionToolbar({
               {filterCounts.all}
             </span>
           </button>
-          <button
-            onClick={() => onFilterChange("pending")}
-            className={`px-4 py-2 rounded-md font-medium transition-all ${
-              filter === "pending"
-                ? "bg-white text-amber-600 shadow-sm"
-                : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            Pending Review
-            {filterCounts.pending > 0 && (
-              <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700">
-                {filterCounts.pending}
-              </span>
-            )}
-          </button>
+          {/* Pending Review tab - AI add-on only */}
+          <LicenseGate requires="ai_addon">
+            <button
+              onClick={() => onFilterChange("pending")}
+              className={`px-4 py-2 rounded-md font-medium transition-all ${
+                filter === "pending"
+                  ? "bg-white text-amber-600 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Pending Review
+              {filterCounts.pending > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700">
+                  {filterCounts.pending}
+                </span>
+              )}
+            </button>
+          </LicenseGate>
           <button
             onClick={() => onFilterChange("active")}
             className={`px-4 py-2 rounded-md font-medium transition-all ${
@@ -181,21 +188,24 @@ function TransactionToolbar({
               {filterCounts.closed}
             </span>
           </button>
-          <button
-            onClick={() => onFilterChange("rejected")}
-            className={`px-4 py-2 rounded-md font-medium transition-all ${
-              filter === "rejected"
-                ? "bg-white text-red-600 shadow-sm"
-                : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            Rejected
-            {filterCounts.rejected > 0 && (
-              <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-red-100 text-red-700">
-                {filterCounts.rejected}
-              </span>
-            )}
-          </button>
+          {/* Rejected tab - AI add-on only */}
+          <LicenseGate requires="ai_addon">
+            <button
+              onClick={() => onFilterChange("rejected")}
+              className={`px-4 py-2 rounded-md font-medium transition-all ${
+                filter === "rejected"
+                  ? "bg-white text-red-600 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Rejected
+              {filterCounts.rejected > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-red-100 text-red-700">
+                  {filterCounts.rejected}
+                </span>
+              )}
+            </button>
+          </LicenseGate>
 
           {/* Status Info Button */}
           <div className="relative ml-2">
@@ -221,18 +231,20 @@ function TransactionToolbar({
                 <div className="absolute left-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 p-4 z-20">
                   <h4 className="font-semibold text-gray-900 mb-3">Transaction Statuses</h4>
                   <div className="space-y-3">
-                    <div className="flex items-start gap-3">
-                      <span className="w-3 h-3 rounded-full bg-amber-500 mt-1 flex-shrink-0" />
-                      <div>
-                        <p className="font-medium text-gray-900">Pending Review</p>
-                        <p className="text-sm text-gray-600">Auto-detected transaction awaiting your approval</p>
+                    {hasAIAddon && (
+                      <div className="flex items-start gap-3">
+                        <span className="w-3 h-3 rounded-full bg-amber-500 mt-1 flex-shrink-0" />
+                        <div>
+                          <p className="font-medium text-gray-900">Pending Review</p>
+                          <p className="text-sm text-gray-600">Auto-detected transaction awaiting your approval</p>
+                        </div>
                       </div>
-                    </div>
+                    )}
                     <div className="flex items-start gap-3">
                       <span className="w-3 h-3 rounded-full bg-blue-500 mt-1 flex-shrink-0" />
                       <div>
                         <p className="font-medium text-gray-900">Active</p>
-                        <p className="text-sm text-gray-600">Confirmed real estate transaction in progress</p>
+                        <p className="text-sm text-gray-600">{hasAIAddon ? "Confirmed real estate transaction in progress" : "Real estate transaction in progress"}</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
@@ -242,13 +254,15 @@ function TransactionToolbar({
                         <p className="text-sm text-gray-600">Completed transaction (deal closed)</p>
                       </div>
                     </div>
-                    <div className="flex items-start gap-3">
-                      <span className="w-3 h-3 rounded-full bg-red-500 mt-1 flex-shrink-0" />
-                      <div>
-                        <p className="font-medium text-gray-900">Rejected</p>
-                        <p className="text-sm text-gray-600">Not a real transaction (false positive)</p>
+                    {hasAIAddon && (
+                      <div className="flex items-start gap-3">
+                        <span className="w-3 h-3 rounded-full bg-red-500 mt-1 flex-shrink-0" />
+                        <div>
+                          <p className="font-medium text-gray-900">Rejected</p>
+                          <p className="text-sm text-gray-600">Not a real transaction (false positive)</p>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               </>
@@ -327,52 +341,54 @@ function TransactionToolbar({
             New Transaction
           </button>
 
-          {/* Scan/Stop Button */}
-          {scanning ? (
-            <button
-              onClick={onStopScan}
-              className="px-4 py-2 rounded-lg font-semibold transition-all bg-red-500 text-white hover:bg-red-600 shadow-md hover:shadow-lg"
-            >
-              <span className="flex items-center gap-2">
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-                Stop Scan
-              </span>
-            </button>
-          ) : (
-            <button
-              onClick={onStartScan}
-              className="px-4 py-2 rounded-lg font-semibold transition-all bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 shadow-md hover:shadow-lg"
-            >
-              <span className="flex items-center gap-2">
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
-                Auto Detect
-              </span>
-            </button>
-          )}
+          {/* Scan/Stop Button - AI add-on only */}
+          <LicenseGate requires="ai_addon">
+            {scanning ? (
+              <button
+                onClick={onStopScan}
+                className="px-4 py-2 rounded-lg font-semibold transition-all bg-red-500 text-white hover:bg-red-600 shadow-md hover:shadow-lg"
+              >
+                <span className="flex items-center gap-2">
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                  Stop Scan
+                </span>
+              </button>
+            ) : (
+              <button
+                onClick={onStartScan}
+                className="px-4 py-2 rounded-lg font-semibold transition-all bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 shadow-md hover:shadow-lg"
+              >
+                <span className="flex items-center gap-2">
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                  Auto Detect
+                </span>
+              </button>
+            )}
+          </LicenseGate>
         </div>
 
         {/* Scan Progress */}

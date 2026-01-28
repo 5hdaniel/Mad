@@ -5,6 +5,60 @@
 
 import { ipcRenderer } from "electron";
 
+// Declared by esbuild at build time: true for dev, false for production
+declare const __DEV__: boolean;
+
+// Dev-only diagnostic functions (stripped from production builds)
+const devDiagnostics = __DEV__
+  ? {
+      /**
+       * Diagnostic: Complete message health report
+       * Returns: total, withThreadId, withNullThreadId, withGarbageText, withEmptyText, healthy, healthPercentage
+       */
+      diagnosticMessageHealth: (userId: string) =>
+        ipcRenderer.invoke("diagnostic:message-health-report", userId),
+
+      /**
+       * Diagnostic: Find messages with NULL thread_id (can cause incorrect chat merging)
+       */
+      diagnosticNullThreadId: (userId: string) =>
+        ipcRenderer.invoke("diagnostic:messages-null-thread-id", userId),
+
+      /**
+       * Diagnostic: Find messages with garbage text (binary signatures)
+       */
+      diagnosticGarbageText: (userId: string) =>
+        ipcRenderer.invoke("diagnostic:messages-garbage-text", userId),
+
+      /**
+       * Diagnostic: Get thread distribution for a contact
+       */
+      diagnosticThreadsForContact: (userId: string, phoneDigits: string) =>
+        ipcRenderer.invoke("diagnostic:threads-for-contact", userId, phoneDigits),
+
+      /**
+       * Diagnostic: Detailed analysis of NULL thread_id messages
+       * Groups by sender, channel, and month to identify patterns
+       */
+      diagnosticNullThreadIdAnalysis: (userId: string) =>
+        ipcRenderer.invoke("diagnostic:null-thread-id-analysis", userId),
+
+      /**
+       * Diagnostic: Get recent messages with unknown recipient
+       * Returns external_id (macOS ROWID) for cross-referencing
+       */
+      diagnosticUnknownRecipientMessages: (userId: string) =>
+        ipcRenderer.invoke("diagnostic:unknown-recipient-messages", userId),
+
+      /**
+       * Diagnostic: Check email data for a specific contact email
+       * Checks both contact_emails junction table and communications table
+       */
+      diagnosticCheckEmailData: (userId: string, emailAddress: string) =>
+        ipcRenderer.invoke("diagnostic:check-email-data", userId, emailAddress),
+    }
+  : {};
+
 export const systemBridge = {
   /**
    * Current platform identifier from Node.js process.platform
@@ -202,4 +256,20 @@ export const systemBridge = {
    */
   showInFolder: (filePath: string) =>
     ipcRenderer.invoke("system:show-in-folder", filePath),
+
+  /**
+   * Reindex the database for performance optimization
+   * Rebuilds all performance indexes to help resolve slowness
+   * @returns Result with index count and duration
+   */
+  reindexDatabase: () =>
+    ipcRenderer.invoke("system:reindex-database") as Promise<{
+      success: boolean;
+      indexesRebuilt?: number;
+      durationMs?: number;
+      error?: string;
+    }>,
+
+  // Spread dev-only diagnostics (empty object in production)
+  ...devDiagnostics,
 };

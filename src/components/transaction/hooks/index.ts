@@ -24,3 +24,7 @@ export type {
   UseBulkActionsResult,
   UseBulkActionsCallbacks,
 } from "./useBulkActions";
+
+// useTransactionModals
+export { useTransactionModals } from "./useTransactionModals";
+export type { UseTransactionModalsResult } from "./useTransactionModals";

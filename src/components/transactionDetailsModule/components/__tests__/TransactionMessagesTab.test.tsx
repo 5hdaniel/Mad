@@ -14,6 +14,7 @@ const mockUnlinkMessages = jest.fn();
 const mockGetMessageContacts = jest.fn();
 const mockGetMessagesByContact = jest.fn();
 const mockLinkMessages = jest.fn();
+const mockGetNamesByPhones = jest.fn();
 
 beforeAll(() => {
   Object.defineProperty(window, "api", {
@@ -23,6 +24,9 @@ beforeAll(() => {
         getMessageContacts: mockGetMessageContacts,
         getMessagesByContact: mockGetMessagesByContact,
         linkMessages: mockLinkMessages,
+      },
+      contacts: {
+        getNamesByPhones: mockGetNamesByPhones,
       },
     },
     writable: true,
@@ -36,6 +40,7 @@ describe("TransactionMessagesTab", () => {
     mockGetMessageContacts.mockResolvedValue({ success: true, contacts: [] });
     mockGetMessagesByContact.mockResolvedValue({ success: true, messages: [] });
     mockLinkMessages.mockResolvedValue({ success: true });
+    mockGetNamesByPhones.mockResolvedValue({ success: true, names: {} });
   });
 
   // Mock messages for testing
@@ -191,7 +196,7 @@ describe("TransactionMessagesTab", () => {
   });
 
   describe("messages list", () => {
-    it("should display message count header when messages exist", () => {
+    it("should render thread list when messages exist", () => {
       render(
         <TransactionMessagesTab
           messages={mockMessages as Communication[]}
@@ -200,10 +205,58 @@ describe("TransactionMessagesTab", () => {
         />
       );
 
-      expect(screen.getByText("Text Messages (3)")).toBeInTheDocument();
+      // Should have thread list container
+      expect(screen.getByTestId("message-thread-list")).toBeInTheDocument();
+
+      // Should render thread cards
+      const threadCards = screen.getAllByTestId("message-thread-card");
+      expect(threadCards.length).toBeGreaterThan(0);
     });
 
-    it("should render thread cards with preview text", () => {
+    it("should render thread cards for 1:1 chats", () => {
+      // 1:1 chat messages - single external participant per thread
+      const singleParticipantMessages: Partial<Communication>[] = [
+        {
+          id: "msg-1",
+          user_id: "user-456",
+          channel: "sms",
+          body_text: "Single chat message 1",
+          sent_at: "2024-01-16T11:00:00Z",
+          direction: "inbound",
+          thread_id: "thread-single",
+          participants: JSON.stringify({ from: "+14155550100", to: ["me"] }),
+          has_attachments: false,
+          is_false_positive: false,
+        },
+        {
+          id: "msg-2",
+          user_id: "user-456",
+          channel: "sms",
+          body_text: "Single chat message 2",
+          sent_at: "2024-01-17T12:00:00Z",
+          direction: "outbound",
+          thread_id: "thread-single",
+          participants: JSON.stringify({ from: "me", to: ["+14155550100"] }),
+          has_attachments: false,
+          is_false_positive: false,
+        },
+      ];
+
+      render(
+        <TransactionMessagesTab
+          messages={singleParticipantMessages as Communication[]}
+          loading={false}
+          error={null}
+        />
+      );
+
+      // Should render thread card
+      expect(screen.getByTestId("message-thread-card")).toBeInTheDocument();
+      // Should show contact name/phone
+      expect(screen.getByTestId("thread-contact-name")).toBeInTheDocument();
+    });
+
+    it("should render multiple thread cards for multiple threads", () => {
       render(
         <TransactionMessagesTab
           messages={mockMessages as Communication[]}
@@ -212,11 +265,9 @@ describe("TransactionMessagesTab", () => {
         />
       );
 
-      // Thread cards should show preview text (last message in each thread)
-      // Thread 1's last message is "Can we schedule a showing tomorrow?"
-      // Thread 2's message is "Thanks for the update!"
-      const previews = screen.getAllByTestId("thread-preview");
-      expect(previews.length).toBe(2);
+      // Mock data has 2 threads (thread-1 and thread-2)
+      const threadCards = screen.getAllByTestId("message-thread-card");
+      expect(threadCards.length).toBe(2);
     });
 
     it("should group messages into threads", () => {
@@ -236,7 +287,7 @@ describe("TransactionMessagesTab", () => {
       expect(threadCards.length).toBe(2);
     });
 
-    it("should display conversation count when multiple threads", () => {
+    it("should display contact name in thread header", () => {
       render(
         <TransactionMessagesTab
           messages={mockMessages as Communication[]}
@@ -245,8 +296,9 @@ describe("TransactionMessagesTab", () => {
         />
       );
 
-      // Should show "in 2 conversations"
-      expect(screen.getByText("in 2 conversations")).toBeInTheDocument();
+      // Each thread should have a contact name element
+      const contactNames = screen.getAllByTestId("thread-contact-name");
+      expect(contactNames.length).toBe(2);
     });
 
     it("should display phone numbers as thread headers", () => {
@@ -376,43 +428,6 @@ describe("TransactionMessagesTab", () => {
       expect(screen.getByTestId("toggle-thread-button")).toHaveTextContent("View");
     });
 
-    it("should display message count badge", () => {
-      const messages: Partial<Communication>[] = [
-        {
-          id: "msg-1",
-          user_id: "user-456",
-          channel: "sms",
-          body_text: "Message 1",
-          sent_at: "2024-01-20T10:00:00Z",
-          direction: "outbound",
-          thread_id: "thread-1",
-          has_attachments: false,
-          is_false_positive: false,
-        },
-        {
-          id: "msg-2",
-          user_id: "user-456",
-          channel: "sms",
-          body_text: "Message 2",
-          sent_at: "2024-01-20T11:00:00Z",
-          direction: "inbound",
-          thread_id: "thread-1",
-          has_attachments: false,
-          is_false_positive: false,
-        },
-      ];
-
-      render(
-        <TransactionMessagesTab
-          messages={messages as Communication[]}
-          loading={false}
-          error={null}
-        />
-      );
-
-      // Should show message count
-      expect(screen.getByText("2 messages")).toBeInTheDocument();
-    });
   });
 
   describe("date formatting", () => {
@@ -439,8 +454,8 @@ describe("TransactionMessagesTab", () => {
 
       // Thread card should be rendered
       expect(screen.getByTestId("message-thread-card")).toBeInTheDocument();
-      // Preview should show the message text
-      expect(screen.getByTestId("thread-preview")).toHaveTextContent("Dated message");
+      // Contact name should be shown
+      expect(screen.getByTestId("thread-contact-name")).toBeInTheDocument();
     });
 
     it("should use received_at as fallback for date", () => {
@@ -464,13 +479,13 @@ describe("TransactionMessagesTab", () => {
         />
       );
 
-      // Should render without error and show the message
-      expect(screen.getByText("Received message")).toBeInTheDocument();
+      // Should render thread card for message with received_at date
+      expect(screen.getByTestId("message-thread-card")).toBeInTheDocument();
     });
   });
 
   describe("body text fallbacks", () => {
-    it("should use body_plain as fallback", () => {
+    it("should render thread card for message with body_plain", () => {
       const messageWithBodyPlain: Partial<Communication>[] = [
         {
           id: "plain-msg",
@@ -491,10 +506,11 @@ describe("TransactionMessagesTab", () => {
         />
       );
 
-      expect(screen.getByText("Plain body content")).toBeInTheDocument();
+      // Thread card should be rendered for message with body_plain
+      expect(screen.getByTestId("message-thread-card")).toBeInTheDocument();
     });
 
-    it("should use body as final fallback", () => {
+    it("should render thread card for message with body", () => {
       const messageWithBody: Partial<Communication>[] = [
         {
           id: "body-msg",
@@ -515,7 +531,8 @@ describe("TransactionMessagesTab", () => {
         />
       );
 
-      expect(screen.getByText("Legacy body content")).toBeInTheDocument();
+      // Thread card should be rendered for message with legacy body field
+      expect(screen.getByTestId("message-thread-card")).toBeInTheDocument();
     });
   });
 
@@ -694,7 +711,8 @@ describe("TransactionMessagesTab", () => {
       fireEvent.click(screen.getByTestId("unlink-confirm-button"));
 
       await waitFor(() => {
-        expect(mockUnlinkMessages).toHaveBeenCalledWith(["msg-1", "msg-2"]);
+        // TASK-1116: unlinkMessages now requires transactionId for thread-based unlinking
+        expect(mockUnlinkMessages).toHaveBeenCalledWith(["msg-1", "msg-2"], "txn-123");
       });
 
       await waitFor(() => {
@@ -752,6 +770,291 @@ describe("TransactionMessagesTab", () => {
       await waitFor(() => {
         expect(mockOnShowError).toHaveBeenCalledWith("Connection failed");
       });
+    });
+
+    it("should await async onMessagesChanged callback before closing modal", async () => {
+      // Track when the callback completes
+      let callbackResolved = false;
+      const mockOnMessagesChanged = jest.fn().mockImplementation(() => {
+        return new Promise<void>((resolve) => {
+          setTimeout(() => {
+            callbackResolved = true;
+            resolve();
+          }, 50);
+        });
+      });
+      const mockOnShowSuccess = jest.fn();
+
+      render(
+        <TransactionMessagesTab
+          messages={messagesWithUserId as Communication[]}
+          loading={false}
+          error={null}
+          userId="user-456"
+          transactionId="txn-123"
+          onMessagesChanged={mockOnMessagesChanged}
+          onShowSuccess={mockOnShowSuccess}
+        />
+      );
+
+      // Open unlink modal
+      fireEvent.click(screen.getByTestId("unlink-thread-button"));
+      expect(screen.getByTestId("unlink-message-modal")).toBeInTheDocument();
+
+      // Confirm unlink
+      fireEvent.click(screen.getByTestId("unlink-confirm-button"));
+
+      // Wait for API call
+      await waitFor(() => {
+        expect(mockUnlinkMessages).toHaveBeenCalled();
+      });
+
+      // Callback should be called and awaited before modal closes
+      await waitFor(() => {
+        expect(mockOnMessagesChanged).toHaveBeenCalled();
+        expect(callbackResolved).toBe(true);
+      });
+
+      // Modal should be closed after callback completes
+      await waitFor(() => {
+        expect(screen.queryByTestId("unlink-message-modal")).not.toBeInTheDocument();
+      });
+    });
+  });
+
+  describe("audit period filter (BACKLOG-357)", () => {
+    // Messages spanning different date ranges for filter testing
+    const messagesForDateFilter: Partial<Communication>[] = [
+      {
+        id: "msg-before",
+        user_id: "user-456",
+        channel: "sms",
+        body_text: "Message before audit period",
+        sent_at: "2024-01-01T10:00:00Z",
+        direction: "inbound",
+        thread_id: "thread-1",
+        participants: JSON.stringify({ from: "+14155550100", to: ["+14155550101"] }),
+        has_attachments: false,
+        is_false_positive: false,
+      },
+      {
+        id: "msg-during-1",
+        user_id: "user-456",
+        channel: "sms",
+        body_text: "Message during audit period 1",
+        sent_at: "2024-01-15T10:00:00Z",
+        direction: "inbound",
+        thread_id: "thread-1",
+        participants: JSON.stringify({ from: "+14155550100", to: ["+14155550101"] }),
+        has_attachments: false,
+        is_false_positive: false,
+      },
+      {
+        id: "msg-during-2",
+        user_id: "user-456",
+        channel: "sms",
+        body_text: "Message during audit period 2",
+        sent_at: "2024-01-20T10:00:00Z",
+        direction: "outbound",
+        thread_id: "thread-1",
+        participants: JSON.stringify({ from: "+14155550101", to: ["+14155550100"] }),
+        has_attachments: false,
+        is_false_positive: false,
+      },
+      {
+        id: "msg-after",
+        user_id: "user-456",
+        channel: "sms",
+        body_text: "Message after audit period",
+        sent_at: "2024-02-01T10:00:00Z",
+        direction: "inbound",
+        thread_id: "thread-1",
+        participants: JSON.stringify({ from: "+14155550100", to: ["+14155550101"] }),
+        has_attachments: false,
+        is_false_positive: false,
+      },
+      {
+        id: "msg-thread2-outside",
+        user_id: "user-456",
+        channel: "sms",
+        body_text: "Thread 2 message outside audit",
+        sent_at: "2024-02-15T10:00:00Z",
+        direction: "inbound",
+        thread_id: "thread-2",
+        participants: JSON.stringify({ from: "+14155550200", to: ["+14155550101"] }),
+        has_attachments: false,
+        is_false_positive: false,
+      },
+    ];
+
+    it("should show audit period filter toggle when audit dates are provided", () => {
+      render(
+        <TransactionMessagesTab
+          messages={messagesForDateFilter as Communication[]}
+          loading={false}
+          error={null}
+          auditStartDate="2024-01-10"
+          auditEndDate="2024-01-25"
+        />
+      );
+
+      expect(screen.getByTestId("audit-period-filter")).toBeInTheDocument();
+      expect(screen.getByTestId("audit-period-filter-checkbox")).toBeInTheDocument();
+    });
+
+    it("should not show audit period filter when no audit dates are provided", () => {
+      render(
+        <TransactionMessagesTab
+          messages={messagesForDateFilter as Communication[]}
+          loading={false}
+          error={null}
+        />
+      );
+
+      expect(screen.queryByTestId("audit-period-filter")).not.toBeInTheDocument();
+    });
+
+    it("should filter threads by audit date range when toggle is on (default)", () => {
+      render(
+        <TransactionMessagesTab
+          messages={messagesForDateFilter as Communication[]}
+          loading={false}
+          error={null}
+          auditStartDate="2024-01-10"
+          auditEndDate="2024-01-25"
+        />
+      );
+
+      // Toggle should be checked by default when audit dates are available
+      const checkbox = screen.getByTestId("audit-period-filter-checkbox");
+      expect(checkbox).toBeChecked();
+
+      // Should show filtered message count in header (format: "X conversations (Y text messages)")
+      expect(screen.getByText(/conversation.*\(2 text message/)).toBeInTheDocument();
+
+      // The info line should indicate showing 2 of 5 messages
+      const infoLine = screen.getByTestId("audit-period-info");
+      expect(infoLine).toHaveTextContent(/Showing 2 of 5 messages/);
+
+      // Thread 2 (only has messages outside audit period) should be hidden
+      const threadCards = screen.getAllByTestId("message-thread-card");
+      expect(threadCards.length).toBe(1);
+    });
+
+    it("should show all threads when toggle is turned off", () => {
+      render(
+        <TransactionMessagesTab
+          messages={messagesForDateFilter as Communication[]}
+          loading={false}
+          error={null}
+          auditStartDate="2024-01-10"
+          auditEndDate="2024-01-25"
+        />
+      );
+
+      // Turn off the filter
+      const checkbox = screen.getByTestId("audit-period-filter-checkbox");
+      fireEvent.click(checkbox);
+
+      // Should show all messages (format: "X conversations (Y text messages)")
+      expect(screen.getByText(/conversation.*\(5 text message/)).toBeInTheDocument();
+
+      // Both threads should be visible
+      const threadCards = screen.getAllByTestId("message-thread-card");
+      expect(threadCards.length).toBe(2);
+    });
+
+    it("should show audit period info line when filter is on", () => {
+      render(
+        <TransactionMessagesTab
+          messages={messagesForDateFilter as Communication[]}
+          loading={false}
+          error={null}
+          auditStartDate="2024-01-10"
+          auditEndDate="2024-01-25"
+        />
+      );
+
+      expect(screen.getByTestId("audit-period-info")).toBeInTheDocument();
+      expect(screen.getByTestId("audit-period-info")).toHaveTextContent(/Showing 2 of 5 messages/);
+    });
+
+    it("should show empty state when all messages are outside audit period", () => {
+      // All messages are outside Jan 10-11 range
+      render(
+        <TransactionMessagesTab
+          messages={messagesForDateFilter as Communication[]}
+          loading={false}
+          error={null}
+          auditStartDate="2024-01-10"
+          auditEndDate="2024-01-11"
+        />
+      );
+
+      // Should show empty filtered state with option to show all
+      expect(screen.getByText("No messages in audit period")).toBeInTheDocument();
+      expect(screen.getByText("Show all messages")).toBeInTheDocument();
+    });
+
+    it("should show all messages when clicking 'Show all messages' link", () => {
+      render(
+        <TransactionMessagesTab
+          messages={messagesForDateFilter as Communication[]}
+          loading={false}
+          error={null}
+          auditStartDate="2024-01-10"
+          auditEndDate="2024-01-11"
+        />
+      );
+
+      // Click show all messages
+      fireEvent.click(screen.getByText("Show all messages"));
+
+      // Toggle should be unchecked
+      expect(screen.getByTestId("audit-period-filter-checkbox")).not.toBeChecked();
+
+      // Should show all messages now (format: "X conversations (Y text messages)")
+      expect(screen.getByText(/conversation.*\(5 text message/)).toBeInTheDocument();
+    });
+
+    it("should handle ongoing transaction with only start date", () => {
+      render(
+        <TransactionMessagesTab
+          messages={messagesForDateFilter as Communication[]}
+          loading={false}
+          error={null}
+          auditStartDate="2024-01-15"
+          auditEndDate={null}
+        />
+      );
+
+      // Filter should still be available
+      expect(screen.getByTestId("audit-period-filter")).toBeInTheDocument();
+
+      // Should show messages from Jan 15 onwards (4 messages)
+      expect(screen.getByText(/conversation.*\(4 text message/)).toBeInTheDocument();
+    });
+
+    it("should update conversation count based on filter", () => {
+      render(
+        <TransactionMessagesTab
+          messages={messagesForDateFilter as Communication[]}
+          loading={false}
+          error={null}
+          auditStartDate="2024-01-10"
+          auditEndDate="2024-01-25"
+        />
+      );
+
+      // With filter on, only 1 conversation has messages in period (format: "X conversations (Y text messages)")
+      expect(screen.getByText(/1 conversation/)).toBeInTheDocument();
+      expect(screen.getByText(/of 2 conversation/)).toBeInTheDocument();
+
+      // Turn off filter
+      fireEvent.click(screen.getByTestId("audit-period-filter-checkbox"));
+
+      // Both conversations should show
+      expect(screen.getByText(/2 conversations/)).toBeInTheDocument();
     });
   });
 

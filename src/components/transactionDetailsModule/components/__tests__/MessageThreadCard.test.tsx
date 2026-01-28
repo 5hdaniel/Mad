@@ -93,7 +93,7 @@ describe("MessageThreadCard", () => {
       );
     });
 
-    it("should display phone number below contact name when both provided", () => {
+    it("should display contact name without phone number in card (phone hidden for cleaner layout)", () => {
       const messages = [createMockMessage()];
 
       render(
@@ -108,9 +108,8 @@ describe("MessageThreadCard", () => {
       expect(screen.getByTestId("thread-contact-name")).toHaveTextContent(
         "Jane Smith"
       );
-      expect(screen.getByTestId("thread-phone-number")).toHaveTextContent(
-        "+14155550200"
-      );
+      // Phone number is intentionally not displayed in the card layout
+      expect(screen.queryByTestId("thread-phone-number")).not.toBeInTheDocument();
     });
   });
 
@@ -151,29 +150,33 @@ describe("MessageThreadCard", () => {
     });
   });
 
-  describe("message count badge", () => {
-    it("should display singular 'message' for one message", () => {
-      const messages = [createMockMessage()];
-
-      render(
-        <MessageThreadCard
-          threadId="thread-1"
-          messages={messages}
-          phoneNumber="+14155550100"
-        />
-      );
-
-      expect(screen.getByText("1 message")).toBeInTheDocument();
-    });
-
-    it("should display plural 'messages' for multiple messages", () => {
+  describe("date range display", () => {
+    it("should render date range for individual chat", () => {
       const messages = [
-        createMockMessage({ id: "msg-1" }),
-        createMockMessage({ id: "msg-2" }),
-        createMockMessage({ id: "msg-3" }),
+        createMockMessage({ id: "msg-1", sent_at: "2024-01-15T10:00:00Z" }),
+        createMockMessage({ id: "msg-2", sent_at: "2024-01-17T10:00:00Z" }),
       ];
 
-      render(
+      const { container } = render(
+        <MessageThreadCard
+          threadId="thread-1"
+          messages={messages}
+          contactName="Jane Doe"
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // Should show date range like "Jan 15, 2024 - Jan 17, 2024"
+      expect(container.textContent).toMatch(/Jan\s+15.*-.*Jan\s+17/);
+    });
+
+    it("should render single date when all messages on same day", () => {
+      const messages = [
+        createMockMessage({ id: "msg-1", sent_at: "2024-01-15T10:00:00Z" }),
+        createMockMessage({ id: "msg-2", sent_at: "2024-01-15T14:00:00Z" }),
+      ];
+
+      const { container } = render(
         <MessageThreadCard
           threadId="thread-1"
           messages={messages}
@@ -181,7 +184,11 @@ describe("MessageThreadCard", () => {
         />
       );
 
-      expect(screen.getByText("3 messages")).toBeInTheDocument();
+      // Should show single date like "Jan 15" (not a range)
+      expect(container.textContent).toMatch(/Jan\s+15/);
+      // Should NOT contain a dash for date range
+      const dateRangePattern = /Jan\s+15\s*-/;
+      expect(container.textContent).not.toMatch(dateRangePattern);
     });
   });
 
@@ -200,7 +207,7 @@ describe("MessageThreadCard", () => {
       expect(screen.getByTestId("toggle-thread-button")).toHaveTextContent("View");
     });
 
-    it("should show preview text of last message", () => {
+    it("should render thread card with View button", () => {
       const messages = [
         createMockMessage({ id: "msg-1", body_text: "This is a preview message" }),
       ];
@@ -213,14 +220,312 @@ describe("MessageThreadCard", () => {
         />
       );
 
-      expect(screen.getByTestId("thread-preview")).toHaveTextContent("This is a preview message");
+      // Thread card renders with View button to open full conversation
+      expect(screen.getByTestId("message-thread-card")).toBeInTheDocument();
+      expect(screen.getByTestId("toggle-thread-button")).toBeInTheDocument();
     });
 
-    it("should truncate long preview text", () => {
-      const longText = "A".repeat(100);
+    it("should render contact name in thread header", () => {
       const messages = [
-        createMockMessage({ id: "msg-1", body_text: longText }),
+        createMockMessage({ id: "msg-1", body_text: "Test message" }),
       ];
+
+      render(
+        <MessageThreadCard
+          threadId="thread-1"
+          messages={messages}
+          contactName="John Doe"
+          phoneNumber="+14155550100"
+        />
+      );
+
+      expect(screen.getByTestId("thread-contact-name")).toHaveTextContent("John Doe");
+    });
+  });
+
+  describe("group chat cards", () => {
+    // Helper to create a group chat message with multiple participants
+    // Note: chat_members is the authoritative list of participants (used by getThreadParticipants)
+    const createGroupMessage = (overrides: Partial<Communication> = {}): Communication => ({
+      id: "msg-1",
+      user_id: "user-123",
+      channel: "sms",
+      direction: "inbound",
+      body_text: "Group message content",
+      sent_at: "2024-01-16T14:30:00Z",
+      has_attachments: false,
+      is_false_positive: false,
+      participants: JSON.stringify({
+        from: "+14155550100",
+        to: ["+14155550101", "+14155550102"],
+        chat_members: ["+14155550100", "+14155550101", "+14155550102"],
+      }),
+      ...overrides,
+    } as Communication);
+
+    it("should NOT render message count badge for group chat", () => {
+      const messages = [
+        createGroupMessage({ id: "msg-1" }),
+        createGroupMessage({ id: "msg-2" }),
+        createGroupMessage({ id: "msg-3" }),
+      ];
+
+      render(
+        <MessageThreadCard
+          threadId="group-thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // Message count badge should NOT exist for group chats
+      expect(screen.queryByTestId("group-message-count-badge")).not.toBeInTheDocument();
+    });
+
+    it("should render View button for group chat", () => {
+      const messages = [
+        createGroupMessage({ id: "msg-1", body_text: "Group chat preview message" }),
+      ];
+
+      render(
+        <MessageThreadCard
+          threadId="group-thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // Group chat should have View button to open full conversation
+      expect(screen.getByTestId("toggle-thread-button")).toBeInTheDocument();
+    });
+
+    it("should display group indicator in contact name", () => {
+      const messages = [createGroupMessage({ id: "msg-1" })];
+
+      render(
+        <MessageThreadCard
+          threadId="group-thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // Group chat should show "Group Chat" label (without colon)
+      const contactName = screen.getByTestId("thread-contact-name");
+      expect(contactName.textContent).toContain("Group Chat");
+    });
+
+    it("should not display people badge for group chat (removed for cleaner layout)", () => {
+      const messages = [createGroupMessage({ id: "msg-1" })];
+
+      render(
+        <MessageThreadCard
+          threadId="group-thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // People badge intentionally removed - contact name shows participants inline
+      expect(screen.queryByText("3 people")).not.toBeInTheDocument();
+    });
+
+    it("should display participant names on separate line below Group Chat label", () => {
+      const messages = [createGroupMessage({ id: "msg-1" })];
+
+      render(
+        <MessageThreadCard
+          threadId="group-thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // Contact name container should exist
+      const contactName = screen.getByTestId("thread-contact-name");
+      expect(contactName).toBeInTheDocument();
+      // Should show "Group Chat" header and participant names on separate lines
+      expect(contactName.textContent).toContain("Group Chat");
+      // Participant names are shown on a separate line with title for tooltip
+      const participantLine = contactName.querySelector('[title]');
+      expect(participantLine).toBeInTheDocument();
+    });
+  });
+
+  describe("unknown participant filtering (BACKLOG-299)", () => {
+    // Helper to create a message with specific participants
+    // Includes chat_members which is the authoritative list used by getThreadParticipants
+    const createMessageWithParticipants = (
+      from: string,
+      to: string[],
+      overrides: Partial<Communication> = {}
+    ): Communication => {
+      // Build chat_members from from + to, excluding 'me'
+      const chatMembers = [from, ...to].filter(p => p !== "me");
+      return {
+        id: "msg-1",
+        user_id: "user-123",
+        channel: "sms",
+        direction: "inbound",
+        body_text: "Test message",
+        sent_at: "2024-01-16T14:30:00Z",
+        has_attachments: false,
+        is_false_positive: false,
+        participants: JSON.stringify({ from, to, chat_members: chatMembers }),
+        ...overrides,
+      } as Communication;
+    };
+
+    it("should display 1:1 chat (not group) when one participant is 'unknown'", () => {
+      // Scenario: 1:1 chat where "unknown" appears in participants
+      const messages = [
+        createMessageWithParticipants("+14155550100", ["me", "unknown"]),
+      ];
+
+      const { container } = render(
+        <MessageThreadCard
+          threadId="thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // Should show 1:1 avatar (green gradient), NOT group avatar (purple)
+      expect(
+        container.querySelector(".bg-gradient-to-br.from-green-500.to-teal-600")
+      ).toBeInTheDocument();
+      expect(container.querySelector(".bg-purple-100")).not.toBeInTheDocument();
+
+      // Should NOT show "Group Chat" label (it's a 1:1 chat)
+      expect(screen.getByTestId("thread-contact-name")).not.toHaveTextContent(
+        "Group Chat"
+      );
+    });
+
+    it("should display 1:1 chat when 'unknown' is the from participant", () => {
+      // Scenario: from is "unknown", to has actual phone
+      const messages = [
+        createMessageWithParticipants("unknown", ["+14155550100"]),
+      ];
+
+      const { container } = render(
+        <MessageThreadCard
+          threadId="thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // Should show 1:1 avatar (green gradient)
+      expect(
+        container.querySelector(".bg-gradient-to-br.from-green-500.to-teal-600")
+      ).toBeInTheDocument();
+    });
+
+    it("should display as group chat when 3+ known participants exist (regardless of unknown)", () => {
+      // Scenario: Actual group chat with 3 known participants + unknown
+      const messages = [
+        createMessageWithParticipants("+14155550100", [
+          "+14155550101",
+          "+14155550102",
+          "unknown",
+          "me",
+        ]),
+      ];
+
+      const { container } = render(
+        <MessageThreadCard
+          threadId="group-thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // Should show group avatar (purple)
+      expect(container.querySelector(".bg-purple-100")).toBeInTheDocument();
+      expect(
+        container.querySelector(".bg-gradient-to-br.from-green-500.to-teal-600")
+      ).not.toBeInTheDocument();
+
+      // Should show "Group Chat" label
+      expect(screen.getByTestId("thread-contact-name")).toHaveTextContent(
+        "Group Chat"
+      );
+    });
+
+    it("should display 1:1 when 2 unknown + 1 known participant", () => {
+      // Edge case: multiple unknowns should all be filtered
+      const messages = [
+        createMessageWithParticipants("unknown", [
+          "+14155550100",
+          "unknown",
+          "me",
+        ]),
+      ];
+
+      const { container } = render(
+        <MessageThreadCard
+          threadId="thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // Should show 1:1 avatar (only 1 known participant after filtering)
+      expect(
+        container.querySelector(".bg-gradient-to-br.from-green-500.to-teal-600")
+      ).toBeInTheDocument();
+    });
+
+    it("should handle all-unknown participants gracefully", () => {
+      // Edge case: all participants are unknown or me
+      const messages = [
+        createMessageWithParticipants("unknown", ["me", "unknown"]),
+      ];
+
+      const { container } = render(
+        <MessageThreadCard
+          threadId="thread-1"
+          messages={messages}
+          phoneNumber="Unknown"
+        />
+      );
+
+      // Should show 1:1 avatar (0 known participants = not a group)
+      expect(
+        container.querySelector(".bg-gradient-to-br.from-green-500.to-teal-600")
+      ).toBeInTheDocument();
+      // Should display the fallback phone number
+      expect(screen.getByTestId("thread-contact-name")).toHaveTextContent(
+        "Unknown"
+      );
+    });
+
+    it("should display 3+ external participants as group chat", () => {
+      // Verify normal group detection still works (3+ external participants = group)
+      const messages = [
+        createMessageWithParticipants("+14155550100", [
+          "+14155550101",
+          "+14155550102",
+        ]),
+      ];
+
+      const { container } = render(
+        <MessageThreadCard
+          threadId="thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // Should show group avatar (purple background)
+      expect(container.querySelector(".bg-purple-100")).toBeInTheDocument();
+    });
+  });
+
+  describe("unified styling", () => {
+    it("should have hover state class on card container", () => {
+      const messages = [createMockMessage()];
 
       render(
         <MessageThreadCard
@@ -230,10 +535,50 @@ describe("MessageThreadCard", () => {
         />
       );
 
-      const preview = screen.getByTestId("thread-preview");
-      // Should be truncated to 60 chars + "..."
-      expect(preview.textContent?.length).toBeLessThan(70);
-      expect(preview.textContent).toContain("...");
+      const card = screen.getByTestId("message-thread-card");
+      expect(card.className).toContain("hover:bg-gray-50");
+      expect(card.className).toContain("transition-colors");
+    });
+
+    it("should have consistent avatar size for individual chat", () => {
+      const messages = [createMockMessage()];
+
+      const { container } = render(
+        <MessageThreadCard
+          threadId="thread-1"
+          messages={messages}
+          contactName="John"
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // Avatar is w-8 h-8
+      const avatar = container.querySelector(".w-8.h-8");
+      expect(avatar).toBeInTheDocument();
+    });
+
+    it("should have consistent avatar size for group chat", () => {
+      const messages = [
+        {
+          ...createMockMessage(),
+          participants: JSON.stringify({
+            from: "+14155550100",
+            to: ["+14155550101", "+14155550102"],
+          }),
+        },
+      ];
+
+      const { container } = render(
+        <MessageThreadCard
+          threadId="group-thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // Avatar is w-8 h-8
+      const avatar = container.querySelector(".w-8.h-8");
+      expect(avatar).toBeInTheDocument();
     });
   });
 });
@@ -410,6 +755,127 @@ describe("extractPhoneFromThread", () => {
     ];
 
     expect(extractPhoneFromThread(messages)).toBe("+14155550200");
+  });
+
+  // BACKLOG-510/513: User identifier exclusion tests
+  describe("user identifier exclusion (BACKLOG-510/513)", () => {
+    it("should exclude user's outbound 'from' field when extracting phone", () => {
+      // Scenario: User sends message (outbound), their phone is in 'from'
+      // The function should identify the user's phone and exclude it
+      // Then return the recipient (external phone) from 'to'
+      const userPhone = "+14155550001"; // User's own phone number
+      const externalPhone = "+14155550099"; // External contact
+
+      const messages = [
+        createMockMessage({
+          id: "msg-1",
+          direction: "outbound",
+          participants: JSON.stringify({
+            from: userPhone, // User's phone (should be excluded)
+            to: [externalPhone], // External contact (should be returned)
+            chat_members: [externalPhone], // Doesn't include user
+          }),
+        }),
+      ];
+
+      expect(extractPhoneFromThread(messages)).toBe(externalPhone);
+    });
+
+    it("should exclude user's inbound 'to' field when extracting phone", () => {
+      // Scenario: User receives message (inbound), their phone is in 'to'
+      // The function should identify the user's phone and exclude it
+      // Then return the sender (external phone) from 'from'
+      const userPhone = "+14155550001"; // User's own phone number
+      const externalPhone = "+14155550088"; // External contact
+
+      const messages = [
+        createMockMessage({
+          id: "msg-1",
+          direction: "inbound",
+          participants: JSON.stringify({
+            from: externalPhone, // External contact (should be returned)
+            to: [userPhone], // User's phone (should be excluded)
+            chat_members: [externalPhone], // Doesn't include user
+          }),
+        }),
+      ];
+
+      expect(extractPhoneFromThread(messages)).toBe(externalPhone);
+    });
+
+    it("should use chat_members fallback when from/to are 'unknown'", () => {
+      // Scenario: Messages have 'unknown' in from/to fields
+      // Should fall back to chat_members array to find external phone
+      const externalPhone = "+14155550077";
+
+      const messages = [
+        createMockMessage({
+          id: "msg-1",
+          direction: "inbound",
+          participants: JSON.stringify({
+            from: "unknown",
+            to: ["unknown"],
+            chat_members: [externalPhone], // Fallback source
+          }),
+        }),
+      ];
+
+      expect(extractPhoneFromThread(messages)).toBe(externalPhone);
+    });
+
+    it("should correctly identify user across mixed inbound/outbound messages", () => {
+      // Scenario: Thread has both sent and received messages
+      // User identification should work across the entire thread
+      const userPhone = "+14155550001";
+      const externalPhone = "+14155550066";
+
+      const messages = [
+        // Inbound message: external sends to user
+        createMockMessage({
+          id: "msg-1",
+          direction: "inbound",
+          participants: JSON.stringify({
+            from: externalPhone,
+            to: [userPhone],
+            chat_members: [externalPhone],
+          }),
+        }),
+        // Outbound message: user sends to external
+        createMockMessage({
+          id: "msg-2",
+          direction: "outbound",
+          participants: JSON.stringify({
+            from: userPhone,
+            to: [externalPhone],
+            chat_members: [externalPhone],
+          }),
+        }),
+      ];
+
+      // Should return external phone, not user's phone
+      expect(extractPhoneFromThread(messages)).toBe(externalPhone);
+    });
+
+    it("should not exclude valid external phones that happen to be in from field of inbound", () => {
+      // Edge case: Don't over-exclude - inbound 'from' is external, should be returned
+      const externalPhone = "+14155550055";
+      const userPhone = "+14155550001";
+
+      const messages = [
+        createMockMessage({
+          id: "msg-1",
+          direction: "inbound",
+          participants: JSON.stringify({
+            from: externalPhone, // This is the external contact, NOT user
+            to: [userPhone], // User's phone
+            chat_members: [externalPhone],
+          }),
+        }),
+      ];
+
+      // External phone in 'from' of inbound should be returned
+      expect(extractPhoneFromThread(messages)).toBe(externalPhone);
+    });
   });
 });
 

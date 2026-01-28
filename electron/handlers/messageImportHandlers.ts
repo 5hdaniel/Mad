@@ -6,6 +6,7 @@
 import { ipcMain, BrowserWindow } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import logService from "../services/logService";
+import databaseService from "../services/databaseService";
 import macOSMessagesImportService from "../services/macOSMessagesImportService";
 import type {
   MacOSImportResult,
@@ -56,10 +57,39 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
       userId: string,
       forceReimport = false
     ): Promise<MacOSImportResult> => {
+      // BACKLOG-551: Verify user exists in database (ID may have been migrated)
+      let validUserId = userId;
+      const userExists = await databaseService.getUserById(userId);
+      if (!userExists) {
+        logService.warn("[MessageImport] User ID not found, may have been migrated", "MessageImportHandlers", {
+          providedId: userId.substring(0, 8) + "...",
+        });
+        // Try to find any user in the database (single-user app)
+        const db = databaseService.getRawDatabase();
+        const anyUser = db.prepare("SELECT id FROM users_local LIMIT 1").get() as { id: string } | undefined;
+        if (anyUser) {
+          validUserId = anyUser.id;
+          logService.info("[MessageImport] Using migrated user ID", "MessageImportHandlers", {
+            correctedId: validUserId.substring(0, 8) + "...",
+          });
+        } else {
+          return {
+            success: false,
+            messagesImported: 0,
+            messagesSkipped: 0,
+            attachmentsImported: 0,
+            attachmentsUpdated: 0,
+            attachmentsSkipped: 0,
+            duration: 0,
+            error: "No valid user found in database",
+          };
+        }
+      }
+
       logService.info(
         `Starting macOS Messages import for user`,
         "MessageImportHandlers",
-        { userId, forceReimport }
+        { userId: validUserId, forceReimport }
       );
 
       // Create progress callback that sends updates to renderer
@@ -71,7 +101,7 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
 
       try {
         const result = await macOSMessagesImportService.importMessages(
-          userId,
+          validUserId,
           onProgress,
           forceReimport
         );
@@ -107,6 +137,7 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
           messagesImported: 0,
           messagesSkipped: 0,
           attachmentsImported: 0,
+          attachmentsUpdated: 0,
           attachmentsSkipped: 0,
           duration: 0,
           error: errorMessage,
@@ -220,6 +251,23 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
         );
         return {};
       }
+    }
+  );
+
+  /**
+   * Repair attachment message_id mappings without full re-import.
+   * IPC: messages:repair-attachments
+   */
+  ipcMain.handle(
+    "messages:repair-attachments",
+    async (): Promise<{
+      total: number;
+      repaired: number;
+      orphaned: number;
+      alreadyCorrect: number;
+    }> => {
+      logService.info("Repairing attachment mappings via IPC", "MessageImportHandlers");
+      return macOSMessagesImportService.repairAttachmentMessageIds();
     }
   );
 

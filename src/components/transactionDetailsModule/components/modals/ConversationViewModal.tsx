@@ -3,7 +3,7 @@
  * Phone-style popup modal for viewing a full conversation thread.
  * Supports inline display of image/GIF attachments (TASK-1012).
  */
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import type { MessageLike } from "../MessageThreadCard";
 
 /**
@@ -27,6 +27,10 @@ interface ConversationViewModalProps {
   phoneNumber: string;
   /** Map of phone -> name for group chat sender resolution */
   contactNames?: Record<string, string>;
+  /** Audit period start date for filtering */
+  auditStartDate?: Date | string | null;
+  /** Audit period end date for filtering */
+  auditEndDate?: Date | string | null;
   /** Callback to close the modal */
   onClose: () => void;
 }
@@ -88,6 +92,37 @@ function isDisplayableImage(mimeType: string | null): boolean {
 }
 
 /**
+ * Check if text is empty or only contains the object replacement character
+ * macOS uses U+FFFC (￼) as a placeholder for attachments in message text
+ */
+function isEmptyOrReplacementChar(text: string): boolean {
+  if (!text) return true;
+  // U+FFFC is the Object Replacement Character, U+FFFD is the Replacement Character
+  const cleaned = text.replace(/[\uFFFC\uFFFD\s]/g, "");
+  return cleaned.length === 0;
+}
+
+/**
+ * Get a human-readable label for an attachment MIME type
+ */
+function getAttachmentLabel(mimeType: string | null, filename: string): string {
+  if (mimeType?.startsWith("video/")) return "Video";
+  if (mimeType?.startsWith("audio/")) return "Audio";
+  if (mimeType?.startsWith("image/")) return "Image";
+  if (mimeType === "application/pdf") return "PDF";
+  if (mimeType?.includes("word") || mimeType?.includes("document")) return "Document";
+
+  // Fall back to extension
+  const ext = filename.toLowerCase().split(".").pop() || "";
+  const labels: Record<string, string> = {
+    mp4: "Video", mov: "Video", m4v: "Video",
+    mp3: "Audio", m4a: "Audio", caf: "Voice Message",
+    pdf: "PDF", doc: "Document", docx: "Document",
+  };
+  return labels[ext] || "Attachment";
+}
+
+/**
  * Attachment image component with loading state and error handling
  */
 function AttachmentImage({
@@ -142,11 +177,31 @@ function AttachmentImage({
   );
 }
 
+/**
+ * Format a date range for display in the toggle label
+ * Handles partial dates (only start, only end, or both)
+ */
+function formatDateRangeLabel(startDate: Date | null, endDate: Date | null): string {
+  const formatDate = (d: Date) =>
+    d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+  if (startDate && endDate) {
+    return `${formatDate(startDate)} - ${formatDate(endDate)}`;
+  } else if (startDate) {
+    return `${formatDate(startDate)} - Ongoing`;
+  } else if (endDate) {
+    return `Through ${formatDate(endDate)}`;
+  }
+  return "";
+}
+
 export function ConversationViewModal({
   messages,
   contactName,
   phoneNumber,
   contactNames = {},
+  auditStartDate,
+  auditEndDate,
   onClose,
 }: ConversationViewModalProps): React.ReactElement {
   // Attachments state (TASK-1012)
@@ -154,6 +209,17 @@ export function ConversationViewModal({
     Record<string, MessageAttachmentInfo[]>
   >({});
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
+  const loadedAttachmentsKeyRef = useRef<string>("");
+
+  // TASK-1157: Audit date filtering state
+  // Parse audit dates
+  const parsedStartDate = auditStartDate ? new Date(auditStartDate) : null;
+  const parsedEndDate = auditEndDate ? new Date(auditEndDate) : null;
+  // Show filter if at least one date is set (handles ongoing transactions with only start date)
+  const hasAuditDates = !!(parsedStartDate || parsedEndDate);
+
+  // Default to showing audit period only when dates are available
+  const [showAuditPeriodOnly, setShowAuditPeriodOnly] = useState<boolean>(hasAuditDates);
 
   // Sort messages chronologically
   const sortedMessages = [...messages].sort((a, b) => {
@@ -162,92 +228,149 @@ export function ConversationViewModal({
     return dateA - dateB;
   });
 
-  // Check if this is a group chat (multiple unique senders)
+  // TASK-1157: Filter messages by audit date range
+  const filteredMessages = React.useMemo(() => {
+    if (!showAuditPeriodOnly || !hasAuditDates) {
+      return sortedMessages;
+    }
+
+    return sortedMessages.filter((msg) => {
+      const msgDate = new Date(msg.sent_at || msg.received_at || 0);
+
+      // Check start date (if set)
+      if (parsedStartDate && msgDate < parsedStartDate) {
+        return false;
+      }
+
+      // Check end date (if set) - use end of day for inclusive comparison
+      if (parsedEndDate) {
+        const endOfDay = new Date(parsedEndDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        if (msgDate > endOfDay) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [sortedMessages, showAuditPeriodOnly, hasAuditDates, parsedStartDate, parsedEndDate]);
+
+  // Collect unique participants from all sources (not just inbound senders)
   const uniqueSenders = new Set<string>();
   messages.forEach((msg) => {
-    const sender = getSenderPhone(msg);
-    if (sender) uniqueSenders.add(normalizePhoneForLookup(sender));
+    try {
+      if (msg.participants) {
+        const parsed =
+          typeof msg.participants === "string"
+            ? JSON.parse(msg.participants)
+            : msg.participants;
+
+        // Collect from chat_members (authoritative list of other participants)
+        if (parsed.chat_members && Array.isArray(parsed.chat_members)) {
+          parsed.chat_members.forEach((m: string) => {
+            if (m && m !== "unknown") uniqueSenders.add(normalizePhoneForLookup(m));
+          });
+        }
+
+        // Collect from inbound message sender
+        if (msg.direction === "inbound" && parsed.from) {
+          if (parsed.from !== "me" && parsed.from !== "unknown") {
+            uniqueSenders.add(normalizePhoneForLookup(parsed.from));
+          }
+        }
+
+        // Collect from outbound message recipients
+        if (msg.direction === "outbound" && parsed.to) {
+          const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
+          toList.forEach((p: string) => {
+            if (p && p !== "me" && p !== "unknown") {
+              uniqueSenders.add(normalizePhoneForLookup(p));
+            }
+          });
+        }
+      }
+    } catch {
+      // Continue
+    }
   });
-  const isGroupChat = uniqueSenders.size > 1;
+
+  // Resolve senders to names and deduplicate
+  const resolveToName = (normalizedPhone: string): string => {
+    for (const [phone, name] of Object.entries(contactNames)) {
+      if (normalizePhoneForLookup(phone) === normalizedPhone) {
+        return name;
+      }
+    }
+    // Find original phone format for display
+    for (const msg of messages) {
+      const msgSender = getSenderPhone(msg);
+      if (msgSender && normalizePhoneForLookup(msgSender) === normalizedPhone) {
+        return msgSender;
+      }
+    }
+    return normalizedPhone;
+  };
+
+  // Get unique participant names (deduplicated by resolved name)
+  const uniqueParticipantNames = [...new Set(
+    Array.from(uniqueSenders).map(resolveToName)
+  )];
+
+  // Group chat = more than one unique participant (by resolved name)
+  const isGroupChat = uniqueParticipantNames.length > 1;
 
   /**
    * Get title for group chat header.
    * Shows participant names (up to 3) with "+X more" for larger groups.
    */
   const getGroupChatTitle = (): string => {
-    // Build participant list from contactNames or unique senders
-    const participants: string[] = [];
-
-    // First, try to get names from contactNames prop
-    for (const [phone, name] of Object.entries(contactNames)) {
-      const normalized = normalizePhoneForLookup(phone);
-      if (uniqueSenders.has(normalized)) {
-        participants.push(name || phone);
-      }
-    }
-
-    // Add any senders not in contactNames (show phone number)
-    for (const sender of uniqueSenders) {
-      const hasName = participants.some((p) => {
-        // Check if this sender already has a name in the list
-        return Object.entries(contactNames).some(([phone, name]) => {
-          const normalized = normalizePhoneForLookup(phone);
-          return normalized === sender && (name === p || phone === p);
-        });
-      });
-      if (!hasName) {
-        // Find the original phone format for this sender
-        let originalPhone = sender;
-        for (const msg of messages) {
-          const msgSender = getSenderPhone(msg);
-          if (msgSender && normalizePhoneForLookup(msgSender) === sender) {
-            originalPhone = msgSender;
-            break;
-          }
-        }
-        participants.push(originalPhone);
-      }
-    }
-
-    if (participants.length === 0) {
+    if (uniqueParticipantNames.length === 0) {
       return `Group (${uniqueSenders.size} participants)`;
     }
 
     // Show up to 3 names, then "+X more"
-    if (participants.length <= 3) {
-      return participants.join(", ");
+    if (uniqueParticipantNames.length <= 3) {
+      return uniqueParticipantNames.join(", ");
     }
-    return `${participants.slice(0, 3).join(", ")} +${participants.length - 3} more`;
+    return `${uniqueParticipantNames.slice(0, 3).join(", ")} +${uniqueParticipantNames.length - 3} more`;
   };
 
   // Load attachments for messages that have them (TASK-1012)
-  const loadAttachments = useCallback(async () => {
-    // Get message IDs that have attachments
-    const messageIdsWithAttachments = messages
-      .filter((msg) => msg.has_attachments)
-      .map((msg) => msg.id);
-
-    if (messageIdsWithAttachments.length === 0) return;
-
-    setAttachmentsLoading(true);
-    try {
-      // Check if API is available (may not be on all platforms)
-      if (window.api?.messages?.getMessageAttachmentsBatch) {
-        const result = await window.api.messages.getMessageAttachmentsBatch(
-          messageIdsWithAttachments
-        );
-        setAttachmentsMap(result);
-      }
-    } catch (error) {
-      console.error("Failed to load attachments:", error);
-    } finally {
-      setAttachmentsLoading(false);
-    }
-  }, [messages]);
+  // Create stable key from message IDs to prevent re-fetching
+  const attachmentsKey = messages
+    .filter((msg) => msg.has_attachments && msg.message_id)
+    .map((msg) => msg.message_id)
+    .sort()
+    .join(",");
 
   useEffect(() => {
+    // Skip if we've already loaded for this key
+    if (attachmentsKey === loadedAttachmentsKeyRef.current || !attachmentsKey) {
+      return;
+    }
+
+    const messageIdsWithAttachments = attachmentsKey.split(",");
+    loadedAttachmentsKeyRef.current = attachmentsKey;
+
+    const loadAttachments = async () => {
+      setAttachmentsLoading(true);
+      try {
+        // Check if API is available (may not be on all platforms)
+        if (window.api?.messages?.getMessageAttachmentsBatch) {
+          const result = await window.api.messages.getMessageAttachmentsBatch(
+            messageIdsWithAttachments
+          );
+          setAttachmentsMap(result);
+        }
+      } catch (error) {
+        console.error("Failed to load attachments:", error);
+      } finally {
+        setAttachmentsLoading(false);
+      }
+    };
+
     loadAttachments();
-  }, [loadAttachments]);
+  }, [attachmentsKey]);
 
   return (
     <div
@@ -283,14 +406,37 @@ export function ConversationViewModal({
               {isGroupChat ? getGroupChatTitle() : (contactName || phoneNumber)}
             </h4>
             <p className="text-green-100 text-xs">
-              {messages.length} message{messages.length !== 1 ? "s" : ""}
+              {filteredMessages.length} message{filteredMessages.length !== 1 ? "s" : ""}
+              {showAuditPeriodOnly && hasAuditDates && filteredMessages.length !== sortedMessages.length && (
+                <span className="ml-1">of {sortedMessages.length}</span>
+              )}
             </p>
           </div>
         </div>
 
+        {/* TASK-1157: Audit date filter toggle */}
+        {hasAuditDates && (
+          <div className="bg-gray-100 px-4 py-2 flex items-center justify-between border-b border-gray-200">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showAuditPeriodOnly}
+                onChange={(e) => setShowAuditPeriodOnly(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-green-500 focus:ring-green-500"
+              />
+              <span className="text-sm text-gray-700">
+                Show audit period only ({formatDateRangeLabel(parsedStartDate, parsedEndDate)})
+              </span>
+            </label>
+            <span className="text-xs text-gray-500">
+              Showing {filteredMessages.length} of {sortedMessages.length}
+            </span>
+          </div>
+        )}
+
         {/* Messages list - phone style */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {sortedMessages.map((msg, index) => {
+          {filteredMessages.map((msg, index) => {
             const isOutbound = msg.direction === "outbound";
             const rawText =
               msg.body_text ||
@@ -317,7 +463,7 @@ export function ConversationViewModal({
               if (index === 0) {
                 showSender = true;
               } else {
-                const prevSender = getSenderPhone(sortedMessages[index - 1]);
+                const prevSender = getSenderPhone(filteredMessages[index - 1]);
                 if (prevSender) {
                   const prevNormalized = normalizePhoneForLookup(prevSender);
                   showSender = normalized !== prevNormalized;
@@ -328,10 +474,17 @@ export function ConversationViewModal({
             }
 
             // Get attachments for this message (TASK-1012)
-            const messageAttachments = attachmentsMap[msg.id] || [];
+            // Use message_id to look up attachments (attachments table uses message_id, not communication id)
+            const messageAttachments = msg.message_id ? (attachmentsMap[msg.message_id] || []) : [];
             const displayableAttachments = messageAttachments.filter((att) =>
               isDisplayableImage(att.mime_type)
             );
+            const nonDisplayableAttachments = messageAttachments.filter((att) =>
+              !isDisplayableImage(att.mime_type)
+            );
+
+            // Check if message text is empty or just replacement character
+            const hasRealText = !isEmptyOrReplacementChar(msgText);
 
             return (
               <div
@@ -353,7 +506,7 @@ export function ConversationViewModal({
                       {senderName}
                     </p>
                   )}
-                  {/* Display attachments (TASK-1012) */}
+                  {/* Display inline images (TASK-1012) */}
                   {displayableAttachments.length > 0 && (
                     <div className="mb-2 space-y-2">
                       {displayableAttachments.map((att) => (
@@ -365,9 +518,22 @@ export function ConversationViewModal({
                       ))}
                     </div>
                   )}
+                  {/* Show placeholders for non-displayable attachments (videos, documents, etc.) */}
+                  {nonDisplayableAttachments.length > 0 && (
+                    <div className="mb-2 space-y-1">
+                      {nonDisplayableAttachments.map((att) => (
+                        <div
+                          key={att.id}
+                          className={`text-xs italic ${isOutbound ? "text-green-100" : "text-gray-500"}`}
+                        >
+                          [{getAttachmentLabel(att.mime_type, att.filename)}: {att.filename}]
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {/* Show placeholder for attachments still loading */}
                   {!!msg.has_attachments &&
-                    displayableAttachments.length === 0 &&
+                    messageAttachments.length === 0 &&
                     attachmentsLoading && (
                       <div
                         className={`text-xs italic mb-1 ${isOutbound ? "text-green-100" : "text-gray-400"}`}
@@ -375,20 +541,22 @@ export function ConversationViewModal({
                         Loading attachment...
                       </div>
                     )}
-                  {/* Show placeholder for unsupported attachments */}
+                  {/* Show generic placeholder when we know there's an attachment but can't load it */}
                   {!!msg.has_attachments &&
-                    displayableAttachments.length === 0 &&
-                    !attachmentsLoading &&
-                    messageAttachments.length === 0 && (
+                    messageAttachments.length === 0 &&
+                    !attachmentsLoading && (
                       <div
                         className={`text-xs italic mb-1 ${isOutbound ? "text-green-100" : "text-gray-400"}`}
                       >
                         [Attachment]
                       </div>
                     )}
-                  <p className="text-sm whitespace-pre-wrap break-words">
-                    {msgText || (displayableAttachments.length === 0 ? "(No content)" : "")}
-                  </p>
+                  {/* Show message text if it's not just a replacement character */}
+                  {hasRealText && (
+                    <p className="text-sm whitespace-pre-wrap break-words">
+                      {msgText}
+                    </p>
+                  )}
                   <p
                     className={`text-xs mt-1 ${
                       isOutbound ? "text-green-100" : "text-gray-400"

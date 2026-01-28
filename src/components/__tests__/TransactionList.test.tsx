@@ -20,6 +20,20 @@ jest.mock("../../appCore", () => ({
   }),
 }));
 
+// Mock the LicenseContext for LicenseGate
+jest.mock("../../contexts/LicenseContext", () => ({
+  useLicense: () => ({
+    licenseType: "individual" as const,
+    hasAIAddon: true, // Enable AI features for testing
+    organizationId: null,
+    canExport: true,
+    canSubmit: false,
+    canAutoDetect: true,
+    isLoading: false,
+    refresh: jest.fn(),
+  }),
+}));
+
 describe("TransactionList", () => {
   const mockUserId = "user-123";
   const mockProvider = "google";
@@ -33,7 +47,7 @@ describe("TransactionList", () => {
     transaction_type: "purchase",
     status: "active",
     sale_price: 450000,
-    closing_date: "2024-03-15",
+    closed_at: "2024-03-15",
     total_communications_count: 25,
     extraction_confidence: 85,
     detection_source: "auto",
@@ -49,7 +63,7 @@ describe("TransactionList", () => {
     transaction_type: "sale",
     status: "active",
     sale_price: 325000,
-    closing_date: "2024-01-20",
+    closed_at: "2024-01-20",
     total_communications_count: 18,
     extraction_confidence: 92,
     detection_source: "auto",
@@ -65,7 +79,7 @@ describe("TransactionList", () => {
     transaction_type: "purchase",
     status: "active",
     sale_price: 550000,
-    closing_date: null,
+    closed_at: null,
     total_communications_count: 12,
     extraction_confidence: 78,
     detection_source: "manual",

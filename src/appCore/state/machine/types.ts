@@ -18,6 +18,7 @@
  */
 export type LoadingPhase =
   | "checking-storage" // Check if encryption key store exists
+  | "awaiting-keychain" // macOS only: Wait for user to confirm keychain access
   | "initializing-db" // Initialize secure storage (may prompt on macOS)
   | "loading-auth" // Check authentication state
   | "loading-user-data"; // Load phone type, email status, etc.
@@ -155,6 +156,12 @@ export interface LoadingState {
    * Only present when entering loading-user-data from fresh login.
    */
   platform?: PlatformInfo;
+  /**
+   * True when DB initialization is deferred for first-time macOS users.
+   * DB will be initialized during onboarding secure-storage step instead.
+   * This prevents the Keychain prompt from appearing before the login screen.
+   */
+  deferredDbInit?: boolean;
 }
 
 /**
@@ -163,6 +170,11 @@ export interface LoadingState {
  */
 export interface UnauthenticatedState {
   status: "unauthenticated";
+  /**
+   * True when DB initialization is deferred for first-time macOS users.
+   * Preserved from loading state to be passed to onboarding after login.
+   */
+  deferredDbInit?: boolean;
 }
 
 /**
@@ -183,6 +195,13 @@ export interface OnboardingState {
   hasEmailConnected?: boolean;
   /** True if macOS Full Disk Access is granted (checked during loading) */
   hasPermissions?: boolean;
+  /** Phone type selected during onboarding (iphone or android) */
+  selectedPhoneType?: "iphone" | "android";
+  /**
+   * True when DB initialization is deferred for first-time macOS users.
+   * DB will be initialized during the secure-storage onboarding step.
+   */
+  deferredDbInit?: boolean;
 }
 
 /**
@@ -223,6 +242,7 @@ export interface ErrorState {
  */
 export type AppAction =
   | StorageCheckedAction
+  | KeychainConfirmedAction
   | DbInitStartedAction
   | DbInitCompleteAction
   | AuthLoadedAction
@@ -231,6 +251,7 @@ export type AppAction =
   | OnboardingStepCompleteAction
   | OnboardingSkipAction
   | EmailConnectedAction
+  | StartEmailSetupAction
   | AppReadyAction
   | LogoutAction
   | ErrorAction
@@ -243,6 +264,18 @@ export interface StorageCheckedAction {
   type: "STORAGE_CHECKED";
   /** True if encryption key store exists */
   hasKeyStore: boolean;
+  /** True if running on macOS (needed to determine if keychain confirmation is needed) */
+  isMacOS?: boolean;
+}
+
+/**
+ * User confirmed keychain access on macOS.
+ * Dispatched when user clicks "Continue" on the KeychainExplanation screen.
+ */
+export interface KeychainConfirmedAction {
+  type: "KEYCHAIN_CONFIRMED";
+  /** If true, user doesn't want to see explanation again */
+  dontShowAgain?: boolean;
 }
 
 /**
@@ -308,6 +341,8 @@ export interface OnboardingStepCompleteAction {
   type: "ONBOARDING_STEP_COMPLETE";
   /** The step that was completed */
   step: OnboardingStep;
+  /** Phone type selected during phone-type step (required when step is "phone-type") */
+  phoneType?: "iphone" | "android";
 }
 
 /**
@@ -329,6 +364,15 @@ export interface EmailConnectedAction {
   email: string;
   /** The email provider (google or microsoft) */
   provider: "google" | "microsoft";
+}
+
+/**
+ * User wants to start email setup from the dashboard.
+ * Transitions from ready state back to onboarding with email-connect step.
+ * Used when user clicks "Continue Setup" on the dashboard.
+ */
+export interface StartEmailSetupAction {
+  type: "START_EMAIL_SETUP";
 }
 
 /**

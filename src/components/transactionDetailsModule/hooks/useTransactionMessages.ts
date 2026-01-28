@@ -47,12 +47,14 @@ export function useTransactionMessages(
 
         // Filter for text messages only (SMS and iMessage, exclude email)
         // Check both 'channel' (newer field) and 'communication_type' (legacy field)
-        // for backward compatibility with auto-linked messages
+        // for backward compatibility with auto-linked messages.
+        // BACKLOG-502: Also check for 'text' in communication_type which is the
+        // valid schema value for SMS (as opposed to 'sms' which is only valid for channel).
         const textMessages = allCommunications.filter(
           (comm: Communication) =>
             comm.channel === "sms" ||
             comm.channel === "imessage" ||
-            comm.communication_type === "sms" ||
+            comm.communication_type === "text" ||
             comm.communication_type === "imessage"
         );
 

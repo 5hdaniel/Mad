@@ -16,13 +16,14 @@ import { app } from "electron";
 import databaseService from "../services/databaseService";
 import microsoftAuthService from "../services/microsoftAuthService";
 import supabaseService from "../services/supabaseService";
+import sessionService from "../services/sessionService";
 import rateLimitService from "../services/rateLimitService";
 import auditService from "../services/auditService";
 import logService from "../services/logService";
 import { setSyncUserId } from "../sync-handlers";
 
 // Import validation utilities
-import { ValidationError, validateUserId } from "../utils/validation";
+import { getValidUserId } from "../utils/userIdHelper";
 
 // Import constants
 import {
@@ -39,13 +40,6 @@ interface AuthResponse {
 interface LoginStartResponse extends AuthResponse {
   authUrl?: string;
   scopes?: string[];
-}
-
-interface LoginCompleteResponse extends AuthResponse {
-  user?: import("../types/models").User;
-  sessionToken?: string;
-  subscription?: import("../types/models").Subscription;
-  isNewUser?: boolean;
 }
 
 /**
@@ -120,8 +114,7 @@ export async function handleMicrosoftLogin(
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        webSecurity: false,
-        allowRunningInsecureContent: true,
+        // webSecurity defaults to true - do not disable
       },
       autoHideMenuBar: true,
       title: "Sign in with Microsoft",
@@ -289,6 +282,12 @@ export async function handleMicrosoftLogin(
           tokens.access_token
         );
 
+        // BACKLOG-390: Sign in with Supabase Auth for RLS support
+        // This creates a Supabase session so auth.uid() works in RLS policies
+        if (tokens.id_token) {
+          await supabaseService.signInWithIdToken("azure", tokens.id_token);
+        }
+
         // Session-only OAuth: no keychain encryption
         const accessToken = tokens.access_token;
         const refreshToken = tokens.refresh_token || null;
@@ -346,7 +345,9 @@ export async function handleMicrosoftLogin(
         );
 
         if (!localUser) {
+          // TASK-1507G: Use Supabase Auth UUID as local user ID for unified IDs
           localUser = await databaseService.createUser({
+            id: cloudUser.id,
             email: userInfo.email,
             first_name: userInfo.given_name,
             last_name: userInfo.family_name,
@@ -437,6 +438,15 @@ export async function handleMicrosoftLogin(
 
         // Create session
         const sessionToken = await databaseService.createSession(localUser.id);
+
+        // Save session to disk for persistence across app restarts
+        await sessionService.saveSession({
+          user: localUser,
+          sessionToken,
+          provider: "microsoft",
+          expiresAt: Date.now() + sessionService.getSessionExpirationMs(),
+          createdAt: Date.now(),
+        });
 
         // Register device
         const deviceInfo = {
@@ -540,7 +550,14 @@ export async function handleMicrosoftConnectMailbox(
       "AuthHandlers"
     );
 
-    const validatedUserId = validateUserId(userId)!;
+    // BACKLOG-551: Validate user ID exists in local DB (handles Supabase auth.uid() mismatch)
+    const validatedUserId = await getValidUserId(userId, "MicrosoftAuth");
+    if (!validatedUserId) {
+      return {
+        success: false,
+        error: "No user found in database. Please log in first.",
+      };
+    }
 
     const user = await databaseService.getUserById(validatedUserId);
     const loginHint = user?.email ?? undefined;
@@ -555,8 +572,7 @@ export async function handleMicrosoftConnectMailbox(
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        webSecurity: false,
-        allowRunningInsecureContent: true,
+        // webSecurity defaults to true - do not disable
       },
       autoHideMenuBar: true,
       title: "Connect Microsoft Mailbox",
@@ -676,7 +692,7 @@ export async function handleMicrosoftConnectMailbox(
           Date.now() + tokens.expires_in * 1000
         ).toISOString();
 
-        await databaseService.saveOAuthToken(userId, "microsoft", "mailbox", {
+        await databaseService.saveOAuthToken(validatedUserId, "microsoft", "mailbox", {
           access_token: accessToken,
           refresh_token: refreshToken ?? undefined,
           token_expires_at: expiresAt,
@@ -688,11 +704,11 @@ export async function handleMicrosoftConnectMailbox(
         await logService.info(
           "Microsoft mailbox connection completed",
           "AuthHandlers",
-          { userId, email: userInfo.email }
+          { userId: validatedUserId, email: userInfo.email }
         );
 
         await auditService.log({
-          userId,
+          userId: validatedUserId,
           action: "MAILBOX_CONNECT",
           resourceType: "MAILBOX",
           metadata: { provider: "microsoft", email: userInfo.email },
@@ -710,13 +726,13 @@ export async function handleMicrosoftConnectMailbox(
           "Microsoft mailbox connection failed",
           "AuthHandlers",
           {
-            userId,
+            userId: validatedUserId,
             error: error instanceof Error ? error.message : "Unknown error",
           }
         );
 
         await auditService.log({
-          userId,
+          userId: validatedUserId,
           action: "MAILBOX_CONNECT",
           resourceType: "MAILBOX",
           metadata: { provider: "microsoft" },
@@ -771,8 +787,7 @@ export async function handleMicrosoftConnectMailboxPending(
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        webSecurity: false,
-        allowRunningInsecureContent: true,
+        // webSecurity defaults to true - do not disable
       },
       autoHideMenuBar: true,
       title: "Connect Microsoft Mailbox",

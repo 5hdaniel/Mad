@@ -710,7 +710,7 @@ describe("AuditTransactionModal", () => {
       expect(saleButton).toHaveClass("bg-indigo-500");
     });
 
-    it("should show step 1 subtitle for transaction details in edit mode", () => {
+    it("should show simplified subtitle in edit mode (no steps)", () => {
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
@@ -721,10 +721,14 @@ describe("AuditTransactionModal", () => {
         />,
       );
 
-      expect(screen.getByText(/step 1: transaction details/i)).toBeInTheDocument();
+      // Edit mode shows simplified subtitle, not step info
+      expect(screen.getByText(/update property address and transaction dates/i)).toBeInTheDocument();
+      // Progress bar (step numbers) should not be visible
+      expect(screen.queryByText("2")).not.toBeInTheDocument();
+      expect(screen.queryByText("3")).not.toBeInTheDocument();
     });
 
-    it("should call update API instead of create when editing", async () => {
+    it("should show Save Changes button directly in edit mode (single-step flow)", async () => {
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
@@ -735,15 +739,13 @@ describe("AuditTransactionModal", () => {
         />,
       );
 
-      // Navigate through steps
-      await userEvent.click(screen.getByRole("button", { name: /continue/i }));
-
-      await waitFor(() => {
-        expect(screen.getByText(/step 2/i)).toBeInTheDocument();
-      });
+      // Edit mode shows Save Changes directly (no multi-step flow)
+      expect(screen.getByRole("button", { name: /save changes/i })).toBeInTheDocument();
+      // Continue button should NOT be present in edit mode
+      expect(screen.queryByRole("button", { name: /continue/i })).not.toBeInTheDocument();
     });
 
-    it("should display Save Changes button in edit mode on step 3", async () => {
+    it("should have Save Changes button visible on initial render in edit mode", () => {
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
@@ -754,18 +756,8 @@ describe("AuditTransactionModal", () => {
         />,
       );
 
-      // Navigate to step 2
-      await userEvent.click(screen.getByRole("button", { name: /continue/i }));
-
-      await waitFor(() => {
-        expect(screen.getByText(/step 2/i)).toBeInTheDocument();
-      });
-
-      // Select a client contact
-      const selectButtons = screen.getAllByRole("button", { name: /select contact/i });
-      if (selectButtons.length > 0) {
-        await userEvent.click(selectButtons[0]);
-      }
+      // Edit mode renders Save Changes immediately (no multi-step navigation)
+      expect(screen.getByRole("button", { name: /save changes/i })).toBeInTheDocument();
     });
 
     it("should handle suggested_contacts JSON parsing", () => {
@@ -830,11 +822,12 @@ describe("AuditTransactionModal", () => {
         />,
       );
 
-      // Navigate through steps
-      await userEvent.click(screen.getByRole("button", { name: /continue/i }));
+      // Click Save Changes directly (edit mode is single-step)
+      await userEvent.click(screen.getByRole("button", { name: /save changes/i }));
 
+      // Should show "Saving..." loading text
       await waitFor(() => {
-        expect(screen.getByText(/step 2/i)).toBeInTheDocument();
+        expect(screen.getByText(/saving/i)).toBeInTheDocument();
       });
     });
 
@@ -911,6 +904,86 @@ describe("AuditTransactionModal", () => {
 
       // Modal should render without errors
       expect(screen.getByText(/edit transaction/i)).toBeInTheDocument();
+    });
+
+    // TASK-1038: When editTransaction doesn't have contact_assignments,
+    // the hook should fetch them via getDetails() API call
+    it("should fetch contact_assignments via getDetails when not included in editTransaction", async () => {
+      // Transaction WITHOUT contact_assignments (typical from getAll())
+      const txnWithoutContactAssignments = {
+        ...mockEditTransaction,
+        // No contact_assignments field - simulates data from transactions.getAll()
+      };
+
+      // Mock getDetails to return contact_assignments
+      window.api.transactions.getDetails.mockResolvedValue({
+        success: true,
+        transaction: {
+          ...mockEditTransaction,
+          contact_assignments: [
+            {
+              id: "assign-1",
+              contact_id: "contact-1",
+              contact_name: "John Fetched",
+              contact_email: "john@example.com",
+              role: "client",
+              specific_role: "client",
+              is_primary: 1,
+            },
+          ],
+        },
+      });
+
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={txnWithoutContactAssignments}
+        />,
+      );
+
+      // Modal should render without errors
+      expect(screen.getByText(/edit transaction/i)).toBeInTheDocument();
+
+      // Should call getDetails to fetch full transaction data
+      await waitFor(() => {
+        expect(window.api.transactions.getDetails).toHaveBeenCalledWith(
+          mockEditTransaction.id,
+        );
+      });
+    });
+
+    it("should handle getDetails API failure gracefully in edit mode", async () => {
+      // Transaction WITHOUT contact_assignments
+      const txnWithoutContactAssignments = {
+        ...mockEditTransaction,
+      };
+
+      // Mock getDetails to fail
+      window.api.transactions.getDetails.mockResolvedValue({
+        success: false,
+        error: "Failed to fetch transaction details",
+      });
+
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={txnWithoutContactAssignments}
+        />,
+      );
+
+      // Modal should still render without errors (graceful degradation)
+      expect(screen.getByText(/edit transaction/i)).toBeInTheDocument();
+
+      // Should have attempted to call getDetails
+      await waitFor(() => {
+        expect(window.api.transactions.getDetails).toHaveBeenCalled();
+      });
     });
   });
 });

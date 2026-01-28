@@ -10,7 +10,47 @@ import {
   ConfidencePill,
   PendingReviewBadge,
 } from "./DetectionBadges";
-import { formatCommunicationCounts } from "./TransactionCard";
+// Note: formatCommunicationCounts is available in TransactionCard.tsx but UI uses inline JSX for thread labels
+import { SubmissionStatusBadge } from "../../transactionDetailsModule/components/SubmissionStatusBadge";
+import { LicenseGate } from "../../common/LicenseGate";
+
+// ============================================
+// SVG ICONS (matching TransactionTabs)
+// ============================================
+
+/** Chat bubble icon for messages/texts - matches TransactionTabs */
+const MessagesIcon = (): React.ReactElement => (
+  <svg
+    className="w-4 h-4"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+    />
+  </svg>
+);
+
+/** Envelope icon for emails - matches TransactionTabs */
+const EmailsIcon = (): React.ReactElement => (
+  <svg
+    className="w-4 h-4"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+    />
+  </svg>
+);
 
 // ============================================
 // TYPES
@@ -23,6 +63,10 @@ export interface TransactionListCardProps {
   onTransactionClick: (transaction: Transaction) => void;
   onCheckboxClick: (e: React.MouseEvent, transactionId: string) => void;
   onQuickExport: (transaction: Transaction, e: React.MouseEvent) => void;
+  /** Handler for clicking the messages count - opens transaction on Messages tab */
+  onMessagesClick?: (transaction: Transaction, e: React.MouseEvent) => void;
+  /** Handler for clicking the emails count - opens transaction on Emails tab */
+  onEmailsClick?: (transaction: Transaction, e: React.MouseEvent) => void;
   formatCurrency: (amount: number | undefined) => string;
   formatDate: (dateString: string | Date | undefined) => string;
 }
@@ -42,9 +86,15 @@ export function TransactionListCard({
   onTransactionClick,
   onCheckboxClick,
   onQuickExport,
+  onMessagesClick,
+  onEmailsClick,
   formatCurrency,
   formatDate,
 }: TransactionListCardProps): React.ReactElement {
+  // BACKLOG-396: Use text_thread_count (stored) instead of text_count (computed dynamically)
+  // This ensures consistency between card view and details page
+  const textCount = transaction.text_thread_count || 0;
+  const emailCount = transaction.email_count || 0;
   return (
     <div
       className={`bg-white border-2 rounded-xl p-6 transition-all cursor-pointer transform hover:scale-[1.01] ${
@@ -91,19 +141,25 @@ export function TransactionListCard({
             <h3 className="font-semibold text-gray-900">
               {transaction.property_address}
             </h3>
-            {/* Detection Status Badges */}
-            <div className="flex items-center gap-1.5">
-              <DetectionSourceBadge source={transaction.detection_source} />
-              {transaction.detection_source === "auto" &&
-                transaction.detection_confidence !== undefined && (
-                  <ConfidencePill
-                    confidence={transaction.detection_confidence}
-                  />
+            {/* Detection Status Badges - AI add-on only (BACKLOG-462) */}
+            <LicenseGate requires="ai_addon">
+              <div className="flex items-center gap-1.5">
+                <DetectionSourceBadge source={transaction.detection_source} />
+                {transaction.detection_source === "auto" &&
+                  transaction.detection_confidence !== undefined && (
+                    <ConfidencePill
+                      confidence={transaction.detection_confidence}
+                    />
+                  )}
+                {transaction.detection_status === "pending" && (
+                  <PendingReviewBadge />
                 )}
-              {transaction.detection_status === "pending" && (
-                <PendingReviewBadge />
-              )}
-            </div>
+              </div>
+            </LicenseGate>
+            {/* Submission Status Badge (BACKLOG-392) */}
+            {transaction.submission_status && transaction.submission_status !== "not_submitted" && (
+              <SubmissionStatusBadge status={transaction.submission_status} />
+            )}
           </div>
           <div className="flex items-center gap-4 text-sm text-gray-600">
             {transaction.transaction_type && (
@@ -125,7 +181,7 @@ export function TransactionListCard({
                 {formatCurrency(transaction.sale_price)}
               </span>
             )}
-            {transaction.closing_date && (
+            {transaction.closed_at && (
               <span className="flex items-center gap-1">
                 <svg
                   className="w-4 h-4"
@@ -140,30 +196,27 @@ export function TransactionListCard({
                     d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
                   />
                 </svg>
-                Closed: {formatDate(transaction.closing_date)}
+                Closed: {formatDate(transaction.closed_at)}
               </span>
             )}
           </div>
-          <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
-            <span className="flex items-center gap-1">
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                />
-              </svg>
-              {formatCommunicationCounts(
-                transaction.email_count || 0,
-                transaction.text_count || 0
-              )}
-            </span>
+          <div className="mt-2 flex items-center gap-3 text-xs text-gray-500">
+            <button
+              onClick={(e) => onMessagesClick?.(transaction, e)}
+              className="flex items-center gap-1 hover:text-blue-600 transition-colors"
+              title="View messages"
+            >
+              <MessagesIcon />
+              <span>{textCount} {textCount === 1 ? "Text thread" : "Text threads"}</span>
+            </button>
+            <button
+              onClick={(e) => onEmailsClick?.(transaction, e)}
+              className="flex items-center gap-1 hover:text-blue-600 transition-colors"
+              title="View emails"
+            >
+              <EmailsIcon />
+              <span>{emailCount} {emailCount === 1 ? "Email thread" : "Email threads"}</span>
+            </button>
             {transaction.extraction_confidence && (
               <span className="flex items-center gap-1">
                 <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">

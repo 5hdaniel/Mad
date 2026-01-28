@@ -4,6 +4,7 @@
  */
 import React from "react";
 import type { Transaction } from "@/types";
+import { LicenseGate } from "@/components/common/LicenseGate";
 
 interface TransactionHeaderProps {
   transaction: Transaction;
@@ -19,6 +20,8 @@ interface TransactionHeaderProps {
   onRestore: () => void;
   onShowExportModal: () => void;
   onShowDeleteConfirm: () => void;
+  onShowSubmitModal?: () => void;
+  isSubmitting?: boolean;
 }
 
 export function TransactionHeader({
@@ -35,6 +38,8 @@ export function TransactionHeader({
   onRestore,
   onShowExportModal,
   onShowDeleteConfirm,
+  onShowSubmitModal,
+  isSubmitting = false,
 }: TransactionHeaderProps): React.ReactElement {
   // Determine header style based on state
   const getHeaderStyle = () => {
@@ -55,71 +60,90 @@ export function TransactionHeader({
     return "Transaction Details";
   };
 
+  // Close button component to avoid duplication
+  const CloseButton = ({ className = "" }: { className?: string }) => (
+    <button
+      onClick={onClose}
+      className={`text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all ${className}`}
+    >
+      <svg
+        className="w-6 h-6"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M6 18L18 6M6 6l12 12"
+        />
+      </svg>
+    </button>
+  );
+
   return (
     <div
-      className={`flex-shrink-0 px-6 py-4 flex items-center justify-between rounded-t-xl ${getHeaderStyle()}`}
+      className={`flex-shrink-0 px-6 py-4 rounded-t-xl ${getHeaderStyle()}`}
     >
-      <div>
-        <div className="flex items-center gap-2">
-          <h3 className="text-xl font-bold text-white">{getHeaderTitle()}</h3>
-          {isPendingReview && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white/20 text-white">
-              Pending Review
-            </span>
-          )}
-          {isRejected && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white/20 text-white">
-              Rejected
-            </span>
-          )}
+      {/* Container: column on mobile, row on md+ */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-2">
+        {/* Top row: Title/Address + Close button (mobile only) */}
+        <div className="flex items-center justify-between md:flex-1">
+          {/* Left side: Title + Address */}
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-xl font-bold text-white">{getHeaderTitle()}</h3>
+              {isPendingReview && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white/20 text-white">
+                  Pending Review
+                </span>
+              )}
+              {isRejected && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white/20 text-white">
+                  Rejected
+                </span>
+              )}
+            </div>
+            <p className={`text-sm ${getHeaderTextStyle()}`}>
+              {transaction.property_address}
+            </p>
+          </div>
+
+          {/* Close button: visible on mobile in top row, hidden on md+ */}
+          <CloseButton className="md:hidden" />
         </div>
-        <p className={`text-sm ${getHeaderTextStyle()}`}>
-          {transaction.property_address}
-        </p>
-      </div>
-      <div className="flex items-center gap-2">
-        {isPendingReview ? (
-          <PendingReviewActions
-            isRejecting={isRejecting}
-            isApproving={isApproving}
-            onShowRejectReasonModal={onShowRejectReasonModal}
-            onShowEditModal={onShowEditModal}
-            onApprove={onApprove}
-          />
-        ) : isRejected ? (
-          <RejectedActions
-            isRestoring={isRestoring}
-            onRestore={onRestore}
-            onShowDeleteConfirm={onShowDeleteConfirm}
-          />
-        ) : (
-          <ActiveActions
-            isRejecting={isRejecting}
-            onShowRejectReasonModal={onShowRejectReasonModal}
-            onShowEditModal={onShowEditModal}
-            onShowExportModal={onShowExportModal}
-            onShowDeleteConfirm={onShowDeleteConfirm}
-          />
-        )}
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
-        >
-          <svg
-            className="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
+
+        {/* Bottom row (mobile) / Right side (desktop): Action buttons */}
+        <div className="flex items-center gap-2 justify-end flex-wrap">
+          {isPendingReview ? (
+            <PendingReviewActions
+              isRejecting={isRejecting}
+              isApproving={isApproving}
+              onShowRejectReasonModal={onShowRejectReasonModal}
+              onShowEditModal={onShowEditModal}
+              onApprove={onApprove}
             />
-          </svg>
-        </button>
+          ) : isRejected ? (
+            <RejectedActions
+              isRestoring={isRestoring}
+              onRestore={onRestore}
+              onShowDeleteConfirm={onShowDeleteConfirm}
+            />
+          ) : (
+            <ActiveActions
+              transaction={transaction}
+              isSubmitting={isSubmitting}
+              onShowEditModal={onShowEditModal}
+              onShowSubmitModal={onShowSubmitModal}
+              onShowExportModal={onShowExportModal}
+              onShowDeleteConfirm={onShowDeleteConfirm}
+            />
+          )}
+
+          {/* Close button: hidden on mobile, visible on md+ */}
+          <CloseButton className="hidden md:block" />
+        </div>
       </div>
     </div>
   );
@@ -226,46 +250,64 @@ function RejectedActions({
 }
 
 function ActiveActions({
-  isRejecting,
-  onShowRejectReasonModal,
+  transaction,
+  isSubmitting,
   onShowEditModal,
+  onShowSubmitModal,
   onShowExportModal,
   onShowDeleteConfirm,
 }: {
-  isRejecting: boolean;
-  onShowRejectReasonModal: () => void;
+  transaction: Transaction;
+  isSubmitting: boolean;
   onShowEditModal: () => void;
+  onShowSubmitModal?: () => void;
   onShowExportModal: () => void;
   onShowDeleteConfirm: () => void;
 }) {
+  // Check if transaction can be submitted
+  const canSubmit = transaction.submission_status === "not_submitted" ||
+    transaction.submission_status === "needs_changes" ||
+    !transaction.submission_status;
+
+  const isResubmit = transaction.submission_status === "needs_changes";
+  const isSubmitted = transaction.submission_status === "submitted" ||
+    transaction.submission_status === "under_review" ||
+    transaction.submission_status === "approved";
+
   return (
     <>
-      {/* Edit Button */}
-      <button
-        onClick={onShowEditModal}
-        className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-green-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
-      >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-        </svg>
-        Edit
-      </button>
-      {/* Reject Button */}
-      <button
-        onClick={onShowRejectReasonModal}
-        disabled={isRejecting}
-        className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-orange-600 hover:bg-opacity-90 shadow-md hover:shadow-lg disabled:opacity-50"
-      >
-        {isRejecting ? (
-          <div className="w-5 h-5 border-2 border-orange-600 border-t-transparent rounded-full animate-spin" />
-        ) : (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-          </svg>
+      {/* Submit for Review Button - Team/Enterprise license only */}
+      <LicenseGate requires="team">
+        {/* Submit for Review Button - shown when not yet submitted */}
+        {onShowSubmitModal && canSubmit && (
+          <button
+            onClick={onShowSubmitModal}
+            disabled={isSubmitting}
+            className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg disabled:opacity-50"
+          >
+            {isSubmitting ? (
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )}
+            {isResubmit ? "Resubmit" : "Submit for Review"}
+          </button>
         )}
-        Reject
-      </button>
-      {/* Export Button */}
+        {/* Submitted Badge - shown when already submitted */}
+        {isSubmitted && (
+          <span className="px-4 py-2 rounded-lg font-medium flex items-center gap-2 bg-green-100 text-green-700">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            Submitted
+          </span>
+        )}
+      </LicenseGate>
+      {/* Export Button - Available for ALL license types (BACKLOG-459)
+          Team license: secondary action (shown alongside Submit)
+          Individual license: primary action */}
       <button
         onClick={onShowExportModal}
         className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-green-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
@@ -274,6 +316,16 @@ function ActiveActions({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
         Export
+      </button>
+      {/* Edit Button */}
+      <button
+        onClick={onShowEditModal}
+        className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-gray-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+        </svg>
+        Edit
       </button>
       {/* Delete Button */}
       <button

@@ -135,6 +135,11 @@ export function decodeUtf16BE(buffer: Buffer, skipBOM = 0): string {
  * Attempt to decode buffer using multiple encodings
  * Returns the first successful decode (no replacement chars) or best effort
  *
+ * @deprecated TASK-1049: This function is deprecated as part of the deterministic
+ * message parsing refactor. The message parser now uses format detection (bplist00
+ * or streamtyped magic bytes) and dedicated parsers instead of encoding guessing.
+ * This function may be removed in a future release.
+ *
  * @param buffer - Buffer to decode
  * @param context - Optional context for logging
  * @returns Decoded text and encoding used
@@ -279,6 +284,11 @@ export function analyzeBufferEncoding(buffer: Buffer): {
 /**
  * Extract text segments from a typedstream buffer
  * Looks for readable text sequences after trying multiple encodings
+ *
+ * @deprecated TASK-1049: This function is deprecated as part of the deterministic
+ * message parsing refactor. Use extractTextFromTypedstream() from messageParser.ts
+ * instead, which provides proper typedstream format parsing without encoding guessing.
+ * This function may be removed in a future release.
  *
  * @param buffer - Buffer containing typedstream data
  * @returns Extracted text segments

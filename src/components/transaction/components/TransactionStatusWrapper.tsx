@@ -1,5 +1,7 @@
 import React from "react";
 import type { Transaction } from "@/types";
+import { LicenseGate } from "@/components/common/LicenseGate";
+import { useLicense } from "@/contexts/LicenseContext";
 
 // ============================================
 // DETECTION BADGE COMPONENTS
@@ -7,13 +9,20 @@ import type { Transaction } from "@/types";
 
 /**
  * Badge showing manual entry - only shown for manually created transactions
- * (AI-detected is the default, no badge needed)
+ * when the user has AI add-on (otherwise all transactions are manual by default)
  */
 export function ManualEntryBadge({
   source,
 }: {
   source: "auto" | "manual" | "hybrid" | undefined;
 }) {
+  const { hasAIAddon } = useLicense();
+
+  // Don't show badge if no AI add-on - no distinction needed
+  if (!hasAIAddon) {
+    return null;
+  }
+
   // Only show badge for manually entered transactions
   if (source !== "manual") {
     return null;
@@ -80,13 +89,16 @@ export interface StatusConfig {
 
 /**
  * Get status configuration based on transaction state
+ * @param transaction - The transaction to get status for
+ * @param hasAIAddon - Whether the user has the AI add-on (affects rejected status display)
  */
-export function getStatusConfig(transaction: Transaction): StatusConfig {
+export function getStatusConfig(transaction: Transaction, hasAIAddon: boolean = true): StatusConfig {
   const detectionStatus = transaction.detection_status;
   const status = transaction.status;
 
   // Pending Review - Amber
   // Show pending styling if EITHER detection_status OR status is "pending"
+  // Note: Without AI add-on, pending status is still possible for manual workflow
   if (detectionStatus === "pending" || status === "pending") {
     return {
       label: "Pending Review",
@@ -103,8 +115,10 @@ export function getStatusConfig(transaction: Transaction): StatusConfig {
     };
   }
 
-  // Rejected - Red
-  if (detectionStatus === "rejected") {
+  // Rejected - Red (AI add-on only)
+  // Without AI add-on, treat rejected transactions as Active
+  // (Rejected is an AI concept - false positive from auto-detection)
+  if (detectionStatus === "rejected" && hasAIAddon) {
     return {
       label: "Rejected",
       headerBg: "bg-gradient-to-r from-red-50 to-rose-50",
@@ -174,7 +188,8 @@ function TransactionStatusWrapper({
   onActionClick,
   children,
 }: TransactionStatusWrapperProps) {
-  const config = getStatusConfig(transaction);
+  const { hasAIAddon } = useLicense();
+  const config = getStatusConfig(transaction, hasAIAddon);
 
   const handleActionClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
@@ -205,27 +220,37 @@ function TransactionStatusWrapper({
           )}
 
           {/* Right: Action Button */}
-          <button
-            onClick={handleActionClick}
-            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${config.buttonBg} ${config.buttonHover} text-white shadow-sm hover:shadow flex items-center gap-1.5`}
-          >
-            {config.buttonText === "Review & Edit" && (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-            )}
-            {config.buttonText === "Export" && (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            )}
-            {config.buttonText === "Restore" && (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            )}
-            {config.buttonText}
-          </button>
+          {/* Export button - Individual license only */}
+          {config.buttonText === "Export" ? (
+            <LicenseGate requires="individual">
+              <button
+                onClick={handleActionClick}
+                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${config.buttonBg} ${config.buttonHover} text-white shadow-sm hover:shadow flex items-center gap-1.5`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                {config.buttonText}
+              </button>
+            </LicenseGate>
+          ) : (
+            <button
+              onClick={handleActionClick}
+              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${config.buttonBg} ${config.buttonHover} text-white shadow-sm hover:shadow flex items-center gap-1.5`}
+            >
+              {config.buttonText === "Review & Edit" && (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              )}
+              {config.buttonText === "Restore" && (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              )}
+              {config.buttonText}
+            </button>
+          )}
         </div>
       </div>
 
