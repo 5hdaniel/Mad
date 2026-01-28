@@ -9,7 +9,9 @@
 // ============================================
 
 // Auth & User
-export type OAuthProvider = "google" | "microsoft";
+// Note: 'azure' is Microsoft's Azure AD provider - we accept it from Supabase
+// but normalize to 'microsoft' for local database storage (CHECK constraint)
+export type OAuthProvider = "google" | "microsoft" | "azure";
 export type OAuthPurpose = "authentication" | "mailbox";
 export type SubscriptionTier = "free" | "pro" | "enterprise";
 export type SubscriptionStatus = "trial" | "active" | "cancelled" | "expired";

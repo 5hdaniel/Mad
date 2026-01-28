@@ -20,10 +20,11 @@ import databaseService from "../services/databaseService";
 import supabaseService from "../services/supabaseService";
 import auditService from "../services/auditService";
 import logService from "../services/logService";
+import sessionService from "../services/sessionService";
 import { setSyncUserId } from "../sync-handlers";
 
 // Import validation utilities
-import { ValidationError, validateUserId } from "../utils/validation";
+import { getValidUserId } from "../utils/userIdHelper";
 
 // Import constants
 import {
@@ -237,6 +238,16 @@ export async function handleCompletePendingLogin(
 
     const sessionToken = await databaseService.createSession(localUser.id);
 
+    // Save session to file for persistence across app restarts
+    await sessionService.saveSession({
+      user: localUser,
+      sessionToken,
+      provider,
+      subscription,
+      expiresAt: Date.now() + sessionService.getSessionExpirationMs(),
+      createdAt: Date.now(),
+    });
+
     const deviceInfo = {
       device_id: crypto.randomUUID(),
       device_name: os.hostname(),
@@ -313,7 +324,14 @@ export async function handleSavePendingMailboxTokens(
       { userId: data.userId, email: data.email }
     );
 
-    const validatedUserId = validateUserId(data.userId)!;
+    // BACKLOG-551: Validate user ID exists in local DB (handles Supabase auth.uid() mismatch)
+    const validatedUserId = await getValidUserId(data.userId, "SharedAuth");
+    if (!validatedUserId) {
+      return {
+        success: false,
+        error: "No user found in database. Please log in first.",
+      };
+    }
 
     await databaseService.saveOAuthToken(
       validatedUserId,
@@ -332,7 +350,7 @@ export async function handleSavePendingMailboxTokens(
     await logService.info(
       `Pending ${data.provider} mailbox tokens saved`,
       "AuthHandlers",
-      { userId: data.userId }
+      { userId: validatedUserId }
     );
 
     await auditService.log({
@@ -372,7 +390,14 @@ export async function handleDisconnectMailbox(
       { userId }
     );
 
-    const validatedUserId = validateUserId(userId)!;
+    // BACKLOG-551: Validate user ID exists in local DB (handles Supabase auth.uid() mismatch)
+    const validatedUserId = await getValidUserId(userId, "SharedAuth");
+    if (!validatedUserId) {
+      return {
+        success: false,
+        error: "No user found in database. Please log in first.",
+      };
+    }
 
     await databaseService.deleteOAuthToken(
       validatedUserId,
@@ -383,7 +408,7 @@ export async function handleDisconnectMailbox(
     await logService.info(
       `${provider} mailbox disconnected successfully`,
       "AuthHandlers",
-      { userId }
+      { userId: validatedUserId }
     );
 
     await auditService.log({
@@ -411,8 +436,9 @@ export async function handleDisconnectMailbox(
       }
     );
 
+    // Use original userId for error logging since validatedUserId may not exist
     await auditService.log({
-      userId,
+      userId: userId || "unknown",
       action: "MAILBOX_DISCONNECT",
       resourceType: "MAILBOX",
       metadata: { provider },

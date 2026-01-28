@@ -111,6 +111,8 @@ jest.mock("../services/supabaseService", () => ({
     registerDevice: jest.fn(),
     trackEvent: jest.fn(),
     syncTermsAcceptance: jest.fn(),
+    // TASK-1507G: Add getAuthUserId for unified ID handling
+    getAuthUserId: jest.fn().mockReturnValue(null),
   },
 }));
 

@@ -38,12 +38,13 @@ if (!gotTheLock) {
 import { autoUpdater } from "electron-updater";
 import dotenv from "dotenv";
 
-// Load environment files based on packaging state
-// In packaged builds: load from resources directory (only public values)
-// In development: load .env.development first, then .env.local for overrides
+// Load environment files based on whether app is packaged or in development
 if (app.isPackaged) {
-  dotenv.config({ path: path.join(process.resourcesPath, '.env.production') });
+  // Packaged build: load .env.production from resources
+  const envPath = path.join(process.resourcesPath, "app.asar", ".env.production");
+  dotenv.config({ path: envPath });
 } else {
+  // Development: load .env.development first (OAuth credentials), then .env.local for overrides
   dotenv.config({ path: path.join(__dirname, "../.env.development") });
   dotenv.config({ path: path.join(__dirname, "../.env.local") });
 }
@@ -79,11 +80,12 @@ import { validateLicense, createUserLicense } from "./services/licenseService";
 import { registerDevice } from "./services/deviceService";
 import supabaseService from "./services/supabaseService";
 import databaseService from "./services/databaseService";
+import sessionService from "./services/sessionService";
 import {
   CURRENT_TERMS_VERSION,
   CURRENT_PRIVACY_POLICY_VERSION,
 } from "./constants/legalVersions";
-import type { OAuthProvider, SubscriptionTier, SubscriptionStatus } from "./types";
+import type { OAuthProvider, SubscriptionTier, SubscriptionStatus, User } from "./types";
 
 // Import extracted handlers from handlers/ directory
 import {
@@ -169,17 +171,21 @@ async function syncDeepLinkUserToLocalDb(userData: PendingDeepLinkUser): Promise
 
     if (!localUser) {
       // Also check by OAuth ID in case the user was created via a different flow
-      localUser = await databaseService.getUserByOAuthId(userData.provider, userData.supabaseId);
+      // Map 'azure' to 'microsoft' for lookup (Azure AD is Microsoft's provider)
+      const lookupProvider = userData.provider === "azure" ? "microsoft" : userData.provider;
+      localUser = await databaseService.getUserByOAuthId(lookupProvider, userData.supabaseId);
     }
 
     if (!localUser) {
       // TASK-1507G: Use Supabase Auth UUID as local user ID for unified IDs
+      // Map 'azure' to 'microsoft' - Azure AD is Microsoft's auth provider
+      const normalizedProvider = userData.provider === "azure" ? "microsoft" : userData.provider;
       await databaseService.createUser({
         id: userData.supabaseId,
         email: userData.email,
         display_name: userData.displayName || userData.email.split("@")[0],
         avatar_url: userData.avatarUrl,
-        oauth_provider: userData.provider,
+        oauth_provider: normalizedProvider,
         oauth_id: userData.supabaseId,
         subscription_tier: userData.subscriptionTier || "free",
         subscription_status: userData.subscriptionStatus || "trial",
@@ -327,9 +333,12 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
         return "trial"; // Default for trial license
       };
 
+      // Extract email - Azure/Microsoft may have empty user.email but email in user_metadata
+      const userEmail = user.email || user.user_metadata?.email || "";
+
       const deepLinkUserData: PendingDeepLinkUser = {
         supabaseId: user.id,
-        email: user.email || "",
+        email: userEmail,
         displayName: user.user_metadata?.full_name,
         avatarUrl: user.user_metadata?.avatar_url,
         provider,
@@ -340,6 +349,7 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
       // TASK-1507F: Track local user ID for renderer callback
       // The renderer needs the LOCAL SQLite user ID (not Supabase UUID) for FK constraints
       let localUserId = user.id; // Default to Supabase UUID as fallback
+      let localUser: User | null = null; // Hoisted for session save logic
 
       if (databaseService.isInitialized()) {
         // Database is ready - create user now
@@ -347,10 +357,42 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
         await syncDeepLinkUserToLocalDb(deepLinkUserData);
 
         // TASK-1507F: Get the local user ID after creation/sync
-        const localUser = await databaseService.getUserByEmail(user.email || "");
+        localUser = await databaseService.getUserByEmail(userEmail);
         if (localUser) {
           localUserId = localUser.id;
           log.info("[DeepLink] Using local user ID:", localUserId);
+
+          // Save session to disk for persistence across app restarts
+          try {
+            const sessionToken = await databaseService.createSession(localUserId);
+
+            // Build full Subscription object from license status
+            const subscriptionTier = deepLinkUserData.subscriptionTier || "free";
+            const subscriptionStatus = deepLinkUserData.subscriptionStatus || "trial";
+            const isTrial = subscriptionStatus === "trial";
+            const isActive = subscriptionStatus === "active" || subscriptionStatus === "trial";
+
+            const subscription = {
+              tier: subscriptionTier,
+              status: subscriptionStatus,
+              isActive,
+              isTrial,
+              trialEnded: subscriptionStatus === "expired",
+              trialDaysRemaining: licenseStatus.trialDaysRemaining ?? 0,
+            };
+
+            await sessionService.saveSession({
+              user: localUser,
+              sessionToken,
+              provider,
+              subscription,
+              expiresAt: Date.now() + sessionService.getSessionExpirationMs(),
+              createdAt: Date.now(),
+            });
+            log.info("[DeepLink] Session saved successfully");
+          } catch (sessionError) {
+            log.error("[DeepLink] Failed to save session:", sessionError);
+          }
         } else {
           log.warn("[DeepLink] Local user not found after sync, using Supabase ID");
         }
@@ -394,7 +436,7 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
         userId: localUserId,
         user: {
           id: localUserId,
-          email: user.email,
+          email: userEmail,
           name: user.user_metadata?.full_name,
         },
         provider: user.app_metadata?.provider,

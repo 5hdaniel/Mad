@@ -54,25 +54,53 @@ interface RevokeTokenResult {
  * Better UX than device code flow - browser redirects back to app
  */
 class MicrosoftAuthService {
-  private clientId: string;
-  private tenantId: string;
+  private clientId: string = "";
+  private tenantId: string = "common";
   private redirectUri: string = "http://localhost:3000/callback";
-  private authorizeUrl: string;
-  private tokenUrl: string;
+  private authorizeUrl: string = "";
+  private tokenUrl: string = "";
   private server: http.Server | null = null;
   // Store resolve/reject functions to allow direct code resolution from navigation interception
   private codeResolver: ((code: string) => void) | null = null;
   private codeRejecter: ((error: Error) => void) | null = null;
+  private initialized: boolean = false;
 
   constructor() {
+    // Lazy initialization - don't read env vars here
+    // They may not be loaded yet in packaged builds
+  }
+
+  /**
+   * Initialize the service by reading env vars
+   * Called lazily on first use to ensure dotenv has loaded
+   */
+  initialize(): void {
+    if (this.initialized) {
+      return;
+    }
+
     this.clientId = process.env.MICROSOFT_CLIENT_ID || "";
-    // Note: client_secret not needed for public clients (desktop apps)
-    // We use PKCE (Proof Key for Code Exchange) for security instead
     this.tenantId = process.env.MICROSOFT_TENANT_ID || "common";
 
     // Microsoft OAuth2 endpoints
     this.authorizeUrl = `https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/authorize`;
     this.tokenUrl = `https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/token`;
+
+    if (!this.clientId) {
+      throw new Error("Microsoft OAuth credentials not configured");
+    }
+
+    this.initialized = true;
+    logService.info("[MicrosoftAuth] Service initialized", "MicrosoftAuth");
+  }
+
+  /**
+   * Ensure service is initialized before use
+   */
+  private _ensureInitialized(): void {
+    if (!this.initialized) {
+      this.initialize();
+    }
   }
 
   /**
@@ -115,6 +143,16 @@ class MicrosoftAuthService {
    * @returns {Promise<string>} Authorization code from redirect
    */
   startLocalServer(): Promise<string> {
+    // Stop any existing server before starting a new one
+    // This prevents EADDRINUSE errors when user retries auth
+    if (this.server) {
+      logService.info(
+        "[MicrosoftAuth] Stopping existing server before starting new one",
+        "MicrosoftAuth"
+      );
+      this.stopLocalServer();
+    }
+
     return new Promise((resolve, reject) => {
       // Store resolve/reject for direct resolution from navigation interception
       this.codeResolver = resolve;
@@ -263,6 +301,7 @@ class MicrosoftAuthService {
    * Opens browser, user logs in, redirects back to local server
    */
   async authenticateForLogin(): Promise<AuthFlowResult> {
+    this._ensureInitialized();
     const scopes = [
       "openid",
       "profile",
@@ -309,6 +348,7 @@ class MicrosoftAuthService {
    * @param loginHint - User email to pre-fill
    */
   async authenticateForMailbox(loginHint?: string): Promise<AuthFlowResult> {
+    this._ensureInitialized();
     const scopes = [
       "openid",
       "profile",
@@ -360,6 +400,7 @@ class MicrosoftAuthService {
     code: string,
     codeVerifier: string,
   ): Promise<TokenResponse> {
+    this._ensureInitialized();
     try {
       const params = new URLSearchParams({
         client_id: this.clientId,
@@ -427,6 +468,7 @@ class MicrosoftAuthService {
    * @param refreshToken - Refresh token
    */
   async refreshToken(refreshToken: string): Promise<TokenResponse> {
+    this._ensureInitialized();
     try {
       const params = new URLSearchParams({
         client_id: this.clientId,
