@@ -5,6 +5,8 @@
  * Verifies that when the feature flag is enabled, the hook correctly
  * derives its state from the state machine instead of local state.
  *
+ * TASK-1612: Updated to mock settingsService instead of window.api.
+ *
  * @module appCore/state/flows/__tests__/usePhoneTypeApi.machine.test
  */
 
@@ -28,19 +30,17 @@ jest.mock("../../machine/utils/featureFlags", () => ({
 const mockIsNewStateMachineEnabled =
   featureFlags.isNewStateMachineEnabled as jest.Mock;
 
-// Mock window.api.user
+// Mock settingsService methods
 const mockSetPhoneType = jest.fn();
 const mockSetPhoneTypeCloud = jest.fn();
-Object.defineProperty(window, "api", {
-  value: {
-    user: {
-      setPhoneType: mockSetPhoneType,
-      // TASK-1600: Cloud phone type storage (Supabase)
-      setPhoneTypeCloud: mockSetPhoneTypeCloud,
-    },
+
+// TASK-1612: Mock the settingsService module instead of window.api
+jest.mock("@/services", () => ({
+  settingsService: {
+    setPhoneType: (...args: unknown[]) => mockSetPhoneType(...args),
+    setPhoneTypeCloud: (...args: unknown[]) => mockSetPhoneTypeCloud(...args),
   },
-  writable: true,
-});
+}));
 
 // Default mock options for usePhoneTypeApi
 const defaultOptions = {

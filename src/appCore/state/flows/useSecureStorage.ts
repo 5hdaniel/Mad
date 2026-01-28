@@ -21,9 +21,12 @@
  *
  * Requires the state machine feature flag to be enabled.
  * If disabled, throws an error - legacy code paths have been removed.
+ *
+ * TASK-1612: Migrated to use systemService and settingsService instead of direct window.api calls.
  */
 
 import { useCallback } from "react";
+import { systemService, settingsService } from "@/services";
 import type { PendingOnboardingData, PendingEmailTokens } from "../types";
 import type { PendingOAuthData } from "../../../components/Login";
 import type { Subscription } from "../../../../electron/types/models";
@@ -123,7 +126,7 @@ export function useSecureStorage(
         try {
           dispatch({ type: "DB_INIT_STARTED" });
 
-          const result = await window.api.system.initializeSecureStorage();
+          const result = await systemService.initializeSecureStorage();
 
           dispatch({
             type: "DB_INIT_COMPLETE",
@@ -136,14 +139,12 @@ export function useSecureStorage(
             const userId = state.user.id;
             const phoneType = state.selectedPhoneType;
             try {
-              const userApi = window.api.user as {
-                setPhoneType: (
-                  userId: string,
-                  phoneType: "iphone" | "android"
-                ) => Promise<{ success: boolean; error?: string }>;
-              };
-              await userApi.setPhoneType(userId, phoneType);
-              console.log("[useSecureStorage] Synced queued phone type to DB:", phoneType);
+              const syncResult = await settingsService.setPhoneType(userId, phoneType);
+              if (syncResult.success) {
+                console.log("[useSecureStorage] Synced queued phone type to DB:", phoneType);
+              } else {
+                console.warn("[useSecureStorage] Failed to sync phone type to DB:", syncResult.error);
+              }
             } catch (syncError) {
               // Log but don't fail - phone type is already in state
               console.warn("[useSecureStorage] Failed to sync phone type to DB:", syncError);

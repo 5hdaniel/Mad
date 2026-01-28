@@ -15,9 +15,12 @@
  *
  * Requires the state machine feature flag to be enabled.
  * If disabled, throws an error - legacy code paths have been removed.
+ *
+ * TASK-1612: Migrated to use settingsService instead of direct window.api calls.
  */
 
 import { useCallback } from "react";
+import { settingsService } from "@/services";
 import type { PhoneType } from "../types";
 import {
   useOptionalMachineState,
@@ -102,6 +105,8 @@ export function usePhoneTypeApi({
    * then to local DB when initialized. This allows phone-type selection
    * to work before database initialization.
    *
+   * TASK-1612: Migrated to use settingsService instead of direct window.api calls.
+   *
    * Storage priority:
    * 1. Supabase cloud (always available after auth)
    * 2. Local SQLite (when initialized, for offline support)
@@ -120,19 +125,7 @@ export function usePhoneTypeApi({
       try {
         // 1. Save to Supabase first (always available after auth)
         // TASK-1600: This allows phone type selection before DB init
-        // Type assertion through unknown needed because window.d.ts index signature causes inference issues
-        const userApi = window.api.user as unknown as {
-          setPhoneType: (
-            userId: string,
-            phoneType: "iphone" | "android"
-          ) => Promise<{ success: boolean; error?: string }>;
-          setPhoneTypeCloud: (
-            userId: string,
-            phoneType: "iphone" | "android"
-          ) => Promise<{ success: boolean; error?: string }>;
-        };
-
-        const cloudResult = await userApi.setPhoneTypeCloud(
+        const cloudResult = await settingsService.setPhoneTypeCloud(
           currentUserId,
           phoneType
         );
@@ -155,7 +148,7 @@ export function usePhoneTypeApi({
 
         if (isDbReady) {
           try {
-            const localResult = await userApi.setPhoneType(
+            const localResult = await settingsService.setPhoneType(
               currentUserId,
               phoneType
             );
