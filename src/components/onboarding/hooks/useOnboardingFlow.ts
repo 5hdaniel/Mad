@@ -8,7 +8,7 @@
  * @module onboarding/hooks/useOnboardingFlow
  */
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { usePlatform } from "../../../contexts/PlatformContext";
 import { getFlowSteps } from "../flows";
 import type {
@@ -184,18 +184,49 @@ export function useOnboardingFlow(
     });
   }, [allSteps, context]);
 
-  // Current step state
-  const [currentIndex, setCurrentIndex] = useState(() => {
-    // If initialStepId is provided, find its index in the steps array
+  // Current step state - track by ID to handle dynamic filtering
+  const [currentStepId, setCurrentStepId] = useState<string | null>(() => {
     if (initialStepId) {
-      const idIndex = steps.findIndex((s) => s.meta.id === initialStepId);
-      if (idIndex >= 0) {
-        return idIndex;
-      }
+      const step = steps.find(s => s.meta.id === initialStepId);
+      if (step) return step.meta.id;
     }
-    // Clamp initial index to valid range
-    return Math.min(Math.max(0, initialStepIndex), Math.max(0, steps.length - 1));
+    return steps[0]?.meta.id ?? null;
   });
+
+  // Derive index from ID - handles array changes automatically
+  const currentIndex = useMemo(() => {
+    if (!currentStepId) return 0;
+    const idx = steps.findIndex(s => s.meta.id === currentStepId);
+    if (idx >= 0) return idx;
+
+    // Current step was filtered out - find next available step
+    const allIdx = allSteps.findIndex(s => s.meta.id === currentStepId);
+    for (let i = allIdx + 1; i < allSteps.length; i++) {
+      const nextIdx = steps.findIndex(s => s.meta.id === allSteps[i].meta.id);
+      if (nextIdx >= 0) return nextIdx;
+    }
+    return Math.max(0, steps.length - 1);
+  }, [currentStepId, steps, allSteps]);
+
+  // Effect to update currentStepId when current step is filtered out
+  useEffect(() => {
+    if (!currentStepId || steps.length === 0) return;
+
+    const exists = steps.some(s => s.meta.id === currentStepId);
+    if (!exists) {
+      // Step was filtered - find and set next available step
+      const allIdx = allSteps.findIndex(s => s.meta.id === currentStepId);
+      for (let i = allIdx + 1; i < allSteps.length; i++) {
+        const nextStep = steps.find(s => s.meta.id === allSteps[i].meta.id);
+        if (nextStep) {
+          setCurrentStepId(nextStep.meta.id);
+          return;
+        }
+      }
+      // No next step - go to last available
+      setCurrentStepId(steps[steps.length - 1]?.meta.id ?? null);
+    }
+  }, [currentStepId, steps, allSteps]);
 
   // Current step (with safety check)
   const currentStep = steps[currentIndex] ?? steps[0];
@@ -224,26 +255,26 @@ export function useOnboardingFlow(
   // Navigation: Go to next step
   const goToNext = useCallback(() => {
     if (currentIndex < steps.length - 1) {
-      setCurrentIndex(currentIndex + 1);
+      setCurrentStepId(steps[currentIndex + 1].meta.id);
     } else {
       // Flow complete
       onComplete?.();
     }
-  }, [currentIndex, steps.length, onComplete]);
+  }, [currentIndex, steps, onComplete]);
 
   // Navigation: Go to previous step
   const goToPrevious = useCallback(() => {
     if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
+      setCurrentStepId(steps[currentIndex - 1].meta.id);
     }
-  }, [currentIndex]);
+  }, [currentIndex, steps]);
 
   // Navigation: Go to specific step
   const goToStep = useCallback(
     (stepId: OnboardingStepId) => {
-      const index = steps.findIndex((s) => s.meta.id === stepId);
-      if (index >= 0) {
-        setCurrentIndex(index);
+      const step = steps.find((s) => s.meta.id === stepId);
+      if (step) {
+        setCurrentStepId(step.meta.id);
       } else {
         console.warn(`[Onboarding] Step "${stepId}" not found in current flow`);
       }

@@ -8,6 +8,7 @@
 import { useCallback, useMemo } from "react";
 import type { AppStep, PendingOnboardingData, PendingEmailTokens } from "../types";
 import type { PendingOAuthData } from "../../../components/Login";
+import { USE_NEW_ONBOARDING } from "../../routing/routeConfig";
 
 export interface UseEmailHandlersOptions {
   // Auth state
@@ -78,11 +79,14 @@ export function useEmailHandlers({
           emailConnected: !!emailTokens,
           emailProvider: emailTokens?.provider || null,
         }));
-        if (isMacOS) {
-          setCurrentStep("keychain-explanation");
-        } else if (isWindows) {
-          // On Windows, go to Apple driver setup for iPhone users
-          setCurrentStep("apple-driver-setup");
+        // When new onboarding is enabled, don't call setCurrentStep - let OnboardingFlow handle navigation
+        if (!USE_NEW_ONBOARDING) {
+          if (isMacOS) {
+            setCurrentStep("keychain-explanation");
+          } else if (isWindows) {
+            // On Windows, go to Apple driver setup for iPhone users
+            setCurrentStep("apple-driver-setup");
+          }
         }
         return;
       }
@@ -94,16 +98,19 @@ export function useEmailHandlers({
         setHasEmailConnected(true, currentUserEmail, provider);
       }
 
-      // Windows iPhone users need driver setup after email onboarding
-      if (isWindows && selectedPhoneType === "iphone" && needsDriverSetup) {
-        setCurrentStep("apple-driver-setup");
-        return;
-      }
+      // When new onboarding is enabled, don't call setCurrentStep - let OnboardingFlow handle navigation
+      if (!USE_NEW_ONBOARDING) {
+        // Windows iPhone users need driver setup after email onboarding
+        if (isWindows && selectedPhoneType === "iphone" && needsDriverSetup) {
+          setCurrentStep("apple-driver-setup");
+          return;
+        }
 
-      if (hasPermissions) {
-        setCurrentStep("dashboard");
-      } else {
-        setCurrentStep("permissions");
+        if (hasPermissions) {
+          setCurrentStep("dashboard");
+        } else {
+          setCurrentStep("permissions");
+        }
       }
     },
     [
@@ -128,27 +135,33 @@ export function useEmailHandlers({
         ...prev,
         emailConnected: false, // Skipped, not connected
       }));
-      if (isMacOS) {
-        setCurrentStep("keychain-explanation");
-      } else if (isWindows) {
-        // On Windows, go to Apple driver setup for iPhone users
-        setCurrentStep("apple-driver-setup");
+      // When new onboarding is enabled, don't call setCurrentStep - let OnboardingFlow handle navigation
+      if (!USE_NEW_ONBOARDING) {
+        if (isMacOS) {
+          setCurrentStep("keychain-explanation");
+        } else if (isWindows) {
+          // On Windows, go to Apple driver setup for iPhone users
+          setCurrentStep("apple-driver-setup");
+        }
       }
       return;
     }
 
     await completeEmailOnboarding();
 
-    // Windows iPhone users need driver setup after email onboarding
-    if (isWindows && selectedPhoneType === "iphone" && needsDriverSetup) {
-      setCurrentStep("apple-driver-setup");
-      return;
-    }
+    // When new onboarding is enabled, don't call setCurrentStep - let OnboardingFlow handle navigation
+    if (!USE_NEW_ONBOARDING) {
+      // Windows iPhone users need driver setup after email onboarding
+      if (isWindows && selectedPhoneType === "iphone" && needsDriverSetup) {
+        setCurrentStep("apple-driver-setup");
+        return;
+      }
 
-    if (hasPermissions) {
-      setCurrentStep("dashboard");
-    } else {
-      setCurrentStep("permissions");
+      if (hasPermissions) {
+        setCurrentStep("dashboard");
+      } else {
+        setCurrentStep("permissions");
+      }
     }
   }, [
     pendingOAuthData,
@@ -164,7 +177,10 @@ export function useEmailHandlers({
   ]);
 
   const handleEmailOnboardingBack = useCallback((): void => {
-    setCurrentStep("phone-type-selection");
+    // When new onboarding is enabled, don't call setCurrentStep - let OnboardingFlow handle navigation
+    if (!USE_NEW_ONBOARDING) {
+      setCurrentStep("phone-type-selection");
+    }
   }, [setCurrentStep]);
 
   /**
