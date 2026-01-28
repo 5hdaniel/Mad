@@ -1,9 +1,38 @@
 # Sprint Plan: SPRINT-063 - Onboarding Flow Refactor
 
 **Created**: 2026-01-28
-**Status**: Planning
+**Status**: In Progress - Phase 1 Complete, Awaiting User Testing
 **Goal**: Refactor onboarding flow for reliability, proper DB initialization order, and modular architecture
-**Branch**: TBD (will branch from develop after SPRINT-062 merges)
+**Branch**: `sprint/063-onboarding-refactor`
+
+---
+
+## Current Progress
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| Phase 1 | **COMPLETE** | Awaiting USER GATE (TASK-1604) |
+| Phase 2 | Not Started | Optional architecture cleanup |
+| Phase 3 | Not Started | Carried from SPRINT-062 |
+| Phase 4 | Not Started | Build fixes |
+| Phase 5 | Not Started | Final review |
+
+### Phase 1 Implementation Status
+
+| Task | PR | Status | Merged |
+|------|-----|--------|--------|
+| TASK-1600 | #656 | ✅ Complete | 2026-01-28 |
+| TASK-1601 | #657 | ✅ Complete | 2026-01-28 |
+| TASK-1602 | #658 | ✅ Complete | 2026-01-28 |
+| TASK-1603 | #659 | ✅ Complete | 2026-01-28 |
+| TASK-1604 | N/A | ⏳ USER GATE | Pending user testing |
+
+### What Was Implemented
+
+1. **TASK-1600**: Phone type now stored in Supabase (cloud-first, no local DB dependency)
+2. **TASK-1601**: macOS flow reordered: phone → secure-storage → permissions → email
+3. **TASK-1602**: Windows flow reordered: phone → apple-driver → email
+4. **TASK-1603**: Removed pendingEmailTokens (~140 lines of complexity eliminated)
 
 ---
 
