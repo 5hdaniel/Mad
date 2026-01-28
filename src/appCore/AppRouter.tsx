@@ -5,7 +5,7 @@
  * This is a pure extraction of the routing logic from App.tsx.
  */
 
-import React from "react";
+import React, { useState, useCallback } from "react";
 import Login from "../components/Login";
 import MicrosoftLogin from "../components/MicrosoftLogin";
 import ConversationList from "../components/ConversationList";
@@ -18,6 +18,7 @@ import PhoneTypeSelection from "../components/PhoneTypeSelection";
 import AndroidComingSoon from "../components/AndroidComingSoon";
 import AppleDriverSetup from "../components/AppleDriverSetup";
 import { OnboardingFlow } from "../components/onboarding";
+import { UpgradeScreen, type UpgradeReason } from "../components/license/UpgradeScreen";
 import type { AppStateMachine } from "./state/types";
 import {
   USE_NEW_ONBOARDING,
@@ -48,7 +49,34 @@ export function AppRouter({ app }: AppRouterProps) {
     handleOutlookCancel, handleStartOver, setExportResult, handleRetryConnection,
     openAuditTransaction, openTransactions, openContacts, goToStep,
     handleDismissSetupPrompt, setIsTourActive, openIPhoneSync, openSettings,
+    handleLogout,
   } = app;
+
+  // Track license blocked state for login screen
+  const [licenseBlocked, setLicenseBlocked] = useState<{
+    blocked: boolean;
+    reason: UpgradeReason;
+  }>({ blocked: false, reason: "unknown" });
+
+  // Handle license blocked during login
+  const handleLicenseBlocked = useCallback((data: { userId: string; blockReason: string }) => {
+    // Map blockReason to UpgradeReason
+    let reason: UpgradeReason = "unknown";
+    if (data.blockReason === "expired") {
+      reason = "trial_expired";
+    } else if (data.blockReason === "transaction_limit") {
+      reason = "transaction_limit";
+    } else if (data.blockReason === "suspended") {
+      reason = "suspended";
+    }
+    setLicenseBlocked({ blocked: true, reason });
+  }, []);
+
+  // Handle logout from UpgradeScreen - reset blocked state and call app logout
+  const handleUpgradeScreenLogout = useCallback(async () => {
+    setLicenseBlocked({ blocked: false, reason: "unknown" });
+    await handleLogout();
+  }, [handleLogout]);
 
   // New onboarding architecture (when enabled)
   if (USE_NEW_ONBOARDING && isOnboardingStep(currentStep)) {
@@ -62,6 +90,11 @@ export function AppRouter({ app }: AppRouterProps) {
 
   // Login screen (with offline fallback)
   if (currentStep === "login") {
+    // Show UpgradeScreen if license was blocked during login
+    if (licenseBlocked.blocked) {
+      return <UpgradeScreen reason={licenseBlocked.reason} onLogout={handleUpgradeScreenLogout} />;
+    }
+
     if (!isOnline) {
       return (
         <OfflineFallback
@@ -78,6 +111,7 @@ export function AppRouter({ app }: AppRouterProps) {
         onLoginSuccess={handleLoginSuccess}
         onLoginPending={handleLoginPending}
         onDeepLinkAuthSuccess={handleDeepLinkAuthSuccess}
+        onLicenseBlocked={handleLicenseBlocked}
       />
     );
   }

@@ -333,6 +333,7 @@ interface MainAPI {
   // Shell operations
   shell: {
     openExternal: (url: string) => Promise<{ success: boolean }>;
+    openPopup: (url: string, title?: string) => Promise<{ success: boolean }>;
     openFolder: (folderPath: string) => Promise<{ success: boolean }>;
   };
 
@@ -388,6 +389,7 @@ interface MainAPI {
     logout: (
       sessionToken: string,
     ) => Promise<{ success: boolean; error?: string }>;
+    forceLogout: () => Promise<{ success: boolean; error?: string }>;
     validateSession: (
       sessionToken: string,
     ) => Promise<{ valid: boolean; user?: unknown; error?: string }>;
