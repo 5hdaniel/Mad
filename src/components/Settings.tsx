@@ -1,7 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { LLMSettings } from "./settings/LLMSettings";
 import { MacOSMessagesImportSettings } from "./settings/MacOSMessagesImportSettings";
 import { LicenseGate } from "./common/LicenseGate";
+import {
+  emitEmailConnectionChanged,
+  useEmailConnectionListener,
+} from "@/utils/emailConnectionEvents";
 
 interface ConnectionError {
   type: string;
@@ -49,13 +53,15 @@ interface SettingsComponentProps {
   userId: string;
   /** Callback when email is connected - updates app state */
   onEmailConnected?: (email: string, provider: "google" | "microsoft") => void;
+  /** Callback when email is disconnected - updates app state (TASK-1730) */
+  onEmailDisconnected?: (provider: "google" | "microsoft") => void;
 }
 
 /**
  * Settings Component
  * Application settings and preferences
  */
-function Settings({ onClose, userId, onEmailConnected }: SettingsComponentProps) {
+function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: SettingsComponentProps) {
   const [connections, setConnections] = useState<Connections>({
     google: null,
     microsoft: null,
@@ -93,6 +99,15 @@ function Settings({ onClose, userId, onEmailConnected }: SettingsComponentProps)
       return () => clearInterval(refreshInterval);
     }
   }, [userId]);
+
+  // TASK-1730: Listen for email connection events from other components (e.g., onboarding flow)
+  // This ensures Settings UI updates immediately when email is connected elsewhere
+  useEmailConnectionListener(
+    useCallback(() => {
+      // Refresh connection status when email connection state changes
+      checkConnections();
+    }, [])
+  );
 
   /**
    * Check all email connections and update state.
@@ -232,6 +247,14 @@ function Settings({ onClose, userId, onEmailConnected }: SettingsComponentProps)
               if (email && onEmailConnected) {
                 onEmailConnected(email, "google");
               }
+              // TASK-1730: Emit event for cross-component state propagation
+              if (email) {
+                emitEmailConnectionChanged({
+                  connected: true,
+                  email,
+                  provider: "google",
+                });
+              }
             }
             setConnectingProvider(null);
             if (cleanup) cleanup();
@@ -263,6 +286,14 @@ function Settings({ onClose, userId, onEmailConnected }: SettingsComponentProps)
               if (email && onEmailConnected) {
                 onEmailConnected(email, "microsoft");
               }
+              // TASK-1730: Emit event for cross-component state propagation
+              if (email) {
+                emitEmailConnectionChanged({
+                  connected: true,
+                  email,
+                  provider: "microsoft",
+                });
+              }
             }
             setConnectingProvider(null);
             if (cleanup) cleanup();
@@ -282,6 +313,12 @@ function Settings({ onClose, userId, onEmailConnected }: SettingsComponentProps)
       const result = await window.api.auth.googleDisconnectMailbox(userId);
       if (result.success) {
         await checkConnections();
+        // TASK-1730: Notify parent to update app state machine
+        if (onEmailDisconnected) {
+          onEmailDisconnected("google");
+        }
+        // TASK-1730: Emit event for cross-component state propagation
+        emitEmailConnectionChanged({ connected: false, provider: "google" });
       }
     } catch (error) {
       console.error("Failed to disconnect Google:", error);
@@ -296,6 +333,12 @@ function Settings({ onClose, userId, onEmailConnected }: SettingsComponentProps)
       const result = await window.api.auth.microsoftDisconnectMailbox(userId);
       if (result.success) {
         await checkConnections();
+        // TASK-1730: Notify parent to update app state machine
+        if (onEmailDisconnected) {
+          onEmailDisconnected("microsoft");
+        }
+        // TASK-1730: Emit event for cross-component state propagation
+        emitEmailConnectionChanged({ connected: false, provider: "microsoft" });
       }
     } catch (error) {
       console.error("Failed to disconnect Microsoft:", error);

@@ -71,13 +71,21 @@ export function AppModals({ app }: AppModalsProps) {
     openTransactions();
   }, [closeAuditTransaction, openTransactions]);
 
-  // Get email onboarding API to dispatch EMAIL_CONNECTED when connecting from Settings
+  // Get email onboarding API to dispatch EMAIL_CONNECTED/EMAIL_DISCONNECTED when connecting/disconnecting from Settings
   const { setHasEmailConnected } = useEmailOnboardingApi({ userId: currentUser?.id });
 
   // Callback for when email is connected from Settings
   const handleEmailConnectedFromSettings = useCallback(
     (email: string, provider: "google" | "microsoft") => {
       setHasEmailConnected(true, email, provider);
+    },
+    [setHasEmailConnected]
+  );
+
+  // TASK-1730: Callback for when email is disconnected from Settings
+  const handleEmailDisconnectedFromSettings = useCallback(
+    (provider: "google" | "microsoft") => {
+      setHasEmailConnected(false, undefined, provider);
     },
     [setHasEmailConnected]
   );
@@ -111,6 +119,7 @@ export function AppModals({ app }: AppModalsProps) {
           userId={currentUser.id}
           onClose={closeSettings}
           onEmailConnected={handleEmailConnectedFromSettings}
+          onEmailDisconnected={handleEmailDisconnectedFromSettings}
         />
       )}
 
