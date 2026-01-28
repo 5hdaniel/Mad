@@ -1,8 +1,8 @@
 # Sprint Plan: SPRINT-062 - Auth Flow + Licensing System
 
 **Created**: 2026-01-26
-**Updated**: 2026-01-27 (PM: Added TASK-1510 - Browser auth landing page with provider selection)
-**Status**: Ready
+**Updated**: 2026-01-28 (Closed - deferred remaining tasks to SPRINT-063)
+**Status**: COMPLETE
 **Goal**: Implement browser-based auth flow with Supabase licensing system
 **Branch**: `project/licensing-and-auth-flow`
 
@@ -280,6 +280,8 @@ Phase 4: Final Review
 
 ### TASK-1505: License Service Test (After Phase 2)
 
+**Status: PASSED** (2026-01-28)
+
 **What to test:**
 1. New user gets trial license created
 2. Trial limits are tracked correctly
@@ -287,11 +289,13 @@ Phase 4: Final Review
 4. License status is queryable
 
 **Pass criteria:**
-- [ ] user_licenses table exists in Supabase
-- [ ] device_registrations table exists in Supabase
-- [ ] RLS policies work (user can only see own license)
-- [ ] validateLicense() returns correct status
-- [ ] incrementTransactionCount() updates Supabase
+- [x] user_licenses table exists in Supabase (named `licenses`)
+- [x] device_registrations table exists in Supabase (named `devices`)
+- [x] RLS policies work (user can only see own license)
+- [x] validateLicense() returns correct status
+- [x] incrementTransactionCount() updates Supabase
+
+**SR Engineer Verification:** All criteria verified via Supabase MCP tools and code review.
 
 ### TASK-1508: Full Flow Test (After Phase 3)
 
@@ -381,22 +385,24 @@ Phase 4: Final Review
 | 1 | TASK-1502 | - | **PASSED** | USER | - | - |
 | 2 | TASK-1503 | BACKLOG-477 | **Complete** | PM direct | - | ~28K |
 | 2 | TASK-1503B | - | **Complete** | PM direct | - | ~3K |
-| 2 | TASK-1504 | BACKLOG-478 | **Testing** | PM direct | #632 | ~45K |
-| 2 | TASK-1505 | - | Blocked | USER | - | - |
-| 3 | TASK-1506 | BACKLOG-480 | **Planning** | - | - | - |
+| 2 | TASK-1504 | BACKLOG-478 | **Complete** | PM direct | #632 | ~45K |
+| 2 | TASK-1505 | - | **PASSED** | USER | - | - |
+| 3 | TASK-1506 | BACKLOG-480 | **Complete** | PM direct | - | - |
 | 3 | TASK-1507 | BACKLOG-484 | **Complete** | PM direct | #634 | ~22K |
 | 3 | TASK-1507B | - | **Complete** | PM direct | #637 | - |
 | 3 | TASK-1507C | - | **Complete** | PM direct | #638 | - |
 | 3 | TASK-1507D | - | **Complete** | PM direct | #639 | - |
-| 3 | TASK-1507E | - | **Ready** | - | - | - |
-| 3 | TASK-1507F | - | **Ready** | - | - | - |
-| 3 | TASK-1507G | - | **Ready** | - | - | - |
+| 3 | TASK-1507E | - | **Complete** | PM direct | #640 | - |
+| 3 | TASK-1507F | - | **Complete** | PM direct | #641 | - |
+| 3 | TASK-1507G | - | **Complete** | PM direct | #642, #649 | - |
 | 3 | TASK-1508A | - | **Complete** | PM direct | #636 | - |
 | 3 | TASK-1508B | - | Blocked | - | - | - |
 | 3 | TASK-1508C | - | **Ready** (P2) | - | - | - |
 | 3 | TASK-1510 | BACKLOG-548 | **Complete** | PM direct | #646 | - |
 | 3 | TASK-1508 | - | Blocked | USER | - | - |
 | 3 | TASK-1509A | BACKLOG-546 | **Complete** | engineer | #644, #645 | ~15K |
+| 3 | TASK-1512 | - | **Complete** | engineer | #652 | ~10K |
+| 3 | TASK-1513 | - | **Complete** | engineer | #653 | ~10K |
 | 4 | TASK-1509 | - | Blocked | - | - | - |
 
 ---
@@ -516,6 +522,19 @@ During TASK-1508 manual testing, multiple blocking bugs were discovered:
 - **Fix:** Sync terms data from cloud when creating local user, use `needsToAcceptTerms(localUser)` for return value
 - **SR Review:** APPROVED
 - **Status:** Complete (PR #644 merged)
+
+**Bug 18: Onboarding Step Deferred DB Init (TASK-1512)** ✅ FIXED
+- **Error:** App stuck on secure-storage step after clicking Continue
+- **Root Cause:** DB init was async but flow advanced before completion
+- **Fix:** Added `waitingForDbInit` state to wait for DB before advancing
+- **Status:** Complete (PR #652 merged)
+
+**Bug 19: Onboarding Loop Between Steps (TASK-1513)** ✅ FIXED
+- **Error:** Users get stuck looping between phone-type and email-connect steps
+- **Root Cause:** Index-based step tracking in `useOnboardingFlow` becomes stale when steps array is filtered
+- **Fix:** Convert to ID-based step tracking - track `currentStepId` instead of `currentIndex`
+- **Impact:** P0 - Blocks all onboarding flows
+- **Status:** Complete (PR #653 merged)
 
 ---
 
