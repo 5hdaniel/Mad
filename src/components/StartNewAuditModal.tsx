@@ -2,6 +2,7 @@ import React from "react";
 import type { Transaction } from "../types";
 import { usePendingTransactions } from "../hooks/usePendingTransactions";
 import { LicenseGate } from "./common/LicenseGate";
+import { AlertBanner, AlertIcons } from "./common/AlertBanner";
 import { useLicense } from "../contexts/LicenseContext";
 
 interface StartNewAuditModalProps {
@@ -40,7 +41,7 @@ function StartNewAuditModal({
   isSyncing = false,
 }: StartNewAuditModalProps): React.ReactElement {
   const { pendingTransactions, isLoading, error, refetch } = usePendingTransactions();
-  const { hasAIAddon } = useLicense();
+  const { hasAIAddon, canCreateTransaction, transactionCount, transactionLimit } = useLicense();
 
   const formatDate = (dateString: string | Date | null | undefined): string => {
     if (!dateString) return "";
@@ -286,6 +287,18 @@ function StartNewAuditModal({
             </div>
           </LicenseGate>
 
+          {/* Transaction Limit Warning */}
+          {!canCreateTransaction && (
+            <AlertBanner
+              icon={AlertIcons.warning}
+              title="Transaction Limit Reached"
+              description={`You've used all ${transactionLimit} transactions in your plan (${transactionCount}/${transactionLimit}). Upgrade to create more.`}
+              actionText="Upgrade"
+              onAction={() => window.open("https://broker-portal-two.vercel.app/beta", "_blank")}
+              testId="modal-transaction-limit-banner"
+            />
+          )}
+
           {/* Secondary Actions */}
           <div className="grid grid-cols-2 gap-4">
             {/* View Active Transactions */}
@@ -321,13 +334,22 @@ function StartNewAuditModal({
 
             {/* Add Manually */}
             <button
-              onClick={onCreateManually}
-              className="flex items-center gap-3 p-4 bg-white border-2 border-gray-200 rounded-lg hover:border-purple-400 hover:bg-purple-50 transition-all group"
+              onClick={canCreateTransaction ? onCreateManually : undefined}
+              disabled={!canCreateTransaction}
+              className={`flex items-center gap-3 p-4 bg-white border-2 rounded-lg transition-all group ${
+                canCreateTransaction
+                  ? "border-gray-200 hover:border-purple-400 hover:bg-purple-50 cursor-pointer"
+                  : "border-gray-200 bg-gray-50 cursor-not-allowed opacity-60"
+              }`}
               data-testid="create-manually-button"
             >
-              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center group-hover:bg-purple-200 transition-colors">
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                canCreateTransaction
+                  ? "bg-purple-100 group-hover:bg-purple-200"
+                  : "bg-gray-200"
+              }`}>
                 <svg
-                  className="w-5 h-5 text-purple-600"
+                  className={`w-5 h-5 ${canCreateTransaction ? "text-purple-600" : "text-gray-400"}`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -341,11 +363,13 @@ function StartNewAuditModal({
                 </svg>
               </div>
               <div className="text-left">
-                <h4 className="font-semibold text-gray-900 text-sm">
+                <h4 className={`font-semibold text-sm ${canCreateTransaction ? "text-gray-900" : "text-gray-500"}`}>
                   Add Manually
                 </h4>
                 <p className="text-xs text-gray-500">
-                  Transaction not here?
+                  {canCreateTransaction
+                    ? "Transaction not here?"
+                    : `Limit reached (${transactionCount}/${transactionLimit})`}
                 </p>
               </div>
             </button>

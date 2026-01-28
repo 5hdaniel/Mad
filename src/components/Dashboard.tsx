@@ -5,6 +5,8 @@ import { usePendingTransactionCount } from "../hooks/usePendingTransactionCount"
 import { SyncStatusIndicator } from "./dashboard/index";
 import StartNewAuditModal from "./StartNewAuditModal";
 import { LicenseGate } from "./common/LicenseGate";
+import { AlertBanner, AlertIcons } from "./common/AlertBanner";
+import { useLicense } from "../contexts/LicenseContext";
 import {
   getDashboardTourSteps,
   JOYRIDE_STYLES,
@@ -64,6 +66,9 @@ function Dashboard({
   // Fetch pending auto-detected transaction count
   const { pendingCount, isLoading: isPendingLoading } =
     usePendingTransactionCount();
+
+  // License status for transaction limit check
+  const { canCreateTransaction, transactionCount, transactionLimit } = useLicense();
 
   // Handle viewing pending transactions - navigates to transactions view
   const handleViewPending = useCallback(() => {
@@ -135,64 +140,28 @@ function Dashboard({
       <div className="max-w-5xl w-full">
         {/* Continue Setup Banner */}
         {showSetupPrompt && onContinueSetup && (
-          <div className="mb-8 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4 shadow-md">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
-                  <svg
-                    className="w-5 h-5 text-amber-600"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                    />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-amber-900">
-                    Complete your account setup
-                  </h3>
-                  <p className="text-xs text-amber-700">
-                    Connect your email to export communications with your audits
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={onContinueSetup}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
-                >
-                  Continue Setup
-                </button>
-                {onDismissSetupPrompt && (
-                  <button
-                    onClick={onDismissSetupPrompt}
-                    className="p-2 text-amber-600 hover:text-amber-800 hover:bg-amber-100 rounded-lg transition-colors"
-                    title="Dismiss"
-                  >
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
+          <AlertBanner
+            icon={AlertIcons.email}
+            title="Complete your account setup"
+            description="Connect your email to export communications with your audits"
+            actionText="Continue Setup"
+            onAction={onContinueSetup}
+            dismissible={!!onDismissSetupPrompt}
+            onDismiss={onDismissSetupPrompt}
+            testId="setup-prompt-banner"
+          />
+        )}
+
+        {/* Transaction Limit Warning Banner */}
+        {!canCreateTransaction && (
+          <AlertBanner
+            icon={AlertIcons.warning}
+            title="Transaction Limit Reached"
+            description={`You've used ${transactionCount} of ${transactionLimit} transactions. Upgrade to create more.`}
+            actionText="Upgrade"
+            onAction={() => window.open("https://broker-portal-two.vercel.app/beta", "_blank")}
+            testId="transaction-limit-banner"
+          />
         )}
 
         {/* Unified Sync Status - shows progress during sync, completion after */}

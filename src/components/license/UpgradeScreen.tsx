@@ -45,7 +45,7 @@ export function UpgradeScreen({ reason }: UpgradeScreenProps): React.ReactElemen
 
   const handleUpgrade = () => {
     // Open upgrade page in browser
-    window.api?.shell?.openExternal?.("https://magicaudit.com/pricing");
+    window.api?.shell?.openExternal?.("https://broker-portal-two.vercel.app/beta");
   };
 
   const handleLogout = async () => {
