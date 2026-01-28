@@ -120,7 +120,6 @@ export function useAppStateMachine(): AppStateMachine {
     isMacOS,
     pendingOAuthData: auth.pendingOAuthData,
     pendingOnboardingData: auth.pendingOnboardingData,
-    pendingEmailTokens: null, // TASK-1603: No longer used after flow reorder
     isAuthenticated,
     login,
     onPendingOAuthClear: () => auth.setPendingOAuthData(null),
@@ -131,7 +130,6 @@ export function useAppStateMachine(): AppStateMachine {
         emailConnected: false,
         emailProvider: null,
       }),
-    onPendingEmailTokensClear: () => {}, // TASK-1603: No-op, no longer used
     onPhoneTypeSet: phoneTypeApi.setHasSelectedPhoneType,
     onEmailOnboardingComplete: (completed, connected) => {
       emailOnboardingApi.setHasCompletedEmailOnboarding(completed);
