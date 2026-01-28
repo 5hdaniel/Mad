@@ -14,6 +14,7 @@ const macOSPermissionHelper =
   require("./services/macOSPermissionHelper").default;
 import { databaseEncryptionService } from "./services/databaseEncryptionService";
 import databaseService from "./services/databaseService";
+import supabaseService from "./services/supabaseService";
 import { initializeDatabase } from "./auth-handlers";
 import { getAndClearPendingDeepLinkUser } from "./main";
 import os from "os";
@@ -1130,6 +1131,134 @@ export function registerSystemHandlers(): void {
         logService.error("Failed to set user phone type", "SystemHandlers", {
           error: errorMessage,
         });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return { success: false, error: errorMessage };
+      }
+    },
+  );
+
+  // ===== CLOUD PHONE TYPE PREFERENCES (TASK-1600) =====
+
+  /**
+   * Get user's mobile phone type from Supabase cloud storage
+   * TASK-1600: Available before local DB initialization
+   * @param userId - User ID to get phone type for
+   * @returns Phone type from user_preferences.preferences.phone_type
+   */
+  ipcMain.handle(
+    "user:get-phone-type-cloud",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<{
+      success: boolean;
+      phoneType?: "iphone" | "android";
+      error?: string;
+    }> => {
+      try {
+        const validatedUserId = validateUserId(userId);
+
+        const preferences = await supabaseService.getPreferences(
+          validatedUserId!,
+        );
+        const phoneType = preferences?.phone_type as
+          | "iphone"
+          | "android"
+          | undefined;
+
+        logService.info(
+          `[user:get-phone-type-cloud] Retrieved phone type from Supabase: ${phoneType || "none"}`,
+          "SystemHandlers",
+          { userId: validatedUserId?.substring(0, 8) + "..." },
+        );
+
+        return { success: true, phoneType };
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error(
+          "[user:get-phone-type-cloud] Failed to get phone type from Supabase",
+          "SystemHandlers",
+          { error: errorMessage },
+        );
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return { success: false, error: errorMessage };
+      }
+    },
+  );
+
+  /**
+   * Set user's mobile phone type in Supabase cloud storage
+   * TASK-1600: Available before local DB initialization
+   * Uses upsert to handle both new and existing user_preferences rows
+   * @param userId - User ID to set phone type for
+   * @param phoneType - Phone type to set ('iphone' | 'android')
+   */
+  ipcMain.handle(
+    "user:set-phone-type-cloud",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+      phoneType: "iphone" | "android",
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const validatedUserId = validateUserId(userId);
+
+        // Validate phone type
+        if (phoneType !== "iphone" && phoneType !== "android") {
+          return {
+            success: false,
+            error: 'Invalid phone type. Must be "iphone" or "android"',
+          };
+        }
+
+        // Get existing preferences to merge
+        let existingPreferences: Record<string, unknown> = {};
+        try {
+          existingPreferences = await supabaseService.getPreferences(
+            validatedUserId!,
+          );
+        } catch {
+          // No existing preferences - start fresh
+        }
+
+        // Merge phone_type into preferences
+        const updatedPreferences = {
+          ...existingPreferences,
+          phone_type: phoneType,
+        };
+
+        // Sync to Supabase (uses upsert internally)
+        await supabaseService.syncPreferences(
+          validatedUserId!,
+          updatedPreferences,
+        );
+
+        logService.info(
+          `[user:set-phone-type-cloud] Saved phone type to Supabase: ${phoneType}`,
+          "SystemHandlers",
+          { userId: validatedUserId?.substring(0, 8) + "..." },
+        );
+
+        return { success: true };
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error(
+          "[user:set-phone-type-cloud] Failed to set phone type in Supabase",
+          "SystemHandlers",
+          { error: errorMessage },
+        );
         if (error instanceof ValidationError) {
           return {
             success: false,
