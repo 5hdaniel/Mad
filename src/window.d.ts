@@ -1376,6 +1376,59 @@ interface MainAPI {
     }) => void,
   ) => () => void;
 
+  // User preferences API
+  user: {
+    /**
+     * Gets user's mobile phone type preference from local database
+     * @param userId - User ID to get phone type for
+     * @returns Phone type result
+     */
+    getPhoneType: (
+      userId: string
+    ) => Promise<{
+      success: boolean;
+      phoneType: "iphone" | "android" | null;
+      error?: string;
+    }>;
+
+    /**
+     * Sets user's mobile phone type preference in local database
+     * @param userId - User ID to set phone type for
+     * @param phoneType - Phone type ('iphone' | 'android')
+     * @returns Set result
+     */
+    setPhoneType: (
+      userId: string,
+      phoneType: "iphone" | "android"
+    ) => Promise<{ success: boolean; error?: string }>;
+
+    /**
+     * Gets user's phone type from Supabase cloud storage
+     * TASK-1600: Pre-DB phone type retrieval (available before local DB init)
+     * @param userId - User ID to get phone type for
+     * @returns Phone type result from Supabase user_preferences
+     */
+    getPhoneTypeCloud: (
+      userId: string
+    ) => Promise<{
+      success: boolean;
+      phoneType?: "iphone" | "android";
+      error?: string;
+    }>;
+
+    /**
+     * Sets user's phone type in Supabase cloud storage
+     * TASK-1600: Pre-DB phone type storage (always available after auth)
+     * @param userId - User ID to set phone type for
+     * @param phoneType - Phone type ('iphone' | 'android')
+     * @returns Set result
+     */
+    setPhoneTypeCloud: (
+      userId: string,
+      phoneType: "iphone" | "android"
+    ) => Promise<{ success: boolean; error?: string }>;
+  };
+
   // License API
   license: {
     /** Get current user's license information */

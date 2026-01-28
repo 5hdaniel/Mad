@@ -30,10 +30,13 @@ const mockIsNewStateMachineEnabled =
 
 // Mock window.api.user
 const mockSetPhoneType = jest.fn();
+const mockSetPhoneTypeCloud = jest.fn();
 Object.defineProperty(window, "api", {
   value: {
     user: {
       setPhoneType: mockSetPhoneType,
+      // TASK-1600: Cloud phone type storage (Supabase)
+      setPhoneTypeCloud: mockSetPhoneTypeCloud,
     },
   },
   writable: true,
@@ -372,9 +375,13 @@ describe("usePhoneTypeApi - State Machine Path", () => {
   });
 
   describe("savePhoneType", () => {
-    it("calls API and returns true on success", async () => {
-      mockSetPhoneType.mockResolvedValueOnce({ success: true });
+    beforeEach(() => {
+      // TASK-1600: Default to successful cloud save
+      mockSetPhoneTypeCloud.mockResolvedValue({ success: true });
+      mockSetPhoneType.mockResolvedValue({ success: true });
+    });
 
+    it("calls cloud API first and local API second, returns true on success", async () => {
       const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
         wrapper: createWrapper(onboardingStatePhoneType),
       });
@@ -384,11 +391,16 @@ describe("usePhoneTypeApi - State Machine Path", () => {
         saveResult = await result.current.savePhoneType("iphone");
       });
 
+      // TASK-1600: Cloud API should be called first
+      expect(mockSetPhoneTypeCloud).toHaveBeenCalledWith("test-user", "iphone");
+      // Local API should also be called (DB is initialized in onboardingStatePhoneType)
       expect(mockSetPhoneType).toHaveBeenCalledWith("test-user", "iphone");
       expect(saveResult).toBe(true);
     });
 
-    it("returns false when API fails", async () => {
+    it("returns true even when local DB fails (graceful degradation)", async () => {
+      // TASK-1600: Local DB failure should not fail the operation
+      // Cloud save succeeded (in beforeEach), local fails
       mockSetPhoneType.mockResolvedValueOnce({
         success: false,
         error: "DB error",
@@ -403,11 +415,13 @@ describe("usePhoneTypeApi - State Machine Path", () => {
         saveResult = await result.current.savePhoneType("android");
       });
 
-      expect(saveResult).toBe(false);
+      // TASK-1600: Should still succeed because cloud save worked
+      expect(saveResult).toBe(true);
     });
 
-    it("returns false when API throws error", async () => {
-      mockSetPhoneType.mockRejectedValueOnce(new Error("Network error"));
+    it("returns false when cloud API throws error", async () => {
+      // TASK-1600: Only exception in cloud API should cause failure
+      mockSetPhoneTypeCloud.mockRejectedValueOnce(new Error("Network error"));
 
       const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
         wrapper: createWrapper(onboardingStatePhoneType),
@@ -431,13 +445,12 @@ describe("usePhoneTypeApi - State Machine Path", () => {
         saveResult = await result.current.savePhoneType("iphone");
       });
 
+      expect(mockSetPhoneTypeCloud).not.toHaveBeenCalled();
       expect(mockSetPhoneType).not.toHaveBeenCalled();
       expect(saveResult).toBe(false);
     });
 
     it("uses user id from state machine, not from options", async () => {
-      mockSetPhoneType.mockResolvedValueOnce({ success: true });
-
       // Options have different userId than state machine
       const optionsWithDifferentUser = {
         ...defaultOptions,
@@ -455,7 +468,10 @@ describe("usePhoneTypeApi - State Machine Path", () => {
         await result.current.savePhoneType("iphone");
       });
 
-      // Should use user id from state machine (test-user), not from options
+      // TASK-1600: Should use user id from state machine (test-user), not from options
+      // Cloud API is called first
+      expect(mockSetPhoneTypeCloud).toHaveBeenCalledWith("test-user", "iphone");
+      // Local API is called second
       expect(mockSetPhoneType).toHaveBeenCalledWith("test-user", "iphone");
     });
   });

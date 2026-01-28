@@ -292,9 +292,11 @@ export function appStateReducer(
       }
 
       // Returning user - need to load their data
+      // Preserve deferredDbInit for returning users on fresh macOS installs
       return {
         status: "loading",
         phase: "loading-user-data",
+        deferredDbInit,
       };
     }
 
@@ -333,12 +335,14 @@ export function appStateReducer(
 
       // Returning user - need to load their data
       // Store user/platform in loading state for Phase 4 to use
+      // Preserve deferredDbInit for returning users on fresh macOS installs
       return {
         status: "loading",
         phase: "loading-user-data",
         progress: 75, // Skip phases 1-3, go directly to user data loading
         user: action.user,
         platform: action.platform,
+        deferredDbInit,
       };
     }
 
@@ -408,6 +412,11 @@ export function appStateReducer(
 
       const nextStep = getNextOnboardingStep(completedSteps, platform, data);
 
+      // Preserve deferredDbInit for returning users on fresh installs
+      // This handles the case where a user exists in Supabase but the local
+      // app data was deleted - DB still needs to be initialized
+      const deferredDbInit = loadingState.deferredDbInit;
+
       return {
         status: "onboarding",
         step: nextStep || "phone-type", // Fallback shouldn't happen
@@ -417,6 +426,8 @@ export function appStateReducer(
         // Preserve hasPermissions from loaded data so selector can access it
         // Fixes bug where users with FDA granted were stuck on permissions step
         hasPermissions: data.hasPermissions,
+        // Preserve deferredDbInit for first-time macOS installs (even for returning users)
+        deferredDbInit,
       };
     }
 

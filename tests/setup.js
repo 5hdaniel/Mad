@@ -135,6 +135,9 @@ if (typeof window !== 'undefined') {
     user: {
       getPhoneType: jest.fn(),
       setPhoneType: jest.fn(),
+      // TASK-1600: Cloud phone type storage (Supabase)
+      getPhoneTypeCloud: jest.fn(),
+      setPhoneTypeCloud: jest.fn(),
     },
     shell: {
       openExternal: jest.fn(),

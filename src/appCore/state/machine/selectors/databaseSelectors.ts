@@ -30,31 +30,53 @@ import type { AppState } from "../types";
  * ```
  */
 export function selectIsDatabaseInitialized(state: AppState): boolean {
+  // DEBUG: Log selector input
+  const deferredDbInit = 'deferredDbInit' in state ? (state as any).deferredDbInit : undefined;
+  console.log('[selectIsDatabaseInitialized] Input:', {
+    status: state.status,
+    deferredDbInit,
+    phase: state.status === 'loading' ? (state as any).phase : undefined,
+  });
+
+  let result: boolean;
   switch (state.status) {
     case "loading":
       // For first-time macOS users, DB init is deferred - return false
       if (state.deferredDbInit) {
-        return false;
+        result = false;
+        break;
       }
       // DB is initialized if we're past the initializing-db phase
-      return !["checking-storage", "initializing-db"].includes(state.phase);
+      result = !["checking-storage", "initializing-db"].includes(state.phase);
+      break;
     case "ready":
-      return true;
+      result = true;
+      break;
     case "onboarding":
       // For first-time macOS users, DB init is deferred until secure-storage step
       if (state.deferredDbInit) {
-        return false;
+        result = false;
+        break;
       }
-      return true;
+      result = true;
+      break;
     case "unauthenticated":
       // For first-time macOS users, DB init is deferred
       if (state.deferredDbInit) {
-        return false;
+        result = false;
+        break;
       }
-      return false;
+      result = false;
+      break;
     case "error":
-      return false;
+      result = false;
+      break;
+    default:
+      result = false;
   }
+
+  console.log('[selectIsDatabaseInitialized] Result:', result);
+  return result;
 }
 
 /**
