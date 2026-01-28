@@ -80,7 +80,8 @@ import { validateLicense, createUserLicense } from "./services/licenseService";
 import { registerDevice } from "./services/deviceService";
 import supabaseService from "./services/supabaseService";
 import databaseService from "./services/databaseService";
-import type { OAuthProvider, SubscriptionTier, SubscriptionStatus } from "./types";
+import sessionService from "./services/sessionService";
+import type { OAuthProvider, SubscriptionTier, SubscriptionStatus, User } from "./types";
 
 // Import extracted handlers from handlers/ directory
 import {
@@ -344,6 +345,7 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
       // TASK-1507F: Track local user ID for renderer callback
       // The renderer needs the LOCAL SQLite user ID (not Supabase UUID) for FK constraints
       let localUserId = user.id; // Default to Supabase UUID as fallback
+      let localUser: User | null = null; // Hoisted for session save logic
 
       if (databaseService.isInitialized()) {
         // Database is ready - create user now
@@ -351,10 +353,42 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
         await syncDeepLinkUserToLocalDb(deepLinkUserData);
 
         // TASK-1507F: Get the local user ID after creation/sync
-        const localUser = await databaseService.getUserByEmail(userEmail);
+        localUser = await databaseService.getUserByEmail(userEmail);
         if (localUser) {
           localUserId = localUser.id;
           log.info("[DeepLink] Using local user ID:", localUserId);
+
+          // Save session to disk for persistence across app restarts
+          try {
+            const sessionToken = await databaseService.createSession(localUserId);
+
+            // Build full Subscription object from license status
+            const subscriptionTier = deepLinkUserData.subscriptionTier || "free";
+            const subscriptionStatus = deepLinkUserData.subscriptionStatus || "trial";
+            const isTrial = subscriptionStatus === "trial";
+            const isActive = subscriptionStatus === "active" || subscriptionStatus === "trial";
+
+            const subscription = {
+              tier: subscriptionTier,
+              status: subscriptionStatus,
+              isActive,
+              isTrial,
+              trialEnded: subscriptionStatus === "expired",
+              trialDaysRemaining: licenseStatus.trialDaysRemaining ?? 0,
+            };
+
+            await sessionService.saveSession({
+              user: localUser,
+              sessionToken,
+              provider,
+              subscription,
+              expiresAt: Date.now() + sessionService.getSessionExpirationMs(),
+              createdAt: Date.now(),
+            });
+            log.info("[DeepLink] Session saved successfully");
+          } catch (sessionError) {
+            log.error("[DeepLink] Failed to save session:", sessionError);
+          }
         } else {
           log.warn("[DeepLink] Local user not found after sync, using Supabase ID");
         }

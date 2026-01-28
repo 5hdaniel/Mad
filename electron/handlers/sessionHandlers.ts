@@ -669,24 +669,24 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
 }
 
 /**
- * Open Supabase auth URL in the default browser
+ * Open broker portal auth URL in the default browser
  * TASK-1507: Used for deep-link authentication flow
+ * The broker portal shows provider selection (Google/Microsoft)
  */
 async function handleOpenAuthInBrowser(): Promise<{ success: boolean; error?: string }> {
   try {
-    const supabaseUrl = process.env.SUPABASE_URL;
-    if (!supabaseUrl) {
-      await logService.error("SUPABASE_URL not configured", "AuthHandlers");
+    const brokerPortalUrl = process.env.BROKER_PORTAL_URL;
+    if (!brokerPortalUrl) {
+      await logService.error("BROKER_PORTAL_URL not configured", "AuthHandlers");
       return { success: false, error: "Authentication not configured" };
     }
 
-    const redirectUrl = "magicaudit://callback";
-    // Construct Supabase OAuth URL with Google provider
-    // Note: The provider can be changed or made configurable
-    const authUrl = `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectUrl)}`;
+    // Open broker portal which shows provider selection
+    // The portal handles OAuth and redirects back via magicaudit://callback
+    const authUrl = `${brokerPortalUrl}/auth/desktop`;
 
-    await logService.info("Opening auth URL in browser", "AuthHandlers", {
-      provider: "google",
+    await logService.info("Opening broker portal for auth", "AuthHandlers", {
+      url: authUrl,
     });
 
     await shell.openExternal(authUrl);

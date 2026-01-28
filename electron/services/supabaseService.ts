@@ -331,17 +331,52 @@ class SupabaseService {
     const client = this._ensureClient();
 
     try {
-      // Check if user exists
-      const { data: existingUser, error: fetchError } = await client
+      // BACKLOG-551: Get auth.uid() to use as canonical user ID
+      const { data: sessionData } = await client.auth.getSession();
+      const authUserId = sessionData?.session?.user?.id;
+      if (!authUserId) {
+        throw new Error("No authenticated session - cannot sync user");
+      }
+
+      // First check if user exists by auth.uid() (canonical ID)
+      let existingUser: User | null = null;
+      const { data: userById, error: byIdError } = await client
         .from("users")
         .select("*")
-        .eq("oauth_provider", userData.oauth_provider)
-        .eq("oauth_id", userData.oauth_id)
+        .eq("id", authUserId)
         .single();
 
-      if (fetchError && fetchError.code !== "PGRST116") {
-        // PGRST116 = not found, which is OK
-        throw fetchError;
+      if (!byIdError) {
+        existingUser = userById as User;
+      } else if (byIdError.code !== "PGRST116") {
+        throw byIdError;
+      }
+
+      // If not found by ID, check by oauth_provider/oauth_id (legacy lookup)
+      if (!existingUser) {
+        const { data: userByOAuth, error: fetchError } = await client
+          .from("users")
+          .select("*")
+          .eq("oauth_provider", userData.oauth_provider)
+          .eq("oauth_id", userData.oauth_id)
+          .single();
+
+        if (fetchError && fetchError.code !== "PGRST116") {
+          throw fetchError;
+        }
+
+        if (userByOAuth) {
+          // Found user with wrong ID - needs migration
+          existingUser = userByOAuth as User;
+          if (existingUser.id !== authUserId) {
+            logService.info("[Supabase] User ID mismatch detected, will migrate", "Supabase", {
+              oldId: existingUser.id.substring(0, 8) + "...",
+              newId: authUserId.substring(0, 8) + "...",
+            });
+            // Migration: Create new user with correct ID, then delete old
+            existingUser = await this._migrateUserToAuthId(existingUser, authUserId);
+          }
+        }
       }
 
       let result: User;
@@ -376,10 +411,11 @@ class SupabaseService {
         result = data as User;
         logService.info("[Supabase] User updated:", "Supabase", { userId: result.id });
       } else {
-        // Create new user
+        // BACKLOG-551: Create new user with auth.uid() as canonical ID
         const { data, error } = await client
           .from("users")
           .insert({
+            id: authUserId, // Use auth.uid() as canonical ID
             email: userData.email,
             first_name: userData.first_name,
             last_name: userData.last_name,
@@ -407,6 +443,95 @@ class SupabaseService {
       return result;
     } catch (error) {
       logService.error("[Supabase] Failed to sync user:", "Supabase", { error });
+      throw error;
+    }
+  }
+
+  /**
+   * BACKLOG-551: Migrate user from old auto-generated ID to auth.uid()
+   * This handles the case where a user was created with a random UUID
+   * instead of the canonical auth.uid().
+   *
+   * @param oldUser - User with wrong ID
+   * @param authUserId - The correct auth.uid() to migrate to
+   * @returns Migrated user with correct ID
+   */
+  private async _migrateUserToAuthId(oldUser: User, authUserId: string): Promise<User> {
+    const client = this._ensureClient();
+
+    try {
+      logService.info("[Supabase] Migrating user to auth.uid()", "Supabase", {
+        oldId: oldUser.id.substring(0, 8) + "...",
+        newId: authUserId.substring(0, 8) + "...",
+      });
+
+      // 1. Create new user record with correct ID
+      const { data: newUser, error: insertError } = await client
+        .from("users")
+        .insert({
+          id: authUserId,
+          email: oldUser.email,
+          first_name: oldUser.first_name,
+          last_name: oldUser.last_name,
+          display_name: oldUser.display_name,
+          avatar_url: oldUser.avatar_url,
+          oauth_provider: oldUser.oauth_provider,
+          oauth_id: oldUser.oauth_id,
+          subscription_tier: oldUser.subscription_tier,
+          subscription_status: oldUser.subscription_status,
+          trial_ends_at: oldUser.trial_ends_at,
+          terms_accepted_at: oldUser.terms_accepted_at,
+          terms_version_accepted: oldUser.terms_version_accepted,
+          privacy_policy_accepted_at: oldUser.privacy_policy_accepted_at,
+          privacy_policy_version_accepted: oldUser.privacy_policy_version_accepted,
+          email_onboarding_completed_at: oldUser.email_onboarding_completed_at,
+          login_count: (oldUser as unknown as Record<string, unknown>).login_count as number || 0,
+          last_login_at: new Date().toISOString(),
+          signup_source: (oldUser as unknown as Record<string, unknown>).signup_source as string || "desktop_app",
+          created_at: oldUser.created_at,
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        throw insertError;
+      }
+
+      // 2. Update FK references in child tables
+      // Note: These updates may fail if user has no records in these tables,
+      // which is OK - we just need to update what exists
+      const tablesToUpdate = ["devices", "user_licenses", "api_usage", "analytics_events"];
+      for (const table of tablesToUpdate) {
+        try {
+          await client
+            .from(table)
+            .update({ user_id: authUserId })
+            .eq("user_id", oldUser.id);
+        } catch {
+          // Table may not have records for this user - that's OK
+        }
+      }
+
+      // 3. Delete old user record
+      const { error: deleteError } = await client
+        .from("users")
+        .delete()
+        .eq("id", oldUser.id);
+
+      if (deleteError) {
+        logService.warn("[Supabase] Failed to delete old user record", "Supabase", {
+          error: deleteError.message,
+        });
+        // Don't throw - migration succeeded even if cleanup failed
+      }
+
+      logService.info("[Supabase] User migration complete", "Supabase", {
+        newId: authUserId.substring(0, 8) + "...",
+      });
+
+      return newUser as User;
+    } catch (error) {
+      logService.error("[Supabase] User migration failed", "Supabase", { error });
       throw error;
     }
   }
@@ -569,11 +694,17 @@ class SupabaseService {
     const client = this._ensureClient();
 
     try {
+      // TASK-1507G: Use auth.uid() for RLS compliance
+      // The devices table RLS requires user_id = auth.uid()
+      // The passed userId may be from public.users which has a different ID
+      const { data: sessionData } = await client.auth.getSession();
+      const authUserId = sessionData?.session?.user?.id || userId;
+
       // Check if device already registered
       const { data: existing, error: fetchError } = await client
         .from("devices")
         .select("*")
-        .eq("user_id", userId)
+        .eq("user_id", authUserId)
         .eq("device_id", deviceInfo.device_id)
         .single();
 
@@ -603,7 +734,7 @@ class SupabaseService {
         const { data, error } = await client
           .from("devices")
           .insert({
-            user_id: userId,
+            user_id: authUserId,  // Use auth.uid() for RLS compliance
             device_id: deviceInfo.device_id,
             device_name: deviceInfo.device_name,
             os: deviceInfo.os,

@@ -156,6 +156,16 @@ class GoogleAuthService {
    * @returns {Promise<string>} Authorization code from redirect
    */
   startLocalServer(): Promise<string> {
+    // Stop any existing server before starting a new one
+    // This prevents EADDRINUSE errors when user retries auth
+    if (this.server) {
+      logService.info(
+        "[GoogleAuth] Stopping existing server before starting new one",
+        "GoogleAuth",
+      );
+      this.stopLocalServer();
+    }
+
     return new Promise((resolve, reject) => {
       // Store resolve/reject for direct resolution from navigation interception
       this.codeResolver = resolve;

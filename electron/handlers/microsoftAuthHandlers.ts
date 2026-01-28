@@ -23,7 +23,7 @@ import logService from "../services/logService";
 import { setSyncUserId } from "../sync-handlers";
 
 // Import validation utilities
-import { ValidationError, validateUserId } from "../utils/validation";
+import { getValidUserId } from "../utils/userIdHelper";
 
 // Import constants
 import {
@@ -40,13 +40,6 @@ interface AuthResponse {
 interface LoginStartResponse extends AuthResponse {
   authUrl?: string;
   scopes?: string[];
-}
-
-interface LoginCompleteResponse extends AuthResponse {
-  user?: import("../types/models").User;
-  sessionToken?: string;
-  subscription?: import("../types/models").Subscription;
-  isNewUser?: boolean;
 }
 
 /**
@@ -557,7 +550,14 @@ export async function handleMicrosoftConnectMailbox(
       "AuthHandlers"
     );
 
-    const validatedUserId = validateUserId(userId)!;
+    // BACKLOG-551: Validate user ID exists in local DB (handles Supabase auth.uid() mismatch)
+    const validatedUserId = await getValidUserId(userId, "MicrosoftAuth");
+    if (!validatedUserId) {
+      return {
+        success: false,
+        error: "No user found in database. Please log in first.",
+      };
+    }
 
     const user = await databaseService.getUserById(validatedUserId);
     const loginHint = user?.email ?? undefined;
@@ -692,7 +692,7 @@ export async function handleMicrosoftConnectMailbox(
           Date.now() + tokens.expires_in * 1000
         ).toISOString();
 
-        await databaseService.saveOAuthToken(userId, "microsoft", "mailbox", {
+        await databaseService.saveOAuthToken(validatedUserId, "microsoft", "mailbox", {
           access_token: accessToken,
           refresh_token: refreshToken ?? undefined,
           token_expires_at: expiresAt,
@@ -704,11 +704,11 @@ export async function handleMicrosoftConnectMailbox(
         await logService.info(
           "Microsoft mailbox connection completed",
           "AuthHandlers",
-          { userId, email: userInfo.email }
+          { userId: validatedUserId, email: userInfo.email }
         );
 
         await auditService.log({
-          userId,
+          userId: validatedUserId,
           action: "MAILBOX_CONNECT",
           resourceType: "MAILBOX",
           metadata: { provider: "microsoft", email: userInfo.email },
@@ -726,13 +726,13 @@ export async function handleMicrosoftConnectMailbox(
           "Microsoft mailbox connection failed",
           "AuthHandlers",
           {
-            userId,
+            userId: validatedUserId,
             error: error instanceof Error ? error.message : "Unknown error",
           }
         );
 
         await auditService.log({
-          userId,
+          userId: validatedUserId,
           action: "MAILBOX_CONNECT",
           resourceType: "MAILBOX",
           metadata: { provider: "microsoft" },

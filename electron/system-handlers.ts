@@ -229,11 +229,12 @@ export function registerSystemHandlers(): void {
           "SystemHandlers",
         );
 
-        // Session-only login: Clear login sessions but keep mailbox tokens
-        // Users must re-login each app launch (security), but mailbox access persists (UX)
-        await databaseService.clearAllSessions();
+        // Sessions persist across app restarts for better UX
+        // Security is maintained via 24hr expiry on session tokens
+        // NOTE: Previously cleared sessions on startup causing issues (file session
+        // not synced with DB session, user appeared logged in but validation failed)
         logService.info(
-          "Cleared login sessions (mailbox tokens preserved)",
+          "Database initialized, sessions preserved across restarts",
           "SystemHandlers",
         );
 
