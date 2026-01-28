@@ -484,7 +484,9 @@ describe("useAppStateMachine", () => {
 
       expect(capturedState?.pendingOnboardingData).toBeDefined();
       expect("pendingOAuthData" in (capturedState ?? {})).toBe(true);
-      expect("pendingEmailTokens" in (capturedState ?? {})).toBe(true);
+      // TASK-1603: pendingEmailTokens removed after flow reorder
+      // DB is always initialized before email step, so email tokens
+      // are saved directly to DB (no pending state needed)
     });
 
     it("should have secure storage related properties in state object", async () => {

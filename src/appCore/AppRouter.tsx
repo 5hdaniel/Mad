@@ -35,7 +35,7 @@ export function AppRouter({ app }: AppRouterProps) {
     // State
     currentStep, isMacOS, isWindows, isOnline, isChecking, connectionError,
     isAuthenticated, currentUser, authProvider, pendingOAuthData, pendingOnboardingData,
-    pendingEmailTokens, isInitializingDatabase, skipKeychainExplanation, selectedPhoneType,
+    isInitializingDatabase, skipKeychainExplanation, selectedPhoneType,
     hasEmailConnected, showSetupPromptDismissed, exportResult, conversations,
     selectedConversationIds, outlookConnected,
     // Handlers

@@ -59,7 +59,12 @@ export interface PendingOnboardingData {
   emailProvider: "google" | "microsoft" | null;
 }
 
-// Pending email token data for pre-DB flow
+/**
+ * @deprecated PendingEmailTokens is no longer needed after TASK-1603.
+ * With the flow reorder (TASK-1601/1602), DB is always initialized before
+ * the email step, so email tokens can be saved directly to the database.
+ * This type is kept temporarily for backwards compatibility during transition.
+ */
 export interface PendingEmailTokens {
   provider: "google" | "microsoft";
   email: string;
@@ -159,7 +164,6 @@ export interface AppStateMachine {
   // Pending data (pre-DB flow)
   pendingOAuthData: PendingOAuthData | null;
   pendingOnboardingData: PendingOnboardingData;
-  pendingEmailTokens: PendingEmailTokens | null;
 
   // Export state
   exportResult: AppExportResult | null;
@@ -267,9 +271,7 @@ export interface AppStateMachine {
   // EMAIL ONBOARDING HANDLERS
   // ============================================
 
-  handleEmailOnboardingComplete: (
-    emailTokens?: PendingEmailTokens,
-  ) => Promise<void>;
+  handleEmailOnboardingComplete: () => Promise<void>;
   handleEmailOnboardingSkip: () => Promise<void>;
   handleEmailOnboardingBack: () => void;
 
