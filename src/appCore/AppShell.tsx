@@ -15,7 +15,8 @@ import SystemHealthMonitor from "../components/SystemHealthMonitor";
 import { isOnboardingStep } from "./routing";
 
 // OAuthProvider type to match SystemHealthMonitor expectations
-type OAuthProvider = "google" | "microsoft";
+// Note: 'azure' is Microsoft's Azure AD provider
+type OAuthProvider = "google" | "microsoft" | "azure";
 
 interface AppShellProps {
   app: AppStateMachine;
