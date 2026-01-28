@@ -27,7 +27,7 @@
 
 import { useCallback } from "react";
 import { systemService, settingsService } from "@/services";
-import type { PendingOnboardingData, PendingEmailTokens } from "../types";
+import type { PendingOnboardingData } from "../types";
 import type { PendingOAuthData } from "../../../components/Login";
 import type { Subscription } from "../../../../electron/types/models";
 import {
@@ -45,7 +45,6 @@ interface UseSecureStorageOptions {
   isMacOS: boolean;
   pendingOAuthData: PendingOAuthData | null;
   pendingOnboardingData: PendingOnboardingData;
-  pendingEmailTokens: PendingEmailTokens | null;
   isAuthenticated: boolean;
   login: (
     user: {
@@ -61,7 +60,6 @@ interface UseSecureStorageOptions {
   ) => void;
   onPendingOAuthClear: () => void;
   onPendingOnboardingClear: () => void;
-  onPendingEmailTokensClear: () => void;
   onPhoneTypeSet: (hasSelected: boolean) => void;
   onEmailOnboardingComplete: (completed: boolean, connected: boolean) => void;
   onNewUserFlowSet: (isNew: boolean) => void;

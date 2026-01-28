@@ -53,14 +53,6 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
       const { state } = machineState;
       const isDatabaseInitialized = selectIsDatabaseInitialized(state);
 
-      // DEBUG: Log state machine values
-      console.log('[OnboardingFlow] State machine path:', {
-        status: state.status,
-        deferredDbInit: 'deferredDbInit' in state ? (state as any).deferredDbInit : 'NOT_PRESENT',
-        isDatabaseInitialized,
-        hasPermissions: selectHasPermissions(state),
-      });
-
       return {
         phoneType: selectPhoneType(state),
         emailConnected: selectHasEmailConnected(state),
@@ -78,12 +70,6 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
     }
 
     // Legacy fallback - use app properties directly
-    // DEBUG: Log legacy path values
-    console.log('[OnboardingFlow] Legacy path:', {
-      isDatabaseInitialized: app.isDatabaseInitialized,
-      hasPermissions: app.hasPermissions,
-    });
-
     return {
       phoneType: app.selectedPhoneType,
       emailConnected: app.hasEmailConnected,

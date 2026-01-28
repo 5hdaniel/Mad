@@ -200,12 +200,10 @@ const defaultSecureStorageOptions = {
     emailConnected: false,
     termsAccepted: false,
   },
-  pendingEmailTokens: null, // TASK-1603: No longer used after flow reorder, kept for API compatibility
   isAuthenticated: false,
   login: jest.fn(),
   onPendingOAuthClear: jest.fn(),
   onPendingOnboardingClear: jest.fn(),
-  onPendingEmailTokensClear: jest.fn(), // TASK-1603: No-op after flow reorder
   onPhoneTypeSet: jest.fn(),
   onEmailOnboardingComplete: jest.fn(),
   onNewUserFlowSet: jest.fn(),
