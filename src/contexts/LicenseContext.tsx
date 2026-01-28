@@ -27,6 +27,7 @@ import React, {
 } from "react";
 import type { LicenseType } from "../../electron/types/models";
 import type { LicenseValidationResult } from "../../shared/types/license";
+import { licenseService } from "../services";
 
 // License context value interface
 interface LicenseContextValue {
@@ -114,28 +115,23 @@ export function LicenseProvider({
    * Fetch license from main process (original method for backward compatibility)
    */
   const fetchLicense = useCallback(async () => {
-    if (window.api?.license?.get) {
-      try {
-        const result = await window.api.license.get();
-        if (result.success && result.license) {
-          const license = result.license;
-          setState((prev) => ({
-            ...prev,
-            licenseType: license.license_type || "individual",
-            hasAIAddon: license.ai_detection_enabled || false,
-            organizationId: license.organization_id || null,
-            isLoading: false,
-          }));
-        } else {
-          // No license found - use defaults
-          setState((prev) => ({ ...prev, isLoading: false }));
-        }
-      } catch {
-        // License fetch failed silently - use defaults
+    try {
+      const result = await licenseService.get();
+      if (result.success && result.data) {
+        const license = result.data;
+        setState((prev) => ({
+          ...prev,
+          licenseType: license.license_type || "individual",
+          hasAIAddon: license.ai_detection_enabled || false,
+          organizationId: license.organization_id || null,
+          isLoading: false,
+        }));
+      } else {
+        // No license found - use defaults
         setState((prev) => ({ ...prev, isLoading: false }));
       }
-    } else {
-      // API not available - use defaults
+    } catch {
+      // License fetch failed silently - use defaults
       setState((prev) => ({ ...prev, isLoading: false }));
     }
   }, []);
@@ -145,7 +141,7 @@ export function LicenseProvider({
    * Handles trial status, transaction limits, and auto-creates license if needed
    */
   const validateLicense = useCallback(async () => {
-    if (!userId || !window.api?.license?.validate) {
+    if (!userId) {
       setState((prev) => ({ ...prev, validationStatus: null, isLoading: false }));
       return;
     }
@@ -153,23 +149,32 @@ export function LicenseProvider({
     try {
       setState((prev) => ({ ...prev, isLoading: true }));
 
-      // Validate license through IPC
-      let validationResult = await window.api.license.validate(userId);
+      // Validate license through service (returns ApiResult<LicenseValidationResult>)
+      const validationResponse = await licenseService.validate(userId);
+      let validationResult = validationResponse.success ? validationResponse.data : null;
 
       // If no license exists, create a trial license
-      if (validationResult.blockReason === "no_license" && window.api?.license?.create) {
-        validationResult = await window.api.license.create(userId);
+      if (!validationResult || validationResult.blockReason === "no_license") {
+        const createResponse = await licenseService.create(userId);
+        if (createResponse.success && createResponse.data) {
+          validationResult = createResponse.data;
+        }
       }
 
       // Update state with validation result
-      setState((prev) => ({
-        ...prev,
-        validationStatus: validationResult,
-        // Map validation result to existing fields for backward compatibility
-        licenseType: validationResult.licenseType as LicenseType,
-        hasAIAddon: validationResult.aiEnabled,
-        isLoading: false,
-      }));
+      if (validationResult) {
+        setState((prev) => ({
+          ...prev,
+          validationStatus: validationResult,
+          // Map validation result to existing fields for backward compatibility
+          licenseType: validationResult.licenseType as LicenseType,
+          hasAIAddon: validationResult.aiEnabled,
+          isLoading: false,
+        }));
+      } else {
+        // Fallback if both validate and create failed
+        setState((prev) => ({ ...prev, isLoading: false }));
+      }
     } catch (error) {
       console.error("Failed to validate license:", error);
       // Set a fallback status that allows app to function with limited features
