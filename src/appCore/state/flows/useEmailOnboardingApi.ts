@@ -103,8 +103,14 @@ export function useEmailOnboardingApi({
           email,
           provider,
         });
+      } else if (!connected && provider) {
+        // TASK-1730: Dispatch EMAIL_DISCONNECTED to update state machine
+        dispatch({
+          type: "EMAIL_DISCONNECTED",
+          provider,
+        });
       }
-      // If not connected or missing info, no-op (state machine is source of truth)
+      // If missing provider info, no-op (state machine is source of truth)
     },
     [dispatch]
   );

@@ -554,6 +554,25 @@ export function appStateReducer(
       return state;
     }
 
+    // TASK-1730: Handle email disconnection to update hasEmailConnected state
+    case "EMAIL_DISCONNECTED": {
+      if (state.status === "ready") {
+        // User disconnected email from Settings
+        // Update userData.hasEmailConnected so setup banner reappears
+        return {
+          ...state,
+          userData: {
+            ...state.userData,
+            hasEmailConnected: false,
+          },
+        };
+      }
+
+      // In other states (onboarding, loading), disconnection is not expected
+      // but if it happens, ignore it
+      return state;
+    }
+
     // ============================================
     // READY STATE TRANSITIONS
     // ============================================

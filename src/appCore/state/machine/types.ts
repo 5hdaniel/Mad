@@ -251,6 +251,7 @@ export type AppAction =
   | OnboardingStepCompleteAction
   | OnboardingSkipAction
   | EmailConnectedAction
+  | EmailDisconnectedAction
   | StartEmailSetupAction
   | AppReadyAction
   | LogoutAction
@@ -363,6 +364,17 @@ export interface EmailConnectedAction {
   /** The email address that was connected */
   email: string;
   /** The email provider (google or microsoft) */
+  provider: "google" | "microsoft";
+}
+
+/**
+ * User disconnected their email account from Settings.
+ * Updates hasEmailConnected to false so the setup banner reappears.
+ * TASK-1730: Added to support email disconnection state propagation.
+ */
+export interface EmailDisconnectedAction {
+  type: "EMAIL_DISCONNECTED";
+  /** The email provider that was disconnected */
   provider: "google" | "microsoft";
 }
 
