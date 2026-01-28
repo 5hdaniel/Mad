@@ -233,12 +233,16 @@ interface ElectronAPI {
  * Exposed via contextBridge in preload.js
  */
 /**
- * Progress event from macOS message import
+ * Progress event from macOS message import (TASK-1710)
+ * Enhanced with querying phase and elapsed time for ETA calculation
  */
 interface MacOSImportProgress {
+  phase: "querying" | "deleting" | "importing" | "attachments";
   current: number;
   total: number;
   percent: number;
+  /** Milliseconds elapsed since import started */
+  elapsedMs: number;
 }
 
 /**
@@ -285,6 +289,8 @@ interface MainAPI {
     getMessageAttachments: (messageId: string) => Promise<MessageAttachmentInfo[]>;
     /** Get attachments for multiple messages at once (TASK-1012) */
     getMessageAttachmentsBatch: (messageIds: string[]) => Promise<Record<string, MessageAttachmentInfo[]>>;
+    /** Cancel the current import operation (TASK-1710) */
+    cancelImport: () => void;
   };
 
   // Outlook integration (migrated from window.electron)
