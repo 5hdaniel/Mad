@@ -633,6 +633,37 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
           "SessionHandlers",
           { userId: freshUser.id }
         );
+
+        // BACKLOG-546: Sync terms data from Supabase if user has already accepted
+        // This ensures returning users on new devices don't see T&C again
+        try {
+          const cloudUser = await supabaseService.getUserById(session.user.id);
+          if (cloudUser?.terms_accepted_at) {
+            await databaseService.updateUser(freshUser.id, {
+              terms_accepted_at: cloudUser.terms_accepted_at,
+              terms_version_accepted: cloudUser.terms_version_accepted,
+              privacy_policy_accepted_at: cloudUser.privacy_policy_accepted_at,
+              privacy_policy_version_accepted: cloudUser.privacy_policy_version_accepted,
+            });
+            // Re-fetch to get updated terms data
+            const updatedUser = await databaseService.getUserById(freshUser.id);
+            if (updatedUser) {
+              freshUser = updatedUser;
+            }
+            await logService.info(
+              "Synced terms data from Supabase to local user (BACKLOG-546)",
+              "SessionHandlers",
+              { userId: freshUser.id }
+            );
+          }
+        } catch (syncError) {
+          // Log but don't fail - terms can be re-accepted if needed
+          await logService.warn(
+            "Failed to sync terms from Supabase",
+            "SessionHandlers",
+            { error: syncError instanceof Error ? syncError.message : "Unknown error" }
+          );
+        }
       } catch (createError) {
         // Log but don't fail - auth should succeed even if local user creation fails
         await logService.error(
@@ -669,23 +700,18 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
 }
 
 /**
- * Open broker portal auth URL in the default browser
+ * Open broker portal auth page in the default browser
  * TASK-1507: Used for deep-link authentication flow
- * The broker portal shows provider selection (Google/Microsoft)
+ * TASK-1510: Redirects to broker portal for provider selection (Google/Microsoft)
  */
 async function handleOpenAuthInBrowser(): Promise<{ success: boolean; error?: string }> {
   try {
-    const brokerPortalUrl = process.env.BROKER_PORTAL_URL;
-    if (!brokerPortalUrl) {
-      await logService.error("BROKER_PORTAL_URL not configured", "AuthHandlers");
-      return { success: false, error: "Authentication not configured" };
-    }
-
-    // Open broker portal which shows provider selection
-    // The portal handles OAuth and redirects back via magicaudit://callback
+    // Use broker portal for provider selection page
+    // Production: broker-portal-two.vercel.app, Dev: localhost:3001 (via .env.development)
+    const brokerPortalUrl = process.env.BROKER_PORTAL_URL || 'https://broker-portal-two.vercel.app';
     const authUrl = `${brokerPortalUrl}/auth/desktop`;
 
-    await logService.info("Opening broker portal for auth", "AuthHandlers", {
+    await logService.info("Opening auth URL in browser", "AuthHandlers", {
       url: authUrl,
     });
 

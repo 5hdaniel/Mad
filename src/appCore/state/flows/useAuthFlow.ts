@@ -169,9 +169,9 @@ export function useAuthFlow({
       // Clear any pending OAuth data
       setPendingOAuthData(null);
 
-      // Determine if this is a new user based on license status
-      // New users have 0 transactions (haven't done anything yet)
-      const isNewUser = !data.licenseStatus || data.licenseStatus.transactionCount === 0;
+      // BACKLOG-546: Use isNewUser from backend (based on terms acceptance)
+      // Fallback to transaction count only if not provided (backwards compatibility)
+      const isNewUser = data.isNewUser ?? (!data.licenseStatus || data.licenseStatus.transactionCount === 0);
       setIsNewUserFlow(isNewUser);
 
       // TASK-1507C: Call login() to set currentUser in AuthContext

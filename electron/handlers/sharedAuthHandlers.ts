@@ -46,6 +46,36 @@ interface LoginCompleteResponse extends AuthResponse {
 }
 
 /**
+ * Check if user needs to accept or re-accept terms
+ * BACKLOG-546: Copied from sessionHandlers.ts to determine isNewUser correctly
+ */
+function needsToAcceptTerms(user: User): boolean {
+  if (!user.terms_accepted_at) {
+    return true;
+  }
+
+  if (!user.terms_version_accepted && !user.privacy_policy_version_accepted) {
+    return false;
+  }
+
+  if (
+    user.terms_version_accepted &&
+    user.terms_version_accepted !== CURRENT_TERMS_VERSION
+  ) {
+    return true;
+  }
+
+  if (
+    user.privacy_policy_version_accepted &&
+    user.privacy_policy_version_accepted !== CURRENT_PRIVACY_POLICY_VERSION
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Complete a pending login after keychain setup
  */
 export async function handleCompletePendingLogin(
@@ -112,6 +142,21 @@ export async function handleCompletePendingLogin(
         trial_ends_at: cloudUser.trial_ends_at,
         is_active: true,
       });
+
+      // BACKLOG-546: Sync terms data from cloud if user has already accepted
+      if (cloudUser.terms_accepted_at) {
+        await databaseService.updateUser(localUser.id, {
+          terms_accepted_at: cloudUser.terms_accepted_at,
+          terms_version_accepted: cloudUser.terms_version_accepted,
+          privacy_policy_accepted_at: cloudUser.privacy_policy_accepted_at,
+          privacy_policy_version_accepted: cloudUser.privacy_policy_version_accepted,
+        });
+        // Re-fetch to get updated terms data
+        const updatedUser = await databaseService.getUserById(localUser.id);
+        if (updatedUser) {
+          localUser = updatedUser;
+        }
+      }
     } else {
       await databaseService.updateUser(localUser.id, {
         email: userInfo.email,
@@ -236,12 +281,13 @@ export async function handleCompletePendingLogin(
 
     setSyncUserId(localUser.id);
 
+    // BACKLOG-546: Use needsToAcceptTerms instead of isNewUser to determine if T&C screen needed
     return {
       success: true,
       user: localUser,
       sessionToken,
       subscription,
-      isNewUser,
+      isNewUser: needsToAcceptTerms(localUser),
     };
   } catch (error) {
     await logService.error("Failed to complete pending login", "AuthHandlers", {

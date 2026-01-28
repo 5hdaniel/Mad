@@ -756,6 +756,127 @@ describe("extractPhoneFromThread", () => {
 
     expect(extractPhoneFromThread(messages)).toBe("+14155550200");
   });
+
+  // BACKLOG-510/513: User identifier exclusion tests
+  describe("user identifier exclusion (BACKLOG-510/513)", () => {
+    it("should exclude user's outbound 'from' field when extracting phone", () => {
+      // Scenario: User sends message (outbound), their phone is in 'from'
+      // The function should identify the user's phone and exclude it
+      // Then return the recipient (external phone) from 'to'
+      const userPhone = "+14155550001"; // User's own phone number
+      const externalPhone = "+14155550099"; // External contact
+
+      const messages = [
+        createMockMessage({
+          id: "msg-1",
+          direction: "outbound",
+          participants: JSON.stringify({
+            from: userPhone, // User's phone (should be excluded)
+            to: [externalPhone], // External contact (should be returned)
+            chat_members: [externalPhone], // Doesn't include user
+          }),
+        }),
+      ];
+
+      expect(extractPhoneFromThread(messages)).toBe(externalPhone);
+    });
+
+    it("should exclude user's inbound 'to' field when extracting phone", () => {
+      // Scenario: User receives message (inbound), their phone is in 'to'
+      // The function should identify the user's phone and exclude it
+      // Then return the sender (external phone) from 'from'
+      const userPhone = "+14155550001"; // User's own phone number
+      const externalPhone = "+14155550088"; // External contact
+
+      const messages = [
+        createMockMessage({
+          id: "msg-1",
+          direction: "inbound",
+          participants: JSON.stringify({
+            from: externalPhone, // External contact (should be returned)
+            to: [userPhone], // User's phone (should be excluded)
+            chat_members: [externalPhone], // Doesn't include user
+          }),
+        }),
+      ];
+
+      expect(extractPhoneFromThread(messages)).toBe(externalPhone);
+    });
+
+    it("should use chat_members fallback when from/to are 'unknown'", () => {
+      // Scenario: Messages have 'unknown' in from/to fields
+      // Should fall back to chat_members array to find external phone
+      const externalPhone = "+14155550077";
+
+      const messages = [
+        createMockMessage({
+          id: "msg-1",
+          direction: "inbound",
+          participants: JSON.stringify({
+            from: "unknown",
+            to: ["unknown"],
+            chat_members: [externalPhone], // Fallback source
+          }),
+        }),
+      ];
+
+      expect(extractPhoneFromThread(messages)).toBe(externalPhone);
+    });
+
+    it("should correctly identify user across mixed inbound/outbound messages", () => {
+      // Scenario: Thread has both sent and received messages
+      // User identification should work across the entire thread
+      const userPhone = "+14155550001";
+      const externalPhone = "+14155550066";
+
+      const messages = [
+        // Inbound message: external sends to user
+        createMockMessage({
+          id: "msg-1",
+          direction: "inbound",
+          participants: JSON.stringify({
+            from: externalPhone,
+            to: [userPhone],
+            chat_members: [externalPhone],
+          }),
+        }),
+        // Outbound message: user sends to external
+        createMockMessage({
+          id: "msg-2",
+          direction: "outbound",
+          participants: JSON.stringify({
+            from: userPhone,
+            to: [externalPhone],
+            chat_members: [externalPhone],
+          }),
+        }),
+      ];
+
+      // Should return external phone, not user's phone
+      expect(extractPhoneFromThread(messages)).toBe(externalPhone);
+    });
+
+    it("should not exclude valid external phones that happen to be in from field of inbound", () => {
+      // Edge case: Don't over-exclude - inbound 'from' is external, should be returned
+      const externalPhone = "+14155550055";
+      const userPhone = "+14155550001";
+
+      const messages = [
+        createMockMessage({
+          id: "msg-1",
+          direction: "inbound",
+          participants: JSON.stringify({
+            from: externalPhone, // This is the external contact, NOT user
+            to: [userPhone], // User's phone
+            chat_members: [externalPhone],
+          }),
+        }),
+      ];
+
+      // External phone in 'from' of inbound should be returned
+      expect(extractPhoneFromThread(messages)).toBe(externalPhone);
+    });
+  });
 });
 
 describe("sortThreadsByRecent", () => {

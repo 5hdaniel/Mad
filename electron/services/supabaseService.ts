@@ -95,6 +95,9 @@ class SupabaseService {
 
   /**
    * Initialize Supabase client
+   * Uses SUPABASE_ANON_KEY (public/publishable key) for client operations.
+   * This is safe to include in packaged builds as it's meant for public use.
+   * RLS policies provide security at the database level.
    */
   initialize(): void {
     if (this.initialized) {
@@ -102,11 +105,13 @@ class SupabaseService {
     }
 
     const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_KEY; // Using service_role for now
+    // Use anon key (public/publishable) - safe for packaged builds
+    // Falls back to service key for backward compatibility during development
+    const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
       logService.error(
-        "[Supabase] Missing credentials. Check .env.development file.",
+        "[Supabase] Missing credentials. Check .env.development or .env.production file.",
         "Supabase"
       );
       throw new Error("Supabase credentials not configured");
