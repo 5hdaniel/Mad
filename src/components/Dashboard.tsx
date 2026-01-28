@@ -159,7 +159,7 @@ function Dashboard({
             title="Transaction Limit Reached"
             description={`You've used ${transactionCount} of ${transactionLimit} transactions. Upgrade to create more.`}
             actionText="Upgrade"
-            onAction={() => window.open("https://magicaudit.ai/pricing", "_blank")}
+            onAction={() => window.open("https://broker-portal-two.vercel.app/beta", "_blank")}
             testId="transaction-limit-banner"
           />
         )}

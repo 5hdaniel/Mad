@@ -294,7 +294,7 @@ function StartNewAuditModal({
               title="Transaction Limit Reached"
               description={`You've used all ${transactionLimit} transactions in your plan (${transactionCount}/${transactionLimit}). Upgrade to create more.`}
               actionText="Upgrade"
-              onAction={() => window.open("https://magicaudit.ai/pricing", "_blank")}
+              onAction={() => window.open("https://broker-portal-two.vercel.app/beta", "_blank")}
               testId="modal-transaction-limit-banner"
             />
           )}
