@@ -15,13 +15,13 @@ import type { Contact, Transaction } from "./types/models";
 // Import validation utilities
 import {
   ValidationError,
-  validateUserId,
   validateContactId,
   validateContactData,
   validateString,
   sanitizeObject,
 } from "./utils/validation";
 import { normalizePhoneNumber } from "./utils/phoneNormalization";
+import { getValidUserId } from "./utils/userIdHelper";
 
 // Import handler types
 import type {
@@ -65,10 +65,13 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           userId,
         });
 
-        // Validate input
-        const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
+        // BACKLOG-551: Validate user ID exists in local DB
+        const validatedUserId = await getValidUserId(userId, "Contacts");
         if (!validatedUserId) {
-          throw new ValidationError("User ID validation failed", "userId");
+          return {
+            success: false,
+            error: "No valid user found in database",
+          };
         }
 
         // Get only imported contacts from database
@@ -118,10 +121,13 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           { userId },
         );
 
-        // Validate input
-        const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
+        // BACKLOG-551: Validate user ID exists in local DB
+        const validatedUserId = await getValidUserId(userId, "Contacts");
         if (!validatedUserId) {
-          throw new ValidationError("User ID validation failed", "userId");
+          return {
+            success: false,
+            error: "No valid user found in database",
+          };
         }
 
         // Get contacts from macOS Contacts app
@@ -407,10 +413,13 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           count: contactsToImport.length,
         });
 
-        // Validate inputs
-        const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
+        // BACKLOG-551: Validate user ID exists in local DB
+        const validatedUserId = await getValidUserId(userId, "Contacts");
         if (!validatedUserId) {
-          throw new ValidationError("User ID validation failed", "userId");
+          return {
+            success: false,
+            error: "No valid user found in database",
+          };
         }
 
         // Validate contacts array
@@ -568,10 +577,13 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           { userId, propertyAddress },
         );
 
-        // Validate inputs
-        const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
+        // BACKLOG-551: Validate user ID exists in local DB
+        const validatedUserId = await getValidUserId(userId, "Contacts");
         if (!validatedUserId) {
-          throw new ValidationError("User ID validation failed", "userId");
+          return {
+            success: false,
+            error: "No valid user found in database",
+          };
         }
 
         // Validate propertyAddress (optional)
@@ -625,10 +637,13 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
       contactData: unknown,
     ): Promise<ContactResponse> => {
       try {
-        // Validate inputs
-        const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
+        // BACKLOG-551: Validate user ID exists in local DB
+        const validatedUserId = await getValidUserId(userId, "Contacts");
         if (!validatedUserId) {
-          throw new ValidationError("User ID validation failed", "userId");
+          return {
+            success: false,
+            error: "No valid user found in database",
+          };
         }
         const validatedData = validateContactData(contactData, false);
 
@@ -956,10 +971,13 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
       query: string,
     ): Promise<ContactResponse> => {
       try {
-        // Validate inputs
-        const validatedUserId = validateUserId(userId);
+        // BACKLOG-551: Validate user ID exists in local DB
+        const validatedUserId = await getValidUserId(userId, "Contacts");
         if (!validatedUserId) {
-          throw new ValidationError("User ID validation failed", "userId");
+          return {
+            success: false,
+            error: "No valid user found in database",
+          };
         }
 
         // For empty/short queries, return the default sorted list
