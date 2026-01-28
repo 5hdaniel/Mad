@@ -38,9 +38,16 @@ if (!gotTheLock) {
 import { autoUpdater } from "electron-updater";
 import dotenv from "dotenv";
 
-// Load environment files: .env.development first (OAuth credentials), then .env.local for overrides
-dotenv.config({ path: path.join(__dirname, "../.env.development") });
-dotenv.config({ path: path.join(__dirname, "../.env.local") });
+// Load environment files based on whether app is packaged or in development
+if (app.isPackaged) {
+  // Packaged build: load .env.production from resources
+  const envPath = path.join(process.resourcesPath, "app.asar", ".env.production");
+  dotenv.config({ path: envPath });
+} else {
+  // Development: load .env.development first (OAuth credentials), then .env.local for overrides
+  dotenv.config({ path: path.join(__dirname, "../.env.development") });
+  dotenv.config({ path: path.join(__dirname, "../.env.local") });
+}
 
 // Import constants
 import {
@@ -159,17 +166,21 @@ async function syncDeepLinkUserToLocalDb(userData: PendingDeepLinkUser): Promise
 
     if (!localUser) {
       // Also check by OAuth ID in case the user was created via a different flow
-      localUser = await databaseService.getUserByOAuthId(userData.provider, userData.supabaseId);
+      // Map 'azure' to 'microsoft' for lookup (Azure AD is Microsoft's provider)
+      const lookupProvider = userData.provider === "azure" ? "microsoft" : userData.provider;
+      localUser = await databaseService.getUserByOAuthId(lookupProvider, userData.supabaseId);
     }
 
     if (!localUser) {
       // TASK-1507G: Use Supabase Auth UUID as local user ID for unified IDs
+      // Map 'azure' to 'microsoft' - Azure AD is Microsoft's auth provider
+      const normalizedProvider = userData.provider === "azure" ? "microsoft" : userData.provider;
       await databaseService.createUser({
         id: userData.supabaseId,
         email: userData.email,
         display_name: userData.displayName || userData.email.split("@")[0],
         avatar_url: userData.avatarUrl,
-        oauth_provider: userData.provider,
+        oauth_provider: normalizedProvider,
         oauth_id: userData.supabaseId,
         subscription_tier: userData.subscriptionTier || "free",
         subscription_status: userData.subscriptionStatus || "trial",
