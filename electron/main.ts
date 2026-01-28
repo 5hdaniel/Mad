@@ -328,9 +328,12 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
         return "trial"; // Default for trial license
       };
 
+      // Extract email - Azure/Microsoft may have empty user.email but email in user_metadata
+      const userEmail = user.email || user.user_metadata?.email || "";
+
       const deepLinkUserData: PendingDeepLinkUser = {
         supabaseId: user.id,
-        email: user.email || "",
+        email: userEmail,
         displayName: user.user_metadata?.full_name,
         avatarUrl: user.user_metadata?.avatar_url,
         provider,
@@ -348,7 +351,7 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
         await syncDeepLinkUserToLocalDb(deepLinkUserData);
 
         // TASK-1507F: Get the local user ID after creation/sync
-        const localUser = await databaseService.getUserByEmail(user.email || "");
+        const localUser = await databaseService.getUserByEmail(userEmail);
         if (localUser) {
           localUserId = localUser.id;
           log.info("[DeepLink] Using local user ID:", localUserId);
@@ -373,7 +376,7 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
         userId: localUserId,
         user: {
           id: localUserId,
-          email: user.email,
+          email: userEmail,
           name: user.user_metadata?.full_name,
         },
         provider: user.app_metadata?.provider,
