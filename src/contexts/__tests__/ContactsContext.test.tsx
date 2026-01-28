@@ -123,10 +123,9 @@ describe("ContactsContext", () => {
         </ContactsProvider>
       );
 
+      // Service layer captures the original error message and passes it through
       await waitFor(() => {
-        expect(
-          screen.getByText("Error: Unable to load contacts")
-        ).toBeInTheDocument();
+        expect(screen.getByText("Error: Network timeout")).toBeInTheDocument();
       });
     });
 

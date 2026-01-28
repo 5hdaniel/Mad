@@ -30,6 +30,7 @@ import React, {
   useRef,
 } from "react";
 import type { ExtendedContact } from "../types/components";
+import { contactService } from "../services";
 
 // ============================================
 // TYPES
@@ -97,14 +98,14 @@ export function ContactsProvider({
 
     try {
       const result = propertyAddress
-        ? await window.api.contacts.getSortedByActivity(userId, propertyAddress)
-        : await window.api.contacts.getAll(userId);
+        ? await contactService.getSortedByActivity(userId, propertyAddress)
+        : await contactService.getAll(userId);
 
       if (!isMountedRef.current) return;
 
       if (result.success) {
         setState({
-          contacts: result.contacts || [],
+          contacts: (result.data || []) as ExtendedContact[],
           loading: false,
           error: null,
         });
