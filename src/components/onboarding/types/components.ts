@@ -36,6 +36,12 @@ export interface OnboardingStepContentProps {
    * onAction({ type: 'SELECT_PHONE', payload: { phoneType: 'iphone' } })
    */
   onAction: (action: StepAction) => void;
+
+  /**
+   * Optional loading state for steps that have async operations.
+   * Used by SecureStorageStep to show loading UI during DB initialization.
+   */
+  isLoading?: boolean;
 }
 
 /**

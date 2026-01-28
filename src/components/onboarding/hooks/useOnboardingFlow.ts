@@ -275,7 +275,13 @@ export function useOnboardingFlow(
           break;
 
         case "SECURE_STORAGE_SETUP":
-          goToNext();
+          // For first-time macOS users, navigation is handled by OnboardingFlow
+          // which waits for DB init to complete before calling goToNext()
+          // Only advance immediately if DB is already initialized (returning user scenario)
+          if (context.isDatabaseInitialized) {
+            goToNext();
+          }
+          // Otherwise, OnboardingFlow's effect will handle navigation
           break;
 
         case "DRIVER_SETUP_COMPLETE":
