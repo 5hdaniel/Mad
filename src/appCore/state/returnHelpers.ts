@@ -12,7 +12,6 @@ import type {
   ModalState,
   PendingOAuthData,
   PendingOnboardingData,
-  PendingEmailTokens,
   AppExportResult,
   Subscription,
   Conversation,
@@ -163,6 +162,8 @@ interface AutoSyncReturn {
 /**
  * Constructs the state properties portion of the return object.
  * Includes navigation, auth, network, platform, and feature-specific state.
+ *
+ * TASK-1603: Removed pendingEmailTokens parameter (no longer needed after flow reorder).
  */
 export function constructStateProps(
   context: ContextState,
@@ -172,7 +173,6 @@ export function constructStateProps(
   emailOnboardingApi: EmailOnboardingApiReturn,
   phoneTypeApi: PhoneTypeApiReturn,
   auth: Pick<AuthFlowReturn, "isNewUserFlow" | "pendingOAuthData" | "pendingOnboardingData">,
-  pendingEmailTokens: PendingEmailTokens | null,
   exportFlow: Pick<ExportFlowReturn, "exportResult" | "conversations" | "selectedConversationIds" | "outlookConnected">,
   modal: Pick<ModalFlowReturn, "modalState">,
   autoSync: AutoSyncReturn,
@@ -207,7 +207,6 @@ export function constructStateProps(
   | "isNewUserFlow"
   | "pendingOAuthData"
   | "pendingOnboardingData"
-  | "pendingEmailTokens"
   | "exportResult"
   | "conversations"
   | "selectedConversationIds"
@@ -270,7 +269,6 @@ export function constructStateProps(
     // Pending data
     pendingOAuthData: auth.pendingOAuthData,
     pendingOnboardingData: auth.pendingOnboardingData,
-    pendingEmailTokens,
 
     // Export state
     exportResult: exportFlow.exportResult,
