@@ -95,10 +95,18 @@ export function usePhoneTypeApi({
     // No-op: state machine is source of truth
   }, []);
 
-  // savePhoneType persists to API and dispatches onboarding step complete
-  // If DB is not initialized (deferred for first-time macOS users), we skip
-  // the DB save and just dispatch the step completion. The phone type will
-  // be synced to DB after secure-storage step initializes it.
+  /**
+   * Save phone type to storage and dispatch step completion.
+   *
+   * TASK-1600: Saves to Supabase first (always available after auth),
+   * then to local DB when initialized. This allows phone-type selection
+   * to work before database initialization.
+   *
+   * Storage priority:
+   * 1. Supabase cloud (always available after auth)
+   * 2. Local SQLite (when initialized, for offline support)
+   * 3. State machine (source of truth for UI)
+   */
   const savePhoneType = useCallback(
     async (phoneType: "iphone" | "android"): Promise<boolean> => {
       // userId comes from state machine
@@ -109,52 +117,77 @@ export function usePhoneTypeApi({
 
       if (!currentUserId) return false;
 
-      // Check if DB is initialized
-      const isDbReady = selectIsDatabaseInitialized(state);
+      try {
+        // 1. Save to Supabase first (always available after auth)
+        // TASK-1600: This allows phone type selection before DB init
+        // Type assertion through unknown needed because window.d.ts index signature causes inference issues
+        const userApi = window.api.user as unknown as {
+          setPhoneType: (
+            userId: string,
+            phoneType: "iphone" | "android"
+          ) => Promise<{ success: boolean; error?: string }>;
+          setPhoneTypeCloud: (
+            userId: string,
+            phoneType: "iphone" | "android"
+          ) => Promise<{ success: boolean; error?: string }>;
+        };
 
-      if (!isDbReady) {
-        // DB not ready (first-time macOS user with deferred init)
-        // Just dispatch step completion - phone type stored in state machine
-        // Will be synced to DB after secure-storage step initializes it
-        console.log(
-          "[usePhoneTypeApi] DB not initialized, queuing phone type in state:",
+        const cloudResult = await userApi.setPhoneTypeCloud(
+          currentUserId,
           phoneType
         );
+
+        if (!cloudResult.success) {
+          // Log but don't fail - graceful degradation
+          console.warn(
+            "[usePhoneTypeApi] Failed to save to Supabase, continuing:",
+            cloudResult.error
+          );
+        } else {
+          console.log(
+            "[usePhoneTypeApi] Phone type saved to Supabase:",
+            phoneType
+          );
+        }
+
+        // 2. Try local DB if initialized (for offline support)
+        const isDbReady = selectIsDatabaseInitialized(state);
+
+        if (isDbReady) {
+          try {
+            const localResult = await userApi.setPhoneType(
+              currentUserId,
+              phoneType
+            );
+            if (!localResult.success) {
+              console.warn(
+                "[usePhoneTypeApi] Failed to save to local DB:",
+                localResult.error
+              );
+            }
+          } catch (localError) {
+            // Log but don't fail - Supabase is primary storage
+            console.warn(
+              "[usePhoneTypeApi] Error saving to local DB:",
+              localError
+            );
+          }
+        } else {
+          console.log(
+            "[usePhoneTypeApi] Local DB not initialized, phone type queued in state"
+          );
+        }
+
+        // 3. Dispatch onboarding step complete with the selected phone type
+        // This ensures the reducer uses the user's actual selection,
+        // not platform detection (fixes TASK-1180 onboarding loop bug)
         dispatch({
           type: "ONBOARDING_STEP_COMPLETE",
           step: "phone-type",
           phoneType,
         });
+
         return true;
-      }
-
-      // DB is ready - persist to API then dispatch
-      try {
-        const userApi = window.api.user as {
-          setPhoneType: (
-            userId: string,
-            phoneType: "iphone" | "android"
-          ) => Promise<{ success: boolean; error?: string }>;
-        };
-        const result = await userApi.setPhoneType(currentUserId, phoneType);
-
-        if (result.success) {
-          // Dispatch onboarding step complete with the selected phone type
-          // This ensures the reducer uses the user's actual selection,
-          // not platform detection (fixes TASK-1180 onboarding loop bug)
-          dispatch({
-            type: "ONBOARDING_STEP_COMPLETE",
-            step: "phone-type",
-            phoneType,
-          });
-          return true;
-        } else {
-          console.error(
-            "[usePhoneTypeApi] Failed to save phone type:",
-            result.error
-          );
-          return false;
-        }
       } catch (error) {
         console.error("[usePhoneTypeApi] Error saving phone type:", error);
         return false;
