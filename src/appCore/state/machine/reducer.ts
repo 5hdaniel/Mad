@@ -482,7 +482,7 @@ export function appStateReducer(
           selectedPhoneType === "iphone" &&
           !completedSteps.includes("apple-driver"),
         hasPermissions:
-          !state.platform.isMacOS || completedSteps.includes("permissions"),
+          !state.platform.isMacOS || state.hasPermissions || completedSteps.includes("permissions"),
       };
 
       const nextStep = getNextOnboardingStep(
@@ -526,10 +526,16 @@ export function appStateReducer(
     case "EMAIL_CONNECTED": {
       if (state.status === "onboarding") {
         // Update onboarding state to track that email was connected
-        return {
+        const updatedState: OnboardingState = {
           ...state,
           hasEmailConnected: true,
         };
+        // Recursively call reducer to complete the step and potentially transition to ready
+        // This ensures the flow advances after email OAuth completes
+        return appStateReducer(updatedState, {
+          type: "ONBOARDING_STEP_COMPLETE",
+          step: "email-connect",
+        });
       }
 
       if (state.status === "ready") {

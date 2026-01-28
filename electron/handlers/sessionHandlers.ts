@@ -700,6 +700,63 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
 }
 
 /**
+ * Force logout - clears all sessions without requiring a session token
+ * Used when the user is stuck (e.g., license blocked during login, can't switch accounts)
+ *
+ * Security note: This only clears LOCAL sessions on this device.
+ * It cannot be used to log out other users or affect other devices.
+ */
+async function handleForceLogout(): Promise<AuthResponse> {
+  try {
+    await logService.info("Force logout initiated", "AuthHandlers");
+
+    // 1. Clear Supabase session
+    try {
+      await supabaseService.signOut();
+    } catch (supabaseError) {
+      await logService.warn("Supabase signOut failed during force logout", "AuthHandlers", {
+        error: supabaseError instanceof Error ? supabaseError.message : "Unknown error",
+      });
+      // Continue - local cleanup is still important
+    }
+
+    // 2. Clear local session file
+    try {
+      await sessionService.clearSession();
+    } catch (sessionError) {
+      await logService.warn("Session file clear failed during force logout", "AuthHandlers", {
+        error: sessionError instanceof Error ? sessionError.message : "Unknown error",
+      });
+    }
+
+    // 3. Clear database sessions (if database is initialized)
+    try {
+      if (databaseService.isInitialized()) {
+        await databaseService.clearAllSessions();
+      }
+    } catch (dbError) {
+      await logService.warn("Database session clear failed during force logout", "AuthHandlers", {
+        error: dbError instanceof Error ? dbError.message : "Unknown error",
+      });
+    }
+
+    // 4. Clear sync user ID
+    setSyncUserId(null);
+
+    await logService.info("Force logout completed successfully", "AuthHandlers");
+    return { success: true };
+  } catch (error) {
+    await logService.error("Force logout failed", "AuthHandlers", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+/**
  * Open broker portal auth page in the default browser
  * TASK-1507: Used for deep-link authentication flow
  * TASK-1510: Redirects to broker portal for provider selection (Google/Microsoft)
@@ -733,6 +790,7 @@ async function handleOpenAuthInBrowser(): Promise<{ success: boolean; error?: st
  */
 export function registerSessionHandlers(): void {
   ipcMain.handle("auth:logout", handleLogout);
+  ipcMain.handle("auth:force-logout", handleForceLogout);
   ipcMain.handle("auth:accept-terms", handleAcceptTerms);
   ipcMain.handle("auth:accept-terms-to-supabase", handleAcceptTermsToSupabase);
   ipcMain.handle("auth:complete-email-onboarding", handleCompleteEmailOnboarding);

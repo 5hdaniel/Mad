@@ -16,6 +16,8 @@ export type UpgradeReason =
 
 interface UpgradeScreenProps {
   reason: UpgradeReason;
+  /** Called when user wants to switch account or sign out */
+  onLogout?: () => Promise<void>;
 }
 
 const MESSAGES: Record<UpgradeReason, { title: string; description: string }> = {
@@ -40,20 +42,28 @@ const MESSAGES: Record<UpgradeReason, { title: string; description: string }> = 
   },
 };
 
-export function UpgradeScreen({ reason }: UpgradeScreenProps): React.ReactElement {
+export function UpgradeScreen({ reason, onLogout }: UpgradeScreenProps): React.ReactElement {
   const message = MESSAGES[reason];
 
   const handleUpgrade = () => {
-    // Open upgrade page in browser
-    window.api?.shell?.openExternal?.("https://broker-portal-two.vercel.app/beta");
+    // Open upgrade page in popup window (keeps user in-app)
+    window.api?.shell?.openPopup?.("https://broker-portal-two.vercel.app/beta", "Upgrade to Magic Audit Pro");
   };
 
   const handleLogout = async () => {
     // Clear license cache before logout
     await window.api?.license?.clearCache?.();
-    // Reload the page to trigger the normal logout flow
-    // The auth context will handle clearing the session
-    window.location.reload();
+
+    // Use force logout to clear all sessions (works even without session token)
+    await window.api?.auth?.forceLogout?.();
+
+    if (onLogout) {
+      // Also call provided logout handler to update React state
+      await onLogout();
+    } else {
+      // Fallback: Reload the page
+      window.location.reload();
+    }
   };
 
   return (
@@ -115,12 +125,20 @@ export function UpgradeScreen({ reason }: UpgradeScreenProps): React.ReactElemen
           >
             Upgrade Now
           </button>
-          <button
-            onClick={handleLogout}
-            className="w-full px-6 py-3 text-gray-600 hover:text-gray-800 transition-colors"
-          >
-            Sign Out
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={handleLogout}
+              className="flex-1 px-4 py-2 text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Switch Account
+            </button>
+            <button
+              onClick={handleLogout}
+              className="flex-1 px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+            >
+              Sign Out
+            </button>
+          </div>
         </div>
       </div>
     </div>

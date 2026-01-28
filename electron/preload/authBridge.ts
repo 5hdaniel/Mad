@@ -75,6 +75,13 @@ export const authBridge = {
     ipcRenderer.invoke("auth:logout", sessionToken),
 
   /**
+   * Force logout - clears all local sessions without requiring a token
+   * Used when user is stuck (e.g., license blocked during login)
+   * @returns Logout result
+   */
+  forceLogout: () => ipcRenderer.invoke("auth:force-logout"),
+
+  /**
    * Validates an existing session token
    * @param sessionToken - Session token to validate
    * @returns Validation result

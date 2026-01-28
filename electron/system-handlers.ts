@@ -3,7 +3,7 @@
 // Permission checks, connection status, system health
 // ============================================
 
-import { ipcMain, shell, app } from "electron";
+import { ipcMain, shell, app, BrowserWindow } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 
 // Import services (TypeScript with default exports)
@@ -947,6 +947,82 @@ export function registerSystemHandlers(): void {
         const errorMessage =
           error instanceof Error ? error.message : "Unknown error";
         logService.error("Failed to open external URL", "SystemHandlers", {
+          error: errorMessage,
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: errorMessage,
+        };
+      }
+    },
+  );
+
+  /**
+   * Open URL in a popup window (instead of system browser)
+   * Used for upgrade flows to keep user in-app
+   */
+  ipcMain.handle(
+    "shell:open-popup",
+    async (event: IpcMainInvokeEvent, url: string, title?: string): Promise<SystemResponse> => {
+      try {
+        // Validate URL
+        const validatedUrl = validateString(url, "url", {
+          required: true,
+          maxLength: 2000,
+        });
+
+        if (!validatedUrl) {
+          return {
+            success: false,
+            error: "URL is required",
+          };
+        }
+
+        // Only allow safe protocols
+        const allowedProtocols = ["https:", "http:"];
+        let parsedUrl: URL;
+        try {
+          parsedUrl = new URL(validatedUrl);
+        } catch {
+          return {
+            success: false,
+            error: "Invalid URL format",
+          };
+        }
+
+        if (!allowedProtocols.includes(parsedUrl.protocol)) {
+          return {
+            success: false,
+            error: `Protocol not allowed: ${parsedUrl.protocol}`,
+          };
+        }
+
+        // Create popup window
+        const popupWindow = new BrowserWindow({
+          width: 800,
+          height: 700,
+          webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+          },
+          autoHideMenuBar: true,
+          title: title || "Magic Audit",
+        });
+
+        // Load the URL
+        popupWindow.loadURL(validatedUrl);
+
+        return { success: true };
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error("Failed to open popup window", "SystemHandlers", {
           error: errorMessage,
         });
         if (error instanceof ValidationError) {

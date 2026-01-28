@@ -634,6 +634,7 @@ export interface WindowApi {
     logout: (
       sessionToken: string,
     ) => Promise<{ success: boolean; error?: string }>;
+    forceLogout: () => Promise<{ success: boolean; error?: string }>;
     validateSession: (
       sessionToken: string,
     ) => Promise<{ valid: boolean; user?: User; error?: string }>;
@@ -1195,6 +1196,7 @@ export interface WindowApi {
   // Shell methods
   shell: {
     openExternal: (url: string) => Promise<void>;
+    openPopup: (url: string, title?: string) => Promise<{ success: boolean }>;
     openFolder: (folderPath: string) => Promise<{ success: boolean }>;
   };
 
