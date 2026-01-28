@@ -28,6 +28,9 @@ interface MessageAttachmentInfo {
 // Track registration to prevent duplicate handlers
 let handlersRegistered = false;
 
+// TASK-1710: Track import start time for elapsed time calculation
+let importStartTime: number | null = null;
+
 /**
  * Register message import IPC handlers
  */
@@ -92,10 +95,17 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
         { userId: validUserId, forceReimport }
       );
 
-      // Create progress callback that sends updates to renderer
+      // TASK-1710: Track import start time for elapsed time calculation
+      importStartTime = Date.now();
+
+      // Create progress callback that sends updates to renderer with elapsed time
       const onProgress: ImportProgressCallback = (progress) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send("messages:import-progress", progress);
+          const elapsedMs = importStartTime ? Date.now() - importStartTime : 0;
+          mainWindow.webContents.send("messages:import-progress", {
+            ...progress,
+            elapsedMs,
+          });
         }
       };
 
@@ -278,6 +288,16 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle("messages:reset-import-lock", async (): Promise<void> => {
     logService.info("Resetting import lock via IPC", "MessageImportHandlers");
     macOSMessagesImportService.resetImportLock();
+  });
+
+  /**
+   * Cancel the current import operation (TASK-1710)
+   * IPC: messages:import-cancel
+   * Uses ipcMain.on (not handle) since this is a one-way event
+   */
+  ipcMain.on("messages:import-cancel", () => {
+    logService.info("Import cancel requested via IPC", "MessageImportHandlers");
+    macOSMessagesImportService.requestCancellation();
   });
 
   logService.info(

@@ -364,6 +364,20 @@ class MacOSMessagesImportService {
   }
 
   /**
+   * Request cancellation of the current import (TASK-1710)
+   * The import will stop at the next batch boundary, preserving partial data
+   */
+  requestCancellation(): void {
+    if (this.isImporting) {
+      logService.info(
+        "Import cancellation requested",
+        MacOSMessagesImportService.SERVICE_NAME
+      );
+      this.cancelCurrentImport = true;
+    }
+  }
+
+  /**
    * Internal import implementation
    */
   private async doImport(
