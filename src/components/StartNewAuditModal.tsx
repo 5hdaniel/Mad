@@ -40,7 +40,7 @@ function StartNewAuditModal({
   isSyncing = false,
 }: StartNewAuditModalProps): React.ReactElement {
   const { pendingTransactions, isLoading, error, refetch } = usePendingTransactions();
-  const { hasAIAddon } = useLicense();
+  const { hasAIAddon, canCreateTransaction, transactionCount, transactionLimit } = useLicense();
 
   const formatDate = (dateString: string | Date | null | undefined): string => {
     if (!dateString) return "";
@@ -286,6 +286,32 @@ function StartNewAuditModal({
             </div>
           </LicenseGate>
 
+          {/* Transaction Limit Warning */}
+          {!canCreateTransaction && (
+            <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0">
+                  <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-sm font-semibold text-amber-800">Transaction Limit Reached</h4>
+                  <p className="text-sm text-amber-700 mt-1">
+                    You've used all {transactionLimit} transactions included in your plan ({transactionCount}/{transactionLimit}).
+                    Upgrade your plan to create more transactions.
+                  </p>
+                  <button
+                    className="mt-2 text-sm font-medium text-amber-800 hover:text-amber-900 underline"
+                    onClick={() => window.open("https://magicaudit.ai/pricing", "_blank")}
+                  >
+                    Upgrade
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Secondary Actions */}
           <div className="grid grid-cols-2 gap-4">
             {/* View Active Transactions */}
@@ -321,13 +347,22 @@ function StartNewAuditModal({
 
             {/* Add Manually */}
             <button
-              onClick={onCreateManually}
-              className="flex items-center gap-3 p-4 bg-white border-2 border-gray-200 rounded-lg hover:border-purple-400 hover:bg-purple-50 transition-all group"
+              onClick={canCreateTransaction ? onCreateManually : undefined}
+              disabled={!canCreateTransaction}
+              className={`flex items-center gap-3 p-4 bg-white border-2 rounded-lg transition-all group ${
+                canCreateTransaction
+                  ? "border-gray-200 hover:border-purple-400 hover:bg-purple-50 cursor-pointer"
+                  : "border-gray-200 bg-gray-50 cursor-not-allowed opacity-60"
+              }`}
               data-testid="create-manually-button"
             >
-              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center group-hover:bg-purple-200 transition-colors">
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                canCreateTransaction
+                  ? "bg-purple-100 group-hover:bg-purple-200"
+                  : "bg-gray-200"
+              }`}>
                 <svg
-                  className="w-5 h-5 text-purple-600"
+                  className={`w-5 h-5 ${canCreateTransaction ? "text-purple-600" : "text-gray-400"}`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -341,11 +376,13 @@ function StartNewAuditModal({
                 </svg>
               </div>
               <div className="text-left">
-                <h4 className="font-semibold text-gray-900 text-sm">
+                <h4 className={`font-semibold text-sm ${canCreateTransaction ? "text-gray-900" : "text-gray-500"}`}>
                   Add Manually
                 </h4>
                 <p className="text-xs text-gray-500">
-                  Transaction not here?
+                  {canCreateTransaction
+                    ? "Transaction not here?"
+                    : `Limit reached (${transactionCount}/${transactionLimit})`}
                 </p>
               </div>
             </button>
