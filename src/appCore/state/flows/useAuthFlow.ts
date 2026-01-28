@@ -3,9 +3,12 @@
  *
  * Manages authentication-related state and handlers.
  * Handles login success, pending OAuth, logout, and terms acceptance.
+ *
+ * TASK-1612: Migrated to use authService instead of direct window.api calls.
  */
 
 import { useState, useCallback, useMemo } from "react";
+import { authService } from "@/services";
 import type { PendingOAuthData, DeepLinkAuthData } from "../../../components/Login";
 import type { Subscription } from "../../../../electron/types/models";
 import type { PendingOnboardingData, AppStep } from "../types";
@@ -244,13 +247,7 @@ export function useAuthFlow({
   const handleAcceptTerms = useCallback(async (): Promise<void> => {
     try {
       if (pendingOAuthData && !isAuthenticated) {
-        const authApi = window.api.auth as typeof window.api.auth & {
-          acceptTermsToSupabase: (userId: string) => Promise<{
-            success: boolean;
-            error?: string;
-          }>;
-        };
-        const result = await authApi.acceptTermsToSupabase(
+        const result = await authService.acceptTermsToSupabase(
           pendingOAuthData.cloudUser.id,
         );
         if (result.success) {

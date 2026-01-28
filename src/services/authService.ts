@@ -329,6 +329,71 @@ export const authService = {
       return { success: false, error: getErrorMessage(error) };
     }
   },
+
+  // ============================================
+  // IPC EVENT LISTENERS
+  // ============================================
+
+  /**
+   * Subscribe to mailbox connection events.
+   * Returns a cleanup function to unsubscribe.
+   *
+   * @param provider - The email provider (google or microsoft)
+   * @param callback - Called when mailbox connection completes
+   * @returns Cleanup function to remove the listener
+   */
+  onMailboxConnected(
+    provider: "google" | "microsoft",
+    callback: (result: { success: boolean; email?: string; error?: string }) => void
+  ): () => void {
+    if (provider === "google") {
+      return window.api.onGoogleMailboxConnected(callback);
+    } else {
+      return window.api.onMicrosoftMailboxConnected(callback);
+    }
+  },
+
+  // ============================================
+  // ONBOARDING METHODS
+  // ============================================
+
+  /**
+   * Accept terms of service to Supabase (before local DB is initialized).
+   * Used during pre-DB onboarding flow when user accepts terms.
+   */
+  async acceptTermsToSupabase(userId: string): Promise<ApiResult> {
+    try {
+      const authApi = window.api.auth as typeof window.api.auth & {
+        acceptTermsToSupabase: (userId: string) => Promise<{
+          success: boolean;
+          error?: string;
+        }>;
+      };
+      const result = await authApi.acceptTermsToSupabase(userId);
+      return { success: result.success, error: result.error };
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) };
+    }
+  },
+
+  /**
+   * Mark email onboarding as complete for a user.
+   * Called when user finishes or skips the email connection step.
+   */
+  async completeEmailOnboarding(userId: string): Promise<ApiResult> {
+    try {
+      const authApi = window.api.auth as typeof window.api.auth & {
+        completeEmailOnboarding: (userId: string) => Promise<{
+          success: boolean;
+          error?: string;
+        }>;
+      };
+      const result = await authApi.completeEmailOnboarding(userId);
+      return { success: result.success, error: result.error };
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) };
+    }
+  },
 };
 
 export default authService;

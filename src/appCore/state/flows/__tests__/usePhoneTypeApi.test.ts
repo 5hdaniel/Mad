@@ -2,6 +2,7 @@
  * usePhoneTypeApi Tests
  *
  * TASK-1600: Tests for phone type selection with Supabase cloud storage.
+ * TASK-1612: Updated to mock settingsService instead of window.api.
  *
  * Test coverage:
  * - savePhoneType saves to Supabase first (cloud-first pattern)
@@ -18,15 +19,21 @@ import { usePhoneTypeApi } from "../usePhoneTypeApi";
 // MOCK SETUP
 // ============================================
 
-// Mock functions for window.api.user methods
+// Mock functions for settingsService methods
 const mockSetPhoneType = jest.fn();
 const mockSetPhoneTypeCloud = jest.fn();
-const mockGetPhoneType = jest.fn();
-const mockGetPhoneTypeCloud = jest.fn();
 
 // Mock state machine hook
 const mockDispatch = jest.fn();
 const mockMachineState = jest.fn();
+
+// Mock the settingsService module
+jest.mock("@/services", () => ({
+  settingsService: {
+    setPhoneType: (...args: unknown[]) => mockSetPhoneType(...args),
+    setPhoneTypeCloud: (...args: unknown[]) => mockSetPhoneTypeCloud(...args),
+  },
+}));
 
 // Default state machine state (onboarding with user and DB initialized)
 const createMockState = (overrides: Record<string, unknown> = {}) => ({
@@ -73,22 +80,6 @@ jest.mock("../../machine", () => ({
   },
 }));
 
-// Setup window.api mock before tests
-beforeAll(() => {
-  Object.defineProperty(window, "api", {
-    value: {
-      user: {
-        setPhoneType: mockSetPhoneType,
-        setPhoneTypeCloud: mockSetPhoneTypeCloud,
-        getPhoneType: mockGetPhoneType,
-        getPhoneTypeCloud: mockGetPhoneTypeCloud,
-      },
-    },
-    writable: true,
-    configurable: true,
-  });
-});
-
 // Reset all mocks before each test
 beforeEach(() => {
   jest.clearAllMocks();
@@ -99,7 +90,7 @@ beforeEach(() => {
     dispatch: mockDispatch,
   });
 
-  // Default successful API responses
+  // Default successful service responses
   mockSetPhoneTypeCloud.mockResolvedValue({ success: true });
   mockSetPhoneType.mockResolvedValue({ success: true });
 });

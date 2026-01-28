@@ -9,9 +9,12 @@
  * - No more "pending" vs "regular" API paths
  * - Email tokens are saved directly to the database
  * - Removed setPendingEmailTokens and pending API calls
+ *
+ * TASK-1612: Migrated to use authService instead of direct window.api calls.
  */
 
 import { useCallback, useMemo } from "react";
+import { authService } from "@/services";
 import type { AppStep, PendingOnboardingData } from "../types";
 import type { PendingOAuthData } from "../../../components/Login";
 import { USE_NEW_ONBOARDING } from "../../routing/routeConfig";
@@ -146,6 +149,7 @@ export function useEmailHandlers({
   /**
    * Start Google OAuth flow for email connection.
    * TASK-1603: Simplified - DB is always initialized at this point.
+   * TASK-1612: Uses authService instead of direct window.api calls.
    * Uses direct database API (no pending fallback needed).
    */
   const handleStartGoogleEmailConnect = useCallback(async (): Promise<void> => {
@@ -155,23 +159,20 @@ export function useEmailHandlers({
     }
 
     try {
-      const result = await window.api.auth.googleConnectMailbox(currentUserId);
+      const result = await authService.googleConnectMailbox(currentUserId);
 
-      if (!result?.success) {
+      if (!result.success) {
         console.error(
           "[useEmailHandlers] Failed to start Google OAuth:",
-          result?.error,
+          result.error,
         );
         return;
       }
 
-      // Set up IPC listener for OAuth completion
-      const cleanup = window.api.onGoogleMailboxConnected(
-        (connectionResult: {
-          success: boolean;
-          email?: string;
-          error?: string;
-        }) => {
+      // Set up IPC listener for OAuth completion via service
+      const cleanup = authService.onMailboxConnected(
+        "google",
+        (connectionResult) => {
           if (connectionResult.success && connectionResult.email) {
             setHasEmailConnected(true, connectionResult.email, "google");
             // Also set email provider so EmailConnectStep shows as connected
@@ -195,6 +196,7 @@ export function useEmailHandlers({
   /**
    * Start Microsoft OAuth flow for email connection.
    * TASK-1603: Simplified - DB is always initialized at this point.
+   * TASK-1612: Uses authService instead of direct window.api calls.
    * Uses direct database API (no pending fallback needed).
    */
   const handleStartMicrosoftEmailConnect =
@@ -205,23 +207,20 @@ export function useEmailHandlers({
       }
 
       try {
-        const result = await window.api.auth.microsoftConnectMailbox(currentUserId);
+        const result = await authService.microsoftConnectMailbox(currentUserId);
 
-        if (!result?.success) {
+        if (!result.success) {
           console.error(
             "[useEmailHandlers] Failed to start Microsoft OAuth:",
-            result?.error,
+            result.error,
           );
           return;
         }
 
-        // Set up IPC listener for OAuth completion
-        const cleanup = window.api.onMicrosoftMailboxConnected(
-          (connectionResult: {
-            success: boolean;
-            email?: string;
-            error?: string;
-          }) => {
+        // Set up IPC listener for OAuth completion via service
+        const cleanup = authService.onMailboxConnected(
+          "microsoft",
+          (connectionResult) => {
             if (connectionResult.success && connectionResult.email) {
               setHasEmailConnected(true, connectionResult.email, "microsoft");
               // Also set email provider so EmailConnectStep shows as connected

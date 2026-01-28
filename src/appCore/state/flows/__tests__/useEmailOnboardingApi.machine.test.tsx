@@ -5,6 +5,8 @@
  * Verifies that when the feature flag is enabled, the hook correctly
  * derives its state from the state machine instead of local state.
  *
+ * TASK-1612: Updated to mock authService instead of window.api.
+ *
  * @module appCore/state/flows/__tests__/useEmailOnboardingApi.machine.test
  */
 
@@ -28,16 +30,15 @@ jest.mock("../../machine/utils/featureFlags", () => ({
 const mockIsNewStateMachineEnabled =
   featureFlags.isNewStateMachineEnabled as jest.Mock;
 
-// Mock window.api.auth
+// Mock authService methods
 const mockCompleteEmailOnboarding = jest.fn();
-Object.defineProperty(window, "api", {
-  value: {
-    auth: {
-      completeEmailOnboarding: mockCompleteEmailOnboarding,
-    },
+
+// TASK-1612: Mock the authService module instead of window.api
+jest.mock("@/services", () => ({
+  authService: {
+    completeEmailOnboarding: (...args: unknown[]) => mockCompleteEmailOnboarding(...args),
   },
-  writable: true,
-});
+}));
 
 // Default mock options for useEmailOnboardingApi
 const defaultOptions = {
