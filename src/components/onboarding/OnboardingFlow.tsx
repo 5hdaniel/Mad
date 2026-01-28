@@ -170,7 +170,8 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
 
   // Map app's currentStep to onboarding step ID
   // This ensures the OnboardingFlow starts at the correct step based on routing
-  const getInitialStepId = (): string | undefined => {
+  // Memoized with empty deps to only compute once at mount
+  const initialStepId = useMemo(() => {
     const stepMap: Record<string, string> = {
       "phone-type-selection": "phone-type",
       "keychain-explanation": "secure-storage",
@@ -180,14 +181,14 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
       "android-coming-soon": "android-coming-soon",
     };
     return stepMap[app.currentStep];
-  };
+  }, []); // Empty deps = mount only
 
   // Initialize the hook
   const flow = useOnboardingFlow({
     appState,
     onAction: handleAction,
     onComplete: handleComplete,
-    initialStepId: getInitialStepId(),
+    initialStepId,
   });
 
   const {
