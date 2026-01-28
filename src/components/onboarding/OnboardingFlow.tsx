@@ -7,7 +7,7 @@
  * @module onboarding/OnboardingFlow
  */
 
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOnboardingFlow, type OnboardingAppState } from "./hooks";
 import { OnboardingShell } from "./shell/OnboardingShell";
 import { ProgressIndicator } from "./shell/ProgressIndicator";
@@ -84,6 +84,9 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
     };
   }, [machineState, app]);
 
+  // Track if we're waiting for DB init to complete after clicking Continue on secure-storage
+  // This handles the async nature of macOS keychain initialization for first-time users
+  const [waitingForDbInit, setWaitingForDbInit] = useState(false);
 
   // Action handler that maps to existing app handlers
   const handleAction = useCallback(
@@ -110,6 +113,11 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
           break;
 
         case "SECURE_STORAGE_SETUP":
+          // For first-time macOS users, DB init is async and happens during keychain setup
+          // Set waitingForDbInit to true so we can show loading state and wait for completion
+          if (!appState.isDatabaseInitialized) {
+            setWaitingForDbInit(true);
+          }
           app.handleKeychainExplanationContinue(action.dontShowAgain);
           break;
 
@@ -207,6 +215,15 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
     [flowHandleAction]
   );
 
+  // When DB becomes initialized while we're waiting (after SECURE_STORAGE_SETUP),
+  // advance to the next step. This handles the async nature of macOS keychain initialization.
+  useEffect(() => {
+    if (waitingForDbInit && appState.isDatabaseInitialized) {
+      setWaitingForDbInit(false);
+      goToNext();
+    }
+  }, [waitingForDbInit, appState.isDatabaseInitialized, goToNext]);
+
   // When all steps are filtered out (returning user with everything complete),
   // navigate to dashboard. This handles the case where a returning user's data
   // loads and all onboarding steps are already complete.
@@ -256,6 +273,7 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
         key={currentStep.meta.id}
         context={context}
         onAction={handleStepAction}
+        isLoading={currentStep.meta.id === 'secure-storage' && waitingForDbInit}
       />
     </OnboardingShell>
   );
