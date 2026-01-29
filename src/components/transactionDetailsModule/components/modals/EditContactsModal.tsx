@@ -423,6 +423,7 @@ function StepContent({
         onSelectionChange={handleSelectionChange}
         isLoading={contactsLoading}
         error={contactsError}
+        showMessageContactsFilter={true}
         className="h-[400px]"
       />
     );
