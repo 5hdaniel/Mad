@@ -296,9 +296,9 @@ describe("App", () => {
         expect(screen.getByText(/magic audit/i)).toBeInTheDocument();
       });
 
-      // Should show login buttons
-      expect(screen.getByText(/sign in with google/i)).toBeInTheDocument();
-      expect(screen.getByText(/sign in with microsoft/i)).toBeInTheDocument();
+      // Should show login button
+      // SPRINT-062: Login now shows single "Sign in with Browser" button instead of separate Google/Microsoft buttons
+      expect(screen.getByText(/sign in with browser/i)).toBeInTheDocument();
     });
 
     it("should show permissions screen when authenticated but no permissions", async () => {
@@ -525,8 +525,9 @@ describe("App", () => {
       renderApp();
 
       // The app should render the login screen
+      // SPRINT-062: Login now shows "Sign in with Browser" instead of "Sign in with Google"
       await waitFor(() => {
-        expect(screen.getByText(/sign in with google/i)).toBeInTheDocument();
+        expect(screen.getByText(/sign in with browser/i)).toBeInTheDocument();
       });
 
       // checkPermissions is called internally by the state machine
@@ -546,8 +547,9 @@ describe("App", () => {
       renderApp();
 
       // Verify login screen renders (permissions check is part of useAppStateMachine)
+      // SPRINT-062: Login now shows "Sign in with Browser" instead of "Sign in with Google"
       await waitFor(() => {
-        expect(screen.getByText(/sign in with google/i)).toBeInTheDocument();
+        expect(screen.getByText(/sign in with browser/i)).toBeInTheDocument();
       });
 
       // The checkPermissions function exists and is callable
@@ -565,8 +567,9 @@ describe("App", () => {
       renderApp();
 
       // Verify login screen renders (app location check is part of useAppStateMachine)
+      // SPRINT-062: Login now shows "Sign in with Browser" instead of "Sign in with Google"
       await waitFor(() => {
-        expect(screen.getByText(/sign in with google/i)).toBeInTheDocument();
+        expect(screen.getByText(/sign in with browser/i)).toBeInTheDocument();
       });
     });
   });
@@ -797,8 +800,9 @@ describe("App", () => {
 
       renderApp();
 
+      // SPRINT-062: Login now shows "Sign in with Browser" instead of "Sign in with Google"
       await waitFor(() => {
-        expect(screen.getByText(/sign in with google/i)).toBeInTheDocument();
+        expect(screen.getByText(/sign in with browser/i)).toBeInTheDocument();
       });
 
       // The move prompt should not appear
