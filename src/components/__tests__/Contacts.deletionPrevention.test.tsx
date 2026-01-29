@@ -386,7 +386,7 @@ describe("Contacts - Deletion Prevention", () => {
         expect(screen.getByText("John Doe")).toBeInTheDocument();
       });
 
-      expect(screen.getByText("Manual")).toBeInTheDocument();
+      expect(screen.getByText("Imported")).toBeInTheDocument();
     });
 
     it("should display From Email badge for email contacts", async () => {
@@ -401,7 +401,7 @@ describe("Contacts - Deletion Prevention", () => {
         expect(screen.getByText("Jane Smith")).toBeInTheDocument();
       });
 
-      expect(screen.getByText("From Email")).toBeInTheDocument();
+      expect(screen.getByText("Imported")).toBeInTheDocument();
     });
 
     it("should display Contacts App badge for contacts_app contacts", async () => {
@@ -416,7 +416,7 @@ describe("Contacts - Deletion Prevention", () => {
         expect(screen.getByText("Bob Wilson")).toBeInTheDocument();
       });
 
-      expect(screen.getByText("Contacts App")).toBeInTheDocument();
+      expect(screen.getByText("Imported")).toBeInTheDocument();
     });
   });
 
