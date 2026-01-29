@@ -704,15 +704,15 @@ After all tasks complete:
 
 | Phase | Task | Status | Engineer | PR | Actual Tokens |
 |-------|------|--------|----------|-----|---------------|
-| 0 | PR #678 (TASK-1760) | Ready to Merge | - | #678 | - |
-| 1 | TASK-1761 | Not Started | - | - | - |
-| 1 | TASK-1762 | Not Started | - | - | - |
-| 1 | TASK-1763 | Not Started | - | - | - |
-| 2 | TASK-1764 | Not Started | - | - | - |
-| 2 | TASK-1765 | Not Started | - | - | - |
-| 3 | TASK-1766 | Not Started | - | - | - |
-| 4 | TASK-1767 | Not Started | - | - | - |
-| 4 | TASK-1768 | Not Started | - | - | - |
+| 0 | PR #678 (TASK-1760) | MERGED | - | #678 | - |
+| 1 | TASK-1761 | MERGED | - | #679 | - |
+| 1 | TASK-1762 | MERGED | - | #680 | - |
+| 1 | TASK-1763 | READY | - | - | - |
+| 2 | TASK-1764 | READY | - | - | - |
+| 2 | TASK-1765 | Blocked by 1763, 1764 | - | - | - |
+| 3 | TASK-1766 | Blocked by 1765 | - | - | - |
+| 4 | TASK-1767 | READY | - | - | - |
+| 4 | TASK-1768 | Blocked by 1767 | - | - | - |
 
 ---
 
