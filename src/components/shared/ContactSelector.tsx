@@ -150,7 +150,7 @@ export function ContactSelector({
 }: ContactSelectorProps): React.ReactElement {
   const [searchQuery, setSearchQuery] = useState("");
   const [focusedIndex, setFocusedIndex] = useState(-1);
-  const [includeMessageContacts, setIncludeMessageContacts] = useState(true);
+  const [includeMessageContacts, setIncludeMessageContacts] = useState(false);
 
   // Refs for keyboard navigation
   const listRef = useRef<HTMLDivElement>(null);
