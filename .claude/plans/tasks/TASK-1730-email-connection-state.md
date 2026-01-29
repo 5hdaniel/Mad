@@ -2,26 +2,11 @@
 
 ---
 
-## WORKFLOW REQUIREMENT
+## Status: COMPLETE
 
-**This task MUST be implemented via the `engineer` agent.**
-
-Direct implementation is PROHIBITED. The correct workflow is:
-
-1. PM creates this task file
-2. PM invokes `engineer` agent with `subagent_type="engineer"`
-3. Engineer agent implements, tracks metrics, creates PR
-4. PM invokes `senior-engineer-pr-lead` agent for PR review
-5. SR Engineer approves PR
-6. **Engineer merges PR and verifies merge state is MERGED**
-7. Task marked complete only AFTER merge verified
-
-**CRITICAL:** Creating a PR is step 3 of 7, not the final step. Task is NOT complete until PR is MERGED.
-
-**PR Lifecycle Reference:** `.claude/docs/shared/pr-lifecycle.md`
-
-If you are reading this task file and about to implement it yourself, **STOP**.
-Use the Task tool to spawn the engineer agent instead.
+**Sprint:** SPRINT-064
+**PR:** #668
+**Merged:** 2026-01-28
 
 ---
 

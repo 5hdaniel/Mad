@@ -1,5 +1,16 @@
 # TASK-1721: RoleAssigner Integration
 
+---
+
+## Status: COMPLETE
+
+**Sprint:** SPRINT-064
+**PR:** #670
+**Merged:** 2026-01-28
+**Depends On:** TASK-1720 (ContactSelector) - COMPLETE
+
+---
+
 ## Overview
 Create RoleAssigner component and integrate the 2-step contact selection flow:
 1. First user selects contacts using ContactSelector
