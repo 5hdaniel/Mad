@@ -223,20 +223,12 @@ export function EditContactsModal({
     }
   };
 
-  // Derive step title and subtitle for header
-  const stepInfo = step === 1
-    ? { title: "Step 1: Select Contacts", subtitle: "Choose which contacts to involve in this transaction" }
-    : { title: "Step 2: Assign Roles", subtitle: "Assign roles to your selected contacts" };
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
-          <div>
-            <h3 className="text-xl font-bold text-white">Edit Contacts</h3>
-            <p className="text-sm text-blue-100 mt-0.5">{stepInfo.title}</p>
-          </div>
+          <h3 className="text-xl font-bold text-white">Edit Contacts</h3>
           <button
             onClick={onClose}
             className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
@@ -256,58 +248,6 @@ export function EditContactsModal({
               />
             </svg>
           </button>
-        </div>
-
-        {/* Step Progress Indicator */}
-        <div className="flex-shrink-0 px-6 py-3 bg-gray-50 border-b border-gray-200">
-          <div className="flex items-center gap-4">
-            {/* Step 1 Indicator */}
-            <div className="flex items-center gap-2">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
-                  step === 1
-                    ? "bg-blue-500 text-white"
-                    : "bg-green-500 text-white"
-                }`}
-              >
-                {step === 1 ? "1" : (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                  </svg>
-                )}
-              </div>
-              <span
-                className={`text-sm font-medium ${
-                  step === 1 ? "text-blue-700" : "text-green-700"
-                }`}
-              >
-                Select Contacts
-              </span>
-            </div>
-
-            {/* Connector */}
-            <div className={`flex-1 h-0.5 ${step === 2 ? "bg-blue-500" : "bg-gray-300"}`} />
-
-            {/* Step 2 Indicator */}
-            <div className="flex items-center gap-2">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
-                  step === 2
-                    ? "bg-blue-500 text-white"
-                    : "bg-gray-300 text-gray-600"
-                }`}
-              >
-                2
-              </div>
-              <span
-                className={`text-sm font-medium ${
-                  step === 2 ? "text-blue-700" : "text-gray-500"
-                }`}
-              >
-                Assign Roles
-              </span>
-            </div>
-          </div>
         </div>
 
         {/* Content */}
