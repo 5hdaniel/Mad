@@ -290,6 +290,15 @@ export function ContactSelector({
         className || ""
       }`}
     >
+      {/* Selection Count */}
+      <div className="p-3 text-sm text-gray-600">
+        Selected: {selectedIds.length} contact
+        {selectedIds.length !== 1 ? "s" : ""}
+        {maxSelection && (
+          <span className="text-gray-400"> (max {maxSelection})</span>
+        )}
+      </div>
+
       {/* Search Input */}
       <div className="p-3">
         <div className="relative">
@@ -436,15 +445,6 @@ export function ContactSelector({
               />
             );
           })}
-      </div>
-
-      {/* Selection Footer */}
-      <div className="p-3 text-sm text-gray-600">
-        Selected: {selectedIds.length} contact
-        {selectedIds.length !== 1 ? "s" : ""}
-        {maxSelection && (
-          <span className="text-gray-400"> (max {maxSelection})</span>
-        )}
       </div>
     </div>
   );
