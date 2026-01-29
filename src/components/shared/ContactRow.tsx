@@ -1,0 +1,237 @@
+import React from "react";
+import { SourcePill, ContactSource as SourcePillSource } from "./SourcePill";
+import type { ExtendedContact } from "../../types/components";
+import type { ContactSource as ModelContactSource } from "../../../electron/types/models";
+
+export interface ContactRowProps {
+  /** The contact to display */
+  contact: ExtendedContact;
+  /** Whether this contact is currently selected */
+  isSelected?: boolean;
+  /** Whether to show a checkbox for selection */
+  showCheckbox?: boolean;
+  /** Whether to show import button for external contacts */
+  showImportButton?: boolean;
+  /** Called when the row is selected (clicked or keyboard) */
+  onSelect?: () => void;
+  /** Called when the import button is clicked */
+  onImport?: () => void;
+  /** Additional CSS classes */
+  className?: string;
+}
+
+/**
+ * Gets the first initial from a name for avatar display
+ */
+function getInitial(name: string | undefined): string {
+  if (!name) return "?";
+  return name.charAt(0).toUpperCase();
+}
+
+/**
+ * Gets the display name for a contact, preferring display_name over name
+ */
+function getDisplayName(contact: ExtendedContact): string {
+  return contact.display_name || contact.name || "Unknown Contact";
+}
+
+/**
+ * Gets the primary email for display
+ */
+function getPrimaryEmail(contact: ExtendedContact): string | undefined {
+  // Prefer allEmails array if available, otherwise fall back to email field
+  if (contact.allEmails && contact.allEmails.length > 0) {
+    return contact.allEmails[0];
+  }
+  return contact.email;
+}
+
+/**
+ * Checks if a contact is external (message-derived, can be imported)
+ * External contacts are those derived from message participants rather than explicitly imported
+ */
+function isExternalContact(contact: ExtendedContact): boolean {
+  // is_message_derived can be number (1) or boolean (true)
+  return contact.is_message_derived === 1 || contact.is_message_derived === true;
+}
+
+/**
+ * Maps model ContactSource to SourcePill's ContactSource
+ * Model: "manual" | "email" | "sms" | "contacts_app" | "inferred"
+ * SourcePill: "imported" | "external" | "manual" | "contacts_app" | "sms"
+ */
+function mapToSourcePillSource(
+  source: ModelContactSource | string | undefined,
+  isMessageDerived: boolean
+): SourcePillSource {
+  // If message-derived, show as external regardless of source
+  if (isMessageDerived) {
+    return "external";
+  }
+
+  // Map model sources to SourcePill sources
+  switch (source) {
+    case "manual":
+      return "manual";
+    case "contacts_app":
+      return "contacts_app";
+    case "sms":
+      return "sms";
+    case "email":
+    case "inferred":
+    default:
+      return "imported";
+  }
+}
+
+/**
+ * ContactRow Component
+ *
+ * Displays a single contact in a horizontal row format with optional
+ * checkbox selection, source pill, and import button for external contacts.
+ *
+ * @example
+ * // Basic usage with selection
+ * <ContactRow
+ *   contact={contact}
+ *   isSelected={selectedId === contact.id}
+ *   onSelect={() => setSelectedId(contact.id)}
+ * />
+ *
+ * @example
+ * // With checkbox and import button
+ * <ContactRow
+ *   contact={contact}
+ *   showCheckbox
+ *   showImportButton
+ *   isSelected={selected.has(contact.id)}
+ *   onSelect={() => toggleSelection(contact.id)}
+ *   onImport={() => importContact(contact)}
+ * />
+ */
+export function ContactRow({
+  contact,
+  isSelected = false,
+  showCheckbox = false,
+  showImportButton = false,
+  onSelect,
+  onImport,
+  className = "",
+}: ContactRowProps): React.ReactElement {
+  const displayName = getDisplayName(contact);
+  const email = getPrimaryEmail(contact);
+  const initial = getInitial(displayName);
+  const isExternal = isExternalContact(contact);
+
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onSelect?.();
+    }
+  };
+
+  const handleImportClick = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    onImport?.();
+  };
+
+  const baseClasses = [
+    "flex items-center gap-3 px-3 py-2 border-b border-gray-100",
+    "cursor-pointer transition-colors duration-150",
+    isSelected ? "bg-purple-50" : "hover:bg-gray-50",
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <div
+      role="option"
+      aria-selected={isSelected}
+      tabIndex={0}
+      className={baseClasses}
+      onClick={onSelect}
+      onKeyDown={handleKeyDown}
+      data-testid="contact-row"
+    >
+      {/* Checkbox */}
+      {showCheckbox && (
+        <div className="flex-shrink-0">
+          <div
+            className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+              isSelected
+                ? "bg-purple-600 border-purple-600"
+                : "border-gray-300 bg-white"
+            }`}
+            data-testid="contact-row-checkbox"
+          >
+            {isSelected && (
+              <svg
+                className="w-3 h-3 text-white"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={3}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Avatar */}
+      <div
+        className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center"
+        data-testid="contact-row-avatar"
+      >
+        <span className="text-white text-sm font-medium">{initial}</span>
+      </div>
+
+      {/* Name and Email */}
+      <div className="flex-1 min-w-0">
+        <p
+          className="text-sm font-medium text-gray-900 truncate"
+          data-testid="contact-row-name"
+        >
+          {displayName}
+        </p>
+        {email && (
+          <p
+            className="text-xs text-gray-500 truncate"
+            data-testid="contact-row-email"
+          >
+            {email}
+          </p>
+        )}
+      </div>
+
+      {/* Source Pill */}
+      <div className="flex-shrink-0">
+        <SourcePill
+          source={mapToSourcePillSource(contact.source, isExternal)}
+          size="sm"
+        />
+      </div>
+
+      {/* Import Button - only for external contacts */}
+      {showImportButton && isExternal && (
+        <button
+          type="button"
+          onClick={handleImportClick}
+          className="flex-shrink-0 px-2 py-1 text-xs font-medium text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded transition-colors"
+          aria-label={`Import ${displayName}`}
+          data-testid="contact-row-import-button"
+        >
+          + Import
+        </button>
+      )}
+    </div>
+  );
+}
+
+export default ContactRow;
