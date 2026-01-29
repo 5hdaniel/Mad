@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { LLMSettings } from "./settings/LLMSettings";
 import { MacOSMessagesImportSettings } from "./settings/MacOSMessagesImportSettings";
+import { ImportSourceSettings } from "./settings/ImportSourceSettings";
 import { LicenseGate } from "./common/LicenseGate";
 
 interface ConnectionError {
@@ -719,6 +720,9 @@ function Settings({ onClose, userId, onEmailConnected }: SettingsComponentProps)
                 Messages
               </h3>
               <div className="space-y-4">
+                {/* Import Source Selector (macOS only) */}
+                <ImportSourceSettings userId={userId} />
+                {/* Manual Import Settings */}
                 <MacOSMessagesImportSettings userId={userId} />
               </div>
             </div>

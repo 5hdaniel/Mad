@@ -13,9 +13,26 @@ import { type ApiResult, getErrorMessage } from "./index";
 export type PhoneType = "iphone" | "android";
 
 /**
+ * Import source preference (TASK-1742)
+ * - 'macos-native': Import from macOS Messages.app and Contacts (default)
+ * - 'iphone-sync': Import from connected iPhone via backup
+ */
+export type ImportSource = "macos-native" | "iphone-sync";
+
+/**
+ * Messages-related preferences
+ */
+export interface MessagesPreferences {
+  source?: ImportSource;
+}
+
+/**
  * User preferences object
  */
-export type UserPreferences = Record<string, unknown>;
+export interface UserPreferences {
+  messages?: MessagesPreferences;
+  [key: string]: unknown;
+}
 
 /**
  * Settings Service
