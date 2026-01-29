@@ -150,10 +150,22 @@ function Contacts({ userId, onClose }: ContactsProps) {
   const handlePreviewImport = async () => {
     if (previewContact) {
       try {
-        // Mark contact as imported by updating is_message_derived to false
-        await window.api.contacts.update(previewContact.id, {
-          is_message_derived: false,
-        });
+        // Message-derived contacts (msg_*) don't exist in DB - need to create them
+        if (previewContact.id.startsWith("msg_")) {
+          await window.api.contacts.create(userId, {
+            display_name: previewContact.display_name || previewContact.name || "",
+            email: previewContact.email || previewContact.allEmails?.[0] || "",
+            phone: previewContact.phone || previewContact.allPhones?.[0] || "",
+            company: previewContact.company || "",
+            title: previewContact.title || "",
+            source: "manual",
+          });
+        } else {
+          // Real contacts can be marked as imported
+          await window.api.contacts.update(previewContact.id, {
+            is_message_derived: false,
+          });
+        }
         setPreviewContact(null);
         // Refresh the contacts list to reflect the change
         await loadContacts();
@@ -165,10 +177,22 @@ function Contacts({ userId, onClose }: ContactsProps) {
 
   const handleCardImport = async (contact: ExtendedContact) => {
     try {
-      // Mark contact as imported by updating is_message_derived to false
-      await window.api.contacts.update(contact.id, {
-        is_message_derived: false,
-      });
+      // Message-derived contacts (msg_*) don't exist in DB - need to create them
+      if (contact.id.startsWith("msg_")) {
+        await window.api.contacts.create(userId, {
+          display_name: contact.display_name || contact.name || "",
+          email: contact.email || contact.allEmails?.[0] || "",
+          phone: contact.phone || contact.allPhones?.[0] || "",
+          company: contact.company || "",
+          title: contact.title || "",
+          source: "manual",
+        });
+      } else {
+        // Real contacts can be marked as imported
+        await window.api.contacts.update(contact.id, {
+          is_message_derived: false,
+        });
+      }
       // Refresh the contacts list to reflect the change
       await loadContacts();
     } catch (error) {
