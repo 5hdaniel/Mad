@@ -31,6 +31,21 @@ jest.mock("../useAutoRefresh", () => ({
 
 import { usePlatform } from "../../contexts/PlatformContext";
 
+// Mock preferences API for TASK-1742
+const mockPreferencesGet = jest.fn();
+
+// Helper to flush all pending promises and timers
+const flushPromisesAndTimers = async () => {
+  // Flush microtask queue multiple times to handle chained promises
+  // Combined with runOnlyPendingTimers to handle interleaved async effects
+  for (let i = 0; i < 10; i++) {
+    await Promise.resolve();
+    // Run any scheduled timers (like the 2-second delay in auto-import)
+    jest.runOnlyPendingTimers();
+    await Promise.resolve();
+  }
+};
+
 describe("useMacOSMessagesImport", () => {
   let consoleLogSpy: jest.SpyInstance;
   let consoleWarnSpy: jest.SpyInstance;
@@ -72,7 +87,16 @@ describe("useMacOSMessagesImport", () => {
       messages: {
         importMacOSMessages: mockImportMacOSMessages,
       },
+      preferences: {
+        get: mockPreferencesGet,
+      },
     };
+
+    // Default: macos-native preference (TASK-1742)
+    mockPreferencesGet.mockResolvedValue({
+      success: true,
+      preferences: { messages: { source: "macos-native" } },
+    });
   });
 
   afterEach(() => {
@@ -98,10 +122,15 @@ describe("useMacOSMessagesImport", () => {
     it("should trigger import after 2 second delay when conditions are met", async () => {
       renderHook(() => useMacOSMessagesImport(defaultOptions));
 
+      // TASK-1742: Wait for preference to load first
+      await act(async () => {
+        await flushPromisesAndTimers();
+      });
+
       // Advance timer to trigger import (2 seconds)
       await act(async () => {
         jest.advanceTimersByTime(2000);
-        await Promise.resolve();
+        await flushPromisesAndTimers();
       });
 
       expect(mockImportMacOSMessages).toHaveBeenCalledWith("test-user-123");
@@ -193,10 +222,15 @@ describe("useMacOSMessagesImport", () => {
         useMacOSMessagesImport(defaultOptions)
       );
 
+      // TASK-1742: Wait for preference to load
+      await act(async () => {
+        await flushPromisesAndTimers();
+      });
+
       // Trigger the import
       await act(async () => {
         jest.advanceTimersByTime(2000);
-        await Promise.resolve();
+        await flushPromisesAndTimers();
       });
 
       expect(mockImportMacOSMessages).toHaveBeenCalledTimes(1);
@@ -226,13 +260,18 @@ describe("useMacOSMessagesImport", () => {
         useMacOSMessagesImport(defaultOptions)
       );
 
+      // TASK-1742: Wait for preference to load
+      await act(async () => {
+        await flushPromisesAndTimers();
+      });
+
       // Rerender immediately (simulates StrictMode behavior)
       rerender();
 
       // Wait for both potential triggers
       await act(async () => {
         jest.advanceTimersByTime(2500);
-        await Promise.resolve();
+        await flushPromisesAndTimers();
       });
 
       // Should only be called once
@@ -247,9 +286,14 @@ describe("useMacOSMessagesImport", () => {
         useMacOSMessagesImport(defaultOptions)
       );
 
+      // TASK-1742: Wait for preference to load
+      await act(async () => {
+        await flushPromisesAndTimers();
+      });
+
       await act(async () => {
         jest.advanceTimersByTime(2000);
-        await Promise.resolve();
+        await flushPromisesAndTimers();
       });
 
       expect(mockImportMacOSMessages).toHaveBeenCalledTimes(1);
@@ -263,9 +307,14 @@ describe("useMacOSMessagesImport", () => {
         useMacOSMessagesImport(defaultOptions)
       );
 
+      // TASK-1742: Wait for preference to load
+      await act(async () => {
+        await flushPromisesAndTimers();
+      });
+
       await act(async () => {
         jest.advanceTimersByTime(2000);
-        await Promise.resolve();
+        await flushPromisesAndTimers();
       });
 
       expect(mockImportMacOSMessages).toHaveBeenCalledTimes(2);
@@ -433,11 +482,21 @@ describe("useMacOSMessagesImport", () => {
         useMacOSMessagesImport(defaultOptions)
       );
 
+      // Wait for preference to load (TASK-1742)
+      await act(async () => {
+        await Promise.resolve(); // Allow preference load promise to resolve
+      });
+
       await act(async () => {
         await result.current.triggerImport();
       });
 
-      expect(consoleWarnSpy).not.toHaveBeenCalled();
+      // The warning spy should not have import-related warnings
+      // Note: Preference load warnings are filtered out by checking the call args
+      const importWarnings = consoleWarnSpy.mock.calls.filter(
+        (call) => call[0]?.includes?.("[useMacOSMessagesImport] Import failed:")
+      );
+      expect(importWarnings).toHaveLength(0);
     });
   });
 
@@ -469,9 +528,14 @@ describe("useMacOSMessagesImport", () => {
         useMacOSMessagesImport(defaultOptions)
       );
 
+      // TASK-1742: Wait for preference to load
+      await act(async () => {
+        await flushPromisesAndTimers();
+      });
+
       await act(async () => {
         jest.advanceTimersByTime(2000);
-        await Promise.resolve();
+        await flushPromisesAndTimers();
       });
 
       expect(mockImportMacOSMessages).toHaveBeenCalledTimes(1);
@@ -482,9 +546,14 @@ describe("useMacOSMessagesImport", () => {
         useMacOSMessagesImport(defaultOptions)
       );
 
+      // TASK-1742: Wait for preference to load
+      await act(async () => {
+        await flushPromisesAndTimers();
+      });
+
       await act(async () => {
         jest.advanceTimersByTime(2000);
-        await Promise.resolve();
+        await flushPromisesAndTimers();
       });
 
       expect(mockImportMacOSMessages).toHaveBeenCalledTimes(1);
@@ -497,13 +566,143 @@ describe("useMacOSMessagesImport", () => {
         useMacOSMessagesImport(defaultOptions)
       );
 
+      // TASK-1742: Wait for preference to load
+      await act(async () => {
+        await flushPromisesAndTimers();
+      });
+
       await act(async () => {
         jest.advanceTimersByTime(2000);
-        await Promise.resolve();
+        await flushPromisesAndTimers();
       });
 
       expect(mockImportMacOSMessages).toHaveBeenCalledTimes(2);
       unmount3();
+    });
+  });
+
+  describe("import source preference (TASK-1742)", () => {
+    it("should return importSource state", async () => {
+      const { result } = renderHook(() =>
+        useMacOSMessagesImport(defaultOptions)
+      );
+
+      // Wait for preference to load
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.current.importSource).toBe("macos-native");
+    });
+
+    it("should load iphone-sync preference correctly", async () => {
+      mockPreferencesGet.mockResolvedValue({
+        success: true,
+        preferences: { messages: { source: "iphone-sync" } },
+      });
+
+      const { result } = renderHook(() =>
+        useMacOSMessagesImport(defaultOptions)
+      );
+
+      // Wait for preference to load
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.current.importSource).toBe("iphone-sync");
+    });
+
+    it("should skip auto-import when iphone-sync is selected", async () => {
+      mockPreferencesGet.mockResolvedValue({
+        success: true,
+        preferences: { messages: { source: "iphone-sync" } },
+      });
+
+      renderHook(() => useMacOSMessagesImport(defaultOptions));
+
+      // Wait for preference to load, then advance timer
+      await act(async () => {
+        await Promise.resolve();
+        jest.advanceTimersByTime(2500);
+        await Promise.resolve();
+      });
+
+      // Should NOT have triggered import when iphone-sync is selected
+      expect(mockImportMacOSMessages).not.toHaveBeenCalled();
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        "[useMacOSMessagesImport] Skipping auto-import - iPhone sync is selected"
+      );
+    });
+
+    it("should trigger auto-import when macos-native is selected", async () => {
+      mockPreferencesGet.mockResolvedValue({
+        success: true,
+        preferences: { messages: { source: "macos-native" } },
+      });
+
+      renderHook(() => useMacOSMessagesImport(defaultOptions));
+
+      // Wait for preference to load first
+      await act(async () => {
+        await flushPromisesAndTimers();
+      });
+
+      // Then advance timer to trigger auto-import
+      await act(async () => {
+        jest.advanceTimersByTime(2000);
+        await flushPromisesAndTimers();
+      });
+
+      // Should have triggered import when macos-native is selected
+      expect(mockImportMacOSMessages).toHaveBeenCalledWith("test-user-123");
+    });
+
+    it("should default to macos-native when no preference saved", async () => {
+      mockPreferencesGet.mockResolvedValue({
+        success: true,
+        preferences: {},
+      });
+
+      const { result } = renderHook(() =>
+        useMacOSMessagesImport(defaultOptions)
+      );
+
+      // Wait for preference to load
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.current.importSource).toBe("macos-native");
+    });
+
+    it("should handle preference load error gracefully", async () => {
+      mockPreferencesGet.mockRejectedValue(new Error("Network error"));
+
+      const { result } = renderHook(() =>
+        useMacOSMessagesImport(defaultOptions)
+      );
+
+      // Wait for preference to load (should fail gracefully)
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      // Should default to macos-native
+      expect(result.current.importSource).toBe("macos-native");
+    });
+
+    it("should not load preference when not on macOS", async () => {
+      (usePlatform as jest.Mock).mockReturnValue({ isMacOS: false });
+
+      renderHook(() => useMacOSMessagesImport(defaultOptions));
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      // preferences.get should not be called on non-macOS
+      expect(mockPreferencesGet).not.toHaveBeenCalled();
     });
   });
 });

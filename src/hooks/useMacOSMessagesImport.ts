@@ -10,12 +10,16 @@
  * 2. Component remounts reset refs but not module-level state
  * 3. Multiple components using this hook would each get their own ref
  *
+ * TASK-1742: Respects import source preference.
+ * When 'iphone-sync' is selected, auto-import is skipped (user must manually sync).
+ *
  * @module hooks/useMacOSMessagesImport
  */
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { usePlatform } from "../contexts/PlatformContext";
 import { shouldSkipMessagesSync } from "./useAutoRefresh";
+import type { ImportSource, UserPreferences } from "../services/settingsService";
 
 // Module-level flag to track if import has been triggered this session.
 // This persists across component remounts and React StrictMode double-mounts.
@@ -54,6 +58,8 @@ interface UseMacOSMessagesImportReturn {
   triggerImport: () => Promise<void>;
   /** Whether import is currently running */
   isImporting: boolean;
+  /** Current import source preference (TASK-1742) */
+  importSource: ImportSource;
 }
 
 /**
@@ -79,6 +85,33 @@ export function useMacOSMessagesImport({
   // Component-scoped ref for tracking import state during this render cycle
   // Note: hasTriggeredImport (module-level) prevents duplicate triggers across remounts
   const isImportingRef = useRef(false);
+  // TASK-1742: Track import source preference
+  const [importSource, setImportSource] = useState<ImportSource>("macos-native");
+  const [preferenceLoaded, setPreferenceLoaded] = useState(false);
+
+  // Load import source preference
+  useEffect(() => {
+    if (!userId || !isMacOS) {
+      setPreferenceLoaded(true);
+      return;
+    }
+
+    const loadPreference = async () => {
+      try {
+        const result = await window.api.preferences.get(userId);
+        const prefs = result.preferences as UserPreferences | undefined;
+        if (result.success && prefs?.messages?.source) {
+          setImportSource(prefs.messages.source);
+        }
+      } catch (error) {
+        console.warn("[useMacOSMessagesImport] Failed to load import source preference:", error);
+      } finally {
+        setPreferenceLoaded(true);
+      }
+    };
+
+    loadPreference();
+  }, [userId, isMacOS]);
 
   const triggerImport = useCallback(async () => {
     if (!userId || isImportingRef.current) return;
@@ -107,6 +140,7 @@ export function useMacOSMessagesImport({
   // Auto-import on startup (runs once per app session)
   // TASK-1113: Uses module-level hasTriggeredImport to prevent duplicate triggers
   // across component remounts and React StrictMode double-mounts
+  // TASK-1742: Respects import source preference (skips auto-import when iphone-sync selected)
   useEffect(() => {
     // Skip if any conditions not met
     if (!isMacOS) return;
@@ -114,6 +148,14 @@ export function useMacOSMessagesImport({
     if (!hasPermissions) return;
     if (!isDatabaseInitialized) return;
     if (isOnboarding) return;
+    // TASK-1742: Wait for preference to load before deciding
+    if (!preferenceLoaded) return;
+    // TASK-1742: Skip auto-import when iPhone sync is selected
+    // User will manually trigger sync via the iPhone sync flow
+    if (importSource === "iphone-sync") {
+      console.log("[useMacOSMessagesImport] Skipping auto-import - iPhone sync is selected");
+      return;
+    }
     // TASK-1113: Use module-level flag instead of component-scoped ref
     // This ensures import only triggers once per app session, regardless of remounts
     if (hasTriggeredImport) return;
@@ -145,11 +187,14 @@ export function useMacOSMessagesImport({
     isDatabaseInitialized,
     isOnboarding,
     triggerImport,
+    preferenceLoaded,
+    importSource,
   ]);
 
   return {
     triggerImport,
     isImporting: isImportingRef.current,
+    importSource,
   };
 }
 
