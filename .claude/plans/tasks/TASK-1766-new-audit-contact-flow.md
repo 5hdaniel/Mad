@@ -352,7 +352,7 @@ describe('ContactAssignmentStep - New Flow', () => {
 
 - **Title:** `feat(audit): update contact flow to search-first (TASK-1766)`
 - **Branch:** `feature/task-1766-new-audit-contact-flow`
-- **Target:** `develop`
+- **Target:** `sprint-066-contact-ux-overhaul`
 
 ---
 
@@ -367,7 +367,7 @@ describe('ContactAssignmentStep - New Flow', () => {
 
 ```
 Pre-Work:
-- [ ] Created branch from develop
+- [ ] Created branch from sprint-066-contact-ux-overhaul
 - [ ] Verified TASK-1765 is merged (uses same patterns)
 - [ ] Noted start time: ___
 - [ ] Read task file completely

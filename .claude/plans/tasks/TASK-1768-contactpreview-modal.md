@@ -426,7 +426,7 @@ describe('ContactPreview', () => {
 
 - **Title:** `feat(contacts): add ContactPreview modal (TASK-1768)`
 - **Branch:** `feature/task-1768-contactpreview-modal`
-- **Target:** `develop`
+- **Target:** `sprint-066-contact-ux-overhaul`
 
 ---
 
@@ -441,7 +441,7 @@ describe('ContactPreview', () => {
 
 ```
 Pre-Work:
-- [ ] Created branch from develop
+- [ ] Created branch from sprint-066-contact-ux-overhaul
 - [ ] Verified TASK-1767 is merged
 - [ ] Noted start time: ___
 - [ ] Read task file completely
