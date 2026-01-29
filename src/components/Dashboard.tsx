@@ -165,20 +165,18 @@ function Dashboard({
         )}
 
         {/* Unified Sync Status - shows progress during sync, completion after */}
-        {/* AI Detection status - only visible with AI add-on */}
-        <LicenseGate requires="ai_addon">
-          {syncStatus && (
-            <div data-tour="ai-detection-status">
-              <SyncStatusIndicator
-                status={syncStatus}
-                isAnySyncing={isAnySyncing}
-                currentMessage={currentSyncMessage}
-                pendingCount={pendingCount}
-                onViewPending={handleViewPending}
-              />
-            </div>
-          )}
-        </LicenseGate>
+        {/* Sync progress shows for ALL users; AI-specific features (pending count) are gated internally */}
+        {syncStatus && (
+          <div data-tour="sync-status">
+            <SyncStatusIndicator
+              status={syncStatus}
+              isAnySyncing={isAnySyncing}
+              currentMessage={currentSyncMessage}
+              pendingCount={pendingCount}
+              onViewPending={handleViewPending}
+            />
+          </div>
+        )}
 
         {/* Header */}
         <div className="text-center mb-12">

@@ -4,20 +4,25 @@
  * Unified notification component for sync operations on the dashboard.
  * This is the SINGLE notification system - handles both progress AND completion.
  *
+ * IMPORTANT: Sync progress is shown for ALL users (not gated by license).
+ * AI-specific features (pending transaction count, "Review Now" button) are
+ * gated internally via useLicense() hook.
+ *
  * Flow:
- * 1. During sync: Shows progress bar with current operation
- * 2. After sync: Shows completion message with dismiss button
+ * 1. During sync: Shows progress bar with current operation (all users)
+ * 2. After sync: Shows completion message with dismiss button (all users)
  * 3. After dismiss: Disappears completely
  *
- * The completion message adapts based on pending transaction count:
- * - If pending > 0: Shows "X transactions found" with "Review Now" button
- * - If pending = 0: Shows "All Caught Up"
+ * The completion message adapts based on license and pending count:
+ * - If hasAIAddon && pending > 0: Shows "X transactions found" with "Review Now" button
+ * - Otherwise: Shows "Sync Complete" with generic success message
  *
  * @module components/dashboard/SyncStatusIndicator
  */
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import type { SyncStatus } from "../../hooks/useAutoRefresh";
+import { useLicense } from "../../contexts/LicenseContext";
 
 interface SyncStatusIndicatorProps {
   /** Current sync status for all operations */
@@ -47,6 +52,9 @@ export function SyncStatusIndicator({
   const [dismissed, setDismissed] = useState(false);
   const wasSyncingRef = useRef(false);
   const autoDismissTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Get license status for AI-specific features (pending count, Review Now button)
+  const { hasAIAddon } = useLicense();
 
   // Track transition from syncing to not syncing
   useEffect(() => {
@@ -88,7 +96,8 @@ export function SyncStatusIndicator({
 
   // Show completion state (after sync finishes)
   if (showCompletion && !isAnySyncing) {
-    const hasPending = pendingCount > 0;
+    // Only show pending count styling/message for AI add-on users
+    const hasPending = hasAIAddon && pendingCount > 0;
 
     return (
       <div
@@ -149,7 +158,7 @@ export function SyncStatusIndicator({
               >
                 {hasPending
                   ? `${pendingCount} transaction${pendingCount !== 1 ? "s" : ""} found`
-                  : "All Caught Up"}
+                  : "Sync Complete"}
               </h3>
               <p
                 className={`text-xs ${
@@ -158,7 +167,7 @@ export function SyncStatusIndicator({
               >
                 {hasPending
                   ? "New transactions detected and ready for review"
-                  : "No new transactions found"}
+                  : "All data synced successfully"}
               </p>
             </div>
           </div>
