@@ -1,11 +1,11 @@
 /**
- * MacOSMessagesImportSettings Component (TASK-1710)
+ * MacOSMessagesImportSettings Component (TASK-1710, TASK-1752)
  *
  * Settings section for importing messages from macOS Messages app.
  * Only visible on macOS platform.
  *
  * Features:
- * - Shows progress modal during import with ETA
+ * - Shows inline progress bar during import (no modal)
  * - Supports cancellation
  * - Displays results after import completes
  *
@@ -14,10 +14,14 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { usePlatform } from "../../contexts/PlatformContext";
-import {
-  ImportProgressModal,
-  ImportProgressState,
-} from "../import/ImportProgressModal";
+
+/** Import progress state for inline display */
+interface ImportProgressState {
+  phase: "deleting" | "attachments" | "importing";
+  current: number;
+  total: number;
+  percent: number;
+}
 
 interface MacOSMessagesImportSettingsProps {
   userId: string;
@@ -112,94 +116,129 @@ export function MacOSMessagesImportSettings({
   }
 
   return (
-    <>
-      {/* Progress Modal */}
-      <ImportProgressModal
-        isOpen={isImporting}
-        progress={importProgress}
-        onCancel={handleCancel}
-      />
-
-      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <svg
-              className="w-5 h-5 text-green-600"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-              />
-            </svg>
-            <h4 className="text-sm font-medium text-gray-900">
-              macOS Messages
-            </h4>
-          </div>
-        </div>
-        <p className="text-xs text-gray-600 mb-3">
-          Import messages from the macOS Messages app to enable linking with
-          your transactions.
-        </p>
-
-        {/* Result display */}
-        {lastResult && !isImporting && (
-          <div
-            className={`mb-3 p-2 rounded text-xs ${
-              lastResult.cancelled
-                ? "bg-yellow-50 text-yellow-700 border border-yellow-200"
-                : lastResult.success
-                  ? "bg-green-50 text-green-700 border border-green-200"
-                  : "bg-red-50 text-red-700 border border-red-200"
-            }`}
+    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <svg
+            className="w-5 h-5 text-green-600"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
           >
-            {lastResult.cancelled ? (
-              <>
-                Import cancelled.{" "}
-                {lastResult.messagesImported > 0 && (
-                  <>
-                    <strong>
-                      {lastResult.messagesImported.toLocaleString()}
-                    </strong>{" "}
-                    messages were imported before cancellation.
-                  </>
-                )}
-              </>
-            ) : lastResult.success ? (
-              <>
-                Successfully imported{" "}
-                <strong>{lastResult.messagesImported.toLocaleString()}</strong>{" "}
-                new messages.
-              </>
-            ) : (
-              <>Import failed: {lastResult.error}</>
-            )}
-          </div>
-        )}
-
-        <div className="flex gap-2">
-          <button
-            onClick={() => handleImport(false)}
-            disabled={isImporting}
-            className="flex-1 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isImporting ? "Importing..." : "Import Messages"}
-          </button>
-          <button
-            onClick={() => handleImport(true)}
-            disabled={isImporting}
-            className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Delete all existing messages and re-import from scratch"
-          >
-            Force Re-import
-          </button>
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+            />
+          </svg>
+          <h4 className="text-sm font-medium text-gray-900">macOS Messages</h4>
         </div>
       </div>
-    </>
+      <p className="text-xs text-gray-600 mb-3">
+        Import messages from the macOS Messages app to enable linking with your
+        transactions.
+      </p>
+
+      {/* Result display */}
+      {lastResult && !isImporting && (
+        <div
+          className={`mb-3 p-2 rounded text-xs ${
+            lastResult.cancelled
+              ? "bg-yellow-50 text-yellow-700 border border-yellow-200"
+              : lastResult.success
+                ? "bg-green-50 text-green-700 border border-green-200"
+                : "bg-red-50 text-red-700 border border-red-200"
+          }`}
+        >
+          {lastResult.cancelled ? (
+            <>
+              Import cancelled.{" "}
+              {lastResult.messagesImported > 0 && (
+                <>
+                  <strong>
+                    {lastResult.messagesImported.toLocaleString()}
+                  </strong>{" "}
+                  messages were imported before cancellation.
+                </>
+              )}
+            </>
+          ) : lastResult.success ? (
+            <>
+              Successfully imported{" "}
+              <strong>{lastResult.messagesImported.toLocaleString()}</strong>{" "}
+              new messages.
+            </>
+          ) : (
+            <>Import failed: {lastResult.error}</>
+          )}
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <button
+          onClick={() => handleImport(false)}
+          disabled={isImporting}
+          className="flex-1 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isImporting ? "Importing..." : "Import Messages"}
+        </button>
+        <button
+          onClick={() => handleImport(true)}
+          disabled={isImporting}
+          className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Delete all existing messages and re-import from scratch"
+        >
+          Force Re-import
+        </button>
+      </div>
+
+      {/* Inline progress bar during import (TASK-1752) */}
+      {isImporting && (
+        <div className="mt-3">
+          {importProgress ? (
+            <>
+              <div className="flex justify-between text-xs text-gray-600 mb-1">
+                <span>
+                  {importProgress.phase === "deleting"
+                    ? "Clearing existing messages..."
+                    : importProgress.phase === "attachments"
+                      ? "Processing attachments..."
+                      : "Importing messages..."}
+                </span>
+                <span>{importProgress.percent}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className={`h-2 rounded-full transition-all duration-300 ${
+                    importProgress.phase === "deleting"
+                      ? "bg-orange-500"
+                      : importProgress.phase === "attachments"
+                        ? "bg-green-500"
+                        : "bg-blue-500"
+                  }`}
+                  style={{ width: `${importProgress.percent}%` }}
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                {importProgress.current.toLocaleString()} /{" "}
+                {importProgress.total.toLocaleString()}
+                {importProgress.phase === "deleting"
+                  ? " cleared"
+                  : importProgress.phase === "attachments"
+                    ? " attachments"
+                    : " messages"}
+              </p>
+            </>
+          ) : (
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              Preparing import...
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

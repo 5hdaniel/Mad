@@ -42,6 +42,8 @@ export interface ContactSelectorProps {
   searchPlaceholder?: string;
   /** Optional class name for styling */
   className?: string;
+  /** Show the "Include message contacts" filter checkbox (TASK-1752) */
+  showMessageContactsFilter?: boolean;
 }
 
 /**
@@ -144,35 +146,55 @@ export function ContactSelector({
   maxSelection,
   searchPlaceholder = "Search contacts...",
   className,
+  showMessageContactsFilter = false,
 }: ContactSelectorProps): React.ReactElement {
   const [searchQuery, setSearchQuery] = useState("");
   const [focusedIndex, setFocusedIndex] = useState(-1);
+  const [includeMessageContacts, setIncludeMessageContacts] = useState(true);
 
   // Refs for keyboard navigation
   const listRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Filter contacts by search query (name, email, phone)
+  // Filter contacts by search query and message contacts filter (TASK-1752)
   const filteredContacts = useMemo(() => {
-    if (!searchQuery.trim()) return contacts;
-    const query = searchQuery.toLowerCase();
-    return contacts.filter((contact) => {
-      const name = (contact.display_name || contact.name || "").toLowerCase();
-      const email = (contact.email || "").toLowerCase();
-      const phone = (contact.phone || "").toLowerCase();
-      // Also check allEmails and allPhones arrays
-      const allEmails = (contact.allEmails || []).join(" ").toLowerCase();
-      const allPhones = (contact.allPhones || []).join(" ").toLowerCase();
-      return (
-        name.includes(query) ||
-        email.includes(query) ||
-        phone.includes(query) ||
-        allEmails.includes(query) ||
-        allPhones.includes(query)
-      );
-    });
-  }, [contacts, searchQuery]);
+    let filtered = contacts;
+
+    // Apply message contacts filter if enabled and filter is active
+    if (showMessageContactsFilter && !includeMessageContacts) {
+      filtered = filtered.filter((contact) => {
+        // Filter out contacts that are message-only (source is 'sms' or is_message_derived is true)
+        const isMessageOnly =
+          contact.source === "sms" ||
+          contact.is_message_derived === true ||
+          contact.is_message_derived === 1;
+        return !isMessageOnly;
+      });
+    }
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter((contact) => {
+        const name = (contact.display_name || contact.name || "").toLowerCase();
+        const email = (contact.email || "").toLowerCase();
+        const phone = (contact.phone || "").toLowerCase();
+        // Also check allEmails and allPhones arrays
+        const allEmails = (contact.allEmails || []).join(" ").toLowerCase();
+        const allPhones = (contact.allPhones || []).join(" ").toLowerCase();
+        return (
+          name.includes(query) ||
+          email.includes(query) ||
+          phone.includes(query) ||
+          allEmails.includes(query) ||
+          allPhones.includes(query)
+        );
+      });
+    }
+
+    return filtered;
+  }, [contacts, searchQuery, showMessageContactsFilter, includeMessageContacts]);
 
   // Reset focused index when filtered list changes
   useEffect(() => {
@@ -297,6 +319,21 @@ export function ContactSelector({
           </svg>
         </div>
       </div>
+
+      {/* Message Contacts Filter (TASK-1752) */}
+      {showMessageContactsFilter && (
+        <div className="px-3 py-2 border-b border-gray-200 bg-gray-50">
+          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={includeMessageContacts}
+              onChange={(e) => setIncludeMessageContacts(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+            />
+            <span>Include message contacts</span>
+          </label>
+        </div>
+      )}
 
       {/* Contact List */}
       <div
