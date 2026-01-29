@@ -286,12 +286,12 @@ export function ContactSelector({
 
   return (
     <div
-      className={`flex flex-col border border-gray-200 rounded-lg overflow-hidden bg-white ${
+      className={`flex flex-col overflow-hidden ${
         className || ""
       }`}
     >
       {/* Search Input */}
-      <div className="p-3 border-b border-gray-200">
+      <div className="p-3">
         <div className="relative">
           <input
             ref={searchInputRef}
@@ -322,7 +322,7 @@ export function ContactSelector({
 
       {/* Message Contacts Filter (TASK-1752) */}
       {showMessageContactsFilter && (
-        <div className="px-3 py-2 border-b border-gray-200 bg-gray-50">
+        <div className="px-3 py-2">
           <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
             <input
               type="checkbox"
@@ -439,7 +439,7 @@ export function ContactSelector({
       </div>
 
       {/* Selection Footer */}
-      <div className="p-3 border-t border-gray-200 bg-gray-50 text-sm text-gray-600">
+      <div className="p-3 text-sm text-gray-600">
         Selected: {selectedIds.length} contact
         {selectedIds.length !== 1 ? "s" : ""}
         {maxSelection && (
