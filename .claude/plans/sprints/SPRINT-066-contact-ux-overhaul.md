@@ -707,8 +707,8 @@ After all tasks complete:
 | 0 | PR #678 (TASK-1760) | MERGED | - | #678 | - |
 | 1 | TASK-1761 | MERGED | - | #679 | - |
 | 1 | TASK-1762 | MERGED | - | #680 | - |
-| 1 | TASK-1763 | READY | - | - | - |
-| 2 | TASK-1764 | READY | - | - | - |
+| 1 | TASK-1763 | MERGED | - | #681 | - |
+| 2 | TASK-1764 | IN PROGRESS | - | - | - |
 | 2 | TASK-1765 | Blocked by 1763, 1764 | - | - | - |
 | 3 | TASK-1766 | Blocked by 1765 | - | - | - |
 | 4 | TASK-1767 | READY | - | - | - |
