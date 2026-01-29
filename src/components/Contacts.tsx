@@ -147,20 +147,33 @@ function Contacts({ userId, onClose }: ContactsProps) {
     }
   };
 
-  const handlePreviewImport = () => {
+  const handlePreviewImport = async () => {
     if (previewContact) {
-      setPreviewContact(null);
-      // Open import modal - the contact is already in the system but message-derived
-      // For now, we just mark it as imported by opening the edit form
-      setSelectedContact(previewContact);
-      setShowAddEdit(true);
+      try {
+        // Mark contact as imported by updating is_message_derived to false
+        await window.api.contacts.update(previewContact.id, {
+          is_message_derived: false,
+        });
+        setPreviewContact(null);
+        // Refresh the contacts list to reflect the change
+        await loadContacts();
+      } catch (error) {
+        console.error("Failed to import contact:", error);
+      }
     }
   };
 
-  const handleCardImport = (contact: ExtendedContact) => {
-    // Open edit form to "import" the external contact
-    setSelectedContact(contact);
-    setShowAddEdit(true);
+  const handleCardImport = async (contact: ExtendedContact) => {
+    try {
+      // Mark contact as imported by updating is_message_derived to false
+      await window.api.contacts.update(contact.id, {
+        is_message_derived: false,
+      });
+      // Refresh the contacts list to reflect the change
+      await loadContacts();
+    } catch (error) {
+      console.error("Failed to import contact:", error);
+    }
   };
 
   const handleViewDetails = (contact: ExtendedContact) => {
