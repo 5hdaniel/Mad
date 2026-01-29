@@ -149,6 +149,19 @@ function Contacts({ userId, onClose }: ContactsProps) {
 
   const handlePreviewImport = async () => {
     if (previewContact) {
+      // Check if contact has required data (name and at least email or phone)
+      const hasName = !!(previewContact.display_name || previewContact.name);
+      const hasEmail = !!(previewContact.email || previewContact.allEmails?.[0]);
+      const hasPhone = !!(previewContact.phone || previewContact.allPhones?.[0]);
+
+      if (!hasName || (!hasEmail && !hasPhone)) {
+        // Missing required data - open edit form to let user fill in details
+        setPreviewContact(null);
+        setSelectedContact(previewContact);
+        setShowAddEdit(true);
+        return;
+      }
+
       try {
         // Message-derived contacts (msg_*) don't exist in DB - need to create them
         if (previewContact.id.startsWith("msg_")) {
@@ -176,6 +189,18 @@ function Contacts({ userId, onClose }: ContactsProps) {
   };
 
   const handleCardImport = async (contact: ExtendedContact) => {
+    // Check if contact has required data (name and at least email or phone)
+    const hasName = !!(contact.display_name || contact.name);
+    const hasEmail = !!(contact.email || contact.allEmails?.[0]);
+    const hasPhone = !!(contact.phone || contact.allPhones?.[0]);
+
+    if (!hasName || (!hasEmail && !hasPhone)) {
+      // Missing required data - open edit form to let user fill in details
+      setSelectedContact(contact);
+      setShowAddEdit(true);
+      return;
+    }
+
     try {
       // Message-derived contacts (msg_*) don't exist in DB - need to create them
       if (contact.id.startsWith("msg_")) {
