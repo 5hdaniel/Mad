@@ -158,12 +158,17 @@ export function ContactSelector({
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Filter contacts by search query and message contacts filter (TASK-1752)
+  // TASK-1760: Selected contacts are always shown regardless of filter state
   const filteredContacts = useMemo(() => {
     let filtered = contacts;
 
     // Apply message contacts filter if enabled and filter is active
     if (showMessageContactsFilter && !includeMessageContacts) {
       filtered = filtered.filter((contact) => {
+        // Always show selected contacts regardless of filter
+        if (selectedIds.includes(contact.id)) {
+          return true;
+        }
         // Filter out contacts that are message-only (source is 'sms' or is_message_derived is true)
         const isMessageOnly =
           contact.source === "sms" ||
@@ -194,7 +199,7 @@ export function ContactSelector({
     }
 
     return filtered;
-  }, [contacts, searchQuery, showMessageContactsFilter, includeMessageContacts]);
+  }, [contacts, searchQuery, showMessageContactsFilter, includeMessageContacts, selectedIds]);
 
   // Reset focused index when filtered list changes
   useEffect(() => {
@@ -351,7 +356,7 @@ export function ContactSelector({
         aria-label="Contacts"
         aria-multiselectable="true"
         onKeyDown={handleKeyDown}
-        className="flex-1 overflow-y-auto max-h-80"
+        className="flex-1 overflow-y-auto max-h-80 pr-2"
       >
         {/* Loading State */}
         {isLoading && (
