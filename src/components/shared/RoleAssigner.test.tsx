@@ -1,16 +1,14 @@
 /**
  * Tests for RoleAssigner.tsx
  *
- * Covers:
- * - Rendering (contacts sidebar, role sections, empty states)
- * - Assigning contacts to roles
- * - Unassigning contacts from roles
- * - Required role indicators
- * - Multiple contacts per role
+ * Contact-Centric UI Tests:
+ * - Rendering (contact list with role dropdowns, empty states)
+ * - Assigning contacts to roles via dropdown
+ * - Changing roles (removes from old, adds to new)
+ * - Clearing roles
  * - Transaction type filtering
- * - Assignment status indicators
  *
- * @see TASK-1721: RoleAssigner Integration
+ * @see TASK-1760: RoleAssigner Redesign - Contact-Centric Approach
  */
 
 import React from "react";
@@ -63,7 +61,7 @@ describe("RoleAssigner", () => {
   });
 
   describe("Rendering", () => {
-    it("should render the component with sidebar and role area", () => {
+    it("should render the component with header and contact list", () => {
       render(
         <RoleAssigner
           selectedContacts={mockContacts}
@@ -74,10 +72,10 @@ describe("RoleAssigner", () => {
       );
 
       expect(screen.getByTestId("role-assigner")).toBeInTheDocument();
-      expect(screen.getByText("Selected Contacts")).toBeInTheDocument();
+      expect(screen.getByText("Assign Roles to Contacts")).toBeInTheDocument();
     });
 
-    it("should display all selected contacts in sidebar", () => {
+    it("should display each contact with a role dropdown", () => {
       render(
         <RoleAssigner
           selectedContacts={mockContacts}
@@ -87,24 +85,29 @@ describe("RoleAssigner", () => {
         />
       );
 
-      // Check contacts appear in sidebar (using testid for scoping)
-      expect(screen.getByTestId("contact-sidebar-contact-1")).toBeInTheDocument();
-      expect(screen.getByTestId("contact-sidebar-contact-2")).toBeInTheDocument();
-      expect(screen.getByTestId("contact-sidebar-contact-3")).toBeInTheDocument();
+      // Check contact rows exist
+      expect(screen.getByTestId("contact-role-row-contact-1")).toBeInTheDocument();
+      expect(screen.getByTestId("contact-role-row-contact-2")).toBeInTheDocument();
+      expect(screen.getByTestId("contact-role-row-contact-3")).toBeInTheDocument();
 
-      // Verify names are in the sidebar items
+      // Check role dropdowns exist
+      expect(screen.getByTestId("role-select-contact-1")).toBeInTheDocument();
+      expect(screen.getByTestId("role-select-contact-2")).toBeInTheDocument();
+      expect(screen.getByTestId("role-select-contact-3")).toBeInTheDocument();
+
+      // Verify contact names are displayed
       expect(
-        within(screen.getByTestId("contact-sidebar-contact-1")).getByText("John Smith")
+        within(screen.getByTestId("contact-role-row-contact-1")).getByText("John Smith")
       ).toBeInTheDocument();
       expect(
-        within(screen.getByTestId("contact-sidebar-contact-2")).getByText("Jane Doe")
+        within(screen.getByTestId("contact-role-row-contact-2")).getByText("Jane Doe")
       ).toBeInTheDocument();
       expect(
-        within(screen.getByTestId("contact-sidebar-contact-3")).getByText("Bob Wilson")
+        within(screen.getByTestId("contact-role-row-contact-3")).getByText("Bob Wilson")
       ).toBeInTheDocument();
     });
 
-    it("should show contact count in sidebar header", () => {
+    it("should show contact count in header", () => {
       render(
         <RoleAssigner
           selectedContacts={mockContacts}
@@ -114,36 +117,9 @@ describe("RoleAssigner", () => {
         />
       );
 
-      expect(screen.getByText("0 of 3 assigned")).toBeInTheDocument();
-    });
-
-    it("should display workflow step sections", () => {
-      render(
-        <RoleAssigner
-          selectedContacts={mockContacts}
-          transactionType="purchase"
-          assignments={emptyAssignments}
-          onAssignmentsChange={mockOnAssignmentsChange}
-        />
-      );
-
-      expect(screen.getByText("Client & Agents")).toBeInTheDocument();
-      expect(screen.getByText("Professional Services")).toBeInTheDocument();
-    });
-
-    it("should display role slots with names", () => {
-      render(
-        <RoleAssigner
-          selectedContacts={mockContacts}
-          transactionType="purchase"
-          assignments={emptyAssignments}
-          onAssignmentsChange={mockOnAssignmentsChange}
-        />
-      );
-
-      // For purchase, should show seller's agent (user represents buyer)
-      expect(screen.getByText("Buyer (Client)")).toBeInTheDocument();
-      expect(screen.getByText("Seller Agent")).toBeInTheDocument();
+      expect(
+        screen.getByText("0 of 3 contacts have roles assigned")
+      ).toBeInTheDocument();
     });
 
     it("should apply custom className", () => {
@@ -159,6 +135,32 @@ describe("RoleAssigner", () => {
 
       expect(screen.getByTestId("role-assigner")).toHaveClass("custom-class");
     });
+
+    it("should show all available roles in each dropdown", () => {
+      render(
+        <RoleAssigner
+          selectedContacts={mockContacts}
+          transactionType="purchase"
+          assignments={emptyAssignments}
+          onAssignmentsChange={mockOnAssignmentsChange}
+        />
+      );
+
+      const roleSelect = screen.getByTestId("role-select-contact-1");
+      const options = within(roleSelect).getAllByRole("option");
+
+      // Should have placeholder + actual roles
+      expect(options.length).toBeGreaterThan(1);
+
+      // First option should be placeholder
+      expect(options[0]).toHaveValue("");
+      expect(options[0]).toHaveTextContent("Select role...");
+
+      // Should include common roles
+      const optionTexts = options.map((o) => o.textContent);
+      expect(optionTexts).toContain("Buyer (Client)");
+      expect(optionTexts).toContain("Seller Agent");
+    });
   });
 
   describe("Empty States", () => {
@@ -173,34 +175,100 @@ describe("RoleAssigner", () => {
       );
 
       expect(screen.getByText("No contacts selected")).toBeInTheDocument();
+    });
+  });
+
+  describe("Contact-Centric Role Assignment", () => {
+    it("should call onAssignmentsChange when role is selected", () => {
+      render(
+        <RoleAssigner
+          selectedContacts={mockContacts}
+          transactionType="purchase"
+          assignments={emptyAssignments}
+          onAssignmentsChange={mockOnAssignmentsChange}
+        />
+      );
+
+      // Select role for contact-1
+      const roleSelect = screen.getByTestId("role-select-contact-1");
+      fireEvent.change(roleSelect, { target: { value: "client" } });
+
+      expect(mockOnAssignmentsChange).toHaveBeenCalledWith({
+        client: ["contact-1"],
+      });
+    });
+
+    it("should show current role as selected in dropdown", () => {
+      const assignments: RoleAssignments = {
+        client: ["contact-1"],
+        seller_agent: ["contact-2"],
+      };
+
+      render(
+        <RoleAssigner
+          selectedContacts={mockContacts}
+          transactionType="purchase"
+          assignments={assignments}
+          onAssignmentsChange={mockOnAssignmentsChange}
+        />
+      );
+
+      // Verify dropdowns show correct current values
+      const select1 = screen.getByTestId("role-select-contact-1") as HTMLSelectElement;
+      const select2 = screen.getByTestId("role-select-contact-2") as HTMLSelectElement;
+      const select3 = screen.getByTestId("role-select-contact-3") as HTMLSelectElement;
+
+      expect(select1.value).toBe("client");
+      expect(select2.value).toBe("seller_agent");
+      expect(select3.value).toBe("");
+    });
+
+    it("should update assignment count when contacts have roles", () => {
+      const assignments: RoleAssignments = {
+        client: ["contact-1"],
+        seller_agent: ["contact-2"],
+      };
+
+      render(
+        <RoleAssigner
+          selectedContacts={mockContacts}
+          transactionType="purchase"
+          assignments={assignments}
+          onAssignmentsChange={mockOnAssignmentsChange}
+        />
+      );
+
       expect(
-        screen.getByText("Select contacts first to assign roles")
+        screen.getByText("2 of 3 contacts have roles assigned")
       ).toBeInTheDocument();
     });
-  });
 
-  describe("Assigning Contacts to Roles", () => {
-    it("should call onAssignmentsChange when assigning contact to role", () => {
+    it("should remove contact from old role when changing to new role", () => {
+      const initialAssignments: RoleAssignments = {
+        client: ["contact-1"],
+      };
+
       render(
         <RoleAssigner
           selectedContacts={mockContacts}
           transactionType="purchase"
-          assignments={emptyAssignments}
+          assignments={initialAssignments}
           onAssignmentsChange={mockOnAssignmentsChange}
         />
       );
 
-      // Find client role select
-      const clientSelect = screen.getByTestId("role-select-client");
-      fireEvent.change(clientSelect, { target: { value: "contact-1" } });
+      // Change contact-1 from client to seller_agent
+      const roleSelect = screen.getByTestId("role-select-contact-1");
+      fireEvent.change(roleSelect, { target: { value: "seller_agent" } });
 
+      // Should have contact removed from client and added to seller_agent
       expect(mockOnAssignmentsChange).toHaveBeenCalledWith({
-        client: ["contact-1"],
+        seller_agent: ["contact-1"],
       });
     });
 
-    it("should show assigned contact as chip in role slot", () => {
-      const assignmentsWithClient: RoleAssignments = {
+    it("should clear role when empty option is selected", () => {
+      const initialAssignments: RoleAssignments = {
         client: ["contact-1"],
       };
 
@@ -208,139 +276,21 @@ describe("RoleAssigner", () => {
         <RoleAssigner
           selectedContacts={mockContacts}
           transactionType="purchase"
-          assignments={assignmentsWithClient}
+          assignments={initialAssignments}
           onAssignmentsChange={mockOnAssignmentsChange}
         />
       );
 
-      // Find the client role slot
-      const clientSlot = screen.getByTestId("role-slot-client");
-      expect(within(clientSlot).getByText("John Smith")).toBeInTheDocument();
+      // Clear role for contact-1
+      const roleSelect = screen.getByTestId("role-select-contact-1");
+      fireEvent.change(roleSelect, { target: { value: "" } });
+
+      // Should have empty assignments (client array removed due to cleanup)
+      expect(mockOnAssignmentsChange).toHaveBeenCalledWith({});
     });
 
-    it("should update sidebar to show assigned status", () => {
-      const assignmentsWithClient: RoleAssignments = {
-        client: ["contact-1"],
-      };
-
-      render(
-        <RoleAssigner
-          selectedContacts={mockContacts}
-          transactionType="purchase"
-          assignments={assignmentsWithClient}
-          onAssignmentsChange={mockOnAssignmentsChange}
-        />
-      );
-
-      // Check sidebar shows assignment count
-      expect(screen.getByText("1 of 3 assigned")).toBeInTheDocument();
-
-      // Check contact shows role badge in sidebar
-      const contactSidebar = screen.getByTestId("contact-sidebar-contact-1");
-      expect(within(contactSidebar).getByText("Buyer (Client)")).toBeInTheDocument();
-    });
-  });
-
-  describe("Unassigning Contacts from Roles", () => {
-    it("should call onAssignmentsChange when removing contact from role", () => {
-      const assignmentsWithClient: RoleAssignments = {
-        client: ["contact-1"],
-      };
-
-      render(
-        <RoleAssigner
-          selectedContacts={mockContacts}
-          transactionType="purchase"
-          assignments={assignmentsWithClient}
-          onAssignmentsChange={mockOnAssignmentsChange}
-        />
-      );
-
-      // Find and click remove button on contact chip
-      const removeButton = screen.getByLabelText("Remove John Smith from this role");
-      fireEvent.click(removeButton);
-
-      expect(mockOnAssignmentsChange).toHaveBeenCalledWith({
-        client: [],
-      });
-    });
-  });
-
-  describe("Required Role Indicators", () => {
-    it("should show required indicator for client role", () => {
-      render(
-        <RoleAssigner
-          selectedContacts={mockContacts}
-          transactionType="purchase"
-          assignments={emptyAssignments}
-          onAssignmentsChange={mockOnAssignmentsChange}
-        />
-      );
-
-      const clientSlot = screen.getByTestId("role-slot-client");
-      expect(within(clientSlot).getByLabelText("Required")).toBeInTheDocument();
-    });
-  });
-
-  describe("Multiple Contacts per Role", () => {
-    it("should allow multiple contacts for roles marked as multiple", () => {
-      const assignmentsWithOneClient: RoleAssignments = {
-        client: ["contact-1"],
-      };
-
-      render(
-        <RoleAssigner
-          selectedContacts={mockContacts}
-          transactionType="purchase"
-          assignments={assignmentsWithOneClient}
-          onAssignmentsChange={mockOnAssignmentsChange}
-        />
-      );
-
-      // Client role allows multiple - should still show dropdown
-      const clientSlot = screen.getByTestId("role-slot-client");
-      expect(within(clientSlot).getByTestId("role-select-client")).toBeInTheDocument();
-    });
-
-    it("should show (multiple) indicator for multi-select roles", () => {
-      render(
-        <RoleAssigner
-          selectedContacts={mockContacts}
-          transactionType="purchase"
-          assignments={emptyAssignments}
-          onAssignmentsChange={mockOnAssignmentsChange}
-        />
-      );
-
-      const clientSlot = screen.getByTestId("role-slot-client");
-      expect(within(clientSlot).getByText("(multiple)")).toBeInTheDocument();
-    });
-
-    it("should add second contact to same role", () => {
-      const assignmentsWithOneClient: RoleAssignments = {
-        client: ["contact-1"],
-      };
-
-      render(
-        <RoleAssigner
-          selectedContacts={mockContacts}
-          transactionType="purchase"
-          assignments={assignmentsWithOneClient}
-          onAssignmentsChange={mockOnAssignmentsChange}
-        />
-      );
-
-      // Add second contact to client role
-      const clientSelect = screen.getByTestId("role-select-client");
-      fireEvent.change(clientSelect, { target: { value: "contact-2" } });
-
-      expect(mockOnAssignmentsChange).toHaveBeenCalledWith({
-        client: ["contact-1", "contact-2"],
-      });
-    });
-
-    it("should display multiple assigned contacts as chips", () => {
-      const assignmentsWithTwoClients: RoleAssignments = {
+    it("should preserve other contacts assignments when changing one", () => {
+      const initialAssignments: RoleAssignments = {
         client: ["contact-1", "contact-2"],
       };
 
@@ -348,14 +298,20 @@ describe("RoleAssigner", () => {
         <RoleAssigner
           selectedContacts={mockContacts}
           transactionType="purchase"
-          assignments={assignmentsWithTwoClients}
+          assignments={initialAssignments}
           onAssignmentsChange={mockOnAssignmentsChange}
         />
       );
 
-      const clientSlot = screen.getByTestId("role-slot-client");
-      expect(within(clientSlot).getByText("John Smith")).toBeInTheDocument();
-      expect(within(clientSlot).getByText("Jane Doe")).toBeInTheDocument();
+      // Change contact-1 from client to seller_agent
+      const roleSelect = screen.getByTestId("role-select-contact-1");
+      fireEvent.change(roleSelect, { target: { value: "seller_agent" } });
+
+      // Should preserve contact-2 in client
+      expect(mockOnAssignmentsChange).toHaveBeenCalledWith({
+        client: ["contact-2"],
+        seller_agent: ["contact-1"],
+      });
     });
   });
 
@@ -370,8 +326,12 @@ describe("RoleAssigner", () => {
         />
       );
 
-      expect(screen.getByText("Seller Agent")).toBeInTheDocument();
-      expect(screen.queryByText("Buyer Agent")).not.toBeInTheDocument();
+      const roleSelect = screen.getByTestId("role-select-contact-1");
+      const options = within(roleSelect).getAllByRole("option");
+      const optionTexts = options.map((o) => o.textContent);
+
+      expect(optionTexts).toContain("Seller Agent");
+      expect(optionTexts).not.toContain("Buyer Agent");
     });
 
     it("should show buyer agent for sale transactions", () => {
@@ -384,8 +344,12 @@ describe("RoleAssigner", () => {
         />
       );
 
-      expect(screen.getByText("Buyer Agent")).toBeInTheDocument();
-      expect(screen.queryByText("Seller Agent")).not.toBeInTheDocument();
+      const roleSelect = screen.getByTestId("role-select-contact-1");
+      const options = within(roleSelect).getAllByRole("option");
+      const optionTexts = options.map((o) => o.textContent);
+
+      expect(optionTexts).toContain("Buyer Agent");
+      expect(optionTexts).not.toContain("Seller Agent");
     });
 
     it("should show correct client label for purchase (Buyer)", () => {
@@ -398,7 +362,11 @@ describe("RoleAssigner", () => {
         />
       );
 
-      expect(screen.getByText("Buyer (Client)")).toBeInTheDocument();
+      const roleSelect = screen.getByTestId("role-select-contact-1");
+      const options = within(roleSelect).getAllByRole("option");
+      const optionTexts = options.map((o) => o.textContent);
+
+      expect(optionTexts).toContain("Buyer (Client)");
     });
 
     it("should show correct client label for sale (Seller)", () => {
@@ -411,110 +379,11 @@ describe("RoleAssigner", () => {
         />
       );
 
-      expect(screen.getByText("Seller (Client)")).toBeInTheDocument();
-    });
-  });
-
-  describe("Contact Availability", () => {
-    it("should not show already-assigned contacts in dropdown for same role", () => {
-      const assignmentsWithClient: RoleAssignments = {
-        client: ["contact-1"],
-      };
-
-      render(
-        <RoleAssigner
-          selectedContacts={mockContacts}
-          transactionType="purchase"
-          assignments={assignmentsWithClient}
-          onAssignmentsChange={mockOnAssignmentsChange}
-        />
-      );
-
-      const clientSelect = screen.getByTestId("role-select-client");
-
-      // John Smith should not be in options (already assigned)
-      const options = within(clientSelect).getAllByRole("option");
+      const roleSelect = screen.getByTestId("role-select-contact-1");
+      const options = within(roleSelect).getAllByRole("option");
       const optionTexts = options.map((o) => o.textContent);
 
-      expect(optionTexts).toContain("Jane Doe");
-      expect(optionTexts).toContain("Bob Wilson");
-      expect(optionTexts).not.toContain("John Smith");
-    });
-
-    it("should allow same contact to be assigned to different roles", () => {
-      const assignmentsWithClient: RoleAssignments = {
-        client: ["contact-1"],
-      };
-
-      render(
-        <RoleAssigner
-          selectedContacts={mockContacts}
-          transactionType="purchase"
-          assignments={assignmentsWithClient}
-          onAssignmentsChange={mockOnAssignmentsChange}
-        />
-      );
-
-      // John Smith should still be available for seller_agent role
-      const sellerAgentSelect = screen.getByTestId("role-select-seller_agent");
-      const options = within(sellerAgentSelect).getAllByRole("option");
-      const optionTexts = options.map((o) => o.textContent);
-
-      expect(optionTexts).toContain("John Smith");
-    });
-  });
-
-  describe("Sidebar Assignment Status", () => {
-    it("should show checkmark for assigned contacts", () => {
-      const assignments: RoleAssignments = {
-        client: ["contact-1"],
-      };
-
-      render(
-        <RoleAssigner
-          selectedContacts={mockContacts}
-          transactionType="purchase"
-          assignments={assignments}
-          onAssignmentsChange={mockOnAssignmentsChange}
-        />
-      );
-
-      const johnSidebar = screen.getByTestId("contact-sidebar-contact-1");
-      expect(within(johnSidebar).getByLabelText("Assigned")).toBeInTheDocument();
-    });
-
-    it("should show Unassigned text for contacts without roles", () => {
-      render(
-        <RoleAssigner
-          selectedContacts={mockContacts}
-          transactionType="purchase"
-          assignments={emptyAssignments}
-          onAssignmentsChange={mockOnAssignmentsChange}
-        />
-      );
-
-      const johnSidebar = screen.getByTestId("contact-sidebar-contact-1");
-      expect(within(johnSidebar).getByText("Unassigned")).toBeInTheDocument();
-    });
-
-    it("should show all assigned roles for a contact in sidebar", () => {
-      const assignments: RoleAssignments = {
-        client: ["contact-1"],
-        seller_agent: ["contact-1"],
-      };
-
-      render(
-        <RoleAssigner
-          selectedContacts={mockContacts}
-          transactionType="purchase"
-          assignments={assignments}
-          onAssignmentsChange={mockOnAssignmentsChange}
-        />
-      );
-
-      const johnSidebar = screen.getByTestId("contact-sidebar-contact-1");
-      expect(within(johnSidebar).getByText("Buyer (Client)")).toBeInTheDocument();
-      expect(within(johnSidebar).getByText("Seller Agent")).toBeInTheDocument();
+      expect(optionTexts).toContain("Seller (Client)");
     });
   });
 
@@ -540,9 +409,8 @@ describe("RoleAssigner", () => {
         />
       );
 
-      // Check contact appears in sidebar (scoped query)
-      const sidebarItem = screen.getByTestId("contact-sidebar-contact-legacy");
-      expect(within(sidebarItem).getByText("Legacy Name")).toBeInTheDocument();
+      const contactRow = screen.getByTestId("contact-role-row-contact-legacy");
+      expect(within(contactRow).getByText("Legacy Name")).toBeInTheDocument();
     });
 
     it("should show Unknown for contacts without any name", () => {
@@ -566,8 +434,7 @@ describe("RoleAssigner", () => {
         />
       );
 
-      // Both sidebar and dropdown should show "Unknown"
-      expect(screen.getAllByText("Unknown").length).toBeGreaterThan(0);
+      expect(screen.getByText("Unknown")).toBeInTheDocument();
     });
 
     it("should handle rapid assignment changes", () => {
@@ -580,36 +447,28 @@ describe("RoleAssigner", () => {
         />
       );
 
-      const clientSelect = screen.getByTestId("role-select-client");
+      const roleSelect = screen.getByTestId("role-select-contact-1");
 
       // Rapid changes
-      fireEvent.change(clientSelect, { target: { value: "contact-1" } });
-      fireEvent.change(clientSelect, { target: { value: "contact-2" } });
-      fireEvent.change(clientSelect, { target: { value: "contact-3" } });
+      fireEvent.change(roleSelect, { target: { value: "client" } });
+      fireEvent.change(roleSelect, { target: { value: "seller_agent" } });
+      fireEvent.change(roleSelect, { target: { value: "title_company" } });
 
       expect(mockOnAssignmentsChange).toHaveBeenCalledTimes(3);
     });
 
-    it("should not duplicate contact when selecting same value", () => {
-      const assignments: RoleAssignments = {
-        client: ["contact-1"],
-      };
-
+    it("should display contact email when available", () => {
       render(
         <RoleAssigner
           selectedContacts={mockContacts}
           transactionType="purchase"
-          assignments={assignments}
+          assignments={emptyAssignments}
           onAssignmentsChange={mockOnAssignmentsChange}
         />
       );
 
-      // Try to assign contact-1 again (shouldn't be in dropdown anyway)
-      const clientSelect = screen.getByTestId("role-select-client");
-      fireEvent.change(clientSelect, { target: { value: "contact-1" } });
-
-      // Should not have been called since contact-1 is already assigned
-      expect(mockOnAssignmentsChange).not.toHaveBeenCalled();
+      const contactRow = screen.getByTestId("contact-role-row-contact-1");
+      expect(within(contactRow).getByText("john@example.com")).toBeInTheDocument();
     });
   });
 
@@ -625,8 +484,8 @@ describe("RoleAssigner", () => {
       );
 
       // Step 1: Assign John as client
-      let clientSelect = screen.getByTestId("role-select-client");
-      fireEvent.change(clientSelect, { target: { value: "contact-1" } });
+      let roleSelect1 = screen.getByTestId("role-select-contact-1");
+      fireEvent.change(roleSelect1, { target: { value: "client" } });
       expect(mockOnAssignmentsChange).toHaveBeenLastCalledWith({
         client: ["contact-1"],
       });
@@ -643,11 +502,13 @@ describe("RoleAssigner", () => {
       );
 
       // Verify count updated
-      expect(screen.getByText("1 of 3 assigned")).toBeInTheDocument();
+      expect(
+        screen.getByText("1 of 3 contacts have roles assigned")
+      ).toBeInTheDocument();
 
       // Step 2: Assign Jane as seller agent
-      const sellerSelect = screen.getByTestId("role-select-seller_agent");
-      fireEvent.change(sellerSelect, { target: { value: "contact-2" } });
+      const roleSelect2 = screen.getByTestId("role-select-contact-2");
+      fireEvent.change(roleSelect2, { target: { value: "seller_agent" } });
       expect(mockOnAssignmentsChange).toHaveBeenLastCalledWith({
         client: ["contact-1"],
         seller_agent: ["contact-2"],
@@ -668,7 +529,25 @@ describe("RoleAssigner", () => {
       );
 
       // Verify final state
-      expect(screen.getByText("2 of 3 assigned")).toBeInTheDocument();
+      expect(
+        screen.getByText("2 of 3 contacts have roles assigned")
+      ).toBeInTheDocument();
+    });
+  });
+
+  describe("Accessibility", () => {
+    it("should have proper aria-label on role dropdowns", () => {
+      render(
+        <RoleAssigner
+          selectedContacts={mockContacts}
+          transactionType="purchase"
+          assignments={emptyAssignments}
+          onAssignmentsChange={mockOnAssignmentsChange}
+        />
+      );
+
+      const roleSelect = screen.getByTestId("role-select-contact-1");
+      expect(roleSelect).toHaveAttribute("aria-label", "Role for John Smith");
     });
   });
 });

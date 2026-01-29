@@ -56,6 +56,14 @@ const devDiagnostics = __DEV__
        */
       diagnosticCheckEmailData: (userId: string, emailAddress: string) =>
         ipcRenderer.invoke("diagnostic:check-email-data", userId, emailAddress),
+
+      /**
+       * DEV-ONLY: Manually trigger deep link callback when protocol handler fails
+       * @param url - The full magicaudit://callback?... URL from browser
+       * @returns Success result
+       */
+      manualDeepLink: (url: string) =>
+        ipcRenderer.invoke("system:manual-deep-link", url),
     }
   : {};
 

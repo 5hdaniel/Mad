@@ -2,6 +2,7 @@ import {
   app,
   BrowserWindow,
   session,
+  ipcMain,
 } from "electron";
 import path from "path";
 import log from "electron-log";
@@ -709,6 +710,16 @@ app.whenReady().then(async () => {
   registerMessageImportHandlers(mainWindow!);
   registerOutlookHandlers(mainWindow!);
   registerUpdaterHandlers(mainWindow!);
+
+  // DEV-ONLY: Manual deep link handler for testing when protocol handler fails
+  // Usage from DevTools console: window.api.system.manualDeepLink("magicaudit://callback?access_token=...&refresh_token=...")
+  if (process.defaultApp) {
+    ipcMain.handle("system:manual-deep-link", async (_event, url: string) => {
+      log.info("[DeepLink] Manual trigger from DevTools:", url);
+      await handleDeepLinkCallback(url);
+      return { success: true };
+    });
+  }
 });
 
 app.on("window-all-closed", () => {

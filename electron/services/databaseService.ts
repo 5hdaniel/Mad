@@ -826,7 +826,7 @@ class DatabaseService implements IDatabaseService {
       SELECT COUNT(*) as count FROM pragma_table_info('communications') WHERE name='email_id'
     `).get() as { count: number };
 
-    if (commEmailIdExists.count === 0) {
+    if (!commEmailIdExists || commEmailIdExists.count === 0) {
       await logService.info("Migration 22: Adding email_id column to communications", "DatabaseService");
       db.exec(`ALTER TABLE communications ADD COLUMN email_id TEXT REFERENCES emails(id) ON DELETE CASCADE`);
       db.exec(`CREATE INDEX IF NOT EXISTS idx_communications_email_id ON communications(email_id)`);
