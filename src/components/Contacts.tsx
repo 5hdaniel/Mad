@@ -157,6 +157,12 @@ function Contacts({ userId, onClose }: ContactsProps) {
     }
   };
 
+  const handleCardImport = (contact: ExtendedContact) => {
+    // Open edit form to "import" the external contact
+    setSelectedContact(contact);
+    setShowAddEdit(true);
+  };
+
   const handleViewDetails = (contact: ExtendedContact) => {
     setSelectedContact(contact);
     setShowDetails(true);
@@ -331,6 +337,7 @@ function Contacts({ userId, onClose }: ContactsProps) {
                 key={contact.id}
                 contact={contact}
                 onClick={handleViewContact}
+                onImport={handleCardImport}
               />
             ))}
           </div>
