@@ -166,12 +166,11 @@ function Contacts({ userId, onClose }: ContactsProps) {
         // Message-derived contacts (msg_*) don't exist in DB - need to create them
         if (previewContact.id.startsWith("msg_")) {
           await window.api.contacts.create(userId, {
-            display_name: previewContact.display_name || previewContact.name || "",
+            name: previewContact.display_name || previewContact.name || "",
             email: previewContact.email || previewContact.allEmails?.[0] || "",
             phone: previewContact.phone || previewContact.allPhones?.[0] || "",
             company: previewContact.company || "",
             title: previewContact.title || "",
-            source: "manual",
           });
         } else {
           // Real contacts can be marked as imported
@@ -205,12 +204,11 @@ function Contacts({ userId, onClose }: ContactsProps) {
       // Message-derived contacts (msg_*) don't exist in DB - need to create them
       if (contact.id.startsWith("msg_")) {
         await window.api.contacts.create(userId, {
-          display_name: contact.display_name || contact.name || "",
+          name: contact.display_name || contact.name || "",
           email: contact.email || contact.allEmails?.[0] || "",
           phone: contact.phone || contact.allPhones?.[0] || "",
           company: contact.company || "",
           title: contact.title || "",
-          source: "manual",
         });
       } else {
         // Real contacts can be marked as imported
