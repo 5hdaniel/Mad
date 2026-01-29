@@ -4,7 +4,7 @@
 **Sprint**: TBD
 **Estimated Tokens**: ~10K (revised - see SR Engineer Review)
 **Priority**: High
-**Status**: Pending
+**Status**: Complete
 
 ---
 
@@ -249,123 +249,42 @@ The following are explicitly OUT OF SCOPE for this task:
 
 ---
 
-## SR Engineer Review Notes
+## SR Engineer Final Review
 
-**Review Date:** 2026-01-28 | **Status:** APPROVED WITH CLARIFICATIONS
+**Review Date:** 2026-01-28 | **Status:** APPROVED AND MERGED
+**PR:** #677
+**Merge Commit:** `26e7413c5fe375986517584990ec14ea94b75321`
 
-### Branch Information (SR Engineer decides)
-- **Branch From:** develop
-- **Branch Into:** develop
-- **Suggested Branch Name:** `feature/task-1760-unified-contact-selection`
+### Code Review Summary
 
-### Execution Classification
-- **Parallel Safe:** Yes (isolated UI component work)
-- **Depends On:** None
-- **Blocks:** None
+| Check | Status | Notes |
+|-------|--------|-------|
+| Target Branch | PASS | Correctly targets `develop` |
+| Branch Naming | PASS | `feature/task-1760-unified-contact-selection` |
+| Code Changes | PASS | Clean, focused, follows existing patterns |
+| TypeScript | PASS | No type errors introduced |
+| Tests | PASS | All 48 ContactSelector tests pass |
+| Security | PASS | No security concerns |
+| Architecture | PASS | No boundary violations |
 
-### Shared File Analysis
-- Files modified: `src/components/shared/ContactSelector.tsx` only
-- Conflicts with: None expected
+### Changes Verified
 
-### Code Review Findings
+1. **Scrollbar padding** (`pr-2` on line 359) - Correctly prevents content overlap
+2. **Selected contacts preservation** (lines 168-171) - Correctly checks `selectedIds.includes(contact.id)` before filtering out message contacts
+3. **Dependency array fix** (line 202) - Correctly adds `selectedIds` to useMemo dependencies
 
-#### Already Implemented (Verified in Codebase)
+### CI Status Note
 
-| Requirement | Status | Evidence |
-|-------------|--------|----------|
-| Multi-filter chip toggles | DONE | `SourceFilterChip` component (lines 181-211) |
-| Messages OFF by default | DONE | `DEFAULT_SOURCE_FILTERS.sms = false` (line 74) |
-| Source badges on contacts | DONE | `showSourceBadge={showSourceFilters}` (line 582) |
-| Badge colors via getSourceBadge() | DONE | Imported and used correctly |
-| EditContactsModal integration | DONE | `showSourceFilters={true}` (line 421) |
+Test failures in CI are **pre-existing issues on develop branch** (integration tests in `integration.test.ts` missing `AuthProvider` wrapper). These failures are unrelated to ContactSelector changes. The `ContactSelector.test.tsx` tests all pass (48/48).
 
-#### NOT Implemented (Actual Work Required)
+### Engineer Adaptation Note
 
-| Requirement | Status | Notes |
-|-------------|--------|-------|
-| Scrollbar padding | NOT DONE | Line 491: `className="flex-1 overflow-y-auto"` missing `pr-2` |
-| Selected contacts visible when filter off | NOT DONE | Filter logic (lines 252-260) does not check `selectedIds` |
-| Styling consistency (Inferred chip) | MINOR | Filter chip uses `bg-gray-200` but `getSourceBadge` uses `bg-gray-100` |
+The engineer correctly identified that:
+- Task file described `showSourceFilters` with multi-chip UI, but codebase uses `showMessageContactsFilter` (simple checkbox)
+- Implemented the preservation logic for the existing filter system
+- EditContactsModal already has 2-step flow - no additional changes needed
 
-### Critical Clarifications
-
-#### 1. "Show ALL contacts" Requirement - NEEDS VERIFICATION
-
-The task states contacts should show "imported AND external contacts" together. However:
-
-- `ContactsContext` uses `contactService.getSortedByActivity()` or `getAll()`
-- These call `window.api.contacts.*` backend methods
-- **I cannot verify from frontend code if the backend returns external/message contacts**
-
-**Action Required:** Before implementation, verify that `window.api.contacts.getSortedByActivity()` returns:
-1. Imported contacts (source: manual, email, contacts_app)
-2. Message-derived contacts (source: sms, is_message_derived: true)
-3. Inferred contacts (source: inferred)
-
-If the backend only returns "imported" contacts, a backend change may be required (out of scope for this task).
-
-#### 2. Styling Inconsistency Detail
-
-```typescript
-// SourceFilterChip (line 461-465):
-color="bg-gray-200 text-gray-700"  // Inferred
-
-// getSourceBadge (components.ts line 81):
-inferred: { text: "Inferred", color: "bg-gray-100 text-gray-700" }
-```
-
-**Recommendation:** Change SourceFilterChip to use `bg-gray-100` for consistency.
-
-### Implementation Scope Refinement
-
-Based on code review, the actual implementation is smaller than estimated:
-
-| Change | Lines | Complexity |
-|--------|-------|------------|
-| Add `pr-2` to list container | 1 | Trivial |
-| Add `selectedIds` check in filter | 3 | Low |
-| Fix Inferred chip color | 1 | Trivial |
-| (Optional) localStorage persistence | 15 | Low |
-
-**Revised Token Estimate:** ~10K (reduced from ~25K)
-
-### Edge Cases to Handle
-
-1. **Empty state with all filters off** - Should show "No contacts match your filters" (not "No contacts available")
-2. **Selected contact from hidden source** - Should remain visible with a visual indicator that it's from a filtered-out source (optional UX enhancement)
-3. **Performance** - No concerns; filter is O(n) and already memoized
-
-### Technical Recommendations
-
-1. **Preserve selected contacts filter logic:**
-```typescript
-// In filteredContacts useMemo, change:
-filtered = filtered.filter((contact) => {
-  const source = getContactSource(contact);
-  return sourceFilters[source] ?? true;
-});
-
-// To:
-filtered = filtered.filter((contact) => {
-  // Always show selected contacts regardless of filter
-  if (selectedIds.includes(contact.id)) {
-    return true;
-  }
-  const source = getContactSource(contact);
-  return sourceFilters[source] ?? true;
-});
-```
-
-2. **Add selectedIds to useMemo dependencies** (line 293)
-
-3. **Update empty state message when filters are active** to be more helpful
-
-### Testing Recommendations
-
-Add to testing checklist:
-- [ ] Verify selected contact remains visible after toggling off its source filter
-- [ ] Verify Inferred badge color matches between filter chip and contact badge
-- [ ] Verify list content doesn't visually overlap with scrollbar on macOS and Windows
+This is a good example of adapting task requirements to match actual codebase state.
 
 ### Risk Assessment
 - **Risk Level:** LOW
@@ -377,6 +296,7 @@ Add to testing checklist:
 
 | Metric | Value |
 |--------|-------|
-| Agent ID | _assigned at start_ |
-| Estimated Tokens | ~10K (revised down from ~25K) |
-| Actual Tokens | _recorded after completion_ |
+| Engineer Agent ID | (to be recorded by PM) |
+| SR Engineer Agent ID | (to be recorded by PM) |
+| Estimated Tokens | ~10K |
+| Actual Tokens | (to be recorded by PM) |
