@@ -11,6 +11,10 @@ import {
   ExtendedContact,
 } from "./contact";
 import { useAppStateMachine } from "../appCore";
+import {
+  ContactPreview,
+  type ContactTransaction,
+} from "./shared/ContactPreview";
 
 // LocalStorage key for toggle persistence (shared with ContactSelectModal)
 const SHOW_MESSAGE_CONTACTS_KEY = "contactModal.showMessageContacts";
@@ -93,6 +97,16 @@ function Contacts({ userId, onClose }: ContactsProps) {
     ExtendedContact | undefined
   >(undefined);
 
+  // ContactPreview state
+  const [previewContact, setPreviewContact] = useState<ExtendedContact | null>(
+    null
+  );
+  const [previewTransactions, setPreviewTransactions] = useState<
+    ContactTransaction[]
+  >([]);
+  const [loadingPreviewTransactions, setLoadingPreviewTransactions] =
+    useState(false);
+
   // DEFENSIVE CHECK: Return loading state if database not initialized
   // Should never trigger if AppShell gate works, but prevents errors if bypassed
   if (!isDatabaseInitialized) {
@@ -117,6 +131,33 @@ function Contacts({ userId, onClose }: ContactsProps) {
   };
 
   const handleViewContact = (contact: ExtendedContact) => {
+    setPreviewContact(contact);
+    // Note: Transaction loading API not yet available
+    // The preview will show "No transactions yet" for now
+    // This can be enhanced when contacts:getTransactions API is added
+    setPreviewTransactions([]);
+    setLoadingPreviewTransactions(false);
+  };
+
+  const handlePreviewEdit = () => {
+    if (previewContact) {
+      setPreviewContact(null);
+      setSelectedContact(previewContact);
+      setShowAddEdit(true);
+    }
+  };
+
+  const handlePreviewImport = () => {
+    if (previewContact) {
+      setPreviewContact(null);
+      // Open import modal - the contact is already in the system but message-derived
+      // For now, we just mark it as imported by opening the edit form
+      setSelectedContact(previewContact);
+      setShowAddEdit(true);
+    }
+  };
+
+  const handleViewDetails = (contact: ExtendedContact) => {
     setSelectedContact(contact);
     setShowDetails(true);
   };
@@ -295,6 +336,19 @@ function Contacts({ userId, onClose }: ContactsProps) {
           </div>
         )}
       </div>
+
+      {/* Contact Preview Modal */}
+      {previewContact && (
+        <ContactPreview
+          contact={previewContact}
+          isExternal={isMessageDerived(previewContact)}
+          transactions={previewTransactions}
+          isLoadingTransactions={loadingPreviewTransactions}
+          onEdit={handlePreviewEdit}
+          onImport={handlePreviewImport}
+          onClose={() => setPreviewContact(null)}
+        />
+      )}
 
       {/* Import Contacts Modal */}
       {showImport && (
