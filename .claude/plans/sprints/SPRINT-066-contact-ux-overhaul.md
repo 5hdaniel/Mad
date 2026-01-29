@@ -711,8 +711,8 @@ After all tasks complete:
 | 2 | TASK-1764 | MERGED | - | #683 | - |
 | 2 | TASK-1765 | MERGED | - | #684 | - |
 | 3 | TASK-1766 | MERGED | - | #685 | - |
-| 4 | TASK-1767 | READY | - | - | - |
-| 4 | TASK-1768 | Blocked by 1767 | - | - | - |
+| 4 | TASK-1767 | MERGED | - | #686 | - |
+| 4 | TASK-1768 | READY | - | - | - |
 
 ---
 
