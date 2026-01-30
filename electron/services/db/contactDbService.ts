@@ -674,18 +674,6 @@ export async function getContactsSortedByActivity(
       address_mention_count: 0,
     }));
 
-    // DEBUG: Log contact sorting data
-    const withCommDate = importedContacts.filter(c => c.last_communication_at);
-    logService.info("[DEBUG] Contact sort data", "Contacts", {
-      totalImported: importedContacts.length,
-      withLastCommAt: withCommDate.length,
-      sampleContacts: importedContacts.slice(0, 5).map(c => ({
-        name: c.display_name || c.name,
-        phone: c.phone,
-        lastComm: c.last_communication_at,
-      }))
-    });
-
     // Get message-derived contacts (already have communication_count from query)
     const messageDerivedContacts = getMessageDerivedContacts(userId);
 

@@ -187,14 +187,6 @@ export function ContactSearchList({
     // Combine lists (imported first, then external)
     const combined = [...imported, ...external];
 
-    // DEBUG: Check if last_communication_at is reaching frontend
-    console.log('[ContactSearchList] Sample contacts with dates:',
-      imported.slice(0, 5).map(c => ({
-        name: c.contact.name || c.contact.display_name,
-        lastComm: c.contact.last_communication_at
-      }))
-    );
-
     // Sort by most recent communication first (BEFORE filtering)
     // Using sortByRecentCommunication on contacts, then mapping back
     const contactsWithIndex = combined.map((item, index) => ({
