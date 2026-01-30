@@ -19,7 +19,7 @@ function ContactFormModal({
   onSuccess,
 }: ContactFormModalProps) {
   const [formData, setFormData] = useState<ContactFormData>({
-    name: contact?.name || "",
+    name: contact?.name || contact?.display_name || "",
     email: contact?.email || "",
     phone: contact?.phone || "",
     company: contact?.company || "",
@@ -27,6 +27,12 @@ function ContactFormModal({
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
+
+  // Check if this is an external contact being imported (missing required data)
+  const isExternalContact = contact?.id?.startsWith("msg_") || contact?.is_message_derived;
+  const hasContactInfo = !!(formData.email.trim() || formData.phone.trim());
+  const showMissingInfoWarning = isExternalContact && !hasContactInfo;
+  const canSave = !!formData.name.trim() && hasContactInfo;
 
   const handleChange = (field: keyof ContactFormData, value: string) => {
     setFormData({ ...formData, [field]: value });
@@ -101,6 +107,15 @@ function ContactFormModal({
 
         {/* Form */}
         <div className="p-6 space-y-4">
+          {/* Missing contact info warning */}
+          {showMissingInfoWarning && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-sm text-amber-800">
+                <span className="font-medium">Missing contact information:</span> Please add an email address or phone number to import this contact.
+              </p>
+            </div>
+          )}
+
           {/* Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -189,9 +204,9 @@ function ContactFormModal({
           </button>
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || !canSave}
             className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-              saving
+              saving || !canSave
                 ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                 : "bg-gradient-to-r from-purple-500 to-pink-600 text-white hover:from-purple-600 hover:to-pink-700"
             }`}

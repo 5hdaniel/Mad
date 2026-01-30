@@ -397,7 +397,7 @@ describe('ContactSearchList', () => {
 
 - **Title:** `feat(contacts): add ContactSearchList component (TASK-1763)`
 - **Branch:** `feature/task-1763-contactsearchlist-component`
-- **Target:** `develop`
+- **Target:** `sprint-066-contact-ux-overhaul`
 
 ---
 
@@ -412,7 +412,7 @@ describe('ContactSearchList', () => {
 
 ```
 Pre-Work:
-- [ ] Created branch from develop
+- [ ] Created branch from sprint-066-contact-ux-overhaul
 - [ ] Verified TASK-1762 is merged
 - [ ] Noted start time: ___
 - [ ] Read task file completely

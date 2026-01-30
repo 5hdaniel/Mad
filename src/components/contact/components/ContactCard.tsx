@@ -1,69 +1,156 @@
 import React from "react";
-import { ExtendedContact, getSourceBadge } from "../types";
+import { SourcePill, ContactSource as SourcePillSource } from "../../shared/SourcePill";
+import type { ExtendedContact } from "../../../types/components";
+import type { ContactSource as ModelContactSource } from "../../../../electron/types/models";
 
-interface ContactCardProps {
+export interface ContactCardProps {
+  /** Contact data to display */
   contact: ExtendedContact;
+  /** Callback when card is clicked */
   onClick: (contact: ExtendedContact) => void;
+  /** Callback when import button is clicked (external contacts only) */
+  onImport?: (contact: ExtendedContact) => void;
+}
+
+/**
+ * Gets the display name for a contact, preferring display_name over name
+ */
+function getDisplayName(contact: ExtendedContact): string {
+  return contact.display_name || contact.name || "Unknown Contact";
+}
+
+/**
+ * Gets the first initial from a name for avatar display
+ */
+function getInitial(name: string): string {
+  return name.charAt(0).toUpperCase();
+}
+
+/**
+ * Checks if a contact is external (message-derived, can be imported)
+ * External contacts are those derived from message participants rather than explicitly imported
+ */
+function isExternalContact(contact: ExtendedContact): boolean {
+  // is_message_derived can be number (1) or boolean (true)
+  return contact.is_message_derived === 1 || contact.is_message_derived === true;
+}
+
+/**
+ * Maps model ContactSource to SourcePill's ContactSource
+ * Model: "manual" | "email" | "sms" | "contacts_app" | "inferred"
+ * SourcePill: "imported" | "external" | "manual" | "contacts_app" | "sms"
+ */
+function mapToSourcePillSource(
+  source: ModelContactSource | string | undefined,
+  isMessageDerived: boolean
+): SourcePillSource {
+  // If message-derived, show as external regardless of source
+  if (isMessageDerived) {
+    return "external";
+  }
+
+  // Map model sources to SourcePill sources
+  switch (source) {
+    case "manual":
+      return "manual";
+    case "contacts_app":
+      return "contacts_app";
+    case "sms":
+      return "sms";
+    case "email":
+    case "inferred":
+    default:
+      return "imported";
+  }
 }
 
 /**
  * ContactCard Component
- * Displays a single contact in a card format with avatar, name, and contact info
+ * Displays a single contact in a card format with avatar, name, source pill,
+ * and optional import button for external contacts.
+ *
+ * @example
+ * // Basic usage
+ * <ContactCard
+ *   contact={contact}
+ *   onClick={(c) => openDetails(c)}
+ * />
+ *
+ * @example
+ * // With import button for external contacts
+ * <ContactCard
+ *   contact={externalContact}
+ *   onClick={(c) => openDetails(c)}
+ *   onImport={(c) => importContact(c)}
+ * />
  */
-function ContactCard({ contact, onClick }: ContactCardProps) {
-  const sourceBadge = getSourceBadge(contact.source);
+function ContactCard({ contact, onClick, onImport }: ContactCardProps) {
+  const displayName = getDisplayName(contact);
+  const initial = getInitial(displayName);
+  const isExternal = isExternalContact(contact);
+  const sourcePillSource = mapToSourcePillSource(contact.source, isExternal);
+
+  const handleImportClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card click
+    onImport?.(contact);
+  };
+
+  // Get emails to display
+  const emails =
+    contact.source === "contacts_app" &&
+    contact.allEmails &&
+    contact.allEmails.length > 0
+      ? contact.allEmails
+      : contact.email
+        ? [contact.email]
+        : [];
+
+  // Get phones to display
+  const phones =
+    contact.source === "contacts_app" &&
+    contact.allPhones &&
+    contact.allPhones.length > 0
+      ? contact.allPhones
+      : contact.phone
+        ? [contact.phone]
+        : [];
 
   return (
     <div
       onClick={() => onClick(contact)}
       className="bg-white border-2 border-gray-200 rounded-xl p-6 hover:border-purple-400 hover:shadow-xl transition-all flex flex-col h-full cursor-pointer"
+      data-testid={`contact-card-${contact.id}`}
     >
       {/* Contact Header */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
-            {contact.name?.charAt(0).toUpperCase() || "?"}
+          <div
+            className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center text-white font-bold text-lg"
+            data-testid="contact-card-avatar"
+          >
+            {initial}
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">{contact.name}</h3>
-            <span
-              className={`text-xs px-2 py-1 rounded-full ${sourceBadge.color}`}
+            <h3
+              className="font-semibold text-gray-900"
+              data-testid="contact-card-name"
             >
-              {sourceBadge.text}
-            </span>
+              {displayName}
+            </h3>
+            <SourcePill source={sourcePillSource} size="sm" />
           </div>
         </div>
       </div>
 
       {/* Contact Details */}
       <div className="space-y-2 mb-4 text-sm flex-1">
-        {/* Show all emails for Contacts app contacts, or just primary email for manual contacts */}
-        {contact.source === "contacts_app" &&
-        contact.allEmails &&
-        contact.allEmails.length > 0 ? (
-          contact.allEmails.map((email: string, idx: number) => (
-            <div
-              key={`email-${idx}`}
-              className="flex items-center gap-2 text-gray-600"
-            >
-              <svg
-                className="w-4 h-4 text-gray-400 flex-shrink-0"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                />
-              </svg>
-              <span className="truncate">{email}</span>
-            </div>
-          ))
-        ) : contact.email ? (
-          <div className="flex items-center gap-2 text-gray-600">
+        {/* Emails */}
+        {emails.map((email: string, idx: number) => (
+          <div
+            key={`email-${idx}`}
+            className="flex items-center gap-2 text-gray-600"
+            data-testid={`contact-card-email-${idx}`}
+          >
             <svg
               className="w-4 h-4 text-gray-400 flex-shrink-0"
               fill="none"
@@ -77,37 +164,17 @@ function ContactCard({ contact, onClick }: ContactCardProps) {
                 d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
               />
             </svg>
-            <span className="truncate">{contact.email}</span>
+            <span className="truncate">{email}</span>
           </div>
-        ) : null}
+        ))}
 
-        {/* Show all phones for Contacts app contacts, or just primary phone for manual contacts */}
-        {contact.source === "contacts_app" &&
-        contact.allPhones &&
-        contact.allPhones.length > 0 ? (
-          contact.allPhones.map((phone: string, idx: number) => (
-            <div
-              key={`phone-${idx}`}
-              className="flex items-center gap-2 text-gray-600"
-            >
-              <svg
-                className="w-4 h-4 text-gray-400 flex-shrink-0"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-                />
-              </svg>
-              <span>{phone}</span>
-            </div>
-          ))
-        ) : contact.phone ? (
-          <div className="flex items-center gap-2 text-gray-600">
+        {/* Phones */}
+        {phones.map((phone: string, idx: number) => (
+          <div
+            key={`phone-${idx}`}
+            className="flex items-center gap-2 text-gray-600"
+            data-testid={`contact-card-phone-${idx}`}
+          >
             <svg
               className="w-4 h-4 text-gray-400 flex-shrink-0"
               fill="none"
@@ -121,12 +188,16 @@ function ContactCard({ contact, onClick }: ContactCardProps) {
                 d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
               />
             </svg>
-            <span>{contact.phone}</span>
+            <span>{phone}</span>
           </div>
-        ) : null}
+        ))}
 
+        {/* Company */}
         {contact.company && (
-          <div className="flex items-center gap-2 text-gray-600">
+          <div
+            className="flex items-center gap-2 text-gray-600"
+            data-testid="contact-card-company"
+          >
             <svg
               className="w-4 h-4 text-gray-400 flex-shrink-0"
               fill="none"
@@ -143,8 +214,13 @@ function ContactCard({ contact, onClick }: ContactCardProps) {
             <span className="truncate">{contact.company}</span>
           </div>
         )}
+
+        {/* Title */}
         {contact.title && (
-          <div className="flex items-center gap-2 text-gray-600">
+          <div
+            className="flex items-center gap-2 text-gray-600"
+            data-testid="contact-card-title"
+          >
             <svg
               className="w-4 h-4 text-gray-400 flex-shrink-0"
               fill="none"
@@ -162,6 +238,34 @@ function ContactCard({ contact, onClick }: ContactCardProps) {
           </div>
         )}
       </div>
+
+      {/* Footer with import button for external contacts */}
+      {isExternal && onImport && (
+        <div className="pt-3 border-t border-gray-100 flex justify-end">
+          <button
+            type="button"
+            onClick={handleImportClick}
+            className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors"
+            aria-label={`Import ${displayName}`}
+            data-testid={`import-button-${contact.id}`}
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+            Import
+          </button>
+        </div>
+      )}
     </div>
   );
 }

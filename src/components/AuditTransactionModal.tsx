@@ -1,5 +1,4 @@
 import React from "react";
-import { AUDIT_WORKFLOW_STEPS } from "../constants/contactRoles";
 import AddressVerificationStep from "./audit/AddressVerificationStep";
 import ContactAssignmentStep from "./audit/ContactAssignmentStep";
 import type { Transaction } from "../../electron/types/models";
@@ -18,6 +17,10 @@ interface AuditTransactionModalProps {
 /**
  * Audit Transaction Modal
  * Comprehensive transaction creation with address verification and contact assignment
+ *
+ * TASK-1766: Updated to 2-step flow:
+ * - Step 1: Transaction Details (address, type, dates)
+ * - Step 2: Contact Assignment (search-first pattern with internal substeps)
  */
 function AuditTransactionModal({
   userId,
@@ -73,6 +76,12 @@ function AuditTransactionModal({
     );
   }
 
+  // Determine total steps and current step for display
+  // In edit mode: single step (just address/dates)
+  // In create mode: 2 steps (details + contacts)
+  const totalSteps = isEditing ? 1 : 2;
+  const displayStep = isEditing ? 1 : Math.min(step, 2);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
@@ -88,8 +97,7 @@ function AuditTransactionModal({
               ) : (
                 <>
                   {step === 1 && "Step 1: Transaction Details"}
-                  {step === 2 && "Step 2: Assign Client & Agents"}
-                  {step === 3 && "Step 3: Assign Professional Services"}
+                  {step >= 2 && "Step 2: Assign Contacts"}
                 </>
               )}
             </p>
@@ -118,22 +126,22 @@ function AuditTransactionModal({
         {!isEditing && (
           <div className="flex-shrink-0 bg-gray-100 px-3 sm:px-6 py-3">
             <div className="flex items-center justify-center gap-1 sm:gap-2 mb-2 max-w-md mx-auto">
-              {[1, 2, 3].map((s: number) => (
+              {[1, 2].map((s: number) => (
                 <React.Fragment key={s}>
                   <div
                     className={`w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-sm sm:text-base font-semibold transition-all ${
-                      s < step
+                      s < displayStep
                         ? "bg-green-500 text-white"
-                        : s === step
+                        : s === displayStep
                           ? "bg-indigo-500 text-white"
                           : "bg-gray-300 text-gray-600"
                     }`}
                   >
-                    {s < step ? "✓" : s}
+                    {s < displayStep ? "\u2713" : s}
                   </div>
-                  {s < 3 && (
+                  {s < totalSteps && (
                     <div
-                      className={`flex-1 h-1 transition-all ${s < step ? "bg-green-500" : "bg-gray-300"}`}
+                      className={`flex-1 h-1 transition-all ${s < displayStep ? "bg-green-500" : "bg-gray-300"}`}
                     ></div>
                   )}
                 </React.Fragment>
@@ -173,26 +181,9 @@ function AuditTransactionModal({
             />
           )}
 
-          {step === 2 && (
+          {/* Step 2+: Contact Assignment (internal 2-step flow handles select + roles) */}
+          {step >= 2 && (
             <ContactAssignmentStep
-              stepConfig={AUDIT_WORKFLOW_STEPS[0]}
-              contactAssignments={contactAssignments}
-              onAssignContact={assignContact}
-              onRemoveContact={removeContact}
-              userId={userId}
-              transactionType={addressData.transaction_type}
-              propertyAddress={addressData.property_address}
-              // Contacts loaded at parent level to prevent duplicate API calls
-              contacts={contacts}
-              contactsLoading={contactsLoading}
-              contactsError={contactsError}
-              onRefreshContacts={refreshContacts}
-            />
-          )}
-
-          {step === 3 && (
-            <ContactAssignmentStep
-              stepConfig={AUDIT_WORKFLOW_STEPS[1]}
               contactAssignments={contactAssignments}
               onAssignContact={assignContact}
               onRemoveContact={removeContact}
@@ -223,7 +214,7 @@ function AuditTransactionModal({
                 disabled={loading}
                 className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-all"
               >
-                ← Back
+                &larr; Back
               </button>
             )}
             <button
@@ -242,10 +233,10 @@ function AuditTransactionModal({
                 </span>
               ) : isEditing ? (
                 "Save Changes"
-              ) : step === 3 ? (
+              ) : step >= 2 ? (
                 "Create Transaction"
               ) : (
-                "Continue →"
+                "Continue \u2192"
               )}
             </button>
           </div>

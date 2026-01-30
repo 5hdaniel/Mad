@@ -124,7 +124,8 @@ describe("AuditTransactionModal", () => {
       expect(screen.getByRole("button", { name: /sale/i })).toBeInTheDocument();
     });
 
-    it("should show progress bar with 3 steps", () => {
+    it("should show progress bar with 2 steps", () => {
+      // TASK-1766: Updated from 3 steps to 2 steps (search-first flow)
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
@@ -134,10 +135,11 @@ describe("AuditTransactionModal", () => {
         />,
       );
 
-      // Progress bar shows step numbers
+      // Progress bar shows step numbers (now 2 steps)
       expect(screen.getByText("1")).toBeInTheDocument();
       expect(screen.getByText("2")).toBeInTheDocument();
-      expect(screen.getByText("3")).toBeInTheDocument();
+      // Step 3 should not exist in new flow
+      expect(screen.queryByText("3")).not.toBeInTheDocument();
     });
   });
 
@@ -366,7 +368,8 @@ describe("AuditTransactionModal", () => {
       });
     });
 
-    it("should show back button only on steps 2 and 3", async () => {
+    it("should show back button only on step 2", async () => {
+      // TASK-1766: Updated from 3 steps to 2 steps
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}

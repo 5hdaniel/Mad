@@ -727,6 +727,9 @@ export function useAuditTransaction({
 
   /**
    * Proceed to next step
+   * TASK-1766: Updated to 2-step flow
+   * - Step 1: Transaction details (address, type, dates)
+   * - Step 2: Contact assignment (search-first pattern)
    * In edit mode, saves directly from step 1 (no contact steps)
    */
   const handleNextStep = useCallback((): void => {
@@ -752,7 +755,8 @@ export function useAuditTransaction({
       } else {
         setStep(2);
       }
-    } else if (step === 2) {
+    } else if (step >= 2) {
+      // Step 2: Contact assignment - validate and create
       if (
         !contactAssignments[SPECIFIC_ROLES.CLIENT] ||
         contactAssignments[SPECIFIC_ROLES.CLIENT].length === 0
@@ -761,11 +765,9 @@ export function useAuditTransaction({
         return;
       }
       setError(null);
-      setStep(3);
-    } else if (step === 3) {
       handleCreateTransaction();
     }
-  }, [step, addressData.property_address, contactAssignments, handleCreateTransaction, isEditing]);
+  }, [step, addressData.property_address, addressData.started_at, addressData.closed_at, contactAssignments, handleCreateTransaction, isEditing]);
 
   /**
    * Go back to previous step

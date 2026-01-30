@@ -234,7 +234,7 @@ describe('SourcePill', () => {
 
 - **Title:** `feat(contacts): add SourcePill component (TASK-1761)`
 - **Branch:** `feature/task-1761-sourcepill-component`
-- **Target:** `develop`
+- **Target:** `sprint-066-contact-ux-overhaul`
 
 ---
 
@@ -249,7 +249,7 @@ describe('SourcePill', () => {
 
 ```
 Pre-Work:
-- [ ] Created branch from develop
+- [ ] Created branch from sprint-066-contact-ux-overhaul
 - [ ] Noted start time: ___
 - [ ] Read task file completely
 

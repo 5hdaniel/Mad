@@ -31,6 +31,9 @@ jest.mock("../../contexts/LicenseContext", () => ({
     canExport: true,
     canSubmit: false,
     canAutoDetect: true,
+    canCreateTransaction: true, // Enable transaction creation for testing
+    transactionCount: 0,
+    transactionLimit: 10,
     isLoading: false,
     refresh: jest.fn(),
   }),

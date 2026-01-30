@@ -306,7 +306,7 @@ describe('ContactCard', () => {
 
 - **Title:** `feat(contacts): add source pill and import button to ContactCard (TASK-1767)`
 - **Branch:** `feature/task-1767-contactcard-import-button`
-- **Target:** `develop`
+- **Target:** `sprint-066-contact-ux-overhaul`
 
 ---
 
@@ -321,7 +321,7 @@ describe('ContactCard', () => {
 
 ```
 Pre-Work:
-- [ ] Created branch from develop
+- [ ] Created branch from sprint-066-contact-ux-overhaul
 - [ ] Verified TASK-1762 is merged (uses similar patterns)
 - [ ] Noted start time: ___
 - [ ] Read task file completely

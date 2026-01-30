@@ -394,7 +394,7 @@ describe('EditContactsModal - New 2-Screen Flow', () => {
 
 - **Title:** `feat(contacts): redesign EditContactsModal 2-screen flow (TASK-1765)`
 - **Branch:** `feature/task-1765-editcontactsmodal-redesign`
-- **Target:** `develop`
+- **Target:** `sprint-066-contact-ux-overhaul`
 
 ---
 
@@ -409,7 +409,7 @@ describe('EditContactsModal - New 2-Screen Flow', () => {
 
 ```
 Pre-Work:
-- [ ] Created branch from develop
+- [ ] Created branch from sprint-066-contact-ux-overhaul
 - [ ] Verified TASK-1763 and TASK-1764 are merged
 - [ ] Noted start time: ___
 - [ ] Read task file completely

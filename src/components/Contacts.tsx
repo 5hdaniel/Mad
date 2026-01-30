@@ -11,6 +11,10 @@ import {
   ExtendedContact,
 } from "./contact";
 import { useAppStateMachine } from "../appCore";
+import {
+  ContactPreview,
+  type ContactTransaction,
+} from "./shared/ContactPreview";
 
 // LocalStorage key for toggle persistence (shared with ContactSelectModal)
 const SHOW_MESSAGE_CONTACTS_KEY = "contactModal.showMessageContacts";
@@ -93,6 +97,16 @@ function Contacts({ userId, onClose }: ContactsProps) {
     ExtendedContact | undefined
   >(undefined);
 
+  // ContactPreview state
+  const [previewContact, setPreviewContact] = useState<ExtendedContact | null>(
+    null
+  );
+  const [previewTransactions, setPreviewTransactions] = useState<
+    ContactTransaction[]
+  >([]);
+  const [loadingPreviewTransactions, setLoadingPreviewTransactions] =
+    useState(false);
+
   // DEFENSIVE CHECK: Return loading state if database not initialized
   // Should never trigger if AppShell gate works, but prevents errors if bypassed
   if (!isDatabaseInitialized) {
@@ -117,6 +131,108 @@ function Contacts({ userId, onClose }: ContactsProps) {
   };
 
   const handleViewContact = (contact: ExtendedContact) => {
+    // For imported contacts (not message-derived), open the full details modal
+    // which has Edit/Remove actions. For message-derived contacts, open preview
+    // which has the Import action.
+    if (isMessageDerived(contact)) {
+      setPreviewContact(contact);
+      // Note: Transaction loading API not yet available
+      // The preview will show "No transactions yet" for now
+      // This can be enhanced when contacts:getTransactions API is added
+      setPreviewTransactions([]);
+      setLoadingPreviewTransactions(false);
+    } else {
+      // Open ContactDetailsModal for imported contacts
+      setSelectedContact(contact);
+      setShowDetails(true);
+    }
+  };
+
+  const handlePreviewEdit = () => {
+    if (previewContact) {
+      setPreviewContact(null);
+      setSelectedContact(previewContact);
+      setShowAddEdit(true);
+    }
+  };
+
+  const handlePreviewImport = async () => {
+    if (previewContact) {
+      // Check if contact has required data (name and at least email or phone)
+      const hasName = !!(previewContact.display_name || previewContact.name);
+      const hasEmail = !!(previewContact.email || previewContact.allEmails?.[0]);
+      const hasPhone = !!(previewContact.phone || previewContact.allPhones?.[0]);
+
+      if (!hasName || (!hasEmail && !hasPhone)) {
+        // Missing required data - open edit form to let user fill in details
+        setPreviewContact(null);
+        setSelectedContact(previewContact);
+        setShowAddEdit(true);
+        return;
+      }
+
+      try {
+        // Message-derived contacts (msg_*) don't exist in DB - need to create them
+        if (previewContact.id.startsWith("msg_")) {
+          await window.api.contacts.create(userId, {
+            name: previewContact.display_name || previewContact.name || "",
+            email: previewContact.email || previewContact.allEmails?.[0] || "",
+            phone: previewContact.phone || previewContact.allPhones?.[0] || "",
+            company: previewContact.company || "",
+            title: previewContact.title || "",
+          });
+        } else {
+          // Real contacts can be marked as imported
+          await window.api.contacts.update(previewContact.id, {
+            is_message_derived: false,
+          });
+        }
+        setPreviewContact(null);
+        // Refresh the contacts list to reflect the change
+        await loadContacts();
+      } catch (error) {
+        console.error("Failed to import contact:", error);
+      }
+    }
+  };
+
+  const handleCardImport = async (contact: ExtendedContact) => {
+    // Check if contact has required data (name and at least email or phone)
+    const hasName = !!(contact.display_name || contact.name);
+    const hasEmail = !!(contact.email || contact.allEmails?.[0]);
+    const hasPhone = !!(contact.phone || contact.allPhones?.[0]);
+
+    if (!hasName || (!hasEmail && !hasPhone)) {
+      // Missing required data - open edit form to let user fill in details
+      setSelectedContact(contact);
+      setShowAddEdit(true);
+      return;
+    }
+
+    try {
+      // Message-derived contacts (msg_*) don't exist in DB - need to create them
+      if (contact.id.startsWith("msg_")) {
+        await window.api.contacts.create(userId, {
+          name: contact.display_name || contact.name || "",
+          email: contact.email || contact.allEmails?.[0] || "",
+          phone: contact.phone || contact.allPhones?.[0] || "",
+          company: contact.company || "",
+          title: contact.title || "",
+        });
+      } else {
+        // Real contacts can be marked as imported
+        await window.api.contacts.update(contact.id, {
+          is_message_derived: false,
+        });
+      }
+      // Refresh the contacts list to reflect the change
+      await loadContacts();
+    } catch (error) {
+      console.error("Failed to import contact:", error);
+    }
+  };
+
+  const handleViewDetails = (contact: ExtendedContact) => {
     setSelectedContact(contact);
     setShowDetails(true);
   };
@@ -290,11 +406,25 @@ function Contacts({ userId, onClose }: ContactsProps) {
                 key={contact.id}
                 contact={contact}
                 onClick={handleViewContact}
+                onImport={handleCardImport}
               />
             ))}
           </div>
         )}
       </div>
+
+      {/* Contact Preview Modal */}
+      {previewContact && (
+        <ContactPreview
+          contact={previewContact}
+          isExternal={isMessageDerived(previewContact)}
+          transactions={previewTransactions}
+          isLoadingTransactions={loadingPreviewTransactions}
+          onEdit={handlePreviewEdit}
+          onImport={handlePreviewImport}
+          onClose={() => setPreviewContact(null)}
+        />
+      )}
 
       {/* Import Contacts Modal */}
       {showImport && (

@@ -307,7 +307,7 @@ describe('ContactRow', () => {
 
 - **Title:** `feat(contacts): add ContactRow component (TASK-1762)`
 - **Branch:** `feature/task-1762-contactrow-component`
-- **Target:** `develop`
+- **Target:** `sprint-066-contact-ux-overhaul`
 
 ---
 
@@ -322,7 +322,7 @@ describe('ContactRow', () => {
 
 ```
 Pre-Work:
-- [ ] Created branch from develop
+- [ ] Created branch from sprint-066-contact-ux-overhaul
 - [ ] Verified TASK-1761 is merged
 - [ ] Noted start time: ___
 - [ ] Read task file completely
