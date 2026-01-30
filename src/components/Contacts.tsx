@@ -131,12 +131,21 @@ function Contacts({ userId, onClose }: ContactsProps) {
   };
 
   const handleViewContact = (contact: ExtendedContact) => {
-    setPreviewContact(contact);
-    // Note: Transaction loading API not yet available
-    // The preview will show "No transactions yet" for now
-    // This can be enhanced when contacts:getTransactions API is added
-    setPreviewTransactions([]);
-    setLoadingPreviewTransactions(false);
+    // For imported contacts (not message-derived), open the full details modal
+    // which has Edit/Remove actions. For message-derived contacts, open preview
+    // which has the Import action.
+    if (isMessageDerived(contact)) {
+      setPreviewContact(contact);
+      // Note: Transaction loading API not yet available
+      // The preview will show "No transactions yet" for now
+      // This can be enhanced when contacts:getTransactions API is added
+      setPreviewTransactions([]);
+      setLoadingPreviewTransactions(false);
+    } else {
+      // Open ContactDetailsModal for imported contacts
+      setSelectedContact(contact);
+      setShowDetails(true);
+    }
   };
 
   const handlePreviewEdit = () => {
