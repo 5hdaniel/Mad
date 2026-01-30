@@ -590,6 +590,44 @@ function Screen2Overlay({
     return loadCategoryFilter();
   });
 
+  // External contacts from macOS Contacts app (lazy-loaded)
+  const [externalContacts, setExternalContacts] = useState<ExternalContact[]>([]);
+  const [externalLoading, setExternalLoading] = useState(false);
+  const [externalLoaded, setExternalLoaded] = useState(false);
+
+  // Load external contacts from Contacts app when component mounts
+  useEffect(() => {
+    const loadExternalContacts = async () => {
+      // Get userId from first contact
+      const userId = contacts.length > 0 ? contacts[0].user_id : "";
+      if (!userId || externalLoaded) return;
+
+      setExternalLoading(true);
+      try {
+        const result = await window.api.contacts.getAvailable(userId);
+        if (result.success && result.contacts) {
+          // Convert to ExternalContact format
+          const external: ExternalContact[] = result.contacts.map((c: ExtendedContact) => ({
+            id: c.id,
+            name: c.name || c.display_name || "",
+            email: c.email,
+            phone: c.phone,
+            company: c.company,
+            source: "external" as const,
+          }));
+          setExternalContacts(external);
+        }
+      } catch (err) {
+        console.error("Failed to load external contacts:", err);
+      } finally {
+        setExternalLoading(false);
+        setExternalLoaded(true);
+      }
+    };
+
+    loadExternalContacts();
+  }, [contacts, externalLoaded]);
+
   // Persist category filter to localStorage
   useEffect(() => {
     saveCategoryFilter(categoryFilter);
@@ -619,6 +657,19 @@ function Screen2Overlay({
     // Sort by most recent communication first
     return sortByRecentCommunication(filtered);
   }, [contacts, assignedContactIds, categoryFilter]);
+
+  // Filter external contacts based on category filter (controlled by "external" checkbox)
+  const filteredExternalContacts = useMemo(() => {
+    if (!categoryFilter.external) {
+      return [];
+    }
+    // Filter out contacts that are already in the database or assigned
+    const existingIds = new Set(contacts.map((c) => c.id));
+    const assignedIds = new Set(assignedContactIds);
+    return externalContacts.filter(
+      (c) => !existingIds.has(c.id) && !assignedIds.has(c.id)
+    );
+  }, [externalContacts, categoryFilter.external, contacts, assignedContactIds]);
 
   // Handle importing an external contact
   // Per SR Engineer: Use contactService.create() for imports
@@ -732,11 +783,11 @@ function Screen2Overlay({
       {/* ContactSearchList - min-h-0 required for flex child scrolling */}
       <ContactSearchList
         contacts={availableContacts}
-        externalContacts={[]} // Per SR Engineer: external API not ready
+        externalContacts={filteredExternalContacts}
         selectedIds={pendingAddIds}
         onSelectionChange={onPendingAddIdsChange}
         onImportContact={handleImportContact}
-        isLoading={loading}
+        isLoading={loading || externalLoading}
         error={error}
         searchPlaceholder="Search contacts to add..."
         className="flex-1 min-h-0"
