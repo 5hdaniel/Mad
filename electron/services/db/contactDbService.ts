@@ -384,25 +384,7 @@ export async function findContactByName(userId: string, name: string): Promise<C
       AND is_imported = 1
     LIMIT 1
   `;
-  logService.info("findContactByName query", "Contacts", {
-    userId,
-    searchName: name,
-    searchNameLower: name.toLowerCase(),
-  });
   const contact = dbGet<Contact>(sql, [userId, name]);
-  if (contact) {
-    logService.info("findContactByName found match", "Contacts", {
-      foundId: contact.id,
-      foundDisplayName: contact.display_name,
-    });
-  } else {
-    // Debug: list first few contacts with similar names
-    const debugSql = `SELECT id, display_name FROM contacts WHERE user_id = ? AND is_imported = 1 LIMIT 10`;
-    const debugContacts = dbAll<{id: string, display_name: string}>(debugSql, [userId]);
-    logService.info("findContactByName no match, existing contacts sample", "Contacts", {
-      sampleContacts: debugContacts.map(c => c.display_name),
-    });
-  }
   return contact || null;
 }
 
@@ -616,35 +598,17 @@ export async function backfillContactPhones(contactId: string, phones: string[])
 }
 
 /**
- * Get contacts sorted by recent communication and optionally by property address relevance
- * BACKLOG-506: JOINs to emails table for email content (sender, recipients, body)
+ * Backfill last_inbound_at for contacts from their messages.
+ * Uses a simpler approach: get max message date per phone, then update contacts.
  */
-export async function getContactsSortedByActivity(
-  userId: string,
-  propertyAddress?: string,
-): Promise<ContactWithActivity[]> {
-  // Get imported contacts with activity data
-  // TASK-1770: Optimized query - removed email join, simplified message matching
-  // Step 1: Get contacts with their primary email/phone (fast)
-  const contactsSql = `
+export async function backfillContactCommunicationDates(userId: string): Promise<number> {
+  // Step 1: Get the most recent message date for each normalized phone number
+  // This is the simple GROUP BY approach the user suggested
+  const phoneMessagesSql = `
     SELECT
-      c.*,
-      c.display_name as name,
-      ce_primary.email as email,
-      cp_primary.phone_e164 as phone,
-      0 as is_message_derived
-    FROM contacts c
-    LEFT JOIN contact_emails ce_primary ON c.id = ce_primary.contact_id AND ce_primary.is_primary = 1
-    LEFT JOIN contact_phones cp_primary ON c.id = cp_primary.contact_id AND cp_primary.is_primary = 1
-    WHERE c.user_id = ? AND c.is_imported = 1
-  `;
-
-  // Step 2: Get last message date for each phone number (separate query for performance)
-  // This avoids the expensive LIKE join in the main query
-  const messagesSql = `
-    SELECT
+      SUBSTR(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(cp.phone_e164, '+', ''), '-', ''), ' ', ''), '(', ''), ')', ''), -10) as normalized_phone,
       cp.contact_id,
-      MAX(m.sent_at) as last_communication_at
+      MAX(m.sent_at) as last_msg_date
     FROM contact_phones cp
     JOIN contacts c ON cp.contact_id = c.id AND c.user_id = ? AND c.is_imported = 1
     JOIN messages m ON (
@@ -652,34 +616,164 @@ export async function getContactsSortedByActivity(
       AND (m.channel = 'sms' OR m.channel = 'imessage')
       AND m.participants_flat LIKE '%' || SUBSTR(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(cp.phone_e164, '+', ''), '-', ''), ' ', ''), '(', ''), ')', ''), -10) || '%'
     )
+    WHERE LENGTH(SUBSTR(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(cp.phone_e164, '+', ''), '-', ''), ' ', ''), '(', ''), ')', ''), -10)) >= 7
     GROUP BY cp.contact_id
   `;
 
+  const phoneMessages = dbAll<{ normalized_phone: string; contact_id: string; last_msg_date: string }>(
+    phoneMessagesSql,
+    [userId, userId]
+  );
+
+  logService.info("Backfill: Found phone-message matches", "ContactDbService", {
+    matchCount: phoneMessages.length,
+    samples: phoneMessages.slice(0, 5).map(p => ({
+      contactId: p.contact_id.substring(0, 8),
+      phone: p.normalized_phone,
+      lastDate: p.last_msg_date,
+    })),
+  });
+
+  // Step 2: Update each contact with their most recent message date
+  let updatedCount = 0;
+  for (const match of phoneMessages) {
+    const updateSql = `
+      UPDATE contacts
+      SET last_inbound_at = ?
+      WHERE id = ? AND (last_inbound_at IS NULL OR last_inbound_at < ?)
+    `;
+    const result = dbRun(updateSql, [match.last_msg_date, match.contact_id, match.last_msg_date]);
+    updatedCount += result.changes;
+  }
+
+  // Debug: Show final state
+  const debugSql = `
+    SELECT c.display_name, c.last_inbound_at
+    FROM contacts c
+    WHERE c.user_id = ? AND c.is_imported = 1
+    ORDER BY c.last_inbound_at DESC NULLS LAST
+    LIMIT 10
+  `;
+  const debugContacts = dbAll<{ display_name: string; last_inbound_at: string | null }>(debugSql, [userId]);
+
+  logService.info("Backfill complete", "ContactDbService", {
+    userId,
+    updatedCount,
+    topContacts: debugContacts.map(c => ({
+      name: c.display_name,
+      lastInbound: c.last_inbound_at,
+    })),
+  });
+
+  return updatedCount;
+}
+
+/**
+ * Get contacts sorted by recent communication and optionally by property address relevance
+ * SIMPLIFIED: Uses denormalized last_inbound_at column with simple ORDER BY
+ */
+export async function getContactsSortedByActivity(
+  userId: string,
+  _propertyAddress?: string,
+): Promise<ContactWithActivity[]> {
+  // === DIAGNOSTIC LOGGING ===
+  // Run diagnostics to understand the data state
+  const diagnostics = {
+    // How many messages exist?
+    messages: dbGet<{ total: number; sms: number; imessage: number }>(`
+      SELECT COUNT(*) as total,
+        SUM(CASE WHEN channel = 'sms' THEN 1 ELSE 0 END) as sms,
+        SUM(CASE WHEN channel = 'imessage' THEN 1 ELSE 0 END) as imessage
+      FROM messages WHERE user_id = ?
+    `, [userId]),
+
+    // How many contacts have phones?
+    contactPhones: dbGet<{ total: number; withPhones: number }>(`
+      SELECT
+        (SELECT COUNT(*) FROM contacts WHERE user_id = ? AND is_imported = 1) as total,
+        (SELECT COUNT(DISTINCT cp.contact_id) FROM contact_phones cp
+         JOIN contacts c ON cp.contact_id = c.id WHERE c.user_id = ? AND c.is_imported = 1) as withPhones
+    `, [userId, userId]),
+
+    // How many contacts have last_inbound_at?
+    withDates: dbGet<{ count: number }>(`
+      SELECT COUNT(*) as count FROM contacts
+      WHERE user_id = ? AND is_imported = 1 AND last_inbound_at IS NOT NULL
+    `, [userId]),
+
+    // Sample participants_flat format
+    sampleMessages: dbAll<{ participants_flat: string; channel: string }>(`
+      SELECT participants_flat, channel FROM messages
+      WHERE user_id = ? AND (channel = 'sms' OR channel = 'imessage')
+      ORDER BY sent_at DESC LIMIT 3
+    `, [userId]),
+
+    // Sample phone_e164 format
+    samplePhones: dbAll<{ name: string; phone: string; normalized: string }>(`
+      SELECT c.display_name as name, cp.phone_e164 as phone,
+        SUBSTR(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(cp.phone_e164, '+', ''), '-', ''), ' ', ''), '(', ''), ')', ''), -10) as normalized
+      FROM contact_phones cp
+      JOIN contacts c ON cp.contact_id = c.id
+      WHERE c.user_id = ? AND c.is_imported = 1
+      LIMIT 5
+    `, [userId]),
+
+    // ALL imported contacts (to see which ones are missing phones)
+    allImportedContacts: dbAll<{ name: string; hasPhone: number }>(`
+      SELECT c.display_name as name,
+        (SELECT COUNT(*) FROM contact_phones cp WHERE cp.contact_id = c.id) as hasPhone
+      FROM contacts c
+      WHERE c.user_id = ? AND c.is_imported = 1
+      ORDER BY c.display_name
+    `, [userId]),
+  };
+
+  logService.info("=== CONTACT SORTING DIAGNOSTICS ===", "ContactDbService", {
+    messages: diagnostics.messages,
+    contactPhones: diagnostics.contactPhones,
+    contactsWithDates: diagnostics.withDates?.count,
+    sampleParticipantsFlat: diagnostics.sampleMessages?.map(m => m.participants_flat),
+    samplePhoneFormats: diagnostics.samplePhones,
+    allImportedContacts: diagnostics.allImportedContacts?.map(c => `${c.name} (${c.hasPhone} phones)`),
+  });
+
+  // Check if backfill has ever run (any contacts have last_inbound_at set)
+  const hasBackfilled = diagnostics.withDates;
+
+  // Only run backfill once - if no contacts have dates yet
+  if (!hasBackfilled || hasBackfilled.count === 0) {
+    logService.info("Running contact communication date backfill (first time)", "ContactDbService", {
+      userId,
+    });
+    await backfillContactCommunicationDates(userId);
+  }
+
+  // Simple query: get contacts sorted by last_inbound_at (denormalized field)
+  const contactsSql = `
+    SELECT
+      c.*,
+      c.display_name as name,
+      ce_primary.email as email,
+      cp_primary.phone_e164 as phone,
+      0 as is_message_derived,
+      COALESCE(c.last_inbound_at, c.last_outbound_at) as last_communication_at,
+      CASE WHEN c.last_inbound_at IS NOT NULL OR c.last_outbound_at IS NOT NULL THEN 1 ELSE 0 END as communication_count,
+      0 as address_mention_count
+    FROM contacts c
+    LEFT JOIN contact_emails ce_primary ON c.id = ce_primary.contact_id AND ce_primary.is_primary = 1
+    LEFT JOIN contact_phones cp_primary ON c.id = cp_primary.contact_id AND cp_primary.is_primary = 1
+    WHERE c.user_id = ? AND c.is_imported = 1
+    ORDER BY
+      COALESCE(c.last_inbound_at, c.last_outbound_at) DESC,
+      c.display_name ASC
+  `;
+
   try {
-    // Step 1: Get contacts (fast query)
-    const contacts = dbAll<ContactWithActivity>(contactsSql, [userId]);
+    const importedContacts = dbAll<ContactWithActivity>(contactsSql, [userId]);
 
-    // Step 2: Get message dates (separate query)
-    const messageDates = dbAll<{ contact_id: string; last_communication_at: string }>(
-      messagesSql,
-      [userId, userId]
-    );
-
-    // Step 3: Merge message dates into contacts
-    const dateMap = new Map(messageDates.map(m => [m.contact_id, m.last_communication_at]));
-    const importedContacts = contacts.map(c => ({
-      ...c,
-      last_communication_at: dateMap.get(c.id) || null,
-      communication_count: dateMap.has(c.id) ? 1 : 0,
-      address_mention_count: 0,
-    }));
-
-    // Get message-derived contacts (already have communication_count from query)
+    // Get message-derived contacts (already have last_communication_at from their source)
     const messageDerivedContacts = getMessageDerivedContacts(userId);
 
-    // BACKLOG-311: Map message-derived contacts to ContactWithActivity
-    // No N+1 queries - communication_count is pre-computed, address_mention_count is 0
-    // (address relevance sorting only meaningful for imported contacts with full email data)
     const messageDerivedWithActivity: ContactWithActivity[] = messageDerivedContacts.map(mc => ({
       id: mc.id,
       user_id: userId,
@@ -693,27 +787,12 @@ export async function getContactsSortedByActivity(
       is_message_derived: mc.is_message_derived,
       last_communication_at: mc.last_communication_at,
       communication_count: mc.communication_count,
-      address_mention_count: 0, // Skip for message-derived, sort by communication date instead
+      address_mention_count: 0,
     } as ContactWithActivity));
 
-    // Merge both lists
-    const allContacts = [...importedContacts, ...messageDerivedWithActivity];
-
-    // Sort by most recent communication first, then by name
-    // TASK-1770: Changed to prioritize last_communication_at over address_mention_count
-    return allContacts.sort((a, b) => {
-      // Primary: Sort by last communication date (most recent first)
-      const dateA = a.last_communication_at ? new Date(a.last_communication_at).getTime() : 0;
-      const dateB = b.last_communication_at ? new Date(b.last_communication_at).getTime() : 0;
-      if (dateA !== dateB) {
-        return dateB - dateA; // More recent first
-      }
-
-      // Secondary: By name
-      const nameA = (a.display_name || a.name || '').toLowerCase();
-      const nameB = (b.display_name || b.name || '').toLowerCase();
-      return nameA.localeCompare(nameB);
-    });
+    // Merge: imported contacts first (already sorted), then message-derived
+    // Message-derived contacts go at the end since they're less relevant for transaction assignment
+    return [...importedContacts, ...messageDerivedWithActivity];
   } catch (error) {
     logService.error("Error getting sorted contacts", "ContactDbService", {
       error: (error as Error).message,
