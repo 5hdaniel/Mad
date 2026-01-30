@@ -44,11 +44,14 @@ export type ContactCategory =
 /**
  * Determines the category of a contact based on its source and flags.
  *
- * Category logic:
- * - External contacts (from address book, not yet imported) -> 'external'
- * - Message-derived contacts (is_message_derived=true or source in ['email', 'sms', 'inferred']) -> 'message_derived'
- * - Manually created contacts (source='manual') -> 'manually_added'
- * - All other contacts (typically source='contacts_app') -> 'imported'
+ * Category logic (aligned with SourcePill display):
+ * - External contacts: isExternal param OR is_message_derived flag -> 'external' (blue badge)
+ * - Message sources: source in ['email', 'sms', 'inferred'] without is_message_derived -> 'message_derived'
+ * - Manually created: source='manual' -> 'manually_added'
+ * - All other: typically source='contacts_app' -> 'imported' (green badge)
+ *
+ * NOTE: is_message_derived contacts show "External" badge in UI, so they're categorized
+ * as 'external' to match. The "External" checkbox controls what shows "External" badge.
  *
  * @param contact - The contact to categorize
  * @param isExternal - Whether this is an external contact not yet imported
@@ -58,20 +61,23 @@ export function getContactCategory(
   contact: ExtendedContact,
   isExternal = false
 ): ContactCategory {
-  // External contacts from address book
+  // External contacts from address book OR message-derived contacts
+  // Both show "External" badge in UI, so both should be in "external" category
   if (isExternal) {
     return "external";
   }
 
-  // Message-derived contacts (extracted from email/SMS participants)
+  // Message-derived contacts show "External" badge in ContactRow
+  // So they should be categorized as "external" to match UI
   if (
     contact.is_message_derived === 1 ||
     contact.is_message_derived === true
   ) {
-    return "message_derived";
+    return "external";
   }
 
-  // Check source for message-derived sources
+  // Check source for message-derived sources (without is_message_derived flag)
+  // These are contacts extracted from communications but already "imported"
   const messageSourceValues = ["email", "sms", "inferred"];
   if (messageSourceValues.includes(contact.source || "")) {
     return "message_derived";
