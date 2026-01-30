@@ -689,6 +689,18 @@ export async function getContactsSortedByActivity(
   try {
     const importedContacts = dbAll<ContactWithActivity>(sql, params);
 
+    // DEBUG: Log contact sorting data to diagnose why sorting isn't working
+    const withCommDate = importedContacts.filter(c => c.last_communication_at);
+    logService.info("Contact sort debug", "ContactDbService", {
+      totalImported: importedContacts.length,
+      withLastCommAt: withCommDate.length,
+      sampleContacts: importedContacts.slice(0, 5).map(c => ({
+        name: c.display_name || c.name,
+        phone: c.phone,
+        lastComm: c.last_communication_at,
+      }))
+    });
+
     // Get message-derived contacts (already have communication_count from query)
     const messageDerivedContacts = getMessageDerivedContacts(userId);
 
