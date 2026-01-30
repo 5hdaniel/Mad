@@ -25,6 +25,13 @@ import {
   getRoleDisplayName,
 } from "../../../../utils/transactionRoleUtils";
 import { contactService } from "../../../../services";
+import {
+  type CategoryFilter,
+  shouldShowContact,
+  loadCategoryFilter,
+  saveCategoryFilter,
+} from "../../../../utils/contactCategoryUtils";
+import { sortByRecentCommunication } from "../../../../utils/contactSortUtils";
 
 // ============================================
 // TYPES
@@ -250,7 +257,7 @@ export function EditContactsModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col relative">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[70vh] max-h-[90vh] flex flex-col relative">
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <h3 className="text-xl font-bold text-white">Edit Transaction Contacts</h3>
@@ -308,45 +315,26 @@ export function EditContactsModal({
         </div>
 
         {/* Footer */}
-        <div className="flex-shrink-0 px-6 py-4 bg-gray-50 rounded-b-xl flex items-center justify-between">
-          {/* Left side - Add Contacts button */}
-          <div>
-            {!loading && (
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg font-medium transition-all flex items-center gap-2"
-                data-testid="add-contacts-button"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                Add Contacts
-              </button>
-            )}
-          </div>
-
-          {/* Right side - Cancel and Save */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-all"
-              data-testid="edit-contacts-modal-cancel"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving || loading}
-              className={`px-6 py-2 rounded-lg font-semibold transition-all ${
-                saving || loading
-                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                  : "bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700 shadow-md hover:shadow-lg"
-              }`}
-              data-testid="edit-contacts-modal-save"
-            >
-              {saving ? "Saving..." : "Save Changes"}
-            </button>
-          </div>
+        <div className="flex-shrink-0 px-6 py-4 bg-gray-50 rounded-b-xl flex items-center justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-all"
+            data-testid="edit-contacts-modal-cancel"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving || loading}
+            className={`px-6 py-2 rounded-lg font-semibold transition-all ${
+              saving || loading
+                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                : "bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700 shadow-md hover:shadow-lg"
+            }`}
+            data-testid="edit-contacts-modal-save"
+          >
+            {saving ? "Saving..." : "Save Changes"}
+          </button>
         </div>
 
         {/* Screen 2: Add Contacts Overlay */}
@@ -539,11 +527,21 @@ function Screen1Content({
   // Assigned contacts list
   return (
     <div data-testid="assigned-contacts-list">
-      {/* Header info */}
-      <div className="mb-4">
+      {/* Header info with Add Contacts button */}
+      <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-gray-500">
           {assignedContacts.length} contact{assignedContacts.length !== 1 ? "s" : ""} assigned
         </p>
+        <button
+          onClick={onOpenAddModal}
+          className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg font-medium transition-all flex items-center gap-2"
+          data-testid="add-contacts-button"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+          Add Contacts
+        </button>
       </div>
 
       {/* Contact rows */}
@@ -586,10 +584,41 @@ function Screen2Overlay({
 }: Screen2OverlayProps): React.ReactElement {
   const { contacts, loading, error, refreshContacts } = useContacts();
 
-  // Filter out already assigned contacts
+  // Multi-category filter state (persisted to localStorage)
+  // Default: Imported, Manual, External = ON; Messages = OFF
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>(() => {
+    return loadCategoryFilter();
+  });
+
+  // Persist category filter to localStorage
+  useEffect(() => {
+    saveCategoryFilter(categoryFilter);
+  }, [categoryFilter]);
+
+  // Handle category checkbox toggle
+  const handleCategoryToggle = useCallback(
+    (category: keyof CategoryFilter, checked: boolean) => {
+      setCategoryFilter((prev) => ({
+        ...prev,
+        [category]: checked,
+      }));
+    },
+    []
+  );
+
+  // Filter out already assigned contacts, apply category filter, and sort by recent communication
   const availableContacts = useMemo(() => {
-    return contacts.filter((c) => !assignedContactIds.includes(c.id));
-  }, [contacts, assignedContactIds]);
+    const filtered = contacts.filter((c) => {
+      // Exclude already assigned contacts
+      if (assignedContactIds.includes(c.id)) {
+        return false;
+      }
+      // Apply category filter
+      return shouldShowContact(c, categoryFilter, false);
+    });
+    // Sort by most recent communication first
+    return sortByRecentCommunication(filtered);
+  }, [contacts, assignedContactIds, categoryFilter]);
 
   // Handle importing an external contact
   // Per SR Engineer: Use contactService.create() for imports
@@ -628,7 +657,7 @@ function Screen2Overlay({
 
   return (
     <div
-      className="absolute inset-0 bg-white rounded-xl flex flex-col z-10"
+      className="absolute inset-0 bg-white rounded-xl flex flex-col z-10 overflow-hidden"
       data-testid="add-contacts-overlay"
     >
       {/* Header */}
@@ -653,6 +682,51 @@ function Screen2Overlay({
             />
           </svg>
         </button>
+      </div>
+
+      {/* Category filter toolbar */}
+      <div className="flex-shrink-0 px-6 py-3 border-b border-gray-200 flex items-center justify-end gap-4">
+        <span className="text-sm text-gray-500">Show:</span>
+        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={categoryFilter.imported}
+            onChange={(e) => handleCategoryToggle("imported", e.target.checked)}
+            className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+            data-testid="filter-imported"
+          />
+          <span>Imported</span>
+        </label>
+        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={categoryFilter.manuallyAdded}
+            onChange={(e) => handleCategoryToggle("manuallyAdded", e.target.checked)}
+            className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+            data-testid="filter-manual"
+          />
+          <span>Manual</span>
+        </label>
+        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={categoryFilter.external}
+            onChange={(e) => handleCategoryToggle("external", e.target.checked)}
+            className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+            data-testid="filter-external"
+          />
+          <span>External</span>
+        </label>
+        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={categoryFilter.messageDerived}
+            onChange={(e) => handleCategoryToggle("messageDerived", e.target.checked)}
+            className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+            data-testid="filter-messages"
+          />
+          <span>Messages</span>
+        </label>
       </div>
 
       {/* ContactSearchList */}

@@ -18,6 +18,7 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { ContactRow } from "./ContactRow";
 import type { ExtendedContact } from "../../types/components";
+import { sortByRecentCommunication } from "../../utils/contactSortUtils";
 
 /**
  * External contact type for contacts not yet imported (e.g., from address book)
@@ -168,7 +169,7 @@ export function ContactSearchList({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Combine and filter contacts
+  // Combine, sort, and filter contacts
   const combinedContacts = useMemo((): CombinedContact[] => {
     // Convert imported contacts
     const imported: CombinedContact[] = contacts.map((c) => ({
@@ -186,12 +187,21 @@ export function ContactSearchList({
     // Combine lists (imported first, then external)
     const combined = [...imported, ...external];
 
+    // Sort by most recent communication first (BEFORE filtering)
+    // Using sortByRecentCommunication on contacts, then mapping back
+    const contactsWithIndex = combined.map((item, index) => ({
+      index,
+      last_communication_at: item.contact.last_communication_at,
+    }));
+    const sortedIndices = sortByRecentCommunication(contactsWithIndex);
+    const sorted = sortedIndices.map((item) => combined[item.index]);
+
     // Apply search filter
     if (!searchQuery.trim()) {
-      return combined;
+      return sorted;
     }
 
-    return combined.filter(({ contact }) => matchesSearch(contact, searchQuery));
+    return sorted.filter(({ contact }) => matchesSearch(contact, searchQuery));
   }, [contacts, externalContacts, searchQuery]);
 
   // Reset focused index when list changes
