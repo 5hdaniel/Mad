@@ -691,7 +691,7 @@ export async function getContactsSortedByActivity(
 
     // DEBUG: Log contact sorting data to diagnose why sorting isn't working
     const withCommDate = importedContacts.filter(c => c.last_communication_at);
-    logService.info("Contact sort debug", "ContactDbService", {
+    logService.info("[DEBUG] Contact sort data", "Contacts", {
       totalImported: importedContacts.length,
       withLastCommAt: withCommDate.length,
       sampleContacts: importedContacts.slice(0, 5).map(c => ({
