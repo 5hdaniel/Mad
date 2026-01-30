@@ -24,6 +24,7 @@ import React, {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
 } from "react";
 import type { LicenseType } from "../../electron/types/models";
 import type { LicenseValidationResult } from "../../shared/types/license";
@@ -110,6 +111,10 @@ export function LicenseProvider({
   userId,
 }: LicenseProviderProps): React.ReactElement {
   const [state, setState] = useState<LicenseState>(defaultLicenseState);
+
+  // Track last license check to throttle focus refresh (60 second minimum between checks)
+  const lastCheckRef = useRef<number>(0);
+  const FOCUS_THROTTLE_MS = 60000; // 60 seconds
 
   /**
    * Fetch license from main process (original method for backward compatibility)
@@ -213,19 +218,27 @@ export function LicenseProvider({
   }, [userId, validateLicense]);
 
   // Refresh on app focus (to catch license changes from other sources)
+  // Throttled to prevent constant "checking license" on every focus
   useEffect(() => {
     const handleFocus = () => {
-      fetchLicense();
-      if (userId) {
-        validateLicense();
+      const now = Date.now();
+      // Skip if checked recently (within 60 seconds)
+      if (now - lastCheckRef.current < FOCUS_THROTTLE_MS) {
+        return;
       }
+      lastCheckRef.current = now;
+
+      // Do a silent background check - don't set isLoading to avoid UI disruption
+      fetchLicense();
+      // Skip validateLicense on focus - it sets isLoading which closes modals
+      // License validation happens on mount and userId change anyway
     };
 
     window.addEventListener("focus", handleFocus);
     return () => {
       window.removeEventListener("focus", handleFocus);
     };
-  }, [fetchLicense, validateLicense, userId]);
+  }, [fetchLicense]);
 
   /**
    * Refresh license data
