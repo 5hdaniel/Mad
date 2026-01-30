@@ -59,6 +59,25 @@ export function getMessageDerivedContacts(userId: string): MessageDerivedContact
   const importedEmailRows = dbAll<{ email: string }>(importedEmailsSql, [userId]);
   const importedEmails = new Set(importedEmailRows.map(r => r.email).filter(Boolean));
 
+  // Get phones of imported contacts to exclude (avoid duplicates)
+  const importedPhonesSql = `
+    SELECT LOWER(phone_e164) as phone
+    FROM contact_phones cp
+    JOIN contacts c ON cp.contact_id = c.id
+    WHERE c.user_id = ? AND c.is_imported = 1
+  `;
+  const importedPhoneRows = dbAll<{ phone: string }>(importedPhonesSql, [userId]);
+  const importedPhones = new Set(importedPhoneRows.map(r => r.phone).filter(Boolean));
+
+  // Also get display_names of imported contacts to exclude (for SMS contacts without proper phone numbers)
+  const importedNamesSql = `
+    SELECT LOWER(display_name) as name
+    FROM contacts
+    WHERE user_id = ? AND is_imported = 1
+  `;
+  const importedNameRows = dbAll<{ name: string }>(importedNamesSql, [userId]);
+  const importedNames = new Set(importedNameRows.map(r => r.name).filter(Boolean));
+
   // Extract unique senders from messages (from field in participants JSON)
   // BACKLOG-313: Only include senders with actual display names (filter out raw emails/phones)
   // BACKLOG-311: Include COUNT(*) to avoid N+1 queries
@@ -100,10 +119,19 @@ export function getMessageDerivedContacts(userId: string): MessageDerivedContact
 
   const results = dbAll<MessageDerivedContact>(sql, [userId]);
 
-  // Filter out contacts whose email is already imported
+  // Filter out contacts whose email, phone, or name is already imported
   return results.filter(contact => {
-    if (contact.email) {
-      return !importedEmails.has(contact.email.toLowerCase());
+    // Filter by email match
+    if (contact.email && importedEmails.has(contact.email.toLowerCase())) {
+      return false;
+    }
+    // Filter by phone match
+    if (contact.phone && importedPhones.has(contact.phone.toLowerCase())) {
+      return false;
+    }
+    // Filter by display name match (for SMS contacts like "*162")
+    if (contact.display_name && importedNames.has(contact.display_name.toLowerCase())) {
+      return false;
     }
     return true;
   });
@@ -344,6 +372,40 @@ export async function getContactById(contactId: string): Promise<Contact | null>
 }
 
 /**
+ * Find an imported contact by display name (case-insensitive)
+ * Used to prevent duplicate imports of message-derived contacts
+ */
+export async function findContactByName(userId: string, name: string): Promise<Contact | null> {
+  const sql = `
+    SELECT * FROM contacts
+    WHERE user_id = ?
+      AND LOWER(display_name) = LOWER(?)
+      AND is_imported = 1
+    LIMIT 1
+  `;
+  logService.info("findContactByName query", "Contacts", {
+    userId,
+    searchName: name,
+    searchNameLower: name.toLowerCase(),
+  });
+  const contact = dbGet<Contact>(sql, [userId, name]);
+  if (contact) {
+    logService.info("findContactByName found match", "Contacts", {
+      foundId: contact.id,
+      foundDisplayName: contact.display_name,
+    });
+  } else {
+    // Debug: list first few contacts with similar names
+    const debugSql = `SELECT id, display_name FROM contacts WHERE user_id = ? AND is_imported = 1 LIMIT 10`;
+    const debugContacts = dbAll<{id: string, display_name: string}>(debugSql, [userId]);
+    logService.info("findContactByName no match, existing contacts sample", "Contacts", {
+      sampleContacts: debugContacts.map(c => c.display_name),
+    });
+  }
+  return contact || null;
+}
+
+/**
  * Get all contacts for a user
  */
 export async function getContacts(filters?: ContactFilters): Promise<Contact[]> {
@@ -562,13 +624,20 @@ export async function getContactsSortedByActivity(
 ): Promise<ContactWithActivity[]> {
   // Get imported contacts with activity data
   // BACKLOG-506: Join emails FIRST, then communications by email_id
+  // TASK-1770: Also join messages (SMS/iMessage) via phone number to include text communications
   const sql = `
     SELECT
       c.*,
       c.display_name as name,
       ce_primary.email as email,
       cp_primary.phone_e164 as phone,
-      MAX(e.sent_at) as last_communication_at,
+      CASE
+        WHEN MAX(e.sent_at) IS NULL AND MAX(m.sent_at) IS NULL THEN NULL
+        WHEN MAX(e.sent_at) IS NULL THEN MAX(m.sent_at)
+        WHEN MAX(m.sent_at) IS NULL THEN MAX(e.sent_at)
+        WHEN MAX(e.sent_at) > MAX(m.sent_at) THEN MAX(e.sent_at)
+        ELSE MAX(m.sent_at)
+      END as last_communication_at,
       COUNT(DISTINCT comm.id) as communication_count,
       ${
         propertyAddress
@@ -585,6 +654,7 @@ export async function getContactsSortedByActivity(
     LEFT JOIN contact_emails ce_primary ON c.id = ce_primary.contact_id AND ce_primary.is_primary = 1
     LEFT JOIN contact_phones cp_primary ON c.id = cp_primary.contact_id AND cp_primary.is_primary = 1
     LEFT JOIN contact_emails ce_all ON c.id = ce_all.contact_id
+    LEFT JOIN contact_phones cp_all ON c.id = cp_all.contact_id
     LEFT JOIN emails e ON (
       ce_all.email IS NOT NULL
       AND (
@@ -593,8 +663,17 @@ export async function getContactsSortedByActivity(
       )
       AND e.user_id = c.user_id
     )
+    LEFT JOIN messages m ON (
+      cp_all.phone_e164 IS NOT NULL
+      AND (m.channel = 'sms' OR m.channel = 'imessage')
+      AND (
+        m.participants_flat LIKE '%' || cp_all.phone_e164 || '%'
+        OR (cp_all.phone_display IS NOT NULL AND m.participants_flat LIKE '%' || cp_all.phone_display || '%')
+      )
+      AND m.user_id = c.user_id
+    )
     LEFT JOIN communications comm ON (
-      comm.email_id = e.id
+      comm.email_id = e.id OR comm.message_id = m.id
     )
     WHERE c.user_id = ? AND c.is_imported = 1
     GROUP BY c.id

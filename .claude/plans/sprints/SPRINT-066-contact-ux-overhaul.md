@@ -2,7 +2,7 @@
 
 **Created**: 2026-01-28
 **Updated**: 2026-01-29
-**Status**: COMPLETE
+**Status**: IN_PROGRESS
 **Goal**: Implement unified contact management UX across all flows
 **Dependencies**: PR #678 (TASK-1760 RoleAssigner redesign) - ready for merge
 **Related**: SPRINT-055b (previous iteration, superseded by this plan)
@@ -444,6 +444,28 @@ interface ContactPreviewProps {
 
 ---
 
+### Phase 5: Follow-up Enhancements (Added 2026-01-29)
+
+**Goal:** Polish contact UX with filtering, sorting, and navigation improvements
+
+| Task | Title | Est. | Execution | Files |
+|------|-------|------|-----------|-------|
+| TASK-1769 | Multi-category contact filtering | ~15K | After Phase 4 | New: `src/utils/contactCategoryUtils.ts`, Modify: `EditContactsModal.tsx` |
+| TASK-1770 | Sort contacts by recent communication | ~8K | After TASK-1769 | New: `src/utils/contactSortUtils.ts`, Modify: `EditContactsModal.tsx`, `ContactSearchList.tsx` |
+| TASK-1771 | Unify New Audit modal navigation | ~20K | After TASK-1769 | Modify: `useAuditTransaction.ts`, `AuditTransactionModal.tsx`, `ContactAssignmentStep.tsx` |
+
+**Phase 5 Deliverables:**
+- Multi-category filtering (Imported/Manual/External/Messages)
+- Contacts sorted by most recent communication first
+- Single unified navigation in New Audit modal (no nested buttons)
+
+**Phase 5 Notes:**
+- **TASK-1769**: Code complete, unit tests added, multiple fixes applied (category filter alignment, scroll fix, label changes, external contacts loading). Awaiting user verification.
+- **TASK-1770**: Code complete, integrated into EditContactsModal and ContactSearchList. Awaiting user verification.
+- **TASK-1771**: NOT STARTED - still ready for implementation
+
+---
+
 ## Dependency Graph
 
 ```
@@ -713,6 +735,9 @@ After all tasks complete:
 | 3 | TASK-1766 | MERGED | - | #685 | - |
 | 4 | TASK-1767 | MERGED | - | #686 | - |
 | 4 | TASK-1768 | MERGED | - | #687 | - |
+| 5 | TASK-1769 | TESTING | - | sprint branch | - |
+| 5 | TASK-1770 | TESTING | - | sprint branch | - |
+| 5 | TASK-1771 | READY | - | - | - |
 
 ---
 
