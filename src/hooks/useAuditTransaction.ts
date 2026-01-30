@@ -104,6 +104,10 @@ export interface UseAuditTransactionReturn {
   contactsError: string | null;
   refreshContacts: () => void;
 
+  // Selected contacts for step 2/3 (TASK-1771: lifted to parent for unified navigation)
+  selectedContactIds: string[];
+  setSelectedContactIds: React.Dispatch<React.SetStateAction<string[]>>;
+
   // Setters
   setAddressData: React.Dispatch<React.SetStateAction<AddressData>>;
   setError: React.Dispatch<React.SetStateAction<string | null>>;
@@ -164,6 +168,10 @@ export function useAuditTransaction({
 
   // Contact assignments state
   const [contactAssignments, setContactAssignments] = useState<ContactAssignments>({});
+
+  // Selected contact IDs for step 2/3 (TASK-1771: lifted to parent for unified navigation)
+  // Initialized from existing contactAssignments when editing
+  const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
 
   // Contact loading state (lazy-loaded when reaching step 2)
   // Contacts aren't needed until step 2, so we defer loading to eliminate modal open lag
@@ -232,9 +240,10 @@ export function useAuditTransaction({
     };
   }, []);
 
-  // Lazy load contacts when step changes to 2 (first contact step)
+  // Lazy load contacts when step changes to 2 or 3 (contact steps)
+  // TASK-1771: Contacts are now needed for both step 2 (selection) and step 3 (roles)
   useEffect(() => {
-    if (step === 2 && !contactsLoadedRef.current) {
+    if ((step === 2 || step === 3) && !contactsLoadedRef.current) {
       loadContacts();
     }
   }, [step, loadContacts]);
@@ -312,6 +321,7 @@ export function useAuditTransaction({
     };
 
     // Helper function to populate contact assignments from transaction data
+    // TASK-1771: Also populates selectedContactIds for unified navigation
     const populateContactAssignments = (
       contactAssignmentsData: Array<{
         id: string;
@@ -327,6 +337,8 @@ export function useAuditTransaction({
       }> | undefined,
       suggestedContactsJson: string | undefined
     ) => {
+      const selectedIds = new Set<string>();
+
       if (contactAssignmentsData && contactAssignmentsData.length > 0) {
         // Use actual contact assignments from junction table
         const assignments: ContactAssignments = {};
@@ -346,9 +358,11 @@ export function useAuditTransaction({
               isPrimary: ca.is_primary === 1,
               notes: ca.notes || "",
             });
+            selectedIds.add(ca.contact_id);
           }
         });
         setContactAssignments(assignments);
+        setSelectedContactIds(Array.from(selectedIds));
       } else if (suggestedContactsJson) {
         // Fall back to suggested_contacts JSON for legacy data
         try {
@@ -365,10 +379,12 @@ export function useAuditTransaction({
                   isPrimary: sc.is_primary || false,
                   notes: sc.notes || "",
                 });
+                selectedIds.add(sc.contact_id);
               }
             });
           }
           setContactAssignments(assignments);
+          setSelectedContactIds(Array.from(selectedIds));
         } catch {
           // Invalid JSON, leave assignments empty
         }
@@ -727,9 +743,10 @@ export function useAuditTransaction({
 
   /**
    * Proceed to next step
-   * TASK-1766: Updated to 2-step flow
+   * TASK-1771: Updated to 3-step flow for unified navigation
    * - Step 1: Transaction details (address, type, dates)
-   * - Step 2: Contact assignment (search-first pattern)
+   * - Step 2: Contact selection (search and select contacts)
+   * - Step 3: Role assignment (assign roles to selected contacts)
    * In edit mode, saves directly from step 1 (no contact steps)
    */
   const handleNextStep = useCallback((): void => {
@@ -755,8 +772,13 @@ export function useAuditTransaction({
       } else {
         setStep(2);
       }
-    } else if (step >= 2) {
-      // Step 2: Contact assignment - validate and create
+    } else if (step === 2) {
+      // Step 2: Contact selection - just advance to step 3
+      // Validation for selected contacts is handled by the disabled button state in modal
+      setError(null);
+      setStep(3);
+    } else if (step === 3) {
+      // Step 3: Role assignment - validate and create
       if (
         !contactAssignments[SPECIFIC_ROLES.CLIENT] ||
         contactAssignments[SPECIFIC_ROLES.CLIENT].length === 0
@@ -793,6 +815,10 @@ export function useAuditTransaction({
     contactsLoading,
     contactsError,
     refreshContacts,
+
+    // Selected contacts for step 2/3 (TASK-1771: lifted to parent for unified navigation)
+    selectedContactIds,
+    setSelectedContactIds,
 
     // Setters
     setAddressData,

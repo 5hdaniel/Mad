@@ -124,8 +124,9 @@ describe("AuditTransactionModal", () => {
       expect(screen.getByRole("button", { name: /sale/i })).toBeInTheDocument();
     });
 
-    it("should show progress bar with 2 steps", () => {
-      // TASK-1766: Updated from 3 steps to 2 steps (search-first flow)
+    it("should show progress bar with 3 steps", () => {
+      // TASK-1771: Updated from 2 steps to 3 steps (unified navigation)
+      // Step 1: Address, Step 2: Select Contacts, Step 3: Assign Roles
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
@@ -135,11 +136,10 @@ describe("AuditTransactionModal", () => {
         />,
       );
 
-      // Progress bar shows step numbers (now 2 steps)
+      // Progress bar shows step numbers (now 3 steps)
       expect(screen.getByText("1")).toBeInTheDocument();
       expect(screen.getByText("2")).toBeInTheDocument();
-      // Step 3 should not exist in new flow
-      expect(screen.queryByText("3")).not.toBeInTheDocument();
+      expect(screen.getByText("3")).toBeInTheDocument();
     });
   });
 

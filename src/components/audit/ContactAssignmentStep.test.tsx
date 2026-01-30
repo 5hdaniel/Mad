@@ -1,13 +1,13 @@
 /**
  * Tests for ContactAssignmentStep Component
- * TASK-1766: New Audit Contact Flow (search-first pattern)
+ * TASK-1771: Unified navigation with mode prop
  *
- * Tests the 2-step internal flow:
- * - Step 1: Contact selection (ContactSearchList)
- * - Step 2: Role assignment (ContactRoleRow)
+ * Tests the mode-based views (navigation handled by parent modal):
+ * - mode="select": Contact selection (ContactSearchList)
+ * - mode="roles": Role assignment (ContactRoleRow)
  */
 
-import React from "react";
+import React, { useState } from "react";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
@@ -20,6 +20,54 @@ jest.mock("../../services", () => ({
     create: jest.fn(),
   },
 }));
+
+/**
+ * Wrapper component to manage selectedContactIds state for tests
+ * since the parent now manages this state
+ */
+interface WrapperProps {
+  mode: 'select' | 'roles';
+  initialSelectedIds?: string[];
+  contacts: Contact[];
+  contactAssignments?: Record<string, { contactId: string; isPrimary: boolean; notes: string }[]>;
+  onAssignContact?: jest.Mock;
+  onRemoveContact?: jest.Mock;
+  onRefreshContacts?: jest.Mock;
+  contactsLoading?: boolean;
+  contactsError?: string | null;
+}
+
+function TestWrapper({
+  mode,
+  initialSelectedIds = [],
+  contacts,
+  contactAssignments = {},
+  onAssignContact = jest.fn(),
+  onRemoveContact = jest.fn(),
+  onRefreshContacts = jest.fn(),
+  contactsLoading = false,
+  contactsError = null,
+}: WrapperProps) {
+  const [selectedContactIds, setSelectedContactIds] = useState<string[]>(initialSelectedIds);
+
+  return (
+    <ContactAssignmentStep
+      mode={mode}
+      contacts={contacts}
+      contactAssignments={contactAssignments}
+      onAssignContact={onAssignContact}
+      onRemoveContact={onRemoveContact}
+      userId="user-123"
+      transactionType="purchase"
+      propertyAddress="123 Main St"
+      contactsLoading={contactsLoading}
+      contactsError={contactsError}
+      onRefreshContacts={onRefreshContacts}
+      selectedContactIds={selectedContactIds}
+      onSelectedContactIdsChange={setSelectedContactIds}
+    />
+  );
+}
 
 describe("ContactAssignmentStep", () => {
   const mockContacts: Contact[] = [
@@ -64,40 +112,27 @@ describe("ContactAssignmentStep", () => {
     },
   ];
 
-  const defaultProps = {
-    contactAssignments: {},
-    onAssignContact: jest.fn(),
-    onRemoveContact: jest.fn(),
-    userId: "user-123",
-    transactionType: "purchase",
-    propertyAddress: "123 Main St",
-    contacts: mockContacts,
-    contactsLoading: false,
-    contactsError: null,
-    onRefreshContacts: jest.fn(),
-  };
-
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  describe("Step 1: Contact Selection", () => {
-    it("renders contact selection step by default", () => {
-      render(<ContactAssignmentStep {...defaultProps} />);
+  describe("mode='select': Contact Selection", () => {
+    it("renders contact selection view when mode is select", () => {
+      render(<TestWrapper mode="select" contacts={mockContacts} />);
 
-      expect(screen.getByTestId("contact-assignment-step-1")).toBeInTheDocument();
+      expect(screen.getByTestId("contact-assignment-select")).toBeInTheDocument();
       // Header text "Select Contacts" should be present
       expect(screen.getByRole("heading", { name: /select contacts/i })).toBeInTheDocument();
     });
 
     it("displays ContactSearchList component", () => {
-      render(<ContactAssignmentStep {...defaultProps} />);
+      render(<TestWrapper mode="select" contacts={mockContacts} />);
 
       expect(screen.getByTestId("contact-search-list")).toBeInTheDocument();
     });
 
     it("shows all contacts in the list", () => {
-      render(<ContactAssignmentStep {...defaultProps} />);
+      render(<TestWrapper mode="select" contacts={mockContacts} />);
 
       expect(screen.getByText("John Client")).toBeInTheDocument();
       expect(screen.getByText("Jane Agent")).toBeInTheDocument();
@@ -106,7 +141,7 @@ describe("ContactAssignmentStep", () => {
 
     it("allows selecting multiple contacts", async () => {
       const user = userEvent.setup();
-      render(<ContactAssignmentStep {...defaultProps} />);
+      render(<TestWrapper mode="select" contacts={mockContacts} />);
 
       // Click on contacts to select them
       const johnRow = screen.getByText("John Client").closest("[data-testid^='contact-row-']");
@@ -115,34 +150,29 @@ describe("ContactAssignmentStep", () => {
       if (johnRow) await user.click(johnRow);
       if (janeRow) await user.click(janeRow);
 
-      // Check selection count in button
+      // Check selection count in header
       await waitFor(() => {
-        expect(screen.getByTestId("next-to-roles-button")).toHaveTextContent("2");
+        expect(screen.getByText(/2 selected/i)).toBeInTheDocument();
       });
     });
 
-    it("disables Next button when no contacts selected", () => {
-      render(<ContactAssignmentStep {...defaultProps} />);
+    it("shows selection count when contacts are selected", async () => {
+      render(
+        <TestWrapper
+          mode="select"
+          contacts={mockContacts}
+          initialSelectedIds={["contact-1", "contact-2"]}
+        />
+      );
 
-      const nextButton = screen.getByTestId("next-to-roles-button");
-      expect(nextButton).toBeDisabled();
-    });
-
-    it("enables Next button when contacts are selected", async () => {
-      const user = userEvent.setup();
-      render(<ContactAssignmentStep {...defaultProps} />);
-
-      // Select a contact
-      const johnRow = screen.getByText("John Client").closest("[data-testid^='contact-row-']");
-      if (johnRow) await user.click(johnRow);
-
-      await waitFor(() => {
-        expect(screen.getByTestId("next-to-roles-button")).not.toBeDisabled();
-      });
+      // Should show selection count
+      expect(screen.getByText(/2 selected/i)).toBeInTheDocument();
     });
 
     it("shows loading state when contacts are loading", () => {
-      render(<ContactAssignmentStep {...defaultProps} contactsLoading={true} />);
+      render(
+        <TestWrapper mode="select" contacts={mockContacts} contactsLoading={true} />
+      );
 
       // Loading message appears in multiple places
       const loadingMessages = screen.getAllByText(/loading contacts/i);
@@ -151,8 +181,9 @@ describe("ContactAssignmentStep", () => {
 
     it("shows error state when there is an error", () => {
       render(
-        <ContactAssignmentStep
-          {...defaultProps}
+        <TestWrapper
+          mode="select"
+          contacts={mockContacts}
           contactsError="Failed to load contacts"
         />
       );
@@ -162,65 +193,48 @@ describe("ContactAssignmentStep", () => {
       expect(errorMessages.length).toBeGreaterThan(0);
     });
 
-    it("initializes selection from existing contactAssignments", () => {
-      const propsWithAssignments = {
-        ...defaultProps,
-        contactAssignments: {
-          client: [{ contactId: "contact-1", isPrimary: false, notes: "" }],
-        },
-      };
+    it("does not render internal navigation buttons (parent controls navigation)", () => {
+      render(<TestWrapper mode="select" contacts={mockContacts} />);
 
-      render(<ContactAssignmentStep {...propsWithAssignments} />);
-
-      // Button should show 1 selected
-      expect(screen.getByTestId("next-to-roles-button")).toHaveTextContent("1");
+      // No internal "Next" button - parent modal has the navigation
+      expect(screen.queryByTestId("next-to-roles-button")).not.toBeInTheDocument();
     });
   });
 
-  describe("Step 1 to Step 2 Transition", () => {
-    it("advances to step 2 when Next is clicked", async () => {
-      const user = userEvent.setup();
-      render(<ContactAssignmentStep {...defaultProps} />);
+  describe("Mode switching (parent-controlled)", () => {
+    // TASK-1771: Navigation is now controlled by the parent modal
+    // These tests verify that the component renders correctly for each mode
 
-      // Select a contact
-      const johnRow = screen.getByText("John Client").closest("[data-testid^='contact-row-']");
-      if (johnRow) await user.click(johnRow);
+    it("renders select view when mode=select", () => {
+      render(<TestWrapper mode="select" contacts={mockContacts} />);
 
-      // Click Next
-      const nextButton = screen.getByTestId("next-to-roles-button");
-      await user.click(nextButton);
+      expect(screen.getByTestId("contact-assignment-select")).toBeInTheDocument();
+      expect(screen.queryByTestId("contact-assignment-roles")).not.toBeInTheDocument();
+    });
 
-      // Should now be on step 2
-      await waitFor(() => {
-        expect(screen.getByTestId("contact-assignment-step-2")).toBeInTheDocument();
-      });
+    it("renders roles view when mode=roles", () => {
+      render(
+        <TestWrapper
+          mode="roles"
+          contacts={mockContacts}
+          initialSelectedIds={["contact-1"]}
+        />
+      );
+
+      expect(screen.getByTestId("contact-assignment-roles")).toBeInTheDocument();
+      expect(screen.queryByTestId("contact-assignment-select")).not.toBeInTheDocument();
     });
   });
 
-  describe("Step 2: Role Assignment", () => {
-    const renderAtStep2 = async () => {
-      const user = userEvent.setup();
-      const result = render(<ContactAssignmentStep {...defaultProps} />);
-
-      // Select contacts and advance to step 2
-      const johnRow = screen.getByText("John Client").closest("[data-testid^='contact-row-']");
-      const janeRow = screen.getByText("Jane Agent").closest("[data-testid^='contact-row-']");
-
-      if (johnRow) await user.click(johnRow);
-      if (janeRow) await user.click(janeRow);
-
-      const nextButton = screen.getByTestId("next-to-roles-button");
-      await user.click(nextButton);
-
-      await waitFor(() => {
-        expect(screen.getByTestId("contact-assignment-step-2")).toBeInTheDocument();
-      });
-
-      return { ...result, user };
-    };
-
-    it("shows selected contacts with role dropdowns", async () => {
-      await renderAtStep2();
+  describe("mode='roles': Role Assignment", () => {
+    it("shows selected contacts with role dropdowns", () => {
+      render(
+        <TestWrapper
+          mode="roles"
+          contacts={mockContacts}
+          initialSelectedIds={["contact-1", "contact-2"]}
+        />
+      );
 
       // Should show both selected contacts
       expect(screen.getByText("John Client")).toBeInTheDocument();
@@ -231,8 +245,14 @@ describe("ContactAssignmentStep", () => {
       expect(screen.getByTestId("role-select-contact-2")).toBeInTheDocument();
     });
 
-    it("displays assigned count", async () => {
-      await renderAtStep2();
+    it("displays assigned count", () => {
+      render(
+        <TestWrapper
+          mode="roles"
+          contacts={mockContacts}
+          initialSelectedIds={["contact-1", "contact-2"]}
+        />
+      );
 
       // Initially 0 of 2 have roles assigned
       expect(screen.getByText(/0 of 2 contacts? have roles assigned/i)).toBeInTheDocument();
@@ -243,19 +263,13 @@ describe("ContactAssignmentStep", () => {
       const user = userEvent.setup();
 
       render(
-        <ContactAssignmentStep {...defaultProps} onAssignContact={onAssignContact} />
+        <TestWrapper
+          mode="roles"
+          contacts={mockContacts}
+          initialSelectedIds={["contact-1"]}
+          onAssignContact={onAssignContact}
+        />
       );
-
-      // Select and advance to step 2
-      const johnRow = screen.getByText("John Client").closest("[data-testid^='contact-row-']");
-      if (johnRow) await user.click(johnRow);
-
-      const nextButton = screen.getByTestId("next-to-roles-button");
-      await user.click(nextButton);
-
-      await waitFor(() => {
-        expect(screen.getByTestId("contact-assignment-step-2")).toBeInTheDocument();
-      });
 
       // Select a role for the contact
       const roleSelect = screen.getByTestId("role-select-contact-1");
@@ -265,8 +279,14 @@ describe("ContactAssignmentStep", () => {
       expect(onAssignContact).toHaveBeenCalledWith("client", "contact-1", false, "");
     });
 
-    it("shows role options based on transaction type", async () => {
-      await renderAtStep2();
+    it("shows role options based on transaction type", () => {
+      render(
+        <TestWrapper
+          mode="roles"
+          contacts={mockContacts}
+          initialSelectedIds={["contact-1"]}
+        />
+      );
 
       const roleSelect = screen.getByTestId("role-select-contact-1");
 
@@ -278,67 +298,41 @@ describe("ContactAssignmentStep", () => {
       const options = within(roleSelect).getAllByRole("option");
       expect(options.length).toBeGreaterThan(1); // At least "Select role..." + some roles
     });
-  });
 
-  describe("Navigation", () => {
-    it("Back button returns to step 1", async () => {
-      const user = userEvent.setup();
-      render(<ContactAssignmentStep {...defaultProps} />);
+    it("shows empty state when no contacts selected", () => {
+      render(
+        <TestWrapper
+          mode="roles"
+          contacts={mockContacts}
+          initialSelectedIds={[]}
+        />
+      );
 
-      // Navigate to step 2
-      const johnRow = screen.getByText("John Client").closest("[data-testid^='contact-row-']");
-      if (johnRow) await user.click(johnRow);
-
-      const nextButton = screen.getByTestId("next-to-roles-button");
-      await user.click(nextButton);
-
-      await waitFor(() => {
-        expect(screen.getByTestId("contact-assignment-step-2")).toBeInTheDocument();
-      });
-
-      // Click Back
-      const backButton = screen.getByTestId("back-to-select-button");
-      await user.click(backButton);
-
-      // Should be back on step 1
-      await waitFor(() => {
-        expect(screen.getByTestId("contact-assignment-step-1")).toBeInTheDocument();
-      });
+      expect(screen.getByText(/no contacts selected/i)).toBeInTheDocument();
+      expect(screen.getByText(/use the back button/i)).toBeInTheDocument();
     });
 
-    it("preserves selection when going back", async () => {
-      const user = userEvent.setup();
-      render(<ContactAssignmentStep {...defaultProps} />);
+    it("does not render internal navigation buttons (parent controls navigation)", () => {
+      render(
+        <TestWrapper
+          mode="roles"
+          contacts={mockContacts}
+          initialSelectedIds={["contact-1"]}
+        />
+      );
 
-      // Select contacts
-      const johnRow = screen.getByText("John Client").closest("[data-testid^='contact-row-']");
-      const janeRow = screen.getByText("Jane Agent").closest("[data-testid^='contact-row-']");
-
-      if (johnRow) await user.click(johnRow);
-      if (janeRow) await user.click(janeRow);
-
-      // Navigate to step 2 and back
-      const nextButton = screen.getByTestId("next-to-roles-button");
-      await user.click(nextButton);
-
-      await waitFor(() => {
-        expect(screen.getByTestId("contact-assignment-step-2")).toBeInTheDocument();
-      });
-
-      const backButton = screen.getByTestId("back-to-select-button");
-      await user.click(backButton);
-
-      // Selection should be preserved
-      await waitFor(() => {
-        expect(screen.getByTestId("next-to-roles-button")).toHaveTextContent("2");
-      });
+      // No internal "Back to Select" button - parent modal has the navigation
+      expect(screen.queryByTestId("back-to-select-button")).not.toBeInTheDocument();
     });
   });
 
-  describe("Search functionality", () => {
+  // TASK-1771: Navigation tests removed - navigation is now handled by parent modal
+  // The parent modal manages step changes via the mode prop
+
+  describe("Search functionality (mode=select)", () => {
     it("filters contacts based on search query", async () => {
       const user = userEvent.setup();
-      render(<ContactAssignmentStep {...defaultProps} />);
+      render(<TestWrapper mode="select" contacts={mockContacts} />);
 
       const searchInput = screen.getByTestId("contact-search-input");
       await user.type(searchInput, "John");
@@ -351,7 +345,7 @@ describe("ContactAssignmentStep", () => {
 
     it("shows all contacts when search is cleared", async () => {
       const user = userEvent.setup();
-      render(<ContactAssignmentStep {...defaultProps} />);
+      render(<TestWrapper mode="select" contacts={mockContacts} />);
 
       const searchInput = screen.getByTestId("contact-search-input");
       await user.type(searchInput, "John");
@@ -365,35 +359,32 @@ describe("ContactAssignmentStep", () => {
   });
 
   describe("Empty states", () => {
-    it("shows empty state when no contacts are available", () => {
-      render(<ContactAssignmentStep {...defaultProps} contacts={[]} />);
+    it("shows empty state when no contacts are available (mode=select)", () => {
+      render(<TestWrapper mode="select" contacts={[]} />);
 
       expect(screen.getByTestId("empty-state")).toBeInTheDocument();
     });
 
-    it("shows message when no contacts selected and on step 2", async () => {
-      // This shouldn't normally happen since button is disabled,
-      // but test the state if it occurs
-      const propsWithSelection = {
-        ...defaultProps,
-        contactAssignments: {},
-      };
+    it("shows message when no contacts selected (mode=roles)", () => {
+      render(
+        <TestWrapper
+          mode="roles"
+          contacts={mockContacts}
+          initialSelectedIds={[]}
+        />
+      );
 
-      // Start at step 1 with a contact selected, then deselect
-      const user = userEvent.setup();
-      render(<ContactAssignmentStep {...propsWithSelection} />);
+      expect(screen.getByText(/no contacts selected/i)).toBeInTheDocument();
+    });
 
-      // Select a contact
-      const johnRow = screen.getByText("John Client").closest("[data-testid^='contact-row-']");
-      if (johnRow) await user.click(johnRow);
-
-      // Navigate to step 2
-      const nextButton = screen.getByTestId("next-to-roles-button");
-      await user.click(nextButton);
-
-      await waitFor(() => {
-        expect(screen.getByTestId("contact-assignment-step-2")).toBeInTheDocument();
-      });
+    it("shows selected contacts in roles mode", () => {
+      render(
+        <TestWrapper
+          mode="roles"
+          contacts={mockContacts}
+          initialSelectedIds={["contact-1"]}
+        />
+      );
 
       // Should show the contact (John Client)
       expect(screen.getByText("John Client")).toBeInTheDocument();
