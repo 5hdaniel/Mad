@@ -631,13 +631,7 @@ export async function getContactsSortedByActivity(
       c.display_name as name,
       ce_primary.email as email,
       cp_primary.phone_e164 as phone,
-      CASE
-        WHEN MAX(e.sent_at) IS NULL AND MAX(m.sent_at) IS NULL THEN NULL
-        WHEN MAX(e.sent_at) IS NULL THEN MAX(m.sent_at)
-        WHEN MAX(m.sent_at) IS NULL THEN MAX(e.sent_at)
-        WHEN MAX(e.sent_at) > MAX(m.sent_at) THEN MAX(e.sent_at)
-        ELSE MAX(m.sent_at)
-      END as last_communication_at,
+      MAX(m.sent_at) as last_communication_at,
       COUNT(DISTINCT comm.id) as communication_count,
       ${
         propertyAddress
