@@ -665,8 +665,8 @@ export async function getContactsSortedByActivity(
         -- Match using last 10 digits after stripping all non-digit characters
         -- participants_flat stores digits only (e.g., "14155550000,14155551111")
         -- phone_e164 may have formatting (e.g., "+1 415 555 0000" or "+14155550000")
-        m.participants_flat LIKE '%' || SUBSTR(REPLACE(REPLACE(REPLACE(REPLACE(cp_all.phone_e164, '+', ''), '-', ''), ' ', ''), '(', ''), -10) || '%'
-        OR (cp_all.phone_display IS NOT NULL AND m.participants_flat LIKE '%' || SUBSTR(REPLACE(REPLACE(REPLACE(REPLACE(cp_all.phone_display, '+', ''), '-', ''), ' ', ''), '(', ''), -10) || '%')
+        m.participants_flat LIKE '%' || SUBSTR(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(cp_all.phone_e164, '+', ''), '-', ''), ' ', ''), '(', ''), ')', ''), -10) || '%'
+        OR (cp_all.phone_display IS NOT NULL AND m.participants_flat LIKE '%' || SUBSTR(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(cp_all.phone_display, '+', ''), '-', ''), ' ', ''), '(', ''), ')', ''), -10) || '%')
       )
       AND m.user_id = c.user_id
     )
