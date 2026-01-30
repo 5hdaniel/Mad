@@ -29,6 +29,8 @@ beforeAll(() => {
 });
 
 // Mock ContactsContext
+// Use source: "contacts_app" to mark as imported (not message-derived)
+// This ensures contacts show by default with the category filter
 const mockContacts: ExtendedContact[] = [
   {
     id: "contact-1",
@@ -36,7 +38,7 @@ const mockContacts: ExtendedContact[] = [
     display_name: "John Smith",
     email: "john@example.com",
     user_id: "user-1",
-    source: "email",
+    source: "contacts_app",
     created_at: "2024-01-01",
     updated_at: "2024-01-01",
   },
@@ -46,7 +48,7 @@ const mockContacts: ExtendedContact[] = [
     display_name: "Jane Doe",
     email: "jane@example.com",
     user_id: "user-1",
-    source: "email",
+    source: "contacts_app",
     created_at: "2024-01-01",
     updated_at: "2024-01-01",
   },
@@ -56,7 +58,7 @@ const mockContacts: ExtendedContact[] = [
     display_name: "Bob Wilson",
     email: "bob@example.com",
     user_id: "user-1",
-    source: "email",
+    source: "contacts_app",
     created_at: "2024-01-01",
     updated_at: "2024-01-01",
   },
@@ -298,7 +300,16 @@ describe("EditContactsModal", () => {
       expect(select).toHaveValue("inspector");
     });
 
-    it('shows "Add Contacts" button in footer', async () => {
+    it('shows "Add Contacts" button when contacts are assigned', async () => {
+      mockGetDetails.mockResolvedValue({
+        success: true,
+        transaction: {
+          contact_assignments: [
+            { id: "a1", contact_id: "contact-1", role: "client" },
+          ],
+        },
+      });
+
       render(<EditContactsModal {...createDefaultProps()} />);
 
       await waitFor(() => {
@@ -309,6 +320,15 @@ describe("EditContactsModal", () => {
 
   describe("Screen 2: Add Contacts Modal", () => {
     it('opens when "Add Contacts" button clicked', async () => {
+      mockGetDetails.mockResolvedValue({
+        success: true,
+        transaction: {
+          contact_assignments: [
+            { id: "a1", contact_id: "contact-1", role: "client" },
+          ],
+        },
+      });
+
       const user = userEvent.setup();
       render(<EditContactsModal {...createDefaultProps()} />);
 
@@ -344,10 +364,10 @@ describe("EditContactsModal", () => {
       render(<EditContactsModal {...createDefaultProps()} />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("add-contacts-button")).toBeInTheDocument();
+        expect(screen.getByTestId("empty-state-add-button")).toBeInTheDocument();
       });
 
-      await user.click(screen.getByTestId("add-contacts-button"));
+      await user.click(screen.getByTestId("empty-state-add-button"));
 
       expect(screen.getByTestId("contact-search-list")).toBeInTheDocument();
     });
@@ -389,10 +409,10 @@ describe("EditContactsModal", () => {
       render(<EditContactsModal {...createDefaultProps()} />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("add-contacts-button")).toBeInTheDocument();
+        expect(screen.getByTestId("empty-state-add-button")).toBeInTheDocument();
       });
 
-      await user.click(screen.getByTestId("add-contacts-button"));
+      await user.click(screen.getByTestId("empty-state-add-button"));
       expect(screen.getByTestId("add-contacts-overlay")).toBeInTheDocument();
 
       await user.click(screen.getByTestId("add-contacts-overlay-cancel"));
@@ -407,10 +427,10 @@ describe("EditContactsModal", () => {
       render(<EditContactsModal {...createDefaultProps()} />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("add-contacts-button")).toBeInTheDocument();
+        expect(screen.getByTestId("empty-state-add-button")).toBeInTheDocument();
       });
 
-      await user.click(screen.getByTestId("add-contacts-button"));
+      await user.click(screen.getByTestId("empty-state-add-button"));
       await user.click(screen.getByTestId("add-contacts-overlay-close"));
 
       expect(
@@ -423,10 +443,10 @@ describe("EditContactsModal", () => {
       render(<EditContactsModal {...createDefaultProps()} />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("add-contacts-button")).toBeInTheDocument();
+        expect(screen.getByTestId("empty-state-add-button")).toBeInTheDocument();
       });
 
-      await user.click(screen.getByTestId("add-contacts-button"));
+      await user.click(screen.getByTestId("empty-state-add-button"));
 
       expect(screen.getByTestId("add-selected-button")).toBeDisabled();
       expect(screen.getByTestId("add-selected-button")).toHaveTextContent(
@@ -439,10 +459,10 @@ describe("EditContactsModal", () => {
       render(<EditContactsModal {...createDefaultProps()} />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("add-contacts-button")).toBeInTheDocument();
+        expect(screen.getByTestId("empty-state-add-button")).toBeInTheDocument();
       });
 
-      await user.click(screen.getByTestId("add-contacts-button"));
+      await user.click(screen.getByTestId("empty-state-add-button"));
       await user.click(screen.getByTestId("search-contact-contact-2"));
 
       expect(screen.getByTestId("add-selected-button")).not.toBeDisabled();
@@ -457,13 +477,13 @@ describe("EditContactsModal", () => {
       const user = userEvent.setup();
       render(<EditContactsModal {...createDefaultProps()} />);
 
-      // Wait for initial load
+      // Wait for initial load (empty state)
       await waitFor(() => {
-        expect(screen.getByTestId("add-contacts-button")).toBeInTheDocument();
+        expect(screen.getByTestId("empty-state-add-button")).toBeInTheDocument();
       });
 
       // Open add modal
-      await user.click(screen.getByTestId("add-contacts-button"));
+      await user.click(screen.getByTestId("empty-state-add-button"));
 
       // Select contact-2
       await user.click(screen.getByTestId("search-contact-contact-2"));
@@ -490,11 +510,11 @@ describe("EditContactsModal", () => {
       render(<EditContactsModal {...createDefaultProps({ onSave })} />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("add-contacts-button")).toBeInTheDocument();
+        expect(screen.getByTestId("empty-state-add-button")).toBeInTheDocument();
       });
 
       // Add a contact
-      await user.click(screen.getByTestId("add-contacts-button"));
+      await user.click(screen.getByTestId("empty-state-add-button"));
       await user.click(screen.getByTestId("search-contact-contact-1"));
       await user.click(screen.getByTestId("add-selected-button"));
 
