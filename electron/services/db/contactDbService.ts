@@ -112,6 +112,7 @@ export function getMessageDerivedContacts(userId: string): MessageDerivedContact
       AND json_extract(participants, '$.from') NOT LIKE '%@%'
       AND json_extract(participants, '$.from') NOT LIKE '+%'
       AND json_extract(participants, '$.from') NOT GLOB '[0-9]*'
+      AND json_extract(participants, '$.from') NOT LIKE 'urn:%'
     GROUP BY LOWER(json_extract(participants, '$.from'))
     ORDER BY last_communication_at DESC
     LIMIT 200
@@ -661,8 +662,8 @@ export async function getContactsSortedByActivity(
       cp_all.phone_e164 IS NOT NULL
       AND (m.channel = 'sms' OR m.channel = 'imessage')
       AND (
-        m.participants_flat LIKE '%' || cp_all.phone_e164 || '%'
-        OR (cp_all.phone_display IS NOT NULL AND m.participants_flat LIKE '%' || cp_all.phone_display || '%')
+        m.participants_flat LIKE '%' || REPLACE(cp_all.phone_e164, '+', '') || '%'
+        OR (cp_all.phone_display IS NOT NULL AND m.participants_flat LIKE '%' || REPLACE(cp_all.phone_display, ' ', '') || '%')
       )
       AND m.user_id = c.user_id
     )
@@ -1286,6 +1287,7 @@ export function searchContactsForSelection(
       AND json_extract(participants, '$.from') NOT LIKE '%@%'
       AND json_extract(participants, '$.from') NOT LIKE '+%'
       AND json_extract(participants, '$.from') NOT GLOB '[0-9]*'
+      AND json_extract(participants, '$.from') NOT LIKE 'urn:%'
       -- Search filter
       AND json_extract(participants, '$.from') LIKE ?
     GROUP BY LOWER(json_extract(participants, '$.from'))
