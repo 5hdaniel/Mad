@@ -21,12 +21,17 @@ interface LicenseGateProps {
 
 /**
  * LicenseGate wraps the app content and shows blocking screens when license is invalid
+ *
+ * SPRINT-066: Only show loading screen on initial load (before first successful validation).
+ * Background refreshes (e.g., on window focus) no longer show loading screen or unmount children.
+ * This fixes the bug where modals would close when switching apps.
  */
 export function LicenseGate({ children }: LicenseGateProps): React.ReactElement {
-  const { validationStatus, isLoading, isValid, blockReason } = useLicense();
+  const { validationStatus, isLoading, hasInitialized, isValid, blockReason } = useLicense();
 
-  // Show loading while checking license
-  if (isLoading) {
+  // Show loading ONLY on initial load (before first successful validation)
+  // Once initialized, background refreshes happen silently without unmounting children
+  if (isLoading && !hasInitialized) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
         <div className="text-center">
