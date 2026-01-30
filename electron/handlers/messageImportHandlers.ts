@@ -8,6 +8,7 @@ import type { IpcMainInvokeEvent } from "electron";
 import logService from "../services/logService";
 import databaseService from "../services/databaseService";
 import macOSMessagesImportService from "../services/macOSMessagesImportService";
+import * as externalContactDb from "../services/db/externalContactDbService";
 import type {
   MacOSImportResult,
   ImportProgressCallback,
@@ -126,6 +127,52 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
               duration: result.duration,
             }
           );
+
+          // Update contact communication dates from imported messages
+          // This enables sorting contacts by recent communication
+          try {
+            const backfillCount = await databaseService.backfillContactCommunicationDates(validUserId);
+            logService.info(
+              `Contact communication dates updated`,
+              "MessageImportHandlers",
+              { updatedContacts: backfillCount }
+            );
+          } catch (backfillError) {
+            logService.warn(
+              `Failed to update contact communication dates: ${backfillError}`,
+              "MessageImportHandlers"
+            );
+          }
+
+          // Update phone_last_message lookup table for fast external contact sorting (BACKLOG-567)
+          try {
+            const phoneCount = await databaseService.backfillPhoneLastMessageTable(validUserId);
+            logService.info(
+              `Phone last message lookup table updated`,
+              "MessageImportHandlers",
+              { phonesUpdated: phoneCount }
+            );
+          } catch (phoneBackfillError) {
+            logService.warn(
+              `Failed to update phone last message table: ${phoneBackfillError}`,
+              "MessageImportHandlers"
+            );
+          }
+
+          // TASK-1773: Update external_contacts last_message_at from phone_last_message lookup
+          try {
+            const externalUpdatedCount = externalContactDb.updateLastMessageAtFromLookupTable(validUserId);
+            logService.info(
+              `External contacts last_message_at updated`,
+              "MessageImportHandlers",
+              { updatedContacts: externalUpdatedCount }
+            );
+          } catch (externalUpdateError) {
+            logService.warn(
+              `Failed to update external contacts dates: ${externalUpdateError}`,
+              "MessageImportHandlers"
+            );
+          }
         } else {
           logService.error(
             `macOS Messages import failed: ${result.error}`,
