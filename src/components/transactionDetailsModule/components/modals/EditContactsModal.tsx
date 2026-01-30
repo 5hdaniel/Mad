@@ -164,6 +164,24 @@ export function EditContactsModal({
     }
   };
 
+  // Remove a contact from the transaction
+  const handleRemoveContact = useCallback((contactId: string) => {
+    // Remove from assignedContactIds
+    setAssignedContactIds((prev) => prev.filter((id) => id !== contactId));
+
+    // Remove from all role assignments
+    setRoleAssignments((prev) => {
+      const updated: RoleAssignments = {};
+      for (const [role, ids] of Object.entries(prev)) {
+        const filteredIds = ids.filter((id) => id !== contactId);
+        if (filteredIds.length > 0) {
+          updated[role] = filteredIds;
+        }
+      }
+      return updated;
+    });
+  }, []);
+
   const handleSave = async () => {
     setSaving(true);
     setError(null);
@@ -309,6 +327,7 @@ export function EditContactsModal({
                 roleAssignments={roleAssignments}
                 onRoleAssignmentsChange={setRoleAssignments}
                 onOpenAddModal={() => setShowAddModal(true)}
+                onRemoveContact={handleRemoveContact}
               />
             </ContactsProvider>
           )}
@@ -376,6 +395,7 @@ interface Screen1ContentProps {
   roleAssignments: RoleAssignments;
   onRoleAssignmentsChange: (assignments: RoleAssignments) => void;
   onOpenAddModal: () => void;
+  onRemoveContact: (contactId: string) => void;
 }
 
 /**
@@ -387,6 +407,7 @@ function Screen1Content({
   roleAssignments,
   onRoleAssignmentsChange,
   onOpenAddModal,
+  onRemoveContact,
 }: Screen1ContentProps): React.ReactElement {
   const { contacts, loading: contactsLoading, error: contactsError } = useContacts();
 
@@ -553,6 +574,7 @@ function Screen1Content({
             currentRole={getContactRole(contact.id)}
             roleOptions={roleOptions}
             onRoleChange={(role) => handleRoleChange(contact.id, role)}
+            onRemove={() => onRemoveContact(contact.id)}
           />
         ))}
       </div>

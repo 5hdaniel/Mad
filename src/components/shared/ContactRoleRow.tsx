@@ -20,6 +20,8 @@ export interface ContactRoleRowProps {
   roleOptions: RoleOption[];
   /** Callback when role changes */
   onRoleChange: (role: string) => void;
+  /** Callback when remove button is clicked (optional - hides button if not provided) */
+  onRemove?: () => void;
   /** Additional CSS classes */
   className?: string;
 }
@@ -111,6 +113,7 @@ export function ContactRoleRow({
   currentRole,
   roleOptions,
   onRoleChange,
+  onRemove,
   className = "",
 }: ContactRoleRowProps): React.ReactElement {
   const displayName = getDisplayName(contact);
@@ -172,6 +175,21 @@ export function ContactRoleRow({
           </option>
         ))}
       </select>
+
+      {/* Remove Button */}
+      {onRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors flex-shrink-0"
+          aria-label={`Remove ${displayName} from transaction`}
+          data-testid={`remove-contact-${contact.id}`}
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }
