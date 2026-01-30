@@ -10,6 +10,7 @@ import databaseService, { TransactionWithRoles as DbTransactionWithRoles } from 
 import { getContactNames } from "./services/contactsService";
 import auditService from "./services/auditService";
 import logService from "./services/logService";
+import * as externalContactDb from "./services/db/externalContactDbService";
 import type { Contact, Transaction } from "./types/models";
 
 // Import validation utilities
@@ -108,6 +109,7 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
   );
 
   // Get available contacts for import (from external sources + unimported DB contacts)
+  // TASK-1773: Uses external_contacts shadow table for instant loading
   ipcMain.handle(
     "contacts:get-available",
     async (
@@ -116,7 +118,7 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
     ): Promise<ContactResponse> => {
       try {
         logService.info(
-          "[Main] Getting available contacts for import",
+          "[Main] Getting available contacts for import (shadow table)",
           "Contacts",
           { userId },
         );
@@ -130,10 +132,7 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           };
         }
 
-        // Get contacts from macOS Contacts app
-        const { phoneToContactInfo, status } = await getContactNames();
-
-        // Get already imported contact names/emails to filter them out
+        // Get already imported contact identifiers to filter them out
         const importedContacts =
           await databaseService.getImportedContactsByUserId(validatedUserId);
         const importedNames = new Set(
@@ -287,99 +286,194 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           // Mark this contact's identifiers as seen
           markAsSeen(dbContact);
 
-          // Try to find additional data from macOS Contacts by matching name
-          const macOsMatch = phoneToContactInfo
-            ? Object.values(phoneToContactInfo).find(
-                (c) => c.name?.toLowerCase() === dbContact.display_name?.toLowerCase()
-              )
-            : null;
-
           availableContacts.push({
             id: dbContact.id, // Use actual DB ID so we can mark as imported
             name: dbContact.name || dbContact.display_name,
             phone: dbContact.phone || null,
-            email: dbContact.email || macOsMatch?.emails?.[0] || null,
+            email: dbContact.email || null,
             company: dbContact.company || null,
             source: dbContact.source || "contacts_app",
             isFromDatabase: true, // Flag to distinguish from macOS Contacts app
-            // Include all phones/emails from macOS Contacts for backfilling
-            allPhones: macOsMatch?.phones || [],
-            allEmails: macOsMatch?.emails || [],
+            allPhones: [],
+            allEmails: [],
           });
         }
 
-        // STEP 2: Add contacts from macOS Contacts app (if not already in list)
-        if (phoneToContactInfo && Object.keys(phoneToContactInfo).length > 0) {
-          for (const [_phone, contactInfo] of Object.entries(
-            phoneToContactInfo,
-          )) {
-            const nameLower = contactInfo.name?.toLowerCase();
-            const primaryEmail = contactInfo.emails?.[0]?.toLowerCase();
+        // STEP 2: TASK-1773 - Read from external_contacts shadow table
+        // Check if shadow table is populated, if not trigger background sync
+        const cachedCount = externalContactDb.getCount(validatedUserId);
 
-            // Skip if already imported (by name or email)
-            if (
-              importedNames.has(nameLower) ||
-              (primaryEmail && importedEmails.has(primaryEmail))
-            ) {
-              continue;
+        if (cachedCount === 0) {
+          // Shadow table is empty - need initial population
+          // Do blocking sync on first load only (non-blocking after)
+          logService.info(
+            "[Main] External contacts shadow table empty, doing initial sync",
+            "Contacts",
+          );
+
+          try {
+            // Read from macOS Contacts API
+            const { phoneToContactInfo } = await getContactNames();
+
+            if (phoneToContactInfo && Object.keys(phoneToContactInfo).length > 0) {
+              // Convert to MacOSContact format
+              const macOSContacts: externalContactDb.MacOSContact[] = [];
+              for (const [_phone, contactInfo] of Object.entries(phoneToContactInfo)) {
+                macOSContacts.push({
+                  name: contactInfo.name,
+                  phones: contactInfo.phones,
+                  emails: contactInfo.emails,
+                  company: contactInfo.company,
+                  recordId: contactInfo.recordId || `auto-${randomUUID().slice(0, 8)}`,
+                });
+              }
+
+              // Full sync: upsert + delete stale + update dates
+              externalContactDb.fullSync(validatedUserId, macOSContacts);
             }
+          } catch (syncErr) {
+            logService.warn(`[Main] Initial external contacts sync failed: ${syncErr}`, "Contacts");
+          }
+        } else if (externalContactDb.isStale(validatedUserId, 24)) {
+          // Shadow table has data but is stale - trigger background sync
+          // SR Engineer requirement: Non-blocking first load
+          logService.info(
+            "[Main] External contacts shadow table stale, triggering background sync",
+            "Contacts",
+          );
 
-            // Check if already imported by phone
-            if (contactInfo.phones) {
-              let phoneAlreadyImported = false;
-              for (const phone of contactInfo.phones) {
-                const normalized = normalizePhoneNumber(phone);
-                if (
-                  normalized &&
-                  normalized !== "+" &&
-                  importedPhones.has(normalized)
-                ) {
-                  phoneAlreadyImported = true;
-                  break;
+          setImmediate(async () => {
+            try {
+              const { phoneToContactInfo } = await getContactNames();
+
+              if (phoneToContactInfo && Object.keys(phoneToContactInfo).length > 0) {
+                const macOSContacts: externalContactDb.MacOSContact[] = [];
+                for (const [_phone, contactInfo] of Object.entries(phoneToContactInfo)) {
+                  macOSContacts.push({
+                    name: contactInfo.name,
+                    phones: contactInfo.phones,
+                    emails: contactInfo.emails,
+                    company: contactInfo.company,
+                    recordId: contactInfo.recordId || `auto-${randomUUID().slice(0, 8)}`,
+                  });
+                }
+
+                externalContactDb.fullSync(validatedUserId, macOSContacts);
+
+                // Notify renderer that sync is complete
+                if (_mainWindow && !_mainWindow.isDestroyed()) {
+                  _mainWindow.webContents.send("contacts:external-sync-complete");
                 }
               }
-              if (phoneAlreadyImported) continue;
+            } catch (err) {
+              logService.warn(`[Main] Background external contacts sync failed: ${err}`, "Contacts");
             }
-
-            // Create a temp object for deduplication check
-            const macOsContact = {
-              name: contactInfo.name,
-              email: contactInfo.emails?.[0] || null,
-              emails: contactInfo.emails,
-              phone: contactInfo.phones?.[0] || null,
-              phones: contactInfo.phones,
-            };
-
-            // Skip if already added from iPhone-synced contacts (by email, phone, or name)
-            if (isDuplicate(macOsContact)) {
-              continue;
-            }
-
-            // Mark this contact's identifiers as seen
-            markAsSeen(macOsContact);
-
-            availableContacts.push({
-              id: `contacts-app-${randomUUID()}`, // Unique ID for UI (names aren't unique)
-              name: contactInfo.name,
-              phone: contactInfo.phones?.[0] || null, // Primary phone
-              email: contactInfo.emails?.[0] || null, // Primary email
-              source: "contacts_app",
-              allPhones: contactInfo.phones || [],
-              allEmails: contactInfo.emails || [],
-              isFromDatabase: false,
-            });
-          }
+          });
         }
+
+        // Read from shadow table (already sorted by last_message_at DESC, NULLS LAST)
+        const externalContacts = externalContactDb.getAllForUser(validatedUserId);
+
+        logService.info(
+          `[Main] Read ${externalContacts.length} contacts from shadow table`,
+          "Contacts",
+        );
+
+        // STEP 3: Add external contacts (filtering out already imported)
+        for (const extContact of externalContacts) {
+          const nameLower = extContact.name?.toLowerCase();
+          const primaryEmail = extContact.emails?.[0]?.toLowerCase();
+
+          // Skip if already imported (by name or email)
+          if (
+            importedNames.has(nameLower) ||
+            (primaryEmail && importedEmails.has(primaryEmail))
+          ) {
+            continue;
+          }
+
+          // Check if already imported by phone
+          if (extContact.phones && extContact.phones.length > 0) {
+            let phoneAlreadyImported = false;
+            for (const phone of extContact.phones) {
+              const normalized = normalizePhoneNumber(phone);
+              if (
+                normalized &&
+                normalized !== "+" &&
+                importedPhones.has(normalized)
+              ) {
+                phoneAlreadyImported = true;
+                break;
+              }
+            }
+            if (phoneAlreadyImported) continue;
+          }
+
+          // Create dedup-check object
+          const extContactForDedup = {
+            name: extContact.name,
+            email: extContact.emails?.[0] || null,
+            emails: extContact.emails,
+            phone: extContact.phones?.[0] || null,
+            phones: extContact.phones,
+          };
+
+          // Skip if already added from iPhone-synced contacts
+          if (isDuplicate(extContactForDedup)) {
+            continue;
+          }
+
+          // Mark as seen
+          markAsSeen(extContactForDedup);
+
+          availableContacts.push({
+            id: extContact.id, // Use shadow table ID
+            name: extContact.name,
+            phone: extContact.phones?.[0] || null,
+            email: extContact.emails?.[0] || null,
+            company: extContact.company || null,
+            source: "contacts_app",
+            allPhones: extContact.phones || [],
+            allEmails: extContact.emails || [],
+            isFromDatabase: false,
+            // last_message_at is already computed in shadow table
+            last_communication_at: extContact.last_message_at,
+          });
+        }
+
+        // Contacts are already sorted by last_message_at from shadow table
+        // Just need to ensure the combined list respects the order
+        // Sort the full list: most recent first, then by name
+        availableContacts.sort((a, b) => {
+          const dateA = a.last_communication_at ? new Date(a.last_communication_at).getTime() : 0;
+          const dateB = b.last_communication_at ? new Date(b.last_communication_at).getTime() : 0;
+          if (dateA !== dateB) {
+            return dateB - dateA; // Most recent first
+          }
+          // Secondary sort by name
+          const nameA = (a.name || '').toLowerCase();
+          const nameB = (b.name || '').toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
 
         logService.info(
           `[Main] Found ${availableContacts.length} total available contacts for import`,
           "Contacts",
         );
 
+        // Log top 5 for debugging
+        logService.info("[Main] Top 5 external contacts by last message:", "Contacts", {
+          top5: availableContacts.slice(0, 5).map(c => ({
+            name: c.name,
+            lastMsg: c.last_communication_at,
+            phone: c.phone,
+          })),
+        });
+
         return {
           success: true,
           contacts: availableContacts,
-          contactsStatus: status, // Include loading status
+          contactsStatus: { loaded: true }, // Shadow table always available
         };
       } catch (error) {
         logService.error("[Main] Get available contacts failed:", "Contacts", {
@@ -647,6 +741,20 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         }
         const validatedData = validateContactData(contactData, false);
 
+        // Check for duplicate contact by name (to prevent multiple imports of the same message contact)
+        if (validatedData.name) {
+          const existingByName = await databaseService.findContactByName(
+            validatedUserId,
+            validatedData.name
+          );
+          if (existingByName) {
+            return {
+              success: true,
+              contact: existingByName,
+            };
+          }
+        }
+
         const contact = await databaseService.createContact({
           user_id: validatedUserId,
           display_name: validatedData.name || "Unknown",
@@ -655,7 +763,7 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           company: validatedData.company ?? undefined,
           title: validatedData.title ?? undefined,
           source: "manual",
-          is_imported: false,
+          is_imported: true,
         });
 
         // Audit log contact creation
@@ -1074,6 +1182,116 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         return {
           success: false,
           names: {},
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // TASK-1773: Trigger manual sync of external contacts from macOS
+  ipcMain.handle(
+    "contacts:syncExternal",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<{
+      success: boolean;
+      inserted?: number;
+      deleted?: number;
+      total?: number;
+      error?: string;
+    }> => {
+      try {
+        logService.info("[Main] Manual external contacts sync requested", "Contacts", { userId });
+
+        // Validate user ID
+        const validatedUserId = await getValidUserId(userId, "Contacts");
+        if (!validatedUserId) {
+          return { success: false, error: "No valid user found in database" };
+        }
+
+        // Read from macOS Contacts API
+        const { phoneToContactInfo } = await getContactNames();
+
+        if (!phoneToContactInfo || Object.keys(phoneToContactInfo).length === 0) {
+          return { success: false, error: "No contacts found in macOS Contacts" };
+        }
+
+        // Convert to MacOSContact format
+        const macOSContacts: externalContactDb.MacOSContact[] = [];
+        for (const [_phone, contactInfo] of Object.entries(phoneToContactInfo)) {
+          macOSContacts.push({
+            name: contactInfo.name,
+            phones: contactInfo.phones,
+            emails: contactInfo.emails,
+            company: contactInfo.company,
+            recordId: contactInfo.recordId || `auto-${randomUUID().slice(0, 8)}`,
+          });
+        }
+
+        // Full sync: upsert + delete stale + update dates
+        const result = externalContactDb.fullSync(validatedUserId, macOSContacts);
+
+        logService.info("[Main] External contacts manual sync complete", "Contacts", {
+          inserted: result.inserted,
+          deleted: result.deleted,
+          total: result.total,
+        });
+
+        return {
+          success: true,
+          inserted: result.inserted,
+          deleted: result.deleted,
+          total: result.total,
+        };
+      } catch (error) {
+        logService.error("[Main] External contacts sync failed", "Contacts", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // TASK-1773: Get external contacts sync status
+  ipcMain.handle(
+    "contacts:getExternalSyncStatus",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<{
+      success: boolean;
+      lastSyncAt?: string | null;
+      isStale?: boolean;
+      contactCount?: number;
+      error?: string;
+    }> => {
+      try {
+        // Validate user ID
+        const validatedUserId = await getValidUserId(userId, "Contacts");
+        if (!validatedUserId) {
+          return { success: false, error: "No valid user found in database" };
+        }
+
+        const lastSyncAt = externalContactDb.getLastSyncTime(validatedUserId);
+        const isStale = externalContactDb.isStale(validatedUserId, 24);
+        const contactCount = externalContactDb.getCount(validatedUserId);
+
+        return {
+          success: true,
+          lastSyncAt,
+          isStale,
+          contactCount,
+        };
+      } catch (error) {
+        logService.error("[Main] Get external sync status failed", "Contacts", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
