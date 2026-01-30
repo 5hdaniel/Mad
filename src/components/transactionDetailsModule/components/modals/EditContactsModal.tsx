@@ -715,7 +715,7 @@ function Screen2Overlay({
             className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
             data-testid="filter-external"
           />
-          <span>External</span>
+          <span>Contacts App</span>
         </label>
         <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
           <input
@@ -725,11 +725,11 @@ function Screen2Overlay({
             className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
             data-testid="filter-messages"
           />
-          <span>Messages</span>
+          <span>Msg Inferred</span>
         </label>
       </div>
 
-      {/* ContactSearchList */}
+      {/* ContactSearchList - min-h-0 required for flex child scrolling */}
       <ContactSearchList
         contacts={availableContacts}
         externalContacts={[]} // Per SR Engineer: external API not ready
@@ -739,7 +739,7 @@ function Screen2Overlay({
         isLoading={loading}
         error={error}
         searchPlaceholder="Search contacts to add..."
-        className="flex-1"
+        className="flex-1 min-h-0"
       />
 
       {/* Footer */}
