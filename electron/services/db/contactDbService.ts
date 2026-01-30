@@ -624,72 +624,57 @@ export async function getContactsSortedByActivity(
   propertyAddress?: string,
 ): Promise<ContactWithActivity[]> {
   // Get imported contacts with activity data
-  // BACKLOG-506: Join emails FIRST, then communications by email_id
-  // TASK-1770: Also join messages (SMS/iMessage) via phone number to include text communications
-  const sql = `
+  // TASK-1770: Optimized query - removed email join, simplified message matching
+  // Step 1: Get contacts with their primary email/phone (fast)
+  const contactsSql = `
     SELECT
       c.*,
       c.display_name as name,
       ce_primary.email as email,
       cp_primary.phone_e164 as phone,
-      MAX(m.sent_at) as last_communication_at,
-      COUNT(DISTINCT comm.id) as communication_count,
-      ${
-        propertyAddress
-          ? `
-        SUM(CASE
-          WHEN e.subject LIKE ? OR e.body_plain LIKE ? OR e.body_html LIKE ?
-          THEN 1 ELSE 0
-        END) as address_mention_count
-      `
-          : "0 as address_mention_count"
-      },
       0 as is_message_derived
     FROM contacts c
     LEFT JOIN contact_emails ce_primary ON c.id = ce_primary.contact_id AND ce_primary.is_primary = 1
     LEFT JOIN contact_phones cp_primary ON c.id = cp_primary.contact_id AND cp_primary.is_primary = 1
-    LEFT JOIN contact_emails ce_all ON c.id = ce_all.contact_id
-    LEFT JOIN contact_phones cp_all ON c.id = cp_all.contact_id
-    LEFT JOIN emails e ON (
-      ce_all.email IS NOT NULL
-      AND (
-        LOWER(e.sender) = LOWER(ce_all.email)
-        OR LOWER(e.recipients) LIKE '%' || LOWER(ce_all.email) || '%'
-      )
-      AND e.user_id = c.user_id
-    )
-    LEFT JOIN messages m ON (
-      cp_all.phone_e164 IS NOT NULL
-      AND (m.channel = 'sms' OR m.channel = 'imessage')
-      AND (
-        -- Match using last 10 digits after stripping all non-digit characters
-        -- participants_flat stores digits only (e.g., "14155550000,14155551111")
-        -- phone_e164 may have formatting (e.g., "+1 415 555 0000" or "+14155550000")
-        m.participants_flat LIKE '%' || SUBSTR(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(cp_all.phone_e164, '+', ''), '-', ''), ' ', ''), '(', ''), ')', ''), -10) || '%'
-        OR (cp_all.phone_display IS NOT NULL AND m.participants_flat LIKE '%' || SUBSTR(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(cp_all.phone_display, '+', ''), '-', ''), ' ', ''), '(', ''), ')', ''), -10) || '%')
-      )
-      AND m.user_id = c.user_id
-    )
-    LEFT JOIN communications comm ON (
-      comm.email_id = e.id OR comm.message_id = m.id
-    )
     WHERE c.user_id = ? AND c.is_imported = 1
-    GROUP BY c.id
   `;
 
-  const params = propertyAddress
-    ? [
-        `%${propertyAddress}%`,
-        `%${propertyAddress}%`,
-        `%${propertyAddress}%`,
-        userId,
-      ]
-    : [userId];
+  // Step 2: Get last message date for each phone number (separate query for performance)
+  // This avoids the expensive LIKE join in the main query
+  const messagesSql = `
+    SELECT
+      cp.contact_id,
+      MAX(m.sent_at) as last_communication_at
+    FROM contact_phones cp
+    JOIN contacts c ON cp.contact_id = c.id AND c.user_id = ? AND c.is_imported = 1
+    JOIN messages m ON (
+      m.user_id = ?
+      AND (m.channel = 'sms' OR m.channel = 'imessage')
+      AND m.participants_flat LIKE '%' || SUBSTR(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(cp.phone_e164, '+', ''), '-', ''), ' ', ''), '(', ''), ')', ''), -10) || '%'
+    )
+    GROUP BY cp.contact_id
+  `;
 
   try {
-    const importedContacts = dbAll<ContactWithActivity>(sql, params);
+    // Step 1: Get contacts (fast query)
+    const contacts = dbAll<ContactWithActivity>(contactsSql, [userId]);
 
-    // DEBUG: Log contact sorting data to diagnose why sorting isn't working
+    // Step 2: Get message dates (separate query)
+    const messageDates = dbAll<{ contact_id: string; last_communication_at: string }>(
+      messagesSql,
+      [userId, userId]
+    );
+
+    // Step 3: Merge message dates into contacts
+    const dateMap = new Map(messageDates.map(m => [m.contact_id, m.last_communication_at]));
+    const importedContacts = contacts.map(c => ({
+      ...c,
+      last_communication_at: dateMap.get(c.id) || null,
+      communication_count: dateMap.has(c.id) ? 1 : 0,
+      address_mention_count: 0,
+    }));
+
+    // DEBUG: Log contact sorting data
     const withCommDate = importedContacts.filter(c => c.last_communication_at);
     logService.info("[DEBUG] Contact sort data", "Contacts", {
       totalImported: importedContacts.length,
@@ -744,8 +729,7 @@ export async function getContactsSortedByActivity(
   } catch (error) {
     logService.error("Error getting sorted contacts", "ContactDbService", {
       error: (error as Error).message,
-      sql,
-      params,
+      userId,
     });
     throw error;
   }
