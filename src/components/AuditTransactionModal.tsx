@@ -47,6 +47,9 @@ function AuditTransactionModal({
     contactsLoading,
     contactsError,
     refreshContacts,
+    // Selected contacts for step 2/3 (TASK-1771: lifted to parent for unified navigation)
+    selectedContactIds,
+    setSelectedContactIds,
     setAddressData,
     handleAddressChange,
     selectAddress,
@@ -78,9 +81,10 @@ function AuditTransactionModal({
 
   // Determine total steps and current step for display
   // In edit mode: single step (just address/dates)
-  // In create mode: 2 steps (details + contacts)
-  const totalSteps = isEditing ? 1 : 2;
-  const displayStep = isEditing ? 1 : Math.min(step, 2);
+  // In create mode: 3 steps (details + select contacts + assign roles)
+  // TASK-1771: Updated to 3-step flow for unified navigation
+  const totalSteps = isEditing ? 1 : 3;
+  const displayStep = isEditing ? 1 : Math.min(step, 3);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
@@ -97,7 +101,8 @@ function AuditTransactionModal({
               ) : (
                 <>
                   {step === 1 && "Step 1: Transaction Details"}
-                  {step >= 2 && "Step 2: Assign Contacts"}
+                  {step === 2 && "Step 2: Select Contacts"}
+                  {step === 3 && "Step 3: Assign Roles"}
                 </>
               )}
             </p>
@@ -123,10 +128,11 @@ function AuditTransactionModal({
         </div>
 
         {/* Progress Bar - Only show for new transactions */}
+        {/* TASK-1771: Updated to show 3 steps */}
         {!isEditing && (
           <div className="flex-shrink-0 bg-gray-100 px-3 sm:px-6 py-3">
             <div className="flex items-center justify-center gap-1 sm:gap-2 mb-2 max-w-md mx-auto">
-              {[1, 2].map((s: number) => (
+              {[1, 2, 3].map((s: number) => (
                 <React.Fragment key={s}>
                   <div
                     className={`w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-sm sm:text-base font-semibold transition-all ${
@@ -181,9 +187,10 @@ function AuditTransactionModal({
             />
           )}
 
-          {/* Step 2+: Contact Assignment (internal 2-step flow handles select + roles) */}
-          {step >= 2 && (
+          {/* Step 2: Contact Selection - TASK-1771: Unified navigation */}
+          {step === 2 && (
             <ContactAssignmentStep
+              mode="select"
               contactAssignments={contactAssignments}
               onAssignContact={assignContact}
               onRemoveContact={removeContact}
@@ -195,6 +202,30 @@ function AuditTransactionModal({
               contactsLoading={contactsLoading}
               contactsError={contactsError}
               onRefreshContacts={refreshContacts}
+              // Selected contacts lifted to parent for unified navigation
+              selectedContactIds={selectedContactIds}
+              onSelectedContactIdsChange={setSelectedContactIds}
+            />
+          )}
+
+          {/* Step 3: Role Assignment - TASK-1771: Unified navigation */}
+          {step === 3 && (
+            <ContactAssignmentStep
+              mode="roles"
+              contactAssignments={contactAssignments}
+              onAssignContact={assignContact}
+              onRemoveContact={removeContact}
+              userId={userId}
+              transactionType={addressData.transaction_type}
+              propertyAddress={addressData.property_address}
+              // Contacts loaded at parent level to prevent duplicate API calls
+              contacts={contacts}
+              contactsLoading={contactsLoading}
+              contactsError={contactsError}
+              onRefreshContacts={refreshContacts}
+              // Selected contacts lifted to parent for unified navigation
+              selectedContactIds={selectedContactIds}
+              onSelectedContactIdsChange={setSelectedContactIds}
             />
           )}
         </div>
@@ -233,8 +264,10 @@ function AuditTransactionModal({
                 </span>
               ) : isEditing ? (
                 "Save Changes"
-              ) : step >= 2 ? (
+              ) : step === 3 ? (
                 "Create Transaction"
+              ) : step === 2 ? (
+                "Next: Assign Roles \u2192"
               ) : (
                 "Continue \u2192"
               )}

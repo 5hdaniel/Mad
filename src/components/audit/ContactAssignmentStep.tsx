@@ -1,10 +1,10 @@
 /**
  * ContactAssignmentStep Component
- * Steps 2-3 of the AuditTransactionModal - Contact assignment using search-first pattern
+ * Steps 2-3 of the AuditTransactionModal - Contact assignment
  *
- * TASK-1766: Updated to use 2-step internal flow:
- * - Internal Step 1: Search and select contacts (ContactSearchList)
- * - Internal Step 2: Assign roles to selected contacts (ContactRoleRow)
+ * TASK-1771: Updated to use mode prop for unified navigation
+ * - mode="select": Search and select contacts (ContactSearchList)
+ * - mode="roles": Assign roles to selected contacts (ContactRoleRow)
  *
  * Contact Loading Optimization:
  * Contacts are now loaded at the parent level (useAuditTransaction hook)
@@ -12,10 +12,7 @@
  * between steps 2 and 3.
  */
 import React, { useState, useMemo, useCallback } from "react";
-import {
-  AUDIT_WORKFLOW_STEPS,
-  ROLE_TO_CATEGORY,
-} from "../../constants/contactRoles";
+import { AUDIT_WORKFLOW_STEPS } from "../../constants/contactRoles";
 import {
   filterRolesByTransactionType,
   getRoleDisplayName,
@@ -31,6 +28,8 @@ import type { ExtendedContact } from "../../types/components";
 import { contactService } from "../../services";
 
 interface ContactAssignmentStepProps {
+  // TASK-1771: Mode prop for unified navigation (replaces internal step state)
+  mode: 'select' | 'roles';
   contactAssignments: ContactAssignments;
   onAssignContact: (
     role: string,
@@ -47,6 +46,9 @@ interface ContactAssignmentStepProps {
   contactsLoading: boolean;
   contactsError: string | null;
   onRefreshContacts: () => void;
+  // TASK-1771: Selected contacts lifted to parent for unified navigation
+  selectedContactIds: string[];
+  onSelectedContactIdsChange: (ids: string[]) => void;
 }
 
 /**
@@ -78,30 +80,23 @@ function toExtendedContact(contact: Contact): ExtendedContact {
 }
 
 function ContactAssignmentStep({
+  mode,
   contactAssignments,
   onAssignContact,
   onRemoveContact,
   userId,
   transactionType,
-  propertyAddress,
+  propertyAddress: _propertyAddress, // Reserved for future use (address-based contact sorting)
   // Contacts loaded at parent level
   contacts,
   contactsLoading,
   contactsError,
   onRefreshContacts,
+  // TASK-1771: Selected contacts lifted to parent for unified navigation
+  selectedContactIds,
+  onSelectedContactIdsChange,
 }: ContactAssignmentStepProps): React.ReactElement {
-  // Internal step state: 1 = select contacts, 2 = assign roles
-  const [internalStep, setInternalStep] = useState<1 | 2>(1);
-
-  // Selected contact IDs (managed internally)
-  const [selectedContactIds, setSelectedContactIds] = useState<string[]>(() => {
-    // Initialize from existing contactAssignments
-    const existingIds = new Set<string>();
-    Object.values(contactAssignments).forEach((assignments) => {
-      assignments.forEach((a) => existingIds.add(a.contactId));
-    });
-    return Array.from(existingIds);
-  });
+  // TASK-1771: Removed internal step state - now controlled by parent via 'mode' prop
 
   // Loading state for external contact import
   const [importing, setImporting] = useState(false);
@@ -200,20 +195,7 @@ function ContactAssignmentStep({
     [userId, onRefreshContacts]
   );
 
-  // Handle "Next" button from step 1 to step 2
-  const handleNextToRoles = useCallback(async () => {
-    // Check if any selected contacts are external (message-derived but not yet imported)
-    // For now, external contacts are auto-imported via ContactSearchList.onImportContact
-    // So when we get here, all selected contacts should already be in the contacts list
-
-    setImportError(null);
-    setInternalStep(2);
-  }, []);
-
-  // Handle "Back" button from step 2 to step 1
-  const handleBackToSelect = useCallback(() => {
-    setInternalStep(1);
-  }, []);
+  // TASK-1771: Removed internal navigation handlers - now controlled by parent modal footer
 
   return (
     <div className="flex flex-col h-full relative">
@@ -236,11 +218,12 @@ function ContactAssignmentStep({
         </div>
       )}
 
-      {/* Internal Step 1: Contact Selection */}
-      {internalStep === 1 && (
+      {/* TASK-1771: Contact Selection - mode="select" */}
+      {/* No internal footer - navigation is in parent modal footer */}
+      {mode === 'select' && (
         <div
           className="flex flex-col flex-1 min-h-0"
-          data-testid="contact-assignment-step-1"
+          data-testid="contact-assignment-select"
         >
           {/* Header */}
           <div className="flex-shrink-0 px-4 pt-4 pb-2">
@@ -249,6 +232,11 @@ function ContactAssignmentStep({
             </h3>
             <p className="text-sm text-gray-600">
               Search and select contacts to add to this transaction.
+              {selectedContactIds.length > 0 && (
+                <span className="ml-1 font-medium text-indigo-600">
+                  ({selectedContactIds.length} selected)
+                </span>
+              )}
             </p>
           </div>
 
@@ -258,7 +246,7 @@ function ContactAssignmentStep({
               contacts={extendedContacts}
               externalContacts={[]} // External contacts API not ready per SR Engineer
               selectedIds={selectedContactIds}
-              onSelectionChange={setSelectedContactIds}
+              onSelectionChange={onSelectedContactIdsChange}
               onImportContact={handleImportContact}
               isLoading={contactsLoading}
               error={contactsError}
@@ -266,32 +254,15 @@ function ContactAssignmentStep({
               className="h-full"
             />
           </div>
-
-          {/* Step 1 Footer */}
-          <div className="flex-shrink-0 px-4 py-3 border-t border-gray-200 bg-gray-50">
-            <div className="flex items-center justify-end">
-              <button
-                onClick={handleNextToRoles}
-                disabled={selectedContactIds.length === 0}
-                className={`px-6 py-2 rounded-lg font-semibold transition-all ${
-                  selectedContactIds.length === 0
-                    ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                    : "bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700 shadow-md hover:shadow-lg"
-                }`}
-                data-testid="next-to-roles-button"
-              >
-                Next: Assign Roles ({selectedContactIds.length})
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
-      {/* Internal Step 2: Role Assignment */}
-      {internalStep === 2 && (
+      {/* TASK-1771: Role Assignment - mode="roles" */}
+      {/* No internal footer - navigation is in parent modal footer */}
+      {mode === 'roles' && (
         <div
           className="flex flex-col flex-1 min-h-0"
-          data-testid="contact-assignment-step-2"
+          data-testid="contact-assignment-roles"
         >
           {/* Header */}
           <div className="flex-shrink-0 px-4 pt-4 pb-2">
@@ -309,12 +280,9 @@ function ContactAssignmentStep({
             {selectedContacts.length === 0 ? (
               <div className="text-center py-12 text-gray-500">
                 <p>No contacts selected.</p>
-                <button
-                  onClick={handleBackToSelect}
-                  className="mt-4 text-indigo-600 hover:underline"
-                >
-                  Go back to select contacts
-                </button>
+                <p className="mt-2 text-sm">
+                  Use the Back button to select contacts.
+                </p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -329,22 +297,6 @@ function ContactAssignmentStep({
                 ))}
               </div>
             )}
-          </div>
-
-          {/* Step 2 Footer */}
-          <div className="flex-shrink-0 px-4 py-3 border-t border-gray-200 bg-gray-50">
-            <div className="flex items-center justify-between">
-              <button
-                onClick={handleBackToSelect}
-                className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-all"
-                data-testid="back-to-select-button"
-              >
-                &larr; Back to Select
-              </button>
-              <p className="text-sm text-gray-500">
-                Click &quot;Continue&quot; below when done
-              </p>
-            </div>
           </div>
         </div>
       )}
