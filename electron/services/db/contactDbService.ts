@@ -726,25 +726,17 @@ export async function getContactsSortedByActivity(
     // Merge both lists
     const allContacts = [...importedContacts, ...messageDerivedWithActivity];
 
-    // Sort by activity (address mentions first if propertyAddress provided, then by last communication)
+    // Sort by most recent communication first, then by name
+    // TASK-1770: Changed to prioritize last_communication_at over address_mention_count
     return allContacts.sort((a, b) => {
-      // Property address relevance first
-      if (propertyAddress) {
-        const mentionA = a.address_mention_count || 0;
-        const mentionB = b.address_mention_count || 0;
-        if (mentionA !== mentionB) {
-          return mentionB - mentionA; // Higher mentions first
-        }
-      }
-
-      // Then by last communication date
+      // Primary: Sort by last communication date (most recent first)
       const dateA = a.last_communication_at ? new Date(a.last_communication_at).getTime() : 0;
       const dateB = b.last_communication_at ? new Date(b.last_communication_at).getTime() : 0;
       if (dateA !== dateB) {
         return dateB - dateA; // More recent first
       }
 
-      // Finally by name
+      // Secondary: By name
       const nameA = (a.display_name || a.name || '').toLowerCase();
       const nameB = (b.display_name || b.name || '').toLowerCase();
       return nameA.localeCompare(nameB);
