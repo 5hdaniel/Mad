@@ -16,6 +16,7 @@ export interface ExternalContact {
   source: "external";
   allEmails?: string[];
   allPhones?: string[];
+  last_communication_at?: string | Date | null;
 }
 
 /**

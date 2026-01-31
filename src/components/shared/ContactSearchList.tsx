@@ -30,6 +30,7 @@ export interface ExternalContact {
   phone?: string;
   company?: string;
   source: "external";
+  last_communication_at?: string | Date | null;
 }
 
 /**
@@ -80,6 +81,7 @@ function toExtendedContact(external: ExternalContact): ExtendedContact {
     user_id: "", // Required by Contact type
     created_at: now,
     updated_at: now,
+    last_communication_at: external.last_communication_at,
   };
 }
 
