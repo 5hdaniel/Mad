@@ -636,6 +636,7 @@ function Screen2Overlay({
             phone: c.phone,
             company: c.company,
             source: "external" as const,
+            last_communication_at: c.last_communication_at,
           }));
           setExternalContacts(external);
         }
