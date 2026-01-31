@@ -21,37 +21,26 @@ import type { ExtendedContact } from "../../types/components";
 import { sortByRecentCommunication } from "../../utils/contactSortUtils";
 
 /**
- * External contact type for contacts not yet imported (e.g., from address book)
- */
-export interface ExternalContact {
-  id: string;
-  name: string;
-  email?: string;
-  phone?: string;
-  company?: string;
-  source: "external";
-}
-
-/**
  * Internal type for combined contact list
+ * All contacts use ExtendedContact - isExternal flag distinguishes external ones.
+ * External contacts have is_message_derived=true or source="external".
  */
 interface CombinedContact {
   contact: ExtendedContact;
   isExternal: boolean;
-  originalExternal?: ExternalContact;
 }
 
 export interface ContactSearchListProps {
   /** Imported/existing contacts */
   contacts: ExtendedContact[];
-  /** External contacts (from address book, not yet imported) */
-  externalContacts?: ExternalContact[];
+  /** External contacts (from address book, not yet imported) - now uses ExtendedContact with isExternal flag */
+  externalContacts?: ExtendedContact[];
   /** Currently selected contact IDs */
   selectedIds: string[];
   /** Callback when selection changes */
   onSelectionChange: (selectedIds: string[]) => void;
   /** Callback to import an external contact - returns the imported contact */
-  onImportContact?: (contact: ExternalContact) => Promise<ExtendedContact>;
+  onImportContact?: (contact: ExtendedContact) => Promise<ExtendedContact>;
   /** Show loading state */
   isLoading?: boolean;
   /** Error message to display */
@@ -63,24 +52,11 @@ export interface ContactSearchListProps {
 }
 
 /**
- * Converts an ExternalContact to ExtendedContact format for ContactRow rendering.
- * Sets is_message_derived=true so ContactRow displays the [External] pill.
+ * Checks if a contact is external (not yet imported to database).
+ * External contacts have is_message_derived=true.
  */
-function toExtendedContact(external: ExternalContact): ExtendedContact {
-  const now = new Date().toISOString();
-  return {
-    id: external.id,
-    name: external.name,
-    display_name: external.name,
-    email: external.email,
-    phone: external.phone,
-    company: external.company,
-    is_message_derived: true, // Marks as external for ContactRow/SourcePill
-    source: "inferred", // Will show as "external" due to is_message_derived
-    user_id: "", // Required by Contact type
-    created_at: now,
-    updated_at: now,
-  };
+function isExternalContact(contact: ExtendedContact): boolean {
+  return contact.is_message_derived === true || contact.is_message_derived === 1;
 }
 
 /**
@@ -88,7 +64,7 @@ function toExtendedContact(external: ExternalContact): ExtendedContact {
  * Searches by name, email, and phone (case-insensitive).
  */
 function matchesSearch(
-  contact: ExtendedContact | ExternalContact,
+  contact: ExtendedContact,
   query: string
 ): boolean {
   const lowerQuery = query.toLowerCase();
@@ -171,17 +147,16 @@ export function ContactSearchList({
 
   // Combine, sort, and filter contacts
   const combinedContacts = useMemo((): CombinedContact[] => {
-    // Convert imported contacts
+    // Convert imported contacts - detect external status from is_message_derived
     const imported: CombinedContact[] = contacts.map((c) => ({
       contact: c,
-      isExternal: false,
+      isExternal: isExternalContact(c),
     }));
 
-    // Convert external contacts
+    // External contacts already in ExtendedContact format - mark as external
     const external: CombinedContact[] = externalContacts.map((c) => ({
-      contact: toExtendedContact(c),
+      contact: c,
       isExternal: true,
-      originalExternal: c,
     }));
 
     // Combine lists (imported first, then external)
@@ -223,15 +198,15 @@ export function ContactSearchList({
 
   // Handle external contact import
   const handleImport = useCallback(
-    async (externalContact: ExternalContact, autoSelect: boolean = false) => {
-      if (!onImportContact || importingIds.has(externalContact.id)) {
+    async (contact: ExtendedContact, autoSelect: boolean = false) => {
+      if (!onImportContact || importingIds.has(contact.id)) {
         return;
       }
 
-      setImportingIds((prev) => new Set(prev).add(externalContact.id));
+      setImportingIds((prev) => new Set(prev).add(contact.id));
 
       try {
-        const imported = await onImportContact(externalContact);
+        const imported = await onImportContact(contact);
         // Add the imported contact to selection if autoSelect is true
         if (autoSelect) {
           onSelectionChange([...selectedIds, imported.id]);
@@ -242,7 +217,7 @@ export function ContactSearchList({
       } finally {
         setImportingIds((prev) => {
           const next = new Set(prev);
-          next.delete(externalContact.id);
+          next.delete(contact.id);
           return next;
         });
       }
@@ -252,10 +227,10 @@ export function ContactSearchList({
 
   // Handle selecting an external contact (auto-import and select)
   const handleExternalSelect = useCallback(
-    async (externalContact: ExternalContact) => {
+    async (contact: ExtendedContact) => {
       if (onImportContact) {
         // Auto-import when selecting external contact
-        await handleImport(externalContact, true);
+        await handleImport(contact, true);
       }
     },
     [onImportContact, handleImport]
@@ -264,8 +239,8 @@ export function ContactSearchList({
   // Handle row click based on contact type
   const handleRowSelect = useCallback(
     (combined: CombinedContact) => {
-      if (combined.isExternal && combined.originalExternal) {
-        handleExternalSelect(combined.originalExternal);
+      if (combined.isExternal) {
+        handleExternalSelect(combined.contact);
       } else {
         handleSelect(combined.contact.id);
       }
@@ -276,8 +251,8 @@ export function ContactSearchList({
   // Handle manual import button click (import without selecting)
   const handleImportButtonClick = useCallback(
     (combined: CombinedContact) => {
-      if (combined.isExternal && combined.originalExternal) {
-        handleImport(combined.originalExternal, false);
+      if (combined.isExternal) {
+        handleImport(combined.contact, false);
       }
     },
     [handleImport]

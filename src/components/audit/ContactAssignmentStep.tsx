@@ -22,7 +22,6 @@ import {
   type TransactionType,
 } from "../../utils/transactionRoleUtils";
 import { ContactSearchList } from "../shared/ContactSearchList";
-import type { ExternalContact } from "../shared/ContactSearchList";
 import { ContactRoleRow } from "../shared/ContactRoleRow";
 import type { RoleOption } from "../shared/ContactRoleRow";
 import type { ContactAssignments } from "../../hooks/useAuditTransaction";
@@ -180,12 +179,12 @@ function ContactAssignmentStep({
 
   // Handle importing an external contact
   const handleImportContact = useCallback(
-    async (external: ExternalContact): Promise<ExtendedContact> => {
+    async (contact: ExtendedContact): Promise<ExtendedContact> => {
       const result = await contactService.create(userId, {
-        display_name: external.name,
-        email: external.email,
-        phone: external.phone,
-        company: external.company,
+        display_name: contact.display_name || contact.name,
+        email: contact.email,
+        phone: contact.phone,
+        company: contact.company,
         source: "manual",
       });
 

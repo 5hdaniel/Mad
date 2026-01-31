@@ -17,7 +17,6 @@ import {
   useContacts,
 } from "../../../../contexts/ContactsContext";
 import { ContactSearchList } from "../../../shared/ContactSearchList";
-import type { ExternalContact } from "../../../shared/ContactSearchList";
 import { ContactRoleRow } from "../../../shared/ContactRoleRow";
 import type { RoleOption } from "../../../shared/ContactRoleRow";
 import {
@@ -612,8 +611,8 @@ function Screen2Overlay({
     return loadCategoryFilter();
   });
 
-  // External contacts from macOS Contacts app (lazy-loaded)
-  const [externalContacts, setExternalContacts] = useState<ExternalContact[]>([]);
+  // External contacts from macOS Contacts app (lazy-loaded) - now using ExtendedContact[]
+  const [externalContacts, setExternalContacts] = useState<ExtendedContact[]>([]);
   const [externalLoading, setExternalLoading] = useState(false);
   const [externalLoaded, setExternalLoaded] = useState(false);
 
@@ -628,14 +627,10 @@ function Screen2Overlay({
       try {
         const result = await window.api.contacts.getAvailable(userId);
         if (result.success && result.contacts) {
-          // Convert to ExternalContact format
-          const external: ExternalContact[] = result.contacts.map((c: ExtendedContact) => ({
-            id: c.id,
-            name: c.name || c.display_name || "",
-            email: c.email,
-            phone: c.phone,
-            company: c.company,
-            source: "external" as const,
+          // External contacts come as ExtendedContact[], mark them with is_message_derived for UI
+          const external: ExtendedContact[] = result.contacts.map((c: ExtendedContact) => ({
+            ...c,
+            is_message_derived: true, // Mark as external for SourcePill display
           }));
           setExternalContacts(external);
         }
@@ -696,7 +691,7 @@ function Screen2Overlay({
   // Handle importing an external contact
   // Per SR Engineer: Use contactService.create() for imports
   const handleImportContact = useCallback(
-    async (external: ExternalContact): Promise<ExtendedContact> => {
+    async (contact: ExtendedContact): Promise<ExtendedContact> => {
       // Get userId from first contact or use a default approach
       const userId = contacts.length > 0 ? contacts[0].user_id : "";
 
@@ -705,10 +700,10 @@ function Screen2Overlay({
       }
 
       const result = await contactService.create(userId, {
-        display_name: external.name,
-        email: external.email,
-        phone: external.phone,
-        company: external.company,
+        display_name: contact.display_name || contact.name,
+        email: contact.email,
+        phone: contact.phone,
+        company: contact.company,
         source: "manual",
       });
 

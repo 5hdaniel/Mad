@@ -9,7 +9,6 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   ContactSearchList,
-  ExternalContact,
   ContactSearchListProps,
 } from "./ContactSearchList";
 import type { ExtendedContact } from "../../types/components";
@@ -79,14 +78,19 @@ const createImportedContact = (
 });
 
 const createExternalContact = (
-  overrides: Partial<ExternalContact> = {}
-): ExternalContact => ({
+  overrides: Partial<ExtendedContact> = {}
+): ExtendedContact => ({
   id: `external-${Math.random().toString(36).substring(7)}`,
   name: "Jane Doe",
+  display_name: "Jane Doe",
   email: "jane@external.com",
   phone: "555-5678",
   company: "External Inc",
-  source: "external",
+  source: "inferred",
+  user_id: "user-1",
+  is_message_derived: true, // Marks as external
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
   ...overrides,
 });
 
@@ -500,7 +504,7 @@ describe("ContactSearchList", () => {
         expect(onImportContact).toHaveBeenCalledWith(
           expect.objectContaining({
             id: "e1",
-            source: "external",
+            is_message_derived: true,
           })
         );
       });
