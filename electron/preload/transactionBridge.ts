@@ -492,4 +492,13 @@ export const transactionBridge = {
    */
   getAttachmentData: (storagePath: string, mimeType: string) =>
     ipcRenderer.invoke("attachments:get-data", storagePath, mimeType),
+
+  /**
+   * Get attachment buffer as raw base64 (for DOCX conversion)
+   * TASK-1783: Returns raw base64 without data: URL prefix for mammoth.js
+   * @param storagePath - Path to attachment file
+   * @returns Success/error result with base64 data in data field
+   */
+  getAttachmentBuffer: (storagePath: string) =>
+    ipcRenderer.invoke("attachments:get-buffer", storagePath),
 };
