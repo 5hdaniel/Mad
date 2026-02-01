@@ -3107,6 +3107,116 @@ export const registerTransactionHandlers = (
     },
   );
 
+  // TASK-1781: Get attachment counts for transaction (from actual downloaded files)
+  // Returns counts from the attachments table, matching what submission service uploads
+  ipcMain.handle(
+    "transactions:get-attachment-counts",
+    async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+      auditStart?: string,
+      auditEnd?: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        // Validate transaction ID
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        const db = databaseService.getRawDatabase();
+
+        // Build date filter params
+        const textDateParams: string[] = [validatedTransactionId];
+        const emailDateParams: string[] = [validatedTransactionId];
+
+        let textDateFilter = "";
+        let emailDateFilter = "";
+
+        if (auditStart) {
+          textDateFilter += " AND m.sent_at >= ?";
+          textDateParams.push(auditStart);
+          emailDateFilter += " AND e.sent_at >= ?";
+          emailDateParams.push(auditStart);
+        }
+
+        if (auditEnd) {
+          // Add end of day to include all messages on the end date
+          const endDate = new Date(auditEnd);
+          endDate.setHours(23, 59, 59, 999);
+          const endDateStr = endDate.toISOString();
+          textDateFilter += " AND m.sent_at <= ?";
+          textDateParams.push(endDateStr);
+          emailDateFilter += " AND e.sent_at <= ?";
+          emailDateParams.push(endDateStr);
+        }
+
+        // Count text message attachments (via message_id -> messages -> communications)
+        // Mirrors the query in submissionService.loadTransactionAttachments
+        const textCountSql = `
+          SELECT COUNT(DISTINCT a.id) as count
+          FROM attachments a
+          INNER JOIN messages m ON a.message_id = m.id
+          INNER JOIN communications c ON (
+            (c.message_id IS NOT NULL AND c.message_id = m.id)
+            OR
+            (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+          )
+          WHERE c.transaction_id = ?
+          AND a.message_id IS NOT NULL
+          AND a.storage_path IS NOT NULL
+          ${textDateFilter}
+        `;
+
+        const textResult = db.prepare(textCountSql).get(...textDateParams) as { count: number };
+
+        // Count email attachments (via email_id -> communications -> emails)
+        const emailCountSql = `
+          SELECT COUNT(DISTINCT a.id) as count
+          FROM attachments a
+          INNER JOIN emails e ON a.email_id = e.id
+          INNER JOIN communications c ON c.email_id = e.id
+          WHERE c.transaction_id = ?
+          AND a.email_id IS NOT NULL
+          AND a.storage_path IS NOT NULL
+          ${emailDateFilter}
+        `;
+
+        const emailResult = db.prepare(emailCountSql).get(...emailDateParams) as { count: number };
+
+        const textAttachments = textResult?.count || 0;
+        const emailAttachments = emailResult?.count || 0;
+
+        return {
+          success: true,
+          data: {
+            textAttachments,
+            emailAttachments,
+            total: textAttachments + emailAttachments,
+          },
+        };
+      } catch (error) {
+        logService.error("Failed to get attachment counts", "Transactions", {
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
   // TASK-1783: Get attachment buffer as base64 (for DOCX conversion with mammoth)
   // Unlike get-data, this returns raw base64 without data: URL prefix
   ipcMain.handle(

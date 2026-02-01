@@ -1353,6 +1353,28 @@ interface MainAPI {
     }>;
 
     /**
+     * Get attachment counts from actual attachments table (TASK-1781)
+     * Returns counts matching what submission service will upload
+     * @param transactionId - Transaction ID
+     * @param auditStart - Optional audit start date (ISO string)
+     * @param auditEnd - Optional audit end date (ISO string)
+     * @returns Counts for text and email attachments
+     */
+    getAttachmentCounts: (
+      transactionId: string,
+      auditStart?: string,
+      auditEnd?: string
+    ) => Promise<{
+      success: boolean;
+      data?: {
+        textAttachments: number;
+        emailAttachments: number;
+        total: number;
+      };
+      error?: string;
+    }>;
+
+    /**
      * Get attachment data as base64 data URL for preview
      * TASK-1778: Returns data: URL for images/PDFs
      * @param storagePath - Path to attachment file

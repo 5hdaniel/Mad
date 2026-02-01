@@ -494,6 +494,17 @@ export const transactionBridge = {
     ipcRenderer.invoke("attachments:get-data", storagePath, mimeType),
 
   /**
+   * Get attachment counts for a transaction from the actual attachments table
+   * TASK-1781: Returns accurate counts matching what submission service uploads
+   * @param transactionId - Transaction ID
+   * @param auditStart - Optional audit start date (ISO string)
+   * @param auditEnd - Optional audit end date (ISO string)
+   * @returns Counts for text and email attachments
+   */
+  getAttachmentCounts: (transactionId: string, auditStart?: string, auditEnd?: string) =>
+    ipcRenderer.invoke("transactions:get-attachment-counts", transactionId, auditStart, auditEnd),
+
+  /**
    * Get attachment buffer as raw base64 (for DOCX conversion)
    * TASK-1783: Returns raw base64 without data: URL prefix for mammoth.js
    * @param storagePath - Path to attachment file
