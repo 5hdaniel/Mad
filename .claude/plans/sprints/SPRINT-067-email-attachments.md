@@ -306,9 +306,11 @@ Before starting sprint work, engineers must:
 | TASK-1776 | MERGED | - | - | #699 |
 | TASK-1777 | MERGED | - | - | #700 |
 | TASK-1780 | MERGED | - | - | #701 |
-| TASK-1778 | MERGED | - | - | #702 |
-| TASK-1779 | TODO | - | - | - |
+| TASK-1778 | MERGED | - | - | #702, #704 |
+| TASK-1779 | MERGED | - | - | #703 |
 | **User Testing** | PENDING | - | - | - |
+
+*Note: PR #704 fixes TASK-1778 CSP issue (file:// URLs blocked, now uses data: URLs)*
 
 ---
 
