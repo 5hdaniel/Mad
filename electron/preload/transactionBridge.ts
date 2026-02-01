@@ -462,4 +462,24 @@ export const transactionBridge = {
       ipcRenderer.removeListener("submission-status-changed", handler);
     };
   },
+
+  // ============================================
+  // EMAIL ATTACHMENT METHODS (TASK-1776)
+  // ============================================
+
+  /**
+   * Get attachments for a specific email
+   * @param emailId - Email ID to get attachments for
+   * @returns Array of attachment records
+   */
+  getEmailAttachments: (emailId: string) =>
+    ipcRenderer.invoke("emails:get-attachments", emailId),
+
+  /**
+   * Open attachment with system viewer
+   * @param storagePath - Path to attachment file
+   * @returns Success/error result
+   */
+  openAttachment: (storagePath: string) =>
+    ipcRenderer.invoke("attachments:open", storagePath),
 };
