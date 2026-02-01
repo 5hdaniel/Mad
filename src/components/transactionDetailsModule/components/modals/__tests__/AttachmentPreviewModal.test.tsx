@@ -4,9 +4,26 @@
  * TASK-1778: Email Attachment Preview Modal
  */
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AttachmentPreviewModal } from "../AttachmentPreviewModal";
+
+// Mock the window.api.transactions.getAttachmentData
+const mockGetAttachmentData = jest.fn();
+
+beforeAll(() => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (window as any).api = {
+    transactions: {
+      getAttachmentData: mockGetAttachmentData,
+    },
+  };
+});
+
+afterAll(() => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  delete (window as any).api;
+});
 
 // Helper to create mock attachment data
 function createMockAttachment(overrides: Partial<{
@@ -32,6 +49,10 @@ describe("AttachmentPreviewModal", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetAttachmentData.mockResolvedValue({
+      success: true,
+      data: "data:image/jpeg;base64,abc123",
+    });
   });
 
   describe("Basic Rendering", () => {
@@ -101,7 +122,7 @@ describe("AttachmentPreviewModal", () => {
   });
 
   describe("Image Attachments", () => {
-    it("should render image preview for image attachments", () => {
+    it("should render image preview for image attachments", async () => {
       render(
         <AttachmentPreviewModal
           attachment={createMockAttachment({
@@ -114,13 +135,22 @@ describe("AttachmentPreviewModal", () => {
         />
       );
 
+      // Wait for async image load
+      await waitFor(() => {
+        expect(screen.getByTestId("preview-image")).toBeInTheDocument();
+      });
+
       const img = screen.getByTestId("preview-image");
-      expect(img).toBeInTheDocument();
-      expect(img).toHaveAttribute("src", "file:///path/to/photo.jpg");
+      expect(img).toHaveAttribute("src", "data:image/jpeg;base64,abc123");
       expect(img).toHaveAttribute("alt", "photo.jpg");
     });
 
-    it("should render image preview for PNG", () => {
+    it("should render image preview for PNG", async () => {
+      mockGetAttachmentData.mockResolvedValue({
+        success: true,
+        data: "data:image/png;base64,xyz789",
+      });
+
       render(
         <AttachmentPreviewModal
           attachment={createMockAttachment({
@@ -133,11 +163,54 @@ describe("AttachmentPreviewModal", () => {
         />
       );
 
+      await waitFor(() => {
+        expect(screen.getByTestId("preview-image")).toBeInTheDocument();
+      });
+
       const img = screen.getByTestId("preview-image");
-      expect(img).toHaveAttribute("src", "file:///path/to/screenshot.png");
+      expect(img).toHaveAttribute("src", "data:image/png;base64,xyz789");
     });
 
-    it("should show error fallback when image fails to load", () => {
+    it("should show loading state while fetching image", async () => {
+      // Create a promise that doesn't resolve immediately
+      let resolvePromise: (value: { success: boolean; data: string }) => void;
+      mockGetAttachmentData.mockReturnValue(
+        new Promise((resolve) => {
+          resolvePromise = resolve;
+        })
+      );
+
+      render(
+        <AttachmentPreviewModal
+          attachment={createMockAttachment({
+            filename: "loading.jpg",
+            mime_type: "image/jpeg",
+            storage_path: "/path/to/loading.jpg",
+          })}
+          onClose={mockOnClose}
+          onOpenWithSystem={mockOnOpenWithSystem}
+        />
+      );
+
+      // Should show loading state
+      expect(screen.getByTestId("image-loading")).toBeInTheDocument();
+      expect(screen.getByText("Loading preview...")).toBeInTheDocument();
+
+      // Resolve the promise
+      resolvePromise!({ success: true, data: "data:image/jpeg;base64,abc" });
+
+      // Should show image after loading
+      await waitFor(() => {
+        expect(screen.getByTestId("preview-image")).toBeInTheDocument();
+      });
+    });
+
+    it("should show error fallback when API returns error", async () => {
+      mockGetAttachmentData.mockResolvedValue({
+        success: false,
+        error: "File not found",
+      });
+
       render(
         <AttachmentPreviewModal
           attachment={createMockAttachment({
@@ -149,6 +222,29 @@ describe("AttachmentPreviewModal", () => {
           onOpenWithSystem={mockOnOpenWithSystem}
         />
       );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("image-error-fallback")).toBeInTheDocument();
+      });
+      expect(screen.getByText("Failed to load image")).toBeInTheDocument();
+    });
+
+    it("should show error fallback when image element fails to load", async () => {
+      render(
+        <AttachmentPreviewModal
+          attachment={createMockAttachment({
+            filename: "broken.jpg",
+            mime_type: "image/jpeg",
+            storage_path: "/path/to/broken.jpg",
+          })}
+          onClose={mockOnClose}
+          onOpenWithSystem={mockOnOpenWithSystem}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("preview-image")).toBeInTheDocument();
+      });
 
       const img = screen.getByTestId("preview-image");
       fireEvent.error(img);
@@ -157,7 +253,12 @@ describe("AttachmentPreviewModal", () => {
       expect(screen.getByText("Failed to load image")).toBeInTheDocument();
     });
 
-    it("should show Open with System Viewer button on image error", () => {
+    it("should show Open with System Viewer button on image error", async () => {
+      mockGetAttachmentData.mockResolvedValue({
+        success: false,
+        error: "File not found",
+      });
+
       render(
         <AttachmentPreviewModal
           attachment={createMockAttachment({
@@ -170,9 +271,9 @@ describe("AttachmentPreviewModal", () => {
         />
       );
 
-      const img = screen.getByTestId("preview-image");
-      fireEvent.error(img);
-
+      await waitFor(() => {
+        expect(screen.getByTestId("image-error-fallback")).toBeInTheDocument();
+      });
       expect(screen.getByText("Open with System Viewer")).toBeInTheDocument();
     });
   });

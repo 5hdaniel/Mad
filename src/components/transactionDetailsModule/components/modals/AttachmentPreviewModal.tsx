@@ -45,17 +45,41 @@ export function AttachmentPreviewModal({
 }: AttachmentPreviewModalProps): React.ReactElement {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
+  const [imageLoading, setImageLoading] = useState(false);
 
   const isImage = attachment.mime_type?.startsWith("image/") ?? false;
   const hasStoragePath = Boolean(attachment.storage_path);
 
-  // Load image from local path
+  // Load image as base64 data URL (CSP blocks file:// URLs)
   useEffect(() => {
-    if (isImage && attachment.storage_path) {
-      // Convert file path to file:// URL for Electron
-      setImageUrl(`file://${attachment.storage_path}`);
+    if (isImage && attachment.storage_path && attachment.mime_type) {
+      setImageLoading(true);
+      setImageError(false);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const api = (window as any).api?.transactions;
+      if (api?.getAttachmentData) {
+        api
+          .getAttachmentData(attachment.storage_path, attachment.mime_type)
+          .then((result: { success: boolean; data?: string; error?: string }) => {
+            if (result.success && result.data) {
+              setImageUrl(result.data);
+            } else {
+              setImageError(true);
+            }
+          })
+          .catch(() => {
+            setImageError(true);
+          })
+          .finally(() => {
+            setImageLoading(false);
+          });
+      } else {
+        // Fallback for tests or missing API
+        setImageError(true);
+        setImageLoading(false);
+      }
     }
-  }, [isImage, attachment.storage_path]);
+  }, [isImage, attachment.storage_path, attachment.mime_type]);
 
   // Handle escape key
   useEffect(() => {
@@ -124,7 +148,12 @@ export function AttachmentPreviewModal({
 
         {/* Content */}
         <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-gray-50">
-          {isImage && imageUrl && !imageError ? (
+          {isImage && imageLoading ? (
+            <div className="text-center py-12" data-testid="image-loading">
+              <div className="w-16 h-16 border-4 border-gray-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4" />
+              <p className="text-gray-500">Loading preview...</p>
+            </div>
+          ) : isImage && imageUrl && !imageError ? (
             <img
               src={imageUrl}
               alt={attachment.filename}

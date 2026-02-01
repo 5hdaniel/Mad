@@ -3062,4 +3062,48 @@ export const registerTransactionHandlers = (
       }
     },
   );
+
+  // Fix for TASK-1778: Get attachment data as base64 for CSP-safe image preview
+  // CSP blocks file:// URLs, so we read the file and return as data: URL
+  ipcMain.handle(
+    "attachments:get-data",
+    async (
+      event: IpcMainInvokeEvent,
+      storagePath: string,
+      mimeType: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        if (!storagePath || typeof storagePath !== "string") {
+          throw new ValidationError("Storage path is required", "storagePath");
+        }
+
+        // Security: Validate path is within app data directory
+        const appDataPath = require("electron").app.getPath("userData");
+        const normalizedPath = require("path").normalize(storagePath);
+        if (!normalizedPath.startsWith(appDataPath)) {
+          throw new ValidationError("Invalid attachment path", "storagePath");
+        }
+
+        // Read file as buffer and convert to base64
+        const fs = require("fs");
+        const buffer = fs.readFileSync(normalizedPath);
+        const base64 = buffer.toString("base64");
+        const dataUrl = `data:${mimeType || "application/octet-stream"};base64,${base64}`;
+
+        return {
+          success: true,
+          data: dataUrl,
+        };
+      } catch (error) {
+        logService.error("Failed to get attachment data", "Transactions", {
+          storagePath,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
 };
