@@ -563,7 +563,9 @@ class FolderExportService {
     index: number,
     outputPath: string
   ): Promise<void> {
-    const html = this.generateEmailHTML(email);
+    // TASK-1780: Get attachments for this email to list in PDF
+    const attachments = email.id ? this.getAttachmentsForEmail(email.id) : [];
+    const html = this.generateEmailHTML(email, attachments);
     const pdfBuffer = await this.htmlToPdf(html);
 
     const date = new Date(email.sent_at as string);
@@ -577,8 +579,12 @@ class FolderExportService {
 
   /**
    * Generate HTML for a single email
+   * TASK-1780: Updated to list attachment filenames instead of generic message
    */
-  private generateEmailHTML(email: Communication): string {
+  private generateEmailHTML(
+    email: Communication,
+    attachments: { filename: string; file_size_bytes: number | null }[] = []
+  ): string {
     const formatDateTime = (dateString: string | Date): string => {
       if (!dateString) return "N/A";
       const date = typeof dateString === "string" ? new Date(dateString) : dateString;
@@ -590,6 +596,14 @@ class FolderExportService {
         hour: "2-digit",
         minute: "2-digit",
       });
+    };
+
+    // TASK-1780: Format file size for display
+    const formatFileSize = (bytes: number | null): string => {
+      if (bytes === null || bytes === 0) return "";
+      if (bytes < 1024) return ` (${bytes} B)`;
+      if (bytes < 1024 * 1024) return ` (${(bytes / 1024).toFixed(1)} KB)`;
+      return ` (${(bytes / (1024 * 1024)).toFixed(1)} MB)`;
     };
 
     // Use HTML body if available, otherwise use plain text
@@ -647,9 +661,28 @@ class FolderExportService {
       color: #718096;
       margin-bottom: 8px;
     }
+    .attachments ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .attachments li {
+      font-size: 13px;
+      color: #4a5568;
+      padding: 4px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .attachments li:last-child {
+      border-bottom: none;
+    }
+    .attachments .file-size {
+      color: #a0aec0;
+      font-size: 12px;
+    }
     .attachments .note {
       font-size: 12px;
       color: #a0aec0;
+      margin-top: 8px;
     }
     @media print { body { padding: 20px; } }
   </style>
@@ -670,11 +703,16 @@ class FolderExportService {
   </div>
 
   ${
-    email.has_attachments
+    email.has_attachments || attachments.length > 0
       ? `
   <div class="attachments">
-    <h4>Attachments (${email.attachment_count || 0})</h4>
-    <div class="note">Attachments are available in the /attachments folder</div>
+    <h4>Attachments (${attachments.length || email.attachment_count || 0})</h4>
+    ${
+      attachments.length > 0
+        ? `<ul>${attachments.map(att => `<li>${this.escapeHtml(att.filename)}<span class="file-size">${formatFileSize(att.file_size_bytes)}</span></li>`).join("")}</ul>
+    <div class="note">Files available in the /attachments folder</div>`
+        : `<div class="note">Attachments are available in the /attachments folder</div>`
+    }
   </div>
   `
       : ""
@@ -1878,6 +1916,40 @@ class FolderExportService {
     } catch (error) {
       logService.warn("[Folder Export] Failed to get attachments for message", "FolderExport", {
         messageId,
+        error,
+      });
+      return [];
+    }
+  }
+
+  /**
+   * TASK-1780: Get attachments for an email by email_id
+   * @param emailId - Email UUID
+   */
+  private getAttachmentsForEmail(emailId: string): {
+    id: string;
+    filename: string;
+    mime_type: string | null;
+    storage_path: string | null;
+    file_size_bytes: number | null;
+  }[] {
+    try {
+      const db = databaseService.getRawDatabase();
+      const sql = `
+        SELECT id, filename, mime_type, storage_path, file_size_bytes
+        FROM attachments
+        WHERE email_id = ?
+      `;
+      return db.prepare(sql).all(emailId) as {
+        id: string;
+        filename: string;
+        mime_type: string | null;
+        storage_path: string | null;
+        file_size_bytes: number | null;
+      }[];
+    } catch (error) {
+      logService.warn("[Folder Export] Failed to get attachments for email", "FolderExport", {
+        emailId,
         error,
       });
       return [];
