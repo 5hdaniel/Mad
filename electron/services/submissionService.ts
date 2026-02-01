@@ -264,7 +264,11 @@ class SubmissionService {
         auditStartDate,
         auditEndDate
       );
-      const attachments = await this.loadTransactionAttachments(transactionId);
+      const attachments = await this.loadTransactionAttachments(
+        transactionId,
+        auditStartDate,
+        auditEndDate
+      );
       const orgId = await this.getUserOrganizationId();
 
       // Load contact names for phone number resolution
@@ -589,17 +593,33 @@ class SubmissionService {
   }
 
   private async loadTransactionAttachments(
-    transactionId: string
+    transactionId: string,
+    auditStartDate?: Date | null,
+    auditEndDate?: Date | null
   ): Promise<Attachment[]> {
     // Get attachments from messages and emails linked to this transaction
+    // Filter by audit period if dates are provided
     const db = databaseService.getRawDatabase();
+
+    // Build date filter conditions
+    let dateFilter = "";
+    const dateParams: string[] = [];
+    if (auditStartDate) {
+      dateFilter += " AND m.sent_at >= ?";
+      dateParams.push(auditStartDate.toISOString());
+    }
+    if (auditEndDate) {
+      const endOfDay = new Date(auditEndDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      dateFilter += " AND m.sent_at <= ?";
+      dateParams.push(endOfDay.toISOString());
+    }
 
     // Query 1: Text message attachments (via message_id -> messages -> communications)
     // BACKLOG-414: Use dual-join pattern to include attachments from both email
     // (via message_id) AND text messages (via thread_id)
-    const textAttachments = db
-      .prepare(
-        `
+    // Now includes audit date filter on message sent_at
+    const textAttachmentsSql = `
       SELECT DISTINCT a.*
       FROM attachments a
       INNER JOIN messages m ON a.message_id = m.id
@@ -610,24 +630,42 @@ class SubmissionService {
       )
       WHERE c.transaction_id = ?
       AND a.storage_path IS NOT NULL
-    `
-      )
-      .all(transactionId) as Attachment[];
+      ${dateFilter}
+    `;
+    const textAttachments = db
+      .prepare(textAttachmentsSql)
+      .all(transactionId, ...dateParams) as Attachment[];
 
-    // Query 2: Email attachments (via email_id -> communications)
+    // Build email date filter (uses emails.sent_at instead of messages.sent_at)
+    let emailDateFilter = "";
+    const emailDateParams: string[] = [];
+    if (auditStartDate) {
+      emailDateFilter += " AND e.sent_at >= ?";
+      emailDateParams.push(auditStartDate.toISOString());
+    }
+    if (auditEndDate) {
+      const endOfDay = new Date(auditEndDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      emailDateFilter += " AND e.sent_at <= ?";
+      emailDateParams.push(endOfDay.toISOString());
+    }
+
+    // Query 2: Email attachments (via email_id -> communications -> emails)
     // TASK-1779: Include email attachments in broker portal upload
-    const emailAttachments = db
-      .prepare(
-        `
+    // Now includes audit date filter on email sent_at
+    const emailAttachmentsSql = `
       SELECT DISTINCT a.*
       FROM attachments a
-      INNER JOIN communications c ON c.email_id = a.email_id
+      INNER JOIN emails e ON a.email_id = e.id
+      INNER JOIN communications c ON c.email_id = e.id
       WHERE c.transaction_id = ?
       AND a.email_id IS NOT NULL
       AND a.storage_path IS NOT NULL
-    `
-      )
-      .all(transactionId) as Attachment[];
+      ${emailDateFilter}
+    `;
+    const emailAttachments = db
+      .prepare(emailAttachmentsSql)
+      .all(transactionId, ...emailDateParams) as Attachment[];
 
     if (emailAttachments.length > 0) {
       logService.info(
