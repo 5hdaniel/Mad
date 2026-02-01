@@ -1422,7 +1422,8 @@ class FolderExportService {
 
   /**
    * Export attachments and create manifest
-   * Queries the attachments table by message_id and copies actual files to output folder
+   * Queries the attachments table by message_id/email_id and copies actual files to output folder
+   * TASK-1777: Updated to include email attachments (queried by email_id)
    */
   private async exportAttachments(
     transaction: Transaction,
@@ -1436,14 +1437,29 @@ class FolderExportService {
       attachments: [],
     };
 
-    // Get message IDs and external IDs for the linked communications
-    // For emails, use message_id; for texts, also check the communication id
-    const messageIds = communications
+    // TASK-1777: Separate email and text message communications
+    const emailComms = communications.filter(
+      (comm) => comm.communication_type === "email"
+    );
+    const textComms = communications.filter(
+      (comm) =>
+        comm.communication_type === "sms" ||
+        comm.communication_type === "imessage" ||
+        comm.communication_type === "text"
+    );
+
+    // Get message IDs for text messages
+    const messageIds = textComms
       .filter((comm) => comm.message_id || comm.id)
       .map((comm) => comm.message_id || comm.id) as string[];
 
-    // Also collect external_ids for fallback lookup
-    const externalIds = communications
+    // TASK-1777: Get email IDs for email attachments
+    const emailIds = emailComms
+      .filter((comm) => comm.id)
+      .map((comm) => comm.id) as string[];
+
+    // Also collect external_ids for fallback lookup (text messages only)
+    const externalIds = textComms
       .filter((comm) => (comm as any).external_id)
       .map((comm) => (comm as any).external_id) as string[];
 
@@ -1456,12 +1472,13 @@ class FolderExportService {
         totalCommunications: communications.length,
         withHasAttachments: commsWithAttachments.length,
         messageIds: messageIds.length,
+        emailIds: emailIds.length,
         externalIds: externalIds.length,
       }
     );
 
-    if (messageIds.length === 0) {
-      // No linked messages, write empty manifest
+    if (messageIds.length === 0 && emailIds.length === 0) {
+      // No linked messages or emails, write empty manifest
       await fs.writeFile(
         path.join(outputPath, "manifest.json"),
         JSON.stringify(manifest, null, 2),
@@ -1470,55 +1487,76 @@ class FolderExportService {
       return;
     }
 
-    // Query attachments table for all linked messages
+    // Query attachments table for all linked messages and emails
     const db = databaseService.getRawDatabase();
-    const placeholders = messageIds.map(() => "?").join(", ");
-    let attachmentRows = db
-      .prepare(
-        `
-        SELECT id, message_id, filename, mime_type, file_size_bytes, storage_path
-        FROM attachments
-        WHERE message_id IN (${placeholders})
-      `
-      )
-      .all(...messageIds) as {
+    let attachmentRows: {
       id: string;
-      message_id: string;
+      message_id: string | null;
+      email_id: string | null;
       filename: string;
       mime_type: string | null;
       file_size_bytes: number | null;
       storage_path: string | null;
-    }[];
+    }[] = [];
 
-    // Fallback: Also query by external_message_id for attachments with stale message_id
-    if (externalIds.length > 0) {
-      const externalPlaceholders = externalIds.map(() => "?").join(", ");
-      const fallbackRows = db
+    // Query text message attachments by message_id
+    if (messageIds.length > 0) {
+      const placeholders = messageIds.map(() => "?").join(", ");
+      const textAttachmentRows = db
         .prepare(
           `
-          SELECT id, message_id, external_message_id, filename, mime_type, file_size_bytes, storage_path
+          SELECT id, message_id, NULL as email_id, filename, mime_type, file_size_bytes, storage_path
           FROM attachments
-          WHERE external_message_id IN (${externalPlaceholders})
-            AND id NOT IN (SELECT id FROM attachments WHERE message_id IN (${placeholders}))
+          WHERE message_id IN (${placeholders})
         `
         )
-        .all(...externalIds, ...messageIds) as {
-        id: string;
-        message_id: string;
-        external_message_id: string;
-        filename: string;
-        mime_type: string | null;
-        file_size_bytes: number | null;
-        storage_path: string | null;
-      }[];
+        .all(...messageIds) as typeof attachmentRows;
 
-      if (fallbackRows.length > 0) {
+      attachmentRows = [...attachmentRows, ...textAttachmentRows];
+
+      // Fallback: Also query by external_message_id for attachments with stale message_id
+      if (externalIds.length > 0) {
+        const externalPlaceholders = externalIds.map(() => "?").join(", ");
+        const fallbackRows = db
+          .prepare(
+            `
+            SELECT id, message_id, NULL as email_id, filename, mime_type, file_size_bytes, storage_path
+            FROM attachments
+            WHERE external_message_id IN (${externalPlaceholders})
+              AND id NOT IN (SELECT id FROM attachments WHERE message_id IN (${placeholders}))
+          `
+          )
+          .all(...externalIds, ...messageIds) as typeof attachmentRows;
+
+        if (fallbackRows.length > 0) {
+          logService.info(
+            `[Folder Export] Found ${fallbackRows.length} additional attachments via external_message_id fallback`,
+            "FolderExport"
+          );
+          attachmentRows = [...attachmentRows, ...fallbackRows];
+        }
+      }
+    }
+
+    // TASK-1777: Query email attachments by email_id
+    if (emailIds.length > 0) {
+      const emailPlaceholders = emailIds.map(() => "?").join(", ");
+      const emailAttachmentRows = db
+        .prepare(
+          `
+          SELECT id, NULL as message_id, email_id, filename, mime_type, file_size_bytes, storage_path
+          FROM attachments
+          WHERE email_id IN (${emailPlaceholders})
+        `
+        )
+        .all(...emailIds) as typeof attachmentRows;
+
+      if (emailAttachmentRows.length > 0) {
         logService.info(
-          `[Folder Export] Found ${fallbackRows.length} additional attachments via external_message_id fallback`,
+          `[Folder Export] Found ${emailAttachmentRows.length} email attachments`,
           "FolderExport"
         );
-        // Merge fallback results
-        attachmentRows = [...attachmentRows, ...fallbackRows];
+        attachmentRows = [...attachmentRows, ...emailAttachmentRows];
       }
     }
 
@@ -1579,9 +1617,21 @@ class FolderExportService {
     const usedFilenames = new Set<string>();
 
     for (const att of attachmentRows) {
-      // Try message_id lookup first, fall back to external_message_id
-      let comm = messageIdToComm.get(att.message_id);
-      let commIndex = messageIdToCommIndex.get(att.message_id);
+      // TASK-1777: Try message_id, email_id, or external_message_id lookup
+      let comm: Communication | undefined;
+      let commIndex: number | undefined;
+
+      // Try message_id lookup (text messages)
+      if (att.message_id) {
+        comm = messageIdToComm.get(att.message_id);
+        commIndex = messageIdToCommIndex.get(att.message_id);
+      }
+
+      // Try email_id lookup (email attachments)
+      if (!comm && att.email_id) {
+        comm = messageIdToComm.get(att.email_id);
+        commIndex = messageIdToCommIndex.get(att.email_id);
+      }
 
       // Fallback: try external_message_id if regular lookup failed
       if (!comm && (att as any).external_message_id) {
