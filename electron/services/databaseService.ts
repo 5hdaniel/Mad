@@ -913,6 +913,59 @@ class DatabaseService implements IDatabaseService {
       await logService.info("Migration 23 complete: communications is now pure junction table (10 columns)", "DatabaseService");
     }
 
+    // Migration 24: Create phone_last_message lookup table for fast contact sorting (BACKLOG-567)
+    // This enables O(1) lookup of last message date by phone number instead of O(n) LIKE scans
+    const phoneLastMsgExists = db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='phone_last_message'"
+    ).get();
+
+    if (!phoneLastMsgExists) {
+      await logService.info("Running migration 24: Create phone_last_message lookup table", "DatabaseService");
+
+      db.exec(`
+        CREATE TABLE phone_last_message (
+          phone_normalized TEXT NOT NULL,
+          user_id TEXT NOT NULL,
+          last_message_at DATETIME NOT NULL,
+          PRIMARY KEY (phone_normalized, user_id),
+          FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
+        )
+      `);
+      db.exec(`CREATE INDEX idx_phone_last_msg_user ON phone_last_message(user_id)`);
+
+      await logService.info("Migration 24 complete: phone_last_message table created", "DatabaseService");
+    }
+
+    // Migration 25: Create external_contacts shadow table (BACKLOG-569, TASK-1773)
+    // This caches macOS Contacts with pre-computed last_message_at for instant sorted loading
+    const externalContactsExists = db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='external_contacts'"
+    ).get();
+
+    if (!externalContactsExists) {
+      await logService.info("Running migration 25: Create external_contacts shadow table", "DatabaseService");
+
+      db.exec(`
+        CREATE TABLE external_contacts (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          name TEXT,
+          phones_json TEXT,
+          emails_json TEXT,
+          company TEXT,
+          last_message_at DATETIME,
+          macos_record_id TEXT,
+          synced_at DATETIME,
+          FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
+          UNIQUE(user_id, macos_record_id)
+        )
+      `);
+      db.exec(`CREATE INDEX idx_external_contacts_user ON external_contacts(user_id)`);
+      db.exec(`CREATE INDEX idx_external_contacts_last_msg ON external_contacts(user_id, last_message_at DESC)`);
+
+      await logService.info("Migration 25 complete: external_contacts shadow table created", "DatabaseService");
+    }
+
     // Finalize schema version (create table if missing for backwards compatibility)
     const schemaVersionExists = db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
@@ -1029,6 +1082,10 @@ class DatabaseService implements IDatabaseService {
     return contactDb.getContactById(contactId);
   }
 
+  async findContactByName(userId: string, name: string): Promise<Contact | null> {
+    return contactDb.findContactByName(userId, name);
+  }
+
   async getContacts(filters?: ContactFilters): Promise<Contact[]> {
     return contactDb.getContacts(filters);
   }
@@ -1041,8 +1098,8 @@ class DatabaseService implements IDatabaseService {
     return contactDb.getUnimportedContactsByUserId(userId);
   }
 
-  async markContactAsImported(contactId: string): Promise<void> {
-    return contactDb.markContactAsImported(contactId);
+  async markContactAsImported(contactId: string, source?: string): Promise<void> {
+    return contactDb.markContactAsImported(contactId, source);
   }
 
   async backfillContactEmails(contactId: string, emails: string[]): Promise<number> {
@@ -1055,6 +1112,10 @@ class DatabaseService implements IDatabaseService {
 
   async getContactsSortedByActivity(userId: string, propertyAddress?: string): Promise<contactDb.ContactWithActivity[]> {
     return contactDb.getContactsSortedByActivity(userId, propertyAddress);
+  }
+
+  async backfillContactCommunicationDates(userId: string): Promise<number> {
+    return contactDb.backfillContactCommunicationDates(userId);
   }
 
   async searchContacts(query: string, userId: string): Promise<Contact[]> {
@@ -1079,6 +1140,116 @@ class DatabaseService implements IDatabaseService {
 
   async getContactByPhone(phone: string): Promise<{ id: string; display_name: string; phone: string } | null> {
     return contactDb.getContactByPhone(phone);
+  }
+
+  /**
+   * Get the most recent message date for a phone number using lookup table
+   * Falls back to direct query if lookup table is empty (BACKLOG-567)
+   */
+  getLastMessageDateForPhone(userId: string, normalizedPhone: string): string | null {
+    const db = this.getRawDatabase();
+
+    // Fast indexed lookup from phone_last_message table
+    const result = db.prepare(`
+      SELECT last_message_at as last_date
+      FROM phone_last_message
+      WHERE user_id = ?
+        AND phone_normalized = ?
+    `).get(userId, normalizedPhone) as { last_date: string | null } | undefined;
+
+    return result?.last_date || null;
+  }
+
+  /**
+   * Batch lookup for multiple phones (much more efficient than N queries)
+   * Returns a Map of normalized phone -> last_message_at (BACKLOG-567)
+   */
+  getLastMessageDatesForPhones(userId: string, phones: string[]): Map<string, string> {
+    const db = this.getRawDatabase();
+    const result = new Map<string, string>();
+
+    if (phones.length === 0) return result;
+
+    // Use parameterized query for safety
+    const placeholders = phones.map(() => '?').join(',');
+    const rows = db.prepare(`
+      SELECT phone_normalized, last_message_at
+      FROM phone_last_message
+      WHERE user_id = ?
+        AND phone_normalized IN (${placeholders})
+    `).all(userId, ...phones) as { phone_normalized: string; last_message_at: string }[];
+
+    for (const row of rows) {
+      result.set(row.phone_normalized, row.last_message_at);
+    }
+
+    return result;
+  }
+
+  /**
+   * Populate phone_last_message lookup table from messages (BACKLOG-567)
+   * This aggregates all SMS/iMessage into a phone->lastDate lookup for O(1) queries
+   */
+  async backfillPhoneLastMessageTable(userId: string): Promise<number> {
+    const db = this.getRawDatabase();
+
+    await logService.info("Backfilling phone_last_message table", "DatabaseService", { userId });
+
+    // Get all distinct phone numbers from participants_flat and their max sent_at
+    // participants_flat format: ",16508685180,16508685180" (comma-separated digits)
+    const messages = db.prepare(`
+      SELECT participants_flat, MAX(sent_at) as last_date
+      FROM messages
+      WHERE user_id = ?
+        AND (channel = 'sms' OR channel = 'imessage')
+        AND participants_flat IS NOT NULL
+        AND participants_flat != ''
+      GROUP BY participants_flat
+    `).all(userId) as { participants_flat: string; last_date: string }[];
+
+    // Parse and aggregate phones
+    const phoneLastDates = new Map<string, string>();
+
+    for (const msg of messages) {
+      // Split comma-separated phones and normalize each
+      const phones = msg.participants_flat.split(',').filter(p => p.trim().length >= 7);
+
+      for (const phone of phones) {
+        const normalized = phone.trim().slice(-10); // Last 10 digits
+        if (normalized.length < 7) continue;
+
+        const existing = phoneLastDates.get(normalized);
+        if (!existing || msg.last_date > existing) {
+          phoneLastDates.set(normalized, msg.last_date);
+        }
+      }
+    }
+
+    // Insert/update all phones in a transaction
+    const insertStmt = db.prepare(`
+      INSERT OR REPLACE INTO phone_last_message (phone_normalized, user_id, last_message_at)
+      VALUES (?, ?, ?)
+    `);
+
+    db.exec('BEGIN TRANSACTION');
+    try {
+      let count = 0;
+      for (const [phone, lastDate] of phoneLastDates) {
+        insertStmt.run(phone, userId, lastDate);
+        count++;
+      }
+      db.exec('COMMIT');
+
+      await logService.info("Phone last message backfill complete", "DatabaseService", {
+        userId,
+        phonesUpdated: count,
+      });
+
+      return count;
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   async getContactNamesByPhones(phones: string[]): Promise<Map<string, string>> {

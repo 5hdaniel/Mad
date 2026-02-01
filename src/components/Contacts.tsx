@@ -1,23 +1,18 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useCallback } from "react";
 import {
-  ContactCard,
   ContactDetailsModal,
   ContactFormModal,
-  ImportContactsModal,
   RemoveConfirmationModal,
   BlockingTransactionsModal,
   useContactList,
-  useContactSearch,
   ExtendedContact,
 } from "./contact";
 import { useAppStateMachine } from "../appCore";
+import { ContactSearchList } from "./shared/ContactSearchList";
 import {
   ContactPreview,
   type ContactTransaction,
 } from "./shared/ContactPreview";
-
-// LocalStorage key for toggle persistence (shared with ContactSelectModal)
-const SHOW_MESSAGE_CONTACTS_KEY = "contactModal.showMessageContacts";
 
 interface ContactsProps {
   userId: string;
@@ -26,8 +21,9 @@ interface ContactsProps {
 
 /**
  * Contacts Component
- * Full contact management interface
- * - List all contacts
+ * Full contact management interface using ContactSearchList for consistent UX
+ * - List all contacts (imported + external from Contacts App)
+ * - Import external contacts
  * - Add/Edit/Delete contacts
  * - View contact details
  */
@@ -35,69 +31,14 @@ function Contacts({ userId, onClose }: ContactsProps) {
   // Database initialization guard (belt-and-suspenders defense)
   const { isDatabaseInitialized } = useAppStateMachine();
 
-  // Contact list and removal state
-  const {
-    contacts,
-    loading,
-    error,
-    loadContacts,
-    handleRemoveContact,
-    handleConfirmRemove,
-    showRemoveConfirmation,
-    setShowRemoveConfirmation,
-    setContactToRemove,
-    showBlockingModal,
-    setShowBlockingModal,
-    blockingTransactions,
-    setBlockingTransactions,
-  } = useContactList(userId);
-
-  // Toggle for showing message-derived contacts (default: hide them)
-  const [showMessageContacts, setShowMessageContacts] = useState<boolean>(() => {
-    try {
-      const stored = localStorage.getItem(SHOW_MESSAGE_CONTACTS_KEY);
-      return stored === "true";
-    } catch {
-      return false;
-    }
-  });
-
-  // Persist toggle state to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(SHOW_MESSAGE_CONTACTS_KEY, String(showMessageContacts));
-    } catch {
-      // Ignore localStorage errors
-    }
-  }, [showMessageContacts]);
-
-  // Helper to check if a contact is message-derived
-  const isMessageDerived = (contact: ExtendedContact): boolean => {
-    // is_message_derived can be number (1) or boolean (true)
-    return contact.is_message_derived === 1 || contact.is_message_derived === true;
-  };
-
-  // Filter contacts based on message-derived toggle before passing to search
-  const visibleContacts = useMemo(() => {
-    if (showMessageContacts) {
-      return contacts;
-    }
-    return contacts.filter((c) => !isMessageDerived(c));
-  }, [contacts, showMessageContacts]);
-
-  // Search and filtering (uses visibleContacts which respects the message-derived toggle)
-  const { searchQuery, setSearchQuery, filteredContacts } =
-    useContactSearch(visibleContacts);
-
   // Modal states
   const [showAddEdit, setShowAddEdit] = useState(false);
-  const [showImport, setShowImport] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [selectedContact, setSelectedContact] = useState<
     ExtendedContact | undefined
   >(undefined);
 
-  // ContactPreview state
+  // ContactPreview state (for external contacts)
   const [previewContact, setPreviewContact] = useState<ExtendedContact | null>(
     null
   );
@@ -107,8 +48,45 @@ function Contacts({ userId, onClose }: ContactsProps) {
   const [loadingPreviewTransactions, setLoadingPreviewTransactions] =
     useState(false);
 
+  // Track imported contact IDs for visual feedback
+  const [importedContactIds, setImportedContactIds] = useState<Set<string>>(
+    new Set()
+  );
+
+  // Clear stale imported IDs when a contact is deleted
+  const handleContactDeleted = useCallback(() => {
+    // Clear all imported IDs - the external contact may reappear and shouldn't show checkmark
+    setImportedContactIds(new Set());
+  }, []);
+
+  // Contact list and removal state
+  const {
+    contacts,
+    loading,
+    error,
+    loadContacts,
+    silentLoadContacts,
+    handleRemoveContact,
+    handleConfirmRemove,
+    showRemoveConfirmation,
+    setShowRemoveConfirmation,
+    setContactToRemove,
+    showBlockingModal,
+    setShowBlockingModal,
+    blockingTransactions,
+    setBlockingTransactions,
+    // External contacts (from macOS Contacts app, etc.)
+    externalContacts,
+    externalContactsLoading,
+    reloadExternalContacts,
+  } = useContactList(userId, { onContactDeleted: handleContactDeleted });
+
+  // Helper to check if a contact is external (message-derived or from Contacts app)
+  const isExternal = (contact: ExtendedContact): boolean => {
+    return contact.is_message_derived === 1 || contact.is_message_derived === true;
+  };
+
   // DEFENSIVE CHECK: Return loading state if database not initialized
-  // Should never trigger if AppShell gate works, but prevents errors if bypassed
   if (!isDatabaseInitialized) {
     return (
       <div className="h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
@@ -120,34 +98,77 @@ function Contacts({ userId, onClose }: ContactsProps) {
     );
   }
 
-  const handleAddContact = () => {
-    setShowImport(true);
-  };
-
-  const handleAddManually = () => {
-    setShowImport(false);
-    setSelectedContact(undefined);
-    setShowAddEdit(true);
-  };
-
-  const handleViewContact = (contact: ExtendedContact) => {
-    // For imported contacts (not message-derived), open the full details modal
-    // which has Edit/Remove actions. For message-derived contacts, open preview
-    // which has the Import action.
-    if (isMessageDerived(contact)) {
+  // Handle clicking on a contact to view details
+  const handleContactClick = useCallback((contact: ExtendedContact) => {
+    if (isExternal(contact)) {
+      // External contact - show preview with import option
       setPreviewContact(contact);
-      // Note: Transaction loading API not yet available
-      // The preview will show "No transactions yet" for now
-      // This can be enhanced when contacts:getTransactions API is added
       setPreviewTransactions([]);
       setLoadingPreviewTransactions(false);
     } else {
-      // Open ContactDetailsModal for imported contacts
+      // Imported contact - show full details modal
       setSelectedContact(contact);
       setShowDetails(true);
     }
+  }, []);
+
+  // Handle importing an external contact (from ContactSearchList's + Add Contact button)
+  const handleImportContact = useCallback(
+    async (contact: ExtendedContact): Promise<ExtendedContact> => {
+      const contactName = contact.display_name || contact.name || "";
+
+      try {
+        const result = await window.api.contacts.create(userId, {
+          name: contactName,
+          email: contact.email || contact.allEmails?.[0] || "",
+          phone: contact.phone || contact.allPhones?.[0] || "",
+          company: contact.company || "",
+          title: contact.title || "",
+          source: "contacts_app",
+        });
+
+        if (result.success && result.contact) {
+          // Mark as imported for visual feedback
+          setImportedContactIds((prev) => new Set(prev).add(contact.id));
+          // Silent refresh to avoid showing loading state
+          await silentLoadContacts();
+          return result.contact as ExtendedContact;
+        }
+
+        throw new Error(result.error || "Failed to import contact");
+      } catch (err) {
+        console.error("Failed to import contact:", err);
+        throw err;
+      }
+    },
+    [userId, silentLoadContacts]
+  );
+
+  // Handle importing from preview modal
+  const handlePreviewImport = async () => {
+    if (!previewContact) return;
+
+    const hasName = !!(previewContact.display_name || previewContact.name);
+    const hasEmail = !!(previewContact.email || previewContact.allEmails?.[0]);
+    const hasPhone = !!(previewContact.phone || previewContact.allPhones?.[0]);
+
+    if (!hasName || (!hasEmail && !hasPhone)) {
+      // Missing required data - open edit form
+      setPreviewContact(null);
+      setSelectedContact(previewContact);
+      setShowAddEdit(true);
+      return;
+    }
+
+    try {
+      await handleImportContact(previewContact);
+      setPreviewContact(null);
+    } catch (err) {
+      console.error("Failed to import contact:", err);
+    }
   };
 
+  // Handle editing from preview modal
   const handlePreviewEdit = () => {
     if (previewContact) {
       setPreviewContact(null);
@@ -156,87 +177,13 @@ function Contacts({ userId, onClose }: ContactsProps) {
     }
   };
 
-  const handlePreviewImport = async () => {
-    if (previewContact) {
-      // Check if contact has required data (name and at least email or phone)
-      const hasName = !!(previewContact.display_name || previewContact.name);
-      const hasEmail = !!(previewContact.email || previewContact.allEmails?.[0]);
-      const hasPhone = !!(previewContact.phone || previewContact.allPhones?.[0]);
-
-      if (!hasName || (!hasEmail && !hasPhone)) {
-        // Missing required data - open edit form to let user fill in details
-        setPreviewContact(null);
-        setSelectedContact(previewContact);
-        setShowAddEdit(true);
-        return;
-      }
-
-      try {
-        // Message-derived contacts (msg_*) don't exist in DB - need to create them
-        if (previewContact.id.startsWith("msg_")) {
-          await window.api.contacts.create(userId, {
-            name: previewContact.display_name || previewContact.name || "",
-            email: previewContact.email || previewContact.allEmails?.[0] || "",
-            phone: previewContact.phone || previewContact.allPhones?.[0] || "",
-            company: previewContact.company || "",
-            title: previewContact.title || "",
-          });
-        } else {
-          // Real contacts can be marked as imported
-          await window.api.contacts.update(previewContact.id, {
-            is_message_derived: false,
-          });
-        }
-        setPreviewContact(null);
-        // Refresh the contacts list to reflect the change
-        await loadContacts();
-      } catch (error) {
-        console.error("Failed to import contact:", error);
-      }
-    }
+  // Handle adding a new contact manually
+  const handleAddManually = () => {
+    setSelectedContact(undefined);
+    setShowAddEdit(true);
   };
 
-  const handleCardImport = async (contact: ExtendedContact) => {
-    // Check if contact has required data (name and at least email or phone)
-    const hasName = !!(contact.display_name || contact.name);
-    const hasEmail = !!(contact.email || contact.allEmails?.[0]);
-    const hasPhone = !!(contact.phone || contact.allPhones?.[0]);
-
-    if (!hasName || (!hasEmail && !hasPhone)) {
-      // Missing required data - open edit form to let user fill in details
-      setSelectedContact(contact);
-      setShowAddEdit(true);
-      return;
-    }
-
-    try {
-      // Message-derived contacts (msg_*) don't exist in DB - need to create them
-      if (contact.id.startsWith("msg_")) {
-        await window.api.contacts.create(userId, {
-          name: contact.display_name || contact.name || "",
-          email: contact.email || contact.allEmails?.[0] || "",
-          phone: contact.phone || contact.allPhones?.[0] || "",
-          company: contact.company || "",
-          title: contact.title || "",
-        });
-      } else {
-        // Real contacts can be marked as imported
-        await window.api.contacts.update(contact.id, {
-          is_message_derived: false,
-        });
-      }
-      // Refresh the contacts list to reflect the change
-      await loadContacts();
-    } catch (error) {
-      console.error("Failed to import contact:", error);
-    }
-  };
-
-  const handleViewDetails = (contact: ExtendedContact) => {
-    setSelectedContact(contact);
-    setShowDetails(true);
-  };
-
+  // Handle editing a contact from details modal
   const handleEditContact = (contact: ExtendedContact) => {
     setShowDetails(false);
     setSelectedContact(contact);
@@ -246,7 +193,7 @@ function Contacts({ userId, onClose }: ContactsProps) {
   return (
     <div className="h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex-shrink-0 bg-gradient-to-r from-purple-500 to-pink-600 px-6 py-6 flex items-center justify-between shadow-lg">
+      <div className="flex-shrink-0 bg-gradient-to-r from-purple-500 to-pink-600 px-6 py-4 flex items-center justify-between shadow-lg">
         <button
           onClick={onClose}
           className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-4 py-2 transition-all flex items-center gap-2 font-medium"
@@ -269,175 +216,50 @@ function Contacts({ userId, onClose }: ContactsProps) {
         <div className="text-right">
           <h2 className="text-2xl font-bold text-white">Contacts</h2>
           <p className="text-purple-100 text-sm">
-            {contacts.length} contacts total
+            {contacts.length + externalContacts.length} contacts
+            {externalContacts.length > 0 &&
+              ` (${externalContacts.length} from Contacts App)`}
           </p>
         </div>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex-shrink-0 p-6 bg-white shadow-md relative">
-        <div className="flex items-center gap-3">
-          {/* Search */}
-          <div className="flex-1 relative">
-            <input
-              type="text"
-              placeholder="Search contacts by name, email, or company..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-            />
-            <svg
-              className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
-          </div>
-
-          {/* Toggle for message-derived contacts */}
-          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none flex-shrink-0 whitespace-nowrap">
-            <input
-              type="checkbox"
-              checked={showMessageContacts}
-              onChange={(e) => setShowMessageContacts(e.target.checked)}
-              className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
-            />
-            <span>Include message contacts</span>
-          </label>
-
-          {/* Add Contact Button */}
-          <button
-            onClick={handleAddContact}
-            className="px-4 py-2 rounded-lg font-semibold transition-all bg-gradient-to-r from-purple-500 to-pink-600 text-white hover:from-purple-600 hover:to-pink-700 shadow-md hover:shadow-lg flex items-center gap-2"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-              />
-            </svg>
-            Add Contact
-          </button>
+      {/* Error Banner */}
+      {error && (
+        <div className="flex-shrink-0 mx-4 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-sm text-red-800">{error}</p>
         </div>
+      )}
 
-        {/* Error */}
-        {error && (
-          <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-sm text-red-800">{error}</p>
-          </div>
-        )}
-
-        {/* Arrow pointing to Add Contact button - only show when no contacts */}
-        {!loading && contacts.length === 0 && !searchQuery && (
-          <div className="absolute right-6 top-full mt-2 flex flex-col items-center gap-1 text-purple-600 animate-bounce">
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 10l7-7m0 0l7 7m-7-7v18"
-              />
-            </svg>
-            <p className="text-xs font-medium whitespace-nowrap">
-              Click "Add Contact" to begin
-            </p>
-          </div>
-        )}
+      {/* ContactSearchList - main content area */}
+      <div className="flex-1 min-h-0 bg-white mx-4 my-4 rounded-xl shadow-lg overflow-hidden">
+        <ContactSearchList
+          contacts={contacts}
+          externalContacts={externalContacts}
+          selectedIds={[]}
+          onSelectionChange={() => {}}
+          onContactClick={handleContactClick}
+          onImportContact={handleImportContact}
+          onAddManually={handleAddManually}
+          addedContactIds={importedContactIds}
+          isLoading={loading || externalContactsLoading}
+          error={error}
+          searchPlaceholder="Search contacts by name, email, or phone..."
+          showCategoryFilter={true}
+          sortOrder="alphabetical"
+          className="h-full"
+        />
       </div>
 
-      {/* Contacts List */}
-      <div className="flex-1 overflow-y-auto p-6 max-w-7xl mx-auto w-full">
-        {loading ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading contacts...</p>
-            </div>
-          </div>
-        ) : filteredContacts.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center max-w-md">
-              <svg
-                className="w-16 h-16 text-gray-300 mx-auto mb-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                />
-              </svg>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                {searchQuery ? "No matching contacts" : "No contacts yet"}
-              </h3>
-              <p className="text-gray-600">
-                {searchQuery
-                  ? "Try adjusting your search"
-                  : "Get started by adding your first contact"}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredContacts.map((contact) => (
-              <ContactCard
-                key={contact.id}
-                contact={contact}
-                onClick={handleViewContact}
-                onImport={handleCardImport}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Contact Preview Modal */}
+      {/* Contact Preview Modal (for external contacts) */}
       {previewContact && (
         <ContactPreview
           contact={previewContact}
-          isExternal={isMessageDerived(previewContact)}
+          isExternal={isExternal(previewContact)}
           transactions={previewTransactions}
           isLoadingTransactions={loadingPreviewTransactions}
           onEdit={handlePreviewEdit}
           onImport={handlePreviewImport}
           onClose={() => setPreviewContact(null)}
-        />
-      )}
-
-      {/* Import Contacts Modal */}
-      {showImport && (
-        <ImportContactsModal
-          userId={userId}
-          onClose={() => setShowImport(false)}
-          onSuccess={() => {
-            // Note: importedContactIds parameter is available but not needed here
-            // since this is the main Contacts page, not a contact selection modal
-            setShowImport(false);
-            loadContacts();
-          }}
-          onAddManually={handleAddManually}
         />
       )}
 
@@ -458,7 +280,7 @@ function Contacts({ userId, onClose }: ContactsProps) {
         />
       )}
 
-      {/* Contact Details Modal */}
+      {/* Contact Details Modal (for imported contacts) */}
       {showDetails && selectedContact && (
         <ContactDetailsModal
           contact={selectedContact}

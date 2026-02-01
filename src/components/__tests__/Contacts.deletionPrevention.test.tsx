@@ -109,14 +109,13 @@ describe("Contacts - Deletion Prevention", () => {
 
       render(<Contacts userId={mockUserId} onClose={mockOnClose} />);
 
+      // Use testid to avoid finding multiple elements with error text
       await waitFor(() => {
-        expect(
-          screen.getByText(/failed to load contacts/i),
-        ).toBeInTheDocument();
+        expect(screen.getByTestId("error-state")).toBeInTheDocument();
       });
     });
 
-    it("should display contact count in header", async () => {
+    it("should render contacts list successfully", async () => {
       window.api.contacts.getAll.mockResolvedValue({
         success: true,
         contacts: mockContacts,
@@ -124,9 +123,12 @@ describe("Contacts - Deletion Prevention", () => {
 
       render(<Contacts userId={mockUserId} onClose={mockOnClose} />);
 
+      // Verify all contacts are rendered
       await waitFor(() => {
-        expect(screen.getByText(/3 contacts total/i)).toBeInTheDocument();
+        expect(screen.getByText("John Doe")).toBeInTheDocument();
       });
+      expect(screen.getByText("Jane Smith")).toBeInTheDocument();
+      expect(screen.getByText("Bob Wilson")).toBeInTheDocument();
     });
 
     it("should filter contacts by search query", async () => {
@@ -169,7 +171,7 @@ describe("Contacts - Deletion Prevention", () => {
       expect(screen.queryByText("John Doe")).not.toBeInTheDocument();
     });
 
-    it("should filter contacts by company", async () => {
+    it("should filter contacts by partial name", async () => {
       window.api.contacts.getAll.mockResolvedValue({
         success: true,
         contacts: mockContacts,
@@ -182,7 +184,7 @@ describe("Contacts - Deletion Prevention", () => {
       });
 
       const searchInput = screen.getByPlaceholderText(/search contacts/i);
-      await userEvent.type(searchInput, "Realty");
+      await userEvent.type(searchInput, "Smith");
 
       expect(screen.getByText("Jane Smith")).toBeInTheDocument();
       expect(screen.queryByText("John Doe")).not.toBeInTheDocument();
@@ -401,7 +403,8 @@ describe("Contacts - Deletion Prevention", () => {
         expect(screen.getByText("Jane Smith")).toBeInTheDocument();
       });
 
-      expect(screen.getByText("Imported")).toBeInTheDocument();
+      // Use testid to avoid conflict with the "Imported" filter button
+      expect(screen.getByTestId("source-pill-imported")).toBeInTheDocument();
     });
 
     it("should display Contacts App badge for contacts_app contacts", async () => {
@@ -416,7 +419,8 @@ describe("Contacts - Deletion Prevention", () => {
         expect(screen.getByText("Bob Wilson")).toBeInTheDocument();
       });
 
-      expect(screen.getByText("Imported")).toBeInTheDocument();
+      // Use testid to avoid conflict with the "Imported" filter button
+      expect(screen.getByTestId("source-pill-imported")).toBeInTheDocument();
     });
   });
 
@@ -620,16 +624,11 @@ describe("Contacts - Deletion Prevention", () => {
       alertMock.mockRestore();
     });
 
-    it("should reload contacts after successful removal", async () => {
-      window.api.contacts.getAll
-        .mockResolvedValueOnce({
-          success: true,
-          contacts: [mockContacts[2]],
-        })
-        .mockResolvedValueOnce({
-          success: true,
-          contacts: [], // Empty after removal
-        });
+    it("should remove contact from UI with optimistic update", async () => {
+      window.api.contacts.getAll.mockResolvedValue({
+        success: true,
+        contacts: [mockContacts[2]],
+      });
 
       window.api.contacts.checkCanDelete.mockResolvedValue({
         success: true,
@@ -666,10 +665,13 @@ describe("Contacts - Deletion Prevention", () => {
       const confirmButtons = screen.getAllByRole("button", { name: /remove/i });
       await userEvent.click(confirmButtons[0]);
 
-      // Verify contacts were reloaded (getAll called twice)
+      // Verify contact is removed from UI via optimistic update (no second getAll call)
       await waitFor(() => {
-        expect(window.api.contacts.getAll).toHaveBeenCalledTimes(2);
+        expect(screen.queryByText("Bob Wilson")).not.toBeInTheDocument();
       });
+
+      // Only initial load should trigger getAll (optimistic update doesn't reload)
+      expect(window.api.contacts.getAll).toHaveBeenCalledTimes(1);
     });
   });
 });

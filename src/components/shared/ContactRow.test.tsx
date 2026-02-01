@@ -186,14 +186,16 @@ describe("ContactRow", () => {
       ).toBeInTheDocument();
     });
 
-    it("hides import button for imported contacts even when showImportButton is true", () => {
+    it("shows import button for any contact when showImportButton is true", () => {
+      // Note: The parent component is responsible for deciding when to show
+      // the import button based on contact type
       renderContactRow({
         showImportButton: true,
         contact: createTestContact({ is_message_derived: false }),
       });
       expect(
-        screen.queryByTestId("contact-row-import-button")
-      ).not.toBeInTheDocument();
+        screen.getByTestId("contact-row-import-button")
+      ).toBeInTheDocument();
     });
 
     it("hides import button when showImportButton is false", () => {
@@ -239,7 +241,7 @@ describe("ContactRow", () => {
         contact: createTestContact({ is_message_derived: true, display_name: "Jane" }),
       });
       const button = screen.getByTestId("contact-row-import-button");
-      expect(button).toHaveAttribute("aria-label", "Import Jane");
+      expect(button).toHaveAttribute("aria-label", "Add Jane");
     });
   });
 
@@ -325,11 +327,11 @@ describe("ContactRow", () => {
   });
 
   describe("Source Pill Variants", () => {
-    it("shows imported variant for manual source", () => {
+    it("shows manual variant for manual source", () => {
       renderContactRow({
         contact: createTestContact({ source: "manual", is_message_derived: false }),
       });
-      expect(screen.getByTestId("source-pill-imported")).toBeInTheDocument();
+      expect(screen.getByTestId("source-pill-manual")).toBeInTheDocument();
     });
 
     it("shows imported variant for contacts_app source", () => {

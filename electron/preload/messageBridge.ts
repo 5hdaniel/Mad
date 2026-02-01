@@ -132,4 +132,18 @@ export const messageBridge = {
   cancelImport: (): void => {
     ipcRenderer.send("messages:import-cancel");
   },
+
+  /**
+   * Get macOS messages import status (count and last import time)
+   * @param userId - User ID to get status for
+   * @returns Import status (messageCount, lastImportAt)
+   */
+  getImportStatus: (
+    userId: string
+  ): Promise<{
+    success: boolean;
+    messageCount?: number;
+    lastImportAt?: string | null;
+    error?: string;
+  }> => ipcRenderer.invoke("messages:getImportStatus", userId),
 };

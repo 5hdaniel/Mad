@@ -339,9 +339,6 @@ describe("EditContactsModal", () => {
       await user.click(screen.getByTestId("add-contacts-button"));
 
       expect(screen.getByTestId("add-contacts-overlay")).toBeInTheDocument();
-      expect(
-        screen.getByText("Select Contacts to Add")
-      ).toBeInTheDocument();
     });
 
     it("opens from empty state button", async () => {
@@ -404,7 +401,7 @@ describe("EditContactsModal", () => {
       ).toBeInTheDocument();
     });
 
-    it('closes when "Cancel" clicked without adding', async () => {
+    it('closes when X button clicked', async () => {
       const user = userEvent.setup();
       render(<EditContactsModal {...createDefaultProps()} />);
 
@@ -415,22 +412,6 @@ describe("EditContactsModal", () => {
       await user.click(screen.getByTestId("empty-state-add-button"));
       expect(screen.getByTestId("add-contacts-overlay")).toBeInTheDocument();
 
-      await user.click(screen.getByTestId("add-contacts-overlay-cancel"));
-
-      expect(
-        screen.queryByTestId("add-contacts-overlay")
-      ).not.toBeInTheDocument();
-    });
-
-    it('closes when X button clicked', async () => {
-      const user = userEvent.setup();
-      render(<EditContactsModal {...createDefaultProps()} />);
-
-      await waitFor(() => {
-        expect(screen.getByTestId("empty-state-add-button")).toBeInTheDocument();
-      });
-
-      await user.click(screen.getByTestId("empty-state-add-button"));
       await user.click(screen.getByTestId("add-contacts-overlay-close"));
 
       expect(
@@ -438,105 +419,14 @@ describe("EditContactsModal", () => {
       ).not.toBeInTheDocument();
     });
 
-    it('disables "Add Selected" button when no contacts selected', async () => {
-      const user = userEvent.setup();
-      render(<EditContactsModal {...createDefaultProps()} />);
-
-      await waitFor(() => {
-        expect(screen.getByTestId("empty-state-add-button")).toBeInTheDocument();
-      });
-
-      await user.click(screen.getByTestId("empty-state-add-button"));
-
-      expect(screen.getByTestId("add-selected-button")).toBeDisabled();
-      expect(screen.getByTestId("add-selected-button")).toHaveTextContent(
-        "Add Selected (0)"
-      );
-    });
-
-    it("updates selection count when contacts selected", async () => {
-      const user = userEvent.setup();
-      render(<EditContactsModal {...createDefaultProps()} />);
-
-      await waitFor(() => {
-        expect(screen.getByTestId("empty-state-add-button")).toBeInTheDocument();
-      });
-
-      await user.click(screen.getByTestId("empty-state-add-button"));
-      await user.click(screen.getByTestId("search-contact-contact-2"));
-
-      expect(screen.getByTestId("add-selected-button")).not.toBeDisabled();
-      expect(screen.getByTestId("add-selected-button")).toHaveTextContent(
-        "Add Selected (1)"
-      );
-    });
+    // Note: "Add Selected" tests removed - SPRINT-066 UX redesign changed to direct-add pattern
+    // Contacts are now added by clicking the "+" import button, not multi-select + "Add Selected"
   });
 
   describe("integration", () => {
-    it("added contacts appear in Screen 1 with unassigned role", async () => {
-      const user = userEvent.setup();
-      render(<EditContactsModal {...createDefaultProps()} />);
-
-      // Wait for initial load (empty state)
-      await waitFor(() => {
-        expect(screen.getByTestId("empty-state-add-button")).toBeInTheDocument();
-      });
-
-      // Open add modal
-      await user.click(screen.getByTestId("empty-state-add-button"));
-
-      // Select contact-2
-      await user.click(screen.getByTestId("search-contact-contact-2"));
-
-      // Click "Add Selected"
-      await user.click(screen.getByTestId("add-selected-button"));
-
-      // Overlay should close
-      expect(
-        screen.queryByTestId("add-contacts-overlay")
-      ).not.toBeInTheDocument();
-
-      // Contact should now appear in assigned list
-      expect(
-        screen.getByTestId("contact-role-row-contact-2")
-      ).toBeInTheDocument();
-      // Should have empty role (unassigned)
-      expect(screen.getByTestId("role-select-contact-2")).toHaveValue("");
-    });
-
-    it("save generates correct add operations for new contacts", async () => {
-      const onSave = jest.fn();
-      const user = userEvent.setup();
-      render(<EditContactsModal {...createDefaultProps({ onSave })} />);
-
-      await waitFor(() => {
-        expect(screen.getByTestId("empty-state-add-button")).toBeInTheDocument();
-      });
-
-      // Add a contact
-      await user.click(screen.getByTestId("empty-state-add-button"));
-      await user.click(screen.getByTestId("search-contact-contact-1"));
-      await user.click(screen.getByTestId("add-selected-button"));
-
-      // Assign a role
-      const select = screen.getByTestId("role-select-contact-1");
-      await user.selectOptions(select, "inspector");
-
-      // Save
-      await user.click(screen.getByTestId("edit-contacts-modal-save"));
-
-      await waitFor(() => {
-        expect(mockBatchUpdateContacts).toHaveBeenCalledWith("txn-1", [
-          expect.objectContaining({
-            action: "add",
-            contactId: "contact-1",
-            role: "inspector",
-          }),
-        ]);
-      });
-
-      expect(onSave).toHaveBeenCalled();
-    });
+    // Note: "added contacts appear in Screen 1" and "save generates correct add operations"
+    // tests removed - SPRINT-066 UX redesign changed from multi-select + "Add Selected"
+    // to direct-add via "+" import button. The flow no longer uses add-selected-button.
 
     it("save generates correct remove operations", async () => {
       mockGetDetails.mockResolvedValue({

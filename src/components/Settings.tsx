@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { LLMSettings } from "./settings/LLMSettings";
 import { MacOSMessagesImportSettings } from "./settings/MacOSMessagesImportSettings";
+import { MacOSContactsImportSettings } from "./settings/MacOSContactsImportSettings";
 import { LicenseGate } from "./common/LicenseGate";
 import {
   emitEmailConnectionChanged,
@@ -763,6 +764,16 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
               </h3>
               <div className="space-y-4">
                 <MacOSMessagesImportSettings userId={userId} />
+              </div>
+            </div>
+
+            {/* macOS Contacts Import - Only shows on macOS */}
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Contacts
+              </h3>
+              <div className="space-y-4">
+                <MacOSContactsImportSettings userId={userId} />
               </div>
             </div>
 

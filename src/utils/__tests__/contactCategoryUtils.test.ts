@@ -40,16 +40,18 @@ describe("contactCategoryUtils", () => {
       expect(getContactCategory(contact, true)).toBe("external");
     });
 
-    it('should return "message_derived" for is_message_derived flag (number 1)', () => {
+    it('should return "external" for is_message_derived flag (number 1)', () => {
+      // is_message_derived contacts show "External" badge in UI
       const contact = createContact({ is_message_derived: 1 });
-      expect(getContactCategory(contact)).toBe("message_derived");
+      expect(getContactCategory(contact)).toBe("external");
     });
 
-    it('should return "message_derived" for is_message_derived flag (boolean true)', () => {
+    it('should return "external" for is_message_derived flag (boolean true)', () => {
+      // is_message_derived contacts show "External" badge in UI
       const contact = createContact({
         is_message_derived: true as unknown as number,
       });
-      expect(getContactCategory(contact)).toBe("message_derived");
+      expect(getContactCategory(contact)).toBe("external");
     });
 
     it('should return "message_derived" for email source', () => {
@@ -134,14 +136,29 @@ describe("contactCategoryUtils", () => {
       expect(shouldShowContact(contact, filter, true)).toBe(false);
     });
 
-    it("should return true when messageDerived filter is enabled for message-derived contact", () => {
+    it("should return true when external filter is enabled for is_message_derived contact", () => {
+      // is_message_derived contacts show "External" badge, controlled by external filter
       const contact = createContact({ is_message_derived: 1 });
+      const filter: CategoryFilter = { ...DEFAULT_CATEGORY_FILTER, external: true };
+      expect(shouldShowContact(contact, filter)).toBe(true);
+    });
+
+    it("should return false when external filter is disabled for is_message_derived contact", () => {
+      // is_message_derived contacts show "External" badge, controlled by external filter
+      const contact = createContact({ is_message_derived: 1 });
+      const filter: CategoryFilter = { ...DEFAULT_CATEGORY_FILTER, external: false };
+      expect(shouldShowContact(contact, filter)).toBe(false);
+    });
+
+    it("should return true when messageDerived filter is enabled for email source contact", () => {
+      // Contacts with message sources (email/sms/inferred) without is_message_derived flag
+      const contact = createContact({ source: "email" });
       const filter: CategoryFilter = { ...DEFAULT_CATEGORY_FILTER, messageDerived: true };
       expect(shouldShowContact(contact, filter)).toBe(true);
     });
 
-    it("should return false when messageDerived filter is disabled for message-derived contact", () => {
-      const contact = createContact({ is_message_derived: 1 });
+    it("should return false when messageDerived filter is disabled for email source contact", () => {
+      const contact = createContact({ source: "email" });
       const filter: CategoryFilter = { ...DEFAULT_CATEGORY_FILTER, messageDerived: false };
       expect(shouldShowContact(contact, filter)).toBe(false);
     });

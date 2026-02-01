@@ -59,6 +59,25 @@ export function getMessageDerivedContacts(userId: string): MessageDerivedContact
   const importedEmailRows = dbAll<{ email: string }>(importedEmailsSql, [userId]);
   const importedEmails = new Set(importedEmailRows.map(r => r.email).filter(Boolean));
 
+  // Get phones of imported contacts to exclude (avoid duplicates)
+  const importedPhonesSql = `
+    SELECT LOWER(phone_e164) as phone
+    FROM contact_phones cp
+    JOIN contacts c ON cp.contact_id = c.id
+    WHERE c.user_id = ? AND c.is_imported = 1
+  `;
+  const importedPhoneRows = dbAll<{ phone: string }>(importedPhonesSql, [userId]);
+  const importedPhones = new Set(importedPhoneRows.map(r => r.phone).filter(Boolean));
+
+  // Also get display_names of imported contacts to exclude (for SMS contacts without proper phone numbers)
+  const importedNamesSql = `
+    SELECT LOWER(display_name) as name
+    FROM contacts
+    WHERE user_id = ? AND is_imported = 1
+  `;
+  const importedNameRows = dbAll<{ name: string }>(importedNamesSql, [userId]);
+  const importedNames = new Set(importedNameRows.map(r => r.name).filter(Boolean));
+
   // Extract unique senders from messages (from field in participants JSON)
   // BACKLOG-313: Only include senders with actual display names (filter out raw emails/phones)
   // BACKLOG-311: Include COUNT(*) to avoid N+1 queries
@@ -93,6 +112,7 @@ export function getMessageDerivedContacts(userId: string): MessageDerivedContact
       AND json_extract(participants, '$.from') NOT LIKE '%@%'
       AND json_extract(participants, '$.from') NOT LIKE '+%'
       AND json_extract(participants, '$.from') NOT GLOB '[0-9]*'
+      AND json_extract(participants, '$.from') NOT LIKE 'urn:%'
     GROUP BY LOWER(json_extract(participants, '$.from'))
     ORDER BY last_communication_at DESC
     LIMIT 200
@@ -100,10 +120,19 @@ export function getMessageDerivedContacts(userId: string): MessageDerivedContact
 
   const results = dbAll<MessageDerivedContact>(sql, [userId]);
 
-  // Filter out contacts whose email is already imported
+  // Filter out contacts whose email, phone, or name is already imported
   return results.filter(contact => {
-    if (contact.email) {
-      return !importedEmails.has(contact.email.toLowerCase());
+    // Filter by email match
+    if (contact.email && importedEmails.has(contact.email.toLowerCase())) {
+      return false;
+    }
+    // Filter by phone match
+    if (contact.phone && importedPhones.has(contact.phone.toLowerCase())) {
+      return false;
+    }
+    // Filter by display name match (for SMS contacts like "*162")
+    if (contact.display_name && importedNames.has(contact.display_name.toLowerCase())) {
+      return false;
     }
     return true;
   });
@@ -344,6 +373,22 @@ export async function getContactById(contactId: string): Promise<Contact | null>
 }
 
 /**
+ * Find an imported contact by display name (case-insensitive)
+ * Used to prevent duplicate imports of message-derived contacts
+ */
+export async function findContactByName(userId: string, name: string): Promise<Contact | null> {
+  const sql = `
+    SELECT * FROM contacts
+    WHERE user_id = ?
+      AND LOWER(display_name) = LOWER(?)
+      AND is_imported = 1
+    LIMIT 1
+  `;
+  const contact = dbGet<Contact>(sql, [userId, name]);
+  return contact || null;
+}
+
+/**
  * Get all contacts for a user
  */
 export async function getContacts(filters?: ContactFilters): Promise<Contact[]> {
@@ -456,11 +501,20 @@ export async function getUnimportedContactsByUserId(
 
 /**
  * Mark a contact as imported (change is_imported from 0 to 1)
+ * Optionally update the source field (e.g., when importing from macOS Contacts)
+ * @param contactId - The contact ID to update
+ * @param source - Optional source to set (e.g., "contacts_app")
  */
-export async function markContactAsImported(contactId: string): Promise<void> {
-  const sql =
-    "UPDATE contacts SET is_imported = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
-  dbRun(sql, [contactId]);
+export async function markContactAsImported(contactId: string, source?: string): Promise<void> {
+  if (source) {
+    const sql =
+      "UPDATE contacts SET is_imported = 1, source = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
+    dbRun(sql, [source, contactId]);
+  } else {
+    const sql =
+      "UPDATE contacts SET is_imported = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
+    dbRun(sql, [contactId]);
+  }
 }
 
 /**
@@ -553,71 +607,182 @@ export async function backfillContactPhones(contactId: string, phones: string[])
 }
 
 /**
+ * Backfill last_inbound_at for contacts from their messages.
+ * Uses a simpler approach: get max message date per phone, then update contacts.
+ */
+export async function backfillContactCommunicationDates(userId: string): Promise<number> {
+  // Step 1: Get the most recent message date for each normalized phone number
+  // This is the simple GROUP BY approach the user suggested
+  const phoneMessagesSql = `
+    SELECT
+      SUBSTR(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(cp.phone_e164, '+', ''), '-', ''), ' ', ''), '(', ''), ')', ''), -10) as normalized_phone,
+      cp.contact_id,
+      MAX(m.sent_at) as last_msg_date
+    FROM contact_phones cp
+    JOIN contacts c ON cp.contact_id = c.id AND c.user_id = ? AND c.is_imported = 1
+    JOIN messages m ON (
+      m.user_id = ?
+      AND (m.channel = 'sms' OR m.channel = 'imessage')
+      AND m.participants_flat LIKE '%' || SUBSTR(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(cp.phone_e164, '+', ''), '-', ''), ' ', ''), '(', ''), ')', ''), -10) || '%'
+    )
+    WHERE LENGTH(SUBSTR(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(cp.phone_e164, '+', ''), '-', ''), ' ', ''), '(', ''), ')', ''), -10)) >= 7
+    GROUP BY cp.contact_id
+  `;
+
+  const phoneMessages = dbAll<{ normalized_phone: string; contact_id: string; last_msg_date: string }>(
+    phoneMessagesSql,
+    [userId, userId]
+  );
+
+  logService.info("Backfill: Found phone-message matches", "ContactDbService", {
+    matchCount: phoneMessages.length,
+    samples: phoneMessages.slice(0, 5).map(p => ({
+      contactId: p.contact_id.substring(0, 8),
+      phone: p.normalized_phone,
+      lastDate: p.last_msg_date,
+    })),
+  });
+
+  // Step 2: Update each contact with their most recent message date
+  let updatedCount = 0;
+  for (const match of phoneMessages) {
+    const updateSql = `
+      UPDATE contacts
+      SET last_inbound_at = ?
+      WHERE id = ? AND (last_inbound_at IS NULL OR last_inbound_at < ?)
+    `;
+    const result = dbRun(updateSql, [match.last_msg_date, match.contact_id, match.last_msg_date]);
+    updatedCount += result.changes;
+  }
+
+  // Debug: Show final state
+  const debugSql = `
+    SELECT c.display_name, c.last_inbound_at
+    FROM contacts c
+    WHERE c.user_id = ? AND c.is_imported = 1
+    ORDER BY c.last_inbound_at DESC NULLS LAST
+    LIMIT 10
+  `;
+  const debugContacts = dbAll<{ display_name: string; last_inbound_at: string | null }>(debugSql, [userId]);
+
+  logService.info("Backfill complete", "ContactDbService", {
+    userId,
+    updatedCount,
+    topContacts: debugContacts.map(c => ({
+      name: c.display_name,
+      lastInbound: c.last_inbound_at,
+    })),
+  });
+
+  return updatedCount;
+}
+
+/**
  * Get contacts sorted by recent communication and optionally by property address relevance
- * BACKLOG-506: JOINs to emails table for email content (sender, recipients, body)
+ * SIMPLIFIED: Uses denormalized last_inbound_at column with simple ORDER BY
  */
 export async function getContactsSortedByActivity(
   userId: string,
-  propertyAddress?: string,
+  _propertyAddress?: string,
 ): Promise<ContactWithActivity[]> {
-  // Get imported contacts with activity data
-  // BACKLOG-506: Join emails FIRST, then communications by email_id
-  const sql = `
+  // === DIAGNOSTIC LOGGING ===
+  // Run diagnostics to understand the data state
+  const diagnostics = {
+    // How many messages exist?
+    messages: dbGet<{ total: number; sms: number; imessage: number }>(`
+      SELECT COUNT(*) as total,
+        SUM(CASE WHEN channel = 'sms' THEN 1 ELSE 0 END) as sms,
+        SUM(CASE WHEN channel = 'imessage' THEN 1 ELSE 0 END) as imessage
+      FROM messages WHERE user_id = ?
+    `, [userId]),
+
+    // How many contacts have phones?
+    contactPhones: dbGet<{ total: number; withPhones: number }>(`
+      SELECT
+        (SELECT COUNT(*) FROM contacts WHERE user_id = ? AND is_imported = 1) as total,
+        (SELECT COUNT(DISTINCT cp.contact_id) FROM contact_phones cp
+         JOIN contacts c ON cp.contact_id = c.id WHERE c.user_id = ? AND c.is_imported = 1) as withPhones
+    `, [userId, userId]),
+
+    // How many contacts have last_inbound_at?
+    withDates: dbGet<{ count: number }>(`
+      SELECT COUNT(*) as count FROM contacts
+      WHERE user_id = ? AND is_imported = 1 AND last_inbound_at IS NOT NULL
+    `, [userId]),
+
+    // Sample participants_flat format
+    sampleMessages: dbAll<{ participants_flat: string; channel: string }>(`
+      SELECT participants_flat, channel FROM messages
+      WHERE user_id = ? AND (channel = 'sms' OR channel = 'imessage')
+      ORDER BY sent_at DESC LIMIT 3
+    `, [userId]),
+
+    // Sample phone_e164 format
+    samplePhones: dbAll<{ name: string; phone: string; normalized: string }>(`
+      SELECT c.display_name as name, cp.phone_e164 as phone,
+        SUBSTR(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(cp.phone_e164, '+', ''), '-', ''), ' ', ''), '(', ''), ')', ''), -10) as normalized
+      FROM contact_phones cp
+      JOIN contacts c ON cp.contact_id = c.id
+      WHERE c.user_id = ? AND c.is_imported = 1
+      LIMIT 5
+    `, [userId]),
+
+    // ALL imported contacts (to see which ones are missing phones)
+    allImportedContacts: dbAll<{ name: string; hasPhone: number }>(`
+      SELECT c.display_name as name,
+        (SELECT COUNT(*) FROM contact_phones cp WHERE cp.contact_id = c.id) as hasPhone
+      FROM contacts c
+      WHERE c.user_id = ? AND c.is_imported = 1
+      ORDER BY c.display_name
+    `, [userId]),
+  };
+
+  logService.info("=== CONTACT SORTING DIAGNOSTICS ===", "ContactDbService", {
+    messages: diagnostics.messages,
+    contactPhones: diagnostics.contactPhones,
+    contactsWithDates: diagnostics.withDates?.count,
+    sampleParticipantsFlat: diagnostics.sampleMessages?.map(m => m.participants_flat),
+    samplePhoneFormats: diagnostics.samplePhones,
+    allImportedContacts: diagnostics.allImportedContacts?.map(c => `${c.name} (${c.hasPhone} phones)`),
+  });
+
+  // Check if backfill has ever run (any contacts have last_inbound_at set)
+  const hasBackfilled = diagnostics.withDates;
+
+  // Only run backfill once - if no contacts have dates yet
+  if (!hasBackfilled || hasBackfilled.count === 0) {
+    logService.info("Running contact communication date backfill (first time)", "ContactDbService", {
+      userId,
+    });
+    await backfillContactCommunicationDates(userId);
+  }
+
+  // Simple query: get contacts sorted by last_inbound_at (denormalized field)
+  const contactsSql = `
     SELECT
       c.*,
       c.display_name as name,
       ce_primary.email as email,
       cp_primary.phone_e164 as phone,
-      MAX(e.sent_at) as last_communication_at,
-      COUNT(DISTINCT comm.id) as communication_count,
-      ${
-        propertyAddress
-          ? `
-        SUM(CASE
-          WHEN e.subject LIKE ? OR e.body_plain LIKE ? OR e.body_html LIKE ?
-          THEN 1 ELSE 0
-        END) as address_mention_count
-      `
-          : "0 as address_mention_count"
-      },
-      0 as is_message_derived
+      0 as is_message_derived,
+      COALESCE(c.last_inbound_at, c.last_outbound_at) as last_communication_at,
+      CASE WHEN c.last_inbound_at IS NOT NULL OR c.last_outbound_at IS NOT NULL THEN 1 ELSE 0 END as communication_count,
+      0 as address_mention_count
     FROM contacts c
     LEFT JOIN contact_emails ce_primary ON c.id = ce_primary.contact_id AND ce_primary.is_primary = 1
     LEFT JOIN contact_phones cp_primary ON c.id = cp_primary.contact_id AND cp_primary.is_primary = 1
-    LEFT JOIN contact_emails ce_all ON c.id = ce_all.contact_id
-    LEFT JOIN emails e ON (
-      ce_all.email IS NOT NULL
-      AND (
-        LOWER(e.sender) = LOWER(ce_all.email)
-        OR LOWER(e.recipients) LIKE '%' || LOWER(ce_all.email) || '%'
-      )
-      AND e.user_id = c.user_id
-    )
-    LEFT JOIN communications comm ON (
-      comm.email_id = e.id
-    )
     WHERE c.user_id = ? AND c.is_imported = 1
-    GROUP BY c.id
+    ORDER BY
+      COALESCE(c.last_inbound_at, c.last_outbound_at) DESC,
+      c.display_name ASC
   `;
 
-  const params = propertyAddress
-    ? [
-        `%${propertyAddress}%`,
-        `%${propertyAddress}%`,
-        `%${propertyAddress}%`,
-        userId,
-      ]
-    : [userId];
-
   try {
-    const importedContacts = dbAll<ContactWithActivity>(sql, params);
+    const importedContacts = dbAll<ContactWithActivity>(contactsSql, [userId]);
 
-    // Get message-derived contacts (already have communication_count from query)
+    // Get message-derived contacts (already have last_communication_at from their source)
     const messageDerivedContacts = getMessageDerivedContacts(userId);
 
-    // BACKLOG-311: Map message-derived contacts to ContactWithActivity
-    // No N+1 queries - communication_count is pre-computed, address_mention_count is 0
-    // (address relevance sorting only meaningful for imported contacts with full email data)
     const messageDerivedWithActivity: ContactWithActivity[] = messageDerivedContacts.map(mc => ({
       id: mc.id,
       user_id: userId,
@@ -631,40 +796,16 @@ export async function getContactsSortedByActivity(
       is_message_derived: mc.is_message_derived,
       last_communication_at: mc.last_communication_at,
       communication_count: mc.communication_count,
-      address_mention_count: 0, // Skip for message-derived, sort by communication date instead
+      address_mention_count: 0,
     } as ContactWithActivity));
 
-    // Merge both lists
-    const allContacts = [...importedContacts, ...messageDerivedWithActivity];
-
-    // Sort by activity (address mentions first if propertyAddress provided, then by last communication)
-    return allContacts.sort((a, b) => {
-      // Property address relevance first
-      if (propertyAddress) {
-        const mentionA = a.address_mention_count || 0;
-        const mentionB = b.address_mention_count || 0;
-        if (mentionA !== mentionB) {
-          return mentionB - mentionA; // Higher mentions first
-        }
-      }
-
-      // Then by last communication date
-      const dateA = a.last_communication_at ? new Date(a.last_communication_at).getTime() : 0;
-      const dateB = b.last_communication_at ? new Date(b.last_communication_at).getTime() : 0;
-      if (dateA !== dateB) {
-        return dateB - dateA; // More recent first
-      }
-
-      // Finally by name
-      const nameA = (a.display_name || a.name || '').toLowerCase();
-      const nameB = (b.display_name || b.name || '').toLowerCase();
-      return nameA.localeCompare(nameB);
-    });
+    // Merge: imported contacts first (already sorted), then message-derived
+    // Message-derived contacts go at the end since they're less relevant for transaction assignment
+    return [...importedContacts, ...messageDerivedWithActivity];
   } catch (error) {
     logService.error("Error getting sorted contacts", "ContactDbService", {
       error: (error as Error).message,
-      sql,
-      params,
+      userId,
     });
     throw error;
   }
@@ -1065,10 +1206,23 @@ export async function deleteContact(contactId: string): Promise<void> {
 
 /**
  * Remove a contact from local database (un-import)
+ * For contacts from Contacts App, delete entirely (they exist in external_contacts)
+ * For other sources, just mark as unimported
  */
 export async function removeContact(contactId: string): Promise<void> {
-  const sql = "UPDATE contacts SET is_imported = 0 WHERE id = ?";
-  dbRun(sql, [contactId]);
+  // Check if this contact came from Contacts App
+  const contact = dbGet<{ source: string }>(
+    "SELECT source FROM contacts WHERE id = ?",
+    [contactId]
+  );
+
+  if (contact?.source === "contacts_app") {
+    // Delete entirely - contact exists in external_contacts shadow table
+    dbRun("DELETE FROM contacts WHERE id = ?", [contactId]);
+  } else {
+    // Keep in DB but mark as unimported
+    dbRun("UPDATE contacts SET is_imported = 0 WHERE id = ?", [contactId]);
+  }
 }
 
 /**
@@ -1213,6 +1367,7 @@ export function searchContactsForSelection(
       AND json_extract(participants, '$.from') NOT LIKE '%@%'
       AND json_extract(participants, '$.from') NOT LIKE '+%'
       AND json_extract(participants, '$.from') NOT GLOB '[0-9]*'
+      AND json_extract(participants, '$.from') NOT LIKE 'urn:%'
       -- Search filter
       AND json_extract(participants, '$.from') LIKE ?
     GROUP BY LOWER(json_extract(participants, '$.from'))
