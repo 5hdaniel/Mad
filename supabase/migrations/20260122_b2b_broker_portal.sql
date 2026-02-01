@@ -148,6 +148,9 @@ CREATE TABLE IF NOT EXISTS transaction_submissions (
   message_count INTEGER DEFAULT 0,
   attachment_count INTEGER DEFAULT 0,
 
+  -- Status History (timeline of status changes)
+  status_history JSONB DEFAULT '[]'::jsonb,
+
   -- Metadata
   submission_metadata JSONB,  -- detection_source, confidence, etc.
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -516,6 +519,27 @@ CREATE TRIGGER update_org_members_updated_at
 CREATE TRIGGER update_submissions_updated_at
   BEFORE UPDATE ON transaction_submissions
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Auto-append to status_history when status changes
+CREATE OR REPLACE FUNCTION track_submission_status_changes()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- Only track if status actually changed
+  IF NEW.status IS DISTINCT FROM OLD.status THEN
+    NEW.status_history = COALESCE(NEW.status_history, '[]'::jsonb) || jsonb_build_object(
+      'status', NEW.status,
+      'changed_at', NOW(),
+      'changed_by', NEW.reviewed_by,
+      'notes', NEW.review_notes
+    );
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER track_status_changes
+  BEFORE UPDATE ON transaction_submissions
+  FOR EACH ROW EXECUTE FUNCTION track_submission_status_changes();
 
 -- ============================================
 -- HELPER FUNCTION: Link pending invitations on user signup

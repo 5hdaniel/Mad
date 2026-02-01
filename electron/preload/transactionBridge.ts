@@ -346,6 +346,16 @@ export const transactionBridge = {
     ipcRenderer.invoke("transactions:resync-auto-link", transactionId),
 
   /**
+   * Sync emails from provider (Gmail/Outlook) for a transaction.
+   * BACKLOG-457: Fetches NEW emails from connected email provider based on
+   * contact email addresses, stores them, then runs auto-link.
+   * @param transactionId - Transaction ID to sync emails for
+   * @returns Results with counts of fetched, stored, and linked emails
+   */
+  syncAndFetchEmails: (transactionId: string) =>
+    ipcRenderer.invoke("transactions:sync-and-fetch-emails", transactionId),
+
+  /**
    * Link emails to a transaction
    * @param emailIds - Array of email IDs to link
    * @param transactionId - Transaction ID to link to
@@ -452,4 +462,54 @@ export const transactionBridge = {
       ipcRenderer.removeListener("submission-status-changed", handler);
     };
   },
+
+  // ============================================
+  // EMAIL ATTACHMENT METHODS (TASK-1776)
+  // ============================================
+
+  /**
+   * Get attachments for a specific email
+   * @param emailId - Email ID to get attachments for
+   * @returns Array of attachment records
+   */
+  getEmailAttachments: (emailId: string) =>
+    ipcRenderer.invoke("emails:get-attachments", emailId),
+
+  /**
+   * Open attachment with system viewer
+   * @param storagePath - Path to attachment file
+   * @returns Success/error result
+   */
+  openAttachment: (storagePath: string) =>
+    ipcRenderer.invoke("attachments:open", storagePath),
+
+  /**
+   * Get attachment data as base64 data URL for CSP-safe image preview
+   * TASK-1778 fix: CSP blocks file:// URLs, so we read the file and return as data: URL
+   * @param storagePath - Path to attachment file
+   * @param mimeType - MIME type for the data URL
+   * @returns Success/error result with data URL in data field
+   */
+  getAttachmentData: (storagePath: string, mimeType: string) =>
+    ipcRenderer.invoke("attachments:get-data", storagePath, mimeType),
+
+  /**
+   * Get attachment counts for a transaction from the actual attachments table
+   * TASK-1781: Returns accurate counts matching what submission service uploads
+   * @param transactionId - Transaction ID
+   * @param auditStart - Optional audit start date (ISO string)
+   * @param auditEnd - Optional audit end date (ISO string)
+   * @returns Counts for text and email attachments
+   */
+  getAttachmentCounts: (transactionId: string, auditStart?: string, auditEnd?: string) =>
+    ipcRenderer.invoke("transactions:get-attachment-counts", transactionId, auditStart, auditEnd),
+
+  /**
+   * Get attachment buffer as raw base64 (for DOCX conversion)
+   * TASK-1783: Returns raw base64 without data: URL prefix for mammoth.js
+   * @param storagePath - Path to attachment file
+   * @returns Success/error result with base64 data in data field
+   */
+  getAttachmentBuffer: (storagePath: string) =>
+    ipcRenderer.invoke("attachments:get-buffer", storagePath),
 };

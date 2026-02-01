@@ -1,0 +1,320 @@
+import React from "react";
+import { render, screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { ContactRoleRow, ContactRoleRowProps, RoleOption } from "./ContactRoleRow";
+import type { ExtendedContact } from "../../types/components";
+
+// Helper to create a test contact
+function createTestContact(
+  overrides: Partial<ExtendedContact> = {}
+): ExtendedContact {
+  return {
+    id: "test-contact-1",
+    user_id: "user-1",
+    name: "John Doe",
+    display_name: "John Doe",
+    email: "john@example.com",
+    phone: "555-1234",
+    company: "Acme Inc",
+    title: "Agent",
+    source: "manual",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+// Standard role options for testing
+const testRoleOptions: RoleOption[] = [
+  { value: "buyer", label: "Buyer" },
+  { value: "seller", label: "Seller" },
+  { value: "buyer_agent", label: "Buyer Agent" },
+  { value: "seller_agent", label: "Seller Agent" },
+];
+
+// Helper to render with default props
+function renderContactRoleRow(props: Partial<ContactRoleRowProps> = {}) {
+  const defaultProps: ContactRoleRowProps = {
+    contact: createTestContact(),
+    currentRole: "",
+    roleOptions: testRoleOptions,
+    onRoleChange: jest.fn(),
+    ...props,
+  };
+  return render(<ContactRoleRow {...defaultProps} />);
+}
+
+describe("ContactRoleRow", () => {
+  describe("Rendering", () => {
+    it("displays contact name", () => {
+      renderContactRoleRow();
+      expect(screen.getByTestId("contact-role-row-name")).toHaveTextContent(
+        "John Doe"
+      );
+    });
+
+    it("displays contact email", () => {
+      renderContactRoleRow();
+      expect(screen.getByTestId("contact-role-row-email")).toHaveTextContent(
+        "john@example.com"
+      );
+    });
+
+    it("displays avatar with first initial", () => {
+      renderContactRoleRow();
+      const avatar = screen.getByTestId("contact-role-row-avatar");
+      expect(avatar).toHaveTextContent("J");
+    });
+
+    it("displays source pill", () => {
+      renderContactRoleRow({
+        contact: createTestContact({ source: "manual" }),
+      });
+      expect(screen.getByTestId("source-pill-manual")).toBeInTheDocument();
+    });
+
+    it("handles missing email gracefully", () => {
+      renderContactRoleRow({
+        contact: createTestContact({ email: undefined }),
+      });
+      expect(
+        screen.queryByTestId("contact-role-row-email")
+      ).not.toBeInTheDocument();
+    });
+
+    it("uses display_name over name if available", () => {
+      renderContactRoleRow({
+        contact: createTestContact({
+          name: "John D",
+          display_name: "John Doe III",
+        }),
+      });
+      expect(screen.getByTestId("contact-role-row-name")).toHaveTextContent(
+        "John Doe III"
+      );
+    });
+
+    it("falls back to name if display_name is not available", () => {
+      renderContactRoleRow({
+        contact: createTestContact({
+          name: "Jane Smith",
+          display_name: undefined,
+        }),
+      });
+      expect(screen.getByTestId("contact-role-row-name")).toHaveTextContent(
+        "Jane Smith"
+      );
+    });
+
+    it("shows Unknown Contact when no name available", () => {
+      renderContactRoleRow({
+        contact: createTestContact({
+          name: undefined,
+          display_name: undefined,
+        }),
+      });
+      expect(screen.getByTestId("contact-role-row-name")).toHaveTextContent(
+        "Unknown Contact"
+      );
+    });
+
+    it("uses allEmails array if available", () => {
+      renderContactRoleRow({
+        contact: createTestContact({
+          email: "old@example.com",
+          allEmails: ["primary@example.com", "secondary@example.com"],
+        }),
+      });
+      expect(screen.getByTestId("contact-role-row-email")).toHaveTextContent(
+        "primary@example.com"
+      );
+    });
+
+    it("shows ? initial when no name available", () => {
+      renderContactRoleRow({
+        contact: createTestContact({
+          name: undefined,
+          display_name: undefined,
+        }),
+      });
+      const avatar = screen.getByTestId("contact-role-row-avatar");
+      // Shows "U" from "Unknown Contact" fallback
+      expect(avatar).toHaveTextContent("U");
+    });
+  });
+
+  describe("Role Dropdown", () => {
+    it("shows 'Select role...' as first option", () => {
+      renderContactRoleRow();
+      const select = screen.getByRole("combobox");
+      const options = select.querySelectorAll("option");
+      expect(options[0]).toHaveTextContent("Select role...");
+      expect(options[0]).toHaveValue("");
+    });
+
+    it("shows all provided role options", () => {
+      renderContactRoleRow();
+      const select = screen.getByRole("combobox");
+      const options = select.querySelectorAll("option");
+      // First option is placeholder + 4 role options
+      expect(options).toHaveLength(5);
+      expect(options[1]).toHaveTextContent("Buyer");
+      expect(options[2]).toHaveTextContent("Seller");
+      expect(options[3]).toHaveTextContent("Buyer Agent");
+      expect(options[4]).toHaveTextContent("Seller Agent");
+    });
+
+    it("shows current role as selected", () => {
+      renderContactRoleRow({ currentRole: "buyer_agent" });
+      const select = screen.getByRole("combobox") as HTMLSelectElement;
+      expect(select.value).toBe("buyer_agent");
+    });
+
+    it("shows empty selection when currentRole is empty", () => {
+      renderContactRoleRow({ currentRole: "" });
+      const select = screen.getByRole("combobox") as HTMLSelectElement;
+      expect(select.value).toBe("");
+    });
+
+    it("displays correct option values", () => {
+      renderContactRoleRow();
+      const select = screen.getByRole("combobox");
+      const options = select.querySelectorAll("option");
+      expect(options[1]).toHaveValue("buyer");
+      expect(options[2]).toHaveValue("seller");
+      expect(options[3]).toHaveValue("buyer_agent");
+      expect(options[4]).toHaveValue("seller_agent");
+    });
+  });
+
+  describe("Role Change", () => {
+    it("calls onRoleChange when role is selected", async () => {
+      const onRoleChange = jest.fn();
+      renderContactRoleRow({ onRoleChange });
+
+      const select = screen.getByRole("combobox");
+      await userEvent.selectOptions(select, "buyer");
+      expect(onRoleChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("passes selected role value to callback", async () => {
+      const onRoleChange = jest.fn();
+      renderContactRoleRow({ onRoleChange });
+
+      const select = screen.getByRole("combobox");
+      await userEvent.selectOptions(select, "seller_agent");
+      expect(onRoleChange).toHaveBeenCalledWith("seller_agent");
+    });
+
+    it("calls onRoleChange with empty string when placeholder selected", async () => {
+      const onRoleChange = jest.fn();
+      renderContactRoleRow({ onRoleChange, currentRole: "buyer" });
+
+      const select = screen.getByRole("combobox");
+      await userEvent.selectOptions(select, "");
+      expect(onRoleChange).toHaveBeenCalledWith("");
+    });
+
+    it("calls onRoleChange on native change event", () => {
+      const onRoleChange = jest.fn();
+      renderContactRoleRow({ onRoleChange });
+
+      const select = screen.getByRole("combobox");
+      fireEvent.change(select, { target: { value: "buyer" } });
+      expect(onRoleChange).toHaveBeenCalledWith("buyer");
+    });
+  });
+
+  describe("Accessibility", () => {
+    it("has aria-label on select element", () => {
+      renderContactRoleRow({
+        contact: createTestContact({ display_name: "Jane Smith" }),
+      });
+      const select = screen.getByRole("combobox");
+      expect(select).toHaveAttribute("aria-label", "Role for Jane Smith");
+    });
+
+    it("has correct test ID for the row", () => {
+      renderContactRoleRow({
+        contact: createTestContact({ id: "contact-123" }),
+      });
+      expect(
+        screen.getByTestId("contact-role-row-contact-123")
+      ).toBeInTheDocument();
+    });
+
+    it("has correct test ID for the select", () => {
+      renderContactRoleRow({
+        contact: createTestContact({ id: "contact-456" }),
+      });
+      expect(screen.getByTestId("role-select-contact-456")).toBeInTheDocument();
+    });
+
+    it("select is focusable", () => {
+      renderContactRoleRow();
+      const select = screen.getByRole("combobox");
+      select.focus();
+      expect(select).toHaveFocus();
+    });
+  });
+
+  describe("Source Pill Variants", () => {
+    it("shows manual variant for manual source", () => {
+      renderContactRoleRow({
+        contact: createTestContact({ source: "manual", is_message_derived: false }),
+      });
+      expect(screen.getByTestId("source-pill-manual")).toBeInTheDocument();
+    });
+
+    it("shows imported variant for contacts_app source", () => {
+      renderContactRoleRow({
+        contact: createTestContact({ source: "contacts_app", is_message_derived: false }),
+      });
+      expect(screen.getByTestId("source-pill-imported")).toBeInTheDocument();
+    });
+
+    it("shows external variant for message-derived contacts", () => {
+      renderContactRoleRow({
+        contact: createTestContact({ is_message_derived: true }),
+      });
+      expect(screen.getByTestId("source-pill-external")).toBeInTheDocument();
+    });
+
+    it("shows external variant for message-derived contacts with is_message_derived=1", () => {
+      renderContactRoleRow({
+        contact: createTestContact({ is_message_derived: 1 }),
+      });
+      expect(screen.getByTestId("source-pill-external")).toBeInTheDocument();
+    });
+
+    it("shows message variant for sms source when not message-derived", () => {
+      renderContactRoleRow({
+        contact: createTestContact({ source: "sms", is_message_derived: false }),
+      });
+      expect(screen.getByTestId("source-pill-message")).toBeInTheDocument();
+    });
+
+    it("shows imported variant for email source", () => {
+      renderContactRoleRow({
+        contact: createTestContact({ source: "email", is_message_derived: false }),
+      });
+      expect(screen.getByTestId("source-pill-imported")).toBeInTheDocument();
+    });
+  });
+
+  describe("Custom className", () => {
+    it("applies custom className to row", () => {
+      renderContactRoleRow({ className: "custom-class" });
+      const row = screen.getByTestId("contact-role-row-test-contact-1");
+      expect(row).toHaveClass("custom-class");
+    });
+
+    it("preserves default classes when custom className added", () => {
+      renderContactRoleRow({ className: "my-custom-class" });
+      const row = screen.getByTestId("contact-role-row-test-contact-1");
+      expect(row).toHaveClass("flex");
+      expect(row).toHaveClass("items-center");
+      expect(row).toHaveClass("my-custom-class");
+    });
+  });
+});

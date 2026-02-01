@@ -15,14 +15,18 @@
  *
  * Requires the state machine feature flag to be enabled.
  * If disabled, throws an error - legacy code paths have been removed.
+ *
+ * TASK-1612: Migrated to use settingsService instead of direct window.api calls.
  */
 
 import { useCallback } from "react";
+import { settingsService } from "@/services";
 import type { PhoneType } from "../types";
 import {
   useOptionalMachineState,
   selectHasSelectedPhoneType,
   selectPhoneType,
+  selectIsDatabaseInitialized,
 } from "../machine";
 
 interface UsePhoneTypeApiOptions {
@@ -94,7 +98,20 @@ export function usePhoneTypeApi({
     // No-op: state machine is source of truth
   }, []);
 
-  // savePhoneType persists to API and dispatches onboarding step complete
+  /**
+   * Save phone type to storage and dispatch step completion.
+   *
+   * TASK-1600: Saves to Supabase first (always available after auth),
+   * then to local DB when initialized. This allows phone-type selection
+   * to work before database initialization.
+   *
+   * TASK-1612: Migrated to use settingsService instead of direct window.api calls.
+   *
+   * Storage priority:
+   * 1. Supabase cloud (always available after auth)
+   * 2. Local SQLite (when initialized, for offline support)
+   * 3. State machine (source of truth for UI)
+   */
   const savePhoneType = useCallback(
     async (phoneType: "iphone" | "android"): Promise<boolean> => {
       // userId comes from state machine
@@ -106,28 +123,64 @@ export function usePhoneTypeApi({
       if (!currentUserId) return false;
 
       try {
-        const userApi = window.api.user as {
-          setPhoneType: (
-            userId: string,
-            phoneType: "iphone" | "android"
-          ) => Promise<{ success: boolean; error?: string }>;
-        };
-        const result = await userApi.setPhoneType(currentUserId, phoneType);
+        // 1. Save to Supabase first (always available after auth)
+        // TASK-1600: This allows phone type selection before DB init
+        const cloudResult = await settingsService.setPhoneTypeCloud(
+          currentUserId,
+          phoneType
+        );
 
-        if (result.success) {
-          // Dispatch onboarding step complete
-          dispatch({
-            type: "ONBOARDING_STEP_COMPLETE",
-            step: "phone-type",
-          });
-          return true;
-        } else {
-          console.error(
-            "[usePhoneTypeApi] Failed to save phone type:",
-            result.error
+        if (!cloudResult.success) {
+          // Log but don't fail - graceful degradation
+          console.warn(
+            "[usePhoneTypeApi] Failed to save to Supabase, continuing:",
+            cloudResult.error
           );
-          return false;
+        } else {
+          console.log(
+            "[usePhoneTypeApi] Phone type saved to Supabase:",
+            phoneType
+          );
         }
+
+        // 2. Try local DB if initialized (for offline support)
+        const isDbReady = selectIsDatabaseInitialized(state);
+
+        if (isDbReady) {
+          try {
+            const localResult = await settingsService.setPhoneType(
+              currentUserId,
+              phoneType
+            );
+            if (!localResult.success) {
+              console.warn(
+                "[usePhoneTypeApi] Failed to save to local DB:",
+                localResult.error
+              );
+            }
+          } catch (localError) {
+            // Log but don't fail - Supabase is primary storage
+            console.warn(
+              "[usePhoneTypeApi] Error saving to local DB:",
+              localError
+            );
+          }
+        } else {
+          console.log(
+            "[usePhoneTypeApi] Local DB not initialized, phone type queued in state"
+          );
+        }
+
+        // 3. Dispatch onboarding step complete with the selected phone type
+        // This ensures the reducer uses the user's actual selection,
+        // not platform detection (fixes TASK-1180 onboarding loop bug)
+        dispatch({
+          type: "ONBOARDING_STEP_COMPLETE",
+          step: "phone-type",
+          phoneType,
+        });
+
+        return true;
       } catch (error) {
         console.error("[usePhoneTypeApi] Error saving phone type:", error);
         return false;

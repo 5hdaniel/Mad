@@ -13,6 +13,7 @@ import { LoadingOrchestrator } from "./LoadingOrchestrator";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { AppStateProvider } from "./AppStateContext";
 import { useAppState } from "./useAppState";
+import { AuthProvider } from "../../../contexts/AuthContext";
 import type { AppState } from "./types";
 
 // ============================================
@@ -76,6 +77,7 @@ function StateDisplay() {
 
 /**
  * Wrapper for testing with provider.
+ * SPRINT-066: Added AuthProvider wrapper since LoadingOrchestrator uses useAuth
  */
 function TestWrapper({
   children,
@@ -85,9 +87,11 @@ function TestWrapper({
   initialState?: AppState;
 }) {
   return (
-    <AppStateProvider initialState={initialState}>
-      <LoadingOrchestrator>{children}</LoadingOrchestrator>
-    </AppStateProvider>
+    <AuthProvider>
+      <AppStateProvider initialState={initialState}>
+        <LoadingOrchestrator>{children}</LoadingOrchestrator>
+      </AppStateProvider>
+    </AuthProvider>
   );
 }
 

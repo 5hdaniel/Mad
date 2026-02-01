@@ -78,6 +78,63 @@ Engineers DON'T see:
 
 ---
 
+## Estimate Integrity Rules (MANDATORY)
+
+**CRITICAL: Estimates are historical data. Never modify them after sprint creation.**
+
+### Why Estimates Must Stay Fixed
+
+Estimates capture planning assumptions at sprint start. Changing them retroactively:
+- Destroys ability to measure estimation accuracy
+- Makes variance analysis meaningless
+- Prevents learning from over/under-estimates
+
+### Rules
+
+1. **Never modify original estimates** in the "In Scope" table
+   - Total Estimated tokens stays fixed
+   - SR Review Overhead stays fixed
+   - Grand Total stays fixed
+
+2. **Billable Tokens = Actuals Only**
+   - Leave as "-" until task is complete AND tokens are tracked
+   - Never put estimates in this column
+   - Only fill with actual monitored token consumption
+
+3. **Mid-Sprint Additions**
+   - Add new task row with `*(added mid-sprint)* ` note
+   - Add footnote: `*Note: TASK-XXXX added mid-sprint (+~XK est.)*`
+   - Do NOT modify original totals
+
+### Example: Adding Task Mid-Sprint
+
+**WRONG:**
+```markdown
+**Total Estimated:** ~165K tokens  <!-- Changed from 150K -->
+```
+
+**RIGHT:**
+```markdown
+| TASK-1780 | New Feature | ~15K | HIGH | 3 | *(added mid-sprint)*
+
+**Total Estimated (implementation):** ~150K tokens  <!-- Unchanged -->
+
+*Note: TASK-1780 added mid-sprint (+~15K est.)*
+```
+
+### Progress Tracking Table
+
+| Column | Contains | When Filled |
+|--------|----------|-------------|
+| Status | TODO/IN_PROGRESS/MERGED | Real-time |
+| Billable Tokens | **Actual** monitored tokens | After task complete |
+| Duration | Actual time if tracked | After task complete |
+| PR | PR number(s) | When PR created |
+
+**NEVER put estimates in Billable Tokens column.**
+
+---
+
 ## Creating a Sprint
 
 ### Prerequisites
@@ -92,6 +149,7 @@ Engineers DON'T see:
 - [ ] Sprint file created: `.claude/plans/sprints/SPRINT-XXX-slug.md`
 - [ ] All task files created in `.claude/plans/tasks/`
 - [ ] INDEX.md updated with sprint assignment
+- [ ] **Backlog CSV updated** - All items have `sprint` column set
 - [ ] Worktrees ready for parallel tasks (BACKLOG-132)
 
 ---
@@ -131,7 +189,44 @@ If actual tokens > 4x estimate:
 
 ### Sprint Closure Checklist
 
-- [ ] All PRs merged
+> **Incident Reference:** SPRINT-051/052 had 20+ orphaned PRs that were created but never merged, causing massive confusion.
+
+**Full lifecycle reference:** `.claude/docs/shared/pr-lifecycle.md`
+
+#### PR Verification (MANDATORY - Do First)
+
+Before ANY other closure activity:
+
+```bash
+# Check for orphaned PRs
+gh pr list --state open --search "TASK-"
+gh pr list --state open --search "SPRINT-"
+```
+
+**A sprint CANNOT be closed if:**
+- Any sprint-related PR is still open
+- Any task has a PR in `OPEN` state (not `MERGED`)
+- Any approved PR is waiting for merge
+
+**For each open PR found:**
+| PR State | Action |
+|----------|--------|
+| CI failing | Fix before closing sprint |
+| Awaiting review | Complete review and merge |
+| Approved but not merged | Merge immediately |
+| Has conflicts | Resolve and merge |
+
+**Verify all PRs are merged:**
+```bash
+# For each task's PR, verify state is MERGED
+gh pr view <PR-NUMBER> --json state --jq '.state'
+# Must show: MERGED (not OPEN, not CLOSED)
+```
+
+#### Full Closure Checklist
+
+- [ ] **PR Audit complete** - `gh pr list --state open` shows no sprint PRs
+- [ ] **All PRs verified MERGED** - Not just approved, actually merged
 - [ ] All task files have actual (monitored) token data
 - [ ] Token variance analysis complete
 - [ ] INDEX.md updated with completion
@@ -237,6 +332,51 @@ Future Sprint Adjustment:
 - If discovery buffer > 30%, reduce planned scope by 20%
 - If discovery buffer > 50%, reduce planned scope by 30%
 ```
+
+---
+
+## Investigation-First Pattern (for Bug Fix Sprints)
+
+**Source:** SPRINT-061 - Saved ~17K tokens by avoiding unnecessary TASK-1406 implementation.
+
+### When to Use
+
+Use investigation-first for sprints where:
+- Root cause is unclear
+- Multiple possible causes exist
+- "Bugs" may already be fixed or not exist
+
+### Structure
+
+```
+Phase 1: Investigation (Parallel)
+  - TASK-X00: Investigate issue A
+  - TASK-X01: Investigate issue B
+  - TASK-X02: Investigate issue C
+
+Phase 2: Implementation (Based on Findings)
+  - TASK-X03: Fix for A (if investigation confirms bug)
+  - TASK-X04: Fix for B (if investigation confirms bug)
+  - etc.
+```
+
+### Key Rules
+
+1. **Investigation tasks are read-only** - No file modifications, safe to parallelize
+2. **Define implementation tasks tentatively** - Mark as "pending investigation"
+3. **Defer if no bug found** - Don't implement fixes for non-existent bugs
+4. **Update backlog immediately** - Change status to `deferred` with reason
+
+### PM Checkpoint After Investigation Phase
+
+Before starting implementation phase:
+1. Review all investigation findings
+2. For each planned implementation task, decide:
+   - **PROCEED**: Bug confirmed, fix needed
+   - **MODIFY**: Different fix needed (update task file)
+   - **SKIP**: No bug found, mark backlog item as `deferred`
+3. Update sprint file with decisions
+4. Notify user of any scope changes
 
 ---
 

@@ -75,6 +75,13 @@ export const authBridge = {
     ipcRenderer.invoke("auth:logout", sessionToken),
 
   /**
+   * Force logout - clears all local sessions without requiring a token
+   * Used when user is stuck (e.g., license blocked during login)
+   * @returns Logout result
+   */
+  forceLogout: () => ipcRenderer.invoke("auth:force-logout"),
+
+  /**
    * Validates an existing session token
    * @param sessionToken - Session token to validate
    * @returns Validation result
@@ -164,4 +171,33 @@ export const authBridge = {
       scopes: string;
     };
   }) => ipcRenderer.invoke("auth:save-pending-mailbox-tokens", data),
+
+  /**
+   * DEV ONLY: Expire a mailbox token for testing Connection Issue state
+   * @param userId - User ID
+   * @param provider - OAuth provider (google | microsoft)
+   */
+  devExpireMailboxToken: (userId: string, provider: "google" | "microsoft") =>
+    ipcRenderer.invoke("auth:dev:expire-mailbox-token", userId, provider),
+
+  /**
+   * DEV ONLY: Reset onboarding for testing the onboarding flow
+   * Clears email_onboarding_completed_at and mobile_phone_type
+   * @param userId - User ID to reset
+   */
+  devResetOnboarding: (userId: string) =>
+    ipcRenderer.invoke("auth:dev:reset-onboarding", userId),
+
+  // ==========================================
+  // DEEP LINK AUTH (TASK-1507)
+  // ==========================================
+
+  /**
+   * Opens the Supabase auth URL in the default browser
+   * Used for deep-link authentication flow where OAuth completes in browser
+   * and redirects back to app via magicaudit://callback
+   * @returns Success status
+   */
+  openAuthInBrowser: (): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke("auth:open-in-browser"),
 };

@@ -26,9 +26,9 @@ function formatDateRangeLabel(startDate: Date | null, endDate: Date | null): str
   if (startDate && endDate) {
     return `${formatDate(startDate)} - ${formatDate(endDate)}`;
   } else if (startDate) {
-    return `from ${formatDate(startDate)}`;
+    return `${formatDate(startDate)} - Ongoing`;
   } else if (endDate) {
-    return `until ${formatDate(endDate)}`;
+    return `Through ${formatDate(endDate)}`;
   }
   return "";
 }
@@ -164,12 +164,9 @@ export function TransactionMessagesTab({
       const phones = extractAllPhones(messages);
       if (phones.length === 0) return;
 
-      console.log("[Messages] Looking up contact names for phones:", phones);
-
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const result = await (window.api.contacts as any).getNamesByPhones(phones);
-        console.log("[Messages] Contact lookup result:", result);
 
         if (result.success && result.names) {
           // Build a lookup map with both original and normalized phone keys
@@ -182,10 +179,7 @@ export function TransactionMessagesTab({
               namesWithNormalized[normalized] = name;
             }
           });
-          console.log("[Messages] Contact names map:", namesWithNormalized);
           setContactNames(namesWithNormalized);
-        } else if (Object.keys(result.names || {}).length === 0) {
-          console.log("[Messages] No matching contacts found for these phone numbers");
         }
       } catch (err) {
         console.error("Failed to look up contact names:", err);
@@ -347,12 +341,28 @@ export function TransactionMessagesTab({
   if (messages.length === 0) {
     return (
       <div>
-        {/* Attach button */}
-        {userId && transactionId && (
-          <div className="flex justify-end mb-4">
+        <div className="bg-gray-50 rounded-lg p-6 text-center">
+          <svg
+            className="w-12 h-12 text-gray-300 mx-auto mb-3"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+            />
+          </svg>
+          <p className="text-gray-600 mb-1">No text messages linked</p>
+          <p className="text-sm text-gray-500 mb-4">
+            Click &quot;Attach Messages&quot; to get started
+          </p>
+          {userId && transactionId && (
             <button
               onClick={handleAttachClick}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
               data-testid="attach-messages-button"
             >
               <svg
@@ -370,27 +380,7 @@ export function TransactionMessagesTab({
               </svg>
               Attach Messages
             </button>
-          </div>
-        )}
-
-        <div className="text-center py-12">
-          <svg
-            className="w-16 h-16 text-gray-300 mx-auto mb-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-            />
-          </svg>
-          <p className="text-gray-600 mb-2">No text messages linked</p>
-          <p className="text-sm text-gray-500">
-            Click "Attach Messages" to link message threads to this transaction
-          </p>
+          )}
         </div>
 
         {/* Modals */}
@@ -413,19 +403,13 @@ export function TransactionMessagesTab({
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="text-lg font-medium text-gray-900">
-            Texts ({filteredMessageCount})
-            {showAuditPeriodOnly && hasAuditDates && filteredMessageCount !== totalMessageCount && (
-              <span className="text-sm font-normal text-gray-500 ml-1">
-                of {totalMessageCount}
-              </span>
-            )}
+            {filteredConversationCount} conversation{filteredConversationCount !== 1 ? "s" : ""} ({filteredMessageCount} text message{filteredMessageCount !== 1 ? "s" : ""})
           </h3>
-          <p className="text-sm text-gray-500">
-            in {filteredConversationCount} conversation{filteredConversationCount !== 1 ? "s" : ""}
-            {showAuditPeriodOnly && hasAuditDates && filteredConversationCount !== totalConversationCount && (
-              <span className="ml-1">of {totalConversationCount}</span>
-            )}
-          </p>
+          {showAuditPeriodOnly && hasAuditDates && (filteredMessageCount !== totalMessageCount || filteredConversationCount !== totalConversationCount) && (
+            <p className="text-sm text-gray-500">
+              of {totalConversationCount} conversation{totalConversationCount !== 1 ? "s" : ""} ({totalMessageCount} messages)
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-4">

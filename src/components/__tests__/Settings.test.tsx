@@ -10,6 +10,20 @@ import "@testing-library/jest-dom";
 import Settings from "../Settings";
 import { PlatformProvider } from "../../contexts/PlatformContext";
 
+// Mock the useLicense hook for LicenseGate (BACKLOG-462)
+jest.mock("@/contexts/LicenseContext", () => ({
+  useLicense: jest.fn(() => ({
+    licenseType: "individual" as const,
+    hasAIAddon: true,
+    organizationId: null,
+    canExport: true,
+    canSubmit: false,
+    canAutoDetect: true,
+    isLoading: false,
+    refresh: jest.fn(),
+  })),
+}));
+
 // Wrap Settings in PlatformProvider for tests
 const renderSettings = (props: { onClose: () => void; userId: string }) => {
   return render(
@@ -405,6 +419,90 @@ describe("Settings", () => {
       expect(screen.getByText("Clear All Data")).toBeInTheDocument();
       expect(screen.getByText(/delete all local data/i)).toBeInTheDocument();
     });
+
+    it("should show reindex database button", async () => {
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      expect(screen.getByText("Reindex Database")).toBeInTheDocument();
+      expect(
+        screen.getByText(/optimize database performance/i),
+      ).toBeInTheDocument();
+    });
+
+    it("should call reindexDatabase when button is clicked", async () => {
+      // Mock window.confirm to return true (user confirms)
+      const confirmSpy = jest.spyOn(window, "confirm").mockReturnValue(true);
+
+      window.api.system.reindexDatabase.mockResolvedValue({
+        success: true,
+        indexesRebuilt: 14,
+        durationMs: 150,
+      });
+
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      const reindexButton = screen
+        .getByText("Reindex Database")
+        .closest("button");
+      expect(reindexButton).not.toBeDisabled();
+
+      await userEvent.click(reindexButton!);
+
+      expect(window.api.system.reindexDatabase).toHaveBeenCalled();
+
+      confirmSpy.mockRestore();
+    });
+
+    it("should show success message after reindex", async () => {
+      // Mock window.confirm to return true (user confirms)
+      const confirmSpy = jest.spyOn(window, "confirm").mockReturnValue(true);
+
+      window.api.system.reindexDatabase.mockResolvedValue({
+        success: true,
+        indexesRebuilt: 14,
+        durationMs: 150,
+      });
+
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      const reindexButton = screen
+        .getByText("Reindex Database")
+        .closest("button");
+      await userEvent.click(reindexButton!);
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(/database optimized.*14 indexes rebuilt/i),
+        ).toBeInTheDocument();
+      });
+
+      confirmSpy.mockRestore();
+    });
+
+    it("should show error message when reindex fails", async () => {
+      // Mock window.confirm to return true (user confirms)
+      const confirmSpy = jest.spyOn(window, "confirm").mockReturnValue(true);
+
+      window.api.system.reindexDatabase.mockResolvedValue({
+        success: false,
+        indexesRebuilt: 0,
+        durationMs: 50,
+        error: "Database is locked",
+      });
+
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      const reindexButton = screen
+        .getByText("Reindex Database")
+        .closest("button");
+      await userEvent.click(reindexButton!);
+
+      await waitFor(() => {
+        expect(screen.getByText(/database is locked/i)).toBeInTheDocument();
+      });
+
+      confirmSpy.mockRestore();
+    });
   });
 
   describe("About Section", () => {
@@ -546,6 +644,68 @@ describe("Settings", () => {
       renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByRole("button", { name: /done/i })).toBeInTheDocument();
+    });
+  });
+
+  describe("AI Settings License Gating (BACKLOG-462)", () => {
+    const { useLicense } = jest.requireMock("@/contexts/LicenseContext");
+
+    it("should show AI Settings section when AI add-on is enabled", async () => {
+      useLicense.mockReturnValue({
+        licenseType: "individual",
+        hasAIAddon: true,
+        organizationId: null,
+        canExport: true,
+        canSubmit: false,
+        canAutoDetect: true,
+        isLoading: false,
+        refresh: jest.fn(),
+      });
+
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      await waitFor(() => {
+        expect(screen.getByText("AI Settings")).toBeInTheDocument();
+      });
+    });
+
+    it("should hide AI Settings section when AI add-on is disabled", async () => {
+      useLicense.mockReturnValue({
+        licenseType: "individual",
+        hasAIAddon: false, // AI add-on disabled
+        organizationId: null,
+        canExport: true,
+        canSubmit: false,
+        canAutoDetect: false,
+        isLoading: false,
+        refresh: jest.fn(),
+      });
+
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      await waitFor(() => {
+        // AI Settings should NOT be visible
+        expect(screen.queryByText("AI Settings")).not.toBeInTheDocument();
+      });
+    });
+
+    it("should show AI Settings for team license with AI add-on", async () => {
+      useLicense.mockReturnValue({
+        licenseType: "team",
+        hasAIAddon: true,
+        organizationId: "org-123",
+        canExport: false,
+        canSubmit: true,
+        canAutoDetect: true,
+        isLoading: false,
+        refresh: jest.fn(),
+      });
+
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      await waitFor(() => {
+        expect(screen.getByText("AI Settings")).toBeInTheDocument();
+      });
     });
   });
 });

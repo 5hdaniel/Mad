@@ -139,10 +139,12 @@ describe("getNextOnboardingStep", () => {
     });
 
     it("returns apple-driver after email-connect if needed", () => {
+      // Must include phoneType: "iphone" because getNextOnboardingStep now
+      // checks userData.phoneType instead of platform.hasIPhone (TASK-1180 fix)
       const result = getNextOnboardingStep(
         ["phone-type", "email-connect"],
         mockWindowsPlatform,
-        { ...mockIncompleteUserData, needsDriverSetup: true }
+        { ...mockIncompleteUserData, phoneType: "iphone", needsDriverSetup: true }
       );
       expect(result).toBe("apple-driver");
     });
@@ -196,9 +198,34 @@ describe("appStateReducer - Loading Phase Transitions", () => {
       });
     });
 
-    it("transitions to initializing-db even when hasKeyStore is false", () => {
+    it("transitions to initializing-db when hasKeyStore is false on Windows", () => {
       const state = INITIAL_APP_STATE;
-      const action: AppAction = { type: "STORAGE_CHECKED", hasKeyStore: false };
+      const action: AppAction = { type: "STORAGE_CHECKED", hasKeyStore: false, isMacOS: false };
+
+      const result = appStateReducer(state, action);
+
+      expect(result).toEqual({
+        status: "loading",
+        phase: "initializing-db",
+      });
+    });
+
+    it("defers DB init for first-time macOS users (no key store + isMacOS)", () => {
+      const state = INITIAL_APP_STATE;
+      const action: AppAction = { type: "STORAGE_CHECKED", hasKeyStore: false, isMacOS: true };
+
+      const result = appStateReducer(state, action);
+
+      expect(result).toEqual({
+        status: "loading",
+        phase: "loading-auth",
+        deferredDbInit: true,
+      });
+    });
+
+    it("does not defer DB init for returning macOS users (has key store)", () => {
+      const state = INITIAL_APP_STATE;
+      const action: AppAction = { type: "STORAGE_CHECKED", hasKeyStore: true, isMacOS: true };
 
       const result = appStateReducer(state, action);
 
@@ -303,6 +330,65 @@ describe("appStateReducer - Loading Phase Transitions", () => {
 
       expect(result).toBe(state);
     });
+
+    it("clears deferredDbInit during onboarding on success", () => {
+      const state: OnboardingState = {
+        status: "onboarding",
+        step: "secure-storage",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        completedSteps: ["phone-type"],
+        deferredDbInit: true,
+      };
+      const action: AppAction = { type: "DB_INIT_COMPLETE", success: true };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("onboarding");
+      if (result.status === "onboarding") {
+        expect(result.deferredDbInit).toBe(false);
+      }
+    });
+
+    it("transitions to error during onboarding on failure", () => {
+      const state: OnboardingState = {
+        status: "onboarding",
+        step: "secure-storage",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        completedSteps: ["phone-type"],
+        deferredDbInit: true,
+      };
+      const action: AppAction = {
+        type: "DB_INIT_COMPLETE",
+        success: false,
+        error: "Keychain access denied",
+      };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("error");
+      if (result.status === "error") {
+        expect(result.error.code).toBe("DB_INIT_FAILED");
+        expect(result.recoverable).toBe(true);
+      }
+    });
+
+    it("ignores during onboarding if deferredDbInit is not set", () => {
+      const state: OnboardingState = {
+        status: "onboarding",
+        step: "secure-storage",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        completedSteps: ["phone-type"],
+        // deferredDbInit not set
+      };
+      const action: AppAction = { type: "DB_INIT_COMPLETE", success: true };
+
+      const result = appStateReducer(state, action);
+
+      expect(result).toBe(state);
+    });
   });
 
   describe("AUTH_LOADED", () => {
@@ -317,7 +403,28 @@ describe("appStateReducer - Loading Phase Transitions", () => {
 
       const result = appStateReducer(state, action);
 
-      expect(result).toEqual({ status: "unauthenticated" });
+      expect(result.status).toBe("unauthenticated");
+    });
+
+    it("preserves deferredDbInit when transitioning to unauthenticated", () => {
+      const state: LoadingState = {
+        status: "loading",
+        phase: "loading-auth",
+        deferredDbInit: true,
+      };
+      const action: AppAction = {
+        type: "AUTH_LOADED",
+        user: null,
+        isNewUser: false,
+        platform: mockMacOSPlatform,
+      };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("unauthenticated");
+      if (result.status === "unauthenticated") {
+        expect(result.deferredDbInit).toBe(true);
+      }
     });
 
     it("transitions new user directly to onboarding", () => {
@@ -337,6 +444,27 @@ describe("appStateReducer - Loading Phase Transitions", () => {
         expect(result.platform).toEqual(mockMacOSPlatform);
         expect(result.step).toBe("phone-type");
         expect(result.completedSteps).toEqual([]);
+      }
+    });
+
+    it("preserves deferredDbInit when transitioning new user to onboarding", () => {
+      const state: LoadingState = {
+        status: "loading",
+        phase: "loading-auth",
+        deferredDbInit: true,
+      };
+      const action: AppAction = {
+        type: "AUTH_LOADED",
+        user: mockUser,
+        isNewUser: true,
+        platform: mockMacOSPlatform,
+      };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("onboarding");
+      if (result.status === "onboarding") {
+        expect(result.deferredDbInit).toBe(true);
       }
     });
 
@@ -699,6 +827,7 @@ describe("appStateReducer - Onboarding Transitions", () => {
         user: mockUser,
         platform: mockWindowsPlatform,
         completedSteps: ["phone-type", "email-connect"],
+        selectedPhoneType: "iphone", // TASK-1180: must have explicit phone type for apple-driver
       };
       const action: AppAction = {
         type: "ONBOARDING_STEP_COMPLETE",
@@ -710,6 +839,76 @@ describe("appStateReducer - Onboarding Transitions", () => {
       expect(result.status).toBe("ready");
       if (result.status === "ready") {
         expect(result.userData.needsDriverSetup).toBe(false);
+      }
+    });
+
+    // TASK-1180: Test for phone type selection with explicit phoneType in action
+    it("uses phoneType from action when completing phone-type step", () => {
+      const state: OnboardingState = {
+        status: "onboarding",
+        step: "phone-type",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        completedSteps: [],
+      };
+      // Explicitly pass phoneType: "android" even though platform.hasIPhone is true
+      const action = {
+        type: "ONBOARDING_STEP_COMPLETE" as const,
+        step: "phone-type" as const,
+        phoneType: "android" as const,
+      };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("onboarding");
+      if (result.status === "onboarding") {
+        expect(result.selectedPhoneType).toBe("android");
+        expect(result.step).toBe("secure-storage"); // Next step on macOS
+      }
+    });
+
+    it("preserves selectedPhoneType in state after phone-type step is complete", () => {
+      const state: OnboardingState = {
+        status: "onboarding",
+        step: "secure-storage",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        completedSteps: ["phone-type"],
+        selectedPhoneType: "iphone", // Set from previous phone-type step completion
+      };
+      const action: AppAction = {
+        type: "ONBOARDING_STEP_COMPLETE",
+        step: "secure-storage",
+      };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("onboarding");
+      if (result.status === "onboarding") {
+        expect(result.selectedPhoneType).toBe("iphone"); // Should be preserved
+        expect(result.step).toBe("email-connect"); // Next step
+      }
+    });
+
+    it("uses selectedPhoneType in userData when transitioning to ready", () => {
+      const state: OnboardingState = {
+        status: "onboarding",
+        step: "permissions",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        completedSteps: ["phone-type", "secure-storage", "email-connect"],
+        selectedPhoneType: "android", // Explicitly selected android
+      };
+      const action: AppAction = {
+        type: "ONBOARDING_STEP_COMPLETE",
+        step: "permissions",
+      };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("ready");
+      if (result.status === "ready") {
+        expect(result.userData.phoneType).toBe("android");
       }
     });
   });
@@ -857,6 +1056,149 @@ describe("appStateReducer - Ready State Transitions", () => {
     it("does not transition from non-ready states", () => {
       const state: AppState = { status: "unauthenticated" };
       const action: AppAction = { type: "START_EMAIL_SETUP" };
+
+      const result = appStateReducer(state, action);
+
+      expect(result).toBe(state);
+    });
+  });
+
+  describe("EMAIL_CONNECTED", () => {
+    it("updates userData.hasEmailConnected when in ready state", () => {
+      // User with email not connected (dashboard shows setup banner)
+      const userDataNoEmail = { ...mockCompleteUserData, hasEmailConnected: false };
+      const state: ReadyState = {
+        status: "ready",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        userData: userDataNoEmail,
+      };
+      const action: AppAction = { type: "EMAIL_CONNECTED" };
+
+      const result = appStateReducer(state, action);
+
+      // Should update hasEmailConnected so banner disappears
+      expect(result.status).toBe("ready");
+      if (result.status === "ready") {
+        expect(result.userData.hasEmailConnected).toBe(true);
+        // Other userData should be preserved
+        expect(result.userData.phoneType).toBe(userDataNoEmail.phoneType);
+        expect(result.userData.hasPermissions).toBe(userDataNoEmail.hasPermissions);
+      }
+    });
+
+    it("preserves other state properties when updating hasEmailConnected", () => {
+      const userDataNoEmail = { ...mockCompleteUserData, hasEmailConnected: false };
+      const state: ReadyState = {
+        status: "ready",
+        user: mockUser,
+        platform: mockWindowsPlatform,
+        userData: userDataNoEmail,
+      };
+      const action: AppAction = { type: "EMAIL_CONNECTED" };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("ready");
+      if (result.status === "ready") {
+        expect(result.user).toEqual(mockUser);
+        expect(result.platform).toEqual(mockWindowsPlatform);
+      }
+    });
+
+    it("updates hasEmailConnected in onboarding state", () => {
+      const state: OnboardingState = {
+        status: "onboarding",
+        step: "email-connect",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        completedSteps: ["phone-type", "secure-storage"],
+      };
+      const action: AppAction = { type: "EMAIL_CONNECTED" };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("onboarding");
+      if (result.status === "onboarding") {
+        expect(result.hasEmailConnected).toBe(true);
+      }
+    });
+
+    it("returns current state for invalid states", () => {
+      const state: AppState = { status: "unauthenticated" };
+      const action: AppAction = { type: "EMAIL_CONNECTED" };
+
+      const result = appStateReducer(state, action);
+
+      expect(result).toBe(state);
+    });
+  });
+
+  // TASK-1730: Tests for EMAIL_DISCONNECTED action
+  describe("EMAIL_DISCONNECTED", () => {
+    it("updates userData.hasEmailConnected to false when in ready state", () => {
+      // User with email connected (banner hidden)
+      const userDataWithEmail = { ...mockCompleteUserData, hasEmailConnected: true };
+      const state: ReadyState = {
+        status: "ready",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        userData: userDataWithEmail,
+      };
+      const action: AppAction = { type: "EMAIL_DISCONNECTED", provider: "google" };
+
+      const result = appStateReducer(state, action);
+
+      // Should update hasEmailConnected so banner reappears
+      expect(result.status).toBe("ready");
+      if (result.status === "ready") {
+        expect(result.userData.hasEmailConnected).toBe(false);
+        // Other userData should be preserved
+        expect(result.userData.phoneType).toBe(userDataWithEmail.phoneType);
+        expect(result.userData.hasPermissions).toBe(userDataWithEmail.hasPermissions);
+      }
+    });
+
+    it("preserves other state properties when updating hasEmailConnected to false", () => {
+      const userDataWithEmail = { ...mockCompleteUserData, hasEmailConnected: true };
+      const state: ReadyState = {
+        status: "ready",
+        user: mockUser,
+        platform: mockWindowsPlatform,
+        userData: userDataWithEmail,
+      };
+      const action: AppAction = { type: "EMAIL_DISCONNECTED", provider: "microsoft" };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("ready");
+      if (result.status === "ready") {
+        expect(result.user).toEqual(mockUser);
+        expect(result.platform).toEqual(mockWindowsPlatform);
+        expect(result.userData.hasEmailConnected).toBe(false);
+      }
+    });
+
+    it("returns current state for onboarding state (disconnect unexpected)", () => {
+      const state: OnboardingState = {
+        status: "onboarding",
+        step: "email-connect",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        completedSteps: ["phone-type", "secure-storage"],
+        hasEmailConnected: true,
+      };
+      const action: AppAction = { type: "EMAIL_DISCONNECTED", provider: "google" };
+
+      const result = appStateReducer(state, action);
+
+      // Disconnect during onboarding should be ignored
+      expect(result).toBe(state);
+    });
+
+    it("returns current state for unauthenticated state", () => {
+      const state: AppState = { status: "unauthenticated" };
+      const action: AppAction = { type: "EMAIL_DISCONNECTED", provider: "google" };
 
       const result = appStateReducer(state, action);
 

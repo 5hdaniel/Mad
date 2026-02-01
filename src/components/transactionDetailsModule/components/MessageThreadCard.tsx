@@ -139,6 +139,7 @@ function isGroupChat(
 /**
  * Format participant names for display.
  * Uses contactNames map to resolve phone numbers to names.
+ * Sorts resolved names first, unresolved phone numbers last.
  */
 function formatParticipantNames(
   participants: string[],
@@ -148,6 +149,11 @@ function formatParticipantNames(
   const normalizePhone = (phone: string): string => {
     const digits = phone.replace(/\D/g, "");
     return digits.length >= 10 ? digits.slice(-10) : digits;
+  };
+
+  // Check if a string looks like a phone number (starts with + or is mostly digits)
+  const isPhoneNumber = (s: string): boolean => {
+    return s.startsWith("+") || /^\d[\d\s\-()]{6,}$/.test(s);
   };
 
   const names = participants.map((p) => {
@@ -164,6 +170,15 @@ function formatParticipantNames(
 
   // Deduplicate names (same contact may have multiple phone numbers)
   const uniqueNames = [...new Set(names)];
+
+  // Sort: resolved names first, phone numbers last
+  uniqueNames.sort((a, b) => {
+    const aIsPhone = isPhoneNumber(a);
+    const bIsPhone = isPhoneNumber(b);
+    if (aIsPhone && !bIsPhone) return 1;  // a is phone, b is name → b first
+    if (!aIsPhone && bIsPhone) return -1; // a is name, b is phone → a first
+    return 0; // preserve original order within same type
+  });
 
   if (uniqueNames.length <= maxShow) {
     return uniqueNames.join(", ");
@@ -455,20 +470,70 @@ export function groupMessagesByThread(
 /**
  * Utility function to extract phone number from thread messages.
  * Looks at participants to find the external phone number.
+ *
+ * Priority order:
+ * 1. from/to fields (for 1:1 messages with valid handle)
+ * 2. chat_members array (for group chats or when handle_id was null)
+ * 3. Legacy sender field
+ * 4. "Unknown" fallback
  */
 export function extractPhoneFromThread(messages: MessageLike[]): string {
+  // First, identify the user's own identifiers to exclude them
+  // The user is "from" in outbound messages, and "to" in inbound messages
+  const userIdentifiers = new Set<string>();
+  for (const msg of messages) {
+    if (msg.participants) {
+      try {
+        const parsed = JSON.parse(msg.participants as string);
+        // For outbound, user is in "from"
+        if (msg.direction === "outbound" && parsed.from && parsed.from !== "me" && parsed.from !== "unknown") {
+          userIdentifiers.add(parsed.from.toLowerCase());
+        }
+        // For inbound, user is in "to"
+        if (msg.direction === "inbound" && parsed.to) {
+          const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
+          for (const t of toList) {
+            if (t && t !== "me" && t !== "unknown") {
+              userIdentifiers.add(t.toLowerCase());
+            }
+          }
+        }
+      } catch { /* ignore */ }
+    }
+  }
+
+  // Helper to check if identifier belongs to user
+  const isUserIdentifier = (id: string): boolean => {
+    if (!id) return true;
+    const lower = id.toLowerCase();
+    return userIdentifiers.has(lower) || lower === "me" || lower === "unknown";
+  };
+
   for (const msg of messages) {
     // Try to parse participants JSON
     if (msg.participants) {
       try {
         const participants = JSON.parse(msg.participants as string);
+
         // For inbound messages, "from" is the external phone
-        // For outbound messages, "to" contains the external phone
-        if (msg.direction === "inbound" && participants.from) {
+        if (msg.direction === "inbound" && participants.from && !isUserIdentifier(participants.from)) {
           return participants.from;
         }
-        if (msg.direction === "outbound" && participants.to?.length > 0) {
+        // For outbound messages, "to" contains the external phone
+        if (msg.direction === "outbound" && participants.to?.length > 0 && !isUserIdentifier(participants.to[0])) {
           return participants.to[0];
+        }
+
+        // Fallback to chat_members for group chats or when from/to are "unknown"
+        // chat_members contains all participants except "me"
+        if (participants.chat_members && participants.chat_members.length > 0) {
+          // Return first non-user member
+          const validMember = participants.chat_members.find(
+            (m: string) => !isUserIdentifier(m)
+          );
+          if (validMember) {
+            return validMember;
+          }
         }
       } catch {
         // Parsing failed, continue to fallback
@@ -476,7 +541,8 @@ export function extractPhoneFromThread(messages: MessageLike[]): string {
     }
 
     // Fallback to legacy sender field (only on Communication type)
-    if ("sender" in msg && msg.sender) {
+    // But not if it's the user's own identifier
+    if ("sender" in msg && msg.sender && !isUserIdentifier(msg.sender)) {
       return msg.sender;
     }
   }

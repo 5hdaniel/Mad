@@ -377,12 +377,75 @@ class DatabaseService implements IDatabaseService {
       { name: 'sent_at', sql: `ALTER TABLE communications ADD COLUMN sent_at DATETIME` },
       { name: 'sender', sql: `ALTER TABLE communications ADD COLUMN sender TEXT` },
       { name: 'communication_type', sql: `ALTER TABLE communications ADD COLUMN communication_type TEXT DEFAULT 'email'` },
+      // BACKLOG-506: Email reference column (must be added before schema.sql creates index)
+      { name: 'email_id', sql: `ALTER TABLE communications ADD COLUMN email_id TEXT REFERENCES emails(id) ON DELETE CASCADE` },
     ]);
 
     // TASK-1110: Add external_message_id to attachments for stable message linking
     // This allows attachments to be linked to messages even when message_id changes on re-import
+    // TASK-1775: Add email_id for email attachments (must be added before schema.sql creates index)
+    // TASK-1775: Make message_id nullable (was NOT NULL originally) to allow email attachments
+    const attachmentsExists = db.prepare(
+      `SELECT name FROM sqlite_master WHERE type='table' AND name='attachments'`
+    ).get();
+
+    if (attachmentsExists) {
+      // Check if message_id has NOT NULL constraint
+      const colInfo = db.prepare(`PRAGMA table_info(attachments)`).all() as { name: string; notnull: number }[];
+      const messageIdCol = colInfo.find(c => c.name === 'message_id');
+
+      if (messageIdCol && messageIdCol.notnull === 1) {
+        await logService.info("TASK-1775: Migrating attachments table to make message_id nullable", "DatabaseService");
+
+        // SQLite requires table recreation to change NOT NULL constraint
+        // Get existing columns to preserve data
+        const existingCols = colInfo.map(c => c.name);
+        const hasEmailId = existingCols.includes('email_id');
+        const hasExternalMessageId = existingCols.includes('external_message_id');
+
+        // Create new table with nullable message_id
+        db.exec(`
+          CREATE TABLE attachments_new (
+            id TEXT PRIMARY KEY,
+            message_id TEXT,
+            ${hasEmailId ? 'email_id TEXT,' : ''}
+            ${hasExternalMessageId ? 'external_message_id TEXT,' : ''}
+            filename TEXT NOT NULL,
+            mime_type TEXT,
+            file_size_bytes INTEGER,
+            storage_path TEXT,
+            text_content TEXT,
+            document_type TEXT,
+            document_type_confidence REAL,
+            document_type_source TEXT CHECK (document_type_source IN ('pattern', 'llm', 'user')),
+            analysis_metadata TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+            ${hasEmailId ? ', FOREIGN KEY (email_id) REFERENCES emails(id) ON DELETE CASCADE' : ''}
+          )
+        `);
+
+        // Copy data - build column list dynamically
+        const copyColumns = ['id', 'message_id', 'filename', 'mime_type', 'file_size_bytes', 'storage_path',
+          'text_content', 'document_type', 'document_type_confidence', 'document_type_source',
+          'analysis_metadata', 'created_at'];
+        if (hasEmailId) copyColumns.splice(2, 0, 'email_id');
+        if (hasExternalMessageId) copyColumns.splice(hasEmailId ? 3 : 2, 0, 'external_message_id');
+
+        const colList = copyColumns.filter(c => existingCols.includes(c)).join(', ');
+        db.exec(`INSERT INTO attachments_new (${colList}) SELECT ${colList} FROM attachments`);
+
+        // Swap tables
+        db.exec(`DROP TABLE attachments`);
+        db.exec(`ALTER TABLE attachments_new RENAME TO attachments`);
+
+        await logService.info("TASK-1775: Attachments table migrated successfully", "DatabaseService");
+      }
+    }
+
     await addMissingColumns('attachments', [
       { name: 'external_message_id', sql: `ALTER TABLE attachments ADD COLUMN external_message_id TEXT` },
+      { name: 'email_id', sql: `ALTER TABLE attachments ADD COLUMN email_id TEXT REFERENCES emails(id) ON DELETE CASCADE` },
     ]);
 
     // Populate display_name from name column if it exists
@@ -517,7 +580,7 @@ class DatabaseService implements IDatabaseService {
     runSafe(`UPDATE transactions SET status = 'active' WHERE status = 'pending'`);
     runSafe(`UPDATE transactions SET status = 'active' WHERE status = 'open'`);
     runSafe(`UPDATE transactions SET status = 'active' WHERE status IS NULL OR status = ''`);
-    runSafe(`UPDATE transactions SET status = 'archived' WHERE status = 'cancelled'`);
+    runSafe(`UPDATE transactions SET status = 'closed' WHERE status = 'cancelled'`);
 
     // Migration 9: Normalize contacts display_name
     runSafe(`UPDATE contacts SET display_name = name WHERE (display_name IS NULL OR display_name = '') AND name IS NOT NULL AND name != ''`);
@@ -649,6 +712,340 @@ class DatabaseService implements IDatabaseService {
       await logService.info("BACKLOG-390: Added B2B submission tracking columns", "DatabaseService");
     }
 
+    // Migration 16 (BACKLOG-426): License Type Support
+    // Add columns for license-aware feature gating
+    const userLicenseColumns = getColumns('users_local');
+    if (!userLicenseColumns.includes('license_type')) {
+      runSafe(`ALTER TABLE users_local ADD COLUMN license_type TEXT DEFAULT 'individual' CHECK (license_type IN ('individual', 'team', 'enterprise'))`);
+      runSafe(`ALTER TABLE users_local ADD COLUMN ai_detection_enabled INTEGER DEFAULT 0`);
+      runSafe(`ALTER TABLE users_local ADD COLUMN organization_id TEXT`);
+      runSafe(`CREATE INDEX IF NOT EXISTS idx_users_local_license_type ON users_local(license_type)`);
+      runSafe(`CREATE INDEX IF NOT EXISTS idx_users_local_organization ON users_local(organization_id)`);
+      await logService.info("BACKLOG-426: Added license type columns to users_local", "DatabaseService");
+    }
+
+    // Migration 17: Backfill known missing contact emails
+    // One-time fix for contacts imported before junction table was properly populated
+    const danielHaimId = '33b96e25-d88b-418d-a1ac-1b46ca960ae7';
+    const danielHaimEmailExists = db.prepare(
+      "SELECT 1 FROM contact_emails WHERE contact_id = ? AND email = 'hd@berkeley.edu'"
+    ).get(danielHaimId);
+    if (!danielHaimEmailExists) {
+      // Check if contact exists first
+      const contactExists = db.prepare("SELECT 1 FROM contacts WHERE id = ?").get(danielHaimId);
+      if (contactExists) {
+        runSafe(`INSERT OR IGNORE INTO contact_emails (id, contact_id, email, is_primary, source, created_at)
+                 VALUES ('${crypto.randomUUID()}', '${danielHaimId}', 'hd@berkeley.edu', 1, 'migration', CURRENT_TIMESTAMP)`);
+        logService.info("Migration 17: Backfilled email for Daniel Haim contact", "DatabaseService");
+      }
+    }
+
+    // Migration 18: Performance indexes to reduce UI freezes during queries
+    // BACKLOG-497: Quick win before full worker thread refactor
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_contacts_user_id ON contacts(user_id)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_contact_emails_contact_id ON contact_emails(contact_id)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_contact_emails_email ON contact_emails(email)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_contact_phones_contact_id ON contact_phones(contact_id)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_user_id ON communications(user_id)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_sender ON communications(sender)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_sent_at ON communications(sent_at)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_user_sent ON communications(user_id, sent_at)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_transaction ON communications(transaction_id)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_user_id ON messages(user_id)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_sent_at ON messages(sent_at)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_user_sent ON messages(user_id, sent_at)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel)`);
+
+    // Migration 20: Add UNIQUE constraint on messages.external_id to prevent import duplicates
+    // The import service uses INSERT OR IGNORE but without a unique constraint it does nothing!
+    // First, delete duplicate messages keeping only the oldest one (by created_at or id)
+    const dupMessagesCount = (db.prepare(`
+      SELECT COUNT(*) as count FROM messages m1
+      WHERE EXISTS (
+        SELECT 1 FROM messages m2
+        WHERE m2.user_id = m1.user_id
+        AND m2.external_id = m1.external_id
+        AND m2.external_id IS NOT NULL
+        AND m2.id < m1.id
+      )
+    `).get() as { count: number })?.count || 0;
+
+    if (dupMessagesCount > 0) {
+      await logService.info(`Migration 20: Found ${dupMessagesCount} duplicate messages to clean up`, "DatabaseService");
+      runSafe(`
+        DELETE FROM messages
+        WHERE id IN (
+          SELECT m1.id FROM messages m1
+          WHERE EXISTS (
+            SELECT 1 FROM messages m2
+            WHERE m2.user_id = m1.user_id
+            AND m2.external_id = m1.external_id
+            AND m2.external_id IS NOT NULL
+            AND m2.id < m1.id
+          )
+        )
+      `);
+      await logService.info("Migration 20: Duplicate messages cleaned up", "DatabaseService");
+    }
+
+    // Now add the unique index so INSERT OR IGNORE actually works
+    runSafe(`CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_user_external_id ON messages(user_id, external_id) WHERE external_id IS NOT NULL`);
+
+    // Migration 21: Delete content-based duplicates (same body_text + sent_at)
+    // This catches duplicates that have different external_ids but same content
+    const contentDupCount = (db.prepare(`
+      SELECT COUNT(*) as count FROM messages m1
+      WHERE m1.channel IN ('sms', 'imessage')
+      AND EXISTS (
+        SELECT 1 FROM messages m2
+        WHERE m2.user_id = m1.user_id
+        AND m2.body_text = m1.body_text
+        AND m2.sent_at = m1.sent_at
+        AND m2.channel IN ('sms', 'imessage')
+        AND m2.id < m1.id
+      )
+    `).get() as { count: number })?.count || 0;
+
+    if (contentDupCount > 0) {
+      await logService.info(`Migration 21: Found ${contentDupCount} content-duplicate messages to clean up`, "DatabaseService");
+      runSafe(`
+        DELETE FROM messages
+        WHERE id IN (
+          SELECT m1.id FROM messages m1
+          WHERE m1.channel IN ('sms', 'imessage')
+          AND EXISTS (
+            SELECT 1 FROM messages m2
+            WHERE m2.user_id = m1.user_id
+            AND m2.body_text = m1.body_text
+            AND m2.sent_at = m1.sent_at
+            AND m2.channel IN ('sms', 'imessage')
+            AND m2.id < m1.id
+          )
+        )
+      `);
+      await logService.info("Migration 21: Content-duplicate messages cleaned up", "DatabaseService");
+    }
+
+    // NOTE: Migration 19 (legacy communication cleanup) was removed after BACKLOG-506
+    // because the body_plain and communication_type columns no longer exist on communications.
+    // Legacy records are now handled by migration 23 which filters them out during table recreation.
+
+    // Migration 22: Create emails table and add email_id to communications (BACKLOG-506)
+    const emailsTableExists = db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='emails'"
+    ).get();
+
+    if (!emailsTableExists) {
+      await logService.info("Running migration 22: Create emails table", "DatabaseService");
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS emails (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          external_id TEXT,
+          source TEXT CHECK (source IN ('gmail', 'outlook')),
+          account_id TEXT,
+          direction TEXT CHECK (direction IN ('inbound', 'outbound')),
+          subject TEXT,
+          body_plain TEXT,
+          body_html TEXT,
+          sender TEXT,
+          recipients TEXT,
+          cc TEXT,
+          bcc TEXT,
+          thread_id TEXT,
+          in_reply_to TEXT,
+          references_header TEXT,
+          sent_at DATETIME,
+          received_at DATETIME,
+          has_attachments INTEGER DEFAULT 0,
+          attachment_count INTEGER DEFAULT 0,
+          message_id_header TEXT,
+          content_hash TEXT,
+          labels TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
+        )
+      `);
+
+      // Create indexes
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_emails_user_id ON emails(user_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_emails_thread_id ON emails(thread_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_emails_sent_at ON emails(sent_at)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_emails_sender ON emails(sender)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_emails_external_id ON emails(external_id)`);
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_emails_user_external ON emails(user_id, external_id) WHERE external_id IS NOT NULL`);
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_emails_message_id_header ON emails(user_id, message_id_header) WHERE message_id_header IS NOT NULL`);
+
+      await logService.info("Migration 22: emails table created", "DatabaseService");
+    }
+
+    // Add email_id column to communications table (if not exists)
+    const commEmailIdExists = db.prepare(`
+      SELECT COUNT(*) as count FROM pragma_table_info('communications') WHERE name='email_id'
+    `).get() as { count: number };
+
+    if (!commEmailIdExists || commEmailIdExists.count === 0) {
+      await logService.info("Migration 22: Adding email_id column to communications", "DatabaseService");
+      db.exec(`ALTER TABLE communications ADD COLUMN email_id TEXT REFERENCES emails(id) ON DELETE CASCADE`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_communications_email_id ON communications(email_id)`);
+      await logService.info("Migration 22: email_id column added to communications", "DatabaseService");
+    }
+
+    // Migration 23: Recreate communications as pure junction table (BACKLOG-506 Phase 5)
+    // This removes all legacy content columns (subject, body_plain, sender, etc.)
+    // Content now lives in emails table (for emails) and messages table (for texts)
+    const currentSchemaVersion = (db.prepare("SELECT version FROM schema_version WHERE id = 1").get() as { version: number } | undefined)?.version || 0;
+    if (currentSchemaVersion < 23) {
+      await logService.info("Running migration 23: Recreate communications as pure junction table", "DatabaseService");
+
+      // Step 1: Create new table with clean schema (10 columns only)
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS communications_new (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          transaction_id TEXT,
+          message_id TEXT,
+          email_id TEXT,
+          thread_id TEXT,
+          link_source TEXT CHECK (link_source IN ('auto', 'manual', 'scan')),
+          link_confidence REAL,
+          linked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
+          FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL,
+          FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+          FOREIGN KEY (email_id) REFERENCES emails(id) ON DELETE CASCADE,
+          CHECK (message_id IS NOT NULL OR email_id IS NOT NULL OR thread_id IS NOT NULL)
+        )
+      `);
+
+      // Step 2: Copy data from old table (only junction fields)
+      // Filter: Only copy records that have at least one content reference
+      // IMPORTANT: Deduplicate to avoid unique constraint violations
+      // Use subqueries to get one row per unique combination
+      db.exec(`
+        INSERT INTO communications_new (
+          id, user_id, transaction_id, message_id, email_id, thread_id,
+          link_source, link_confidence, linked_at, created_at
+        )
+        SELECT
+          id, user_id, transaction_id, message_id, email_id, thread_id,
+          link_source, link_confidence, linked_at, created_at
+        FROM communications
+        WHERE (message_id IS NOT NULL OR email_id IS NOT NULL OR thread_id IS NOT NULL)
+          AND id IN (
+            -- Get first ID for each unique email_id + transaction_id
+            SELECT MIN(id) FROM communications
+            WHERE email_id IS NOT NULL
+            GROUP BY email_id, transaction_id
+            UNION
+            -- Get first ID for each unique message_id + transaction_id
+            SELECT MIN(id) FROM communications
+            WHERE message_id IS NOT NULL
+            GROUP BY message_id, transaction_id
+            UNION
+            -- Get first ID for each unique thread_id + transaction_id (without message/email)
+            SELECT MIN(id) FROM communications
+            WHERE thread_id IS NOT NULL AND message_id IS NULL AND email_id IS NULL
+            GROUP BY thread_id, transaction_id
+          )
+      `);
+
+      // Step 3: Drop old table
+      db.exec(`DROP TABLE communications`);
+
+      // Step 4: Rename new table
+      db.exec(`ALTER TABLE communications_new RENAME TO communications`);
+
+      // Step 5: Recreate indexes
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_communications_user_id ON communications(user_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_communications_transaction_id ON communications(transaction_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_communications_message_id ON communications(message_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_communications_email_id ON communications(email_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_communications_thread_id ON communications(thread_id)`);
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_comm_msg_txn ON communications(message_id, transaction_id) WHERE message_id IS NOT NULL`);
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_comm_email_txn ON communications(email_id, transaction_id) WHERE email_id IS NOT NULL`);
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_comm_thread_txn ON communications(thread_id, transaction_id) WHERE thread_id IS NOT NULL AND message_id IS NULL AND email_id IS NULL`);
+
+      db.exec(`UPDATE schema_version SET version = 23, updated_at = CURRENT_TIMESTAMP WHERE id = 1`);
+      await logService.info("Migration 23 complete: communications is now pure junction table (10 columns)", "DatabaseService");
+    }
+
+    // Migration 24: Create phone_last_message lookup table for fast contact sorting (BACKLOG-567)
+    // This enables O(1) lookup of last message date by phone number instead of O(n) LIKE scans
+    const phoneLastMsgExists = db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='phone_last_message'"
+    ).get();
+
+    if (!phoneLastMsgExists) {
+      await logService.info("Running migration 24: Create phone_last_message lookup table", "DatabaseService");
+
+      db.exec(`
+        CREATE TABLE phone_last_message (
+          phone_normalized TEXT NOT NULL,
+          user_id TEXT NOT NULL,
+          last_message_at DATETIME NOT NULL,
+          PRIMARY KEY (phone_normalized, user_id),
+          FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
+        )
+      `);
+      db.exec(`CREATE INDEX idx_phone_last_msg_user ON phone_last_message(user_id)`);
+
+      await logService.info("Migration 24 complete: phone_last_message table created", "DatabaseService");
+    }
+
+    // Migration 25: Create external_contacts shadow table (BACKLOG-569, TASK-1773)
+    // This caches macOS Contacts with pre-computed last_message_at for instant sorted loading
+    const externalContactsExists = db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='external_contacts'"
+    ).get();
+
+    if (!externalContactsExists) {
+      await logService.info("Running migration 25: Create external_contacts shadow table", "DatabaseService");
+
+      db.exec(`
+        CREATE TABLE external_contacts (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          name TEXT,
+          phones_json TEXT,
+          emails_json TEXT,
+          company TEXT,
+          last_message_at DATETIME,
+          macos_record_id TEXT,
+          synced_at DATETIME,
+          FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
+          UNIQUE(user_id, macos_record_id)
+        )
+      `);
+      db.exec(`CREATE INDEX idx_external_contacts_user ON external_contacts(user_id)`);
+      db.exec(`CREATE INDEX idx_external_contacts_last_msg ON external_contacts(user_id, last_message_at DESC)`);
+
+      await logService.info("Migration 25 complete: external_contacts shadow table created", "DatabaseService");
+    }
+
+    // Migration 26: Add email_id to attachments table for email attachment support (TASK-1775)
+    // This enables storing attachments from Gmail/Outlook emails alongside iMessage attachments
+    const attachmentsColumns = getColumns('attachments');
+    if (!attachmentsColumns.includes('email_id')) {
+      await logService.info("Running migration 26: Add email_id to attachments table", "DatabaseService");
+
+      // Add email_id column (nullable - existing attachments have message_id, new email attachments have email_id)
+      runSafe(`ALTER TABLE attachments ADD COLUMN email_id TEXT REFERENCES emails(id) ON DELETE CASCADE`);
+
+      // Create index for email_id lookups
+      runSafe(`CREATE INDEX IF NOT EXISTS idx_attachments_email_id ON attachments(email_id)`);
+
+      // Note: CHECK constraint (message_id IS NOT NULL OR email_id IS NOT NULL) is enforced
+      // by the service layer (emailAttachmentService and macOSMessagesImportService)
+      // because SQLite ALTER TABLE cannot add CHECK constraints without table recreation.
+
+      await logService.info("Migration 26 complete: email_id column added to attachments", "DatabaseService");
+    }
+
     // Finalize schema version (create table if missing for backwards compatibility)
     const schemaVersionExists = db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
@@ -661,12 +1058,12 @@ class DatabaseService implements IDatabaseService {
           version INTEGER NOT NULL DEFAULT 1,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
-        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 8);
+        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 23);
       `);
     } else {
-      const currentVersion = (db.prepare("SELECT version FROM schema_version").get() as { version: number } | undefined)?.version || 0;
-      if (currentVersion < 8) {
-        db.exec("UPDATE schema_version SET version = 8");
+      const finalVersion = (db.prepare("SELECT version FROM schema_version").get() as { version: number } | undefined)?.version || 0;
+      if (finalVersion < 23) {
+        db.exec("UPDATE schema_version SET version = 23");
       }
     }
 
@@ -677,7 +1074,8 @@ class DatabaseService implements IDatabaseService {
   // USER OPERATIONS (Delegate to userDbService)
   // ============================================
 
-  async createUser(userData: NewUser): Promise<User> {
+  // TASK-1507G: Accept optional ID to unify user IDs across local SQLite and Supabase
+  async createUser(userData: NewUser & { id?: string }): Promise<User> {
     return userDb.createUser(userData);
   }
 
@@ -764,6 +1162,10 @@ class DatabaseService implements IDatabaseService {
     return contactDb.getContactById(contactId);
   }
 
+  async findContactByName(userId: string, name: string): Promise<Contact | null> {
+    return contactDb.findContactByName(userId, name);
+  }
+
   async getContacts(filters?: ContactFilters): Promise<Contact[]> {
     return contactDb.getContacts(filters);
   }
@@ -776,12 +1178,24 @@ class DatabaseService implements IDatabaseService {
     return contactDb.getUnimportedContactsByUserId(userId);
   }
 
-  async markContactAsImported(contactId: string): Promise<void> {
-    return contactDb.markContactAsImported(contactId);
+  async markContactAsImported(contactId: string, source?: string): Promise<void> {
+    return contactDb.markContactAsImported(contactId, source);
+  }
+
+  async backfillContactEmails(contactId: string, emails: string[]): Promise<number> {
+    return contactDb.backfillContactEmails(contactId, emails);
+  }
+
+  async backfillContactPhones(contactId: string, phones: string[]): Promise<number> {
+    return contactDb.backfillContactPhones(contactId, phones);
   }
 
   async getContactsSortedByActivity(userId: string, propertyAddress?: string): Promise<contactDb.ContactWithActivity[]> {
     return contactDb.getContactsSortedByActivity(userId, propertyAddress);
+  }
+
+  async backfillContactCommunicationDates(userId: string): Promise<number> {
+    return contactDb.backfillContactCommunicationDates(userId);
   }
 
   async searchContacts(query: string, userId: string): Promise<Contact[]> {
@@ -806,6 +1220,116 @@ class DatabaseService implements IDatabaseService {
 
   async getContactByPhone(phone: string): Promise<{ id: string; display_name: string; phone: string } | null> {
     return contactDb.getContactByPhone(phone);
+  }
+
+  /**
+   * Get the most recent message date for a phone number using lookup table
+   * Falls back to direct query if lookup table is empty (BACKLOG-567)
+   */
+  getLastMessageDateForPhone(userId: string, normalizedPhone: string): string | null {
+    const db = this.getRawDatabase();
+
+    // Fast indexed lookup from phone_last_message table
+    const result = db.prepare(`
+      SELECT last_message_at as last_date
+      FROM phone_last_message
+      WHERE user_id = ?
+        AND phone_normalized = ?
+    `).get(userId, normalizedPhone) as { last_date: string | null } | undefined;
+
+    return result?.last_date || null;
+  }
+
+  /**
+   * Batch lookup for multiple phones (much more efficient than N queries)
+   * Returns a Map of normalized phone -> last_message_at (BACKLOG-567)
+   */
+  getLastMessageDatesForPhones(userId: string, phones: string[]): Map<string, string> {
+    const db = this.getRawDatabase();
+    const result = new Map<string, string>();
+
+    if (phones.length === 0) return result;
+
+    // Use parameterized query for safety
+    const placeholders = phones.map(() => '?').join(',');
+    const rows = db.prepare(`
+      SELECT phone_normalized, last_message_at
+      FROM phone_last_message
+      WHERE user_id = ?
+        AND phone_normalized IN (${placeholders})
+    `).all(userId, ...phones) as { phone_normalized: string; last_message_at: string }[];
+
+    for (const row of rows) {
+      result.set(row.phone_normalized, row.last_message_at);
+    }
+
+    return result;
+  }
+
+  /**
+   * Populate phone_last_message lookup table from messages (BACKLOG-567)
+   * This aggregates all SMS/iMessage into a phone->lastDate lookup for O(1) queries
+   */
+  async backfillPhoneLastMessageTable(userId: string): Promise<number> {
+    const db = this.getRawDatabase();
+
+    await logService.info("Backfilling phone_last_message table", "DatabaseService", { userId });
+
+    // Get all distinct phone numbers from participants_flat and their max sent_at
+    // participants_flat format: ",16508685180,16508685180" (comma-separated digits)
+    const messages = db.prepare(`
+      SELECT participants_flat, MAX(sent_at) as last_date
+      FROM messages
+      WHERE user_id = ?
+        AND (channel = 'sms' OR channel = 'imessage')
+        AND participants_flat IS NOT NULL
+        AND participants_flat != ''
+      GROUP BY participants_flat
+    `).all(userId) as { participants_flat: string; last_date: string }[];
+
+    // Parse and aggregate phones
+    const phoneLastDates = new Map<string, string>();
+
+    for (const msg of messages) {
+      // Split comma-separated phones and normalize each
+      const phones = msg.participants_flat.split(',').filter(p => p.trim().length >= 7);
+
+      for (const phone of phones) {
+        const normalized = phone.trim().slice(-10); // Last 10 digits
+        if (normalized.length < 7) continue;
+
+        const existing = phoneLastDates.get(normalized);
+        if (!existing || msg.last_date > existing) {
+          phoneLastDates.set(normalized, msg.last_date);
+        }
+      }
+    }
+
+    // Insert/update all phones in a transaction
+    const insertStmt = db.prepare(`
+      INSERT OR REPLACE INTO phone_last_message (phone_normalized, user_id, last_message_at)
+      VALUES (?, ?, ?)
+    `);
+
+    db.exec('BEGIN TRANSACTION');
+    try {
+      let count = 0;
+      for (const [phone, lastDate] of phoneLastDates) {
+        insertStmt.run(phone, userId, lastDate);
+        count++;
+      }
+      db.exec('COMMIT');
+
+      await logService.info("Phone last message backfill complete", "DatabaseService", {
+        userId,
+        phonesUpdated: count,
+      });
+
+      return count;
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   async getContactNamesByPhones(phones: string[]): Promise<Map<string, string>> {
@@ -1084,19 +1608,29 @@ class DatabaseService implements IDatabaseService {
   }
 
   /**
-   * Get unlinked emails from the communications table
-   * These are emails not yet attached to any transaction
-   * Note: Emails are stored in communications table, not messages table
+   * Get unlinked emails - emails not attached to any transaction
+   * BACKLOG-506: Now queries emails table directly since communications is a junction table
    */
   async getUnlinkedEmails(userId: string, limit = 500): Promise<Communication[]> {
     const db = this._ensureDb();
+    // Get emails that don't have a corresponding communication link with a transaction
     const sql = `
-      SELECT id, user_id, transaction_id, subject, sender, sent_at, body_plain as body_preview
-      FROM communications
-      WHERE user_id = ?
-        AND transaction_id IS NULL
-        AND (communication_type = 'email' OR communication_type IS NULL)
-      ORDER BY sent_at DESC
+      SELECT
+        e.id,
+        e.user_id,
+        NULL as transaction_id,
+        e.subject,
+        e.sender,
+        e.sent_at,
+        SUBSTR(e.body_plain, 1, 200) as body_preview
+      FROM emails e
+      WHERE e.user_id = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM communications c
+          WHERE c.email_id = e.id
+            AND c.transaction_id IS NOT NULL
+        )
+      ORDER BY e.sent_at DESC
       LIMIT ?
     `;
     return db.prepare(sql).all(userId, limit) as Communication[];
@@ -1563,6 +2097,98 @@ class DatabaseService implements IDatabaseService {
       ? await databaseEncryptionService.isDatabaseEncrypted(this.dbPath)
       : false;
     return { isEncrypted, keyMetadata };
+  }
+
+  /**
+   * Reindex all performance indexes
+   * Recreates indexes that optimize query performance for contacts, communications, and messages.
+   * This can help resolve slowness caused by fragmented or outdated indexes.
+   *
+   * @returns Object with reindex results including index count and duration
+   */
+  async reindexDatabase(): Promise<{
+    success: boolean;
+    indexesRebuilt: number;
+    durationMs: number;
+    error?: string;
+  }> {
+    const db = this._ensureDb();
+    const startTime = Date.now();
+    let indexesRebuilt = 0;
+
+    try {
+      await logService.info("Starting database reindex operation", "DatabaseService");
+
+      // Performance indexes from Migration 18 (BACKLOG-497)
+      // Drop and recreate to ensure fresh, optimized indexes
+      const performanceIndexes = [
+        // Contact indexes
+        { name: "idx_contacts_user_id", sql: "CREATE INDEX IF NOT EXISTS idx_contacts_user_id ON contacts(user_id)" },
+        { name: "idx_contact_emails_contact_id", sql: "CREATE INDEX IF NOT EXISTS idx_contact_emails_contact_id ON contact_emails(contact_id)" },
+        { name: "idx_contact_emails_email", sql: "CREATE INDEX IF NOT EXISTS idx_contact_emails_email ON contact_emails(email)" },
+        { name: "idx_contact_phones_contact_id", sql: "CREATE INDEX IF NOT EXISTS idx_contact_phones_contact_id ON contact_phones(contact_id)" },
+        // Communication indexes
+        { name: "idx_communications_user_id", sql: "CREATE INDEX IF NOT EXISTS idx_communications_user_id ON communications(user_id)" },
+        { name: "idx_communications_sender", sql: "CREATE INDEX IF NOT EXISTS idx_communications_sender ON communications(sender)" },
+        { name: "idx_communications_sent_at", sql: "CREATE INDEX IF NOT EXISTS idx_communications_sent_at ON communications(sent_at)" },
+        { name: "idx_communications_user_sent", sql: "CREATE INDEX IF NOT EXISTS idx_communications_user_sent ON communications(user_id, sent_at)" },
+        { name: "idx_communications_transaction", sql: "CREATE INDEX IF NOT EXISTS idx_communications_transaction ON communications(transaction_id)" },
+        // Message indexes
+        { name: "idx_messages_user_id", sql: "CREATE INDEX IF NOT EXISTS idx_messages_user_id ON messages(user_id)" },
+        { name: "idx_messages_sent_at", sql: "CREATE INDEX IF NOT EXISTS idx_messages_sent_at ON messages(sent_at)" },
+        { name: "idx_messages_thread_id", sql: "CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id)" },
+        { name: "idx_messages_user_sent", sql: "CREATE INDEX IF NOT EXISTS idx_messages_user_sent ON messages(user_id, sent_at)" },
+        { name: "idx_messages_channel", sql: "CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel)" },
+      ];
+
+      // Use a transaction for consistency
+      db.exec("BEGIN TRANSACTION");
+
+      try {
+        for (const index of performanceIndexes) {
+          // Drop the existing index if it exists
+          db.exec(`DROP INDEX IF EXISTS ${index.name}`);
+          // Recreate the index
+          db.exec(index.sql);
+          indexesRebuilt++;
+        }
+
+        // Run ANALYZE to update statistics used by the query planner
+        db.exec("ANALYZE");
+
+        db.exec("COMMIT");
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      }
+
+      const durationMs = Date.now() - startTime;
+      await logService.info(
+        `Database reindex completed: ${indexesRebuilt} indexes rebuilt in ${durationMs}ms`,
+        "DatabaseService"
+      );
+
+      return {
+        success: true,
+        indexesRebuilt,
+        durationMs,
+      };
+    } catch (error) {
+      const durationMs = Date.now() - startTime;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      await logService.error("Database reindex failed", "DatabaseService", {
+        error: errorMessage,
+        indexesRebuilt,
+        durationMs,
+      });
+
+      return {
+        success: false,
+        indexesRebuilt,
+        durationMs,
+        error: errorMessage,
+      };
+    }
   }
 }
 

@@ -19,6 +19,33 @@ jest.mock("../../appCore", () => ({
   useAppStateMachine: () => mockUseAppStateMachine(),
 }));
 
+// Mock the LicenseContext for LicenseGate
+jest.mock("../../contexts/LicenseContext", () => ({
+  LicenseProvider: ({ children }: { children: React.ReactNode }) => children,
+  useLicense: () => ({
+    licenseType: "individual" as const,
+    hasAIAddon: true, // Enable AI features for testing
+    organizationId: null,
+    canExport: true,
+    canSubmit: false,
+    canAutoDetect: true,
+    isLoading: false,
+    refresh: jest.fn(),
+  }),
+}));
+
+// Mock useEmailOnboardingApi used by AppModals
+jest.mock("../../appCore/state/flows", () => ({
+  ...jest.requireActual("../../appCore/state/flows"),
+  useEmailOnboardingApi: () => ({
+    hasCompletedEmailOnboarding: true,
+    hasEmailConnected: true,
+    isCheckingEmailOnboarding: false,
+    setHasEmailConnected: jest.fn(),
+    setHasCompletedEmailOnboarding: jest.fn(),
+  }),
+}));
+
 // Default mock user data
 const mockUser = {
   id: "user-123",
@@ -102,7 +129,7 @@ const createAppStateMock = (overrides: Partial<AppStateMachine> = {}): AppStateM
     emailConnected: false,
     emailProvider: null,
   },
-  pendingEmailTokens: null,
+  // TASK-1603: pendingEmailTokens removed after flow reorder
 
   // Export
   exportResult: null,
@@ -269,9 +296,9 @@ describe("App", () => {
         expect(screen.getByText(/magic audit/i)).toBeInTheDocument();
       });
 
-      // Should show login buttons
-      expect(screen.getByText(/sign in with google/i)).toBeInTheDocument();
-      expect(screen.getByText(/sign in with microsoft/i)).toBeInTheDocument();
+      // Should show login button
+      // SPRINT-062: Login now shows single "Sign in with Browser" button instead of separate Google/Microsoft buttons
+      expect(screen.getByText(/sign in with browser/i)).toBeInTheDocument();
     });
 
     it("should show permissions screen when authenticated but no permissions", async () => {
@@ -498,8 +525,9 @@ describe("App", () => {
       renderApp();
 
       // The app should render the login screen
+      // SPRINT-062: Login now shows "Sign in with Browser" instead of "Sign in with Google"
       await waitFor(() => {
-        expect(screen.getByText(/sign in with google/i)).toBeInTheDocument();
+        expect(screen.getByText(/sign in with browser/i)).toBeInTheDocument();
       });
 
       // checkPermissions is called internally by the state machine
@@ -519,8 +547,9 @@ describe("App", () => {
       renderApp();
 
       // Verify login screen renders (permissions check is part of useAppStateMachine)
+      // SPRINT-062: Login now shows "Sign in with Browser" instead of "Sign in with Google"
       await waitFor(() => {
-        expect(screen.getByText(/sign in with google/i)).toBeInTheDocument();
+        expect(screen.getByText(/sign in with browser/i)).toBeInTheDocument();
       });
 
       // The checkPermissions function exists and is callable
@@ -538,8 +567,9 @@ describe("App", () => {
       renderApp();
 
       // Verify login screen renders (app location check is part of useAppStateMachine)
+      // SPRINT-062: Login now shows "Sign in with Browser" instead of "Sign in with Google"
       await waitFor(() => {
-        expect(screen.getByText(/sign in with google/i)).toBeInTheDocument();
+        expect(screen.getByText(/sign in with browser/i)).toBeInTheDocument();
       });
     });
   });
@@ -770,8 +800,9 @@ describe("App", () => {
 
       renderApp();
 
+      // SPRINT-062: Login now shows "Sign in with Browser" instead of "Sign in with Google"
       await waitFor(() => {
-        expect(screen.getByText(/sign in with google/i)).toBeInTheDocument();
+        expect(screen.getByText(/sign in with browser/i)).toBeInTheDocument();
       });
 
       // The move prompt should not appear

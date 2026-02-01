@@ -11,6 +11,12 @@
 import React from "react";
 import type { AppStateMachine } from "./state/types";
 import { OfflineBanner, VersionPopup } from "./shell";
+import SystemHealthMonitor from "../components/SystemHealthMonitor";
+import { isOnboardingStep } from "./routing";
+
+// OAuthProvider type to match SystemHealthMonitor expectations
+// Note: 'azure' is Microsoft's Azure AD provider
+type OAuthProvider = "google" | "microsoft" | "azure";
 
 interface AppShellProps {
   app: AppStateMachine;
@@ -23,10 +29,16 @@ export function AppShell({ app, children }: AppShellProps) {
     isAuthenticated,
     isDatabaseInitialized,
     currentUser,
+    authProvider,
+    hasPermissions,
+    hasEmailConnected,
+    isTourActive,
+    needsTermsAcceptance,
     isOnline,
     isChecking,
     modalState,
     openProfile,
+    openSettings,
     toggleVersion,
     closeVersion,
     handleRetryConnection,
@@ -36,7 +48,9 @@ export function AppShell({ app, children }: AppShellProps) {
   // PRIMARY DATABASE INITIALIZATION GATE
   // Block all content for authenticated users until database is ready
   // This prevents "Database is not initialized" errors from modal bypass
-  if (isAuthenticated && !isDatabaseInitialized) {
+  // EXCEPTION: Don't block during onboarding - DB init is deferred for first-time macOS users
+  // and will be initialized during the secure-storage/keychain step in onboarding
+  if (isAuthenticated && !isDatabaseInitialized && !isOnboardingStep(currentStep)) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
         <div className="text-center">
@@ -88,6 +102,22 @@ export function AppShell({ app, children }: AppShellProps) {
           onRetry={handleRetryConnection}
         />
       )}
+
+      {/* System Health Monitor - Show permission/connection errors */}
+      {isAuthenticated &&
+        currentUser &&
+        authProvider &&
+        hasPermissions &&
+        currentStep === "dashboard" &&
+        hasEmailConnected && (
+          <SystemHealthMonitor
+            key={`health-monitor-${hasEmailConnected}`}
+            userId={currentUser.id}
+            provider={authProvider as OAuthProvider}
+            hidden={isTourActive || needsTermsAcceptance}
+            onOpenSettings={openSettings}
+          />
+        )}
 
       {/* Scrollable Content Area */}
       <div className="flex-1 min-h-0 overflow-y-auto relative">

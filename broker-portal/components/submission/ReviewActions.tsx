@@ -47,7 +47,21 @@ export function ReviewActions({ submission, disabled }: ReviewActionsProps) {
     try {
       const {
         data: { user },
+        error: authError,
       } = await supabase.auth.getUser();
+
+      // Check for auth errors
+      if (authError) {
+        console.error('Auth error getting user:', authError);
+        throw new Error('Authentication failed. Please refresh the page and try again.');
+      }
+
+      if (!user) {
+        console.error('No user found in session');
+        throw new Error('You must be logged in to review submissions.');
+      }
+
+      console.log('Review action by user:', user.id, 'on submission:', submission.id);
 
       const statusMap: Record<Exclude<ReviewAction, null>, string> = {
         approve: 'approved',
@@ -58,46 +72,35 @@ export function ReviewActions({ submission, disabled }: ReviewActionsProps) {
       const newStatus = statusMap[action];
       const now = new Date().toISOString();
 
-      // First fetch current status_history to append to it
-      const { data: currentSubmission } = await supabase
-        .from('transaction_submissions')
-        .select('status_history')
-        .eq('id', submission.id)
-        .single();
-
-      // Build new history entry
-      const historyEntry = {
-        status: newStatus,
-        changed_at: now,
-        changed_by: user?.email || 'Unknown',
-        notes: notes || undefined,
-      };
-
-      // Append to existing history or create new array
-      const existingHistory = currentSubmission?.status_history || [];
-      const updatedHistory = [...existingHistory, historyEntry];
-
-      const { error: updateError } = await supabase
+      const { error: updateError, data: updateData } = await supabase
         .from('transaction_submissions')
         .update({
           status: newStatus,
-          reviewed_by: user?.id,
+          reviewed_by: user.id,
           reviewed_at: now,
           review_notes: notes || null,
-          status_history: updatedHistory,
         })
-        .eq('id', submission.id);
+        .eq('id', submission.id)
+        .select();
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('Supabase update error:', updateError);
+        // Provide more specific error messages
+        if (updateError.code === 'PGRST301' || updateError.message?.includes('permission')) {
+          throw new Error('Permission denied. You may not have broker access for this organization.');
+        }
+        throw updateError;
+      }
+
+      // Log success for debugging
+      console.log('Review action successful:', updateData);
 
       // Add a comment for the record if notes provided
       if (notes && user) {
         await supabase.from('submission_comments').insert({
           submission_id: submission.id,
-          author_id: user.id,
+          user_id: user.id,
           content: notes,
-          comment_type:
-            action === 'approve' ? 'approval' : action === 'reject' ? 'rejection' : 'feedback',
         });
       }
 
@@ -110,7 +113,9 @@ export function ReviewActions({ submission, disabled }: ReviewActionsProps) {
       setShowConfirm(false);
     } catch (err) {
       console.error('Review error:', err);
-      setError('Failed to submit review. Please try again.');
+      // Show more specific error message if available
+      const errorMessage = err instanceof Error ? err.message : 'Failed to submit review. Please try again.';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -263,7 +268,7 @@ export function ReviewActions({ submission, disabled }: ReviewActionsProps) {
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                className="w-full border border-gray-300 rounded-lg p-3 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
                 rows={3}
                 placeholder={
                   action === 'approve'
@@ -386,7 +391,7 @@ export function ReviewActions({ submission, disabled }: ReviewActionsProps) {
                 <button
                   onClick={handleCancel}
                   disabled={loading}
-                  className="px-6 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 text-sm font-medium"
+                  className="px-6 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 text-sm font-medium text-gray-700"
                 >
                   Cancel
                 </button>

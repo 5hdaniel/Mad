@@ -10,8 +10,9 @@ import {
   ConfidencePill,
   PendingReviewBadge,
 } from "./DetectionBadges";
-import { formatCommunicationCounts } from "./TransactionCard";
+// Note: formatCommunicationCounts is available in TransactionCard.tsx but UI uses inline JSX for thread labels
 import { SubmissionStatusBadge } from "../../transactionDetailsModule/components/SubmissionStatusBadge";
+import { LicenseGate } from "../../common/LicenseGate";
 
 // ============================================
 // SVG ICONS (matching TransactionTabs)
@@ -90,7 +91,9 @@ export function TransactionListCard({
   formatCurrency,
   formatDate,
 }: TransactionListCardProps): React.ReactElement {
-  const textCount = transaction.text_count || 0;
+  // BACKLOG-396: Use text_thread_count (stored) instead of text_count (computed dynamically)
+  // This ensures consistency between card view and details page
+  const textCount = transaction.text_thread_count || 0;
   const emailCount = transaction.email_count || 0;
   return (
     <div
@@ -138,19 +141,21 @@ export function TransactionListCard({
             <h3 className="font-semibold text-gray-900">
               {transaction.property_address}
             </h3>
-            {/* Detection Status Badges */}
-            <div className="flex items-center gap-1.5">
-              <DetectionSourceBadge source={transaction.detection_source} />
-              {transaction.detection_source === "auto" &&
-                transaction.detection_confidence !== undefined && (
-                  <ConfidencePill
-                    confidence={transaction.detection_confidence}
-                  />
+            {/* Detection Status Badges - AI add-on only (BACKLOG-462) */}
+            <LicenseGate requires="ai_addon">
+              <div className="flex items-center gap-1.5">
+                <DetectionSourceBadge source={transaction.detection_source} />
+                {transaction.detection_source === "auto" &&
+                  transaction.detection_confidence !== undefined && (
+                    <ConfidencePill
+                      confidence={transaction.detection_confidence}
+                    />
+                  )}
+                {transaction.detection_status === "pending" && (
+                  <PendingReviewBadge />
                 )}
-              {transaction.detection_status === "pending" && (
-                <PendingReviewBadge />
-              )}
-            </div>
+              </div>
+            </LicenseGate>
             {/* Submission Status Badge (BACKLOG-392) */}
             {transaction.submission_status && transaction.submission_status !== "not_submitted" && (
               <SubmissionStatusBadge status={transaction.submission_status} />
@@ -196,23 +201,21 @@ export function TransactionListCard({
             )}
           </div>
           <div className="mt-2 flex items-center gap-3 text-xs text-gray-500">
-            {/* Messages count - clickable, LEFT position */}
             <button
               onClick={(e) => onMessagesClick?.(transaction, e)}
               className="flex items-center gap-1 hover:text-blue-600 transition-colors"
               title="View messages"
             >
               <MessagesIcon />
-              <span>{textCount} {textCount === 1 ? "text" : "texts"}</span>
+              <span>{textCount} {textCount === 1 ? "Text thread" : "Text threads"}</span>
             </button>
-            {/* Emails count - clickable, RIGHT position */}
             <button
               onClick={(e) => onEmailsClick?.(transaction, e)}
               className="flex items-center gap-1 hover:text-blue-600 transition-colors"
               title="View emails"
             >
               <EmailsIcon />
-              <span>{emailCount} {emailCount === 1 ? "email thread" : "email threads"}</span>
+              <span>{emailCount} {emailCount === 1 ? "Email thread" : "Email threads"}</span>
             </button>
             {transaction.extraction_confidence && (
               <span className="flex items-center gap-1">

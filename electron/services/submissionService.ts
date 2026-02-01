@@ -264,7 +264,11 @@ class SubmissionService {
         auditStartDate,
         auditEndDate
       );
-      const attachments = await this.loadTransactionAttachments(transactionId);
+      const attachments = await this.loadTransactionAttachments(
+        transactionId,
+        auditStartDate,
+        auditEndDate
+      );
       const orgId = await this.getUserOrganizationId();
 
       // Load contact names for phone number resolution
@@ -287,6 +291,43 @@ class SubmissionService {
 
       if (!orgId) {
         throw new Error("User is not a member of any organization");
+      }
+
+      // Check for existing submission
+      const client = supabaseService.getClient();
+      const { data: existingSubmission } = await client
+        .from("transaction_submissions")
+        .select("id, status")
+        .eq("organization_id", orgId)
+        .eq("local_transaction_id", transactionId)
+        .maybeSingle();
+
+      if (existingSubmission) {
+        // Check if resubmission is allowed based on status
+        const blockedStatuses = ["under_review", "approved", "rejected"];
+        if (blockedStatuses.includes(existingSubmission.status)) {
+          const statusMessages: Record<string, string> = {
+            under_review:
+              "Cannot resubmit while broker is reviewing. Please wait for their decision.",
+            approved: "This submission has already been approved.",
+            rejected: "This submission has been rejected.",
+          };
+          throw new Error(
+            statusMessages[existingSubmission.status] ||
+              `Cannot resubmit with status: ${existingSubmission.status}`
+          );
+        }
+
+        // Allowed to resubmit (status is 'submitted', 'resubmitted', or 'needs_changes')
+        logService.info(
+          `[Submission] Replacing existing submission ${existingSubmission.id} (status: ${existingSubmission.status})`,
+          "SubmissionService"
+        );
+        // Delete old submission (cascades to messages and attachments)
+        await client
+          .from("transaction_submissions")
+          .delete()
+          .eq("id", existingSubmission.id);
       }
 
       onProgress?.({
@@ -352,7 +393,6 @@ class SubmissionService {
         options
       );
 
-      const client = supabaseService.getClient();
       const { error: insertError } = await client
         .from("transaction_submissions")
         .insert(submissionRecord);
@@ -508,10 +548,16 @@ class SubmissionService {
     const db = databaseService.getRawDatabase();
 
     // Build query with optional audit period filter
+    // BACKLOG-414: Use dual-join pattern to include both email (via message_id)
+    // AND text messages (via thread_id) like getCommunicationsWithMessages does
     let sql = `
       SELECT DISTINCT m.*
       FROM messages m
-      INNER JOIN communications c ON c.message_id = m.id
+      INNER JOIN communications c ON (
+        (c.message_id IS NOT NULL AND c.message_id = m.id)
+        OR
+        (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+      )
       WHERE c.transaction_id = ?
     `;
     const params: (string | number)[] = [transactionId];
@@ -547,26 +593,101 @@ class SubmissionService {
   }
 
   private async loadTransactionAttachments(
-    transactionId: string
+    transactionId: string,
+    auditStartDate?: Date | null,
+    auditEndDate?: Date | null
   ): Promise<Attachment[]> {
-    // Get attachments from messages linked to this transaction
+    // Get attachments from messages and emails linked to this transaction
+    // Filter by audit period if dates are provided
     const db = databaseService.getRawDatabase();
 
-    const rows = db
-      .prepare(
-        `
+    // Build date filter conditions
+    let dateFilter = "";
+    const dateParams: string[] = [];
+    if (auditStartDate) {
+      dateFilter += " AND m.sent_at >= ?";
+      dateParams.push(auditStartDate.toISOString());
+    }
+    if (auditEndDate) {
+      const endOfDay = new Date(auditEndDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      dateFilter += " AND m.sent_at <= ?";
+      dateParams.push(endOfDay.toISOString());
+    }
+
+    // Query 1: Text message attachments (via message_id -> messages -> communications)
+    // BACKLOG-414: Use dual-join pattern to include attachments from both email
+    // (via message_id) AND text messages (via thread_id)
+    // Now includes audit date filter on message sent_at
+    const textAttachmentsSql = `
       SELECT DISTINCT a.*
       FROM attachments a
       INNER JOIN messages m ON a.message_id = m.id
-      INNER JOIN communications c ON c.message_id = m.id
+      INNER JOIN communications c ON (
+        (c.message_id IS NOT NULL AND c.message_id = m.id)
+        OR
+        (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+      )
       WHERE c.transaction_id = ?
       AND a.storage_path IS NOT NULL
-      ORDER BY a.created_at ASC
-    `
-      )
-      .all(transactionId) as Attachment[];
+      ${dateFilter}
+    `;
+    const textAttachments = db
+      .prepare(textAttachmentsSql)
+      .all(transactionId, ...dateParams) as Attachment[];
 
-    return rows;
+    // Build email date filter (uses emails.sent_at instead of messages.sent_at)
+    let emailDateFilter = "";
+    const emailDateParams: string[] = [];
+    if (auditStartDate) {
+      emailDateFilter += " AND e.sent_at >= ?";
+      emailDateParams.push(auditStartDate.toISOString());
+    }
+    if (auditEndDate) {
+      const endOfDay = new Date(auditEndDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      emailDateFilter += " AND e.sent_at <= ?";
+      emailDateParams.push(endOfDay.toISOString());
+    }
+
+    // Query 2: Email attachments (via email_id -> communications -> emails)
+    // TASK-1779: Include email attachments in broker portal upload
+    // Now includes audit date filter on email sent_at
+    const emailAttachmentsSql = `
+      SELECT DISTINCT a.*
+      FROM attachments a
+      INNER JOIN emails e ON a.email_id = e.id
+      INNER JOIN communications c ON c.email_id = e.id
+      WHERE c.transaction_id = ?
+      AND a.email_id IS NOT NULL
+      AND a.storage_path IS NOT NULL
+      ${emailDateFilter}
+    `;
+    const emailAttachments = db
+      .prepare(emailAttachmentsSql)
+      .all(transactionId, ...emailDateParams) as Attachment[];
+
+    if (emailAttachments.length > 0) {
+      logService.info(
+        `[Submission] Found ${emailAttachments.length} email attachments for transaction ${transactionId}`,
+        "SubmissionService"
+      );
+    }
+
+    // Combine and deduplicate by id, then sort by created_at
+    const allAttachments = [...textAttachments, ...emailAttachments];
+    const uniqueAttachments = Array.from(
+      new Map(allAttachments.map((a) => [a.id, a])).values()
+    );
+
+    // Sort by created_at
+    uniqueAttachments.sort((a, b) => {
+      const aTime = a.created_at ? new Date(a.created_at as string).getTime() : 0;
+      const bTime = b.created_at ? new Date(b.created_at as string).getTime() : 0;
+      return aTime - bTime;
+    });
+
+    return uniqueAttachments;
   }
 
   private async getUserOrganizationId(): Promise<string | null> {

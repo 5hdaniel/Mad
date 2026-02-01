@@ -20,6 +20,20 @@ jest.mock("../../appCore", () => ({
   }),
 }));
 
+// Mock the LicenseContext for LicenseGate
+jest.mock("../../contexts/LicenseContext", () => ({
+  useLicense: () => ({
+    licenseType: "individual" as const,
+    hasAIAddon: true, // Enable AI features for testing
+    organizationId: null,
+    canExport: true,
+    canSubmit: false,
+    canAutoDetect: true,
+    isLoading: false,
+    refresh: jest.fn(),
+  }),
+}));
+
 describe("TransactionList", () => {
   const mockUserId = "user-123";
   const mockProvider = "google";

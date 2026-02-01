@@ -91,11 +91,31 @@ export const settingsService = {
   },
 
   /**
-   * Set user's phone type preference
+   * Set user's phone type preference (local DB)
    */
   async setPhoneType(userId: string, phoneType: PhoneType): Promise<ApiResult> {
     try {
       const result = await window.api.user.setPhoneType(userId, phoneType);
+      return { success: result.success, error: result.error };
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) };
+    }
+  },
+
+  /**
+   * Set user's phone type preference to Supabase cloud.
+   * Used during onboarding before local DB is initialized.
+   * This ensures phone type is persisted even before keychain setup.
+   */
+  async setPhoneTypeCloud(userId: string, phoneType: PhoneType): Promise<ApiResult> {
+    try {
+      const userApi = window.api.user as typeof window.api.user & {
+        setPhoneTypeCloud: (
+          userId: string,
+          phoneType: PhoneType
+        ) => Promise<{ success: boolean; error?: string }>;
+      };
+      const result = await userApi.setPhoneTypeCloud(userId, phoneType);
       return { success: result.success, error: result.error };
     } catch (error) {
       return { success: false, error: getErrorMessage(error) };

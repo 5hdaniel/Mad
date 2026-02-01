@@ -18,6 +18,7 @@ jest.mock("../gmailFetchService");
 jest.mock("../outlookFetchService");
 jest.mock("../transactionExtractorService");
 jest.mock("../logService");
+jest.mock("../emailAttachmentService");
 
 describe("TransactionService - Database Method Fixes", () => {
   const mockUserId = "test-user-id";

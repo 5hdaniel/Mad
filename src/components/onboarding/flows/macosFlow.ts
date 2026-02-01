@@ -19,15 +19,15 @@ export const MACOS_PLATFORM: Platform = "macos";
  *
  * Flow order:
  * 1. phone-type - Select iPhone or Android
- * 2. secure-storage - Set up macOS Keychain for secure credential storage
- * 3. email-connect - Connect email account (Google or Microsoft)
- * 4. permissions - Grant required macOS permissions
+ * 2. secure-storage - Set up macOS Keychain for secure credential storage (DB init happens here)
+ * 3. permissions - Grant required macOS permissions (Full Disk Access)
+ * 4. email-connect - Connect email account (Google or Microsoft) - DB is ready by this point
  */
 export const MACOS_FLOW_STEPS: readonly OnboardingStepId[] = [
   "phone-type",
   "secure-storage",
-  "email-connect",
   "permissions",
+  "email-connect",
 ] as const;
 
 /**

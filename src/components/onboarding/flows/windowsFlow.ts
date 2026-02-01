@@ -19,13 +19,17 @@ export const WINDOWS_PLATFORM: Platform = "windows";
  *
  * Flow order:
  * 1. phone-type - Select iPhone or Android
- * 2. email-connect - Connect email account (Google or Microsoft)
- * 3. apple-driver - Install Apple Mobile Device USB Driver (for iPhone users)
+ * 2. apple-driver - Install Apple Mobile Device USB Driver (for iPhone users, triggers DB init)
+ * 3. email-connect - Connect email account (Google or Microsoft, DB is ready)
+ *
+ * Note: apple-driver is placed before email-connect to ensure database initialization
+ * happens before email OAuth. For Android users, the apple-driver step is skipped
+ * via shouldSkipStep() logic in stepDerivation.ts.
  */
 export const WINDOWS_FLOW_STEPS: readonly OnboardingStepId[] = [
   "phone-type",
-  "email-connect",
   "apple-driver",
+  "email-connect",
 ] as const;
 
 /**

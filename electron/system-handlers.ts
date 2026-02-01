@@ -3,7 +3,7 @@
 // Permission checks, connection status, system health
 // ============================================
 
-import { ipcMain, shell } from "electron";
+import { ipcMain, shell, app, BrowserWindow } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 
 // Import services (TypeScript with default exports)
@@ -14,7 +14,9 @@ const macOSPermissionHelper =
   require("./services/macOSPermissionHelper").default;
 import { databaseEncryptionService } from "./services/databaseEncryptionService";
 import databaseService from "./services/databaseService";
+import supabaseService from "./services/supabaseService";
 import { initializeDatabase } from "./auth-handlers";
+import { getAndClearPendingDeepLinkUser } from "./main";
 import os from "os";
 
 // Import validation utilities
@@ -228,13 +230,69 @@ export function registerSystemHandlers(): void {
           "SystemHandlers",
         );
 
-        // Session-only login: Clear login sessions but keep mailbox tokens
-        // Users must re-login each app launch (security), but mailbox access persists (UX)
-        await databaseService.clearAllSessions();
+        // Sessions persist across app restarts for better UX
+        // Security is maintained via 24hr expiry on session tokens
+        // NOTE: Previously cleared sessions on startup causing issues (file session
+        // not synced with DB session, user appeared logged in but validation failed)
         logService.info(
-          "Cleared login sessions (mailbox tokens preserved)",
+          "Database initialized, sessions preserved across restarts",
           "SystemHandlers",
         );
+
+        // TASK-1507D: Create pending deep link user if exists
+        // This handles the case where deep link auth completed before DB was ready
+        const pendingUser = getAndClearPendingDeepLinkUser();
+        if (pendingUser) {
+          logService.info(
+            "Processing pending deep link user",
+            "SystemHandlers",
+            { email: pendingUser.email },
+          );
+          try {
+            // Check if user already exists
+            let localUser = await databaseService.getUserByEmail(pendingUser.email);
+            if (!localUser) {
+              localUser = await databaseService.getUserByOAuthId(
+                pendingUser.provider,
+                pendingUser.supabaseId,
+              );
+            }
+
+            if (!localUser) {
+              // TASK-1507G: Use Supabase Auth UUID as local user ID for unified IDs
+              await databaseService.createUser({
+                id: pendingUser.supabaseId,
+                email: pendingUser.email,
+                display_name: pendingUser.displayName || pendingUser.email.split("@")[0],
+                avatar_url: pendingUser.avatarUrl,
+                oauth_provider: pendingUser.provider,
+                oauth_id: pendingUser.supabaseId,
+                subscription_tier: pendingUser.subscriptionTier || "free",
+                subscription_status: pendingUser.subscriptionStatus || "trial",
+                trial_ends_at: pendingUser.trialEndsAt,
+                is_active: true,
+              });
+              logService.info(
+                "Created local user from pending deep link data",
+                "SystemHandlers",
+                { supabaseId: pendingUser.supabaseId },
+              );
+            } else {
+              logService.info(
+                "Local user already exists for pending deep link",
+                "SystemHandlers",
+                { email: pendingUser.email },
+              );
+            }
+          } catch (userError) {
+            // Log but don't fail initialization
+            logService.error(
+              "Failed to create pending deep link user",
+              "SystemHandlers",
+              { error: userError instanceof Error ? userError.message : String(userError) },
+            );
+          }
+        }
 
         initializationComplete = true;
         return {
@@ -906,6 +964,82 @@ export function registerSystemHandlers(): void {
   );
 
   /**
+   * Open URL in a popup window (instead of system browser)
+   * Used for upgrade flows to keep user in-app
+   */
+  ipcMain.handle(
+    "shell:open-popup",
+    async (event: IpcMainInvokeEvent, url: string, title?: string): Promise<SystemResponse> => {
+      try {
+        // Validate URL
+        const validatedUrl = validateString(url, "url", {
+          required: true,
+          maxLength: 2000,
+        });
+
+        if (!validatedUrl) {
+          return {
+            success: false,
+            error: "URL is required",
+          };
+        }
+
+        // Only allow safe protocols
+        const allowedProtocols = ["https:", "http:"];
+        let parsedUrl: URL;
+        try {
+          parsedUrl = new URL(validatedUrl);
+        } catch {
+          return {
+            success: false,
+            error: "Invalid URL format",
+          };
+        }
+
+        if (!allowedProtocols.includes(parsedUrl.protocol)) {
+          return {
+            success: false,
+            error: `Protocol not allowed: ${parsedUrl.protocol}`,
+          };
+        }
+
+        // Create popup window
+        const popupWindow = new BrowserWindow({
+          width: 800,
+          height: 700,
+          webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+          },
+          autoHideMenuBar: true,
+          title: title || "Magic Audit",
+        });
+
+        // Load the URL
+        popupWindow.loadURL(validatedUrl);
+
+        return { success: true };
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error("Failed to open popup window", "SystemHandlers", {
+          error: errorMessage,
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: errorMessage,
+        };
+      }
+    },
+  );
+
+  /**
    * Show file in folder (Finder on macOS, Explorer on Windows)
    */
   ipcMain.handle(
@@ -1084,6 +1218,134 @@ export function registerSystemHandlers(): void {
     },
   );
 
+  // ===== CLOUD PHONE TYPE PREFERENCES (TASK-1600) =====
+
+  /**
+   * Get user's mobile phone type from Supabase cloud storage
+   * TASK-1600: Available before local DB initialization
+   * @param userId - User ID to get phone type for
+   * @returns Phone type from user_preferences.preferences.phone_type
+   */
+  ipcMain.handle(
+    "user:get-phone-type-cloud",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<{
+      success: boolean;
+      phoneType?: "iphone" | "android";
+      error?: string;
+    }> => {
+      try {
+        const validatedUserId = validateUserId(userId);
+
+        const preferences = await supabaseService.getPreferences(
+          validatedUserId!,
+        );
+        const phoneType = preferences?.phone_type as
+          | "iphone"
+          | "android"
+          | undefined;
+
+        logService.info(
+          `[user:get-phone-type-cloud] Retrieved phone type from Supabase: ${phoneType || "none"}`,
+          "SystemHandlers",
+          { userId: validatedUserId?.substring(0, 8) + "..." },
+        );
+
+        return { success: true, phoneType };
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error(
+          "[user:get-phone-type-cloud] Failed to get phone type from Supabase",
+          "SystemHandlers",
+          { error: errorMessage },
+        );
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return { success: false, error: errorMessage };
+      }
+    },
+  );
+
+  /**
+   * Set user's mobile phone type in Supabase cloud storage
+   * TASK-1600: Available before local DB initialization
+   * Uses upsert to handle both new and existing user_preferences rows
+   * @param userId - User ID to set phone type for
+   * @param phoneType - Phone type to set ('iphone' | 'android')
+   */
+  ipcMain.handle(
+    "user:set-phone-type-cloud",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+      phoneType: "iphone" | "android",
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const validatedUserId = validateUserId(userId);
+
+        // Validate phone type
+        if (phoneType !== "iphone" && phoneType !== "android") {
+          return {
+            success: false,
+            error: 'Invalid phone type. Must be "iphone" or "android"',
+          };
+        }
+
+        // Get existing preferences to merge
+        let existingPreferences: Record<string, unknown> = {};
+        try {
+          existingPreferences = await supabaseService.getPreferences(
+            validatedUserId!,
+          );
+        } catch {
+          // No existing preferences - start fresh
+        }
+
+        // Merge phone_type into preferences
+        const updatedPreferences = {
+          ...existingPreferences,
+          phone_type: phoneType,
+        };
+
+        // Sync to Supabase (uses upsert internally)
+        await supabaseService.syncPreferences(
+          validatedUserId!,
+          updatedPreferences,
+        );
+
+        logService.info(
+          `[user:set-phone-type-cloud] Saved phone type to Supabase: ${phoneType}`,
+          "SystemHandlers",
+          { userId: validatedUserId?.substring(0, 8) + "..." },
+        );
+
+        return { success: true };
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error(
+          "[user:set-phone-type-cloud] Failed to set phone type in Supabase",
+          "SystemHandlers",
+          { error: errorMessage },
+        );
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return { success: false, error: errorMessage };
+      }
+    },
+  );
+
   /**
    * Get diagnostic information for support requests
    */
@@ -1249,6 +1511,100 @@ export function registerSystemHandlers(): void {
           error: errorMessage,
         });
         throw error;
+      }
+    },
+  );
+
+  // ============================================
+  // DATABASE MAINTENANCE HANDLERS
+  // ============================================
+
+  /**
+   * Reindex the database for performance optimization
+   * Rebuilds all performance indexes and runs ANALYZE
+   */
+  ipcMain.handle(
+    "system:reindex-database",
+    async (): Promise<{
+      success: boolean;
+      indexesRebuilt?: number;
+      durationMs?: number;
+      error?: string;
+    }> => {
+      try {
+        logService.info("Database reindex requested via UI", "SystemHandlers");
+        const result = await databaseService.reindexDatabase();
+        return result;
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error("Database reindex handler failed", "SystemHandlers", {
+          error: errorMessage,
+        });
+        return {
+          success: false,
+          error: errorMessage,
+        };
+      }
+    },
+  );
+
+  // ============================================
+  // DATA DIAGNOSTIC HANDLERS
+  // ============================================
+
+  // Diagnostic: Check email data for a specific contact email
+  ipcMain.handle(
+    "diagnostic:check-email-data",
+    async (_event: IpcMainInvokeEvent, userId: string, emailAddress: string) => {
+      try {
+        validateUserId(userId);
+        validateString(emailAddress, "emailAddress", { required: true, maxLength: 255 });
+
+        const db = databaseService.getRawDatabase();
+
+        // Check contact_emails junction table
+        const contactEmails = db.prepare(`
+          SELECT ce.*, c.display_name
+          FROM contact_emails ce
+          JOIN contacts c ON ce.contact_id = c.id
+          WHERE c.user_id = ? AND LOWER(ce.email) = LOWER(?)
+        `).all(userId, emailAddress);
+
+        // BACKLOG-506: Check emails table (communications is now junction only)
+        const communications = db.prepare(`
+          SELECT e.id, e.sender, e.recipients, e.subject, e.sent_at,
+                 c.transaction_id
+          FROM emails e
+          LEFT JOIN communications c ON c.email_id = e.id
+          WHERE e.user_id = ?
+            AND (LOWER(e.sender) LIKE ? OR LOWER(e.recipients) LIKE ?)
+          ORDER BY e.sent_at DESC
+          LIMIT 20
+        `).all(userId, `%${emailAddress.toLowerCase()}%`, `%${emailAddress.toLowerCase()}%`);
+
+        // Count total emails for this user
+        const totalEmails = db.prepare(`
+          SELECT COUNT(*) as count FROM emails
+          WHERE user_id = ?
+        `).get(userId) as { count: number };
+
+        return {
+          success: true,
+          emailAddress,
+          contactEmailsFound: contactEmails.length,
+          contactEmails,
+          communicationsFound: communications.length,
+          communications,
+          totalEmailsInDb: totalEmails.count,
+        };
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error("diagnostic:check-email-data failed", "SystemHandlers", {
+          error: errorMessage,
+        });
+        return { success: false, error: errorMessage };
       }
     },
   );

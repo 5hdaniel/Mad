@@ -571,4 +571,120 @@ describe("EmailViewModal", () => {
       expect(screen.getByText("Content")).toBeInTheDocument();
     });
   });
+
+  describe("Attachment Preview Integration (TASK-1778)", () => {
+    beforeEach(() => {
+      // Mock the transactions API for attachment fetching
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window.api.transactions as any).getEmailAttachments = jest.fn().mockResolvedValue({
+        success: true,
+        data: [
+          {
+            id: "att-1",
+            filename: "document.pdf",
+            mime_type: "application/pdf",
+            file_size_bytes: 1024000,
+            storage_path: "/path/to/document.pdf",
+          },
+          {
+            id: "att-2",
+            filename: "image.jpg",
+            mime_type: "image/jpeg",
+            file_size_bytes: 512000,
+            storage_path: "/path/to/image.jpg",
+          },
+        ],
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window.api.transactions as any).openAttachment = jest.fn().mockResolvedValue({
+        success: true,
+      });
+    });
+
+    it("should open preview modal when clicking an attachment", async () => {
+      const user = userEvent.setup();
+
+      render(
+        <EmailViewModal
+          email={createMockEmail({ has_attachments: true })}
+          onClose={mockOnClose}
+          onRemoveFromTransaction={mockOnRemoveFromTransaction}
+        />
+      );
+
+      // Wait for attachments to load
+      await screen.findByText(/attachment/i);
+
+      // Expand the attachments section
+      const expandButton = screen.getByRole("button", { name: /attachment/i });
+      await user.click(expandButton);
+
+      // Wait for attachment buttons to appear
+      await screen.findByTestId("attachment-att-1");
+
+      // Click on an attachment to open preview
+      await user.click(screen.getByTestId("attachment-att-1"));
+
+      // Preview modal should appear
+      expect(screen.getByTestId("attachment-preview-backdrop")).toBeInTheDocument();
+      expect(screen.getAllByText("document.pdf").length).toBeGreaterThan(0);
+    });
+
+    it("should close preview modal when close button is clicked", async () => {
+      const user = userEvent.setup();
+
+      render(
+        <EmailViewModal
+          email={createMockEmail({ has_attachments: true })}
+          onClose={mockOnClose}
+          onRemoveFromTransaction={mockOnRemoveFromTransaction}
+        />
+      );
+
+      // Wait for attachments to load and expand
+      await screen.findByText(/attachment/i);
+      const expandButton = screen.getByRole("button", { name: /attachment/i });
+      await user.click(expandButton);
+
+      // Open preview
+      await screen.findByTestId("attachment-att-1");
+      await user.click(screen.getByTestId("attachment-att-1"));
+
+      // Close preview
+      await user.click(screen.getByRole("button", { name: "Close preview" }));
+
+      // Preview modal should be gone
+      expect(screen.queryByTestId("attachment-preview-backdrop")).not.toBeInTheDocument();
+    });
+
+    it("should call openAttachment when Open button is clicked in preview", async () => {
+      const user = userEvent.setup();
+
+      render(
+        <EmailViewModal
+          email={createMockEmail({ has_attachments: true })}
+          onClose={mockOnClose}
+          onRemoveFromTransaction={mockOnRemoveFromTransaction}
+        />
+      );
+
+      // Wait for attachments to load and expand
+      await screen.findByText(/attachment/i);
+      const expandButton = screen.getByRole("button", { name: /attachment/i });
+      await user.click(expandButton);
+
+      // Open preview for PDF
+      await screen.findByTestId("attachment-att-1");
+      await user.click(screen.getByTestId("attachment-att-1"));
+
+      // Click Open with System Viewer
+      await user.click(screen.getByText("Open with System Viewer"));
+
+      // Should call the openAttachment handler
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect((window.api.transactions as any).openAttachment).toHaveBeenCalledWith(
+        "/path/to/document.pdf"
+      );
+    });
+  });
 });

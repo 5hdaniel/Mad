@@ -9,6 +9,20 @@ import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
 import TransactionDetails from "../TransactionDetails";
 
+// Mock the LicenseContext for LicenseGate
+jest.mock("../../contexts/LicenseContext", () => ({
+  useLicense: () => ({
+    licenseType: "team" as const,
+    hasAIAddon: true, // Enable AI features for testing
+    organizationId: "org-123",
+    canExport: false,
+    canSubmit: true, // Team can submit
+    canAutoDetect: true,
+    isLoading: false,
+    refresh: jest.fn(),
+  }),
+}));
+
 describe("TransactionDetails", () => {
   const mockOnClose = jest.fn();
   const mockOnTransactionUpdated = jest.fn();

@@ -115,14 +115,14 @@ export async function getTransactions(
 ): Promise<Transaction[]> {
   // BACKLOG-390: Count emails using subquery for accurate count
   // BACKLOG-396: Use stored text_thread_count for texts (updated on link/unlink)
+  // TASK-1403: Updated email_count to use email_id IS NOT NULL (new three-table architecture)
   // This ensures consistency between card view and details page
   let sql = `SELECT t.*,
              (SELECT COUNT(*) FROM communications c WHERE c.transaction_id = t.id) as total_communications_count,
-             (SELECT COUNT(*) FROM communications c
-              LEFT JOIN messages m ON (c.message_id IS NOT NULL AND c.message_id = m.id)
-                                   OR (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+             (SELECT COUNT(DISTINCT c.email_id)
+              FROM communications c
               WHERE c.transaction_id = t.id
-              AND COALESCE(m.channel, c.communication_type) = 'email') as email_count
+              AND c.email_id IS NOT NULL) as email_count
              FROM transactions t WHERE 1=1`;
   const params: unknown[] = [];
 
@@ -172,7 +172,15 @@ export async function getTransactions(
 export async function getTransactionById(
   transactionId: string,
 ): Promise<Transaction | null> {
-  const sql = "SELECT * FROM transactions WHERE id = ?";
+  // BACKLOG-446: Include email_count using same subquery as getTransactions
+  // TASK-1403: Updated email_count to use email_id IS NOT NULL (new three-table architecture)
+  // This ensures consistent email counts between list view and detail view
+  const sql = `SELECT t.*,
+               (SELECT COUNT(DISTINCT c.email_id)
+                FROM communications c
+                WHERE c.transaction_id = t.id
+                AND c.email_id IS NOT NULL) as email_count
+               FROM transactions t WHERE t.id = ?`;
   const transaction = dbGet<Transaction>(sql, [transactionId]);
   return transaction || null;
 }

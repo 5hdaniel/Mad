@@ -12,7 +12,6 @@ import type {
   ModalState,
   PendingOAuthData,
   PendingOnboardingData,
-  PendingEmailTokens,
   AppExportResult,
   Subscription,
   Conversation,
@@ -83,6 +82,7 @@ interface AuthFlowReturn {
   pendingOnboardingData: PendingOnboardingData;
   handleLoginSuccess: AppStateMachine["handleLoginSuccess"];
   handleLoginPending: AppStateMachine["handleLoginPending"];
+  handleDeepLinkAuthSuccess: AppStateMachine["handleDeepLinkAuthSuccess"];
   handleLogout: AppStateMachine["handleLogout"];
   handleAcceptTerms: AppStateMachine["handleAcceptTerms"];
   handleDeclineTerms: AppStateMachine["handleDeclineTerms"];
@@ -162,6 +162,8 @@ interface AutoSyncReturn {
 /**
  * Constructs the state properties portion of the return object.
  * Includes navigation, auth, network, platform, and feature-specific state.
+ *
+ * TASK-1603: Removed pendingEmailTokens parameter (no longer needed after flow reorder).
  */
 export function constructStateProps(
   context: ContextState,
@@ -171,7 +173,6 @@ export function constructStateProps(
   emailOnboardingApi: EmailOnboardingApiReturn,
   phoneTypeApi: PhoneTypeApiReturn,
   auth: Pick<AuthFlowReturn, "isNewUserFlow" | "pendingOAuthData" | "pendingOnboardingData">,
-  pendingEmailTokens: PendingEmailTokens | null,
   exportFlow: Pick<ExportFlowReturn, "exportResult" | "conversations" | "selectedConversationIds" | "outlookConnected">,
   modal: Pick<ModalFlowReturn, "modalState">,
   autoSync: AutoSyncReturn,
@@ -206,7 +207,6 @@ export function constructStateProps(
   | "isNewUserFlow"
   | "pendingOAuthData"
   | "pendingOnboardingData"
-  | "pendingEmailTokens"
   | "exportResult"
   | "conversations"
   | "selectedConversationIds"
@@ -269,7 +269,6 @@ export function constructStateProps(
     // Pending data
     pendingOAuthData: auth.pendingOAuthData,
     pendingOnboardingData: auth.pendingOnboardingData,
-    pendingEmailTokens,
 
     // Export state
     exportResult: exportFlow.exportResult,
@@ -346,7 +345,7 @@ export function constructModalTransitions(
  */
 export function constructHandlers(
   nav: Pick<NavigationFlowReturn, "goToStep" | "goToEmailOnboarding" | "handleDismissSetupPrompt" | "setIsTourActive" | "getPageTitle">,
-  auth: Pick<AuthFlowReturn, "handleLoginSuccess" | "handleLoginPending" | "handleLogout" | "handleAcceptTerms" | "handleDeclineTerms">,
+  auth: Pick<AuthFlowReturn, "handleLoginSuccess" | "handleLoginPending" | "handleDeepLinkAuthSuccess" | "handleLogout" | "handleAcceptTerms" | "handleDeclineTerms">,
   permissions: Pick<PermissionsFlowReturn, "handlePermissionsGranted" | "checkPermissions">,
   phoneHandlers: PhoneHandlersReturn,
   emailHandlers: EmailHandlersReturn,
@@ -371,6 +370,7 @@ export function constructHandlers(
   | "goToEmailOnboarding"
   | "handleLoginSuccess"
   | "handleLoginPending"
+  | "handleDeepLinkAuthSuccess"
   | "handleLogout"
   | "handleAcceptTerms"
   | "handleDeclineTerms"
@@ -413,6 +413,7 @@ export function constructHandlers(
     // Auth handlers
     handleLoginSuccess: auth.handleLoginSuccess,
     handleLoginPending: auth.handleLoginPending,
+    handleDeepLinkAuthSuccess: auth.handleDeepLinkAuthSuccess,
     handleLogout: auth.handleLogout,
 
     // Terms handlers

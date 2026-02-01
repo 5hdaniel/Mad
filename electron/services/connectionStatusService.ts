@@ -144,10 +144,11 @@ class ConnectionStatusService {
           );
         }
 
-        // Refresh failed, mark as expired
+        // Refresh failed, mark as expired but preserve email for UI
         this.connectionStatus.google = {
           connected: false,
           lastCheck: Date.now(),
+          email: token.connected_email_address,
           error: {
             type: "TOKEN_REFRESH_FAILED",
             userMessage: "Gmail connection expired",
@@ -259,10 +260,11 @@ class ConnectionStatusService {
           );
         }
 
-        // Refresh failed, mark as expired
+        // Refresh failed, mark as expired but preserve email for UI
         this.connectionStatus.microsoft = {
           connected: false,
           lastCheck: Date.now(),
+          email: token.connected_email_address,
           error: {
             type: "TOKEN_REFRESH_FAILED",
             userMessage: "Outlook connection expired",

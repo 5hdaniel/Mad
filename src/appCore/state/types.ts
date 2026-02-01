@@ -7,7 +7,7 @@
 
 import type { Conversation } from "../../hooks/useConversations";
 import type { Subscription } from "../../../electron/types/models";
-import type { PendingOAuthData } from "../../components/Login";
+import type { PendingOAuthData, DeepLinkAuthData } from "../../components/Login";
 import type { SyncStatus } from "../../hooks/useAutoRefresh";
 
 // Application navigation steps
@@ -57,18 +57,6 @@ export interface PendingOnboardingData {
   phoneType: "iphone" | "android" | null;
   emailConnected: boolean;
   emailProvider: "google" | "microsoft" | null;
-}
-
-// Pending email token data for pre-DB flow
-export interface PendingEmailTokens {
-  provider: "google" | "microsoft";
-  email: string;
-  tokens: {
-    access_token: string;
-    refresh_token: string | null;
-    expires_at: string;
-    scopes: string;
-  };
 }
 
 // Phone type options
@@ -159,7 +147,6 @@ export interface AppStateMachine {
   // Pending data (pre-DB flow)
   pendingOAuthData: PendingOAuthData | null;
   pendingOnboardingData: PendingOnboardingData;
-  pendingEmailTokens: PendingEmailTokens | null;
 
   // Export state
   exportResult: AppExportResult | null;
@@ -240,6 +227,8 @@ export interface AppStateMachine {
     isNewUser: boolean,
   ) => void;
   handleLoginPending: (oauthData: PendingOAuthData) => void;
+  /** TASK-1507B: Handle deep link auth success from browser OAuth flow */
+  handleDeepLinkAuthSuccess: (data: DeepLinkAuthData) => void;
   handleLogout: () => Promise<void>;
 
   // ============================================
@@ -265,9 +254,7 @@ export interface AppStateMachine {
   // EMAIL ONBOARDING HANDLERS
   // ============================================
 
-  handleEmailOnboardingComplete: (
-    emailTokens?: PendingEmailTokens,
-  ) => Promise<void>;
+  handleEmailOnboardingComplete: () => Promise<void>;
   handleEmailOnboardingSkip: () => Promise<void>;
   handleEmailOnboardingBack: () => void;
 
@@ -338,4 +325,4 @@ export interface AppStateMachine {
 }
 
 // Re-export types needed by consumers
-export type { Conversation, Subscription, PendingOAuthData };
+export type { Conversation, Subscription, PendingOAuthData, DeepLinkAuthData };

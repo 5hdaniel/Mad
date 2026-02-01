@@ -59,6 +59,26 @@ async function getSubmission(id: string) {
   return data;
 }
 
+/**
+ * Mark submission as under_review when broker first opens it.
+ * This prevents agent from resubmitting while broker is reviewing.
+ */
+async function markAsUnderReview(submission: { id: string; status: string }) {
+  // Only transition from 'submitted' or 'resubmitted' to 'under_review'
+  if (submission.status !== 'submitted' && submission.status !== 'resubmitted') {
+    return;
+  }
+
+  const supabase = await createClient();
+
+  await supabase
+    .from('transaction_submissions')
+    .update({
+      status: 'under_review',
+    })
+    .eq('id', submission.id);
+}
+
 async function getMessages(submissionId: string): Promise<Message[]> {
   const supabase = await createClient();
 
@@ -103,6 +123,10 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
   if (!submission) {
     notFound();
   }
+
+  // Mark as under_review when broker first opens (don't await - fire and forget)
+  // This prevents agent from resubmitting while broker is reviewing
+  markAsUnderReview(submission);
 
   return (
     <div className="space-y-6 pb-24">
@@ -169,10 +193,11 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
       />
 
       {/* Status History Timeline */}
+      {/* Note: status_history column doesn't exist in schema yet, passing empty array */}
+      {/* The StatusHistory component gracefully handles this by showing initial submission entry */}
       <StatusHistory
-        history={submission.status_history || []}
+        history={[]}
         currentStatus={submission.status}
-        submittedBy={submission.submitted_by_email}
         submittedAt={submission.created_at}
       />
 

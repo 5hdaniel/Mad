@@ -1,16 +1,33 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { LLMSettings } from "./settings/LLMSettings";
 import { MacOSMessagesImportSettings } from "./settings/MacOSMessagesImportSettings";
+import { MacOSContactsImportSettings } from "./settings/MacOSContactsImportSettings";
+import { LicenseGate } from "./common/LicenseGate";
+import {
+  emitEmailConnectionChanged,
+  useEmailConnectionListener,
+} from "@/utils/emailConnectionEvents";
+
+interface ConnectionError {
+  type: string;
+  userMessage: string;
+  action?: string;
+  actionHandler?: string;
+}
 
 interface ConnectionStatus {
   connected: boolean;
   email?: string;
+  error?: ConnectionError | null;
 }
 
 interface Connections {
   google: ConnectionStatus | null;
   microsoft: ConnectionStatus | null;
 }
+
+// Refresh interval for connection status (60 seconds)
+const CONNECTION_REFRESH_INTERVAL = 60000;
 
 interface PreferencesResult {
   success: boolean;
@@ -35,13 +52,17 @@ interface ConnectionResult {
 interface SettingsComponentProps {
   onClose: () => void;
   userId: string;
+  /** Callback when email is connected - updates app state */
+  onEmailConnected?: (email: string, provider: "google" | "microsoft") => void;
+  /** Callback when email is disconnected - updates app state (TASK-1730) */
+  onEmailDisconnected?: (provider: "google" | "microsoft") => void;
 }
 
 /**
  * Settings Component
  * Application settings and preferences
  */
-function Settings({ onClose, userId }: SettingsComponentProps) {
+function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: SettingsComponentProps) {
   const [connections, setConnections] = useState<Connections>({
     google: null,
     microsoft: null,
@@ -58,26 +79,75 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
   const [autoSyncOnLogin, setAutoSyncOnLogin] = useState<boolean>(true); // Default auto-sync ON
   const [loadingPreferences, setLoadingPreferences] = useState<boolean>(true);
 
-  // Load connection status and preferences on mount
+  // Database maintenance state
+  const [reindexing, setReindexing] = useState<boolean>(false);
+  const [reindexResult, setReindexResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
+
+  // Load connection status and preferences on mount, with periodic refresh
   useEffect(() => {
     if (userId) {
       checkConnections();
       loadPreferences();
+
+      // Set up periodic refresh for connection status
+      const refreshInterval = setInterval(() => {
+        checkConnections();
+      }, CONNECTION_REFRESH_INTERVAL);
+
+      return () => clearInterval(refreshInterval);
     }
   }, [userId]);
 
-  const checkConnections = async (): Promise<void> => {
+  // TASK-1730: Listen for email connection events from other components (e.g., onboarding flow)
+  // This ensures Settings UI updates immediately when email is connected elsewhere
+  useEmailConnectionListener(
+    useCallback(() => {
+      // Refresh connection status when email connection state changes
+      checkConnections();
+    }, [])
+  );
+
+  /**
+   * Check all email connections and update state.
+   * Returns the connection result for callers that need immediate access to the data.
+   */
+  const checkConnections = async (): Promise<{
+    google?: { connected: boolean; email?: string };
+    microsoft?: { connected: boolean; email?: string };
+  } | null> => {
     setLoadingConnections(true);
     try {
       const result = await window.api.system.checkAllConnections(userId);
       if (result.success) {
         setConnections({
-          google: result.google || null,
-          microsoft: result.microsoft || null,
+          google: result.google
+            ? {
+                connected: result.google.connected,
+                email: result.google.email,
+                error: result.google.error,
+              }
+            : null,
+          microsoft: result.microsoft
+            ? {
+                connected: result.microsoft.connected,
+                email: result.microsoft.email,
+                error: result.microsoft.error,
+              }
+            : null,
         });
+        // Return the result for immediate use by callers
+        return {
+          google: result.google,
+          microsoft: result.microsoft,
+        };
       }
+      return null;
     } catch (error) {
       console.error("Failed to check connections:", error);
+      return null;
     } finally {
       setLoadingConnections(false);
     }
@@ -171,10 +241,24 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
         cleanup = window.api.onGoogleMailboxConnected(
           async (connectionResult: ConnectionResult) => {
             if (connectionResult.success) {
-              await checkConnections();
+              // Refresh connections and get the result in one call
+              const connResult = await checkConnections();
+              const email = connResult?.google?.email;
+              // Notify parent to update app state so banner disappears
+              if (email && onEmailConnected) {
+                onEmailConnected(email, "google");
+              }
+              // TASK-1730: Emit event for cross-component state propagation
+              if (email) {
+                emitEmailConnectionChanged({
+                  connected: true,
+                  email,
+                  provider: "google",
+                });
+              }
             }
             setConnectingProvider(null);
-            if (cleanup) cleanup(); // Clean up listener after handling the event
+            if (cleanup) cleanup();
           },
         );
       }
@@ -196,10 +280,24 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
         cleanup = window.api.onMicrosoftMailboxConnected(
           async (connectionResult: ConnectionResult) => {
             if (connectionResult.success) {
-              await checkConnections();
+              // Refresh connections and get the result in one call
+              const connResult = await checkConnections();
+              const email = connResult?.microsoft?.email;
+              // Notify parent to update app state so banner disappears
+              if (email && onEmailConnected) {
+                onEmailConnected(email, "microsoft");
+              }
+              // TASK-1730: Emit event for cross-component state propagation
+              if (email) {
+                emitEmailConnectionChanged({
+                  connected: true,
+                  email,
+                  provider: "microsoft",
+                });
+              }
             }
             setConnectingProvider(null);
-            if (cleanup) cleanup(); // Clean up listener after handling the event
+            if (cleanup) cleanup();
           },
         );
       }
@@ -216,6 +314,12 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
       const result = await window.api.auth.googleDisconnectMailbox(userId);
       if (result.success) {
         await checkConnections();
+        // TASK-1730: Notify parent to update app state machine
+        if (onEmailDisconnected) {
+          onEmailDisconnected("google");
+        }
+        // TASK-1730: Emit event for cross-component state propagation
+        emitEmailConnectionChanged({ connected: false, provider: "google" });
       }
     } catch (error) {
       console.error("Failed to disconnect Google:", error);
@@ -230,6 +334,12 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
       const result = await window.api.auth.microsoftDisconnectMailbox(userId);
       if (result.success) {
         await checkConnections();
+        // TASK-1730: Notify parent to update app state machine
+        if (onEmailDisconnected) {
+          onEmailDisconnected("microsoft");
+        }
+        // TASK-1730: Emit event for cross-component state propagation
+        emitEmailConnectionChanged({ connected: false, provider: "microsoft" });
       }
     } catch (error) {
       console.error("Failed to disconnect Microsoft:", error);
@@ -242,6 +352,41 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
     e: React.ChangeEvent<HTMLSelectElement>,
   ): void => {
     handleExportFormatChange(e.target.value);
+  };
+
+  const handleReindexDatabase = async (): Promise<void> => {
+    // Show confirmation with freeze warning
+    const confirmed = window.confirm(
+      "This will optimize the database for better performance.\n\n" +
+        "Note: The app may briefly freeze during this process. This is normal and should only take a few seconds.\n\n" +
+        "Continue?",
+    );
+    if (!confirmed) return;
+
+    setReindexing(true);
+    setReindexResult(null);
+    try {
+      const result = await window.api.system.reindexDatabase();
+      if (result.success) {
+        setReindexResult({
+          success: true,
+          message: `Database optimized: ${result.indexesRebuilt} indexes rebuilt in ${result.durationMs}ms`,
+        });
+      } else {
+        setReindexResult({
+          success: false,
+          message: result.error || "Failed to optimize database",
+        });
+      }
+    } catch (error) {
+      console.error("Failed to reindex database:", error);
+      setReindexResult({
+        success: false,
+        message: "An unexpected error occurred while optimizing the database",
+      });
+    } finally {
+      setReindexing(false);
+    }
   };
 
   return (
@@ -392,13 +537,17 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
             </div>
 
             {/* Email Connections */}
-            <div className="mb-8">
+            <div id="email-connections" className="mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 Email Connections
               </h3>
               <div className="space-y-4">
                 {/* Gmail Connection */}
-                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className={`p-4 rounded-lg border ${
+                  connections.google?.error && !connections.google?.connected && connections.google.error.type !== "NOT_CONNECTED"
+                    ? "bg-yellow-50 border-yellow-200"
+                    : "bg-gray-50 border-gray-200"
+                }`}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <svg
@@ -421,6 +570,16 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                         </span>
                         <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                       </div>
+                    ) : connections.google?.error && connections.google.error.type !== "NOT_CONNECTED" ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-yellow-600 font-medium">
+                          {connections.google.error.type === "TOKEN_REFRESH_FAILED" ||
+                           connections.google.error.type === "TOKEN_EXPIRED"
+                            ? "Session Expired"
+                            : "Connection Issue"}
+                        </span>
+                        <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                      </div>
                     ) : (
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-500">
@@ -431,9 +590,22 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                     )}
                   </div>
                   {connections.google?.email && (
-                    <p className="text-xs text-gray-600 mb-3">
+                    <p className="text-xs text-gray-600 mb-2">
                       {connections.google.email}
                     </p>
+                  )}
+                  {/* Show error message and action prompt when connection has issues (not for NOT_CONNECTED) */}
+                  {connections.google?.error && !connections.google?.connected && connections.google.error.type !== "NOT_CONNECTED" && (
+                    <div className="mb-3 p-2 bg-yellow-100 rounded text-xs">
+                      <p className="text-yellow-800 font-medium">
+                        {connections.google.error.userMessage}
+                      </p>
+                      {connections.google.error.action && (
+                        <p className="text-yellow-700 mt-1">
+                          {connections.google.error.action}
+                        </p>
+                      )}
+                    </div>
                   )}
                   {connections.google?.connected ? (
                     <button
@@ -444,6 +616,16 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                       {disconnectingProvider === "google"
                         ? "Disconnecting..."
                         : "Disconnect Gmail"}
+                    </button>
+                  ) : connections.google?.error && connections.google.error.type !== "NOT_CONNECTED" ? (
+                    <button
+                      onClick={handleConnectGoogle}
+                      disabled={connectingProvider === "google"}
+                      className="w-full mt-2 px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {connectingProvider === "google"
+                        ? "Reconnecting..."
+                        : "Reconnect Gmail"}
                     </button>
                   ) : (
                     <button
@@ -459,7 +641,11 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                 </div>
 
                 {/* Outlook Connection */}
-                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className={`p-4 rounded-lg border ${
+                  connections.microsoft?.error && !connections.microsoft?.connected && connections.microsoft.error.type !== "NOT_CONNECTED"
+                    ? "bg-yellow-50 border-yellow-200"
+                    : "bg-gray-50 border-gray-200"
+                }`}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <svg className="w-5 h-5" viewBox="0 0 21 21" fill="none">
@@ -499,6 +685,16 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                         </span>
                         <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                       </div>
+                    ) : connections.microsoft?.error && connections.microsoft.error.type !== "NOT_CONNECTED" ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-yellow-600 font-medium">
+                          {connections.microsoft.error.type === "TOKEN_REFRESH_FAILED" ||
+                           connections.microsoft.error.type === "TOKEN_EXPIRED"
+                            ? "Session Expired"
+                            : "Connection Issue"}
+                        </span>
+                        <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                      </div>
                     ) : (
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-500">
@@ -509,9 +705,22 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                     )}
                   </div>
                   {connections.microsoft?.email && (
-                    <p className="text-xs text-gray-600 mb-3">
+                    <p className="text-xs text-gray-600 mb-2">
                       {connections.microsoft.email}
                     </p>
+                  )}
+                  {/* Show error message and action prompt when connection has issues (not for NOT_CONNECTED) */}
+                  {connections.microsoft?.error && !connections.microsoft?.connected && connections.microsoft.error.type !== "NOT_CONNECTED" && (
+                    <div className="mb-3 p-2 bg-yellow-100 rounded text-xs">
+                      <p className="text-yellow-800 font-medium">
+                        {connections.microsoft.error.userMessage}
+                      </p>
+                      {connections.microsoft.error.action && (
+                        <p className="text-yellow-700 mt-1">
+                          {connections.microsoft.error.action}
+                        </p>
+                      )}
+                    </div>
                   )}
                   {connections.microsoft?.connected ? (
                     <button
@@ -522,6 +731,16 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                       {disconnectingProvider === "microsoft"
                         ? "Disconnecting..."
                         : "Disconnect Outlook"}
+                    </button>
+                  ) : connections.microsoft?.error && connections.microsoft.error.type !== "NOT_CONNECTED" ? (
+                    <button
+                      onClick={handleConnectMicrosoft}
+                      disabled={connectingProvider === "microsoft"}
+                      className="w-full mt-2 px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {connectingProvider === "microsoft"
+                        ? "Reconnecting..."
+                        : "Reconnect Outlook"}
                     </button>
                   ) : (
                     <button
@@ -545,6 +764,16 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
               </h3>
               <div className="space-y-4">
                 <MacOSMessagesImportSettings userId={userId} />
+              </div>
+            </div>
+
+            {/* macOS Contacts Import - Only shows on macOS */}
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Contacts
+              </h3>
+              <div className="space-y-4">
+                <MacOSContactsImportSettings userId={userId} />
               </div>
             </div>
 
@@ -582,13 +811,15 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
               </div>
             </div>
 
-            {/* AI Settings */}
-            <div className="mb-8">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                AI Settings
-              </h3>
-              <LLMSettings userId={userId} />
-            </div>
+            {/* AI Settings - Only visible with AI add-on (BACKLOG-462) */}
+            <LicenseGate requires="ai_addon">
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  AI Settings
+                </h3>
+                <LLMSettings userId={userId} />
+              </div>
+            </LicenseGate>
 
             {/* Data & Privacy */}
             <div className="mb-8">
@@ -596,6 +827,71 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                 Data & Privacy
               </h3>
               <div className="space-y-3">
+                {/* Reindex Database - Database maintenance for performance */}
+                <button
+                  onClick={handleReindexDatabase}
+                  disabled={reindexing}
+                  className="w-full text-left p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-900">
+                        Reindex Database
+                      </h4>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Optimize database performance if you notice slowness
+                      </p>
+                      {/* Show result message */}
+                      {reindexResult && (
+                        <p
+                          className={`text-xs mt-2 ${
+                            reindexResult.success
+                              ? "text-green-600"
+                              : "text-red-600"
+                          }`}
+                        >
+                          {reindexResult.message}
+                        </p>
+                      )}
+                    </div>
+                    {reindexing ? (
+                      <svg
+                        className="w-5 h-5 text-blue-500 animate-spin"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        />
+                      </svg>
+                    ) : (
+                      <svg
+                        className="w-5 h-5 text-gray-400"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                        />
+                      </svg>
+                    )}
+                  </div>
+                </button>
+
                 {/* TODO: Implement data viewer showing transactions, contacts, and cached emails */}
                 <button
                   disabled

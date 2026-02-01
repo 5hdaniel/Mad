@@ -205,23 +205,21 @@ function TransactionCard({
             )}
           </div>
           <div className="mt-2 flex items-center gap-3 text-xs text-gray-500">
-            {/* Messages count - clickable, LEFT position */}
             <button
               onClick={onMessagesClick}
               className="flex items-center gap-1 hover:text-blue-600 transition-colors"
               title="View messages"
             >
               <MessagesIcon />
-              <span>{textCount} {textCount === 1 ? "Text" : "Texts"}</span>
+              <span>{textCount} {textCount === 1 ? "Text thread" : "Text threads"}</span>
             </button>
-            {/* Emails count - clickable, RIGHT position */}
             <button
               onClick={onEmailsClick}
               className="flex items-center gap-1 hover:text-blue-600 transition-colors"
               title="View emails"
             >
               <EmailsIcon />
-              <span>{emailCount} {emailCount === 1 ? "email thread" : "email threads"}</span>
+              <span>{emailCount} {emailCount === 1 ? "Email thread" : "Email threads"}</span>
             </button>
             {transaction.extraction_confidence && (
               <span className="flex items-center gap-1">

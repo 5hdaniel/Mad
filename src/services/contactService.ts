@@ -12,6 +12,8 @@ import { type ApiResult, getErrorMessage } from "./index";
  * Contact creation input
  */
 export interface ContactCreateInput {
+  /** Required by backend validation */
+  name?: string;
   display_name?: string;
   email?: string;
   phone?: string;

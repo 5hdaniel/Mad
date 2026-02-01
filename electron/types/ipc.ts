@@ -17,6 +17,7 @@ import type {
   OAuthProvider,
   ExportFormat,
   Subscription,
+  UserLicense,
 } from "./models";
 import type { ExportResult, ExtractionResult, SyncStatus } from "./database";
 
@@ -633,6 +634,7 @@ export interface WindowApi {
     logout: (
       sessionToken: string,
     ) => Promise<{ success: boolean; error?: string }>;
+    forceLogout: () => Promise<{ success: boolean; error?: string }>;
     validateSession: (
       sessionToken: string,
     ) => Promise<{ valid: boolean; user?: User; error?: string }>;
@@ -682,6 +684,13 @@ export interface WindowApi {
         scopes: string;
       };
     }) => Promise<{ success: boolean; error?: string }>;
+
+    // TASK-1507: Deep link browser auth
+    /**
+     * Opens Supabase auth URL in the default browser
+     * Used for deep-link authentication flow
+     */
+    openAuthInBrowser: () => Promise<{ success: boolean; error?: string }>;
   };
 
   // System methods
@@ -733,8 +742,26 @@ export interface WindowApi {
     ) => Promise<{ connected: boolean; email?: string; error?: string }>;
     checkAllConnections: (userId: string) => Promise<{
       success: boolean;
-      google?: { connected: boolean; email?: string };
-      microsoft?: { connected: boolean; email?: string };
+      google?: {
+        connected: boolean;
+        email?: string;
+        error?: {
+          type: string;
+          userMessage: string;
+          action?: string;
+          actionHandler?: string;
+        } | null;
+      };
+      microsoft?: {
+        connected: boolean;
+        email?: string;
+        error?: {
+          type: string;
+          userMessage: string;
+          action?: string;
+          actionHandler?: string;
+        } | null;
+      };
     }>;
     healthCheck: (
       userId: string,
@@ -775,6 +802,13 @@ export interface WindowApi {
     getDiagnostics: () => Promise<{
       success: boolean;
       diagnostics?: string;
+      error?: string;
+    }>;
+    // Database maintenance methods
+    reindexDatabase: () => Promise<{
+      success: boolean;
+      indexesRebuilt?: number;
+      durationMs?: number;
       error?: string;
     }>;
   };
@@ -939,6 +973,30 @@ export interface WindowApi {
     onImportProgress: (
       callback: (progress: { current: number; total: number; percent: number }) => void
     ) => () => void;
+    /**
+     * Sync external contacts from macOS Contacts app
+     * @param userId - User ID to sync contacts for
+     * @returns Sync result with inserted/deleted/total counts
+     */
+    syncExternal: (userId: string) => Promise<{
+      success: boolean;
+      inserted?: number;
+      deleted?: number;
+      total?: number;
+      error?: string;
+    }>;
+    /**
+     * Get external contacts sync status
+     * @param userId - User ID to check status for
+     * @returns Sync status (lastSyncAt, isStale, contactCount)
+     */
+    getExternalSyncStatus: (userId: string) => Promise<{
+      success: boolean;
+      lastSyncAt?: string | null;
+      isStale?: boolean;
+      contactCount?: number;
+      error?: string;
+    }>;
   };
 
   // Transaction methods
@@ -1162,6 +1220,7 @@ export interface WindowApi {
   // Shell methods
   shell: {
     openExternal: (url: string) => Promise<void>;
+    openPopup: (url: string, title?: string) => Promise<{ success: boolean }>;
     openFolder: (folderPath: string) => Promise<{ success: boolean }>;
   };
 
@@ -1205,6 +1264,13 @@ export interface WindowApi {
       repaired: number;
       orphaned: number;
       alreadyCorrect: number;
+    }>;
+    /** Get macOS messages import status (count and last import time) */
+    getImportStatus: (userId: string) => Promise<{
+      success: boolean;
+      messageCount?: number;
+      lastImportAt?: string | null;
+      error?: string;
     }>;
   };
 
@@ -1552,6 +1618,212 @@ export interface WindowApi {
   ) => () => void;
   onExportFolderProgress: (
     callback: (progress: { stage: string; current: number; total: number; message: string }) => void,
+  ) => () => void;
+
+  // License API (BACKLOG-426, SPRINT-062)
+  license: {
+    /** Get current user's license information */
+    get: () => Promise<{
+      success: boolean;
+      license?: UserLicense;
+      error?: string;
+    }>;
+    /** Refresh license data from database */
+    refresh: () => Promise<{
+      success: boolean;
+      license?: UserLicense;
+      error?: string;
+    }>;
+
+    // ============================================
+    // SPRINT-062: License Validation Methods
+    // ============================================
+
+    /** Validates the user's license status */
+    validate: (userId: string) => Promise<{
+      isValid: boolean;
+      licenseType: "trial" | "individual" | "team";
+      trialStatus?: "active" | "expired" | "converted";
+      trialDaysRemaining?: number;
+      transactionCount: number;
+      transactionLimit: number;
+      canCreateTransaction: boolean;
+      deviceCount: number;
+      deviceLimit: number;
+      aiEnabled: boolean;
+      blockReason?: "expired" | "limit_reached" | "no_license" | "suspended";
+    }>;
+
+    /** Creates a trial license for a new user */
+    create: (userId: string) => Promise<{
+      isValid: boolean;
+      licenseType: "trial" | "individual" | "team";
+      trialStatus?: "active" | "expired" | "converted";
+      trialDaysRemaining?: number;
+      transactionCount: number;
+      transactionLimit: number;
+      canCreateTransaction: boolean;
+      deviceCount: number;
+      deviceLimit: number;
+      aiEnabled: boolean;
+      blockReason?: "expired" | "limit_reached" | "no_license" | "suspended";
+    }>;
+
+    /** Increments the user's transaction count */
+    incrementTransactionCount: (userId: string) => Promise<number>;
+
+    /** Clears the license cache (call on logout) */
+    clearCache: () => Promise<void>;
+
+    /** Checks if an action is allowed based on license status */
+    canPerformAction: (
+      status: {
+        isValid: boolean;
+        licenseType: "trial" | "individual" | "team";
+        transactionCount: number;
+        transactionLimit: number;
+        canCreateTransaction: boolean;
+        deviceCount: number;
+        deviceLimit: number;
+        aiEnabled: boolean;
+        blockReason?: "expired" | "limit_reached" | "no_license" | "suspended";
+      },
+      action: "create_transaction" | "use_ai" | "export"
+    ) => Promise<boolean>;
+
+    // ============================================
+    // SPRINT-062: Device Registration Methods
+    // ============================================
+
+    /** Registers the current device for the user */
+    registerDevice: (userId: string) => Promise<{
+      success: boolean;
+      device?: {
+        id: string;
+        user_id: string;
+        device_id: string;
+        device_name: string | null;
+        os: string | null;
+        platform: "macos" | "windows" | "linux" | null;
+        app_version: string | null;
+        is_active: boolean;
+        last_seen_at: string;
+        activated_at: string;
+      };
+      error?: "device_limit_reached" | "already_registered" | "unknown";
+    }>;
+
+    /** Lists all registered devices for a user */
+    listRegisteredDevices: (userId: string) => Promise<Array<{
+      id: string;
+      user_id: string;
+      device_id: string;
+      device_name: string | null;
+      os: string | null;
+      platform: "macos" | "windows" | "linux" | null;
+      app_version: string | null;
+      is_active: boolean;
+      last_seen_at: string;
+      activated_at: string;
+    }>>;
+
+    /** Deactivates a device */
+    deactivateDevice: (userId: string, deviceId: string) => Promise<void>;
+
+    /** Deletes a device registration */
+    deleteDevice: (userId: string, deviceId: string) => Promise<void>;
+
+    /** Gets the current device's ID */
+    getCurrentDeviceId: () => Promise<string>;
+
+    /** Checks if the current device is registered */
+    isDeviceRegistered: (userId: string) => Promise<boolean>;
+
+    /** Sends a heartbeat to update device last_seen_at */
+    deviceHeartbeat: (userId: string) => Promise<void>;
+  };
+
+  // ==========================================
+  // DEEP LINK AUTH EVENTS (TASK-1500, enhanced TASK-1507)
+  // ==========================================
+
+  /**
+   * Listen for deep link auth callback with tokens and license status
+   * Fired when app receives magicaudit://callback and auth/license validation succeeds
+   * TASK-1507: Enhanced to include user, license, and device data
+   */
+  onDeepLinkAuthCallback: (
+    callback: (data: {
+      accessToken: string;
+      refreshToken: string;
+      userId?: string;
+      user?: {
+        id: string;
+        email?: string;
+        name?: string;
+      };
+      licenseStatus?: {
+        isValid: boolean;
+        licenseType: "trial" | "individual" | "team";
+        trialDaysRemaining?: number;
+        transactionCount: number;
+        transactionLimit: number;
+        canCreateTransaction: boolean;
+        deviceCount: number;
+        deviceLimit: number;
+        aiEnabled: boolean;
+        blockReason?: string;
+      };
+      device?: {
+        id: string;
+        device_id: string;
+        device_name: string | null;
+      };
+    }) => void,
+  ) => () => void;
+
+  /**
+   * Listen for deep link auth errors
+   * Fired when callback URL is invalid, tokens are missing, or auth fails
+   */
+  onDeepLinkAuthError: (
+    callback: (data: { error: string; code: "MISSING_TOKENS" | "INVALID_URL" | "INVALID_TOKENS" | "UNKNOWN_ERROR" }) => void,
+  ) => () => void;
+
+  /**
+   * Listen for deep link license blocked events (TASK-1507)
+   * Fired when user authenticates successfully but license is expired/suspended
+   */
+  onDeepLinkLicenseBlocked: (
+    callback: (data: {
+      accessToken: string;
+      refreshToken: string;
+      userId: string;
+      blockReason: string;
+      licenseStatus: {
+        isValid: boolean;
+        licenseType: "trial" | "individual" | "team";
+        blockReason?: string;
+      };
+    }) => void,
+  ) => () => void;
+
+  /**
+   * Listen for deep link device limit events (TASK-1507)
+   * Fired when user authenticates successfully but device registration fails due to limit
+   */
+  onDeepLinkDeviceLimit: (
+    callback: (data: {
+      accessToken: string;
+      refreshToken: string;
+      userId: string;
+      licenseStatus: {
+        isValid: boolean;
+        licenseType: "trial" | "individual" | "team";
+        deviceCount: number;
+        deviceLimit: number;
+      };
+    }) => void,
   ) => () => void;
 }
 

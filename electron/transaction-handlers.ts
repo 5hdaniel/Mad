@@ -3,13 +3,16 @@
 // This file contains transaction handlers to be registered in main.js
 // ============================================
 
-import { ipcMain, BrowserWindow } from "electron";
+import { ipcMain, BrowserWindow, shell } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import transactionService from "./services/transactionService";
 import auditService from "./services/auditService";
 import logService from "./services/logService";
 import { autoLinkAllToTransaction } from "./services/messageMatchingService";
 import { autoLinkCommunicationsForContact } from "./services/autoLinkService";
+import { dbAll } from "./services/db/core/dbConnection";
+import { createEmail, getEmailByExternalId } from "./services/db/emailDbService";
+import { createCommunication } from "./services/db/communicationDbService";
 import submissionService from "./services/submissionService";
 import submissionSyncService from "./services/submissionSyncService";
 import type { SubmissionProgress } from "./services/submissionService";
@@ -27,6 +30,9 @@ const folderExportService = require("./services/folderExportService").default;
 const databaseService = require("./services/databaseService").default;
 const gmailFetchService = require("./services/gmailFetchService").default;
 const outlookFetchService = require("./services/outlookFetchService").default;
+
+// TASK-1775: Email attachment download service
+import emailAttachmentService from "./services/emailAttachmentService";
 
 // Import validation utilities
 import {
@@ -1545,22 +1551,59 @@ export const registerTransactionHandlers = (
               for (const messageId of gmailIds) {
                 try {
                   const email = await gmailFetchService.getEmailById(messageId);
-                  // Save to communications table
+
+                  // BACKLOG-506: Check if email already exists (dedup by external_id)
+                  let emailRecord = await getEmailByExternalId(transaction.user_id, messageId);
+
+                  if (!emailRecord) {
+                    // Create email in emails table (content store)
+                    emailRecord = await createEmail({
+                      user_id: transaction.user_id,
+                      external_id: messageId,
+                      source: "gmail",
+                      thread_id: email.threadId,
+                      sender: email.from,
+                      recipients: email.to,
+                      cc: email.cc,
+                      subject: email.subject,
+                      body_html: email.body,
+                      body_plain: email.bodyPlain,
+                      sent_at: email.date ? new Date(email.date).toISOString() : undefined,
+                      has_attachments: email.hasAttachments || false,
+                      attachment_count: email.attachmentCount || 0,
+                    });
+                  }
+
+                  // TASK-1775: Download email attachments if present
+                  if (email.hasAttachments && email.attachments && email.attachments.length > 0) {
+                    try {
+                      await emailAttachmentService.downloadEmailAttachments(
+                        transaction.user_id,
+                        emailRecord.id,
+                        messageId, // External email ID (Gmail message ID)
+                        "gmail",
+                        email.attachments.map((att: { filename?: string; name?: string; mimeType?: string; contentType?: string; size?: number; attachmentId?: string; id?: string }) => ({
+                          filename: att.filename || att.name || "attachment",
+                          mimeType: att.mimeType || att.contentType || "application/octet-stream",
+                          size: att.size || 0,
+                          attachmentId: att.attachmentId || att.id,
+                        }))
+                      );
+                    } catch (attachmentError) {
+                      // Log but don't fail - attachment download is non-blocking
+                      logService.warn("Failed to download Gmail email attachments", "Transactions", {
+                        emailId: emailRecord.id,
+                        error: attachmentError instanceof Error ? attachmentError.message : "Unknown",
+                      });
+                    }
+                  }
+
+                  // Create junction link in communications table
                   await createCommunication({
                     user_id: transaction.user_id,
                     transaction_id: validatedTransactionId,
+                    email_id: emailRecord.id,
                     communication_type: "email",
-                    source: "gmail",
-                    email_thread_id: email.threadId,
-                    sender: email.from,
-                    recipients: email.to,
-                    cc: email.cc,
-                    subject: email.subject,
-                    body: email.htmlBody || email.plainBody,
-                    body_plain: email.plainBody,
-                    sent_at: email.date ? new Date(email.date).toISOString() : null,
-                    has_attachments: email.hasAttachments || false,
-                    attachment_count: email.attachmentCount || 0,
                     link_source: "manual",
                     link_confidence: 1.0,
                   });
@@ -1587,22 +1630,59 @@ export const registerTransactionHandlers = (
               for (const messageId of outlookIds) {
                 try {
                   const email = await outlookFetchService.getEmailById(messageId);
-                  // Save to communications table
+
+                  // BACKLOG-506: Check if email already exists (dedup by external_id)
+                  let emailRecord = await getEmailByExternalId(transaction.user_id, messageId);
+
+                  if (!emailRecord) {
+                    // Create email in emails table (content store)
+                    emailRecord = await createEmail({
+                      user_id: transaction.user_id,
+                      external_id: messageId,
+                      source: "outlook",
+                      thread_id: email.threadId,
+                      sender: email.from,
+                      recipients: email.to,
+                      cc: email.cc,
+                      subject: email.subject,
+                      body_html: email.body,
+                      body_plain: email.bodyPlain,
+                      sent_at: email.date ? new Date(email.date).toISOString() : undefined,
+                      has_attachments: email.hasAttachments || false,
+                      attachment_count: email.attachmentCount || 0,
+                    });
+                  }
+
+                  // TASK-1775: Download email attachments if present
+                  if (email.hasAttachments && email.attachments && email.attachments.length > 0) {
+                    try {
+                      await emailAttachmentService.downloadEmailAttachments(
+                        transaction.user_id,
+                        emailRecord.id,
+                        messageId, // External email ID (Outlook message ID)
+                        "outlook",
+                        email.attachments.map((att: { filename?: string; name?: string; mimeType?: string; contentType?: string; size?: number; attachmentId?: string; id?: string }) => ({
+                          filename: att.filename || att.name || "attachment",
+                          mimeType: att.mimeType || att.contentType || "application/octet-stream",
+                          size: att.size || 0,
+                          attachmentId: att.attachmentId || att.id,
+                        }))
+                      );
+                    } catch (attachmentError) {
+                      // Log but don't fail - attachment download is non-blocking
+                      logService.warn("Failed to download Outlook email attachments", "Transactions", {
+                        emailId: emailRecord.id,
+                        error: attachmentError instanceof Error ? attachmentError.message : "Unknown",
+                      });
+                    }
+                  }
+
+                  // Create junction link in communications table
                   await createCommunication({
                     user_id: transaction.user_id,
                     transaction_id: validatedTransactionId,
+                    email_id: emailRecord.id,
                     communication_type: "email",
-                    source: "outlook",
-                    email_thread_id: email.threadId,
-                    sender: email.from,
-                    recipients: email.to,
-                    cc: email.cc,
-                    subject: email.subject,
-                    body: email.htmlBody || email.plainBody,
-                    body_plain: email.plainBody,
-                    sent_at: email.date ? new Date(email.date).toISOString() : null,
-                    has_attachments: email.hasAttachments || false,
-                    attachment_count: email.attachmentCount || 0,
                     link_source: "manual",
                     link_confidence: 1.0,
                   });
@@ -2086,10 +2166,10 @@ export const registerTransactionHandlers = (
         );
 
         // Update export tracking in database
+        // Note: export_format constraint doesn't include "folder", so we use NULL
         const db = require("./services/databaseService").default;
         await db.updateTransaction(validatedTransactionId, {
           export_status: "exported",
-          export_format: "folder",
           last_exported_on: new Date().toISOString(),
           export_count: (details.export_count || 0) + 1,
         });
@@ -2469,6 +2549,362 @@ export const registerTransactionHandlers = (
   );
 
   // ============================================
+  // SYNC FROM PROVIDER HANDLER (BACKLOG-457)
+  // ============================================
+
+  // Sync emails from email provider (Gmail/Outlook) for a transaction
+  // This fetches NEW emails from the provider, stores them, then runs auto-link
+  ipcMain.handle(
+    "transactions:sync-and-fetch-emails",
+    async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Sync and fetch emails for transaction", "Transactions", {
+          transactionId,
+        });
+
+        // Validate transaction ID
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        // Get transaction with contacts
+        const transactionDetails = await transactionService.getTransactionWithContacts(
+          validatedTransactionId,
+        );
+
+        if (!transactionDetails) {
+          return {
+            success: false,
+            error: "Transaction not found",
+          };
+        }
+
+        const userId = transactionDetails.user_id;
+        const contactAssignments = (transactionDetails as any).contact_assignments || [];
+
+        if (contactAssignments.length === 0) {
+          return {
+            success: true,
+            message: "No contacts to sync",
+            emailsFetched: 0,
+            emailsStored: 0,
+            totalEmailsLinked: 0,
+            totalMessagesLinked: 0,
+          };
+        }
+
+        // Collect all contact emails
+        const contactEmails: string[] = [];
+        for (const assignment of contactAssignments) {
+          // Get contact's email addresses from contact_emails table
+          const emails = dbAll<{ email: string }>(
+            "SELECT email FROM contact_emails WHERE contact_id = ?",
+            [assignment.contact_id]
+          );
+          for (const e of emails) {
+            if (e.email && !contactEmails.includes(e.email.toLowerCase())) {
+              contactEmails.push(e.email.toLowerCase());
+            }
+          }
+        }
+
+        if (contactEmails.length === 0) {
+          // No contact emails, just run the regular auto-link
+          return {
+            success: true,
+            message: "No contact emails found, running local auto-link only",
+            emailsFetched: 0,
+            emailsStored: 0,
+            totalEmailsLinked: 0,
+            totalMessagesLinked: 0,
+          };
+        }
+
+        // Determine date range from transaction (or default to 6 months)
+        const startDate = transactionDetails.started_at
+          ? new Date(transactionDetails.started_at)
+          : new Date(Date.now() - 6 * 30 * 24 * 60 * 60 * 1000); // 6 months ago
+        const endDate = transactionDetails.closed_at
+          ? new Date(transactionDetails.closed_at)
+          : new Date();
+        // Add buffer days after closing
+        endDate.setDate(endDate.getDate() + 30);
+
+        // Build search query for contact emails
+        // Gmail: "from:email1 OR from:email2 OR to:email1 OR to:email2"
+        // Outlook: Similar but uses $filter
+        const gmailQuery = contactEmails
+          .map((email) => `from:${email} OR to:${email}`)
+          .join(" OR ");
+
+        logService.info("Fetching emails from provider", "Transactions", {
+          contactEmailCount: contactEmails.length,
+          gmailQuery: gmailQuery.substring(0, 100) + "...",
+          dateRange: { start: startDate.toISOString(), end: endDate.toISOString() },
+        });
+
+        let emailsFetched = 0;
+        let emailsStored = 0;
+        let providerUsed: "gmail" | "outlook" | null = null;
+
+        // createCommunication and getCommunications are imported at the top
+
+        // Check which provider the user is authenticated with
+        const googleToken = await databaseService.getOAuthToken(userId, "google", "mailbox");
+        const microsoftToken = await databaseService.getOAuthToken(userId, "microsoft", "mailbox");
+
+        // Try Gmail first
+        if (googleToken) {
+          try {
+            const isReady = await gmailFetchService.initialize(userId);
+            if (isReady) {
+              providerUsed = "gmail";
+              const fetchedEmails = await gmailFetchService.searchEmails({
+                query: gmailQuery,
+                after: startDate,
+                before: endDate,
+                maxResults: 100,
+              });
+              emailsFetched = fetchedEmails.length;
+
+              // Check for duplicates using the deduplication service
+              const enrichedEmails = await gmailFetchService.checkDuplicates(userId, fetchedEmails);
+
+              // Store new emails
+              // BACKLOG-506: Deduplication is handled by getEmailByExternalId below
+              for (const email of enrichedEmails) {
+                // Skip if already flagged as duplicate by deduplication service
+                if (email.duplicateOf) {
+                  logService.debug(`Skipping duplicate email: ${email.subject}`, "Transactions");
+                  continue;
+                }
+
+                try {
+                  // BACKLOG-506: Check if email exists (deduplication by provider ID)
+                  let emailRecord = await getEmailByExternalId(userId, email.id);
+
+                  if (!emailRecord) {
+                    // Create email in emails table (content store)
+                    emailRecord = await createEmail({
+                      user_id: userId,
+                      external_id: email.id,  // Gmail API message ID
+                      source: "gmail",
+                      thread_id: email.threadId,
+                      sender: email.from,
+                      recipients: email.to,
+                      cc: email.cc,
+                      subject: email.subject,
+                      body_html: email.body,
+                      body_plain: email.bodyPlain,
+                      sent_at: email.date ? new Date(email.date).toISOString() : undefined,
+                      has_attachments: email.hasAttachments || false,
+                      attachment_count: email.attachmentCount || 0,
+                    });
+                  }
+
+                  // Create junction link in communications (no content, just IDs)
+                  await createCommunication({
+                    user_id: userId,
+                    transaction_id: validatedTransactionId,  // HOTFIX: Link to transaction!
+                    email_id: emailRecord.id,
+                    communication_type: "email",
+                    link_source: "scan",
+                    link_confidence: 0.9,
+                    has_attachments: email.hasAttachments || false,
+                    is_false_positive: false,
+                  });
+                  emailsStored++;
+                } catch (storeError) {
+                  logService.warn(`Failed to store email: ${email.subject}`, "Transactions", {
+                    error: storeError instanceof Error ? storeError.message : "Unknown",
+                  });
+                }
+              }
+              logService.info(`Gmail: Fetched ${emailsFetched}, stored ${emailsStored}`, "Transactions");
+            }
+          } catch (gmailError) {
+            logService.warn("Failed to fetch from Gmail", "Transactions", {
+              error: gmailError instanceof Error ? gmailError.message : "Unknown",
+            });
+          }
+        }
+
+        // Try Outlook if Gmail didn't work
+        if (!providerUsed && microsoftToken) {
+          try {
+            const isReady = await outlookFetchService.initialize(userId);
+            if (isReady) {
+              providerUsed = "outlook";
+              // Outlook uses OData filter, so we need to format the query differently
+              // Build a query that searches for contact emails in subject or body
+              // The searchEmails method handles the filtering
+              const fetchedEmails = await outlookFetchService.searchEmails({
+                // Outlook's search is less flexible, so just use date range
+                // and filter by contact emails client-side
+                after: startDate,
+                before: endDate,
+                maxResults: 200, // Fetch more since we'll filter client-side
+              });
+
+              // Filter to only emails involving our contacts
+              const relevantEmails = fetchedEmails.filter((email: { from?: string | null; to?: string | null; cc?: string | null }) => {
+                const fromEmail = email.from?.toLowerCase() || "";
+                const toEmails = email.to?.toLowerCase() || "";
+                const ccEmails = email.cc?.toLowerCase() || "";
+                return contactEmails.some(
+                  (contactEmail) =>
+                    fromEmail.includes(contactEmail) ||
+                    toEmails.includes(contactEmail) ||
+                    ccEmails.includes(contactEmail)
+                );
+              });
+
+              emailsFetched = relevantEmails.length;
+
+              // Check for duplicates
+              const enrichedEmails = await outlookFetchService.checkDuplicates(userId, relevantEmails);
+
+              // Store new emails
+              // BACKLOG-506: Deduplication is handled by getEmailByExternalId below
+              for (const email of enrichedEmails) {
+                if (email.duplicateOf) {
+                  continue;
+                }
+
+                try {
+                  // BACKLOG-506: Check if email exists (deduplication by provider ID)
+                  let emailRecord = await getEmailByExternalId(userId, email.id);
+
+                  if (!emailRecord) {
+                    // Create email in emails table (content store)
+                    emailRecord = await createEmail({
+                      user_id: userId,
+                      external_id: email.id,  // Outlook API message ID
+                      source: "outlook",
+                      thread_id: email.threadId,
+                      sender: email.from,
+                      recipients: email.to,
+                      cc: email.cc,
+                      subject: email.subject,
+                      body_html: email.body,
+                      body_plain: email.bodyPlain,
+                      sent_at: email.date ? new Date(email.date).toISOString() : undefined,
+                      has_attachments: email.hasAttachments || false,
+                      attachment_count: email.attachmentCount || 0,
+                    });
+                  }
+
+                  // Create junction link in communications (no content, just IDs)
+                  await createCommunication({
+                    user_id: userId,
+                    transaction_id: validatedTransactionId,  // HOTFIX: Link to transaction!
+                    email_id: emailRecord.id,
+                    communication_type: "email",
+                    link_source: "scan",
+                    link_confidence: 0.9,
+                    has_attachments: email.hasAttachments || false,
+                    is_false_positive: false,
+                  });
+                  emailsStored++;
+                } catch (storeError) {
+                  logService.warn(`Failed to store email: ${email.subject}`, "Transactions", {
+                    error: storeError instanceof Error ? storeError.message : "Unknown",
+                  });
+                }
+              }
+              logService.info(`Outlook: Fetched ${emailsFetched}, stored ${emailsStored}`, "Transactions");
+            }
+          } catch (outlookError) {
+            logService.warn("Failed to fetch from Outlook", "Transactions", {
+              error: outlookError instanceof Error ? outlookError.message : "Unknown",
+            });
+          }
+        }
+
+        if (!providerUsed) {
+          return {
+            success: false,
+            error: "No email account connected. Please connect Gmail or Outlook in Settings.",
+          };
+        }
+
+        // Now run auto-link to link the newly fetched emails to this transaction
+        let totalEmailsLinked = 0;
+        let totalMessagesLinked = 0;
+        let totalAlreadyLinked = 0;
+        let totalErrors = 0;
+
+        for (const assignment of contactAssignments) {
+          try {
+            const result = await autoLinkCommunicationsForContact({
+              contactId: assignment.contact_id,
+              transactionId: validatedTransactionId,
+            });
+
+            totalEmailsLinked += result.emailsLinked;
+            totalMessagesLinked += result.messagesLinked;
+            totalAlreadyLinked += result.alreadyLinked;
+            totalErrors += result.errors;
+          } catch (error) {
+            totalErrors++;
+            logService.warn(
+              `Auto-link failed for contact ${assignment.contact_id}`,
+              "Transactions",
+              {
+                error: error instanceof Error ? error.message : "Unknown",
+              }
+            );
+          }
+        }
+
+        logService.info("Sync and fetch emails complete", "Transactions", {
+          transactionId: validatedTransactionId,
+          provider: providerUsed,
+          emailsFetched,
+          emailsStored,
+          totalEmailsLinked,
+          totalMessagesLinked,
+          totalAlreadyLinked,
+          totalErrors,
+        });
+
+        return {
+          success: true,
+          provider: providerUsed,
+          emailsFetched,
+          emailsStored,
+          totalEmailsLinked,
+          totalMessagesLinked,
+          totalAlreadyLinked,
+          totalErrors,
+        };
+      } catch (error) {
+        logService.error("Sync and fetch emails failed", "Transactions", {
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // ============================================
   // SYNC HANDLERS (BACKLOG-395)
   // ============================================
 
@@ -2545,6 +2981,308 @@ export const registerTransactionHandlers = (
             error: `Validation error: ${error.message}`,
           };
         }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // TASK-1776: Get attachments for a specific email
+  ipcMain.handle(
+    "emails:get-attachments",
+    async (
+      event: IpcMainInvokeEvent,
+      emailId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        if (!emailId || typeof emailId !== "string") {
+          throw new ValidationError("Email ID is required", "emailId");
+        }
+
+        const attachments = await emailAttachmentService.getAttachmentsForEmail(emailId);
+
+        return {
+          success: true,
+          data: attachments,
+        };
+      } catch (error) {
+        logService.error("Failed to get email attachments", "Transactions", {
+          emailId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // TASK-1776: Open attachment with system viewer
+  ipcMain.handle(
+    "attachments:open",
+    async (
+      event: IpcMainInvokeEvent,
+      storagePath: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        if (!storagePath || typeof storagePath !== "string") {
+          throw new ValidationError("Storage path is required", "storagePath");
+        }
+
+        // Security: Validate path is within app data directory
+        const appDataPath = require("electron").app.getPath("userData");
+        const normalizedPath = require("path").normalize(storagePath);
+        if (!normalizedPath.startsWith(appDataPath)) {
+          throw new ValidationError("Invalid attachment path", "storagePath");
+        }
+
+        const result = await shell.openPath(normalizedPath);
+
+        if (result) {
+          // shell.openPath returns empty string on success, error message on failure
+          return {
+            success: false,
+            error: result,
+          };
+        }
+
+        return { success: true };
+      } catch (error) {
+        logService.error("Failed to open attachment", "Transactions", {
+          storagePath,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Fix for TASK-1778: Get attachment data as base64 for CSP-safe image preview
+  // CSP blocks file:// URLs, so we read the file and return as data: URL
+  ipcMain.handle(
+    "attachments:get-data",
+    async (
+      event: IpcMainInvokeEvent,
+      storagePath: string,
+      mimeType: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        if (!storagePath || typeof storagePath !== "string") {
+          throw new ValidationError("Storage path is required", "storagePath");
+        }
+
+        // Security: Validate path is within app data directory
+        const appDataPath = require("electron").app.getPath("userData");
+        const normalizedPath = require("path").normalize(storagePath);
+        if (!normalizedPath.startsWith(appDataPath)) {
+          throw new ValidationError("Invalid attachment path", "storagePath");
+        }
+
+        // Read file as buffer and convert to base64
+        const fs = require("fs");
+        const buffer = fs.readFileSync(normalizedPath);
+        const base64 = buffer.toString("base64");
+        const dataUrl = `data:${mimeType || "application/octet-stream"};base64,${base64}`;
+
+        return {
+          success: true,
+          data: dataUrl,
+        };
+      } catch (error) {
+        logService.error("Failed to get attachment data", "Transactions", {
+          storagePath,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // TASK-1781: Get attachment counts for transaction (from actual downloaded files)
+  // Returns counts from the attachments table, matching what submission service uploads
+  ipcMain.handle(
+    "transactions:get-attachment-counts",
+    async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+      auditStart?: string,
+      auditEnd?: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        // Validate transaction ID
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        const db = databaseService.getRawDatabase();
+
+        // Build date filter params
+        const textDateParams: string[] = [validatedTransactionId];
+        const emailDateParams: string[] = [validatedTransactionId];
+
+        let textDateFilter = "";
+        let emailDateFilter = "";
+
+        if (auditStart) {
+          textDateFilter += " AND m.sent_at >= ?";
+          textDateParams.push(auditStart);
+          emailDateFilter += " AND e.sent_at >= ?";
+          emailDateParams.push(auditStart);
+        }
+
+        if (auditEnd) {
+          // Add end of day to include all messages on the end date
+          const endDate = new Date(auditEnd);
+          endDate.setHours(23, 59, 59, 999);
+          const endDateStr = endDate.toISOString();
+          textDateFilter += " AND m.sent_at <= ?";
+          textDateParams.push(endDateStr);
+          emailDateFilter += " AND e.sent_at <= ?";
+          emailDateParams.push(endDateStr);
+        }
+
+        // Count text message attachments (via message_id -> messages -> communications)
+        // Mirrors the query in submissionService.loadTransactionAttachments
+        const textCountSql = `
+          SELECT COUNT(DISTINCT a.id) as count
+          FROM attachments a
+          INNER JOIN messages m ON a.message_id = m.id
+          INNER JOIN communications c ON (
+            (c.message_id IS NOT NULL AND c.message_id = m.id)
+            OR
+            (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+          )
+          WHERE c.transaction_id = ?
+          AND a.message_id IS NOT NULL
+          AND a.storage_path IS NOT NULL
+          ${textDateFilter}
+        `;
+
+        const textResult = db.prepare(textCountSql).get(...textDateParams) as { count: number };
+
+        // Count email attachments (via email_id -> communications -> emails)
+        const emailCountSql = `
+          SELECT COUNT(DISTINCT a.id) as count
+          FROM attachments a
+          INNER JOIN emails e ON a.email_id = e.id
+          INNER JOIN communications c ON c.email_id = e.id
+          WHERE c.transaction_id = ?
+          AND a.email_id IS NOT NULL
+          AND a.storage_path IS NOT NULL
+          ${emailDateFilter}
+        `;
+
+        const emailResult = db.prepare(emailCountSql).get(...emailDateParams) as { count: number };
+
+        // Calculate total size of all attachments (text + email)
+        const textSizeSql = `
+          SELECT COALESCE(SUM(a.file_size_bytes), 0) as total_size
+          FROM attachments a
+          INNER JOIN messages m ON a.message_id = m.id
+          INNER JOIN communications c ON (
+            (c.message_id IS NOT NULL AND c.message_id = m.id)
+            OR
+            (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+          )
+          WHERE c.transaction_id = ?
+          AND a.message_id IS NOT NULL
+          AND a.storage_path IS NOT NULL
+          ${textDateFilter}
+        `;
+
+        const emailSizeSql = `
+          SELECT COALESCE(SUM(a.file_size_bytes), 0) as total_size
+          FROM attachments a
+          INNER JOIN emails e ON a.email_id = e.id
+          INNER JOIN communications c ON c.email_id = e.id
+          WHERE c.transaction_id = ?
+          AND a.email_id IS NOT NULL
+          AND a.storage_path IS NOT NULL
+          ${emailDateFilter}
+        `;
+
+        const textSizeResult = db.prepare(textSizeSql).get(...textDateParams) as { total_size: number };
+        const emailSizeResult = db.prepare(emailSizeSql).get(...emailDateParams) as { total_size: number };
+
+        const textAttachments = textResult?.count || 0;
+        const emailAttachments = emailResult?.count || 0;
+        const totalSizeBytes = (textSizeResult?.total_size || 0) + (emailSizeResult?.total_size || 0);
+
+        return {
+          success: true,
+          data: {
+            textAttachments,
+            emailAttachments,
+            total: textAttachments + emailAttachments,
+            totalSizeBytes,
+          },
+        };
+      } catch (error) {
+        logService.error("Failed to get attachment counts", "Transactions", {
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // TASK-1783: Get attachment buffer as base64 (for DOCX conversion with mammoth)
+  // Unlike get-data, this returns raw base64 without data: URL prefix
+  ipcMain.handle(
+    "attachments:get-buffer",
+    async (
+      event: IpcMainInvokeEvent,
+      storagePath: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        if (!storagePath || typeof storagePath !== "string") {
+          throw new ValidationError("Storage path is required", "storagePath");
+        }
+
+        // Security: Validate path is within app data directory
+        const appDataPath = require("electron").app.getPath("userData");
+        const normalizedPath = require("path").normalize(storagePath);
+        if (!normalizedPath.startsWith(appDataPath)) {
+          throw new ValidationError("Invalid attachment path", "storagePath");
+        }
+
+        // Read file as buffer and convert to base64
+        const fs = require("fs");
+        const buffer = fs.readFileSync(normalizedPath);
+        const base64 = buffer.toString("base64");
+
+        return {
+          success: true,
+          data: base64,
+        };
+      } catch (error) {
+        logService.error("Failed to get attachment buffer", "Transactions", {
+          storagePath,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",

@@ -15,9 +15,12 @@
  *
  * Requires the state machine feature flag to be enabled.
  * If disabled, throws an error - legacy code paths have been removed.
+ *
+ * TASK-1612: Migrated to use authService instead of direct window.api calls.
  */
 
 import { useCallback } from "react";
+import { authService } from "@/services";
 import {
   useOptionalMachineState,
   selectHasCompletedEmailOnboarding,
@@ -100,8 +103,14 @@ export function useEmailOnboardingApi({
           email,
           provider,
         });
+      } else if (!connected && provider) {
+        // TASK-1730: Dispatch EMAIL_DISCONNECTED to update state machine
+        dispatch({
+          type: "EMAIL_DISCONNECTED",
+          provider,
+        });
       }
-      // If not connected or missing info, no-op (state machine is source of truth)
+      // If missing provider info, no-op (state machine is source of truth)
     },
     [dispatch]
   );
@@ -117,12 +126,13 @@ export function useEmailOnboardingApi({
     if (!currentUserId) return;
 
     try {
-      const authApi = window.api.auth as typeof window.api.auth & {
-        completeEmailOnboarding: (
-          userId: string
-        ) => Promise<{ success: boolean; error?: string }>;
-      };
-      await authApi.completeEmailOnboarding(currentUserId);
+      const result = await authService.completeEmailOnboarding(currentUserId);
+      if (!result.success) {
+        console.warn(
+          "[useEmailOnboardingApi] API call failed but continuing:",
+          result.error
+        );
+      }
 
       // Dispatch onboarding step complete
       dispatch({

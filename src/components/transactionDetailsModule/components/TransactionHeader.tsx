@@ -4,6 +4,7 @@
  */
 import React from "react";
 import type { Transaction } from "@/types";
+import { LicenseGate } from "@/components/common/LicenseGate";
 
 interface TransactionHeaderProps {
   transaction: Transaction;
@@ -59,6 +60,24 @@ export function TransactionHeader({
     return "Transaction Details";
   };
 
+  // Split address into street and city/state/zip for two-line display
+  const formatAddress = (address: string) => {
+    if (!address) return { street: "", cityStateZip: "" };
+
+    // Try to split at the first comma (street, city state zip)
+    const firstCommaIndex = address.indexOf(",");
+    if (firstCommaIndex === -1) {
+      return { street: address, cityStateZip: "" };
+    }
+
+    const street = address.substring(0, firstCommaIndex).trim();
+    const cityStateZip = address.substring(firstCommaIndex + 1).trim();
+
+    return { street, cityStateZip };
+  };
+
+  const { street, cityStateZip } = formatAddress(transaction.property_address);
+
   // Close button component to avoid duplication
   const CloseButton = ({ className = "" }: { className?: string }) => (
     <button
@@ -85,12 +104,12 @@ export function TransactionHeader({
     <div
       className={`flex-shrink-0 px-6 py-4 rounded-t-xl ${getHeaderStyle()}`}
     >
-      {/* Container: column on mobile, row on md+ */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-2">
-        {/* Top row: Title/Address + Close button (mobile only) */}
-        <div className="flex items-center justify-between md:flex-1">
+      {/* Container: always row layout */}
+      <div className="flex flex-row flex-nowrap items-center justify-between gap-1 overflow-hidden">
+        {/* Title/Address section */}
+        <div className="flex items-center justify-between flex-1 min-w-0 overflow-hidden">
           {/* Left side: Title + Address */}
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h3 className="text-xl font-bold text-white">{getHeaderTitle()}</h3>
               {isPendingReview && (
@@ -104,17 +123,17 @@ export function TransactionHeader({
                 </span>
               )}
             </div>
-            <p className={`text-sm ${getHeaderTextStyle()}`}>
-              {transaction.property_address}
-            </p>
+            <div className={`text-sm ${getHeaderTextStyle()} truncate`}>
+              <p className="truncate">{street}</p>
+              {cityStateZip && <p className="truncate">{cityStateZip}</p>}
+            </div>
           </div>
 
-          {/* Close button: visible on mobile in top row, hidden on md+ */}
-          <CloseButton className="md:hidden" />
+          {/* Close button removed from here - only one close button in buttons section */}
         </div>
 
         {/* Bottom row (mobile) / Right side (desktop): Action buttons */}
-        <div className="flex items-center gap-2 justify-end flex-wrap">
+        <div className="flex flex-nowrap items-center gap-2 justify-end flex-shrink-0">
           {isPendingReview ? (
             <PendingReviewActions
               isRejecting={isRejecting}
@@ -135,11 +154,13 @@ export function TransactionHeader({
               isSubmitting={isSubmitting}
               onShowEditModal={onShowEditModal}
               onShowSubmitModal={onShowSubmitModal}
+              onShowExportModal={onShowExportModal}
+              onShowDeleteConfirm={onShowDeleteConfirm}
             />
           )}
 
-          {/* Close button: hidden on mobile, visible on md+ */}
-          <CloseButton className="hidden md:block" />
+          {/* Close button */}
+          <CloseButton />
         </div>
       </div>
     </div>
@@ -251,11 +272,15 @@ function ActiveActions({
   isSubmitting,
   onShowEditModal,
   onShowSubmitModal,
+  onShowExportModal,
+  onShowDeleteConfirm,
 }: {
   transaction: Transaction;
   isSubmitting: boolean;
   onShowEditModal: () => void;
   onShowSubmitModal?: () => void;
+  onShowExportModal: () => void;
+  onShowDeleteConfirm: () => void;
 }) {
   // Check if transaction can be submitted
   const canSubmit = transaction.submission_status === "not_submitted" ||
@@ -269,41 +294,46 @@ function ActiveActions({
 
   return (
     <>
-      {/* Submit for Review Button - shown when not yet submitted */}
-      {onShowSubmitModal && canSubmit && (
-        <button
-          onClick={onShowSubmitModal}
-          disabled={isSubmitting}
-          className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg disabled:opacity-50"
-        >
-          {isSubmitting ? (
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
+      {/* Submit for Review Button - Team/Enterprise license only */}
+      <LicenseGate requires="team">
+        {/* Submit for Review Button - shown when not yet submitted */}
+        {onShowSubmitModal && canSubmit && (
+          <button
+            onClick={onShowSubmitModal}
+            disabled={isSubmitting}
+            className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg disabled:opacity-50"
+          >
+            {isSubmitting ? (
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )}
+            {isResubmit ? "Resubmit" : "Submit for Review"}
+          </button>
+        )}
+        {/* Submitted Badge - shown when already submitted */}
+        {isSubmitted && (
+          <span className="px-4 py-2 rounded-lg font-medium flex items-center gap-2 bg-green-100 text-green-700">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
-          )}
-          {isResubmit ? "Resubmit" : "Submit for Review"}
-        </button>
-      )}
-      {/* Submitted Badge - shown when already submitted */}
-      {isSubmitted && (
-        <span className="px-4 py-2 rounded-lg font-medium flex items-center gap-2 bg-green-100 text-green-700">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-          Submitted
-        </span>
-      )}
-      {/* Edit Button */}
+            Submitted
+          </span>
+        )}
+      </LicenseGate>
+      {/* Export Button - Available for ALL license types (BACKLOG-459)
+          Team license: secondary action (shown alongside Submit)
+          Individual license: primary action */}
       <button
-        onClick={onShowEditModal}
-        className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-gray-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
+        onClick={onShowExportModal}
+        className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-green-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
       >
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
-        Edit
+        Export
       </button>
     </>
   );

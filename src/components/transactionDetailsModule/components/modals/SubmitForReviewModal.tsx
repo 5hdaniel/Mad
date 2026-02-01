@@ -17,8 +17,18 @@ export interface SubmitProgress {
 
 interface SubmitForReviewModalProps {
   transaction: Transaction;
-  messageCount: number;
+  /** @deprecated Use emailThreadCount and textThreadCount instead */
+  messageCount?: number;
+  /** Number of email threads */
+  emailThreadCount: number;
+  /** Number of text message threads */
+  textThreadCount: number;
+  /** Total attachment count (text + email) */
   attachmentCount: number;
+  /** Email attachment count specifically */
+  emailAttachmentCount: number;
+  /** Total size of all attachments in bytes */
+  totalSizeBytes: number;
   isSubmitting: boolean;
   progress: SubmitProgress | null;
   error: string | null;
@@ -36,10 +46,24 @@ const STAGE_LABELS: Record<string, string> = {
   failed: "Submission failed",
 };
 
+/**
+ * Format bytes to human-readable size (KB, MB, GB)
+ */
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+}
+
 export function SubmitForReviewModal({
   transaction,
-  messageCount,
+  emailThreadCount,
+  textThreadCount,
   attachmentCount,
+  emailAttachmentCount,
+  totalSizeBytes,
   isSubmitting,
   progress,
   error,
@@ -110,7 +134,7 @@ export function SubmitForReviewModal({
                   </span>
                 </div>
 
-                {/* Messages */}
+                {/* Email Threads */}
                 <div className="flex items-center gap-2 text-sm">
                   <svg
                     className="w-4 h-4 text-gray-500 flex-shrink-0"
@@ -122,16 +146,42 @@ export function SubmitForReviewModal({
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+                      d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
                     />
                   </svg>
-                  <span className="text-gray-600">Messages:</span>
+                  <span className="text-gray-600">Email threads:</span>
                   <span className="font-medium text-gray-900">
-                    {messageCount} {messageCount === 1 ? "message" : "messages"}
+                    {emailThreadCount}
+                    {emailAttachmentCount > 0 && (
+                      <span className="text-gray-500 font-normal">
+                        {" "}({emailAttachmentCount} {emailAttachmentCount === 1 ? "attachment" : "attachments"})
+                      </span>
+                    )}
                   </span>
                 </div>
 
-                {/* Attachments */}
+                {/* Text Threads */}
+                <div className="flex items-center gap-2 text-sm">
+                  <svg
+                    className="w-4 h-4 text-gray-500 flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                    />
+                  </svg>
+                  <span className="text-gray-600">Text threads:</span>
+                  <span className="font-medium text-gray-900">
+                    {textThreadCount}
+                  </span>
+                </div>
+
+                {/* Total Attachments with Size */}
                 <div className="flex items-center gap-2 text-sm">
                   <svg
                     className="w-4 h-4 text-gray-500 flex-shrink-0"
@@ -146,9 +196,14 @@ export function SubmitForReviewModal({
                       d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
                     />
                   </svg>
-                  <span className="text-gray-600">Attachments:</span>
+                  <span className="text-gray-600">Total attachments:</span>
                   <span className="font-medium text-gray-900">
                     {attachmentCount} {attachmentCount === 1 ? "file" : "files"}
+                    {totalSizeBytes > 0 && (
+                      <span className="text-gray-500 font-normal">
+                        {" "}({formatBytes(totalSizeBytes)})
+                      </span>
+                    )}
                   </span>
                 </div>
               </div>

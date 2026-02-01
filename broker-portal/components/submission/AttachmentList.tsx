@@ -14,6 +14,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { AttachmentViewerModal } from './AttachmentViewerModal';
 import { EmptyAttachments } from '@/components/ui/EmptyState';
+import heic2any from 'heic2any';
 
 interface Attachment {
   id: string;
@@ -68,6 +69,16 @@ function isVideoFile(attachment: Attachment): boolean {
   return videoExtensions.some(ext => filename.endsWith(ext));
 }
 
+function isHeicFile(attachment: Attachment): boolean {
+  const mimeType = attachment.mime_type?.toLowerCase() || '';
+  const filename = attachment.filename.toLowerCase();
+
+  return mimeType === 'image/heic' ||
+    mimeType === 'image/heif' ||
+    filename.endsWith('.heic') ||
+    filename.endsWith('.heif');
+}
+
 function formatFileSize(bytes: number | null): string {
   if (!bytes) return 'Unknown size';
   if (bytes < 1024) return `${bytes} B`;
@@ -118,6 +129,7 @@ function MediaThumbnail({
   const [error, setError] = useState(false);
   const supabase = createClient();
   const isVideo = isVideoFile(attachment);
+  const isHeic = isHeicFile(attachment);
 
   useEffect(() => {
     if (!attachment.storage_path) {
@@ -132,8 +144,33 @@ function MediaThumbnail({
           .createSignedUrl(attachment.storage_path!, 3600);
 
         if (storageError) throw storageError;
-        setThumbnailUrl(data.signedUrl);
-      } catch {
+
+        // Convert HEIC to displayable format
+        if (isHeic) {
+          try {
+            const response = await fetch(data.signedUrl);
+            const blob = await response.blob();
+            const convertedBlob = await heic2any({
+              blob,
+              toType: 'image/jpeg',
+              quality: 0.7, // Lower quality for thumbnails
+            });
+            const resultBlob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+            const objectUrl = URL.createObjectURL(resultBlob);
+            setThumbnailUrl(objectUrl);
+          } catch (conversionError) {
+            console.error('HEIC thumbnail conversion failed:', conversionError);
+            setError(true);
+          }
+        } else {
+          setThumbnailUrl(data.signedUrl);
+        }
+      } catch (err) {
+        console.error('Failed to load attachment thumbnail:', {
+          filename: attachment.filename,
+          storagePath: attachment.storage_path,
+          error: err instanceof Error ? err.message : err,
+        });
         setError(true);
       } finally {
         setLoading(false);
@@ -141,7 +178,14 @@ function MediaThumbnail({
     };
 
     fetchUrl();
-  }, [attachment.storage_path, supabase.storage]);
+
+    // Cleanup object URL on unmount
+    return () => {
+      if (thumbnailUrl && thumbnailUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(thumbnailUrl);
+      }
+    };
+  }, [attachment.storage_path, supabase.storage, isHeic]);
 
   return (
     <button

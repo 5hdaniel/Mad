@@ -1,12 +1,16 @@
-# BACKLOG-372: Switch Mac to iPhone Backup for Messages/Contacts
+# BACKLOG-372: Mac Message Source Toggle (Local vs iPhone Cable Sync)
 
 ## Summary
 
-Currently on Mac, the app accesses Messages.app and Contacts.app directly via native macOS APIs. This creates two different code paths (Mac vs Windows). Switch Mac to use iPhone backup files (same as Windows) for consistency and easier support.
+Add a setting for Mac users to choose their message source:
+- **Local macOS Messages** (current default) - reads from Messages.app database directly
+- **iPhone Cable Sync** (same as Windows) - uses iPhone backup files
+
+This enables unified testing across platforms and gives users flexibility.
 
 ## Category
 
-architecture
+architecture / settings
 
 ## Priority
 
@@ -18,8 +22,12 @@ Pending
 
 ## User Story
 
+**As a** Mac user with an iPhone,
+**I want** to choose between using my Mac's local Messages database or syncing via iPhone cable,
+**So that** I can use whichever method works best for my setup.
+
 **As a** developer/support team,
-**I want** Mac to use iPhone backup for messages and contacts (same as Windows),
+**I want** the option to have all users use iPhone cable sync,
 **So that** we have one unified code path to test, debug, and support across both platforms.
 
 ## Current Behavior
@@ -27,22 +35,31 @@ Pending
 - **Mac**: Accesses Messages.app database and Contacts.app directly via macOS APIs
 - **Windows**: Uses iPhone backup files to extract messages and contacts
 - Results in two separate code paths requiring separate testing and support procedures
+- No user choice on Mac - always uses local Messages.app
 
 ## Proposed Behavior
 
-- **Mac**: Use iPhone backup files (same method as Windows)
+- **Mac**: Setting to choose between:
+  - Local macOS Messages (existing behavior)
+  - iPhone Cable Sync (same as Windows)
 - **Windows**: Continue using iPhone backup files (no change)
-- Single unified code path for both platforms
+- Default can be set to "iPhone Cable Sync" for unified testing
 
 ## Feature Requirements
 
-1. **Use iPhone Backup on Mac** - Instead of accessing Messages.app and Contacts.app directly, use iPhone backup files on Mac (same method as Windows)
+1. **Settings Toggle** - Add setting in Settings > Data & Privacy to choose message source:
+   - "Use Mac Messages" (local)
+   - "Use iPhone Sync" (cable)
 
-2. **Remove/Deprecate Direct Access** - Phase out the Messages.app and Contacts.app direct access code paths
+2. **iPhone Backup Detection on Mac** - Detect iPhone backups at `~/Library/Application Support/MobileSync/Backup/`
 
-3. **Unified Code Path** - Same backup parsing logic across both platforms
+3. **Conditional Service Routing** - Based on setting, route to:
+   - `macOSMessagesImportService` for local
+   - `iosBackupService` for iPhone sync
 
-4. **Easier Support** - One method to debug/support instead of two
+4. **Keep Both Paths Working** - Don't deprecate local access, keep as option
+
+5. **Unified Default** - Can set iPhone Sync as default for unified testing experience
 
 ## Benefits
 
@@ -77,22 +94,46 @@ Pending
 
 ## Acceptance Criteria
 
-- [ ] Mac version uses iPhone backup for messages extraction
-- [ ] Mac version uses iPhone backup for contacts extraction
-- [ ] Same user flow on Mac as Windows (backup iPhone, then sync)
-- [ ] Direct Messages.app/Contacts.app access removed or deprecated
-- [ ] All existing functionality preserved (message import, contact import, attachments)
-- [ ] Tests updated to reflect unified code path
-- [ ] Documentation updated for Mac users
+- [ ] Settings UI shows message source toggle (Mac only)
+- [ ] "Use Mac Messages" option works (existing local behavior)
+- [ ] "Use iPhone Sync" option works (same as Windows flow)
+- [ ] iPhone backup path detected correctly on Mac
+- [ ] Setting persists across app restarts
+- [ ] Onboarding adapts based on setting (shows cable instructions if iPhone Sync)
+- [ ] Both code paths continue to work (no deprecation)
+- [ ] Tests cover both paths
 
 ## Dependencies
 
-- iPhone backup path detection on macOS (different from Windows)
-- User must have iPhone backup available on Mac
+- iPhone backup path detection on macOS (`~/Library/Application Support/MobileSync/Backup/`)
+- User must have iPhone backup available if using iPhone Sync option
 
 ## Estimated Effort
 
-~80K tokens (architecture change affecting multiple services)
+~40-50K tokens (medium - both code paths exist, need routing + UI)
+
+## Implementation Notes
+
+### Settings UI
+```typescript
+// In Settings component
+<Select value={messageSource} onChange={setMessageSource}>
+  <Option value="local">Use Mac Messages (local)</Option>
+  <Option value="iphone">Use iPhone Sync (cable)</Option>
+</Select>
+```
+
+### Service Routing
+```typescript
+// In message import logic
+if (platform === 'darwin' && settings.messageSource === 'iphone') {
+  // Use iOS backup service (same as Windows)
+  return iosBackupService.importMessages();
+} else if (platform === 'darwin') {
+  // Use local macOS Messages
+  return macOSMessagesImportService.importMessages();
+}
+```
 
 ## Related Items
 

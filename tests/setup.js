@@ -60,6 +60,7 @@ if (typeof window !== 'undefined') {
       bulkDelete: jest.fn(),
       bulkUpdateStatus: jest.fn(),
       batchUpdateContacts: jest.fn(),
+      onSubmissionStatusChanged: jest.fn().mockReturnValue(() => {}),
     },
     contacts: {
       getAll: jest.fn(),
@@ -99,6 +100,7 @@ if (typeof window !== 'undefined') {
       initializeSecureStorage: jest.fn(),
       getSecureStorageStatus: jest.fn(),
       setupFullDiskAccess: jest.fn(),
+      reindexDatabase: jest.fn(),
     },
     address: {
       initialize: jest.fn(),
@@ -133,6 +135,9 @@ if (typeof window !== 'undefined') {
     user: {
       getPhoneType: jest.fn(),
       setPhoneType: jest.fn(),
+      // TASK-1600: Cloud phone type storage (Supabase)
+      getPhoneTypeCloud: jest.fn(),
+      setPhoneTypeCloud: jest.fn(),
     },
     shell: {
       openExternal: jest.fn(),

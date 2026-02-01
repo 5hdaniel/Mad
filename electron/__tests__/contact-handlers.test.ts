@@ -29,6 +29,7 @@ const mockMainWindow = {
 } as unknown as import("electron").BrowserWindow;
 
 // Mock services - inline factories since jest.mock is hoisted
+// Note: getUserById returns the user only for TEST_USER_ID, null for empty/invalid IDs
 jest.mock("../services/databaseService", () => ({
   __esModule: true,
   default: {
@@ -43,6 +44,27 @@ jest.mock("../services/databaseService", () => ({
     removeContact: jest.fn(),
     getTransactionsByContact: jest.fn(),
     markContactAsImported: jest.fn(),
+    // getUserById returns user only for valid TEST_USER_ID
+    getUserById: jest.fn().mockImplementation((id: string) => {
+      if (id === '550e8400-e29b-41d4-a716-446655440000') {
+        return Promise.resolve({ id });
+      }
+      return Promise.resolve(null);
+    }),
+    // getRawDatabase returns empty for invalid lookups
+    getRawDatabase: jest.fn().mockReturnValue({
+      prepare: jest.fn().mockReturnValue({
+        get: jest.fn().mockReturnValue(undefined), // No user found in fallback
+      }),
+    }),
+    isInitialized: jest.fn().mockReturnValue(true),
+    backfillContactEmails: jest.fn(),
+    backfillContactPhones: jest.fn(),
+    findContactByName: jest.fn(),
+    searchContactsForSelection: jest.fn().mockReturnValue([]),
+    getContactNamesByPhones: jest.fn().mockResolvedValue(new Map()),
+    getLastMessageDatesForPhones: jest.fn().mockReturnValue(new Map()),
+    backfillPhoneLastMessageTable: jest.fn().mockResolvedValue(0),
   },
 }));
 
@@ -67,6 +89,35 @@ jest.mock("../services/logService", () => ({
   },
 }));
 
+// TASK-1773: Mock external contact db service
+// The shadow table starts empty, but fullSync populates it from macOS contacts
+// We simulate this by having getAllForUser return contacts that match what fullSync stores
+let mockExternalContacts: any[] = [];
+
+jest.mock("../services/db/externalContactDbService", () => ({
+  __esModule: true,
+  getCount: jest.fn().mockImplementation(() => mockExternalContacts.length),
+  getAllForUser: jest.fn().mockImplementation(() => mockExternalContacts),
+  isStale: jest.fn().mockReturnValue(false),
+  fullSync: jest.fn().mockImplementation((_userId: string, contacts: any[]) => {
+    // Store the contacts that were synced
+    mockExternalContacts = contacts.map((c: any, i: number) => ({
+      id: `ext-${i}`,
+      user_id: _userId,
+      name: c.name,
+      phones: c.phones || [],
+      emails: c.emails || [],
+      company: c.company || null,
+      last_message_at: null,
+      macos_record_id: c.recordId,
+      synced_at: new Date().toISOString(),
+    }));
+    return { inserted: contacts.length, updated: 0, deleted: 0, total: contacts.length };
+  }),
+  getLastSyncTime: jest.fn().mockReturnValue(null),
+  updateLastMessageAtFromLookupTable: jest.fn().mockReturnValue(0),
+}));
+
 // Import after mocks are set up
 import { registerContactHandlers } from "../contact-handlers";
 import databaseService from "../services/databaseService";
@@ -85,6 +136,15 @@ const mockContactsService = {
 };
 const mockAuditService = auditService as jest.Mocked<typeof auditService>;
 const mockLogService = logService as jest.Mocked<typeof logService>;
+
+// Reset external contacts mock state
+function resetExternalContactsMock() {
+  // Access the mocked module and reset its state
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const externalContactDb = require("../services/db/externalContactDbService");
+  (externalContactDb.getCount as jest.Mock).mockReturnValue(0);
+  (externalContactDb.getAllForUser as jest.Mock).mockReturnValue([]);
+}
 
 // Test UUIDs
 const TEST_USER_ID = "550e8400-e29b-41d4-a716-446655440000";
@@ -107,6 +167,7 @@ describe("Contact Handlers", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    resetExternalContactsMock();
   });
 
   describe("contacts:get-all", () => {
@@ -136,7 +197,7 @@ describe("Contact Handlers", () => {
       const result = await handler(mockEvent, "");
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Validation error");
+      expect(result.error).toContain("No valid user found");
     });
 
     it("should handle database error", async () => {
@@ -155,24 +216,36 @@ describe("Contact Handlers", () => {
 
   describe("contacts:get-available", () => {
     it("should return available contacts for import", async () => {
-      // Mock unimported DB contacts (empty for this test)
-      mockDatabaseService.getUnimportedContactsByUserId.mockResolvedValue([]);
-      // Mock macOS contacts app
-      mockContactsService.getContactNames.mockResolvedValue({
-        phoneToContactInfo: {
-          "555-1234": {
-            name: "John Doe",
-            phones: ["555-1234"],
-            emails: ["john@example.com"],
-          },
-          "555-5678": {
-            name: "Jane Smith",
-            phones: ["555-5678"],
-            emails: ["jane@example.com"],
-          },
+      // TASK-1773: Set up external contacts in shadow table
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const externalContactDb = require("../services/db/externalContactDbService");
+      (externalContactDb.getCount as jest.Mock).mockReturnValue(2); // Shadow table has data
+      (externalContactDb.getAllForUser as jest.Mock).mockReturnValue([
+        {
+          id: "ext-1",
+          user_id: TEST_USER_ID,
+          name: "John Doe",
+          phones: ["555-1234"],
+          emails: ["john@example.com"],
+          company: null,
+          last_message_at: null,
+          macos_record_id: "record-1",
+          synced_at: new Date().toISOString(),
         },
-        status: "loaded",
-      });
+        {
+          id: "ext-2",
+          user_id: TEST_USER_ID,
+          name: "Jane Smith",
+          phones: ["555-5678"],
+          emails: ["jane@example.com"],
+          company: null,
+          last_message_at: null,
+          macos_record_id: "record-2",
+          synced_at: new Date().toISOString(),
+        },
+      ]);
+
+      mockDatabaseService.getUnimportedContactsByUserId.mockResolvedValue([]);
       mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([]);
 
       const handler = registeredHandlers.get("contacts:get-available");
@@ -180,28 +253,41 @@ describe("Contact Handlers", () => {
 
       expect(result.success).toBe(true);
       expect(result.contacts).toHaveLength(2);
-      expect(result.contactsStatus).toBe("loaded");
+      // TASK-1773: Shadow table always available, status is { loaded: true }
+      expect(result.contactsStatus).toEqual({ loaded: true });
     });
 
     it("should filter out already imported contacts", async () => {
-      // Mock unimported DB contacts (empty for this test)
-      mockDatabaseService.getUnimportedContactsByUserId.mockResolvedValue([]);
-      // Mock macOS contacts app
-      mockContactsService.getContactNames.mockResolvedValue({
-        phoneToContactInfo: {
-          "555-1234": {
-            name: "John Doe",
-            phones: ["555-1234"],
-            emails: ["john@example.com"],
-          },
-          "555-5678": {
-            name: "Jane Smith",
-            phones: ["555-5678"],
-            emails: ["jane@example.com"],
-          },
+      // TASK-1773: Set up external contacts in shadow table
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const externalContactDb = require("../services/db/externalContactDbService");
+      (externalContactDb.getCount as jest.Mock).mockReturnValue(2); // Shadow table has data
+      (externalContactDb.getAllForUser as jest.Mock).mockReturnValue([
+        {
+          id: "ext-1",
+          user_id: TEST_USER_ID,
+          name: "John Doe",
+          phones: ["555-1234"],
+          emails: ["john@example.com"],
+          company: null,
+          last_message_at: null,
+          macos_record_id: "record-1",
+          synced_at: new Date().toISOString(),
         },
-        status: "loaded",
-      });
+        {
+          id: "ext-2",
+          user_id: TEST_USER_ID,
+          name: "Jane Smith",
+          phones: ["555-5678"],
+          emails: ["jane@example.com"],
+          company: null,
+          last_message_at: null,
+          macos_record_id: "record-2",
+          synced_at: new Date().toISOString(),
+        },
+      ]);
+
+      mockDatabaseService.getUnimportedContactsByUserId.mockResolvedValue([]);
       mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([
         { name: "John Doe", email: "john@example.com" },
       ]);
@@ -219,12 +305,18 @@ describe("Contact Handlers", () => {
       const result = await handler(mockEvent, "");
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Validation error");
+      expect(result.error).toContain("No valid user found");
     });
 
     it("should handle contacts service error", async () => {
-      // Mock unimported DB contacts (empty for this test)
+      // TASK-1773: When shadow table is empty and macOS sync fails,
+      // handler logs warning but still returns available contacts (from DB)
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const externalContactDb = require("../services/db/externalContactDbService");
+      (externalContactDb.getCount as jest.Mock).mockReturnValue(0); // Empty shadow table
+
       mockDatabaseService.getUnimportedContactsByUserId.mockResolvedValue([]);
+      mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([]);
       mockContactsService.getContactNames.mockRejectedValue(
         new Error("Contacts access denied"),
       );
@@ -232,8 +324,11 @@ describe("Contact Handlers", () => {
       const handler = registeredHandlers.get("contacts:get-available");
       const result = await handler(mockEvent, TEST_USER_ID);
 
-      expect(result.success).toBe(false);
-      expect(result.error).toContain("Contacts access denied");
+      // Handler now gracefully handles sync failures - returns empty but still succeeds
+      expect(result.success).toBe(true);
+      expect(result.contacts).toHaveLength(0);
+      // The warning is logged but handler doesn't fail
+      expect(mockLogService.warn).toHaveBeenCalled();
     });
 
     // TASK-982: Deduplication tests
@@ -443,6 +538,24 @@ describe("Contact Handlers", () => {
 
     describe("no false positives in deduplication", () => {
       it("should not dedupe contacts with different identifiers", async () => {
+        // TASK-1773: Set up external contacts in shadow table
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const externalContactDb = require("../services/db/externalContactDbService");
+        (externalContactDb.getCount as jest.Mock).mockReturnValue(1); // Shadow table has data
+        (externalContactDb.getAllForUser as jest.Mock).mockReturnValue([
+          {
+            id: "ext-2",
+            user_id: TEST_USER_ID,
+            name: "Person Two", // Different name
+            phones: ["555-2222"], // Different phone
+            emails: ["two@example.com"], // Different email
+            company: null,
+            last_message_at: null,
+            macos_record_id: "record-2",
+            synced_at: new Date().toISOString(),
+          },
+        ]);
+
         mockDatabaseService.getUnimportedContactsByUserId.mockResolvedValue([
           {
             id: "db-1",
@@ -451,16 +564,6 @@ describe("Contact Handlers", () => {
             phone: "555-1111",
           },
         ]);
-        mockContactsService.getContactNames.mockResolvedValue({
-          phoneToContactInfo: {
-            "555-2222": {
-              name: "Person Two", // Different name
-              phones: ["555-2222"], // Different phone
-              emails: ["two@example.com"], // Different email
-            },
-          },
-          status: "loaded",
-        });
         mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([]);
 
         const handler = registeredHandlers.get("contacts:get-available");
@@ -543,7 +646,7 @@ describe("Contact Handlers", () => {
       const result = await handler(mockEvent, "", contactsToImport);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Validation error");
+      expect(result.error).toContain("No valid user found");
     });
 
     it("should handle empty contacts array", async () => {
@@ -629,7 +732,7 @@ describe("Contact Handlers", () => {
       const result = await handler(mockEvent, "", null);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Validation error");
+      expect(result.error).toContain("No valid user found");
     });
   });
 
@@ -662,7 +765,7 @@ describe("Contact Handlers", () => {
       const result = await handler(mockEvent, "", validContactData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Validation error");
+      expect(result.error).toContain("No valid user found");
     });
 
     it("should handle creation failure", async () => {

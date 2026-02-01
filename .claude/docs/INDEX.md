@@ -1,6 +1,6 @@
 # Documentation Index
 
-**Last Updated:** 2026-01-04
+**Last Updated:** 2026-01-24
 
 This is the master index for all Claude agent documentation in Magic Audit.
 
@@ -45,6 +45,7 @@ These are the **canonical sources** for content that was previously duplicated a
 
 | Document | Location | Content |
 |----------|----------|---------|
+| **PR Lifecycle** | `.claude/docs/shared/pr-lifecycle.md` | PR completion rules, orphan prevention |
 | **Plan-First Protocol** | `.claude/docs/shared/plan-first-protocol.md` | Mandatory planning steps for all agents |
 | **Metrics Templates** | `.claude/docs/shared/metrics-templates.md` | Engineer, SR, and PM metrics formats |
 | **Architecture Guardrails** | `.claude/docs/shared/architecture-guardrails.md` | Entry file budgets, state machine patterns |
@@ -111,3 +112,4 @@ When updating documentation:
 |------|--------|--------|
 | 2024-12-24 | Created shared docs structure, consolidated duplicates | Claude |
 | 2026-01-04 | Added state machine architecture documentation (BACKLOG-142 complete) | Claude |
+| 2026-01-24 | Added PR lifecycle documentation, orphan PR prevention rules (SPRINT-051/052 incident) | Claude |

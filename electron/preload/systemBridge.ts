@@ -49,6 +49,21 @@ const devDiagnostics = __DEV__
        */
       diagnosticUnknownRecipientMessages: (userId: string) =>
         ipcRenderer.invoke("diagnostic:unknown-recipient-messages", userId),
+
+      /**
+       * Diagnostic: Check email data for a specific contact email
+       * Checks both contact_emails junction table and communications table
+       */
+      diagnosticCheckEmailData: (userId: string, emailAddress: string) =>
+        ipcRenderer.invoke("diagnostic:check-email-data", userId, emailAddress),
+
+      /**
+       * DEV-ONLY: Manually trigger deep link callback when protocol handler fails
+       * @param url - The full magicaudit://callback?... URL from browser
+       * @returns Success result
+       */
+      manualDeepLink: (url: string) =>
+        ipcRenderer.invoke("system:manual-deep-link", url),
     }
   : {};
 
@@ -249,6 +264,19 @@ export const systemBridge = {
    */
   showInFolder: (filePath: string) =>
     ipcRenderer.invoke("system:show-in-folder", filePath),
+
+  /**
+   * Reindex the database for performance optimization
+   * Rebuilds all performance indexes to help resolve slowness
+   * @returns Result with index count and duration
+   */
+  reindexDatabase: () =>
+    ipcRenderer.invoke("system:reindex-database") as Promise<{
+      success: boolean;
+      indexesRebuilt?: number;
+      durationMs?: number;
+      error?: string;
+    }>,
 
   // Spread dev-only diagnostics (empty object in production)
   ...devDiagnostics,

@@ -233,12 +233,16 @@ interface ElectronAPI {
  * Exposed via contextBridge in preload.js
  */
 /**
- * Progress event from macOS message import
+ * Progress event from macOS message import (TASK-1710)
+ * Enhanced with querying phase and elapsed time for ETA calculation
  */
 interface MacOSImportProgress {
+  phase: "querying" | "deleting" | "importing" | "attachments";
   current: number;
   total: number;
   percent: number;
+  /** Milliseconds elapsed since import started */
+  elapsedMs: number;
 }
 
 /**
@@ -285,6 +289,15 @@ interface MainAPI {
     getMessageAttachments: (messageId: string) => Promise<MessageAttachmentInfo[]>;
     /** Get attachments for multiple messages at once (TASK-1012) */
     getMessageAttachmentsBatch: (messageIds: string[]) => Promise<Record<string, MessageAttachmentInfo[]>>;
+    /** Cancel the current import operation (TASK-1710) */
+    cancelImport: () => void;
+    /** Get macOS messages import status (count and last import time) */
+    getImportStatus: (userId: string) => Promise<{
+      success: boolean;
+      messageCount?: number;
+      lastImportAt?: string | null;
+      error?: string;
+    }>;
   };
 
   // Outlook integration (migrated from window.electron)
@@ -333,6 +346,7 @@ interface MainAPI {
   // Shell operations
   shell: {
     openExternal: (url: string) => Promise<{ success: boolean }>;
+    openPopup: (url: string, title?: string) => Promise<{ success: boolean }>;
     openFolder: (folderPath: string) => Promise<{ success: boolean }>;
   };
 
@@ -388,6 +402,7 @@ interface MainAPI {
     logout: (
       sessionToken: string,
     ) => Promise<{ success: boolean; error?: string }>;
+    forceLogout: () => Promise<{ success: boolean; error?: string }>;
     validateSession: (
       sessionToken: string,
     ) => Promise<{ valid: boolean; user?: unknown; error?: string }>;
@@ -437,6 +452,13 @@ interface MainAPI {
         scopes: string;
       };
     }) => Promise<{ success: boolean; error?: string }>;
+
+    // TASK-1507: Deep link browser auth
+    /**
+     * Opens Supabase auth URL in the default browser
+     * Used for deep-link authentication flow
+     */
+    openAuthInBrowser: () => Promise<{ success: boolean; error?: string }>;
   };
   system: {
     // Platform detection (migrated from window.electron.platform)
@@ -491,8 +513,26 @@ interface MainAPI {
     }>;
     checkAllConnections: (userId: string) => Promise<{
       success: boolean;
-      google?: { connected: boolean; email?: string };
-      microsoft?: { connected: boolean; email?: string };
+      google?: {
+        connected: boolean;
+        email?: string;
+        error?: {
+          type: string;
+          userMessage: string;
+          action?: string;
+          actionHandler?: string;
+        } | null;
+      };
+      microsoft?: {
+        connected: boolean;
+        email?: string;
+        error?: {
+          type: string;
+          userMessage: string;
+          action?: string;
+          actionHandler?: string;
+        } | null;
+      };
       error?: string;
     }>;
     healthCheck: (
@@ -532,6 +572,13 @@ interface MainAPI {
     }>;
     showInFolder: (filePath: string) => Promise<{
       success: boolean;
+      error?: string;
+    }>;
+    /** Reindex database for performance optimization */
+    reindexDatabase: () => Promise<{
+      success: boolean;
+      indexesRebuilt?: number;
+      durationMs?: number;
       error?: string;
     }>;
   };
@@ -939,6 +986,30 @@ interface MainAPI {
     onImportProgress: (
       callback: (progress: { current: number; total: number; percent: number }) => void
     ) => () => void;
+    /**
+     * Sync external contacts from macOS Contacts app (TASK-1773)
+     * @param userId - User ID to sync contacts for
+     * @returns Sync result with inserted/deleted/total counts
+     */
+    syncExternal: (userId: string) => Promise<{
+      success: boolean;
+      inserted?: number;
+      deleted?: number;
+      total?: number;
+      error?: string;
+    }>;
+    /**
+     * Get external contacts sync status (TASK-1773)
+     * @param userId - User ID to check status for
+     * @returns Sync status (lastSyncAt, isStale, contactCount)
+     */
+    getExternalSyncStatus: (userId: string) => Promise<{
+      success: boolean;
+      lastSyncAt?: string | null;
+      isStale?: boolean;
+      contactCount?: number;
+      error?: string;
+    }>;
   };
 
   // Transactions API
@@ -1249,6 +1320,84 @@ interface MainAPI {
       title: string;
       message: string;
     }) => void) => () => void;
+
+    // ============================================
+    // EMAIL ATTACHMENT METHODS (TASK-1776)
+    // ============================================
+
+    /**
+     * Get attachments for a specific email
+     * @param emailId - Email ID to get attachments for
+     * @returns Array of attachment records
+     */
+    getEmailAttachments: (emailId: string) => Promise<{
+      success: boolean;
+      data?: Array<{
+        id: string;
+        filename: string;
+        mime_type: string | null;
+        file_size_bytes: number | null;
+        storage_path: string | null;
+      }>;
+      error?: string;
+    }>;
+
+    /**
+     * Open attachment with system viewer
+     * @param storagePath - Path to attachment file
+     * @returns Success/error result
+     */
+    openAttachment: (storagePath: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+
+    /**
+     * Get attachment counts from actual attachments table (TASK-1781)
+     * Returns counts matching what submission service will upload
+     * @param transactionId - Transaction ID
+     * @param auditStart - Optional audit start date (ISO string)
+     * @param auditEnd - Optional audit end date (ISO string)
+     * @returns Counts for text and email attachments
+     */
+    getAttachmentCounts: (
+      transactionId: string,
+      auditStart?: string,
+      auditEnd?: string
+    ) => Promise<{
+      success: boolean;
+      data?: {
+        textAttachments: number;
+        emailAttachments: number;
+        total: number;
+      };
+      error?: string;
+    }>;
+
+    /**
+     * Get attachment data as base64 data URL for preview
+     * TASK-1778: Returns data: URL for images/PDFs
+     * @param storagePath - Path to attachment file
+     * @param mimeType - MIME type for the data URL
+     * @returns Success/error result with data URL in data field
+     */
+    getAttachmentData: (storagePath: string, mimeType: string) => Promise<{
+      success: boolean;
+      data?: string;
+      error?: string;
+    }>;
+
+    /**
+     * Get attachment buffer as raw base64 (for DOCX conversion)
+     * TASK-1783: Returns raw base64 without data: URL prefix for mammoth.js
+     * @param storagePath - Path to attachment file
+     * @returns Success/error result with base64 data in data field
+     */
+    getAttachmentBuffer: (storagePath: string) => Promise<{
+      success: boolean;
+      data?: string;
+      error?: string;
+    }>;
   };
 
   // Transaction scan progress event
@@ -1260,6 +1409,273 @@ interface MainAPI {
   onExportFolderProgress: (
     callback: (progress: { stage: string; current: number; total: number; message: string }) => void,
   ) => () => void;
+
+  // ==========================================
+  // DEEP LINK AUTH EVENTS (TASK-1500, enhanced TASK-1507)
+  // ==========================================
+
+  /**
+   * Listen for deep link auth callback with tokens and license status
+   * Fired when app receives magicaudit://callback and auth/license validation succeeds
+   * TASK-1507: Enhanced to include user, license, and device data
+   */
+  onDeepLinkAuthCallback: (
+    callback: (data: {
+      accessToken: string;
+      refreshToken: string;
+      userId?: string;
+      user?: {
+        id: string;
+        email?: string;
+        name?: string;
+      };
+      licenseStatus?: {
+        isValid: boolean;
+        licenseType: "trial" | "individual" | "team";
+        trialDaysRemaining?: number;
+        transactionCount: number;
+        transactionLimit: number;
+        canCreateTransaction: boolean;
+        deviceCount: number;
+        deviceLimit: number;
+        aiEnabled: boolean;
+        blockReason?: string;
+      };
+      device?: {
+        id: string;
+        device_id: string;
+        device_name: string | null;
+      };
+    }) => void,
+  ) => () => void;
+
+  /**
+   * Listen for deep link auth errors
+   * Fired when callback URL is invalid, tokens are missing, or auth fails
+   */
+  onDeepLinkAuthError: (
+    callback: (data: { error: string; code: "MISSING_TOKENS" | "INVALID_URL" | "INVALID_TOKENS" | "UNKNOWN_ERROR" }) => void,
+  ) => () => void;
+
+  /**
+   * Listen for deep link license blocked events (TASK-1507)
+   * Fired when user authenticates successfully but license is expired/suspended
+   */
+  onDeepLinkLicenseBlocked: (
+    callback: (data: {
+      accessToken: string;
+      refreshToken: string;
+      userId: string;
+      blockReason: string;
+      licenseStatus: {
+        isValid: boolean;
+        licenseType: "trial" | "individual" | "team";
+        blockReason?: string;
+      };
+    }) => void,
+  ) => () => void;
+
+  /**
+   * Listen for deep link device limit events (TASK-1507)
+   * Fired when user authenticates successfully but device registration fails due to limit
+   */
+  onDeepLinkDeviceLimit: (
+    callback: (data: {
+      accessToken: string;
+      refreshToken: string;
+      userId: string;
+      licenseStatus: {
+        isValid: boolean;
+        licenseType: "trial" | "individual" | "team";
+        deviceCount: number;
+        deviceLimit: number;
+      };
+    }) => void,
+  ) => () => void;
+
+  // User preferences API
+  user: {
+    /**
+     * Gets user's mobile phone type preference from local database
+     * @param userId - User ID to get phone type for
+     * @returns Phone type result
+     */
+    getPhoneType: (
+      userId: string
+    ) => Promise<{
+      success: boolean;
+      phoneType: "iphone" | "android" | null;
+      error?: string;
+    }>;
+
+    /**
+     * Sets user's mobile phone type preference in local database
+     * @param userId - User ID to set phone type for
+     * @param phoneType - Phone type ('iphone' | 'android')
+     * @returns Set result
+     */
+    setPhoneType: (
+      userId: string,
+      phoneType: "iphone" | "android"
+    ) => Promise<{ success: boolean; error?: string }>;
+
+    /**
+     * Gets user's phone type from Supabase cloud storage
+     * TASK-1600: Pre-DB phone type retrieval (available before local DB init)
+     * @param userId - User ID to get phone type for
+     * @returns Phone type result from Supabase user_preferences
+     */
+    getPhoneTypeCloud: (
+      userId: string
+    ) => Promise<{
+      success: boolean;
+      phoneType?: "iphone" | "android";
+      error?: string;
+    }>;
+
+    /**
+     * Sets user's phone type in Supabase cloud storage
+     * TASK-1600: Pre-DB phone type storage (always available after auth)
+     * @param userId - User ID to set phone type for
+     * @param phoneType - Phone type ('iphone' | 'android')
+     * @returns Set result
+     */
+    setPhoneTypeCloud: (
+      userId: string,
+      phoneType: "iphone" | "android"
+    ) => Promise<{ success: boolean; error?: string }>;
+  };
+
+  // License API
+  license: {
+    /** Get current user's license information */
+    get: () => Promise<{
+      success: boolean;
+      license?: {
+        license_type: "individual" | "team" | "enterprise";
+        ai_detection_enabled: boolean;
+        organization_id?: string;
+      };
+      error?: string;
+    }>;
+    /** Refresh license data from database */
+    refresh: () => Promise<{
+      success: boolean;
+      license?: {
+        license_type: "individual" | "team" | "enterprise";
+        ai_detection_enabled: boolean;
+        organization_id?: string;
+      };
+      error?: string;
+    }>;
+
+    // ============================================
+    // SPRINT-062: License Validation Methods
+    // ============================================
+
+    /** Validates the user's license status */
+    validate: (userId: string) => Promise<{
+      isValid: boolean;
+      licenseType: "trial" | "individual" | "team";
+      trialStatus?: "active" | "expired" | "converted";
+      trialDaysRemaining?: number;
+      transactionCount: number;
+      transactionLimit: number;
+      canCreateTransaction: boolean;
+      deviceCount: number;
+      deviceLimit: number;
+      aiEnabled: boolean;
+      blockReason?: "expired" | "limit_reached" | "no_license" | "suspended";
+    }>;
+
+    /** Creates a trial license for a new user */
+    create: (userId: string) => Promise<{
+      isValid: boolean;
+      licenseType: "trial" | "individual" | "team";
+      trialStatus?: "active" | "expired" | "converted";
+      trialDaysRemaining?: number;
+      transactionCount: number;
+      transactionLimit: number;
+      canCreateTransaction: boolean;
+      deviceCount: number;
+      deviceLimit: number;
+      aiEnabled: boolean;
+      blockReason?: "expired" | "limit_reached" | "no_license" | "suspended";
+    }>;
+
+    /** Increments the user's transaction count */
+    incrementTransactionCount: (userId: string) => Promise<number>;
+
+    /** Clears the license cache (call on logout) */
+    clearCache: () => Promise<void>;
+
+    /** Checks if an action is allowed based on license status */
+    canPerformAction: (
+      status: {
+        isValid: boolean;
+        licenseType: "trial" | "individual" | "team";
+        transactionCount: number;
+        transactionLimit: number;
+        canCreateTransaction: boolean;
+        deviceCount: number;
+        deviceLimit: number;
+        aiEnabled: boolean;
+        blockReason?: "expired" | "limit_reached" | "no_license" | "suspended";
+      },
+      action: "create_transaction" | "use_ai" | "export"
+    ) => Promise<boolean>;
+
+    // ============================================
+    // SPRINT-062: Device Registration Methods
+    // ============================================
+
+    /** Registers the current device for the user */
+    registerDevice: (userId: string) => Promise<{
+      success: boolean;
+      device?: {
+        id: string;
+        user_id: string;
+        device_id: string;
+        device_name: string | null;
+        os: string | null;
+        platform: "macos" | "windows" | "linux" | null;
+        app_version: string | null;
+        is_active: boolean;
+        last_seen_at: string;
+        activated_at: string;
+      };
+      error?: "device_limit_reached" | "already_registered" | "unknown";
+    }>;
+
+    /** Lists all registered devices for a user */
+    listRegisteredDevices: (userId: string) => Promise<Array<{
+      id: string;
+      user_id: string;
+      device_id: string;
+      device_name: string | null;
+      os: string | null;
+      platform: "macos" | "windows" | "linux" | null;
+      app_version: string | null;
+      is_active: boolean;
+      last_seen_at: string;
+      activated_at: string;
+    }>>;
+
+    /** Deactivates a device */
+    deactivateDevice: (userId: string, deviceId: string) => Promise<void>;
+
+    /** Deletes a device registration */
+    deleteDevice: (userId: string, deviceId: string) => Promise<void>;
+
+    /** Gets the current device's ID */
+    getCurrentDeviceId: () => Promise<string>;
+
+    /** Checks if the current device is registered */
+    isDeviceRegistered: (userId: string) => Promise<boolean>;
+
+    /** Sends a heartbeat to update device last_seen_at */
+    deviceHeartbeat: (userId: string) => Promise<void>;
+  };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any; // Allow other properties for backwards compatibility

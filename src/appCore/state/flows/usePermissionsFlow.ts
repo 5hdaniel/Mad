@@ -3,9 +3,12 @@
  *
  * Manages macOS permissions checking and granting.
  * Also handles app location checking for move-to-Applications prompts.
+ *
+ * TASK-1612: Migrated to use systemService instead of direct window.api calls.
  */
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { systemService } from "@/services";
 import type { AppStep } from "../types";
 import type { AppAction } from "../machine/types";
 
@@ -45,12 +48,14 @@ export function usePermissionsFlow({
       setHasPermissions(true);
       return;
     }
-    const result = await window.api.system.checkAllPermissions();
-    // Set based on actual permission status
-    // The result has permissions.fullDiskAccess.hasPermission and permissions.contacts.hasPermission
-    const fullDiskOk = result.permissions?.fullDiskAccess?.hasPermission ?? false;
-    const contactsOk = result.permissions?.contacts?.hasPermission ?? false;
-    setHasPermissions(fullDiskOk && contactsOk);
+    const result = await systemService.checkAllPermissions();
+    // Set based on actual permission status from service result
+    if (result.success && result.data) {
+      setHasPermissions(result.data.allGranted);
+    } else {
+      // On error, default to false to trigger permission prompts
+      setHasPermissions(false);
+    }
   }, [isWindows]);
 
   const checkAppLocation = useCallback(async (): Promise<void> => {
@@ -75,14 +80,10 @@ export function usePermissionsFlow({
   }, [checkPermissions, checkAppLocation]);
 
   const handlePermissionsGranted = useCallback((): void => {
-    console.log("[usePermissionsFlow] handlePermissionsGranted called, stateMachineDispatch:", !!stateMachineDispatch);
     setHasPermissions(true);
     // Dispatch to state machine to complete the permissions step
     if (stateMachineDispatch) {
-      console.log("[usePermissionsFlow] Dispatching ONBOARDING_STEP_COMPLETE for permissions");
       stateMachineDispatch({ type: "ONBOARDING_STEP_COMPLETE", step: "permissions" });
-    } else {
-      console.warn("[usePermissionsFlow] No stateMachineDispatch available!");
     }
     // Legacy fallback (no-op if state machine is enabled)
     onSetCurrentStep("dashboard");

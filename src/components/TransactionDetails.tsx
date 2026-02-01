@@ -25,6 +25,7 @@ import {
   useSuggestedContacts,
   useTransactionMessages,
   useTransactionAttachments,
+  useAttachmentCounts,
   TransactionHeader,
   TransactionTabs,
   TransactionDetailsTab,
@@ -36,7 +37,6 @@ import {
   EmailViewModal,
   RejectReasonModal,
   EditContactsModal,
-  groupMessagesByThread,
 } from "./transactionDetailsModule";
 // Import ReviewNotesPanel for displaying broker feedback (BACKLOG-395)
 import { ReviewNotesPanel } from "./transactionDetailsModule/components/ReviewNotesPanel";
@@ -133,13 +133,17 @@ function TransactionDetails({
     refresh: refreshMessages,
   } = useTransactionMessages(transaction);
 
-  // Attachments hook
+  // Attachments hook (for tab display - parses email metadata)
   const {
     attachments,
     loading: attachmentsLoading,
     error: attachmentsError,
     count: attachmentCount,
   } = useTransactionAttachments(transaction);
+
+  // Accurate attachment counts from database (TASK-1781)
+  // Used for submission preview - counts actual downloaded files
+  const { counts: dbAttachmentCounts } = useAttachmentCounts(transaction.id);
 
   // Transaction status update hook
   const { state: statusState, approve, reject, restore } = useTransactionStatusUpdate(userId);
@@ -156,11 +160,9 @@ function TransactionDetails({
     });
   }, [communications]);
 
-  // Calculate conversation count (number of threads, not individual messages)
-  const conversationCount = useMemo(() => {
-    if (textMessages.length === 0) return 0;
-    return groupMessagesByThread(textMessages).size;
-  }, [textMessages]);
+  // Note: conversation/message count for tabs now uses transaction.text_thread_count
+  // (stored count) instead of computing from dynamically loaded textMessages array.
+  // This ensures correct counts display even before data loads (BACKLOG-415).
 
   // Modal states
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
@@ -313,33 +315,54 @@ function TransactionDetails({
     });
   }, [handleAcceptAll, resolvedSuggestions, suggestionCallbacks, setResolvedSuggestions]);
 
-  // Sync communications handler - re-runs auto-link for all contacts
+  // Sync communications handler - fetches from provider and auto-links
+  // BACKLOG-457: Now fetches NEW emails from Gmail/Outlook, not just local DB
   const handleSyncCommunications = useCallback(async () => {
     setSyncingCommunications(true);
     try {
-      // Cast to access resyncAutoLink - method is defined in preload but window.d.ts augmentation has issues with tsc
+      // Cast to access syncAndFetchEmails - method is defined in preload but window.d.ts augmentation has issues with tsc
       const result = await (window.api.transactions as typeof window.api.transactions & {
-        resyncAutoLink: (transactionId: string) => Promise<{
+        syncAndFetchEmails: (transactionId: string) => Promise<{
           success: boolean;
-          contactsProcessed?: number;
+          provider?: "gmail" | "outlook";
+          emailsFetched?: number;
+          emailsStored?: number;
           totalEmailsLinked?: number;
           totalMessagesLinked?: number;
           totalAlreadyLinked?: number;
           totalErrors?: number;
           error?: string;
+          message?: string;
         }>;
-      }).resyncAutoLink(transaction.id);
+      }).syncAndFetchEmails(transaction.id);
       if (result.success) {
+        const emailsFetched = result.emailsFetched || 0;
+        const emailsStored = result.emailsStored || 0;
         const totalLinked = (result.totalEmailsLinked || 0) + (result.totalMessagesLinked || 0);
-        if (totalLinked > 0) {
-          showSuccess(`Synced ${totalLinked} communication${totalLinked !== 1 ? "s" : ""} (${result.totalEmailsLinked || 0} emails, ${result.totalMessagesLinked || 0} message threads)`);
-          // Refresh to show newly linked communications
+
+        if (emailsStored > 0 || totalLinked > 0) {
+          const parts: string[] = [];
+          if (emailsStored > 0) {
+            parts.push(`${emailsStored} new email${emailsStored !== 1 ? "s" : ""} fetched`);
+          }
+          if (result.totalEmailsLinked && result.totalEmailsLinked > 0) {
+            parts.push(`${result.totalEmailsLinked} email${result.totalEmailsLinked !== 1 ? "s" : ""} linked`);
+          }
+          if (result.totalMessagesLinked && result.totalMessagesLinked > 0) {
+            parts.push(`${result.totalMessagesLinked} message thread${result.totalMessagesLinked !== 1 ? "s" : ""} linked`);
+          }
+          showSuccess(parts.join(", "));
+          // Refresh to show newly fetched/linked communications
           loadDetails();
           refreshMessages();
+        } else if (emailsFetched > 0 && emailsStored === 0) {
+          showSuccess(`Checked ${emailsFetched} emails - all already in database`);
         } else if (result.totalAlreadyLinked && result.totalAlreadyLinked > 0) {
           showSuccess(`All communications already linked (${result.totalAlreadyLinked} found)`);
+        } else if (result.message) {
+          showSuccess(result.message);
         } else {
-          showSuccess("No new communications found to link");
+          showSuccess("No new communications found");
         }
       } else {
         showError(result.error || "Failed to sync communications");
@@ -377,8 +400,8 @@ function TransactionDetails({
         {/* Tabs */}
         <TransactionTabs
           activeTab={activeTab}
-          conversationCount={conversationCount}
-          emailCount={emailCommunications.length}
+          conversationCount={transaction.text_thread_count || 0}
+          emailCount={transaction.email_count || 0}
           attachmentCount={attachmentCount}
           onTabChange={setActiveTab}
         />
@@ -401,7 +424,9 @@ function TransactionDetails({
               transaction={transaction}
               contactAssignments={contactAssignments}
               loading={loading}
+              onEdit={() => setShowEditModal(true)}
               onEditContacts={() => setShowEditContactsModal(true)}
+              onDelete={() => setShowDeleteConfirm(true)}
               resolvedSuggestions={resolvedSuggestions}
               processingContactId={processingContactId}
               processingAll={processingAll}
@@ -572,8 +597,11 @@ function TransactionDetails({
       {showSubmitModal && (
         <SubmitForReviewModal
           transaction={transaction}
-          messageCount={emailCommunications.length + textMessages.length}
-          attachmentCount={attachmentCount}
+          emailThreadCount={transaction.email_count || 0}
+          textThreadCount={transaction.text_thread_count || 0}
+          attachmentCount={dbAttachmentCounts.total}
+          emailAttachmentCount={dbAttachmentCounts.emailAttachments}
+          totalSizeBytes={dbAttachmentCounts.totalSizeBytes}
           isSubmitting={isSubmitting}
           progress={submitProgress}
           error={submitError}

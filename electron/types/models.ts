@@ -9,14 +9,19 @@
 // ============================================
 
 // Auth & User
-export type OAuthProvider = "google" | "microsoft";
+// Note: 'azure' is Microsoft's Azure AD provider - we accept it from Supabase
+// but normalize to 'microsoft' for local database storage (CHECK constraint)
+export type OAuthProvider = "google" | "microsoft" | "azure";
 export type OAuthPurpose = "authentication" | "mailbox";
 export type SubscriptionTier = "free" | "pro" | "enterprise";
 export type SubscriptionStatus = "trial" | "active" | "cancelled" | "expired";
 export type Theme = "light" | "dark" | "auto";
 
+// License Types (BACKLOG-426)
+export type LicenseType = "individual" | "team" | "enterprise";
+
 // Contacts
-export type ContactSource = "manual" | "email" | "sms" | "contacts_app" | "inferred";
+export type ContactSource = "manual" | "email" | "sms" | "messages" | "contacts_app" | "inferred";
 export type ContactInfoSource = "import" | "manual" | "inferred";
 
 // Messages
@@ -27,7 +32,7 @@ export type FalsePositiveReason = "signature" | "promotional" | "unrelated" | "o
 
 // Transactions
 export type TransactionType = "purchase" | "sale" | "other";
-export type TransactionStatus = "pending" | "active" | "closed" | "archived" | "rejected";
+export type TransactionStatus = "pending" | "active" | "closed" | "rejected";
 
 // B2B Submission Status (BACKLOG-390)
 export type SubmissionStatus =
@@ -130,6 +135,14 @@ export interface User {
   job_title?: string;
   mobile_phone_type?: "iphone" | "android";
 
+  // License (BACKLOG-426)
+  /** Base license tier: individual, team, or enterprise */
+  license_type?: LicenseType;
+  /** AI detection add-on enabled (works with any base license) */
+  ai_detection_enabled?: boolean;
+  /** Organization ID for team/enterprise users */
+  organization_id?: string;
+
   // Sync
   last_cloud_sync_at?: Date | string;
 }
@@ -179,6 +192,30 @@ export interface Subscription {
   isTrial: boolean;
   trialEnded: boolean;
   trialDaysRemaining: number;
+}
+
+/**
+ * User license information (BACKLOG-426)
+ *
+ * License Model:
+ *   license_type: 'individual' | 'team' | 'enterprise' (base license)
+ *   ai_detection_enabled: boolean (add-on, works with ANY base license)
+ *
+ * Combined Examples:
+ *   - Individual + No AI: Export, manual transactions only
+ *   - Individual + AI: Export, manual transactions, AI detection features
+ *   - Team + No AI: Submit for review, manual transactions only
+ *   - Team + AI: Submit for review, manual transactions, AI detection features
+ */
+export interface UserLicense {
+  /** Base license tier */
+  license_type: LicenseType;
+  /** AI detection add-on enabled (works with any base license) */
+  ai_detection_enabled: boolean;
+  /** Organization ID for team/enterprise users */
+  organization_id?: string;
+  /** Organization name for display purposes */
+  organization_name?: string;
 }
 
 // ============================================
@@ -384,6 +421,10 @@ export interface Message {
   link_confidence?: number;
   /** When the link was created */
   linked_at?: Date | string;
+
+  // Email Link (BACKLOG-506)
+  /** ID of the email in the emails table (for email communications) */
+  email_id?: string;
 }
 
 // ============================================
@@ -838,21 +879,129 @@ export interface MessageLLMAnalysis {
 }
 
 // ============================================
+// EMAIL MODELS (BACKLOG-506)
+// ============================================
+
+/**
+ * Email record stored in the emails table.
+ * This is the content store for emails - separate from the junction table.
+ */
+export interface Email {
+  id: string;
+  user_id: string;
+
+  // Source identification
+  external_id?: string;
+  source?: "gmail" | "outlook";
+  account_id?: string;
+
+  // Direction
+  direction?: "inbound" | "outbound";
+
+  // Content
+  subject?: string;
+  body_plain?: string;
+  body_html?: string;
+
+  // Participants
+  sender?: string;
+  recipients?: string;
+  cc?: string;
+  bcc?: string;
+
+  // Threading
+  thread_id?: string;
+  in_reply_to?: string;
+  references_header?: string;
+
+  // Timestamps
+  sent_at?: Date | string;
+  received_at?: Date | string;
+
+  // Attachments
+  has_attachments?: boolean;
+  attachment_count?: number;
+
+  // Deduplication
+  message_id_header?: string;
+  content_hash?: string;
+
+  // Metadata
+  labels?: string;
+  created_at?: Date | string;
+}
+
+/**
+ * Data required to create a new email
+ */
+export type NewEmail = Omit<Email, "id" | "created_at">;
+
+// ============================================
+// JUNCTION TABLE MODELS (BACKLOG-506)
+// ============================================
+
+/**
+ * Communication junction record - links content (message or email) to a transaction.
+ * This is the PURE junction table type with NO content columns.
+ *
+ * Use this type for:
+ * - Creating new junction records
+ * - Reading junction-only data
+ *
+ * For reading with content, use the result of getCommunicationsWithMessages()
+ * which returns Message (with content populated from JOINs).
+ */
+export interface JunctionCommunication {
+  id: string;
+  user_id: string;
+  transaction_id: string;
+
+  // Content references (ONE should be set)
+  message_id?: string;        // FK to messages table (for texts)
+  email_id?: string;          // FK to emails table (for emails)
+  thread_id?: string;         // For batch-linking all texts in a thread
+
+  // Link metadata
+  link_source?: "auto" | "manual" | "scan";
+  link_confidence?: number;
+  linked_at?: Date | string;
+
+  created_at?: Date | string;
+}
+
+/**
+ * Data required to create a new communication junction record.
+ * BACKLOG-506: This is the proper type for createCommunication().
+ */
+export type NewJunctionCommunication = Omit<JunctionCommunication, "id" | "created_at" | "linked_at">;
+
+// ============================================
 // LEGACY TYPES (Backwards Compatibility)
 // ============================================
 
 /**
- * @deprecated Use Message instead. This alias exists for backwards compatibility.
+ * @deprecated BACKLOG-506: Communication is aliased to Message for backward compatibility.
+ *
+ * This alias exists because getCommunicationsWithMessages() returns Message objects
+ * with content populated from JOINs to messages/emails tables.
+ *
+ * For junction-only operations, use JunctionCommunication instead.
+ * For creating new junction records, use NewJunctionCommunication.
  */
 export type Communication = Message;
 
 /**
- * @deprecated Use NewMessage instead.
+ * @deprecated BACKLOG-506: Use NewJunctionCommunication for creating junction records.
+ *
+ * This alias is kept for backward compatibility during the transition.
+ * Code that creates communications should be updated to use NewJunctionCommunication.
  */
 export type NewCommunication = NewMessage;
 
 /**
- * @deprecated Use UpdateMessage instead.
+ * @deprecated BACKLOG-506: Use Partial<JunctionCommunication> for updating junction records.
+ *
+ * This alias is kept for backward compatibility during the transition.
  */
 export type UpdateCommunication = UpdateMessage;
 

@@ -13,3 +13,11 @@ export type { User } from "./AuthContext";
 export { NetworkProvider, useNetwork } from "./NetworkContext";
 
 export { PlatformProvider, usePlatform } from "./PlatformContext";
+
+export {
+  LicenseProvider,
+  useLicense,
+  useCanExport,
+  useCanSubmit,
+  useCanAutoDetect,
+} from "./LicenseContext";

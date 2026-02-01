@@ -89,7 +89,9 @@ export function getNextOnboardingStep(
   }
 
   // 5. Windows + iPhone driver setup (if needed)
-  if (platform.isWindows && platform.hasIPhone && userData.needsDriverSetup) {
+  // Use userData.phoneType instead of platform.hasIPhone to check user's actual selection
+  // (fixes TASK-1180: platform.hasIPhone may not be updated yet when step completes)
+  if (platform.isWindows && userData.phoneType === "iphone" && userData.needsDriverSetup) {
     steps.push("apple-driver");
   }
 
@@ -105,17 +107,21 @@ export function getNextOnboardingStep(
 
 /**
  * Checks if onboarding is complete based on user data.
- * Onboarding is complete when email onboarding is done and
+ * Onboarding is complete when the user has selected phone type and
  * platform-specific requirements are met.
+ *
+ * Email onboarding is optional for returning users - they can skip it
+ * and connect email later from the dashboard.
  */
-function isOnboardingComplete(userData: UserData, platform: PlatformInfo): boolean {
-  // Must have completed email onboarding
-  if (!userData.hasCompletedEmailOnboarding) {
+function isOnboardingComplete(userData: UserData, platform: PlatformInfo, isNewUser: boolean = false): boolean {
+  // Must have phone type selected
+  if (!userData.phoneType) {
     return false;
   }
 
-  // Must have phone type selected
-  if (!userData.phoneType) {
+  // For NEW users, email onboarding is required during initial setup
+  // For RETURNING users, email is optional (can be done later)
+  if (isNewUser && !userData.hasCompletedEmailOnboarding) {
     return false;
   }
 
@@ -125,7 +131,8 @@ function isOnboardingComplete(userData: UserData, platform: PlatformInfo): boole
   }
 
   // Windows + iPhone must not need driver setup
-  if (platform.isWindows && platform.hasIPhone && userData.needsDriverSetup) {
+  // Use userData.phoneType instead of platform.hasIPhone to check user's actual selection
+  if (platform.isWindows && userData.phoneType === "iphone" && userData.needsDriverSetup) {
     return false;
   }
 
@@ -164,53 +171,86 @@ export function appStateReducer(
         return state; // Invalid transition
       }
 
-      if (action.hasKeyStore) {
-        // Key store exists, proceed to initialize DB
+      // Check if this is a first-time macOS user (no key store = new installation)
+      const isFirstTimeMacOS = !action.hasKeyStore && action.isMacOS;
+
+      if (isFirstTimeMacOS) {
+        // Skip DB init for first-time macOS users to avoid showing Keychain prompt
+        // before the login screen. DB will be initialized during onboarding
+        // secure-storage step after user has been properly informed.
         return {
           status: "loading",
-          phase: "initializing-db",
-        };
-      } else {
-        // No key store - still need to initialize (will create one)
-        // For new installs, we still go through db init
-        return {
-          status: "loading",
-          phase: "initializing-db",
+          phase: "loading-auth",
+          deferredDbInit: true,
         };
       }
+
+      // Normal flow: proceed to initialize DB
+      // (returning macOS users with key store, or Windows users)
+      return {
+        status: "loading",
+        phase: "initializing-db",
+      };
     }
 
     case "DB_INIT_STARTED": {
-      // Progress indicator - valid during initializing-db phase
-      if (state.status !== "loading" || state.phase !== "initializing-db") {
-        return state;
+      // Progress indicator - valid during initializing-db phase or onboarding with deferred init
+      if (state.status === "loading" && state.phase === "initializing-db") {
+        return { ...state, progress: 0 };
       }
-      return { ...state, progress: 0 };
+      // Also allow during onboarding for first-time macOS users (deferred DB init)
+      if (state.status === "onboarding" && state.deferredDbInit) {
+        return state; // No visible change needed, but action is valid
+      }
+      return state;
     }
 
     case "DB_INIT_COMPLETE": {
-      if (state.status !== "loading" || state.phase !== "initializing-db") {
-        return state;
-      }
+      // Handle during normal loading flow
+      if (state.status === "loading" && state.phase === "initializing-db") {
+        if (!action.success) {
+          // DB initialization failed - transition to error state
+          return {
+            status: "error",
+            error: {
+              code: "DB_INIT_FAILED",
+              message: action.error || "Failed to initialize database",
+            },
+            recoverable: true,
+            previousState: state,
+          };
+        }
 
-      if (!action.success) {
-        // DB initialization failed - transition to error state
+        // Success - proceed to load auth
         return {
-          status: "error",
-          error: {
-            code: "DB_INIT_FAILED",
-            message: action.error || "Failed to initialize database",
-          },
-          recoverable: true,
-          previousState: state,
+          status: "loading",
+          phase: "loading-auth",
         };
       }
 
-      // Success - proceed to load auth
-      return {
-        status: "loading",
-        phase: "loading-auth",
-      };
+      // Handle during onboarding for first-time macOS users (deferred DB init)
+      if (state.status === "onboarding" && state.deferredDbInit) {
+        if (!action.success) {
+          // DB initialization failed - transition to error state
+          return {
+            status: "error",
+            error: {
+              code: "DB_INIT_FAILED",
+              message: action.error || "Failed to initialize database",
+            },
+            recoverable: true,
+            previousState: state,
+          };
+        }
+
+        // Success - clear deferred flag, DB is now initialized
+        return {
+          ...state,
+          deferredDbInit: false,
+        };
+      }
+
+      return state;
     }
 
     case "AUTH_LOADED": {
@@ -218,9 +258,16 @@ export function appStateReducer(
         return state;
       }
 
+      // Preserve deferredDbInit flag from loading state
+      const loadingState = state as LoadingState;
+      const deferredDbInit = loadingState.deferredDbInit;
+
       if (!action.user) {
-        // No authenticated user
-        return { status: "unauthenticated" };
+        // No authenticated user - preserve deferredDbInit for after login
+        return {
+          status: "unauthenticated",
+          deferredDbInit,
+        };
       }
 
       if (action.isNewUser) {
@@ -240,13 +287,16 @@ export function appStateReducer(
           user: action.user,
           platform: action.platform,
           completedSteps: [],
+          deferredDbInit,
         };
       }
 
       // Returning user - need to load their data
+      // Preserve deferredDbInit for returning users on fresh macOS installs
       return {
         status: "loading",
         phase: "loading-user-data",
+        deferredDbInit,
       };
     }
 
@@ -259,6 +309,9 @@ export function appStateReducer(
       if (state.status !== "unauthenticated") {
         return state; // Invalid transition
       }
+
+      // Preserve deferredDbInit flag from unauthenticated state
+      const deferredDbInit = state.deferredDbInit;
 
       if (action.isNewUser) {
         // New user - start onboarding immediately
@@ -276,17 +329,20 @@ export function appStateReducer(
           user: action.user,
           platform: action.platform,
           completedSteps: [],
+          deferredDbInit,
         };
       }
 
       // Returning user - need to load their data
       // Store user/platform in loading state for Phase 4 to use
+      // Preserve deferredDbInit for returning users on fresh macOS installs
       return {
         status: "loading",
         phase: "loading-user-data",
         progress: 75, // Skip phases 1-3, go directly to user data loading
         user: action.user,
         platform: action.platform,
+        deferredDbInit,
       };
     }
 
@@ -321,7 +377,9 @@ export function appStateReducer(
       }
 
       // Determine if onboarding is complete
-      if (isOnboardingComplete(data, platform)) {
+      // USER_DATA_LOADED is only called for returning users, so isNewUser = false
+      // This allows returning users to skip email onboarding and go to dashboard
+      if (isOnboardingComplete(data, platform, false)) {
         // All onboarding complete - go to ready state
         return {
           status: "ready",
@@ -354,6 +412,11 @@ export function appStateReducer(
 
       const nextStep = getNextOnboardingStep(completedSteps, platform, data);
 
+      // Preserve deferredDbInit for returning users on fresh installs
+      // This handles the case where a user exists in Supabase but the local
+      // app data was deleted - DB still needs to be initialized
+      const deferredDbInit = loadingState.deferredDbInit;
+
       return {
         status: "onboarding",
         step: nextStep || "phone-type", // Fallback shouldn't happen
@@ -363,6 +426,8 @@ export function appStateReducer(
         // Preserve hasPermissions from loaded data so selector can access it
         // Fixes bug where users with FDA granted were stuck on permissions step
         hasPermissions: data.hasPermissions,
+        // Preserve deferredDbInit for first-time macOS installs (even for returning users)
+        deferredDbInit,
       };
     }
 
@@ -371,9 +436,7 @@ export function appStateReducer(
     // ============================================
 
     case "ONBOARDING_STEP_COMPLETE": {
-      console.log("[Reducer] ONBOARDING_STEP_COMPLETE received:", action.step, "current state:", state.status);
       if (state.status !== "onboarding") {
-        console.log("[Reducer] Not in onboarding state, returning unchanged");
         return state;
       }
 
@@ -382,6 +445,13 @@ export function appStateReducer(
       let completedSteps = state.completedSteps.includes(action.step)
         ? state.completedSteps
         : [...state.completedSteps, action.step];
+
+      // Track phone type selection from the action (when completing phone-type step)
+      // This is the user's actual selection, not inferred from platform detection
+      const selectedPhoneType: "iphone" | "android" | undefined =
+        action.step === "phone-type" && action.phoneType
+          ? action.phoneType
+          : state.selectedPhoneType;
 
       // If completing permissions on macOS, mark all preceding steps as complete
       // (you can't get to permissions without going through phone-type, secure-storage, email-connect)
@@ -396,21 +466,23 @@ export function appStateReducer(
           }
         }
       }
-      console.log("[Reducer] completedSteps after adding:", completedSteps);
 
       // Determine user data state based on completed steps
+      // Use selectedPhoneType from action/state, fallback to platform detection only if no explicit selection
+      const phoneTypeForUserData: "iphone" | "android" | null = completedSteps.includes("phone-type")
+        ? (selectedPhoneType ?? (state.platform.hasIPhone ? "iphone" : "android"))
+        : null;
+
       const userData: UserData = {
-        phoneType: completedSteps.includes("phone-type")
-          ? (state.platform.hasIPhone ? "iphone" : "android")
-          : null,
+        phoneType: phoneTypeForUserData,
         hasCompletedEmailOnboarding: completedSteps.includes("email-connect"),
         hasEmailConnected: state.hasEmailConnected ?? false,
         needsDriverSetup:
           state.platform.isWindows &&
-          state.platform.hasIPhone &&
+          selectedPhoneType === "iphone" &&
           !completedSteps.includes("apple-driver"),
         hasPermissions:
-          !state.platform.isMacOS || completedSteps.includes("permissions"),
+          !state.platform.isMacOS || state.hasPermissions || completedSteps.includes("permissions"),
       };
 
       const nextStep = getNextOnboardingStep(
@@ -418,11 +490,9 @@ export function appStateReducer(
         state.platform,
         userData
       );
-      console.log("[Reducer] nextStep from getNextOnboardingStep:", nextStep, "platform:", state.platform, "userData:", userData);
 
       if (!nextStep) {
         // All onboarding complete - transition to ready
-        console.log("[Reducer] No next step - transitioning to READY");
         return {
           status: "ready",
           user: state.user,
@@ -430,13 +500,13 @@ export function appStateReducer(
           userData,
         };
       }
-      console.log("[Reducer] More steps to go, staying in onboarding with step:", nextStep);
 
       // Continue to next step
       return {
         ...state,
         step: nextStep,
         completedSteps,
+        selectedPhoneType,
       };
     }
 
@@ -454,15 +524,53 @@ export function appStateReducer(
     }
 
     case "EMAIL_CONNECTED": {
-      if (state.status !== "onboarding") {
-        return state;
+      if (state.status === "onboarding") {
+        // Update onboarding state to track that email was connected
+        const updatedState: OnboardingState = {
+          ...state,
+          hasEmailConnected: true,
+        };
+        // Recursively call reducer to complete the step and potentially transition to ready
+        // This ensures the flow advances after email OAuth completes
+        return appStateReducer(updatedState, {
+          type: "ONBOARDING_STEP_COMPLETE",
+          step: "email-connect",
+        });
       }
 
-      // Update onboarding state to track that email was connected
-      return {
-        ...state,
-        hasEmailConnected: true,
-      };
+      if (state.status === "ready") {
+        // User connected email from Settings after onboarding complete
+        // Update userData.hasEmailConnected so dashboard banner disappears
+        return {
+          ...state,
+          userData: {
+            ...state.userData,
+            hasEmailConnected: true,
+          },
+        };
+      }
+
+      // Invalid state for email connection
+      return state;
+    }
+
+    // TASK-1730: Handle email disconnection to update hasEmailConnected state
+    case "EMAIL_DISCONNECTED": {
+      if (state.status === "ready") {
+        // User disconnected email from Settings
+        // Update userData.hasEmailConnected so setup banner reappears
+        return {
+          ...state,
+          userData: {
+            ...state.userData,
+            hasEmailConnected: false,
+          },
+        };
+      }
+
+      // In other states (onboarding, loading), disconnection is not expected
+      // but if it happens, ignore it
+      return state;
     }
 
     // ============================================

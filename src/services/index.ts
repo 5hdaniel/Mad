@@ -90,3 +90,13 @@ export { deviceService } from "./deviceService";
 
 // Address service
 export { addressService } from "./addressService";
+
+// License service
+export { licenseService } from "./licenseService";
+export type {
+  LicenseInfo,
+  LicenseValidationResult,
+  LicenseStatus,
+  LicenseAction,
+  ValidationLicenseType,
+} from "./licenseService";

@@ -180,6 +180,7 @@ export interface AvailableContact {
   isFromDatabase: boolean;
   allPhones?: string[];
   allEmails?: string[];
+  last_communication_at?: string | null;  // TASK-1773: Pre-computed from shadow table
 }
 
 /**

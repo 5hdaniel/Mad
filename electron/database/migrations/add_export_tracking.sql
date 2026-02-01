@@ -19,7 +19,8 @@ ALTER TABLE transactions ADD COLUMN export_format TEXT CHECK (export_format IN (
   'csv',
   'json',
   'txt_eml',
-  'excel'
+  'excel',
+  'folder'
 ));
 
 -- Step 3: Add export count column

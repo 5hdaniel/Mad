@@ -18,6 +18,8 @@ import supabaseService from "./supabaseService";
 import { getContactNames } from "./contactsService";
 import { createCommunicationReference } from "./messageMatchingService";
 import { autoLinkCommunicationsForContact, AutoLinkResult } from "./autoLinkService";
+import { createEmail, getEmailByExternalId } from "./db/emailDbService";
+import emailAttachmentService from "./emailAttachmentService";
 
 // Hybrid extraction imports
 import { HybridExtractorService } from "./extraction/hybridExtractorService";
@@ -139,6 +141,9 @@ interface AuditedTransactionData {
   property_coordinates?: string;
   transaction_type?: "purchase" | "sale";
   contact_assignments?: ContactAssignment[];
+  started_at?: string;
+  closed_at?: string;
+  closing_deadline?: string;
 }
 
 interface ContactRoleUpdate {
@@ -656,23 +661,93 @@ class TransactionService {
         continue;
       }
 
+      // BACKLOG-506: Determine external ID for deduplication
+      // originalEmail comes from Gmail/Outlook fetch, check available identifiers
+      // Note: originalEmails is typed as any[], so handle defensively
+      const externalId = originalEmail.id ||  // Gmail/Outlook message ID
+        originalEmail.messageIdHeader ||      // RFC 5322 Message-ID header
+        `${analyzed.from}_${analyzed.subject}_${sentAt}`;  // Fallback composite key
+
+      // Defensive: Log if using composite fallback
+      if (!originalEmail.id && !originalEmail.messageIdHeader) {
+        await logService.warn(
+          "Using composite fallback for external_id - originalEmail missing id fields",
+          "TransactionService._saveCommunications",
+          { subject: analyzed.subject, from: analyzed.from },
+        );
+      }
+
+      // Check if email already exists
+      let emailRecord = await getEmailByExternalId(userId, externalId);
+
+      if (!emailRecord) {
+        // Create email in emails table (content store)
+        emailRecord = await createEmail({
+          user_id: userId,
+          external_id: externalId,
+          source: analyzed.from.includes("@gmail") ? "gmail" : "outlook",
+          thread_id: originalEmail.threadId,
+          sender: analyzed.from,
+          recipients: originalEmail.to,
+          cc: originalEmail.cc,
+          bcc: originalEmail.bcc,
+          subject: analyzed.subject,
+          body_html: originalEmail.body,
+          body_plain: originalEmail.bodyPlain,
+          sent_at: sentAt,
+          received_at: sentAt,
+          has_attachments: originalEmail.hasAttachments || false,
+          attachment_count: originalEmail.attachmentCount || 0,
+          message_id_header: originalEmail.messageIdHeader,  // RFC 5322 Message-ID
+        });
+      }
+
+      // TASK-1775: Download email attachments if present
+      // This happens synchronously with per-attachment timeout (30s)
+      // Failed downloads are logged but don't fail the email linking flow
+      if (
+        originalEmail.hasAttachments &&
+        originalEmail.attachments &&
+        originalEmail.attachments.length > 0
+      ) {
+        const source: "gmail" | "outlook" = analyzed.from?.includes("@gmail")
+          ? "gmail"
+          : "outlook";
+
+        try {
+          await emailAttachmentService.downloadEmailAttachments(
+            userId,
+            emailRecord.id,
+            originalEmail.id, // External email ID (Gmail/Outlook message ID)
+            source,
+            originalEmail.attachments.map((att: any) => ({
+              filename: att.filename || att.name || "attachment",
+              mimeType: att.mimeType || att.contentType || "application/octet-stream",
+              size: att.size || 0,
+              attachmentId: att.attachmentId || att.id,
+            }))
+          );
+        } catch (error) {
+          // Log but don't fail - attachment download is non-blocking
+          await logService.warn(
+            "Failed to download email attachments",
+            "TransactionService._saveCommunications",
+            {
+              emailId: emailRecord.id,
+              error: error instanceof Error ? error.message : "Unknown error",
+            }
+          );
+        }
+      }
+
+      // Create junction in communications (no content, keep metadata)
       const commData: Partial<NewCommunication> = {
         user_id: userId,
         transaction_id: transactionId,
+        email_id: emailRecord.id,
         communication_type: "email",
-        source: analyzed.from.includes("@gmail") ? "gmail" : "outlook",
-        email_thread_id: originalEmail.threadId,
-        sender: analyzed.from,
-        recipients: originalEmail.to,
-        cc: originalEmail.cc,
-        bcc: originalEmail.bcc,
-        subject: analyzed.subject,
-        body: originalEmail.body,
-        body_plain: originalEmail.bodyPlain,
-        sent_at: sentAt,
-        received_at: sentAt,
-        has_attachments: originalEmail.hasAttachments || false,
-        attachment_count: originalEmail.attachmentCount || 0,
+        // BACKLOG-506: link_source and link_confidence for junction tracking
+        // Keep metadata fields (analysis results, not content)
         // Serialize arrays/objects for SQLite
         attachment_metadata: originalEmail.attachments
           ? JSON.stringify(originalEmail.attachments)
@@ -1163,6 +1238,9 @@ class TransactionService {
         property_coordinates,
         transaction_type,
         contact_assignments,
+        started_at,
+        closed_at,
+        closing_deadline,
       } = data;
 
       // Create the transaction
@@ -1177,6 +1255,9 @@ class TransactionService {
         transaction_type,
         transaction_status: "pending",
         status: "active",
+        started_at,
+        closed_at,
+        closing_deadline,
         closing_date_verified: property_coordinates ? true : false,
         export_status: "not_exported",
         export_count: 0,
@@ -1433,17 +1514,6 @@ class TransactionService {
 
     // Delete the communication from the database
     await databaseService.deleteCommunication(communicationId);
-
-    // Update the transaction's communication count
-    const transaction = await databaseService.getTransactionById(
-      communication.transaction_id,
-    );
-    if (transaction) {
-      const newCount = Math.max(0, (transaction.total_communications_count || 0) - 1);
-      await databaseService.updateTransaction(communication.transaction_id, {
-        total_communications_count: newCount,
-      });
-    }
 
     await logService.info(
       "Communication unlinked from transaction",
