@@ -966,6 +966,25 @@ class DatabaseService implements IDatabaseService {
       await logService.info("Migration 25 complete: external_contacts shadow table created", "DatabaseService");
     }
 
+    // Migration 26: Add email_id to attachments table for email attachment support (TASK-1775)
+    // This enables storing attachments from Gmail/Outlook emails alongside iMessage attachments
+    const attachmentsColumns = getColumns('attachments');
+    if (!attachmentsColumns.includes('email_id')) {
+      await logService.info("Running migration 26: Add email_id to attachments table", "DatabaseService");
+
+      // Add email_id column (nullable - existing attachments have message_id, new email attachments have email_id)
+      runSafe(`ALTER TABLE attachments ADD COLUMN email_id TEXT REFERENCES emails(id) ON DELETE CASCADE`);
+
+      // Create index for email_id lookups
+      runSafe(`CREATE INDEX IF NOT EXISTS idx_attachments_email_id ON attachments(email_id)`);
+
+      // Note: CHECK constraint (message_id IS NOT NULL OR email_id IS NOT NULL) is enforced
+      // by the service layer (emailAttachmentService and macOSMessagesImportService)
+      // because SQLite ALTER TABLE cannot add CHECK constraints without table recreation.
+
+      await logService.info("Migration 26 complete: email_id column added to attachments", "DatabaseService");
+    }
+
     // Finalize schema version (create table if missing for backwards compatibility)
     const schemaVersionExists = db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
