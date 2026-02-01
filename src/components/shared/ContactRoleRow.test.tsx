@@ -70,7 +70,7 @@ describe("ContactRoleRow", () => {
       renderContactRoleRow({
         contact: createTestContact({ source: "manual" }),
       });
-      expect(screen.getByTestId("source-pill-imported")).toBeInTheDocument();
+      expect(screen.getByTestId("source-pill-manual")).toBeInTheDocument();
     });
 
     it("handles missing email gracefully", () => {
@@ -259,11 +259,11 @@ describe("ContactRoleRow", () => {
   });
 
   describe("Source Pill Variants", () => {
-    it("shows imported variant for manual source", () => {
+    it("shows manual variant for manual source", () => {
       renderContactRoleRow({
         contact: createTestContact({ source: "manual", is_message_derived: false }),
       });
-      expect(screen.getByTestId("source-pill-imported")).toBeInTheDocument();
+      expect(screen.getByTestId("source-pill-manual")).toBeInTheDocument();
     });
 
     it("shows imported variant for contacts_app source", () => {
