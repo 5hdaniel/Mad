@@ -120,7 +120,7 @@ function ContactAssignmentStep({
 
   // Convert external contacts to ExtendedContact format
   const extendedExternalContacts = useMemo(
-    () => externalContacts.map(toExtendedContact),
+    () => (externalContacts ?? []).map(toExtendedContact),
     [externalContacts]
   );
 
