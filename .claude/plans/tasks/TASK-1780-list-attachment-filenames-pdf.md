@@ -3,7 +3,9 @@
 **Sprint:** SPRINT-067 - Email Attachments for Audits
 **Priority:** HIGH
 **Estimated Tokens:** ~15K
-**Status:** TODO
+**Status:** MERGED
+**PR:** #701
+**Branch:** feature/TASK-1780-list-attachment-filenames-pdf
 
 ---
 
