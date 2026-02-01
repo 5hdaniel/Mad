@@ -340,9 +340,9 @@
         .modal {
             background: white;
             border-radius: 12px;
-            max-width: 600px;
+            max-width: 800px;
             width: 90%;
-            max-height: 80vh;
+            max-height: 85vh;
             overflow-y: auto;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
         }
@@ -399,6 +399,37 @@
         .detail-value {
             color: #333;
             flex: 1;
+        }
+
+        .detail-value code {
+            background: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 0.85em;
+            color: #e11d48;
+        }
+
+        .detail-value strong {
+            display: block;
+            margin-top: 16px;
+            margin-bottom: 8px;
+            color: #1f2937;
+            font-size: 1.05em;
+        }
+
+        .detail-value strong:first-child {
+            margin-top: 0;
+        }
+
+        .description-content {
+            background: #f9fafb;
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            max-height: 400px;
+            overflow-y: auto;
+            line-height: 1.7;
         }
 
         .clickable-row {
@@ -1223,8 +1254,8 @@
                     <div class="detail-value">${item.variance || '-'}</div>
                 </div>
                 <div class="detail-row" style="flex-direction: column;">
-                    <div class="detail-label" style="width: 100%; margin-bottom: 8px;">Description</div>
-                    <div class="detail-value" style="white-space: pre-wrap;">${item.description || 'No description available'}</div>
+                    <div class="detail-label" style="width: 100%; margin-bottom: 8px;">Details</div>
+                    <div class="detail-value description-content">${item.description || 'No detailed description available.'}</div>
                 </div>
             `;
 

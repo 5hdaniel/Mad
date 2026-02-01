@@ -27,20 +27,52 @@ BACKLOG_FILE = DATA_DIR / 'backlog.csv'
 
 
 def extract_description(md_path: Path) -> str:
-    """Extract the Description section from a markdown file."""
+    """Extract the full content from a markdown file (after frontmatter)."""
     if not md_path.exists():
         return ''
 
     try:
         content = md_path.read_text(encoding='utf-8')
-        # Find ## Description section
-        match = re.search(r'## Description\s*\n(.*?)(?=\n## |\Z)', content, re.DOTALL)
-        if match:
-            desc = match.group(1).strip()
-            # Limit to first 500 chars for display
-            if len(desc) > 500:
-                desc = desc[:500] + '...'
-            return desc
+
+        # Remove the header (# BACKLOG-XXX: Title) and metadata block
+        # Find the first --- separator after the header
+        lines = content.split('\n')
+        start_idx = 0
+
+        # Skip the title line
+        for i, line in enumerate(lines):
+            if line.startswith('# BACKLOG-'):
+                start_idx = i + 1
+                break
+
+        # Skip the metadata block (lines starting with **)
+        for i in range(start_idx, len(lines)):
+            line = lines[i].strip()
+            if line == '---':
+                start_idx = i + 1
+                break
+
+        # Get everything after the metadata
+        description = '\n'.join(lines[start_idx:]).strip()
+
+        # Convert markdown to simple HTML for display
+        # Replace ## headers with bold text
+        description = re.sub(r'^## (.+)$', r'<strong>\1</strong>', description, flags=re.MULTILINE)
+        # Replace ### headers
+        description = re.sub(r'^### (.+)$', r'<strong>\1</strong>', description, flags=re.MULTILINE)
+        # Replace - [ ] checkboxes
+        description = re.sub(r'^- \[ \] (.+)$', r'☐ \1', description, flags=re.MULTILINE)
+        # Replace - [x] checkboxes
+        description = re.sub(r'^- \[x\] (.+)$', r'☑ \1', description, flags=re.MULTILINE)
+        # Replace bullet points
+        description = re.sub(r'^- (.+)$', r'• \1', description, flags=re.MULTILINE)
+        # Replace numbered lists (keep as-is, they display fine)
+        # Replace code blocks with styled text
+        description = re.sub(r'```\w*\n(.*?)```', r'<code>\1</code>', description, flags=re.DOTALL)
+        # Replace inline code
+        description = re.sub(r'`([^`]+)`', r'<code>\1</code>', description)
+
+        return description
     except Exception:
         pass
     return ''
