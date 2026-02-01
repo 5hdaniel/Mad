@@ -31,6 +31,9 @@ const databaseService = require("./services/databaseService").default;
 const gmailFetchService = require("./services/gmailFetchService").default;
 const outlookFetchService = require("./services/outlookFetchService").default;
 
+// TASK-1775: Email attachment download service
+import emailAttachmentService from "./services/emailAttachmentService";
+
 // Import validation utilities
 import {
   ValidationError,
@@ -1571,6 +1574,30 @@ export const registerTransactionHandlers = (
                     });
                   }
 
+                  // TASK-1775: Download email attachments if present
+                  if (email.hasAttachments && email.attachments && email.attachments.length > 0) {
+                    try {
+                      await emailAttachmentService.downloadEmailAttachments(
+                        transaction.user_id,
+                        emailRecord.id,
+                        messageId, // External email ID (Gmail message ID)
+                        "gmail",
+                        email.attachments.map((att: { filename?: string; name?: string; mimeType?: string; contentType?: string; size?: number; attachmentId?: string; id?: string }) => ({
+                          filename: att.filename || att.name || "attachment",
+                          mimeType: att.mimeType || att.contentType || "application/octet-stream",
+                          size: att.size || 0,
+                          attachmentId: att.attachmentId || att.id,
+                        }))
+                      );
+                    } catch (attachmentError) {
+                      // Log but don't fail - attachment download is non-blocking
+                      logService.warn("Failed to download Gmail email attachments", "Transactions", {
+                        emailId: emailRecord.id,
+                        error: attachmentError instanceof Error ? attachmentError.message : "Unknown",
+                      });
+                    }
+                  }
+
                   // Create junction link in communications table
                   await createCommunication({
                     user_id: transaction.user_id,
@@ -1624,6 +1651,30 @@ export const registerTransactionHandlers = (
                       has_attachments: email.hasAttachments || false,
                       attachment_count: email.attachmentCount || 0,
                     });
+                  }
+
+                  // TASK-1775: Download email attachments if present
+                  if (email.hasAttachments && email.attachments && email.attachments.length > 0) {
+                    try {
+                      await emailAttachmentService.downloadEmailAttachments(
+                        transaction.user_id,
+                        emailRecord.id,
+                        messageId, // External email ID (Outlook message ID)
+                        "outlook",
+                        email.attachments.map((att: { filename?: string; name?: string; mimeType?: string; contentType?: string; size?: number; attachmentId?: string; id?: string }) => ({
+                          filename: att.filename || att.name || "attachment",
+                          mimeType: att.mimeType || att.contentType || "application/octet-stream",
+                          size: att.size || 0,
+                          attachmentId: att.attachmentId || att.id,
+                        }))
+                      );
+                    } catch (attachmentError) {
+                      // Log but don't fail - attachment download is non-blocking
+                      logService.warn("Failed to download Outlook email attachments", "Transactions", {
+                        emailId: emailRecord.id,
+                        error: attachmentError instanceof Error ? attachmentError.message : "Unknown",
+                      });
+                    }
                   }
 
                   // Create junction link in communications table
