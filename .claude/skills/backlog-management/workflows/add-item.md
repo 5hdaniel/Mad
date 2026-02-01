@@ -53,20 +53,27 @@ List any blocking items (BACKLOG-XXX).
 Append to `.claude/plans/backlog/data/backlog.csv`:
 
 ```csv
-BACKLOG-XXX,Title Here,category,priority,pending,-,-,-,-,[BACKLOG-XXX.md]
+BACKLOG-XXX,Title Here,category,priority,pending,-,~15K,-,-,2026-01-17,-,BACKLOG-XXX.md
 ```
 
-**Fields:**
-- `id`: BACKLOG-XXX
-- `title`: Brief description
-- `category`: bug/feature/enhancement/refactor/tech-debt/test/docs/infra/security/schema/service/ui/ipc/config
-- `priority`: critical/high/medium/low
-- `status`: pending (for new items)
-- `sprint`: - (not assigned)
-- `est_tokens`: - (or estimate like ~30K)
-- `actual_tokens`: -
-- `variance`: -
-- `file`: [BACKLOG-XXX.md]
+**CRITICAL: Column Order Must Be Exact**
+
+| Position | Column | Valid Values | Example |
+|----------|--------|--------------|---------|
+| 1 | id | BACKLOG-XXX | BACKLOG-579 |
+| 2 | title | Brief description | Fix sync error |
+| 3 | category | bug/feature/enhancement/refactor/tech-debt/test/docs/infra/security/schema/service/ui/ipc/config | enhancement |
+| 4 | priority | critical/high/medium/low | high |
+| 5 | status | pending/in-progress/testing/completed/blocked/deferred/obsolete/reopened | pending |
+| 6 | sprint | SPRINT-XXX or - | SPRINT-067 |
+| 7 | est_tokens | ~XK or - | ~15K |
+| 8 | actual_tokens | Actual value or - | - |
+| 9 | variance | Calculated or - | - |
+| 10 | created_at | YYYY-MM-DD | 2026-01-17 |
+| 11 | completed_at | YYYY-MM-DD or - | - |
+| 12 | file | BACKLOG-XXX.md | BACKLOG-579.md |
+
+> **Warning:** Getting columns out of order causes CI validation failures. The most common mistake is swapping category/priority/status. Always double-check position 3-5.
 
 ### 4. Validate
 

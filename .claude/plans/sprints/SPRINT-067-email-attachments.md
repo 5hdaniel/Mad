@@ -71,10 +71,13 @@ User requirements:
 | TASK-1777 | Include Email Attachments in Export | ~25K | HIGH | 3 |
 | TASK-1778 | Email Attachment Preview Modal | ~20K | MEDIUM | 3 |
 | TASK-1779 | Upload Email Attachments to Broker Portal | ~25K | HIGH | 4 |
+| TASK-1780 | List Attachment Filenames in Export PDF | ~15K | HIGH | 3 | *(added mid-sprint)*
 
 **Total Estimated (implementation):** ~150K tokens
 **SR Review Overhead:** +20K (5 tasks @ ~4K each)
 **Grand Total:** ~170K tokens
+
+*Note: TASK-1780 added mid-sprint (+~15K est.)*
 
 ---
 
@@ -299,9 +302,10 @@ Before starting sprint work, engineers must:
 
 | Task | Status | Billable Tokens | Duration | PR |
 |------|--------|-----------------|----------|-----|
-| TASK-1775 | MERGED | ~45K (est) | - | #697, #698 |
-| TASK-1776 | MERGED | ~35K (est) | - | #699 |
-| TASK-1777 | TODO | - | - | - |
+| TASK-1775 | MERGED | - | - | #697, #698 |
+| TASK-1776 | MERGED | - | - | #699 |
+| TASK-1777 | MERGED | - | - | #700 |
+| TASK-1780 | TODO | - | - | - |
 | TASK-1778 | TODO | - | - | - |
 | TASK-1779 | TODO | - | - | - |
 | **User Testing** | PENDING | - | - | - |
