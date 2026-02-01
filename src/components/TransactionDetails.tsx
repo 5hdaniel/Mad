@@ -419,7 +419,9 @@ function TransactionDetails({
               transaction={transaction}
               contactAssignments={contactAssignments}
               loading={loading}
+              onEdit={() => setShowEditModal(true)}
               onEditContacts={() => setShowEditContactsModal(true)}
+              onDelete={() => setShowDeleteConfirm(true)}
               resolvedSuggestions={resolvedSuggestions}
               processingContactId={processingContactId}
               processingAll={processingAll}

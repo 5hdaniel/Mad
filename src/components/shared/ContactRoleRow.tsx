@@ -22,6 +22,8 @@ export interface ContactRoleRowProps {
   onRoleChange: (role: string) => void;
   /** Callback when remove button is clicked (optional - hides button if not provided) */
   onRemove?: () => void;
+  /** Whether this row has a validation error (missing role) */
+  hasError?: boolean;
   /** Additional CSS classes */
   className?: string;
 }
@@ -63,28 +65,29 @@ function isExternalContact(contact: ExtendedContact): boolean {
 
 /**
  * Maps model ContactSource to SourcePill's ContactSource
- * Model: "manual" | "email" | "sms" | "contacts_app" | "inferred"
- * SourcePill: "imported" | "external" | "manual" | "contacts_app" | "sms"
+ * Model: "manual" | "email" | "sms" | "messages" | "contacts_app" | "inferred"
+ * SourcePill: "imported" | "external" | "manual" | "contacts_app" | "sms" | "messages"
  */
 function mapToSourcePillSource(
   source: ModelContactSource | string | undefined,
-  isMessageDerived: boolean
+  isExternal: boolean
 ): SourcePillSource {
-  // If message-derived, show as external regardless of source
-  if (isMessageDerived) {
+  // sms/messages source takes priority - always show "Message" pill
+  if (source === "sms" || source === "messages") {
+    return source;
+  }
+
+  // External contacts (from Contacts App, not yet imported) show "Contacts App" pill
+  if (isExternal) {
     return "external";
   }
 
-  // Map model sources to SourcePill sources
+  // Imported contacts - check source for specific display
   switch (source) {
     case "manual":
       return "manual";
     case "contacts_app":
       return "contacts_app";
-    case "sms":
-      return "sms";
-    case "email":
-    case "inferred":
     default:
       return "imported";
   }
@@ -114,6 +117,7 @@ export function ContactRoleRow({
   roleOptions,
   onRoleChange,
   onRemove,
+  hasError = false,
   className = "",
 }: ContactRoleRowProps): React.ReactElement {
   const displayName = getDisplayName(contact);
@@ -121,9 +125,13 @@ export function ContactRoleRow({
   const initial = getInitial(displayName);
   const isExternal = isExternalContact(contact);
 
+  const borderClass = hasError
+    ? "border-red-400 bg-red-50 ring-2 ring-red-200"
+    : "border-gray-200 bg-white";
+
   return (
     <div
-      className={`flex items-center gap-4 p-3 bg-white border border-gray-200 rounded-lg ${className}`.trim()}
+      className={`flex flex-wrap items-center gap-3 p-3 rounded-lg border ${borderClass} ${className}`.trim()}
       data-testid={`contact-role-row-${contact.id}`}
     >
       {/* Avatar */}
@@ -134,14 +142,20 @@ export function ContactRoleRow({
         <span className="text-white text-sm font-bold">{initial}</span>
       </div>
 
-      {/* Contact Info */}
-      <div className="flex-1 min-w-0">
-        <p
-          className="font-medium text-gray-900 text-sm truncate"
-          data-testid="contact-role-row-name"
-        >
-          {displayName}
-        </p>
+      {/* Contact Info with Source Pill */}
+      <div className="flex-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p
+            className="font-medium text-gray-900 text-sm"
+            data-testid="contact-role-row-name"
+          >
+            {displayName}
+          </p>
+          <SourcePill
+            source={mapToSourcePillSource(contact.source, isExternal)}
+            size="sm"
+          />
+        </div>
         {email && (
           <p
             className="text-xs text-gray-500 truncate"
@@ -152,44 +166,38 @@ export function ContactRoleRow({
         )}
       </div>
 
-      {/* Source Pill */}
-      <div className="flex-shrink-0">
-        <SourcePill
-          source={mapToSourcePillSource(contact.source, isExternal)}
-          size="sm"
-        />
-      </div>
-
-      {/* Role Dropdown */}
-      <select
-        className="px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:outline-none min-w-[160px]"
-        value={currentRole}
-        onChange={(e) => onRoleChange(e.target.value)}
-        aria-label={`Role for ${displayName}`}
-        data-testid={`role-select-${contact.id}`}
-      >
-        <option value="">Select role...</option>
-        {roleOptions.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-
-      {/* Remove Button */}
-      {onRemove && (
-        <button
-          type="button"
-          onClick={onRemove}
-          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors flex-shrink-0"
-          aria-label={`Remove ${displayName} from transaction`}
-          data-testid={`remove-contact-${contact.id}`}
+      {/* Role Dropdown and Remove Button - wrap together on small screens */}
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <select
+          className="px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:outline-none min-w-[140px]"
+          value={currentRole}
+          onChange={(e) => onRoleChange(e.target.value)}
+          aria-label={`Role for ${displayName}`}
+          data-testid={`role-select-${contact.id}`}
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      )}
+          <option value="">Select role...</option>
+          {roleOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+
+        {/* Remove Button */}
+        {onRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors flex-shrink-0"
+            aria-label={`Remove ${displayName} from transaction`}
+            data-testid={`remove-contact-${contact.id}`}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+      </div>
     </div>
   );
 }

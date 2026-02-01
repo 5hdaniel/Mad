@@ -1,8 +1,8 @@
 # Sprint Plan: SPRINT-066 - Contact Management UX Overhaul
 
 **Created**: 2026-01-28
-**Updated**: 2026-01-29
-**Status**: IN_PROGRESS
+**Updated**: 2026-01-31
+**Status**: COMPLETE
 **Goal**: Implement unified contact management UX across all flows
 **Dependencies**: PR #678 (TASK-1760 RoleAssigner redesign) - ready for merge
 **Related**: SPRINT-055b (previous iteration, superseded by this plan)
@@ -453,16 +453,18 @@ interface ContactPreviewProps {
 | TASK-1769 | Multi-category contact filtering | ~15K | After Phase 4 | New: `src/utils/contactCategoryUtils.ts`, Modify: `EditContactsModal.tsx` |
 | TASK-1770 | Sort contacts by recent communication | ~8K | After TASK-1769 | New: `src/utils/contactSortUtils.ts`, Modify: `EditContactsModal.tsx`, `ContactSearchList.tsx` |
 | TASK-1771 | Unify New Audit modal navigation | ~20K | After TASK-1769 | Modify: `useAuditTransaction.ts`, `AuditTransactionModal.tsx`, `ContactAssignmentStep.tsx` |
+| TASK-1774 | Add contact count to transaction cards | ~10K | After Phase 4 | Modify: `TransactionCard.tsx`, `TransactionListCard.tsx`, `models.ts` |
 
 **Phase 5 Deliverables:**
 - Multi-category filtering (Imported/Manual/External/Messages)
 - Contacts sorted by most recent communication first
 - Single unified navigation in New Audit modal (no nested buttons)
+- Contact count visible on transaction cards (TASK-1774)
 
 **Phase 5 Notes:**
-- **TASK-1769**: Code complete, unit tests added, multiple fixes applied (category filter alignment, scroll fix, label changes, external contacts loading). Awaiting user verification.
+- **TASK-1769**: COMPLETE - Category filtering implemented in ContactSearchList as pill-style toggle buttons (Imported/Contacts App/Messages). All three flows now have filtering. See task file for details on architectural changes from original spec.
 - **TASK-1770**: Code complete, integrated into EditContactsModal and ContactSearchList. Awaiting user verification.
-- **TASK-1771**: NOT STARTED - still ready for implementation
+- **TASK-1771**: COMPLETE - Navigation unified during TASK-1766 implementation. Modal now has 3 linear steps, ContactAssignmentStep is headless (no internal footer). See task file for verification steps.
 
 ---
 
@@ -735,9 +737,16 @@ After all tasks complete:
 | 3 | TASK-1766 | MERGED | - | #685 | - |
 | 4 | TASK-1767 | MERGED | - | #686 | - |
 | 4 | TASK-1768 | MERGED | - | #687 | - |
-| 5 | TASK-1769 | TESTING | - | sprint branch | - |
-| 5 | TASK-1770 | TESTING | - | sprint branch | - |
-| 5 | TASK-1771 | READY | - | - | - |
+| 5 | TASK-1769 | COMPLETE | - | sprint branch | - |
+| 5 | TASK-1770 | COMPLETE | - | sprint branch | - |
+| 5 | TASK-1771 | COMPLETE | - | sprint branch | - |
+| 5 | TASK-1774 | deferred | - | - | - |
+| 5 | BUG-FIX | COMPLETE | - | sprint branch | - |
+
+**BUG-FIX: Contacts Page UI Not Refreshing After Deletion**
+- Fixed `useContactList.ts`: Await `loadContacts()` and use optimistic update for deletion
+- Fixed `ContactSearchList.tsx`: Added client-side deduplication (filter external contacts by email/phone match)
+- Fixed `ContactSearchList.tsx`: Dynamic `isAdded` check for external contacts (clears after delete)
 
 ---
 

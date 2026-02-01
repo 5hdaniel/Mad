@@ -4,21 +4,6 @@ import type { ExtendedContact } from "../../types/components";
 import type { ContactSource as ModelContactSource } from "../../../electron/types/models";
 
 /**
- * External contact from message participants (not yet imported)
- */
-export interface ExternalContact {
-  id: string;
-  name: string;
-  email?: string;
-  phone?: string;
-  company?: string;
-  title?: string;
-  source: "external";
-  allEmails?: string[];
-  allPhones?: string[];
-}
-
-/**
  * Transaction associated with a contact
  */
 export interface ContactTransaction {
@@ -28,9 +13,9 @@ export interface ContactTransaction {
 }
 
 export interface ContactPreviewProps {
-  /** Contact to display (imported or external) */
-  contact: ExtendedContact | ExternalContact;
-  /** Whether this is an external contact */
+  /** Contact to display - uses ExtendedContact for all contacts */
+  contact: ExtendedContact;
+  /** Whether this is an external contact (not yet imported) */
   isExternal: boolean;
   /** Transactions this contact is involved in (imported only) */
   transactions?: ContactTransaction[];
@@ -47,11 +32,8 @@ export interface ContactPreviewProps {
 /**
  * Gets the display name for a contact
  */
-function getDisplayName(contact: ExtendedContact | ExternalContact): string {
-  if ("display_name" in contact && contact.display_name) {
-    return contact.display_name;
-  }
-  return contact.name || "Unknown Contact";
+function getDisplayName(contact: ExtendedContact): string {
+  return contact.display_name || contact.name || "Unknown Contact";
 }
 
 /**
@@ -68,19 +50,22 @@ function mapToSourcePillSource(
   source: ModelContactSource | string | undefined,
   isExternal: boolean
 ): ContactSource {
+  // sms/messages source takes priority - always show "Message" pill
+  if (source === "sms" || source === "messages") {
+    return source;
+  }
+
+  // External contacts (from Contacts App, not yet imported) show "Contacts App" pill
   if (isExternal) {
     return "external";
   }
 
+  // Imported contacts - check source for specific display
   switch (source) {
     case "manual":
       return "manual";
     case "contacts_app":
       return "contacts_app";
-    case "sms":
-      return "sms";
-    case "email":
-    case "inferred":
     default:
       return "imported";
   }

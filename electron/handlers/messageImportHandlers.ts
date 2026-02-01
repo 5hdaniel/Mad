@@ -347,6 +347,52 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
     macOSMessagesImportService.requestCancellation();
   });
 
+  /**
+   * Get macOS messages import status (count and last import time)
+   * IPC: messages:getImportStatus
+   */
+  ipcMain.handle(
+    "messages:getImportStatus",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string
+    ): Promise<{
+      success: boolean;
+      messageCount?: number;
+      lastImportAt?: string | null;
+      error?: string;
+    }> => {
+      try {
+        const db = databaseService.getRawDatabase();
+
+        // Get count and most recent created_at for iMessage/SMS
+        const result = db.prepare(`
+          SELECT
+            COUNT(*) as count,
+            MAX(created_at) as last_import_at
+          FROM messages
+          WHERE user_id = ?
+            AND channel IN ('sms', 'imessage')
+        `).get(userId) as { count: number; last_import_at: string | null } | undefined;
+
+        return {
+          success: true,
+          messageCount: result?.count ?? 0,
+          lastImportAt: result?.last_import_at ?? null,
+        };
+      } catch (error) {
+        logService.error(
+          `Failed to get import status: ${error instanceof Error ? error.message : "Unknown"}`,
+          "MessageImportHandlers"
+        );
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Failed to get import status",
+        };
+      }
+    }
+  );
+
   logService.info(
     "Message import handlers registered",
     "MessageImportHandlers"

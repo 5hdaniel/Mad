@@ -3,7 +3,6 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import {
   ContactPreview,
   type ContactPreviewProps,
-  type ExternalContact,
   type ContactTransaction,
 } from "./ContactPreview";
 import type { ExtendedContact } from "../../types/components";
@@ -26,15 +25,20 @@ const mockImportedContact: ExtendedContact = {
   updated_at: new Date().toISOString(),
 };
 
-// Mock external contact
-const mockExternalContact: ExternalContact = {
+// Mock external contact - now uses ExtendedContact with is_message_derived flag
+const mockExternalContact: ExtendedContact = {
   id: "contact-2",
+  user_id: "user-1",
   name: "Bob Wilson",
+  display_name: "Bob Wilson",
   email: "bob@work.com",
   phone: "+1-310-555-6789",
   company: "XYZ Corp",
   title: "Agent",
-  source: "external",
+  source: "inferred",
+  is_message_derived: true, // Marks as external
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
 };
 
 // Mock transactions

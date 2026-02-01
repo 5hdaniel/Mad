@@ -40,6 +40,7 @@ function AuditTransactionModal({
     isEditing,
     addressData,
     contactAssignments,
+    selectedContactIds,
     showAddressAutocomplete,
     addressSuggestions,
     // Contact loading (lifted to parent level to prevent duplicate API calls)
@@ -47,7 +48,12 @@ function AuditTransactionModal({
     contactsLoading,
     contactsError,
     refreshContacts,
+    silentRefreshContacts,
+    // External contacts (from macOS Contacts app, etc.)
+    externalContacts,
+    externalContactsLoading,
     setAddressData,
+    setSelectedContactIds,
     handleAddressChange,
     selectAddress,
     assignContact,
@@ -78,9 +84,9 @@ function AuditTransactionModal({
 
   // Determine total steps and current step for display
   // In edit mode: single step (just address/dates)
-  // In create mode: 2 steps (details + contacts)
-  const totalSteps = isEditing ? 1 : 2;
-  const displayStep = isEditing ? 1 : Math.min(step, 2);
+  // In create mode: 3 steps (details + select contacts + assign roles)
+  const totalSteps = isEditing ? 1 : 3;
+  const displayStep = isEditing ? 1 : Math.min(step, 3);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
@@ -97,7 +103,8 @@ function AuditTransactionModal({
               ) : (
                 <>
                   {step === 1 && "Step 1: Transaction Details"}
-                  {step >= 2 && "Step 2: Assign Contacts"}
+                  {step === 2 && "Step 2: Select Contacts"}
+                  {step === 3 && "Step 3: Assign Roles"}
                 </>
               )}
             </p>
@@ -125,8 +132,8 @@ function AuditTransactionModal({
         {/* Progress Bar - Only show for new transactions */}
         {!isEditing && (
           <div className="flex-shrink-0 bg-gray-100 px-3 sm:px-6 py-3">
-            <div className="flex items-center justify-center gap-1 sm:gap-2 mb-2 max-w-md mx-auto">
-              {[1, 2].map((s: number) => (
+            <div className="flex items-center justify-center gap-1 sm:gap-2 max-w-md mx-auto">
+              {[1, 2, 3].map((s: number) => (
                 <React.Fragment key={s}>
                   <div
                     className={`w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-sm sm:text-base font-semibold transition-all ${
@@ -158,7 +165,7 @@ function AuditTransactionModal({
         )}
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className={`flex-1 overflow-y-auto ${step === 1 ? "p-6" : "pt-0 px-2 pb-2"}`}>
           {step === 1 && (
             <AddressVerificationStep
               addressData={addressData}
@@ -181,10 +188,13 @@ function AuditTransactionModal({
             />
           )}
 
-          {/* Step 2+: Contact Assignment (internal 2-step flow handles select + roles) */}
+          {/* Step 2: Select Contacts, Step 3: Assign Roles */}
           {step >= 2 && (
             <ContactAssignmentStep
+              step={step}
               contactAssignments={contactAssignments}
+              selectedContactIds={selectedContactIds}
+              onSelectedContactIdsChange={setSelectedContactIds}
               onAssignContact={assignContact}
               onRemoveContact={removeContact}
               userId={userId}
@@ -195,6 +205,10 @@ function AuditTransactionModal({
               contactsLoading={contactsLoading}
               contactsError={contactsError}
               onRefreshContacts={refreshContacts}
+              onSilentRefreshContacts={silentRefreshContacts}
+              // External contacts (from macOS Contacts app, etc.)
+              externalContacts={externalContacts}
+              externalContactsLoading={externalContactsLoading}
             />
           )}
         </div>
@@ -233,7 +247,7 @@ function AuditTransactionModal({
                 </span>
               ) : isEditing ? (
                 "Save Changes"
-              ) : step >= 2 ? (
+              ) : step === 3 ? (
                 "Create Transaction"
               ) : (
                 "Continue \u2192"
