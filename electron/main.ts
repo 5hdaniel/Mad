@@ -41,8 +41,9 @@ import dotenv from "dotenv";
 
 // Load environment files based on whether app is packaged or in development
 if (app.isPackaged) {
-  // Packaged build: load .env.production from resources
-  const envPath = path.join(process.resourcesPath, "app.asar", ".env.production");
+  // Packaged build: load .env.production from extraResources
+  // extraResources files are copied to process.resourcesPath (NOT inside app.asar)
+  const envPath = path.join(process.resourcesPath, ".env.production");
   dotenv.config({ path: envPath });
 } else {
   // Development: load .env.development first (OAuth credentials), then .env.local for overrides
