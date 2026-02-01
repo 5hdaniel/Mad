@@ -1,21 +1,24 @@
 /**
  * AttachmentPreviewModal Tests
- * Tests for email attachment preview with image display and system viewer fallback
+ * Tests for email attachment preview with image, PDF, and DOCX display
  * TASK-1778: Email Attachment Preview Modal
+ * TASK-1783: Add PDF and DOCX inline preview
  */
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AttachmentPreviewModal } from "../AttachmentPreviewModal";
 
-// Mock the window.api.transactions.getAttachmentData
+// Mock the window.api.transactions methods
 const mockGetAttachmentData = jest.fn();
+const mockGetAttachmentBuffer = jest.fn();
 
 beforeAll(() => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (window as any).api = {
     transactions: {
       getAttachmentData: mockGetAttachmentData,
+      getAttachmentBuffer: mockGetAttachmentBuffer,
     },
   };
 });
@@ -53,10 +56,15 @@ describe("AttachmentPreviewModal", () => {
       success: true,
       data: "data:image/jpeg;base64,abc123",
     });
+    // Valid base64 string (just some bytes, mammoth mock will handle it)
+    mockGetAttachmentBuffer.mockResolvedValue({
+      success: true,
+      data: "SGVsbG8gV29ybGQ=", // "Hello World" in base64
+    });
   });
 
   describe("Basic Rendering", () => {
-    it("should render attachment filename", () => {
+    it("should render attachment filename", async () => {
       render(
         <AttachmentPreviewModal
           attachment={createMockAttachment({ filename: "report.pdf" })}
@@ -65,11 +73,16 @@ describe("AttachmentPreviewModal", () => {
         />
       );
 
-      // Filename appears in header and fallback area
-      expect(screen.getAllByText("report.pdf").length).toBeGreaterThan(0);
+      // Wait for PDF to render (async)
+      await waitFor(() => {
+        expect(screen.getByTestId("pdf-preview")).toBeInTheDocument();
+      });
+
+      // Filename appears in header
+      expect(screen.getByText("report.pdf")).toBeInTheDocument();
     });
 
-    it("should render formatted file size", () => {
+    it("should render formatted file size", async () => {
       render(
         <AttachmentPreviewModal
           attachment={createMockAttachment({ file_size_bytes: 1048576 })}
@@ -78,11 +91,16 @@ describe("AttachmentPreviewModal", () => {
         />
       );
 
-      // 1048576 bytes = 1 MB - appears in header and fallback
-      expect(screen.getAllByText("1 MB").length).toBeGreaterThan(0);
+      // Wait for render
+      await waitFor(() => {
+        expect(screen.getByTestId("pdf-preview")).toBeInTheDocument();
+      });
+
+      // 1048576 bytes = 1 MB - appears in header
+      expect(screen.getByText("1 MB")).toBeInTheDocument();
     });
 
-    it("should render file size in KB", () => {
+    it("should render file size in KB", async () => {
       render(
         <AttachmentPreviewModal
           attachment={createMockAttachment({ file_size_bytes: 2048 })}
@@ -91,11 +109,16 @@ describe("AttachmentPreviewModal", () => {
         />
       );
 
-      // Size appears in header and fallback
-      expect(screen.getAllByText("2 KB").length).toBeGreaterThan(0);
+      // Wait for render
+      await waitFor(() => {
+        expect(screen.getByTestId("pdf-preview")).toBeInTheDocument();
+      });
+
+      // Size appears in header
+      expect(screen.getByText("2 KB")).toBeInTheDocument();
     });
 
-    it("should render 0 B for null file size", () => {
+    it("should render 0 B for null file size", async () => {
       render(
         <AttachmentPreviewModal
           attachment={createMockAttachment({ file_size_bytes: null })}
@@ -104,8 +127,13 @@ describe("AttachmentPreviewModal", () => {
         />
       );
 
-      // Size appears in header and fallback
-      expect(screen.getAllByText("0 B").length).toBeGreaterThan(0);
+      // Wait for render
+      await waitFor(() => {
+        expect(screen.getByTestId("pdf-preview")).toBeInTheDocument();
+      });
+
+      // Size appears in header
+      expect(screen.getByText("0 B")).toBeInTheDocument();
     });
 
     it("should have close button with aria-label", () => {
@@ -278,40 +306,202 @@ describe("AttachmentPreviewModal", () => {
     });
   });
 
-  describe("Non-Image Attachments", () => {
-    it("should show fallback UI for PDF attachments", () => {
+  describe("PDF Attachments (TASK-1783)", () => {
+    it("should render PDF preview for PDF attachments", async () => {
+      mockGetAttachmentData.mockResolvedValue({
+        success: true,
+        data: "data:application/pdf;base64,JVBERi0...",
+      });
+
       render(
         <AttachmentPreviewModal
           attachment={createMockAttachment({
             filename: "document.pdf",
             mime_type: "application/pdf",
+            storage_path: "/path/to/document.pdf",
           })}
           onClose={mockOnClose}
           onOpenWithSystem={mockOnOpenWithSystem}
         />
       );
 
-      expect(screen.getByTestId("non-image-fallback")).toBeInTheDocument();
-      // Should show filename in the fallback
-      expect(screen.getAllByText("document.pdf").length).toBeGreaterThan(0);
+      await waitFor(() => {
+        expect(screen.getByTestId("pdf-preview")).toBeInTheDocument();
+      });
+
+      // Should show the PDF document container
+      expect(screen.getByTestId("pdf-document")).toBeInTheDocument();
     });
 
-    it("should show fallback UI for Word documents", () => {
+    it("should show page navigation for multi-page PDFs", async () => {
+      mockGetAttachmentData.mockResolvedValue({
+        success: true,
+        data: "data:application/pdf;base64,JVBERi0...",
+      });
+
+      render(
+        <AttachmentPreviewModal
+          attachment={createMockAttachment({
+            filename: "multipage.pdf",
+            mime_type: "application/pdf",
+            storage_path: "/path/to/multipage.pdf",
+          })}
+          onClose={mockOnClose}
+          onOpenWithSystem={mockOnOpenWithSystem}
+        />
+      );
+
+      // Wait for PDF to load (mock returns 3 pages)
+      await waitFor(() => {
+        expect(screen.getByTestId("pdf-page-info")).toBeInTheDocument();
+      });
+
+      expect(screen.getByText("Page 1 of 3")).toBeInTheDocument();
+      expect(screen.getByTestId("pdf-prev-page")).toBeInTheDocument();
+      expect(screen.getByTestId("pdf-next-page")).toBeInTheDocument();
+    });
+
+    it("should navigate between PDF pages", async () => {
+      const user = userEvent.setup();
+      mockGetAttachmentData.mockResolvedValue({
+        success: true,
+        data: "data:application/pdf;base64,JVBERi0...",
+      });
+
+      render(
+        <AttachmentPreviewModal
+          attachment={createMockAttachment({
+            filename: "multipage.pdf",
+            mime_type: "application/pdf",
+            storage_path: "/path/to/multipage.pdf",
+          })}
+          onClose={mockOnClose}
+          onOpenWithSystem={mockOnOpenWithSystem}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("pdf-page-info")).toBeInTheDocument();
+      });
+
+      // Initially on page 1
+      expect(screen.getByText("Page 1 of 3")).toBeInTheDocument();
+
+      // Go to next page
+      await user.click(screen.getByTestId("pdf-next-page"));
+      expect(screen.getByText("Page 2 of 3")).toBeInTheDocument();
+
+      // Go to previous page
+      await user.click(screen.getByTestId("pdf-prev-page"));
+      expect(screen.getByText("Page 1 of 3")).toBeInTheDocument();
+    });
+
+    it("should show error fallback when PDF load fails", async () => {
+      mockGetAttachmentData.mockResolvedValue({
+        success: false,
+        error: "Failed to load PDF",
+      });
+
+      render(
+        <AttachmentPreviewModal
+          attachment={createMockAttachment({
+            filename: "broken.pdf",
+            mime_type: "application/pdf",
+            storage_path: "/path/to/broken.pdf",
+          })}
+          onClose={mockOnClose}
+          onOpenWithSystem={mockOnOpenWithSystem}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("pdf-error-fallback")).toBeInTheDocument();
+      });
+
+      expect(screen.getByText("Failed to load PDF")).toBeInTheDocument();
+      expect(screen.getByText("Open with System Viewer")).toBeInTheDocument();
+    });
+  });
+
+  describe("DOCX Attachments (TASK-1783)", () => {
+    it("should render DOCX preview for Word documents", async () => {
+      mockGetAttachmentBuffer.mockResolvedValue({
+        success: true,
+        data: "SGVsbG8gV29ybGQ=", // Valid base64 for mammoth mock
+      });
+
       render(
         <AttachmentPreviewModal
           attachment={createMockAttachment({
             filename: "document.docx",
             mime_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            storage_path: "/path/to/document.docx",
           })}
           onClose={mockOnClose}
           onOpenWithSystem={mockOnOpenWithSystem}
         />
       );
 
-      expect(screen.getByTestId("non-image-fallback")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByTestId("docx-preview")).toBeInTheDocument();
+      });
+
+      // Should contain the converted HTML content
+      expect(screen.getByText("Mock DOCX content converted to HTML")).toBeInTheDocument();
     });
 
-    it("should show Open with System Viewer button for non-image files", () => {
+    it("should render DOCX preview for legacy .doc files", async () => {
+      mockGetAttachmentBuffer.mockResolvedValue({
+        success: true,
+        data: "SGVsbG8gV29ybGQ=", // Valid base64 for mammoth mock
+      });
+
+      render(
+        <AttachmentPreviewModal
+          attachment={createMockAttachment({
+            filename: "legacy.doc",
+            mime_type: "application/msword",
+            storage_path: "/path/to/legacy.doc",
+          })}
+          onClose={mockOnClose}
+          onOpenWithSystem={mockOnOpenWithSystem}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("docx-preview")).toBeInTheDocument();
+      });
+    });
+
+    it("should show error fallback when DOCX load fails", async () => {
+      mockGetAttachmentBuffer.mockResolvedValue({
+        success: false,
+        error: "Failed to load DOCX",
+      });
+
+      render(
+        <AttachmentPreviewModal
+          attachment={createMockAttachment({
+            filename: "broken.docx",
+            mime_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            storage_path: "/path/to/broken.docx",
+          })}
+          onClose={mockOnClose}
+          onOpenWithSystem={mockOnOpenWithSystem}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("docx-error-fallback")).toBeInTheDocument();
+      });
+
+      expect(screen.getByText("Failed to load DOCX")).toBeInTheDocument();
+      expect(screen.getByText("Open with System Viewer")).toBeInTheDocument();
+    });
+  });
+
+  describe("Non-Previewable Attachments", () => {
+    it("should show fallback UI for Excel files", () => {
       render(
         <AttachmentPreviewModal
           attachment={createMockAttachment({
@@ -323,15 +513,16 @@ describe("AttachmentPreviewModal", () => {
         />
       );
 
+      expect(screen.getByTestId("non-image-fallback")).toBeInTheDocument();
       expect(screen.getByText("Open with System Viewer")).toBeInTheDocument();
     });
 
-    it("should show not downloaded message when storage_path is null", () => {
+    it("should show not downloaded message when storage_path is null for non-previewable", () => {
       render(
         <AttachmentPreviewModal
           attachment={createMockAttachment({
-            filename: "missing.pdf",
-            mime_type: "application/pdf",
+            filename: "missing.xlsx",
+            mime_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             storage_path: null,
           })}
           onClose={mockOnClose}
@@ -340,7 +531,6 @@ describe("AttachmentPreviewModal", () => {
       );
 
       expect(screen.getByText("Attachment not downloaded")).toBeInTheDocument();
-      // Should NOT show open button
       expect(screen.queryByText("Open with System Viewer")).not.toBeInTheDocument();
     });
   });
@@ -426,29 +616,12 @@ describe("AttachmentPreviewModal", () => {
       expect(mockOnOpenWithSystem).toHaveBeenCalledWith("/path/to/file.pdf");
     });
 
-    it("should call onOpenWithSystem from fallback button for non-image files", async () => {
-      const user = userEvent.setup();
-
-      render(
-        <AttachmentPreviewModal
-          attachment={createMockAttachment({
-            filename: "document.pdf",
-            mime_type: "application/pdf",
-            storage_path: "/path/to/document.pdf",
-          })}
-          onClose={mockOnClose}
-          onOpenWithSystem={mockOnOpenWithSystem}
-        />
-      );
-
-      await user.click(screen.getByText("Open with System Viewer"));
-      expect(mockOnOpenWithSystem).toHaveBeenCalledWith("/path/to/document.pdf");
-    });
-
     it("should NOT show Open button when storage_path is null", () => {
       render(
         <AttachmentPreviewModal
           attachment={createMockAttachment({
+            // Non-previewable file type
+            mime_type: "application/zip",
             storage_path: null,
           })}
           onClose={mockOnClose}
@@ -481,6 +654,8 @@ describe("AttachmentPreviewModal", () => {
         <AttachmentPreviewModal
           attachment={createMockAttachment({
             filename: "",
+            // Non-previewable file type
+            mime_type: "application/zip",
           })}
           onClose={mockOnClose}
           onOpenWithSystem={mockOnOpenWithSystem}

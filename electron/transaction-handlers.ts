@@ -3106,4 +3106,46 @@ export const registerTransactionHandlers = (
       }
     },
   );
+
+  // TASK-1783: Get attachment buffer as base64 (for DOCX conversion with mammoth)
+  // Unlike get-data, this returns raw base64 without data: URL prefix
+  ipcMain.handle(
+    "attachments:get-buffer",
+    async (
+      event: IpcMainInvokeEvent,
+      storagePath: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        if (!storagePath || typeof storagePath !== "string") {
+          throw new ValidationError("Storage path is required", "storagePath");
+        }
+
+        // Security: Validate path is within app data directory
+        const appDataPath = require("electron").app.getPath("userData");
+        const normalizedPath = require("path").normalize(storagePath);
+        if (!normalizedPath.startsWith(appDataPath)) {
+          throw new ValidationError("Invalid attachment path", "storagePath");
+        }
+
+        // Read file as buffer and convert to base64
+        const fs = require("fs");
+        const buffer = fs.readFileSync(normalizedPath);
+        const base64 = buffer.toString("base64");
+
+        return {
+          success: true,
+          data: base64,
+        };
+      } catch (error) {
+        logService.error("Failed to get attachment buffer", "Transactions", {
+          storagePath,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
 };

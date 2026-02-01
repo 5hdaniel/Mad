@@ -1351,6 +1351,31 @@ interface MainAPI {
       success: boolean;
       error?: string;
     }>;
+
+    /**
+     * Get attachment data as base64 data URL for preview
+     * TASK-1778: Returns data: URL for images/PDFs
+     * @param storagePath - Path to attachment file
+     * @param mimeType - MIME type for the data URL
+     * @returns Success/error result with data URL in data field
+     */
+    getAttachmentData: (storagePath: string, mimeType: string) => Promise<{
+      success: boolean;
+      data?: string;
+      error?: string;
+    }>;
+
+    /**
+     * Get attachment buffer as raw base64 (for DOCX conversion)
+     * TASK-1783: Returns raw base64 without data: URL prefix for mammoth.js
+     * @param storagePath - Path to attachment file
+     * @returns Success/error result with base64 data in data field
+     */
+    getAttachmentBuffer: (storagePath: string) => Promise<{
+      success: boolean;
+      data?: string;
+      error?: string;
+    }>;
   };
 
   // Transaction scan progress event
