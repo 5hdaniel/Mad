@@ -468,7 +468,7 @@ BACKLOG-542,Merge SMS and iMessage threads from same contact,bug,medium,pending,
 BACKLOG-543,Audit period not displayed after transaction creation until edit/save,bug,low,pending,-,~15K,-,-,2026-01-27,,[BACKLOG-543.md](items/BACKLOG-543.md)
 BACKLOG-545,Attachments not exported in package,bug,High,Pending,-,~40K,-,-,2026-01-27,,[BACKLOG-545.md](items/BACKLOG-545.md)
 BACKLOG-546,Returning users incorrectly see T&C acceptance screen,bug,High,completed,SPRINT-062,~15K,~15K,0,2026-01-27,2026-01-27,[BACKLOG-546.md](items/BACKLOG-546.md)
-BACKLOG-547,Email attachments not included in export package,bug,High,Pending,-,~25K,-,-,2026-01-27,,[BACKLOG-547.md](items/BACKLOG-547.md)
+BACKLOG-547,Email attachments not included in export package,bug,High,completed,SPRINT-067,~25K,-,-,2026-01-27,2026-02-01,[BACKLOG-547.md](items/BACKLOG-547.md)
 BACKLOG-548,Browser auth landing page with provider selection,feature,High,completed,SPRINT-062,~5K,~5K,0,2026-01-27,2026-01-27,[BACKLOG-548.md](items/BACKLOG-548.md)
 BACKLOG-549,Investigate and consolidate TransactionToolbar vs TransactionsToolbar,refactoring,medium,pending,,"There are two nearly identical toolbar components: TransactionToolbar.tsx (used by TransactionList.tsx) and TransactionsToolbar.tsx (used by Transactions.tsx). Investigate whether both pages are needed and consolidate to a single toolbar component.",,2026-01-29
 BACKLOG-566,Multi-Category Contact Filtering in EditContactsModal,enhancement,Medium,Testing,SPRINT-066,~15K,-,-,2026-01-29,TASK-1769,[BACKLOG-566-multi-category-contact-filtering.md](items/BACKLOG-566-multi-category-contact-filtering.md)
@@ -484,5 +484,5 @@ BACKLOG-575,ContactRoleRow responsive layout,ux,medium,completed,SPRINT-066,Add 
 BACKLOG-576,Responsive icon-only buttons for Overview tab,ux,medium,completed,SPRINT-066,Edit Summary - Sync - Edit Contacts buttons show icon-only on small screens with text on larger screens,2026-01-31,
 BACKLOG-577,Consistent Edit button colors,ux,low,completed,SPRINT-066,Change Edit Summary button from indigo to blue to match Edit Contacts button color,2026-01-31,
 BACKLOG-578,Fix Supabase RLS infinite recursion in organization_members,bugfix,high,pending,,Fix Row Level Security policy on organization_members table that causes infinite recursion - need to use security definer function or different table reference,2026-01-31,
-BACKLOG-579,List Attachment Filenames in Export PDF,enhancement,high,testing,SPRINT-067,~15K,-,-,2026-02-01,-,BACKLOG-579.md
-BACKLOG-579,Attachments Tab Show Downloaded Files,medium,feature,pending,,"Wire Attachments tab to show actual downloaded files from attachments table instead of email metadata JSON. Add click-to-open functionality.",SPRINT-067-feedback
+BACKLOG-579,List Attachment Filenames in Export PDF,enhancement,high,completed,SPRINT-067,~15K,-,-,2026-02-01,2026-02-01,[BACKLOG-579.md](items/BACKLOG-579.md)
+BACKLOG-580,Attachments Tab Show Downloaded Files,feature,medium,deferred,-,~30K,-,SPRINT-067 feedback - deferred,2026-02-01,-,[BACKLOG-580.md](items/BACKLOG-580-attachments-tab-downloaded-files.md)

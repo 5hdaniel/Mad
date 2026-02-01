@@ -21,6 +21,9 @@ beforeAll(() => {
       getAttachmentBuffer: mockGetAttachmentBuffer,
     },
   };
+
+  // Mock scrollTo for JSDOM (not implemented by default)
+  Element.prototype.scrollTo = jest.fn();
 });
 
 afterAll(() => {
@@ -333,7 +336,7 @@ describe("AttachmentPreviewModal", () => {
       expect(screen.getByTestId("pdf-document")).toBeInTheDocument();
     });
 
-    it("should show page navigation for multi-page PDFs", async () => {
+    it("should render PDF in scrollable view without pagination", async () => {
       mockGetAttachmentData.mockResolvedValue({
         success: true,
         data: "data:application/pdf;base64,JVBERi0...",
@@ -351,49 +354,14 @@ describe("AttachmentPreviewModal", () => {
         />
       );
 
-      // Wait for PDF to load (mock returns 3 pages)
+      // Wait for PDF preview to load
       await waitFor(() => {
-        expect(screen.getByTestId("pdf-page-info")).toBeInTheDocument();
+        expect(screen.getByTestId("pdf-preview")).toBeInTheDocument();
       });
 
-      expect(screen.getByText("Page 1 of 3")).toBeInTheDocument();
-      expect(screen.getByTestId("pdf-prev-page")).toBeInTheDocument();
-      expect(screen.getByTestId("pdf-next-page")).toBeInTheDocument();
-    });
-
-    it("should navigate between PDF pages", async () => {
-      const user = userEvent.setup();
-      mockGetAttachmentData.mockResolvedValue({
-        success: true,
-        data: "data:application/pdf;base64,JVBERi0...",
-      });
-
-      render(
-        <AttachmentPreviewModal
-          attachment={createMockAttachment({
-            filename: "multipage.pdf",
-            mime_type: "application/pdf",
-            storage_path: "/path/to/multipage.pdf",
-          })}
-          onClose={mockOnClose}
-          onOpenWithSystem={mockOnOpenWithSystem}
-        />
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId("pdf-page-info")).toBeInTheDocument();
-      });
-
-      // Initially on page 1
-      expect(screen.getByText("Page 1 of 3")).toBeInTheDocument();
-
-      // Go to next page
-      await user.click(screen.getByTestId("pdf-next-page"));
-      expect(screen.getByText("Page 2 of 3")).toBeInTheDocument();
-
-      // Go to previous page
-      await user.click(screen.getByTestId("pdf-prev-page"));
-      expect(screen.getByText("Page 1 of 3")).toBeInTheDocument();
+      // Full scroll view - no pagination buttons (all pages rendered for scrolling)
+      expect(screen.queryByTestId("pdf-prev-page")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("pdf-next-page")).not.toBeInTheDocument();
     });
 
     it("should show error fallback when PDF load fails", async () => {

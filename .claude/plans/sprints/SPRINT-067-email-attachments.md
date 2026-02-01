@@ -1,7 +1,8 @@
 # Sprint Plan: SPRINT-067 - Email Attachments for Audits
 
 **Created**: 2026-01-31
-**Status**: PLANNING
+**Completed**: 2026-02-01
+**Status**: COMPLETED
 **Goal**: Enable users to see email attachments in audit interface and include them in exports
 **Target Branch**: develop
 **Estimated Duration**: 3-4 days
@@ -312,32 +313,33 @@ Before starting sprint work, engineers must:
 | TASK-1780 | MERGED | - | - | #701 |
 | TASK-1778 | MERGED | - | - | #702, #704 |
 | TASK-1779 | MERGED | - | - | #703 |
-| TASK-1781 | TODO | - | - | - |
-| TASK-1782 | TODO | - | - | - |
-| TASK-1783 | TODO | - | - | - |
-| **User Testing** | PENDING | - | - | - |
+| TASK-1781 | MERGED | - | - | #708 |
+| TASK-1782 | MERGED | - | - | #708 |
+| TASK-1783 | MERGED | - | - | #708 |
+| **User Testing** | PASSED | - | - | - |
+| **Final Merge** | MERGED | - | - | #708 |
 
 *Note: PR #704 fixes TASK-1778 CSP issue (file:// URLs blocked, now uses data: URLs)*
-*Note: TASK-1781/1782/1783 added from user testing feedback*
+*Note: TASK-1781/1782/1783 added from user testing feedback, merged in PR #708*
 
 ---
 
 ## User Testing Gate
 
-**Status:** PENDING
-**Required Before:** Sprint close
+**Status:** PASSED
+**Completed:** 2026-02-01
 
-After all 5 PRs are merged to develop:
+After all PRs merged to develop:
 
 ### Manual Test Checklist
 
-- [ ] **Attachment Download:** Link an email with attachments, verify files appear in app data
-- [ ] **UI Display:** Open email in EmailViewModal, see attachment list with names/sizes/icons
-- [ ] **Open Attachment:** Click an attachment, verify it opens with system viewer
-- [ ] **Preview Modal:** Click image attachment, verify inline preview displays
-- [ ] **Export:** Export audit package, verify email attachments in attachments/ folder
-- [ ] **Manifest:** Check manifest.json includes email attachment entries with `messageType: "email"`
-- [ ] **Broker Portal:** Submit transaction, verify email attachments appear in broker portal
+- [x] **Attachment Download:** Link an email with attachments, verify files appear in app data
+- [x] **UI Display:** Open email in EmailViewModal, see attachment list with names/sizes/icons
+- [x] **Open Attachment:** Click an attachment, verify it opens with system viewer
+- [x] **Preview Modal:** Click image attachment, verify inline preview displays
+- [x] **Export:** Export audit package, verify email attachments in attachments/ folder
+- [x] **Manifest:** Check manifest.json includes email attachment entries with `messageType: "email"`
+- [x] **Broker Portal:** Submit transaction, verify email attachments appear in broker portal
 
 ### How to Test
 
@@ -352,8 +354,36 @@ After all 5 PRs are merged to develop:
 
 ### Pass/Fail
 
-- **Pass:** Mark sprint as COMPLETED
-- **Fail:** Create fix tasks, return to implementation
+- **PASSED:** Sprint marked COMPLETED on 2026-02-01
+
+---
+
+## QA Session Summary
+
+**Date:** 2026-02-01
+**Result:** All issues resolved, sprint closed
+
+### Issues Found and Fixed
+
+| # | Issue | Root Cause | How Found | Time to Fix | Lesson Learned |
+|---|-------|------------|-----------|-------------|----------------|
+| 1 | Wrong license type for multi-org users | `maybeSingle()` errors when query returns multiple rows | User testing - wrong license displayed | ~15 min | Supabase `maybeSingle()` throws on >1 row; use `limit(1)` for "get first match" queries |
+| 2 | LicenseGate flash on hot reload | Race condition - `isLoading` resets to true during background refresh | User testing - Submit button appeared then disappeared | ~20 min | Add `hasInitialized` flag to distinguish first load from refresh |
+| 3 | PDF preview failed to load | CSP blocked external worker script from unpkg.com | User testing - "Setting up fake worker failed" error | ~30 min | Electron CSP blocks external scripts; bundle workers locally in public/ |
+| 4 | PDF started at wrong page | `items-center` on flex container centered 450-page PDF vertically | User testing - opened at page 220 | ~25 min | For scrollable content, use `items-start` not `items-center` |
+| 5 | Attachment count showed 0 | useAttachmentCounts hook created but not wired to SubmitForReviewModal | User testing - modal showed wrong count | ~15 min | End-to-end testing needed after adding new hooks |
+| 6 | No file size in Submit modal | API returned counts but not totalSizeBytes | User feedback - wanted to see package size | ~20 min | Include aggregate metrics (size, count) in summary APIs |
+
+### Agent/Process Improvement Recommendations
+
+1. **Engineer Agent**: Should run manual smoke test after implementing UI features, not just type-check/lint
+2. **QA Agent**: Add test cases for edge cases like multi-org users, large documents (450+ pages)
+3. **SR Engineer**: Review CSP implications when adding external dependencies (workers, CDNs)
+4. **PM**: Include "visual regression" test cases in QA checklist for UI changes
+
+### Deferred Items
+
+- **BACKLOG-580 (Attachments Tab Show Downloaded Files)**: Deferred to future sprint. Infrastructure exists from TASK-1781/1783, just needs wiring.
 
 ---
 
