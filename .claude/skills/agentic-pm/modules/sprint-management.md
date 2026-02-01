@@ -78,6 +78,63 @@ Engineers DON'T see:
 
 ---
 
+## Estimate Integrity Rules (MANDATORY)
+
+**CRITICAL: Estimates are historical data. Never modify them after sprint creation.**
+
+### Why Estimates Must Stay Fixed
+
+Estimates capture planning assumptions at sprint start. Changing them retroactively:
+- Destroys ability to measure estimation accuracy
+- Makes variance analysis meaningless
+- Prevents learning from over/under-estimates
+
+### Rules
+
+1. **Never modify original estimates** in the "In Scope" table
+   - Total Estimated tokens stays fixed
+   - SR Review Overhead stays fixed
+   - Grand Total stays fixed
+
+2. **Billable Tokens = Actuals Only**
+   - Leave as "-" until task is complete AND tokens are tracked
+   - Never put estimates in this column
+   - Only fill with actual monitored token consumption
+
+3. **Mid-Sprint Additions**
+   - Add new task row with `*(added mid-sprint)* ` note
+   - Add footnote: `*Note: TASK-XXXX added mid-sprint (+~XK est.)*`
+   - Do NOT modify original totals
+
+### Example: Adding Task Mid-Sprint
+
+**WRONG:**
+```markdown
+**Total Estimated:** ~165K tokens  <!-- Changed from 150K -->
+```
+
+**RIGHT:**
+```markdown
+| TASK-1780 | New Feature | ~15K | HIGH | 3 | *(added mid-sprint)*
+
+**Total Estimated (implementation):** ~150K tokens  <!-- Unchanged -->
+
+*Note: TASK-1780 added mid-sprint (+~15K est.)*
+```
+
+### Progress Tracking Table
+
+| Column | Contains | When Filled |
+|--------|----------|-------------|
+| Status | TODO/IN_PROGRESS/MERGED | Real-time |
+| Billable Tokens | **Actual** monitored tokens | After task complete |
+| Duration | Actual time if tracked | After task complete |
+| PR | PR number(s) | When PR created |
+
+**NEVER put estimates in Billable Tokens column.**
+
+---
+
 ## Creating a Sprint
 
 ### Prerequisites
