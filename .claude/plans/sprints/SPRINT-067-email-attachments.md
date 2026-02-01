@@ -72,12 +72,16 @@ User requirements:
 | TASK-1778 | Email Attachment Preview Modal | ~20K | MEDIUM | 3 |
 | TASK-1779 | Upload Email Attachments to Broker Portal | ~25K | HIGH | 4 |
 | TASK-1780 | List Attachment Filenames in Export PDF | ~15K | HIGH | 3 | *(added mid-sprint)*
+| TASK-1781 | Fix UI Attachment Count Display | ~25K | HIGH | 5 | *(added mid-sprint)*
+| TASK-1782 | Show Attachments in Email Thread View | ~30K | MEDIUM | 5 | *(added mid-sprint)*
+| TASK-1783 | Add PDF and DOCX Preview | ~35K | MEDIUM | 5 | *(added mid-sprint)*
 
 **Total Estimated (implementation):** ~150K tokens
 **SR Review Overhead:** +20K (5 tasks @ ~4K each)
 **Grand Total:** ~170K tokens
 
 *Note: TASK-1780 added mid-sprint (+~15K est.)*
+*Note: TASK-1781, TASK-1782, TASK-1783 added mid-sprint from user testing feedback (+~90K est.)*
 
 ---
 
@@ -308,9 +312,13 @@ Before starting sprint work, engineers must:
 | TASK-1780 | MERGED | - | - | #701 |
 | TASK-1778 | MERGED | - | - | #702, #704 |
 | TASK-1779 | MERGED | - | - | #703 |
+| TASK-1781 | TODO | - | - | - |
+| TASK-1782 | TODO | - | - | - |
+| TASK-1783 | TODO | - | - | - |
 | **User Testing** | PENDING | - | - | - |
 
 *Note: PR #704 fixes TASK-1778 CSP issue (file:// URLs blocked, now uses data: URLs)*
+*Note: TASK-1781/1782/1783 added from user testing feedback*
 
 ---
 
