@@ -501,11 +501,20 @@ export async function getUnimportedContactsByUserId(
 
 /**
  * Mark a contact as imported (change is_imported from 0 to 1)
+ * Optionally update the source field (e.g., when importing from macOS Contacts)
+ * @param contactId - The contact ID to update
+ * @param source - Optional source to set (e.g., "contacts_app")
  */
-export async function markContactAsImported(contactId: string): Promise<void> {
-  const sql =
-    "UPDATE contacts SET is_imported = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
-  dbRun(sql, [contactId]);
+export async function markContactAsImported(contactId: string, source?: string): Promise<void> {
+  if (source) {
+    const sql =
+      "UPDATE contacts SET is_imported = 1, source = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
+    dbRun(sql, [source, contactId]);
+  } else {
+    const sql =
+      "UPDATE contacts SET is_imported = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
+    dbRun(sql, [contactId]);
+  }
 }
 
 /**
@@ -1197,10 +1206,23 @@ export async function deleteContact(contactId: string): Promise<void> {
 
 /**
  * Remove a contact from local database (un-import)
+ * For contacts from Contacts App, delete entirely (they exist in external_contacts)
+ * For other sources, just mark as unimported
  */
 export async function removeContact(contactId: string): Promise<void> {
-  const sql = "UPDATE contacts SET is_imported = 0 WHERE id = ?";
-  dbRun(sql, [contactId]);
+  // Check if this contact came from Contacts App
+  const contact = dbGet<{ source: string }>(
+    "SELECT source FROM contacts WHERE id = ?",
+    [contactId]
+  );
+
+  if (contact?.source === "contacts_app") {
+    // Delete entirely - contact exists in external_contacts shadow table
+    dbRun("DELETE FROM contacts WHERE id = ?", [contactId]);
+  } else {
+    // Keep in DB but mark as unimported
+    dbRun("UPDATE contacts SET is_imported = 0 WHERE id = ?", [contactId]);
+  }
 }
 
 /**

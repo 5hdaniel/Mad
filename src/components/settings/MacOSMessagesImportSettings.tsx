@@ -44,6 +44,48 @@ export function MacOSMessagesImportSettings({
     error?: string;
     cancelled?: boolean;
   } | null>(null);
+  const [importStatus, setImportStatus] = useState<{
+    messageCount?: number;
+    lastImportAt?: string | null;
+  } | null>(null);
+
+  // Load import status on mount
+  useEffect(() => {
+    if (!isMacOS || !userId) return;
+    loadImportStatus();
+  }, [isMacOS, userId]);
+
+  const loadImportStatus = async () => {
+    try {
+      const result = await window.api.messages.getImportStatus(userId);
+      if (result.success) {
+        setImportStatus({
+          messageCount: result.messageCount,
+          lastImportAt: result.lastImportAt,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to load import status:", error);
+    }
+  };
+
+  // Format the last import time for display
+  const formatLastImport = (lastImportAt: string | null | undefined): string => {
+    if (!lastImportAt) return "Never imported";
+
+    const importDate = new Date(lastImportAt);
+    const now = new Date();
+    const diffMs = now.getTime() - importDate.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? "s" : ""} ago`;
+    if (diffHours < 24)
+      return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
+    return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
+  };
 
   // Subscribe to import progress updates
   useEffect(() => {
@@ -87,6 +129,11 @@ export function MacOSMessagesImportSettings({
           error: wasCancelled ? undefined : result.error,
           cancelled: wasCancelled,
         });
+
+        // Reload status after successful import
+        if (result.success) {
+          await loadImportStatus();
+        }
       } catch (error) {
         setLastResult({
           success: false,
@@ -139,6 +186,16 @@ export function MacOSMessagesImportSettings({
         Import messages from the macOS Messages app to enable linking with your
         transactions.
       </p>
+
+      {/* Import status display */}
+      {importStatus && (
+        <div className="mb-3 text-xs text-gray-500">
+          Last imported: {formatLastImport(importStatus.lastImportAt)}
+          {importStatus.messageCount !== undefined && (
+            <> | {importStatus.messageCount.toLocaleString()} messages</>
+          )}
+        </div>
+      )}
 
       {/* Result display */}
       {lastResult && !isImporting && (

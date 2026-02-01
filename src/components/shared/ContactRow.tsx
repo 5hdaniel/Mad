@@ -6,8 +6,14 @@ import type { ContactSource as ModelContactSource } from "../../../electron/type
 export interface ContactRowProps {
   /** The contact to display */
   contact: ExtendedContact;
+  /** Whether this is an external contact (from Contacts App, not yet imported) */
+  isExternal?: boolean;
   /** Whether this contact is currently selected */
   isSelected?: boolean;
+  /** Whether this contact has been added to the transaction */
+  isAdded?: boolean;
+  /** Whether this contact is currently being added (loading state) */
+  isAdding?: boolean;
   /** Whether to show a checkbox for selection */
   showCheckbox?: boolean;
   /** Whether to show import button for external contacts */
@@ -57,28 +63,29 @@ function isExternalContact(contact: ExtendedContact): boolean {
 
 /**
  * Maps model ContactSource to SourcePill's ContactSource
- * Model: "manual" | "email" | "sms" | "contacts_app" | "inferred"
- * SourcePill: "imported" | "external" | "manual" | "contacts_app" | "sms"
+ * Model: "manual" | "email" | "sms" | "messages" | "contacts_app" | "inferred"
+ * SourcePill: "imported" | "external" | "manual" | "contacts_app" | "sms" | "messages"
  */
 function mapToSourcePillSource(
   source: ModelContactSource | string | undefined,
-  isMessageDerived: boolean
+  isExternal: boolean
 ): SourcePillSource {
-  // If message-derived, show as external regardless of source
-  if (isMessageDerived) {
+  // sms/messages source takes priority - always show "Message" pill
+  if (source === "sms" || source === "messages") {
+    return source;
+  }
+
+  // External contacts (from Contacts App, not yet imported) show "Contacts App" pill
+  if (isExternal) {
     return "external";
   }
 
-  // Map model sources to SourcePill sources
+  // Imported contacts - check source for specific display
   switch (source) {
     case "manual":
       return "manual";
     case "contacts_app":
       return "contacts_app";
-    case "sms":
-      return "sms";
-    case "email":
-    case "inferred":
     default:
       return "imported";
   }
@@ -111,7 +118,10 @@ function mapToSourcePillSource(
  */
 export function ContactRow({
   contact,
+  isExternal: isExternalProp,
   isSelected = false,
+  isAdded = false,
+  isAdding = false,
   showCheckbox = false,
   showImportButton = false,
   onSelect,
@@ -121,7 +131,8 @@ export function ContactRow({
   const displayName = getDisplayName(contact);
   const email = getPrimaryEmail(contact);
   const initial = getInitial(displayName);
-  const isExternal = isExternalContact(contact);
+  // Use prop if provided, otherwise check contact's is_message_derived flag
+  const isExternal = isExternalProp ?? isExternalContact(contact);
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === "Enter" || event.key === " ") {
@@ -192,14 +203,20 @@ export function ContactRow({
         <span className="text-white text-sm font-medium">{initial}</span>
       </div>
 
-      {/* Name and Email */}
+      {/* Name, Source Pill, and Email */}
       <div className="flex-1 min-w-0">
-        <p
-          className="text-sm font-medium text-gray-900 truncate"
-          data-testid="contact-row-name"
-        >
-          {displayName}
-        </p>
+        <div className="flex items-center gap-2">
+          <p
+            className="text-sm font-medium text-gray-900 truncate"
+            data-testid="contact-row-name"
+          >
+            {displayName}
+          </p>
+          <SourcePill
+            source={mapToSourcePillSource(contact.source, isExternal)}
+            size="sm"
+          />
+        </div>
         {email && (
           <p
             className="text-xs text-gray-500 truncate"
@@ -210,24 +227,68 @@ export function ContactRow({
         )}
       </div>
 
-      {/* Source Pill */}
-      <div className="flex-shrink-0">
-        <SourcePill
-          source={mapToSourcePillSource(contact.source, isExternal)}
-          size="sm"
-        />
-      </div>
+      {/* Adding spinner */}
+      {isAdding && (
+        <div
+          className="flex-shrink-0 flex items-center gap-1.5 px-2 py-1 text-purple-600 text-xs font-medium"
+          data-testid="contact-row-adding-indicator"
+        >
+          <svg
+            className="w-3.5 h-3.5 animate-spin"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            />
+          </svg>
+          Adding...
+        </div>
+      )}
 
-      {/* Import Button - only for external contacts */}
-      {showImportButton && isExternal && (
+      {/* Added indicator with checkmark */}
+      {!isAdding && isAdded && (
+        <div
+          className="flex-shrink-0 flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium"
+          data-testid="contact-row-added-indicator"
+        >
+          <svg
+            className="w-3.5 h-3.5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={3}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M5 13l4 4L19 7"
+            />
+          </svg>
+          Added
+        </div>
+      )}
+
+      {/* Add Contact Button */}
+      {!isAdding && !isAdded && showImportButton && (
         <button
           type="button"
           onClick={handleImportClick}
           className="flex-shrink-0 px-2 py-1 text-xs font-medium text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded transition-colors"
-          aria-label={`Import ${displayName}`}
+          aria-label={`Add ${displayName}`}
           data-testid="contact-row-import-button"
         >
-          + Import
+          + Add Contact
         </button>
       )}
     </div>

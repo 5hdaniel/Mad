@@ -50,19 +50,22 @@ function mapToSourcePillSource(
   source: ModelContactSource | string | undefined,
   isExternal: boolean
 ): ContactSource {
+  // sms/messages source takes priority - always show "Message" pill
+  if (source === "sms" || source === "messages") {
+    return source;
+  }
+
+  // External contacts (from Contacts App, not yet imported) show "Contacts App" pill
   if (isExternal) {
     return "external";
   }
 
+  // Imported contacts - check source for specific display
   switch (source) {
     case "manual":
       return "manual";
     case "contacts_app":
       return "contacts_app";
-    case "sms":
-      return "sms";
-    case "email":
-    case "inferred":
     default:
       return "imported";
   }

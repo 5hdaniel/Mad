@@ -9,7 +9,8 @@ export type ContactSource =
   | "external"
   | "manual"
   | "contacts_app"
-  | "sms";
+  | "sms"
+  | "messages";
 
 export interface SourcePillProps {
   /** The contact source - mapped to visual variant */
@@ -20,22 +21,27 @@ export interface SourcePillProps {
   className?: string;
 }
 
-type Variant = "imported" | "external" | "message";
+type Variant = "imported" | "external" | "message" | "manual";
 
 const VARIANT_STYLES: Record<Variant, { bg: string; text: string; label: string }> = {
   imported: {
-    bg: "bg-green-100",
-    text: "text-green-700",
-    label: "Imported",
-  },
-  external: {
     bg: "bg-blue-100",
     text: "text-blue-700",
-    label: "External",
+    label: "Imported",
+  },
+  manual: {
+    bg: "bg-green-100",
+    text: "text-green-700",
+    label: "Manual",
+  },
+  external: {
+    bg: "bg-violet-100",
+    text: "text-violet-700",
+    label: "Contacts App",
   },
   message: {
-    bg: "bg-gray-100",
-    text: "text-gray-600",
+    bg: "bg-amber-100",
+    text: "text-amber-700",
     label: "Message",
   },
 };
@@ -47,19 +53,22 @@ const SIZE_STYLES: Record<"sm" | "md", string> = {
 
 /**
  * Maps a contact source to its display variant.
- * - imported, manual, contacts_app -> 'imported' (green)
- * - external -> 'external' (blue)
- * - sms -> 'message' (gray)
+ * - manual -> 'manual' (green)
+ * - imported, contacts_app -> 'imported' (blue)
+ * - external -> 'external' (violet)
+ * - sms, messages -> 'message' (amber)
  */
 function getVariant(source: ContactSource): Variant {
   switch (source) {
-    case "imported":
     case "manual":
+      return "manual";
+    case "imported":
     case "contacts_app":
       return "imported";
     case "external":
       return "external";
     case "sms":
+    case "messages":
       return "message";
     default:
       return "imported";

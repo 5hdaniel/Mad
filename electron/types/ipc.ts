@@ -973,6 +973,30 @@ export interface WindowApi {
     onImportProgress: (
       callback: (progress: { current: number; total: number; percent: number }) => void
     ) => () => void;
+    /**
+     * Sync external contacts from macOS Contacts app
+     * @param userId - User ID to sync contacts for
+     * @returns Sync result with inserted/deleted/total counts
+     */
+    syncExternal: (userId: string) => Promise<{
+      success: boolean;
+      inserted?: number;
+      deleted?: number;
+      total?: number;
+      error?: string;
+    }>;
+    /**
+     * Get external contacts sync status
+     * @param userId - User ID to check status for
+     * @returns Sync status (lastSyncAt, isStale, contactCount)
+     */
+    getExternalSyncStatus: (userId: string) => Promise<{
+      success: boolean;
+      lastSyncAt?: string | null;
+      isStale?: boolean;
+      contactCount?: number;
+      error?: string;
+    }>;
   };
 
   // Transaction methods
@@ -1240,6 +1264,13 @@ export interface WindowApi {
       repaired: number;
       orphaned: number;
       alreadyCorrect: number;
+    }>;
+    /** Get macOS messages import status (count and last import time) */
+    getImportStatus: (userId: string) => Promise<{
+      success: boolean;
+      messageCount?: number;
+      lastImportAt?: string | null;
+      error?: string;
     }>;
   };
 

@@ -1098,8 +1098,8 @@ class DatabaseService implements IDatabaseService {
     return contactDb.getUnimportedContactsByUserId(userId);
   }
 
-  async markContactAsImported(contactId: string): Promise<void> {
-    return contactDb.markContactAsImported(contactId);
+  async markContactAsImported(contactId: string, source?: string): Promise<void> {
+    return contactDb.markContactAsImported(contactId, source);
   }
 
   async backfillContactEmails(contactId: string, emails: string[]): Promise<number> {

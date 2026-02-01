@@ -41,12 +41,34 @@ export interface ContactSearchListProps {
   onSelectionChange: (selectedIds: string[]) => void;
   /** Callback to import an external contact - returns the imported contact */
   onImportContact?: (contact: ExtendedContact) => Promise<ExtendedContact>;
+  /**
+   * Whether to show add/import button for already-imported contacts.
+   * - true: Show button for ALL contacts (use in transaction flows to add to transaction)
+   * - false: Only show button for external contacts (use in Contacts screen for import only)
+   * Default: false
+   */
+  showAddButtonForImported?: boolean;
+  /** Callback when a contact is clicked (for viewing details). If provided, clicking a contact calls this instead of selection. */
+  onContactClick?: (contact: ExtendedContact) => void;
+  /** Callback to add a new contact manually */
+  onAddManually?: () => void;
+  /** Contact IDs that have been added (for visual feedback) */
+  addedContactIds?: Set<string>;
   /** Show loading state */
   isLoading?: boolean;
   /** Error message to display */
   error?: string | null;
   /** Placeholder text for search input */
   searchPlaceholder?: string;
+  /** Whether to show the built-in category filter (default: true) */
+  showCategoryFilter?: boolean;
+  /**
+   * Sort order for contacts.
+   * - "recent": Most recent communication first (for transaction flows)
+   * - "alphabetical": A-Z by name (for Contacts screen)
+   * Default: "recent"
+   */
+  sortOrder?: "recent" | "alphabetical";
   /** Additional CSS classes */
   className?: string;
 }
@@ -127,23 +149,102 @@ function matchesSearch(
  *   }}
  * />
  */
+/**
+ * Category filter state - matches SourcePill display variants
+ * - manual: Green "Manual" pill (user-created contacts)
+ * - imported: Blue "Imported" pill (imported from Contacts App, non-message-derived)
+ * - external: Violet "Contacts App" pill (message-derived contacts, not yet imported)
+ * - messages: Amber "Message" pill (SMS source)
+ */
+interface CategoryFilter {
+  manual: boolean;
+  imported: boolean;
+  external: boolean;
+  messages: boolean;
+}
+
+const DEFAULT_CATEGORY_FILTER: CategoryFilter = {
+  manual: true,
+  imported: true,
+  external: true,
+  messages: false,
+};
+
+/**
+ * Determines the filter category of a contact based on source and external status.
+ * This is the single source of truth for contact categorization.
+ *
+ * Categories map to pill display:
+ * - "messages" → "Message" pill (amber) - from SMS/iMessage sync
+ * - "external" → "Contacts App" pill (violet) - from Contacts App, not imported
+ * - "manual" → "Manual" pill (green) - user-created via Add Manually
+ * - "imported" → "Imported" pill (blue) - imported from Contacts App
+ */
+function getContactCategory(contact: ExtendedContact, isExternalContact: boolean = false): keyof CategoryFilter {
+  // SMS/messages source shows as "Message" pill
+  if (contact.source === "sms" || contact.source === "messages") {
+    return "messages";
+  }
+  // External contacts (from Contacts App, not yet imported) show as "Contacts App" pill
+  if (isExternalContact || contact.is_message_derived === true || contact.is_message_derived === 1) {
+    return "external";
+  }
+  // Manual source - user-created contacts via Add Manually
+  if (contact.source === "manual") {
+    return "manual";
+  }
+  // Everything else shows as "Imported" pill (contacts_app, email, inferred, etc.)
+  return "imported";
+}
+
 export function ContactSearchList({
   contacts,
   externalContacts = [],
   selectedIds,
   onSelectionChange,
   onImportContact,
+  showAddButtonForImported = false,
+  onContactClick,
+  onAddManually,
+  addedContactIds = new Set(),
   isLoading = false,
   error = null,
   searchPlaceholder = "Search contacts...",
+  showCategoryFilter = true,
+  sortOrder = "recent",
   className = "",
 }: ContactSearchListProps): React.ReactElement {
   const [searchQuery, setSearchQuery] = useState("");
   const [importingIds, setImportingIds] = useState<Set<string>>(new Set());
   const [focusedIndex, setFocusedIndex] = useState(-1);
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>(DEFAULT_CATEGORY_FILTER);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+
+  // Build sets of emails/phones from imported contacts for deduplication and isAdded check
+  const { importedEmails, importedPhones } = useMemo(() => {
+    const emails = new Set<string>();
+    const phones = new Set<string>();
+    contacts.forEach((c) => {
+      if (c.email) emails.add(c.email.toLowerCase());
+      c.allEmails?.forEach((e) => emails.add(e.toLowerCase()));
+      if (c.phone) phones.add(c.phone.replace(/\D/g, ""));
+      c.allPhones?.forEach((p) => phones.add(p.replace(/\D/g, "")));
+    });
+    return { importedEmails: emails, importedPhones: phones };
+  }, [contacts]);
+
+  // Helper to check if an external contact is already imported (by email/phone)
+  const isContactImported = useCallback((contact: ExtendedContact): boolean => {
+    const emails = [contact.email, ...(contact.allEmails || [])].filter(Boolean);
+    const emailMatch = emails.some((e) => importedEmails.has(e!.toLowerCase()));
+    if (emailMatch) return true;
+
+    const phones = [contact.phone, ...(contact.allPhones || [])].filter(Boolean);
+    const phoneMatch = phones.some((p) => importedPhones.has(p!.replace(/\D/g, "")));
+    return phoneMatch;
+  }, [importedEmails, importedPhones]);
 
   // Combine, sort, and filter contacts
   const combinedContacts = useMemo((): CombinedContact[] => {
@@ -153,31 +254,51 @@ export function ContactSearchList({
       isExternal: isExternalContact(c),
     }));
 
-    // External contacts already in ExtendedContact format - mark as external
-    const external: CombinedContact[] = externalContacts.map((c) => ({
-      contact: c,
-      isExternal: true,
-    }));
+    // External contacts - filter out those already imported (by email/phone match)
+    const external: CombinedContact[] = externalContacts
+      .filter((c) => !isContactImported(c))
+      .map((c) => ({
+        contact: c,
+        isExternal: true,
+      }));
 
     // Combine lists (imported first, then external)
     const combined = [...imported, ...external];
 
-    // Sort by most recent communication first (BEFORE filtering)
-    // Using sortByRecentCommunication on contacts, then mapping back
-    const contactsWithIndex = combined.map((item, index) => ({
-      index,
-      last_communication_at: item.contact.last_communication_at,
-    }));
-    const sortedIndices = sortByRecentCommunication(contactsWithIndex);
-    const sorted = sortedIndices.map((item) => combined[item.index]);
+    // Sort based on sortOrder prop
+    let sorted: CombinedContact[];
+    if (sortOrder === "alphabetical") {
+      // Sort A-Z by display name
+      sorted = [...combined].sort((a, b) => {
+        const nameA = (a.contact.display_name || a.contact.name || "").toLowerCase();
+        const nameB = (b.contact.display_name || b.contact.name || "").toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+    } else {
+      // Sort by most recent communication first
+      const contactsWithIndex = combined.map((item, index) => ({
+        index,
+        last_communication_at: item.contact.last_communication_at,
+      }));
+      const sortedIndices = sortByRecentCommunication(contactsWithIndex);
+      sorted = sortedIndices.map((item) => combined[item.index]);
+    }
+
+    // Apply category filter only if enabled
+    const categoryFiltered = showCategoryFilter
+      ? sorted.filter(({ contact, isExternal }) => {
+          const category = getContactCategory(contact, isExternal);
+          return categoryFilter[category];
+        })
+      : sorted;
 
     // Apply search filter
     if (!searchQuery.trim()) {
-      return sorted;
+      return categoryFiltered;
     }
 
-    return sorted.filter(({ contact }) => matchesSearch(contact, searchQuery));
-  }, [contacts, externalContacts, searchQuery]);
+    return categoryFiltered.filter(({ contact }) => matchesSearch(contact, searchQuery));
+  }, [contacts, externalContacts, isContactImported, searchQuery, categoryFilter, showCategoryFilter, sortOrder]);
 
   // Reset focused index when list changes
   useEffect(() => {
@@ -236,24 +357,28 @@ export function ContactSearchList({
     [onImportContact, handleImport]
   );
 
-  // Handle row click based on contact type
+  // Handle row click based on contact type and mode
   const handleRowSelect = useCallback(
     (combined: CombinedContact) => {
+      // If onContactClick is provided, use it for viewing details (non-selection mode)
+      if (onContactClick) {
+        onContactClick(combined.contact);
+        return;
+      }
+      // Otherwise, use selection behavior
       if (combined.isExternal) {
         handleExternalSelect(combined.contact);
       } else {
         handleSelect(combined.contact.id);
       }
     },
-    [handleSelect, handleExternalSelect]
+    [handleSelect, handleExternalSelect, onContactClick]
   );
 
-  // Handle manual import button click (import without selecting)
+  // Handle add contact button click - works for all contacts
   const handleImportButtonClick = useCallback(
     (combined: CombinedContact) => {
-      if (combined.isExternal) {
-        handleImport(combined.contact, false);
-      }
+      handleImport(combined.contact, false);
     },
     [handleImport]
   );
@@ -301,36 +426,132 @@ export function ContactSearchList({
       className={`flex flex-col ${className}`}
       data-testid="contact-search-list"
     >
-      {/* Search Input */}
+      {/* Search Input and Add Manually Button */}
       <div className="p-3 border-b border-gray-200">
-        <div className="relative">
-          <input
-            ref={searchInputRef}
-            type="text"
-            value={searchQuery}
-            onChange={handleSearchChange}
-            onKeyDown={handleKeyDown}
-            placeholder={searchPlaceholder}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:outline-none"
-            aria-label="Search contacts"
-            data-testid="contact-search-input"
-          />
-          <svg
-            className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery}
+              onChange={handleSearchChange}
+              onKeyDown={handleKeyDown}
+              placeholder={searchPlaceholder}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:outline-none"
+              aria-label="Search contacts"
+              data-testid="contact-search-input"
             />
-          </svg>
+            <svg
+              className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+          </div>
+          {onAddManually && (
+            <button
+              type="button"
+              onClick={onAddManually}
+              className="flex-shrink-0 px-3 py-2 text-sm font-medium text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors flex items-center gap-1"
+              data-testid="add-manually-button"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                />
+              </svg>
+              Add Manually
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Category Filter - matches SourcePill display */}
+      {showCategoryFilter && (
+        <div className="flex-shrink-0 px-3 py-2 border-b border-gray-100 flex items-center gap-2">
+          <span className="text-xs text-gray-400 mr-1">Show:</span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setCategoryFilter(prev => ({ ...prev, manual: !prev.manual }));
+            }}
+            className={`px-2.5 py-1 text-xs font-medium rounded-full transition-colors ${
+              categoryFilter.manual
+                ? "bg-green-100 text-green-700"
+                : "bg-gray-100 text-gray-400"
+            }`}
+            data-testid="filter-manual"
+          >
+            Manual
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setCategoryFilter(prev => ({ ...prev, imported: !prev.imported }));
+            }}
+            className={`px-2.5 py-1 text-xs font-medium rounded-full transition-colors ${
+              categoryFilter.imported
+                ? "bg-blue-100 text-blue-700"
+                : "bg-gray-100 text-gray-400"
+            }`}
+            data-testid="filter-imported"
+          >
+            Imported
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setCategoryFilter(prev => ({ ...prev, external: !prev.external }));
+            }}
+            className={`px-2.5 py-1 text-xs font-medium rounded-full transition-colors ${
+              categoryFilter.external
+                ? "bg-violet-100 text-violet-700"
+                : "bg-gray-100 text-gray-400"
+            }`}
+            data-testid="filter-external"
+          >
+            Contacts App
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setCategoryFilter(prev => ({ ...prev, messages: !prev.messages }));
+            }}
+            className={`px-2.5 py-1 text-xs font-medium rounded-full transition-colors ${
+              categoryFilter.messages
+                ? "bg-amber-100 text-amber-700"
+                : "bg-gray-100 text-gray-400"
+            }`}
+            data-testid="filter-messages"
+          >
+            Messages
+          </button>
+        </div>
+      )}
 
       {/* Contact List */}
       <div
@@ -409,32 +630,26 @@ export function ContactSearchList({
           combinedContacts.map((combined, index) => {
             const isSelected = selectedIds.includes(combined.contact.id);
             const isImporting = importingIds.has(combined.contact.id);
+            const isAdded = addedContactIds.has(combined.contact.id);
 
             return (
               <ContactRow
                 key={combined.contact.id}
                 contact={combined.contact}
+                isExternal={combined.isExternal}
                 isSelected={isSelected}
-                showCheckbox={true}
-                showImportButton={combined.isExternal && !!onImportContact}
+                isAdded={isAdded}
+                isAdding={isImporting}
+                showCheckbox={false}
+                showImportButton={!!onImportContact && (combined.isExternal || showAddButtonForImported)}
                 onSelect={() => handleRowSelect(combined)}
                 onImport={() => handleImportButtonClick(combined)}
-                className={`${
-                  focusedIndex === index ? "ring-2 ring-inset ring-purple-500" : ""
-                } ${isImporting ? "opacity-50 pointer-events-none" : ""}`}
+                className={focusedIndex === index ? "ring-2 ring-inset ring-purple-500" : ""}
               />
             );
           })}
       </div>
 
-      {/* Selection Count Footer */}
-      <div
-        className="p-3 border-t border-gray-200 text-sm text-gray-600"
-        data-testid="selection-count"
-      >
-        Selected: {selectedIds.length} contact
-        {selectedIds.length !== 1 ? "s" : ""}
-      </div>
     </div>
   );
 }

@@ -11,7 +11,7 @@ import { getContactNames } from "./services/contactsService";
 import auditService from "./services/auditService";
 import logService from "./services/logService";
 import * as externalContactDb from "./services/db/externalContactDbService";
-import type { Contact, Transaction } from "./types/models";
+import type { Contact, Transaction, ContactSource } from "./types/models";
 
 // Import validation utilities
 import {
@@ -278,6 +278,22 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         );
 
         for (const dbContact of unimportedDbContacts) {
+          // Skip if already imported (by name, email, or phone)
+          const dbNameLower = (dbContact.name || dbContact.display_name)?.toLowerCase();
+          const dbEmailLower = dbContact.email?.toLowerCase();
+          if (importedNames.has(dbNameLower)) {
+            continue;
+          }
+          if (dbEmailLower && importedEmails.has(dbEmailLower)) {
+            continue;
+          }
+          if (dbContact.phone) {
+            const normalizedPhone = normalizePhoneNumber(dbContact.phone);
+            if (normalizedPhone && normalizedPhone !== "+" && importedPhones.has(normalizedPhone)) {
+              continue;
+            }
+          }
+
           // Skip if this is a duplicate (by email, phone, or name)
           if (isDuplicate(dbContact)) {
             continue;
@@ -574,8 +590,9 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         let processed = 0;
 
         // Mark existing DB contacts as imported and backfill any missing emails/phones
+        // Also update source to "contacts_app" when importing from macOS Contacts
         for (const { id, contact } of existingDbContacts) {
-          await databaseService.markContactAsImported(id);
+          await databaseService.markContactAsImported(id, contact.source || "contacts_app");
 
           // Backfill emails/phones from macOS Contacts if available
           if (contact.allEmails && contact.allEmails.length > 0) {
@@ -755,6 +772,12 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           }
         }
 
+        // Extract source from input data (falls back to "manual" if not provided)
+        const validSources: ContactSource[] = ["manual", "email", "sms", "messages", "contacts_app", "inferred"];
+        const inputSource = (contactData as { source?: string })?.source;
+        const source: ContactSource = validSources.includes(inputSource as ContactSource)
+          ? (inputSource as ContactSource)
+          : "manual";
         const contact = await databaseService.createContact({
           user_id: validatedUserId,
           display_name: validatedData.name || "Unknown",
@@ -762,7 +785,7 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           phone: validatedData.phone ?? undefined,
           company: validatedData.company ?? undefined,
           title: validatedData.title ?? undefined,
-          source: "manual",
+          source,
           is_imported: true,
         });
 

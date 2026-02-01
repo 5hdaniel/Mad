@@ -95,6 +95,7 @@ export interface UseAuditTransactionReturn {
   isEditing: boolean;
   addressData: AddressData;
   contactAssignments: ContactAssignments;
+  selectedContactIds: string[];
   showAddressAutocomplete: boolean;
   addressSuggestions: AddressSuggestion[];
 
@@ -102,10 +103,16 @@ export interface UseAuditTransactionReturn {
   contacts: Contact[];
   contactsLoading: boolean;
   contactsError: string | null;
-  refreshContacts: () => void;
+  refreshContacts: () => Promise<void>;
+  silentRefreshContacts: () => Promise<void>;
+
+  // External contacts (from macOS Contacts app, etc.)
+  externalContacts: Contact[];
+  externalContactsLoading: boolean;
 
   // Setters
   setAddressData: React.Dispatch<React.SetStateAction<AddressData>>;
+  setSelectedContactIds: React.Dispatch<React.SetStateAction<string[]>>;
   setError: React.Dispatch<React.SetStateAction<string | null>>;
 
   // Handlers
@@ -165,14 +172,23 @@ export function useAuditTransaction({
   // Contact assignments state
   const [contactAssignments, setContactAssignments] = useState<ContactAssignments>({});
 
+  // Selected contact IDs for step 2 (select contacts)
+  const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
+
   // Contact loading state (lazy-loaded when reaching step 2)
   // Contacts aren't needed until step 2, so we defer loading to eliminate modal open lag
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [contactsLoading, setContactsLoading] = useState<boolean>(false);
   const [contactsError, setContactsError] = useState<string | null>(null);
 
+  // External contacts state (from macOS Contacts app, etc.)
+  const [externalContacts, setExternalContacts] = useState<Contact[]>([]);
+  const [externalContactsLoading, setExternalContactsLoading] = useState<boolean>(false);
+
   // Track if contacts have been loaded (prevents duplicate loads in StrictMode and step navigation)
   const contactsLoadedRef = useRef(false);
+  // Track if external contacts have been loaded
+  const externalContactsLoadedRef = useRef(false);
   // Track if component is mounted to prevent state updates after unmount
   const isMountedRef = useRef(true);
 
@@ -187,7 +203,7 @@ export function useAuditTransaction({
    *
    * The forceRefresh parameter allows explicit refresh after imports.
    */
-  const loadContacts = useCallback(async (forceRefresh = false) => {
+  const loadContacts = useCallback(async (forceRefresh = false, showLoading = true) => {
     // Skip if already loaded and not a forced refresh (prevents StrictMode double-call)
     if (contactsLoadedRef.current && !forceRefresh) {
       return;
@@ -195,7 +211,10 @@ export function useAuditTransaction({
 
     if (!isMountedRef.current) return;
 
-    setContactsLoading(true);
+    // Only show loading state if requested (silent refresh passes false)
+    if (showLoading) {
+      setContactsLoading(true);
+    }
     setContactsError(null);
 
     try {
@@ -224,6 +243,38 @@ export function useAuditTransaction({
     }
   }, [userId, addressData.property_address]);
 
+  /**
+   * Load external contacts (from macOS Contacts app, etc.)
+   * Called lazily when reaching step 2, similar to loadContacts.
+   */
+  const loadExternalContacts = useCallback(async () => {
+    if (externalContactsLoadedRef.current) return;
+    if (!isMountedRef.current) return;
+
+    setExternalContactsLoading(true);
+    try {
+      const result = await window.api.contacts.getAvailable(userId);
+      if (!isMountedRef.current) return;
+
+      if (result.success && result.contacts) {
+        // Mark as external for SourcePill display
+        const external = result.contacts.map((c: Contact) => ({
+          ...c,
+          is_message_derived: true,
+        }));
+        setExternalContacts(external);
+        externalContactsLoadedRef.current = true;
+      }
+    } catch (err) {
+      if (!isMountedRef.current) return;
+      console.error("Failed to load external contacts:", err);
+    } finally {
+      if (isMountedRef.current) {
+        setExternalContactsLoading(false);
+      }
+    }
+  }, [userId]);
+
   // Setup mounted ref for cleanup
   useEffect(() => {
     isMountedRef.current = true;
@@ -239,9 +290,23 @@ export function useAuditTransaction({
     }
   }, [step, loadContacts]);
 
+  // Lazy load external contacts when step changes to 2
+  useEffect(() => {
+    if (step === 2 && !externalContactsLoadedRef.current) {
+      loadExternalContacts();
+    }
+  }, [step, loadExternalContacts]);
+
   // Wrapper to expose refresh functionality that always forces reload
-  const refreshContacts = useCallback(() => {
-    loadContacts(true);
+  // Returns a Promise so callers can await the refresh
+  const refreshContacts = useCallback((): Promise<void> => {
+    return loadContacts(true, true); // forceRefresh=true, showLoading=true
+  }, [loadContacts]);
+
+  // Silent refresh - forces reload without showing loading state
+  // Use after importing contacts to avoid jarring UI refresh
+  const silentRefreshContacts = useCallback((): Promise<void> => {
+    return loadContacts(true, false); // forceRefresh=true, showLoading=false
   }, [loadContacts]);
 
   /**
@@ -727,9 +792,10 @@ export function useAuditTransaction({
 
   /**
    * Proceed to next step
-   * TASK-1766: Updated to 2-step flow
+   * 3-step flow:
    * - Step 1: Transaction details (address, type, dates)
-   * - Step 2: Contact assignment (search-first pattern)
+   * - Step 2: Select contacts
+   * - Step 3: Assign roles to selected contacts
    * In edit mode, saves directly from step 1 (no contact steps)
    */
   const handleNextStep = useCallback((): void => {
@@ -755,19 +821,27 @@ export function useAuditTransaction({
       } else {
         setStep(2);
       }
-    } else if (step >= 2) {
-      // Step 2: Contact assignment - validate and create
+    } else if (step === 2) {
+      // Step 2: Select contacts - validate at least one selected
+      if (selectedContactIds.length === 0) {
+        setError("Please select at least one contact");
+        return;
+      }
+      setError(null);
+      setStep(3);
+    } else if (step === 3) {
+      // Step 3: Assign roles - validate client role is assigned
       if (
         !contactAssignments[SPECIFIC_ROLES.CLIENT] ||
         contactAssignments[SPECIFIC_ROLES.CLIENT].length === 0
       ) {
-        setError("Client contact is required");
+        setError("At least one contact must be assigned the Buyer (Client) role");
         return;
       }
       setError(null);
       handleCreateTransaction();
     }
-  }, [step, addressData.property_address, addressData.started_at, addressData.closed_at, contactAssignments, handleCreateTransaction, isEditing]);
+  }, [step, addressData.property_address, addressData.started_at, addressData.closed_at, selectedContactIds, contactAssignments, handleCreateTransaction, isEditing]);
 
   /**
    * Go back to previous step
@@ -785,6 +859,7 @@ export function useAuditTransaction({
     isEditing,
     addressData,
     contactAssignments,
+    selectedContactIds,
     showAddressAutocomplete,
     addressSuggestions,
 
@@ -793,9 +868,15 @@ export function useAuditTransaction({
     contactsLoading,
     contactsError,
     refreshContacts,
+    silentRefreshContacts,
+
+    // External contacts (from macOS Contacts app, etc.)
+    externalContacts,
+    externalContactsLoading,
 
     // Setters
     setAddressData,
+    setSelectedContactIds,
     setError,
 
     // Handlers

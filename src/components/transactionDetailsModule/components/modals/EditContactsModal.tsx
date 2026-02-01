@@ -18,18 +18,15 @@ import {
 } from "../../../../contexts/ContactsContext";
 import { ContactSearchList } from "../../../shared/ContactSearchList";
 import { ContactRoleRow } from "../../../shared/ContactRoleRow";
+import { ContactPreview } from "../../../shared/ContactPreview";
+import { ContactFormModal } from "../../../contact";
 import type { RoleOption } from "../../../shared/ContactRoleRow";
 import {
   filterRolesByTransactionType,
   getRoleDisplayName,
 } from "../../../../utils/transactionRoleUtils";
 import { contactService } from "../../../../services";
-import {
-  type CategoryFilter,
-  shouldShowContact,
-  loadCategoryFilter,
-  saveCategoryFilter,
-} from "../../../../utils/contactCategoryUtils";
+// Category filtering is now handled by ContactSearchList with its built-in pill-style filters
 import { sortByRecentCommunication } from "../../../../utils/contactSortUtils";
 
 // ============================================
@@ -101,7 +98,6 @@ export function EditContactsModal({
 }: EditContactsModalProps): React.ReactElement {
   // Screen 2 (Add Contacts) overlay state
   const [showAddModal, setShowAddModal] = useState(false);
-  const [pendingAddIds, setPendingAddIds] = useState<string[]>([]);
 
   // Assigned contact IDs (those shown in Screen 1)
   const [assignedContactIds, setAssignedContactIds] = useState<string[]>([]);
@@ -113,6 +109,9 @@ export function EditContactsModal({
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Contacts without roles (for validation highlighting)
+  const [contactsWithoutRoles, setContactsWithoutRoles] = useState<Set<string>>(new Set());
 
   // Store original assignments for save diffing
   const [originalAssignments, setOriginalAssignments] = useState<
@@ -182,6 +181,23 @@ export function EditContactsModal({
   }, []);
 
   const handleSave = async () => {
+    // First, validate that all assigned contacts have roles
+    const contactsInRoles = new Set<string>();
+    for (const contactIds of Object.values(roleAssignments)) {
+      for (const contactId of contactIds) {
+        contactsInRoles.add(contactId);
+      }
+    }
+
+    const missingRoles = assignedContactIds.filter((id) => !contactsInRoles.has(id));
+    if (missingRoles.length > 0) {
+      setContactsWithoutRoles(new Set(missingRoles));
+      setError(`Please assign a role to all contacts (${missingRoles.length} contact${missingRoles.length !== 1 ? "s" : ""} missing roles)`);
+      return;
+    }
+
+    // Clear any previous validation errors
+    setContactsWithoutRoles(new Set());
     setSaving(true);
     setError(null);
 
@@ -299,24 +315,25 @@ export function EditContactsModal({
           </button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-800">{error}</p>
-            </div>
-          )}
+        {/* Shared ContactsProvider for both Screen1 and Screen2 */}
+        <ContactsProvider
+          userId={transaction.user_id}
+          propertyAddress={transaction.property_address || ""}
+        >
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-6">
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm text-red-800">{error}</p>
+              </div>
+            )}
 
-          {loading ? (
-            <div className="text-center py-12">
-              <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-              <p className="text-gray-600 mt-4">Loading contacts...</p>
-            </div>
-          ) : (
-            <ContactsProvider
-              userId={transaction.user_id}
-              propertyAddress={transaction.property_address || ""}
-            >
+            {loading ? (
+              <div className="text-center py-12">
+                <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                <p className="text-gray-600 mt-4">Loading contacts...</p>
+              </div>
+            ) : (
               <Screen1Content
                 transactionType={
                   (transaction.transaction_type as "purchase" | "sale" | "other") ||
@@ -324,61 +341,56 @@ export function EditContactsModal({
                 }
                 assignedContactIds={assignedContactIds}
                 roleAssignments={roleAssignments}
-                onRoleAssignmentsChange={setRoleAssignments}
+                onRoleAssignmentsChange={(assignments) => {
+                  setRoleAssignments(assignments);
+                  // Clear validation errors when user assigns a role
+                  setContactsWithoutRoles(new Set());
+                  setError(null);
+                }}
                 onOpenAddModal={() => setShowAddModal(true)}
                 onRemoveContact={handleRemoveContact}
+                contactsWithoutRoles={contactsWithoutRoles}
               />
-            </ContactsProvider>
-          )}
-        </div>
+            )}
+          </div>
 
-        {/* Footer */}
-        <div className="flex-shrink-0 px-6 py-4 bg-gray-50 rounded-b-xl flex items-center justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-all"
-            data-testid="edit-contacts-modal-cancel"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving || loading}
-            className={`px-6 py-2 rounded-lg font-semibold transition-all ${
-              saving || loading
-                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                : "bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700 shadow-md hover:shadow-lg"
-            }`}
-            data-testid="edit-contacts-modal-save"
-          >
-            {saving ? "Saving..." : "Save Changes"}
-          </button>
-        </div>
+          {/* Footer */}
+          <div className="flex-shrink-0 px-6 py-4 bg-gray-50 rounded-b-xl flex items-center justify-end gap-3">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-all"
+              data-testid="edit-contacts-modal-cancel"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving || loading}
+              className={`px-6 py-2 rounded-lg font-semibold transition-all ${
+                saving || loading
+                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                  : "bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700 shadow-md hover:shadow-lg"
+              }`}
+              data-testid="edit-contacts-modal-save"
+            >
+              {saving ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
 
-        {/* Screen 2: Add Contacts Overlay */}
-        {showAddModal && !loading && (
-          <ContactsProvider
-            userId={transaction.user_id}
-            propertyAddress={transaction.property_address || ""}
-          >
+          {/* Screen 2: Add Contacts Overlay */}
+          {showAddModal && !loading && (
             <Screen2Overlay
               assignedContactIds={assignedContactIds}
-              pendingAddIds={pendingAddIds}
-              onPendingAddIdsChange={setPendingAddIds}
-              onClose={() => {
-                setShowAddModal(false);
-                setPendingAddIds([]);
-              }}
-              onAddSelected={(newIds) => {
-                // Add new contacts to assigned list
-                setAssignedContactIds((prev) => [...prev, ...newIds]);
-                // Close overlay and reset pending
-                setShowAddModal(false);
-                setPendingAddIds([]);
+              onClose={() => setShowAddModal(false)}
+              onAddContact={(contactId) => {
+                // Add the contact to assigned list
+                setAssignedContactIds((prev) =>
+                  prev.includes(contactId) ? prev : [...prev, contactId]
+                );
               }}
             />
-          </ContactsProvider>
-        )}
+          )}
+        </ContactsProvider>
       </div>
     </div>
   );
@@ -395,6 +407,8 @@ interface Screen1ContentProps {
   onRoleAssignmentsChange: (assignments: RoleAssignments) => void;
   onOpenAddModal: () => void;
   onRemoveContact: (contactId: string) => void;
+  /** Contacts that are missing roles (for validation highlighting) */
+  contactsWithoutRoles?: Set<string>;
 }
 
 /**
@@ -407,6 +421,7 @@ function Screen1Content({
   onRoleAssignmentsChange,
   onOpenAddModal,
   onRemoveContact,
+  contactsWithoutRoles = new Set(),
 }: Screen1ContentProps): React.ReactElement {
   const { contacts, loading: contactsLoading, error: contactsError } = useContacts();
 
@@ -574,6 +589,7 @@ function Screen1Content({
             roleOptions={roleOptions}
             onRoleChange={(role) => handleRoleChange(contact.id, role)}
             onRemove={() => onRemoveContact(contact.id)}
+            hasError={contactsWithoutRoles.has(contact.id)}
           />
         ))}
       </div>
@@ -587,34 +603,30 @@ function Screen1Content({
 
 interface Screen2OverlayProps {
   assignedContactIds: string[];
-  pendingAddIds: string[];
-  onPendingAddIdsChange: (ids: string[]) => void;
   onClose: () => void;
-  onAddSelected: (newIds: string[]) => void;
+  onAddContact: (contactId: string) => void;
 }
 
 /**
  * Screen 2: Add Contacts overlay using ContactSearchList
+ * Each contact has a "+ Add Contact" button that adds immediately
  */
 function Screen2Overlay({
   assignedContactIds,
-  pendingAddIds,
-  onPendingAddIdsChange,
   onClose,
-  onAddSelected,
+  onAddContact,
 }: Screen2OverlayProps): React.ReactElement {
-  const { contacts, loading, error, refreshContacts } = useContacts();
-
-  // Multi-category filter state (persisted to localStorage)
-  // Default: Imported, Manual, External = ON; Messages = OFF
-  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>(() => {
-    return loadCategoryFilter();
-  });
+  const { contacts, loading, error, silentRefresh } = useContacts();
 
   // External contacts from macOS Contacts app (lazy-loaded) - now using ExtendedContact[]
   const [externalContacts, setExternalContacts] = useState<ExtendedContact[]>([]);
   const [externalLoading, setExternalLoading] = useState(false);
   const [externalLoaded, setExternalLoaded] = useState(false);
+
+  // Contact preview/edit modal state
+  const [previewContact, setPreviewContact] = useState<ExtendedContact | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editContact, setEditContact] = useState<ExtendedContact | undefined>(undefined);
 
   // Load external contacts from Contacts app when component mounts
   useEffect(() => {
@@ -645,83 +657,111 @@ function Screen2Overlay({
     loadExternalContacts();
   }, [contacts, externalLoaded]);
 
-  // Persist category filter to localStorage
-  useEffect(() => {
-    saveCategoryFilter(categoryFilter);
-  }, [categoryFilter]);
-
-  // Handle category checkbox toggle
-  const handleCategoryToggle = useCallback(
-    (category: keyof CategoryFilter, checked: boolean) => {
-      setCategoryFilter((prev) => ({
-        ...prev,
-        [category]: checked,
-      }));
-    },
-    []
-  );
-
-  // Filter out already assigned contacts, apply category filter, and sort by recent communication
+  // Filter out already assigned contacts - category filtering is handled by ContactSearchList
   const availableContacts = useMemo(() => {
-    const filtered = contacts.filter((c) => {
-      // Exclude already assigned contacts
-      if (assignedContactIds.includes(c.id)) {
-        return false;
-      }
-      // Apply category filter
-      return shouldShowContact(c, categoryFilter, false);
-    });
+    const filtered = contacts.filter((c) => !assignedContactIds.includes(c.id));
     // Sort by most recent communication first
     return sortByRecentCommunication(filtered);
-  }, [contacts, assignedContactIds, categoryFilter]);
+  }, [contacts, assignedContactIds]);
 
-  // Filter external contacts based on category filter (controlled by "external" checkbox)
+  // Filter external contacts - exclude those already in database or assigned
+  // Category filtering is handled by ContactSearchList
   const filteredExternalContacts = useMemo(() => {
-    if (!categoryFilter.external) {
-      return [];
-    }
-    // Filter out contacts that are already in the database or assigned
     const existingIds = new Set(contacts.map((c) => c.id));
     const assignedIds = new Set(assignedContactIds);
     return externalContacts.filter(
       (c) => !existingIds.has(c.id) && !assignedIds.has(c.id)
     );
-  }, [externalContacts, categoryFilter.external, contacts, assignedContactIds]);
+  }, [externalContacts, contacts, assignedContactIds]);
 
-  // Handle importing an external contact
-  // Per SR Engineer: Use contactService.create() for imports
-  const handleImportContact = useCallback(
+  // Track which contacts have been added (for visual feedback)
+  const [addedContactIds, setAddedContactIds] = useState<Set<string>>(new Set());
+
+  // Helper to check if a contact is external
+  const isExternal = (contact: ExtendedContact): boolean => {
+    return contact.is_message_derived === true || contact.is_message_derived === 1;
+  };
+
+  // Handle clicking on a contact to view details
+  const handleContactClick = useCallback((contact: ExtendedContact) => {
+    setPreviewContact(contact);
+  }, []);
+
+  // Handle editing a contact from preview
+  const handlePreviewEdit = useCallback(() => {
+    if (previewContact) {
+      setPreviewContact(null);
+      setEditContact(previewContact);
+      setShowEditModal(true);
+    }
+  }, [previewContact]);
+
+  // Handle adding a new contact manually
+  const handleAddManually = useCallback(() => {
+    setEditContact(undefined);
+    setShowEditModal(true);
+  }, []);
+
+  // Handle importing and adding a contact in one action
+  // For external contacts: import first, then add to transaction
+  // For database contacts: add directly to transaction
+  const handleImportAndAddContact = useCallback(
     async (contact: ExtendedContact): Promise<ExtendedContact> => {
-      // Get userId from first contact or use a default approach
-      const userId = contacts.length > 0 ? contacts[0].user_id : "";
+      const isExternal = contact.is_message_derived === true || contact.is_message_derived === 1 || contact.isFromDatabase === false;
+      const contactName = contact.display_name || contact.name || "Unknown";
 
-      if (!userId) {
-        throw new Error("Cannot import contact: no user context");
+      if (isExternal) {
+        // External contact: import first, then add
+        const userId = contacts.length > 0 ? contacts[0].user_id : "";
+
+        if (!userId) {
+          throw new Error("Cannot import contact: no user context");
+        }
+
+        const result = await contactService.create(userId, {
+          name: contactName,
+          display_name: contactName,
+          email: contact.email,
+          phone: contact.phone,
+          company: contact.company,
+          source: "contacts_app",
+        });
+
+        if (result.success && result.data) {
+          // Add the imported contact to the transaction
+          onAddContact(result.data.id);
+          // Mark as added for visual feedback
+          setAddedContactIds((prev) => new Set(prev).add(contact.id));
+          // Silent refresh so Screen1 can find the new contact
+          silentRefresh();
+          return result.data as ExtendedContact;
+        }
+
+        throw new Error(result.error || "Failed to import contact");
+      } else {
+        // Database contact: add directly to transaction
+        onAddContact(contact.id);
+        // Mark as added for visual feedback
+        setAddedContactIds((prev) => new Set(prev).add(contact.id));
+        return contact;
       }
-
-      const result = await contactService.create(userId, {
-        display_name: contact.display_name || contact.name,
-        email: contact.email,
-        phone: contact.phone,
-        company: contact.company,
-        source: "manual",
-      });
-
-      if (result.success && result.data) {
-        // Refresh contacts list to include the new contact
-        await refreshContacts();
-        return result.data as ExtendedContact;
-      }
-
-      throw new Error(result.error || "Failed to import contact");
     },
-    [contacts, refreshContacts]
+    [contacts, onAddContact]
   );
 
-  // Handle adding selected contacts
-  const handleAddSelected = () => {
-    onAddSelected(pendingAddIds);
-  };
+  // Handle importing from preview modal
+  const handlePreviewImport = useCallback(async () => {
+    if (!previewContact) return;
+    try {
+      await handleImportAndAddContact(previewContact);
+      setPreviewContact(null);
+    } catch (err) {
+      console.error("Failed to import contact:", err);
+    }
+  }, [previewContact, handleImportAndAddContact]);
+
+  // Get userId for ContactFormModal
+  const userId = contacts.length > 0 ? contacts[0].user_id : "";
 
   return (
     <div
@@ -730,7 +770,7 @@ function Screen2Overlay({
     >
       {/* Header */}
       <div className="flex-shrink-0 bg-gradient-to-r from-purple-500 to-pink-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
-        <h3 className="text-xl font-bold text-white">Select Contacts to Add</h3>
+        <h3 className="text-xl font-bold text-white">Add Contacts</h3>
         <button
           onClick={onClose}
           className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
@@ -752,86 +792,69 @@ function Screen2Overlay({
         </button>
       </div>
 
-      {/* Category filter toolbar */}
-      <div className="flex-shrink-0 px-6 py-3 border-b border-gray-200 flex items-center justify-end gap-4">
-        <span className="text-sm text-gray-500">Show:</span>
-        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={categoryFilter.imported}
-            onChange={(e) => handleCategoryToggle("imported", e.target.checked)}
-            className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
-            data-testid="filter-imported"
-          />
-          <span>Imported</span>
-        </label>
-        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={categoryFilter.manuallyAdded}
-            onChange={(e) => handleCategoryToggle("manuallyAdded", e.target.checked)}
-            className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
-            data-testid="filter-manual"
-          />
-          <span>Manual</span>
-        </label>
-        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={categoryFilter.external}
-            onChange={(e) => handleCategoryToggle("external", e.target.checked)}
-            className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
-            data-testid="filter-external"
-          />
-          <span>Contacts App</span>
-        </label>
-        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={categoryFilter.messageDerived}
-            onChange={(e) => handleCategoryToggle("messageDerived", e.target.checked)}
-            className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
-            data-testid="filter-messages"
-          />
-          <span>Msg Inferred</span>
-        </label>
-      </div>
-
-      {/* ContactSearchList - min-h-0 required for flex child scrolling */}
+      {/* ContactSearchList with built-in category filter (pill-style buttons) */}
+      {/* min-h-0 required for flex child scrolling */}
       <ContactSearchList
         contacts={availableContacts}
         externalContacts={filteredExternalContacts}
-        selectedIds={pendingAddIds}
-        onSelectionChange={onPendingAddIdsChange}
-        onImportContact={handleImportContact}
+        selectedIds={[]}
+        onSelectionChange={() => {}}
+        onImportContact={handleImportAndAddContact}
+        showAddButtonForImported={true}
+        onContactClick={handleContactClick}
+        onAddManually={handleAddManually}
+        addedContactIds={addedContactIds}
         isLoading={loading || externalLoading}
         error={error}
         searchPlaceholder="Search contacts to add..."
+        showCategoryFilter={true}
         className="flex-1 min-h-0"
       />
 
-      {/* Footer */}
-      <div className="flex-shrink-0 px-6 py-4 bg-gray-50 rounded-b-xl flex items-center justify-end gap-3">
-        <button
-          onClick={onClose}
-          className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-all"
-          data-testid="add-contacts-overlay-cancel"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleAddSelected}
-          disabled={pendingAddIds.length === 0}
-          className={`px-6 py-2 rounded-lg font-semibold transition-all ${
-            pendingAddIds.length === 0
-              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-              : "bg-gradient-to-r from-purple-500 to-pink-600 text-white hover:from-purple-600 hover:to-pink-700 shadow-md hover:shadow-lg"
-          }`}
-          data-testid="add-selected-button"
-        >
-          Add Selected ({pendingAddIds.length})
-        </button>
-      </div>
+      {/* Footer with Assign Roles button - only show when contacts have been added */}
+      {addedContactIds.size > 0 && (
+        <div className="flex-shrink-0 px-6 py-4 bg-gray-50 rounded-b-xl flex items-center justify-between">
+          <p className="text-sm text-gray-600">
+            {addedContactIds.size} contact{addedContactIds.size !== 1 ? "s" : ""} added
+          </p>
+          <button
+            onClick={onClose}
+            className="px-6 py-2 rounded-lg font-semibold bg-gradient-to-r from-purple-500 to-pink-600 text-white hover:from-purple-600 hover:to-pink-700 shadow-md hover:shadow-lg transition-all"
+            data-testid="assign-roles-button"
+          >
+            Assign Roles →
+          </button>
+        </div>
+      )}
+
+      {/* Contact Preview Modal */}
+      {previewContact && (
+        <ContactPreview
+          contact={previewContact}
+          isExternal={isExternal(previewContact)}
+          transactions={[]}
+          onEdit={handlePreviewEdit}
+          onImport={handlePreviewImport}
+          onClose={() => setPreviewContact(null)}
+        />
+      )}
+
+      {/* Add/Edit Contact Modal */}
+      {showEditModal && userId && (
+        <ContactFormModal
+          userId={userId}
+          contact={editContact}
+          onClose={() => {
+            setShowEditModal(false);
+            setEditContact(undefined);
+          }}
+          onSuccess={() => {
+            setShowEditModal(false);
+            setEditContact(undefined);
+            silentRefresh();
+          }}
+        />
+      )}
     </div>
   );
 }

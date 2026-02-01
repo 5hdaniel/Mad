@@ -44,6 +44,8 @@ interface ContactsState {
 
 interface ContactsContextValue extends ContactsState {
   refreshContacts: () => Promise<void>;
+  /** Refresh without showing loading state - use after adding a contact */
+  silentRefresh: () => Promise<void>;
 }
 
 interface ContactsProviderProps {
@@ -91,10 +93,12 @@ export function ContactsProvider({
    * Uses getSortedByActivity when propertyAddress is provided for relevance,
    * otherwise uses getAll.
    */
-  const loadContacts = useCallback(async () => {
+  const loadContacts = useCallback(async (showLoading = true) => {
     if (!isMountedRef.current) return;
 
-    setState((prev) => ({ ...prev, loading: true, error: null }));
+    if (showLoading) {
+      setState((prev) => ({ ...prev, loading: true, error: null }));
+    }
 
     try {
       const result = propertyAddress
@@ -110,23 +114,26 @@ export function ContactsProvider({
           error: null,
         });
       } else {
-        setState({
-          contacts: [],
+        setState((prev) => ({
+          ...prev,
           loading: false,
           error: result.error || "Failed to load contacts",
-        });
+        }));
       }
     } catch (err) {
       if (!isMountedRef.current) return;
 
       console.error("ContactsContext: Failed to load contacts:", err);
-      setState({
-        contacts: [],
+      setState((prev) => ({
+        ...prev,
         loading: false,
         error: "Unable to load contacts",
-      });
+      }));
     }
   }, [userId, propertyAddress]);
+
+  /** Refresh without showing loading state */
+  const silentRefresh = useCallback(() => loadContacts(false), [loadContacts]);
 
   // Load contacts on mount
   useEffect(() => {
@@ -154,9 +161,10 @@ export function ContactsProvider({
   const contextValue = useMemo<ContactsContextValue>(
     () => ({
       ...state,
-      refreshContacts: loadContacts,
+      refreshContacts: () => loadContacts(true),
+      silentRefresh,
     }),
-    [state, loadContacts]
+    [state, loadContacts, silentRefresh]
   );
 
   return (
