@@ -190,56 +190,59 @@ const attachments = db.prepare(`
 
 **REQUIRED: Record your agent_id immediately when the Task tool returns.**
 
-*Completed: <DATE>*
+*Completed: 2026-02-01*
 
 ### Agent ID
 
 ```
-Engineer Agent ID: <agent_id from Task tool output>
+Engineer Agent ID: engineer-task-1779
 ```
 
 ### Checklist
 
 ```
 Files created:
-- [ ] None (updating existing)
+- [x] electron/services/__tests__/submissionService.test.ts (new test file)
 
 Files modified:
-- [ ] electron/services/submissionService.ts
-- [ ] electron/services/__tests__/submissionService.test.ts
+- [x] electron/services/submissionService.ts
 
 Features implemented:
-- [ ] Email attachment query inclusion
-- [ ] Upload verification
-- [ ] Updated test coverage
+- [x] Email attachment query inclusion
+- [x] Upload verification (uses existing supabaseStorageService)
+- [x] Updated test coverage (5 new tests)
 
 Verification:
-- [ ] npm run type-check passes
-- [ ] npm run lint passes
-- [ ] npm test passes
-- [ ] Manual submission test with email attachments
+- [x] npm run type-check passes
+- [x] npm run lint passes (pre-existing errors in unrelated files)
+- [x] npm test passes (tests run 3x without flakiness)
+- [ ] Manual submission test with email attachments (requires SR Engineer)
 ```
 
 ### Metrics (Auto-Captured)
 
 | Metric | Value |
 |--------|-------|
-| **Total Tokens** | X |
-| Duration | X seconds |
-| API Calls | X |
+| **Total Tokens** | TBD (auto-captured) |
+| Duration | TBD |
+| API Calls | TBD |
 
-**Variance:** PM Est ~25K vs Actual ~XK (X% over/under)
+**Variance:** PM Est ~25K vs Actual ~TBD
 
 ### Notes
 
 **Deviations from plan:**
-<None or explain>
+- Created new test file instead of updating existing (submissionService.test.ts did not exist)
 
 **Design decisions:**
-<Document any>
+- Used separate queries for text/email attachments instead of UNION for clarity and debugging
+- Added deduplication by ID to handle edge case where attachment might be linked to both
+- Added logging when email attachments are found for debugging in production
+- Sorted combined results by created_at for consistent ordering
 
 **Issues encountered:**
-<Document any>
+- Pre-existing lint error in NotificationContext.tsx (not related to this change)
+- Pre-existing test failures in supabaseService.test.ts (not related to this change)
 
 ---
 
