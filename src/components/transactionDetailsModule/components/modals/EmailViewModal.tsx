@@ -2,10 +2,12 @@
  * EmailViewModal Component
  * Full email view modal for communications with HTML rendering support
  * TASK-1776: Added email attachment display with collapsible section
+ * TASK-1778: Added attachment preview modal
  */
 import React, { useState, useCallback, useMemo, useEffect } from "react";
 import DOMPurify from "dompurify";
 import type { Communication } from "../../types";
+import { AttachmentPreviewModal } from "./AttachmentPreviewModal";
 
 /**
  * Email attachment structure from IPC
@@ -168,6 +170,8 @@ export function EmailViewModal({
   const [attachments, setAttachments] = useState<EmailAttachment[]>([]);
   const [loadingAttachments, setLoadingAttachments] = useState(false);
   const [attachmentsExpanded, setAttachmentsExpanded] = useState(false);
+  // TASK-1778: Preview modal state
+  const [previewAttachment, setPreviewAttachment] = useState<EmailAttachment | null>(null);
 
   // TASK-1776: Fetch attachments when email loads
   useEffect(() => {
@@ -369,14 +373,10 @@ export function EmailViewModal({
                 {attachments.map((attachment) => (
                   <button
                     key={attachment.id}
-                    onClick={() => handleOpenAttachment(attachment)}
-                    disabled={!attachment.storage_path}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-                      attachment.storage_path
-                        ? "bg-gray-100 hover:bg-gray-200 text-gray-700"
-                        : "bg-gray-50 text-gray-400 cursor-not-allowed"
-                    }`}
-                    title={attachment.storage_path ? `Open ${attachment.filename}` : "Attachment not downloaded"}
+                    onClick={() => setPreviewAttachment(attachment)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors bg-gray-100 hover:bg-gray-200 text-gray-700"
+                    title={`Preview ${attachment.filename}`}
+                    data-testid={`attachment-${attachment.id}`}
                   >
                     {getFileTypeIcon(attachment.mime_type)}
                     <span className="truncate max-w-[150px]">{attachment.filename}</span>
@@ -446,6 +446,17 @@ export function EmailViewModal({
           </div>
         </div>
       </div>
+
+      {/* TASK-1778: Attachment Preview Modal */}
+      {previewAttachment && (
+        <AttachmentPreviewModal
+          attachment={previewAttachment}
+          onClose={() => setPreviewAttachment(null)}
+          onOpenWithSystem={(storagePath) => {
+            handleOpenAttachment({ storage_path: storagePath } as EmailAttachment);
+          }}
+        />
+      )}
     </div>
   );
 }
