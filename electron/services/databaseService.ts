@@ -383,8 +383,69 @@ class DatabaseService implements IDatabaseService {
 
     // TASK-1110: Add external_message_id to attachments for stable message linking
     // This allows attachments to be linked to messages even when message_id changes on re-import
+    // TASK-1775: Add email_id for email attachments (must be added before schema.sql creates index)
+    // TASK-1775: Make message_id nullable (was NOT NULL originally) to allow email attachments
+    const attachmentsExists = db.prepare(
+      `SELECT name FROM sqlite_master WHERE type='table' AND name='attachments'`
+    ).get();
+
+    if (attachmentsExists) {
+      // Check if message_id has NOT NULL constraint
+      const colInfo = db.prepare(`PRAGMA table_info(attachments)`).all() as { name: string; notnull: number }[];
+      const messageIdCol = colInfo.find(c => c.name === 'message_id');
+
+      if (messageIdCol && messageIdCol.notnull === 1) {
+        await logService.info("TASK-1775: Migrating attachments table to make message_id nullable", "DatabaseService");
+
+        // SQLite requires table recreation to change NOT NULL constraint
+        // Get existing columns to preserve data
+        const existingCols = colInfo.map(c => c.name);
+        const hasEmailId = existingCols.includes('email_id');
+        const hasExternalMessageId = existingCols.includes('external_message_id');
+
+        // Create new table with nullable message_id
+        db.exec(`
+          CREATE TABLE attachments_new (
+            id TEXT PRIMARY KEY,
+            message_id TEXT,
+            ${hasEmailId ? 'email_id TEXT,' : ''}
+            ${hasExternalMessageId ? 'external_message_id TEXT,' : ''}
+            filename TEXT NOT NULL,
+            mime_type TEXT,
+            file_size_bytes INTEGER,
+            storage_path TEXT,
+            text_content TEXT,
+            document_type TEXT,
+            document_type_confidence REAL,
+            document_type_source TEXT CHECK (document_type_source IN ('pattern', 'llm', 'user')),
+            analysis_metadata TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+            ${hasEmailId ? ', FOREIGN KEY (email_id) REFERENCES emails(id) ON DELETE CASCADE' : ''}
+          )
+        `);
+
+        // Copy data - build column list dynamically
+        const copyColumns = ['id', 'message_id', 'filename', 'mime_type', 'file_size_bytes', 'storage_path',
+          'text_content', 'document_type', 'document_type_confidence', 'document_type_source',
+          'analysis_metadata', 'created_at'];
+        if (hasEmailId) copyColumns.splice(2, 0, 'email_id');
+        if (hasExternalMessageId) copyColumns.splice(hasEmailId ? 3 : 2, 0, 'external_message_id');
+
+        const colList = copyColumns.filter(c => existingCols.includes(c)).join(', ');
+        db.exec(`INSERT INTO attachments_new (${colList}) SELECT ${colList} FROM attachments`);
+
+        // Swap tables
+        db.exec(`DROP TABLE attachments`);
+        db.exec(`ALTER TABLE attachments_new RENAME TO attachments`);
+
+        await logService.info("TASK-1775: Attachments table migrated successfully", "DatabaseService");
+      }
+    }
+
     await addMissingColumns('attachments', [
       { name: 'external_message_id', sql: `ALTER TABLE attachments ADD COLUMN external_message_id TEXT` },
+      { name: 'email_id', sql: `ALTER TABLE attachments ADD COLUMN email_id TEXT REFERENCES emails(id) ON DELETE CASCADE` },
     ]);
 
     // Populate display_name from name column if it exists

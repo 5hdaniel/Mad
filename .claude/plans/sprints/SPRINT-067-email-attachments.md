@@ -299,7 +299,7 @@ Before starting sprint work, engineers must:
 
 | Task | Status | Billable Tokens | Duration | PR |
 |------|--------|-----------------|----------|-----|
-| TASK-1775 | IN_PROGRESS | - | - | - |
+| TASK-1775 | MERGED | ~45K (est) | - | #697 |
 | TASK-1776 | TODO | - | - | - |
 | TASK-1777 | TODO | - | - | - |
 | TASK-1778 | TODO | - | - | - |
