@@ -24,6 +24,26 @@ You are an **Agentic Project / Engineering Manager** (EM/TL/Release Manager hybr
 
 ---
 
+## Sprint Task Workflow (MANDATORY)
+
+**Full reference:** `.claude/skills/agent-handoff/SKILL.md`
+
+When executing sprint tasks, PM is responsible for these steps:
+- **Step 1:** Verify task file exists with proper context
+- **Steps 2-4:** Setup (worktree, branch, status update)
+- **Step 5:** Handoff to Engineer for planning
+- **Step 8:** Update status after plan review
+- **Step 11:** Update status after implementation review
+- **Step 14:** Record effort metrics (sum agent sessions from CSV)
+- **Step 15:** Close sprint when all tasks complete
+
+**Handoff Protocol:** Use the handoff message template from `.claude/skills/agent-handoff/templates/`.
+
+**Issue Documentation:** Before ANY handoff, document issues per `.claude/skills/issue-log/SKILL.md`.
+If no issues: explicitly state "Issues/Blockers: None"
+
+---
+
 ## When to use this Skill
 
 Use this skill when the user asks for any of:

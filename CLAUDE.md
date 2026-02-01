@@ -8,13 +8,26 @@ This guide is for all Claude agents working on Magic Audit. Follow these standar
 
 **CRITICAL: READ THIS BEFORE ANY SPRINT/TASK WORK**
 
+**Full workflow reference:** `.claude/skills/agent-handoff/SKILL.md`
+
 When working on tasks from `.claude/plans/tasks/`, you MUST use the proper agent workflow. Direct implementation is PROHIBITED.
 
-### Required Workflow
+### Required Workflow (15 Steps)
 
 ```
-1. PM assigns task → 2. Engineer agent implements → 3. SR Engineer agent reviews → 4. Merge
+PHASE A: PM Setup (Steps 1-5)
+PHASE B: Engineer Plans, SR Reviews (Steps 6-8)
+PHASE C: Engineer Implements, SR Reviews (Steps 9-11)
+PHASE D: SR Merges, PM Closes (Steps 12-15)
 ```
+
+### Agent Responsibilities
+
+| Agent | Steps | Key Actions |
+|-------|-------|-------------|
+| PM | 1-5, 8, 11, 14-15 | Verify task, setup, update status, record metrics, close sprint |
+| Engineer | 6, 9 | Plan in plan mode, implement, commit, push |
+| SR Engineer | 7, 10, 12-13 | Review plan, review impl, merge PR, cleanup |
 
 ### Step-by-Step
 
@@ -28,23 +41,20 @@ When working on tasks from `.claude/plans/tasks/`, you MUST use the proper agent
    - Let the SR Engineer validate architecture, tests, and quality gates
    - Only merge after SR Engineer approval
 
-### Example: Correct Workflow
+### Handoff Protocol
+
+Every agent handoff MUST use the structured handoff message format:
 
 ```
-User: "Implement TASK-510"
-
-WRONG (what you've been doing):
-- Read the task file
-- Write the code yourself
-- Create PR and merge
-
-RIGHT (what you must do):
-- Invoke Task tool with subagent_type="engineer"
-- Prompt: "Implement TASK-510 from .claude/plans/tasks/TASK-510-xxx.md"
-- Wait for engineer to complete and hand off to SR Engineer
-- Invoke Task tool with subagent_type="senior-engineer-pr-lead" for PR review
-- Only merge after SR Engineer approval
+## Handoff: [FROM] → [TO]
+**Task:** TASK-XXXX
+**Current Step:** X
+**Status:** [approved/rejected/changes-requested]
+**Next Action:** [instruction for receiving agent]
+**Issues/Blockers:** [problems or "None"]
 ```
+
+Template: `.claude/skills/agent-handoff/templates/handoff-message.template.md`
 
 ### Why This Matters
 
@@ -54,6 +64,49 @@ RIGHT (what you must do):
 - **Consistency**: Same workflow every sprint
 
 **FAILURE TO FOLLOW THIS WORKFLOW IS A PROCESS VIOLATION.**
+
+---
+
+## MANDATORY: Issue Documentation
+
+**Full reference:** `.claude/skills/issue-log/SKILL.md`
+
+Before ANY handoff or task completion, you MUST document issues encountered.
+
+### When to Document
+
+- Something doesn't work as expected
+- You try an approach and abandon it
+- You spend significant time debugging (>10 min)
+- You discover a workaround
+- Before ANY handoff to another agent
+- Before marking a task complete
+
+### Format
+
+```markdown
+### Issue #1: [Brief title]
+- **When:** Step X / Phase Y
+- **What happened:** [Description]
+- **Root cause:** [If known]
+- **Resolution:** [How fixed / workaround]
+- **Time spent:** [Estimate]
+```
+
+### No Issues?
+
+If nothing went wrong, explicitly state: `**Issues/Blockers:** None`
+
+This confirms issues were considered, not forgotten.
+
+### Why This Matters
+
+Undocumented issues lead to:
+- Repeated debugging of the same problems
+- Lost knowledge when context resets
+- Inaccurate time estimates for similar tasks
+
+**FAILURE TO DOCUMENT ISSUES IS A PROCESS VIOLATION.**
 
 ---
 
