@@ -75,6 +75,20 @@ Use this skill when the user asks for any of:
 
    PM estimates in tokens only. Self-reported metrics are deprecated.
 
+4. **Metrics Management Scripts**: For Step 14 (Record effort metrics), use the scripts in `.claude/skills/log-metrics/`:
+
+   | Script | Purpose | Example |
+   |--------|---------|---------|
+   | `query_metrics.py` | Filter entries | `--task TASK-1234` or `--since 2026-01-30` |
+   | `sum_effort.py` | Aggregate totals | `--task TASK-1234` (for Step 14) |
+   | `log_metrics.py` | Append entry | `--agent-type X --task-id Y --input Z` |
+
+   **Step 14 Example:**
+   ```bash
+   python .claude/skills/log-metrics/sum_effort.py --task TASK-1234
+   # Returns: {"total_tokens": 125000, "billable_tokens": 45000, ...}
+   ```
+
 ## Progressive disclosure (how to use the bundled modules)
 
 Only load the module you need:

@@ -136,9 +136,8 @@ PHASE D: MERGE & CLEANUP
     - → PM: Task merged notification
 
 14. PM: Record effort metrics
-    - Read .claude/metrics/tokens.csv
-    - Sum all agent sessions for this task (filter by task_id)
-    - Update task file: ## Actual Effort section
+    - Run: `python .claude/skills/log-metrics/sum_effort.py --task TASK-XXXX`
+    - Copy output totals to task file `## Actual Effort` section
     - Update sprint file progress table
     - Update backlog CSV actual_tokens column
 
@@ -230,5 +229,6 @@ If nothing went wrong, explicitly state in handoff:
 
 - `.claude/skills/agentic-pm/SKILL.md` - PM responsibilities
 - `.claude/skills/issue-log/SKILL.md` - Issue documentation
+- `.claude/skills/log-metrics/SKILL.md` - Metrics scripts (Step 14)
 - `.claude/docs/shared/git-branching.md` - Git workflow
 - `.claude/docs/shared/pr-lifecycle.md` - PR requirements

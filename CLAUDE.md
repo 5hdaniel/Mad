@@ -8,57 +8,44 @@ This guide is for all Claude agents working on Magic Audit. Follow these standar
 
 **CRITICAL: READ THIS BEFORE ANY SPRINT/TASK WORK**
 
-**Full workflow reference:** `.claude/skills/agent-handoff/SKILL.md`
+When working on tasks from `.claude/plans/tasks/`, you MUST follow the **15-step agent-handoff workflow**. Direct implementation is PROHIBITED.
 
-When working on tasks from `.claude/plans/tasks/`, you MUST use the proper agent workflow. Direct implementation is PROHIBITED.
+### Authoritative Reference
 
-### Required Workflow (15 Steps)
+**READ THIS FIRST:** `.claude/skills/agent-handoff/SKILL.md`
+
+This skill defines:
+- The complete 15-step lifecycle (4 phases)
+- Which agent owns which steps
+- Handoff message templates
+- Decision trees for approvals/rejections
+
+### Quick Summary
 
 ```
 PHASE A: PM Setup (Steps 1-5)
-PHASE B: Engineer Plans, SR Reviews (Steps 6-8)
-PHASE C: Engineer Implements, SR Reviews (Steps 9-11)
-PHASE D: SR Merges, PM Closes (Steps 12-15)
+   → Verify task, create branch, update status, handoff to Engineer
+
+PHASE B: Planning (Steps 6-8)
+   → Engineer plans, SR reviews plan, PM updates status
+
+PHASE C: Implementation (Steps 9-11)
+   → Engineer implements, SR reviews, PM updates status
+
+PHASE D: Merge & Cleanup (Steps 12-15)
+   → SR merges PR, deletes worktree, PM records metrics, closes sprint
 ```
 
-### Agent Responsibilities
+### Critical Rules
 
-| Agent | Steps | Key Actions |
-|-------|-------|-------------|
-| PM | 1-5, 8, 11, 14-15 | Verify task, setup, update status, record metrics, close sprint |
-| Engineer | 6, 9 | Plan in plan mode, implement, commit, push |
-| SR Engineer | 7, 10, 12-13 | Review plan, review impl, merge PR, cleanup |
-
-### Step-by-Step
-
-1. **DO NOT implement tasks directly.** When you see a TASK-XXX file:
-   - Invoke the `engineer` agent with `subagent_type="engineer"`
-   - Pass the task file path and context
-   - Let the engineer agent handle implementation
-
-2. **DO NOT merge PRs without review.** Before any PR merge:
-   - Invoke the `senior-engineer-pr-lead` agent with `subagent_type="senior-engineer-pr-lead"`
-   - Let the SR Engineer validate architecture, tests, and quality gates
-   - Only merge after SR Engineer approval
-
-### Handoff Protocol
-
-Every agent handoff MUST use the structured handoff message format:
-
-```
-## Handoff: [FROM] → [TO]
-**Task:** TASK-XXXX
-**Current Step:** X
-**Status:** [approved/rejected/changes-requested]
-**Next Action:** [instruction for receiving agent]
-**Issues/Blockers:** [problems or "None"]
-```
-
-Template: `.claude/skills/agent-handoff/templates/handoff-message.template.md`
+1. **DO NOT implement tasks directly.** Follow all 15 steps.
+2. **DO NOT skip PM setup steps.** Branch and status updates happen BEFORE invoking Engineer.
+3. **DO NOT merge without SR Engineer review.** Every PR goes through `senior-engineer-pr-lead` agent.
+4. **DO NOT handoff without the template.** Use `.claude/skills/agent-handoff/templates/handoff-message.template.md`
 
 ### Why This Matters
 
-- **Metrics tracking**: Engineer agent tracks turns/tokens/time
+- **Metrics tracking**: Effort captured at each handoff
 - **Quality gates**: SR Engineer validates architecture and tests
 - **Audit trail**: Proper handoffs create accountability
 - **Consistency**: Same workflow every sprint

@@ -5,7 +5,7 @@
 **Goal**: Enable users to see email attachments in audit interface and include them in exports
 **Target Branch**: develop
 **Estimated Duration**: 3-4 days
-**Total Estimated Tokens**: ~140K-180K (including SR review overhead)
+**Total Estimated Tokens**: ~170K (including SR review overhead)
 
 ---
 
@@ -16,6 +16,7 @@ Implement email attachment visibility and export functionality for audits. Curre
 1. Download and store email attachments from Gmail/Outlook
 2. Display email attachments in the audit interface (EmailViewModal)
 3. Include email attachments in audit package exports
+4. Upload email attachments to broker portal (parity with text messages)
 
 ---
 
@@ -69,10 +70,11 @@ User requirements:
 | TASK-1776 | Display Email Attachments in UI | ~35K | HIGH | 2 |
 | TASK-1777 | Include Email Attachments in Export | ~25K | HIGH | 3 |
 | TASK-1778 | Email Attachment Preview Modal | ~20K | MEDIUM | 3 |
+| TASK-1779 | Upload Email Attachments to Broker Portal | ~25K | HIGH | 4 |
 
-**Total Estimated (implementation):** ~125K tokens
-**SR Review Overhead:** +15K (4 tasks @ ~4K each)
-**Grand Total:** ~140K tokens
+**Total Estimated (implementation):** ~150K tokens
+**SR Review Overhead:** +20K (5 tasks @ ~4K each)
+**Grand Total:** ~170K tokens
 
 ---
 
@@ -96,9 +98,11 @@ graph TD
     TASK1776[TASK-1776: Display Attachments in UI<br/>HIGH ~35K<br/>Phase 2]
     TASK1777[TASK-1777: Include in Export<br/>HIGH ~25K<br/>Phase 3]
     TASK1778[TASK-1778: Preview Modal<br/>MEDIUM ~20K<br/>Phase 3]
+    TASK1779[TASK-1779: Broker Portal Upload<br/>HIGH ~25K<br/>Phase 4]
 
     TASK1775 --> TASK1776
     TASK1775 --> TASK1777
+    TASK1775 --> TASK1779
     TASK1776 --> TASK1778
 ```
 
@@ -122,6 +126,11 @@ graph TD
 - TASK-1778: Email Attachment Preview Modal
   - Depends on TASK-1776 (needs attachment list to click)
   - Can run parallel with TASK-1777
+
+**Phase 4 (Broker Portal):**
+- TASK-1779: Upload Email Attachments to Broker Portal
+  - Depends on TASK-1775 (needs files to upload)
+  - Runs after Phase 3 (sequential, modifies submission service)
 
 ### YAML Edges
 
@@ -156,12 +165,22 @@ dependency_graph:
       priority: medium
       est_tokens: 20K
 
+    - id: TASK-1779
+      type: task
+      phase: 4
+      title: "Upload Email Attachments to Broker Portal"
+      priority: high
+      est_tokens: 25K
+
   edges:
     - from: TASK-1775
       to: TASK-1776
       type: must_complete_before
     - from: TASK-1775
       to: TASK-1777
+      type: must_complete_before
+    - from: TASK-1775
+      to: TASK-1779
       type: must_complete_before
     - from: TASK-1776
       to: TASK-1778
@@ -190,6 +209,7 @@ dependency_graph:
 | TASK-1776 | `src/components/transactionDetailsModule/components/modals/EmailViewModal.tsx`, `src/components/transactionDetailsModule/hooks/useEmailAttachments.ts` (NEW) |
 | TASK-1777 | `electron/services/folderExportService.ts` |
 | TASK-1778 | `src/components/transactionDetailsModule/components/modals/AttachmentPreviewModal.tsx` (NEW) |
+| TASK-1779 | `electron/services/submissionService.ts` |
 
 ### Shared File Analysis
 
@@ -260,6 +280,15 @@ Before starting sprint work, engineers must:
   - Click PDF attachment, see preview/download
   - Click other types, offer download
 
+### TASK-1779 (Broker Portal)
+- **Goal:** Email attachments upload to broker portal with submissions
+- **Unit Tests:**
+  - Email attachment inclusion in submission query
+  - Mixed email + text attachment submission
+- **Manual Testing:**
+  - Submit transaction with email attachments
+  - Verify attachments visible in broker portal
+
 ### CI Requirements
 - All PRs must pass: `npm test`, `npm run type-check`, `npm run lint`
 - No regressions in existing test coverage
@@ -274,6 +303,43 @@ Before starting sprint work, engineers must:
 | TASK-1776 | TODO | - | - | - |
 | TASK-1777 | TODO | - | - | - |
 | TASK-1778 | TODO | - | - | - |
+| TASK-1779 | TODO | - | - | - |
+| **User Testing** | PENDING | - | - | - |
+
+---
+
+## User Testing Gate
+
+**Status:** PENDING
+**Required Before:** Sprint close
+
+After all 5 PRs are merged to develop:
+
+### Manual Test Checklist
+
+- [ ] **Attachment Download:** Link an email with attachments, verify files appear in app data
+- [ ] **UI Display:** Open email in EmailViewModal, see attachment list with names/sizes/icons
+- [ ] **Open Attachment:** Click an attachment, verify it opens with system viewer
+- [ ] **Preview Modal:** Click image attachment, verify inline preview displays
+- [ ] **Export:** Export audit package, verify email attachments in attachments/ folder
+- [ ] **Manifest:** Check manifest.json includes email attachment entries with `messageType: "email"`
+- [ ] **Broker Portal:** Submit transaction, verify email attachments appear in broker portal
+
+### How to Test
+
+1. Run `npm run dev`
+2. Open a transaction with linked emails that have attachments
+3. Click an email to open EmailViewModal
+4. Verify attachments section appears
+5. Test open/preview functionality
+6. Export the audit package and inspect the output folder
+7. Submit the transaction to broker portal
+8. Log into broker portal and verify email attachments are visible
+
+### Pass/Fail
+
+- **Pass:** Mark sprint as COMPLETED
+- **Fail:** Create fix tasks, return to implementation
 
 ---
 
@@ -306,6 +372,8 @@ Before starting sprint work, engineers must:
 5. **Export:** Audit package export includes email attachment files
 6. **Manifest:** Export manifest.json includes email attachment metadata
 7. **Quality:** All tests passing, no new regressions
+8. **Broker Portal:** Email attachments upload and visible in broker portal
+9. **User Verification:** Manual testing checkpoint passed before sprint close
 
 ---
 
@@ -315,6 +383,7 @@ Before starting sprint work, engineers must:
 |----|-------|----------|--------|
 | NEW | Email Attachment Visibility | HIGH | This Sprint |
 | NEW | Email Attachments in Export | HIGH | This Sprint |
+| NEW | Email Attachments in Broker Portal | HIGH | This Sprint |
 | BACKLOG-332 | Audit Package Completion | HIGH | Partially Complete (text done, email pending) |
 
 ---
