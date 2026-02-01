@@ -1320,6 +1320,37 @@ interface MainAPI {
       title: string;
       message: string;
     }) => void) => () => void;
+
+    // ============================================
+    // EMAIL ATTACHMENT METHODS (TASK-1776)
+    // ============================================
+
+    /**
+     * Get attachments for a specific email
+     * @param emailId - Email ID to get attachments for
+     * @returns Array of attachment records
+     */
+    getEmailAttachments: (emailId: string) => Promise<{
+      success: boolean;
+      data?: Array<{
+        id: string;
+        filename: string;
+        mime_type: string | null;
+        file_size_bytes: number | null;
+        storage_path: string | null;
+      }>;
+      error?: string;
+    }>;
+
+    /**
+     * Open attachment with system viewer
+     * @param storagePath - Path to attachment file
+     * @returns Success/error result
+     */
+    openAttachment: (storagePath: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
   };
 
   // Transaction scan progress event

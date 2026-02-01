@@ -3,7 +3,7 @@
 // This file contains transaction handlers to be registered in main.js
 // ============================================
 
-import { ipcMain, BrowserWindow } from "electron";
+import { ipcMain, BrowserWindow, shell } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import transactionService from "./services/transactionService";
 import auditService from "./services/auditService";
@@ -2981,6 +2981,80 @@ export const registerTransactionHandlers = (
             error: `Validation error: ${error.message}`,
           };
         }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // TASK-1776: Get attachments for a specific email
+  ipcMain.handle(
+    "emails:get-attachments",
+    async (
+      event: IpcMainInvokeEvent,
+      emailId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        if (!emailId || typeof emailId !== "string") {
+          throw new ValidationError("Email ID is required", "emailId");
+        }
+
+        const attachments = await emailAttachmentService.getAttachmentsForEmail(emailId);
+
+        return {
+          success: true,
+          data: attachments,
+        };
+      } catch (error) {
+        logService.error("Failed to get email attachments", "Transactions", {
+          emailId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // TASK-1776: Open attachment with system viewer
+  ipcMain.handle(
+    "attachments:open",
+    async (
+      event: IpcMainInvokeEvent,
+      storagePath: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        if (!storagePath || typeof storagePath !== "string") {
+          throw new ValidationError("Storage path is required", "storagePath");
+        }
+
+        // Security: Validate path is within app data directory
+        const appDataPath = require("electron").app.getPath("userData");
+        const normalizedPath = require("path").normalize(storagePath);
+        if (!normalizedPath.startsWith(appDataPath)) {
+          throw new ValidationError("Invalid attachment path", "storagePath");
+        }
+
+        const result = await shell.openPath(normalizedPath);
+
+        if (result) {
+          // shell.openPath returns empty string on success, error message on failure
+          return {
+            success: false,
+            error: result,
+          };
+        }
+
+        return { success: true };
+      } catch (error) {
+        logService.error("Failed to open attachment", "Transactions", {
+          storagePath,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",
