@@ -306,7 +306,7 @@ Before starting sprint work, engineers must:
 | TASK-1776 | MERGED | - | - | #699 |
 | TASK-1777 | MERGED | - | - | #700 |
 | TASK-1780 | MERGED | - | - | #701 |
-| TASK-1778 | TODO | - | - | - |
+| TASK-1778 | MERGED | - | - | #702 |
 | TASK-1779 | TODO | - | - | - |
 | **User Testing** | PENDING | - | - | - |
 
