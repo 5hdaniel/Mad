@@ -135,11 +135,10 @@ describe("AuditTransactionModal", () => {
         />,
       );
 
-      // Progress bar shows step numbers (now 2 steps)
+      // Progress bar shows step numbers (3 steps after TASK-1771 unified navigation)
       expect(screen.getByText("1")).toBeInTheDocument();
       expect(screen.getByText("2")).toBeInTheDocument();
-      // Step 3 should not exist in new flow
-      expect(screen.queryByText("3")).not.toBeInTheDocument();
+      expect(screen.getByText("3")).toBeInTheDocument();
     });
   });
 
