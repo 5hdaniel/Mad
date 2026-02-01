@@ -482,4 +482,14 @@ export const transactionBridge = {
    */
   openAttachment: (storagePath: string) =>
     ipcRenderer.invoke("attachments:open", storagePath),
+
+  /**
+   * Get attachment data as base64 data URL for CSP-safe image preview
+   * TASK-1778 fix: CSP blocks file:// URLs, so we read the file and return as data: URL
+   * @param storagePath - Path to attachment file
+   * @param mimeType - MIME type for the data URL
+   * @returns Success/error result with data URL in data field
+   */
+  getAttachmentData: (storagePath: string, mimeType: string) =>
+    ipcRenderer.invoke("attachments:get-data", storagePath, mimeType),
 };
