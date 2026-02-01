@@ -18,6 +18,7 @@ jest.mock("./ContactRow", () => ({
   ContactRow: ({
     contact,
     isSelected,
+    isAdding,
     showCheckbox,
     showImportButton,
     onSelect,
@@ -26,6 +27,7 @@ jest.mock("./ContactRow", () => ({
   }: {
     contact: ExtendedContact;
     isSelected: boolean;
+    isAdding?: boolean;
     showCheckbox: boolean;
     showImportButton: boolean;
     onSelect: () => void;
@@ -38,7 +40,7 @@ jest.mock("./ContactRow", () => ({
       data-show-checkbox={showCheckbox}
       data-show-import-button={showImportButton}
       data-is-external={contact.is_message_derived}
-      className={className}
+      className={`${className || ""} ${isAdding ? "opacity-50" : ""}`.trim()}
       onClick={onSelect}
       role="option"
       aria-selected={isSelected}
@@ -132,28 +134,8 @@ describe("ContactSearchList", () => {
       ).toBeInTheDocument();
     });
 
-    it("renders selection count footer", () => {
-      render(<ContactSearchList {...createDefaultProps()} />);
-
-      expect(screen.getByTestId("selection-count")).toHaveTextContent(
-        "Selected: 0 contacts"
-      );
-    });
-
-    it("shows singular 'contact' when one is selected", () => {
-      render(
-        <ContactSearchList
-          {...createDefaultProps({
-            contacts: [createImportedContact({ id: "c1" })],
-            selectedIds: ["c1"],
-          })}
-        />
-      );
-
-      expect(screen.getByTestId("selection-count")).toHaveTextContent(
-        "Selected: 1 contact"
-      );
-    });
+    // Note: selection-count footer was removed in the SPRINT-066 UX redesign
+    // Selection is now tracked by the parent component
 
     it("applies custom className", () => {
       render(
@@ -364,12 +346,13 @@ describe("ContactSearchList", () => {
         />
       );
 
+      // Checkboxes are disabled in the redesigned contact list (click-to-select pattern)
       expect(
         screen.getByTestId("contact-row-c1").getAttribute("data-show-checkbox")
-      ).toBe("true");
+      ).toBe("false");
       expect(
         screen.getByTestId("contact-row-e1").getAttribute("data-show-checkbox")
-      ).toBe("true");
+      ).toBe("false");
     });
   });
 
@@ -428,32 +411,8 @@ describe("ContactSearchList", () => {
       );
     });
 
-    it("updates selection count display", () => {
-      const contacts = [
-        createImportedContact({ id: "c1" }),
-        createImportedContact({ id: "c2" }),
-      ];
-
-      const { rerender } = render(
-        <ContactSearchList
-          {...createDefaultProps({ contacts, selectedIds: [] })}
-        />
-      );
-
-      expect(screen.getByTestId("selection-count")).toHaveTextContent(
-        "Selected: 0 contacts"
-      );
-
-      rerender(
-        <ContactSearchList
-          {...createDefaultProps({ contacts, selectedIds: ["c1", "c2"] })}
-        />
-      );
-
-      expect(screen.getByTestId("selection-count")).toHaveTextContent(
-        "Selected: 2 contacts"
-      );
-    });
+    // Note: "updates selection count display" test removed - selection count
+    // footer was removed in SPRINT-066 UX redesign
 
     it("supports multi-select", () => {
       const contacts = [
