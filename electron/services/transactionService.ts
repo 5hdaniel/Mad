@@ -19,6 +19,7 @@ import { getContactNames } from "./contactsService";
 import { createCommunicationReference } from "./messageMatchingService";
 import { autoLinkCommunicationsForContact, AutoLinkResult } from "./autoLinkService";
 import { createEmail, getEmailByExternalId } from "./db/emailDbService";
+import emailAttachmentService from "./emailAttachmentService";
 
 // Hybrid extraction imports
 import { HybridExtractorService } from "./extraction/hybridExtractorService";
@@ -699,6 +700,44 @@ class TransactionService {
           attachment_count: originalEmail.attachmentCount || 0,
           message_id_header: originalEmail.messageIdHeader,  // RFC 5322 Message-ID
         });
+      }
+
+      // TASK-1775: Download email attachments if present
+      // This happens synchronously with per-attachment timeout (30s)
+      // Failed downloads are logged but don't fail the email linking flow
+      if (
+        originalEmail.hasAttachments &&
+        originalEmail.attachments &&
+        originalEmail.attachments.length > 0
+      ) {
+        const source: "gmail" | "outlook" = analyzed.from?.includes("@gmail")
+          ? "gmail"
+          : "outlook";
+
+        try {
+          await emailAttachmentService.downloadEmailAttachments(
+            userId,
+            emailRecord.id,
+            originalEmail.id, // External email ID (Gmail/Outlook message ID)
+            source,
+            originalEmail.attachments.map((att: any) => ({
+              filename: att.filename || att.name || "attachment",
+              mimeType: att.mimeType || att.contentType || "application/octet-stream",
+              size: att.size || 0,
+              attachmentId: att.attachmentId || att.id,
+            }))
+          );
+        } catch (error) {
+          // Log but don't fail - attachment download is non-blocking
+          await logService.warn(
+            "Failed to download email attachments",
+            "TransactionService._saveCommunications",
+            {
+              emailId: emailRecord.id,
+              error: error instanceof Error ? error.message : "Unknown error",
+            }
+          );
+        }
       }
 
       // Create junction in communications (no content, keep metadata)

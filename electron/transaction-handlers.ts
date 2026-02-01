@@ -3,7 +3,7 @@
 // This file contains transaction handlers to be registered in main.js
 // ============================================
 
-import { ipcMain, BrowserWindow } from "electron";
+import { ipcMain, BrowserWindow, shell } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import transactionService from "./services/transactionService";
 import auditService from "./services/auditService";
@@ -30,6 +30,9 @@ const folderExportService = require("./services/folderExportService").default;
 const databaseService = require("./services/databaseService").default;
 const gmailFetchService = require("./services/gmailFetchService").default;
 const outlookFetchService = require("./services/outlookFetchService").default;
+
+// TASK-1775: Email attachment download service
+import emailAttachmentService from "./services/emailAttachmentService";
 
 // Import validation utilities
 import {
@@ -1571,6 +1574,30 @@ export const registerTransactionHandlers = (
                     });
                   }
 
+                  // TASK-1775: Download email attachments if present
+                  if (email.hasAttachments && email.attachments && email.attachments.length > 0) {
+                    try {
+                      await emailAttachmentService.downloadEmailAttachments(
+                        transaction.user_id,
+                        emailRecord.id,
+                        messageId, // External email ID (Gmail message ID)
+                        "gmail",
+                        email.attachments.map((att: { filename?: string; name?: string; mimeType?: string; contentType?: string; size?: number; attachmentId?: string; id?: string }) => ({
+                          filename: att.filename || att.name || "attachment",
+                          mimeType: att.mimeType || att.contentType || "application/octet-stream",
+                          size: att.size || 0,
+                          attachmentId: att.attachmentId || att.id,
+                        }))
+                      );
+                    } catch (attachmentError) {
+                      // Log but don't fail - attachment download is non-blocking
+                      logService.warn("Failed to download Gmail email attachments", "Transactions", {
+                        emailId: emailRecord.id,
+                        error: attachmentError instanceof Error ? attachmentError.message : "Unknown",
+                      });
+                    }
+                  }
+
                   // Create junction link in communications table
                   await createCommunication({
                     user_id: transaction.user_id,
@@ -1624,6 +1651,30 @@ export const registerTransactionHandlers = (
                       has_attachments: email.hasAttachments || false,
                       attachment_count: email.attachmentCount || 0,
                     });
+                  }
+
+                  // TASK-1775: Download email attachments if present
+                  if (email.hasAttachments && email.attachments && email.attachments.length > 0) {
+                    try {
+                      await emailAttachmentService.downloadEmailAttachments(
+                        transaction.user_id,
+                        emailRecord.id,
+                        messageId, // External email ID (Outlook message ID)
+                        "outlook",
+                        email.attachments.map((att: { filename?: string; name?: string; mimeType?: string; contentType?: string; size?: number; attachmentId?: string; id?: string }) => ({
+                          filename: att.filename || att.name || "attachment",
+                          mimeType: att.mimeType || att.contentType || "application/octet-stream",
+                          size: att.size || 0,
+                          attachmentId: att.attachmentId || att.id,
+                        }))
+                      );
+                    } catch (attachmentError) {
+                      // Log but don't fail - attachment download is non-blocking
+                      logService.warn("Failed to download Outlook email attachments", "Transactions", {
+                        emailId: emailRecord.id,
+                        error: attachmentError instanceof Error ? attachmentError.message : "Unknown",
+                      });
+                    }
                   }
 
                   // Create junction link in communications table
@@ -2930,6 +2981,308 @@ export const registerTransactionHandlers = (
             error: `Validation error: ${error.message}`,
           };
         }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // TASK-1776: Get attachments for a specific email
+  ipcMain.handle(
+    "emails:get-attachments",
+    async (
+      event: IpcMainInvokeEvent,
+      emailId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        if (!emailId || typeof emailId !== "string") {
+          throw new ValidationError("Email ID is required", "emailId");
+        }
+
+        const attachments = await emailAttachmentService.getAttachmentsForEmail(emailId);
+
+        return {
+          success: true,
+          data: attachments,
+        };
+      } catch (error) {
+        logService.error("Failed to get email attachments", "Transactions", {
+          emailId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // TASK-1776: Open attachment with system viewer
+  ipcMain.handle(
+    "attachments:open",
+    async (
+      event: IpcMainInvokeEvent,
+      storagePath: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        if (!storagePath || typeof storagePath !== "string") {
+          throw new ValidationError("Storage path is required", "storagePath");
+        }
+
+        // Security: Validate path is within app data directory
+        const appDataPath = require("electron").app.getPath("userData");
+        const normalizedPath = require("path").normalize(storagePath);
+        if (!normalizedPath.startsWith(appDataPath)) {
+          throw new ValidationError("Invalid attachment path", "storagePath");
+        }
+
+        const result = await shell.openPath(normalizedPath);
+
+        if (result) {
+          // shell.openPath returns empty string on success, error message on failure
+          return {
+            success: false,
+            error: result,
+          };
+        }
+
+        return { success: true };
+      } catch (error) {
+        logService.error("Failed to open attachment", "Transactions", {
+          storagePath,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Fix for TASK-1778: Get attachment data as base64 for CSP-safe image preview
+  // CSP blocks file:// URLs, so we read the file and return as data: URL
+  ipcMain.handle(
+    "attachments:get-data",
+    async (
+      event: IpcMainInvokeEvent,
+      storagePath: string,
+      mimeType: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        if (!storagePath || typeof storagePath !== "string") {
+          throw new ValidationError("Storage path is required", "storagePath");
+        }
+
+        // Security: Validate path is within app data directory
+        const appDataPath = require("electron").app.getPath("userData");
+        const normalizedPath = require("path").normalize(storagePath);
+        if (!normalizedPath.startsWith(appDataPath)) {
+          throw new ValidationError("Invalid attachment path", "storagePath");
+        }
+
+        // Read file as buffer and convert to base64
+        const fs = require("fs");
+        const buffer = fs.readFileSync(normalizedPath);
+        const base64 = buffer.toString("base64");
+        const dataUrl = `data:${mimeType || "application/octet-stream"};base64,${base64}`;
+
+        return {
+          success: true,
+          data: dataUrl,
+        };
+      } catch (error) {
+        logService.error("Failed to get attachment data", "Transactions", {
+          storagePath,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // TASK-1781: Get attachment counts for transaction (from actual downloaded files)
+  // Returns counts from the attachments table, matching what submission service uploads
+  ipcMain.handle(
+    "transactions:get-attachment-counts",
+    async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+      auditStart?: string,
+      auditEnd?: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        // Validate transaction ID
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        const db = databaseService.getRawDatabase();
+
+        // Build date filter params
+        const textDateParams: string[] = [validatedTransactionId];
+        const emailDateParams: string[] = [validatedTransactionId];
+
+        let textDateFilter = "";
+        let emailDateFilter = "";
+
+        if (auditStart) {
+          textDateFilter += " AND m.sent_at >= ?";
+          textDateParams.push(auditStart);
+          emailDateFilter += " AND e.sent_at >= ?";
+          emailDateParams.push(auditStart);
+        }
+
+        if (auditEnd) {
+          // Add end of day to include all messages on the end date
+          const endDate = new Date(auditEnd);
+          endDate.setHours(23, 59, 59, 999);
+          const endDateStr = endDate.toISOString();
+          textDateFilter += " AND m.sent_at <= ?";
+          textDateParams.push(endDateStr);
+          emailDateFilter += " AND e.sent_at <= ?";
+          emailDateParams.push(endDateStr);
+        }
+
+        // Count text message attachments (via message_id -> messages -> communications)
+        // Mirrors the query in submissionService.loadTransactionAttachments
+        const textCountSql = `
+          SELECT COUNT(DISTINCT a.id) as count
+          FROM attachments a
+          INNER JOIN messages m ON a.message_id = m.id
+          INNER JOIN communications c ON (
+            (c.message_id IS NOT NULL AND c.message_id = m.id)
+            OR
+            (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+          )
+          WHERE c.transaction_id = ?
+          AND a.message_id IS NOT NULL
+          AND a.storage_path IS NOT NULL
+          ${textDateFilter}
+        `;
+
+        const textResult = db.prepare(textCountSql).get(...textDateParams) as { count: number };
+
+        // Count email attachments (via email_id -> communications -> emails)
+        const emailCountSql = `
+          SELECT COUNT(DISTINCT a.id) as count
+          FROM attachments a
+          INNER JOIN emails e ON a.email_id = e.id
+          INNER JOIN communications c ON c.email_id = e.id
+          WHERE c.transaction_id = ?
+          AND a.email_id IS NOT NULL
+          AND a.storage_path IS NOT NULL
+          ${emailDateFilter}
+        `;
+
+        const emailResult = db.prepare(emailCountSql).get(...emailDateParams) as { count: number };
+
+        // Calculate total size of all attachments (text + email)
+        const textSizeSql = `
+          SELECT COALESCE(SUM(a.file_size_bytes), 0) as total_size
+          FROM attachments a
+          INNER JOIN messages m ON a.message_id = m.id
+          INNER JOIN communications c ON (
+            (c.message_id IS NOT NULL AND c.message_id = m.id)
+            OR
+            (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+          )
+          WHERE c.transaction_id = ?
+          AND a.message_id IS NOT NULL
+          AND a.storage_path IS NOT NULL
+          ${textDateFilter}
+        `;
+
+        const emailSizeSql = `
+          SELECT COALESCE(SUM(a.file_size_bytes), 0) as total_size
+          FROM attachments a
+          INNER JOIN emails e ON a.email_id = e.id
+          INNER JOIN communications c ON c.email_id = e.id
+          WHERE c.transaction_id = ?
+          AND a.email_id IS NOT NULL
+          AND a.storage_path IS NOT NULL
+          ${emailDateFilter}
+        `;
+
+        const textSizeResult = db.prepare(textSizeSql).get(...textDateParams) as { total_size: number };
+        const emailSizeResult = db.prepare(emailSizeSql).get(...emailDateParams) as { total_size: number };
+
+        const textAttachments = textResult?.count || 0;
+        const emailAttachments = emailResult?.count || 0;
+        const totalSizeBytes = (textSizeResult?.total_size || 0) + (emailSizeResult?.total_size || 0);
+
+        return {
+          success: true,
+          data: {
+            textAttachments,
+            emailAttachments,
+            total: textAttachments + emailAttachments,
+            totalSizeBytes,
+          },
+        };
+      } catch (error) {
+        logService.error("Failed to get attachment counts", "Transactions", {
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // TASK-1783: Get attachment buffer as base64 (for DOCX conversion with mammoth)
+  // Unlike get-data, this returns raw base64 without data: URL prefix
+  ipcMain.handle(
+    "attachments:get-buffer",
+    async (
+      event: IpcMainInvokeEvent,
+      storagePath: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        if (!storagePath || typeof storagePath !== "string") {
+          throw new ValidationError("Storage path is required", "storagePath");
+        }
+
+        // Security: Validate path is within app data directory
+        const appDataPath = require("electron").app.getPath("userData");
+        const normalizedPath = require("path").normalize(storagePath);
+        if (!normalizedPath.startsWith(appDataPath)) {
+          throw new ValidationError("Invalid attachment path", "storagePath");
+        }
+
+        // Read file as buffer and convert to base64
+        const fs = require("fs");
+        const buffer = fs.readFileSync(normalizedPath);
+        const base64 = buffer.toString("base64");
+
+        return {
+          success: true,
+          data: base64,
+        };
+      } catch (error) {
+        logService.error("Failed to get attachment buffer", "Transactions", {
+          storagePath,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",

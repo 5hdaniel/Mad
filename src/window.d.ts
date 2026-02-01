@@ -1320,6 +1320,84 @@ interface MainAPI {
       title: string;
       message: string;
     }) => void) => () => void;
+
+    // ============================================
+    // EMAIL ATTACHMENT METHODS (TASK-1776)
+    // ============================================
+
+    /**
+     * Get attachments for a specific email
+     * @param emailId - Email ID to get attachments for
+     * @returns Array of attachment records
+     */
+    getEmailAttachments: (emailId: string) => Promise<{
+      success: boolean;
+      data?: Array<{
+        id: string;
+        filename: string;
+        mime_type: string | null;
+        file_size_bytes: number | null;
+        storage_path: string | null;
+      }>;
+      error?: string;
+    }>;
+
+    /**
+     * Open attachment with system viewer
+     * @param storagePath - Path to attachment file
+     * @returns Success/error result
+     */
+    openAttachment: (storagePath: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+
+    /**
+     * Get attachment counts from actual attachments table (TASK-1781)
+     * Returns counts matching what submission service will upload
+     * @param transactionId - Transaction ID
+     * @param auditStart - Optional audit start date (ISO string)
+     * @param auditEnd - Optional audit end date (ISO string)
+     * @returns Counts for text and email attachments
+     */
+    getAttachmentCounts: (
+      transactionId: string,
+      auditStart?: string,
+      auditEnd?: string
+    ) => Promise<{
+      success: boolean;
+      data?: {
+        textAttachments: number;
+        emailAttachments: number;
+        total: number;
+      };
+      error?: string;
+    }>;
+
+    /**
+     * Get attachment data as base64 data URL for preview
+     * TASK-1778: Returns data: URL for images/PDFs
+     * @param storagePath - Path to attachment file
+     * @param mimeType - MIME type for the data URL
+     * @returns Success/error result with data URL in data field
+     */
+    getAttachmentData: (storagePath: string, mimeType: string) => Promise<{
+      success: boolean;
+      data?: string;
+      error?: string;
+    }>;
+
+    /**
+     * Get attachment buffer as raw base64 (for DOCX conversion)
+     * TASK-1783: Returns raw base64 without data: URL prefix for mammoth.js
+     * @param storagePath - Path to attachment file
+     * @returns Success/error result with base64 data in data field
+     */
+    getAttachmentBuffer: (storagePath: string) => Promise<{
+      success: boolean;
+      data?: string;
+      error?: string;
+    }>;
   };
 
   // Transaction scan progress event

@@ -28,6 +28,17 @@ export interface TransactionAttachment {
   emailDate: string;
 }
 
+/**
+ * Interface for attachment counts from the actual attachments table (TASK-1781)
+ * These counts match what the submission service will upload
+ */
+export interface AttachmentCounts {
+  textAttachments: number;
+  emailAttachments: number;
+  total: number;
+  totalSizeBytes: number;
+}
+
 interface UseTransactionAttachmentsResult {
   /** Attachments from emails linked to the transaction */
   attachments: TransactionAttachment[];
@@ -38,6 +49,17 @@ interface UseTransactionAttachmentsResult {
   /** Total count of attachments */
   count: number;
   /** Refresh the attachments list */
+  refresh: () => Promise<void>;
+}
+
+interface UseAttachmentCountsResult {
+  /** Counts from actual downloaded attachments in DB */
+  counts: AttachmentCounts;
+  /** Whether counts are being loaded */
+  loading: boolean;
+  /** Error message if loading failed */
+  error: string | null;
+  /** Refresh the counts */
   refresh: () => Promise<void>;
 }
 
@@ -148,5 +170,102 @@ export function useTransactionAttachments(
     error,
     count: attachments.length,
     refresh: loadAttachments,
+  };
+}
+
+/**
+ * Hook for fetching accurate attachment counts from the attachments table.
+ * TASK-1781: These counts match what the submission service will actually upload.
+ *
+ * @param transactionId - Transaction ID to get counts for
+ * @param auditStart - Optional audit start date (ISO string or Date)
+ * @param auditEnd - Optional audit end date (ISO string or Date)
+ * @returns Attachment counts, loading state, error state, and refresh function
+ */
+export function useAttachmentCounts(
+  transactionId: string,
+  auditStart?: string | Date | null,
+  auditEnd?: string | Date | null
+): UseAttachmentCountsResult {
+  const [counts, setCounts] = useState<AttachmentCounts>({
+    textAttachments: 0,
+    emailAttachments: 0,
+    total: 0,
+    totalSizeBytes: 0,
+  });
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadCounts = useCallback(async (): Promise<void> => {
+    if (!transactionId) {
+      setCounts({ textAttachments: 0, emailAttachments: 0, total: 0, totalSizeBytes: 0 });
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Convert dates to ISO strings if needed
+      const startStr = auditStart
+        ? (auditStart instanceof Date ? auditStart.toISOString() : auditStart)
+        : undefined;
+      const endStr = auditEnd
+        ? (auditEnd instanceof Date ? auditEnd.toISOString() : auditEnd)
+        : undefined;
+
+      // Use type assertion for new API method (TASK-1781)
+      // Note: The window.d.ts types after onSubmitProgress have a known TS parsing issue
+      const transactions = window.api.transactions as typeof window.api.transactions & {
+        getAttachmentCounts: (
+          transactionId: string,
+          auditStart?: string,
+          auditEnd?: string
+        ) => Promise<{
+          success: boolean;
+          data?: {
+            textAttachments: number;
+            emailAttachments: number;
+            total: number;
+            totalSizeBytes: number;
+          };
+          error?: string;
+        }>;
+      };
+
+      const result = await transactions.getAttachmentCounts(
+        transactionId,
+        startStr,
+        endStr
+      );
+
+      if (result.success && result.data) {
+        setCounts({
+          ...result.data,
+          totalSizeBytes: result.data.totalSizeBytes || 0,
+        });
+      } else {
+        setError(result.error || "Failed to load attachment counts");
+        setCounts({ textAttachments: 0, emailAttachments: 0, total: 0, totalSizeBytes: 0 });
+      }
+    } catch (err) {
+      console.error("Failed to load attachment counts:", err);
+      setError("Failed to load attachment counts");
+      setCounts({ textAttachments: 0, emailAttachments: 0, total: 0, totalSizeBytes: 0 });
+    } finally {
+      setLoading(false);
+    }
+  }, [transactionId, auditStart, auditEnd]);
+
+  useEffect(() => {
+    loadCounts();
+  }, [loadCounts]);
+
+  return {
+    counts,
+    loading,
+    error,
+    refresh: loadCounts,
   };
 }

@@ -25,6 +25,7 @@ import {
   useSuggestedContacts,
   useTransactionMessages,
   useTransactionAttachments,
+  useAttachmentCounts,
   TransactionHeader,
   TransactionTabs,
   TransactionDetailsTab,
@@ -132,13 +133,17 @@ function TransactionDetails({
     refresh: refreshMessages,
   } = useTransactionMessages(transaction);
 
-  // Attachments hook
+  // Attachments hook (for tab display - parses email metadata)
   const {
     attachments,
     loading: attachmentsLoading,
     error: attachmentsError,
     count: attachmentCount,
   } = useTransactionAttachments(transaction);
+
+  // Accurate attachment counts from database (TASK-1781)
+  // Used for submission preview - counts actual downloaded files
+  const { counts: dbAttachmentCounts } = useAttachmentCounts(transaction.id);
 
   // Transaction status update hook
   const { state: statusState, approve, reject, restore } = useTransactionStatusUpdate(userId);
@@ -592,8 +597,11 @@ function TransactionDetails({
       {showSubmitModal && (
         <SubmitForReviewModal
           transaction={transaction}
-          messageCount={emailCommunications.length + textMessages.length}
-          attachmentCount={attachmentCount}
+          emailThreadCount={transaction.email_count || 0}
+          textThreadCount={transaction.text_thread_count || 0}
+          attachmentCount={dbAttachmentCounts.total}
+          emailAttachmentCount={dbAttachmentCounts.emailAttachments}
+          totalSizeBytes={dbAttachmentCounts.totalSizeBytes}
           isSubmitting={isSubmitting}
           progress={submitProgress}
           error={submitError}

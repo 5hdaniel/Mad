@@ -360,55 +360,60 @@ export function EmailViewModal({ ... }): React.ReactElement {
 
 **REQUIRED: Record your agent_id immediately when the Task tool returns.**
 
-*Completed: <DATE>*
+*Completed: 2026-02-01*
 
 ### Agent ID
 
 ```
-Engineer Agent ID: <agent_id from Task tool output>
+Engineer Agent ID: engineer-1778
 ```
 
 ### Checklist
 
 ```
 Files created:
-- [ ] src/.../modals/AttachmentPreviewModal.tsx
-- [ ] src/.../modals/__tests__/AttachmentPreviewModal.test.tsx
+- [x] src/components/transactionDetailsModule/components/modals/AttachmentPreviewModal.tsx
+- [x] src/components/transactionDetailsModule/components/modals/__tests__/AttachmentPreviewModal.test.tsx
 
 Files modified:
-- [ ] src/.../components/EmailAttachmentList.tsx
-- [ ] src/.../modals/EmailViewModal.tsx
+- [x] src/components/transactionDetailsModule/components/modals/EmailViewModal.tsx
+  (Note: EmailAttachmentList.tsx not needed - attachments inline in EmailViewModal)
 
 Features implemented:
-- [ ] Image preview display
-- [ ] Non-image fallback UI
-- [ ] Close button and escape key
-- [ ] Backdrop click to close
-- [ ] Open with system button
+- [x] Image preview display (using file:// URLs for Electron)
+- [x] Non-image fallback UI (shows file info with Open button)
+- [x] Close button and escape key
+- [x] Backdrop click to close
+- [x] Open with system button
 
 Verification:
-- [ ] npm run type-check passes
-- [ ] npm run lint passes
-- [ ] npm test passes
+- [x] npm run type-check passes
+- [x] npm run lint passes (my files clean; pre-existing error in unrelated file)
+- [x] npm test passes (96 suites, 2522 tests in CI mode)
 ```
 
 ### Metrics (Auto-Captured)
 
 | Metric | Value |
 |--------|-------|
-| **Total Tokens** | X |
-| Duration | X seconds |
-| API Calls | X |
+| **Total Tokens** | TBD (auto-captured) |
+| Duration | TBD |
+| API Calls | TBD |
 
-**Variance:** PM Est ~20K vs Actual ~XK (X% over/under)
+**Variance:** PM Est ~20K vs Actual ~TBD
 
 ### Notes
 
 **Deviations from plan:**
-<None or explain>
+- Task file mentioned updating `EmailAttachmentList.tsx` but this component doesn't exist - the attachment list is rendered inline in `EmailViewModal.tsx`. Updated EmailViewModal directly.
+- The attachment button now opens preview instead of directly opening the file. Users can still open with system viewer from the preview modal.
 
 **Design decisions:**
-<Document any>
+- Added `data-testid` attributes to key elements for reliable test targeting
+- Preview modal uses z-index 100 (higher than EmailViewModal's 90) to properly overlay
+- Image loading uses file:// URL scheme for Electron compatibility
+- Non-image files show centered fallback UI with file icon, name, size, and "Open with System Viewer" button
+- When storage_path is null (attachment not downloaded), hide the Open button and show "Attachment not downloaded" message
 
 ---
 

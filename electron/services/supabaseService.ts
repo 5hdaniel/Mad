@@ -270,11 +270,14 @@ class SupabaseService {
   ): Promise<{ organization_id: string; organization_name?: string } | null> {
     try {
       const client = this._ensureClient();
+      // Use limit(1) instead of maybeSingle() to handle users with multiple org memberships
+      // Filter by active license_status to only consider valid memberships
       const { data, error } = await client
         .from("organization_members")
         .select("organization_id, organizations(name)")
         .eq("user_id", userId)
-        .maybeSingle();
+        .eq("license_status", "active")
+        .limit(1);
 
       if (error) {
         logService.warn(
@@ -284,13 +287,15 @@ class SupabaseService {
         return null;
       }
 
-      if (!data) {
+      // data is now an array, get first element
+      const membership = data?.[0];
+      if (!membership) {
         return null;
       }
 
       return {
-        organization_id: data.organization_id,
-        organization_name: (data.organizations as { name?: string } | null)?.name,
+        organization_id: membership.organization_id,
+        organization_name: (membership.organizations as { name?: string } | null)?.name,
       };
     } catch (err) {
       logService.error("[Supabase] Error checking org membership", "SupabaseService", { err });

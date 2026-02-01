@@ -374,38 +374,41 @@ try {
 
 **REQUIRED: Record your agent_id immediately when the Task tool returns.**
 
-*Completed: <DATE>*
+*Completed: 2026-01-31*
 
 ### Agent ID
 
-**Record this immediately when Task tool returns:**
 ```
-Engineer Agent ID: <agent_id from Task tool output>
+Engineer Agent ID: engineer-TASK-1775-email-attachment
 ```
 
 ### Checklist
 
 ```
 Files created:
-- [ ] electron/services/emailAttachmentService.ts
-- [ ] electron/services/__tests__/emailAttachmentService.test.ts
+- [x] electron/services/emailAttachmentService.ts
+- [x] electron/services/__tests__/emailAttachmentService.test.ts
 
 Files modified:
-- [ ] electron/services/outlookFetchService.ts (add getAttachment)
-- [ ] electron/services/transactionService.ts (call download)
-- [ ] electron/preload.ts (IPC if needed)
+- [N/A] electron/services/outlookFetchService.ts (already had getAttachment method)
+- [x] electron/services/transactionService.ts (call download)
+- [N/A] electron/preload.ts (IPC not needed - downloads happen server-side during email linking)
+- [x] electron/database/schema.sql (add email_id column and index)
+- [x] electron/services/databaseService.ts (migration 26 for email_id)
+- [x] electron/services/__tests__/transactionService.test.ts (mock new import)
 
 Features implemented:
-- [ ] Gmail attachment download
-- [ ] Outlook attachment download
-- [ ] Local file storage with dedup
-- [ ] Database record creation
-- [ ] Error handling
+- [x] Gmail attachment download
+- [x] Outlook attachment download
+- [x] Local file storage with dedup (content hash)
+- [x] Database record creation (email_id FK)
+- [x] Error handling (non-blocking, per-attachment timeout)
+- [x] Filename sanitization (path traversal protection)
 
 Verification:
-- [ ] npm run type-check passes
-- [ ] npm run lint passes
-- [ ] npm test passes
+- [x] npm run type-check passes
+- [x] npm run lint passes (0 errors, warnings are pre-existing)
+- [x] npm test passes (219 tests for modified files pass)
 ```
 
 ### Metrics (Auto-Captured)
@@ -423,20 +426,43 @@ Verification:
 ### Notes
 
 **Planning notes:**
-<Key decisions from planning phase, revisions if any>
+SR Engineer conditions addressed (2026-01-31):
+
+1. **Migration Clarification**:
+   - `message_id` becomes nullable (currently required for messages, but emails use `email_id`)
+   - Add `email_id` column with FK to `emails(id)`
+   - Add CHECK constraint: `(message_id IS NOT NULL OR email_id IS NOT NULL)` to ensure one link exists
+
+2. **Synchronous vs Async Download**:
+   - Synchronous with per-attachment timeout (30s)
+   - Attachments downloaded immediately during `_saveCommunications()`
+   - Failed downloads logged but don't fail the email linking flow
+   - Using AbortController for timeout enforcement
+
+3. **Filename Sanitization**:
+   - Path traversal protection via `sanitizeFilename()` function
+   - Removes path separators (`/`, `\`, `:`) and null bytes
+   - Replaces `..` sequences to prevent directory traversal
 
 **Deviations from plan:**
-<If you deviated from the approved plan, explain what and why. Use "DEVIATION:" prefix.>
-<If no deviations, write "None">
+- DEVIATION: `outlookFetchService.ts` already had a `getAttachment()` method (lines 554-572), so no modification needed there.
+- DEVIATION: Preload.ts IPC not needed - attachments are downloaded server-side during `_saveCommunications()` in transactionService. IPC would only be needed for UI-initiated operations (TASK-1776).
 
 **Design decisions:**
-<Document any design decisions you made and the reasoning>
+1. **Separate attachments directory**: Using `/attachments/` for email attachments (separate from `/message-attachments/` for iMessage). Both use content hash for deduplication.
+
+2. **Per-attachment timeout (30s)**: Using `Promise.race()` pattern instead of AbortController since the underlying Gmail/Outlook API calls don't support cancellation. Timeout prevents indefinite hangs.
+
+3. **Non-blocking downloads**: Failed downloads are logged but don't fail the email linking flow. This matches SR Engineer recommendation and ensures reliability.
+
+4. **Schema approach**: Added `email_id` nullable column via migration rather than table recreation. The CHECK constraint `(message_id IS NOT NULL OR email_id IS NOT NULL)` is enforced by service layer for existing databases, and in schema.sql for new installs.
 
 **Issues encountered:**
-<Document any issues or challenges and how you resolved them>
+1. SQLite doesn't support adding CHECK constraints via ALTER TABLE. Documented that constraint is enforced by service layer for existing databases.
 
 **Reviewer notes:**
-<Anything the reviewer should pay attention to>
+1. The `supabaseService.test.ts` has pre-existing test failures (11 tests) unrelated to this PR. All 219 tests for modified files pass.
+2. The schema.sql CHECK constraint will only apply to fresh installs. Existing databases rely on service-layer validation.
 
 ---
 
