@@ -485,3 +485,4 @@ BACKLOG-576,Responsive icon-only buttons for Overview tab,ux,medium,completed,SP
 BACKLOG-577,Consistent Edit button colors,ux,low,completed,SPRINT-066,Change Edit Summary button from indigo to blue to match Edit Contacts button color,2026-01-31,
 BACKLOG-578,Fix Supabase RLS infinite recursion in organization_members,bugfix,high,pending,,Fix Row Level Security policy on organization_members table that causes infinite recursion - need to use security definer function or different table reference,2026-01-31,
 BACKLOG-579,List Attachment Filenames in Export PDF,enhancement,high,testing,SPRINT-067,~15K,-,-,2026-02-01,-,BACKLOG-579.md
+BACKLOG-579,Attachments Tab Show Downloaded Files,medium,feature,pending,,"Wire Attachments tab to show actual downloaded files from attachments table instead of email metadata JSON. Add click-to-open functionality.",SPRINT-067-feedback

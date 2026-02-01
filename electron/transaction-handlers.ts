@@ -3187,8 +3187,39 @@ export const registerTransactionHandlers = (
 
         const emailResult = db.prepare(emailCountSql).get(...emailDateParams) as { count: number };
 
+        // Calculate total size of all attachments (text + email)
+        const textSizeSql = `
+          SELECT COALESCE(SUM(a.file_size_bytes), 0) as total_size
+          FROM attachments a
+          INNER JOIN messages m ON a.message_id = m.id
+          INNER JOIN communications c ON (
+            (c.message_id IS NOT NULL AND c.message_id = m.id)
+            OR
+            (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+          )
+          WHERE c.transaction_id = ?
+          AND a.message_id IS NOT NULL
+          AND a.storage_path IS NOT NULL
+          ${textDateFilter}
+        `;
+
+        const emailSizeSql = `
+          SELECT COALESCE(SUM(a.file_size_bytes), 0) as total_size
+          FROM attachments a
+          INNER JOIN emails e ON a.email_id = e.id
+          INNER JOIN communications c ON c.email_id = e.id
+          WHERE c.transaction_id = ?
+          AND a.email_id IS NOT NULL
+          AND a.storage_path IS NOT NULL
+          ${emailDateFilter}
+        `;
+
+        const textSizeResult = db.prepare(textSizeSql).get(...textDateParams) as { total_size: number };
+        const emailSizeResult = db.prepare(emailSizeSql).get(...emailDateParams) as { total_size: number };
+
         const textAttachments = textResult?.count || 0;
         const emailAttachments = emailResult?.count || 0;
+        const totalSizeBytes = (textSizeResult?.total_size || 0) + (emailSizeResult?.total_size || 0);
 
         return {
           success: true,
@@ -3196,6 +3227,7 @@ export const registerTransactionHandlers = (
             textAttachments,
             emailAttachments,
             total: textAttachments + emailAttachments,
+            totalSizeBytes,
           },
         };
       } catch (error) {

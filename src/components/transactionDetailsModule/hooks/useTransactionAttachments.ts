@@ -36,6 +36,7 @@ export interface AttachmentCounts {
   textAttachments: number;
   emailAttachments: number;
   total: number;
+  totalSizeBytes: number;
 }
 
 interface UseTransactionAttachmentsResult {
@@ -190,13 +191,14 @@ export function useAttachmentCounts(
     textAttachments: 0,
     emailAttachments: 0,
     total: 0,
+    totalSizeBytes: 0,
   });
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadCounts = useCallback(async (): Promise<void> => {
     if (!transactionId) {
-      setCounts({ textAttachments: 0, emailAttachments: 0, total: 0 });
+      setCounts({ textAttachments: 0, emailAttachments: 0, total: 0, totalSizeBytes: 0 });
       setLoading(false);
       return;
     }
@@ -226,6 +228,7 @@ export function useAttachmentCounts(
             textAttachments: number;
             emailAttachments: number;
             total: number;
+            totalSizeBytes: number;
           };
           error?: string;
         }>;
@@ -238,15 +241,18 @@ export function useAttachmentCounts(
       );
 
       if (result.success && result.data) {
-        setCounts(result.data);
+        setCounts({
+          ...result.data,
+          totalSizeBytes: result.data.totalSizeBytes || 0,
+        });
       } else {
         setError(result.error || "Failed to load attachment counts");
-        setCounts({ textAttachments: 0, emailAttachments: 0, total: 0 });
+        setCounts({ textAttachments: 0, emailAttachments: 0, total: 0, totalSizeBytes: 0 });
       }
     } catch (err) {
       console.error("Failed to load attachment counts:", err);
       setError("Failed to load attachment counts");
-      setCounts({ textAttachments: 0, emailAttachments: 0, total: 0 });
+      setCounts({ textAttachments: 0, emailAttachments: 0, total: 0, totalSizeBytes: 0 });
     } finally {
       setLoading(false);
     }

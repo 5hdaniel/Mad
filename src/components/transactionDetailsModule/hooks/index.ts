@@ -6,6 +6,6 @@ export { useTransactionTabs } from "./useTransactionTabs";
 export { useTransactionCommunications } from "./useTransactionCommunications";
 export { useSuggestedContacts } from "./useSuggestedContacts";
 export { useTransactionMessages } from "./useTransactionMessages";
-export { useTransactionAttachments } from "./useTransactionAttachments";
-export type { TransactionAttachment, EmailAttachment } from "./useTransactionAttachments";
+export { useTransactionAttachments, useAttachmentCounts } from "./useTransactionAttachments";
+export type { TransactionAttachment, EmailAttachment, AttachmentCounts } from "./useTransactionAttachments";
 export { useSubmitForReview } from "./useSubmitForReview";

@@ -4,15 +4,13 @@
  * TASK-1778: Email Attachment Preview Modal
  * TASK-1783: Add PDF and DOCX inline preview
  */
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   X,
   ExternalLink,
   Image,
   FileText,
   File,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
 import { Document, Page, pdfjs } from "react-pdf";
 import DOMPurify from "dompurify";
@@ -22,8 +20,9 @@ import mammoth from "mammoth";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 
-// Configure PDF.js worker - must be in the same module as Document/Page
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+// Configure PDF.js worker - use local copy in public folder to avoid CSP issues
+// The worker file is copied from node_modules/pdfjs-dist/build/pdf.worker.min.mjs
+pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
 interface AttachmentPreviewModalProps {
   attachment: {
@@ -85,7 +84,9 @@ export function AttachmentPreviewModal({
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [numPages, setNumPages] = useState<number>(0);
-  const [pageNumber, setPageNumber] = useState(1);
+
+  // Ref for scrolling to top when PDF loads
+  const pdfContainerRef = useRef<HTMLDivElement>(null);
 
   // DOCX preview state
   const [docxHtml, setDocxHtml] = useState<string | null>(null);
@@ -239,20 +240,14 @@ export function AttachmentPreviewModal({
     }
   };
 
-  // PDF page navigation
-  const goToPreviousPage = useCallback(() => {
-    setPageNumber((prev) => Math.max(1, prev - 1));
-  }, []);
-
-  const goToNextPage = useCallback(() => {
-    setPageNumber((prev) => Math.min(numPages, prev + 1));
-  }, [numPages]);
-
-  // Handle PDF document load success
+  // Handle PDF document load success - scroll to top
   const onDocumentLoadSuccess = useCallback(
     ({ numPages: pages }: { numPages: number }) => {
       setNumPages(pages);
-      setPageNumber(1);
+      // Scroll the content area to top when PDF loads
+      setTimeout(() => {
+        pdfContainerRef.current?.scrollTo({ top: 0, behavior: "instant" });
+      }, 100);
     },
     []
   );
@@ -289,7 +284,7 @@ export function AttachmentPreviewModal({
     </div>
   );
 
-  // Render PDF preview
+  // Render PDF preview - all pages in scrollable view
   const renderPdfPreview = () => {
     if (pdfLoading) {
       return renderLoading("Loading PDF...");
@@ -303,8 +298,22 @@ export function AttachmentPreviewModal({
       return null;
     }
 
+    // Generate array of all page numbers
+    const allPages = Array.from({ length: numPages }, (_, i) => i + 1);
+
     return (
-      <div className="flex flex-col items-center w-full" data-testid="pdf-preview">
+      <div
+        ref={pdfContainerRef}
+        className="flex flex-col items-center w-full"
+        data-testid="pdf-preview"
+      >
+        {/* Page count indicator - sticky at top */}
+        {numPages > 1 && (
+          <div className="sticky top-0 z-10 bg-white bg-opacity-90 backdrop-blur-sm rounded-lg shadow px-4 py-2 mb-4">
+            <span className="text-sm text-gray-600">{numPages} pages • Scroll to navigate</span>
+          </div>
+        )}
+
         <Document
           file={pdfData}
           onLoadSuccess={onDocumentLoadSuccess}
@@ -313,41 +322,25 @@ export function AttachmentPreviewModal({
           error={renderError("Failed to render PDF", "pdf-render-error")}
           className="max-w-full"
         >
-          <Page
-            pageNumber={pageNumber}
-            renderTextLayer={true}
-            renderAnnotationLayer={true}
-            className="shadow-lg"
-            width={Math.min(800, window.innerWidth - 100)}
-          />
-        </Document>
-
-        {/* Page navigation */}
-        {numPages > 1 && (
-          <div className="flex items-center gap-4 mt-4 bg-white rounded-lg shadow px-4 py-2">
-            <button
-              onClick={goToPreviousPage}
-              disabled={pageNumber <= 1}
-              className="p-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-              aria-label="Previous page"
-              data-testid="pdf-prev-page"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <span className="text-sm text-gray-600" data-testid="pdf-page-info">
-              Page {pageNumber} of {numPages}
-            </span>
-            <button
-              onClick={goToNextPage}
-              disabled={pageNumber >= numPages}
-              className="p-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-              aria-label="Next page"
-              data-testid="pdf-next-page"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
+          {/* Render all pages for natural scrolling */}
+          <div className="space-y-4">
+            {allPages.map((pageNum) => (
+              <div key={pageNum} className="relative">
+                <Page
+                  pageNumber={pageNum}
+                  renderTextLayer={true}
+                  renderAnnotationLayer={true}
+                  className="shadow-lg"
+                  width={Math.min(800, window.innerWidth - 100)}
+                />
+                {/* Page number badge */}
+                <div className="absolute bottom-2 right-2 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded">
+                  {pageNum} / {numPages}
+                </div>
+              </div>
+            ))}
           </div>
-        )}
+        </Document>
       </div>
     );
   };
@@ -498,8 +491,8 @@ export function AttachmentPreviewModal({
           </div>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-gray-50">
+        {/* Content - use items-start for scrollable content like PDFs */}
+        <div className={`flex-1 overflow-auto p-4 flex justify-center bg-gray-50 ${isPdf ? "items-start" : "items-center"}`}>
           {renderContent()}
         </div>
       </div>
