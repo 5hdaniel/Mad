@@ -23,6 +23,8 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import type { SyncStatus } from "../../hooks/useAutoRefresh";
 import { useLicense } from "../../contexts/LicenseContext";
+import { useSyncQueue } from "../../hooks/useSyncQueue";
+import type { SyncItemState } from "../../services/SyncQueueService";
 
 interface SyncStatusIndicatorProps {
   /** Current sync status for all operations */
@@ -38,13 +40,34 @@ interface SyncStatusIndicatorProps {
 }
 
 /**
+ * Map SyncQueueService state to visual pill state
+ * - idle/queued → waiting (gray)
+ * - running → active (blue)
+ * - complete/error → complete (green)
+ */
+const mapToPillState = (itemState: SyncItemState): 'waiting' | 'active' | 'complete' => {
+  switch (itemState) {
+    case 'idle':
+    case 'queued':
+      return 'waiting';
+    case 'running':
+      return 'active';
+    case 'complete':
+    case 'error':
+      return 'complete';
+    default:
+      return 'waiting';
+  }
+};
+
+/**
  * Unified sync notification - handles progress and completion.
  * Replaces the need for separate AIStatusCard for sync status.
  */
 export function SyncStatusIndicator({
   status,
-  isAnySyncing,
-  currentMessage,
+  isAnySyncing: _isAnySyncingProp, // Keep prop for backward compatibility, but use hook
+  currentMessage: _currentMessage, // Keep prop for backward compatibility
   pendingCount = 0,
   onViewPending,
 }: SyncStatusIndicatorProps) {
@@ -55,6 +78,17 @@ export function SyncStatusIndicator({
 
   // Get license status for AI-specific features (pending count, Review Now button)
   const { hasAIAddon } = useLicense();
+
+  // Use SyncQueue as single source of truth for sync state
+  const { state: queueState, isRunning } = useSyncQueue();
+
+  // Derive pill states from SyncQueue (single source of truth)
+  const contactsPillState = mapToPillState(queueState.contacts.state);
+  const emailsPillState = mapToPillState(queueState.emails.state);
+  const messagesPillState = mapToPillState(queueState.messages.state);
+
+  // Use isRunning from SyncQueue as authoritative "is syncing" state
+  const isAnySyncing = isRunning;
 
   // Track transition from syncing to not syncing
   useEffect(() => {
@@ -212,28 +246,24 @@ export function SyncStatusIndicator({
     );
   }
 
-  // Check completion status
-  const emailsComplete = !status.emails.isSyncing && status.emails.progress === 100;
-  const messagesComplete = !status.messages.isSyncing && status.messages.progress === 100;
-  const contactsComplete = !status.contacts.isSyncing && status.contacts.progress === 100;
-
   // Don't render if no sync is in progress
   if (!isAnySyncing) {
     return null;
   }
 
   // Get the active sync's progress for the main progress bar
-  const activeProgress = status.messages.isSyncing && status.messages.progress !== null
+  // Priority: messages (longest) > contacts > emails
+  const activeProgress = status.messages.progress !== null && messagesPillState === 'active'
     ? status.messages.progress
-    : status.contacts.isSyncing && status.contacts.progress !== null
+    : status.contacts.progress !== null && contactsPillState === 'active'
       ? status.contacts.progress
-      : status.emails.isSyncing && status.emails.progress !== null
+      : status.emails.progress !== null && emailsPillState === 'active'
         ? status.emails.progress
         : null;
 
-  // Render a status pill for each sync type (no spinners, just color)
-  const renderPill = (label: string, isSyncing: boolean, isComplete: boolean) => {
-    if (isComplete) {
+  // Render a status pill for each sync type based on SyncQueue state
+  const renderPill = (label: string, pillState: 'waiting' | 'active' | 'complete') => {
+    if (pillState === 'complete') {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -243,13 +273,14 @@ export function SyncStatusIndicator({
         </span>
       );
     }
-    if (isSyncing) {
+    if (pillState === 'active') {
       return (
         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
           {label}
         </span>
       );
     }
+    // waiting (idle or queued)
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
         {label}
@@ -270,9 +301,9 @@ export function SyncStatusIndicator({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
         <span className="text-xs font-medium text-blue-800">Syncing:</span>
-        {renderPill("Emails", status.emails.isSyncing, emailsComplete)}
-        {renderPill("Messages", status.messages.isSyncing, messagesComplete)}
-        {renderPill("Contacts", status.contacts.isSyncing, contactsComplete)}
+        {renderPill("Contacts", contactsPillState)}
+        {renderPill("Emails", emailsPillState)}
+        {renderPill("Messages", messagesPillState)}
         {activeProgress !== null && (
           <span className="text-xs text-blue-600 ml-auto">{activeProgress}%</span>
         )}

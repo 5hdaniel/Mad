@@ -20,6 +20,32 @@ jest.mock("../../../contexts/LicenseContext", () => ({
   useLicense: () => mockUseLicense(),
 }));
 
+// Mock the useSyncQueue hook
+const mockUseSyncQueue = jest.fn();
+jest.mock("../../../hooks/useSyncQueue", () => ({
+  useSyncQueue: () => mockUseSyncQueue(),
+}));
+
+// Helper to create SyncQueue state
+const createQueueState = (
+  contacts: 'idle' | 'queued' | 'running' | 'complete' = 'idle',
+  emails: 'idle' | 'queued' | 'running' | 'complete' = 'idle',
+  messages: 'idle' | 'queued' | 'running' | 'complete' = 'idle',
+  isRunning = false
+) => ({
+  state: {
+    contacts: { type: 'contacts' as const, state: contacts },
+    emails: { type: 'emails' as const, state: emails },
+    messages: { type: 'messages' as const, state: messages },
+    isRunning,
+    isComplete: !isRunning && contacts === 'complete' && emails === 'complete' && messages === 'complete',
+    runStartedAt: isRunning ? Date.now() : null,
+    runCompletedAt: null,
+  },
+  isRunning,
+  isComplete: false,
+});
+
 describe("SyncStatusIndicator", () => {
   // Default sync status (all idle)
   const idleSyncStatus: SyncStatus = {
@@ -51,6 +77,8 @@ describe("SyncStatusIndicator", () => {
       licenseType: "individual",
       isLoading: false,
     });
+    // Default: idle sync state (not running)
+    mockUseSyncQueue.mockReturnValue(createQueueState('idle', 'idle', 'idle', false));
   });
 
   afterEach(() => {
@@ -64,6 +92,8 @@ describe("SyncStatusIndicator", () => {
         licenseType: "individual",
         isLoading: false,
       });
+      // Set up SyncQueue to show messages as running
+      mockUseSyncQueue.mockReturnValue(createQueueState('complete', 'complete', 'running', true));
 
       render(
         <SyncStatusIndicator
@@ -84,6 +114,8 @@ describe("SyncStatusIndicator", () => {
         licenseType: "individual",
         isLoading: false,
       });
+      // Set up SyncQueue to show messages as running
+      mockUseSyncQueue.mockReturnValue(createQueueState('complete', 'complete', 'running', true));
 
       render(
         <SyncStatusIndicator
@@ -98,6 +130,7 @@ describe("SyncStatusIndicator", () => {
     });
 
     it("should not render when not syncing and not dismissed", () => {
+      // Default mock is already idle and not running
       render(
         <SyncStatusIndicator
           status={idleSyncStatus}
@@ -112,6 +145,9 @@ describe("SyncStatusIndicator", () => {
 
   describe("All three sync types display correctly", () => {
     it("should show all three sync type pills", () => {
+      // Set up SyncQueue to show all as running
+      mockUseSyncQueue.mockReturnValue(createQueueState('running', 'running', 'running', true));
+
       render(
         <SyncStatusIndicator
           status={allSyncingStatus}
@@ -131,6 +167,8 @@ describe("SyncStatusIndicator", () => {
         messages: { isSyncing: true, progress: 50, message: "Importing...", error: null },
         contacts: { isSyncing: false, progress: 100, message: "Done", error: null },
       };
+      // Set up SyncQueue to show contacts and emails complete, messages running
+      mockUseSyncQueue.mockReturnValue(createQueueState('complete', 'complete', 'running', true));
 
       render(
         <SyncStatusIndicator
@@ -154,6 +192,8 @@ describe("SyncStatusIndicator", () => {
         licenseType: "individual",
         isLoading: false,
       });
+      // Start with running state
+      mockUseSyncQueue.mockReturnValue(createQueueState('running', 'running', 'running', true));
 
       const { rerender } = render(
         <SyncStatusIndicator
@@ -164,7 +204,8 @@ describe("SyncStatusIndicator", () => {
         />
       );
 
-      // Transition to not syncing
+      // Transition to not syncing - update mock to complete state
+      mockUseSyncQueue.mockReturnValue(createQueueState('complete', 'complete', 'complete', false));
       rerender(
         <SyncStatusIndicator
           status={idleSyncStatus}
@@ -187,6 +228,8 @@ describe("SyncStatusIndicator", () => {
         licenseType: "individual",
         isLoading: false,
       });
+      // Start with running state
+      mockUseSyncQueue.mockReturnValue(createQueueState('running', 'running', 'running', true));
 
       const { rerender } = render(
         <SyncStatusIndicator
@@ -198,7 +241,8 @@ describe("SyncStatusIndicator", () => {
         />
       );
 
-      // Transition to not syncing
+      // Transition to not syncing - update mock to complete state
+      mockUseSyncQueue.mockReturnValue(createQueueState('complete', 'complete', 'complete', false));
       rerender(
         <SyncStatusIndicator
           status={idleSyncStatus}
@@ -220,6 +264,8 @@ describe("SyncStatusIndicator", () => {
         licenseType: "individual",
         isLoading: false,
       });
+      // Start with running state
+      mockUseSyncQueue.mockReturnValue(createQueueState('running', 'running', 'running', true));
 
       const { rerender } = render(
         <SyncStatusIndicator
@@ -230,7 +276,8 @@ describe("SyncStatusIndicator", () => {
         />
       );
 
-      // Transition to not syncing
+      // Transition to not syncing - update mock to complete state
+      mockUseSyncQueue.mockReturnValue(createQueueState('complete', 'complete', 'complete', false));
       rerender(
         <SyncStatusIndicator
           status={idleSyncStatus}
@@ -251,6 +298,8 @@ describe("SyncStatusIndicator", () => {
         licenseType: "individual",
         isLoading: false,
       });
+      // Start with running state
+      mockUseSyncQueue.mockReturnValue(createQueueState('running', 'running', 'running', true));
 
       const { rerender } = render(
         <SyncStatusIndicator
@@ -260,7 +309,8 @@ describe("SyncStatusIndicator", () => {
         />
       );
 
-      // Transition to not syncing
+      // Transition to not syncing - update mock to complete state
+      mockUseSyncQueue.mockReturnValue(createQueueState('complete', 'complete', 'complete', false));
       rerender(
         <SyncStatusIndicator
           status={idleSyncStatus}
@@ -285,6 +335,8 @@ describe("SyncStatusIndicator", () => {
         licenseType: "individual",
         isLoading: false,
       });
+      // Start with running state
+      mockUseSyncQueue.mockReturnValue(createQueueState('running', 'running', 'running', true));
 
       const { rerender } = render(
         <SyncStatusIndicator
@@ -294,7 +346,8 @@ describe("SyncStatusIndicator", () => {
         />
       );
 
-      // Transition to not syncing
+      // Transition to not syncing - update mock to complete state
+      mockUseSyncQueue.mockReturnValue(createQueueState('complete', 'complete', 'complete', false));
       rerender(
         <SyncStatusIndicator
           status={idleSyncStatus}
@@ -320,6 +373,8 @@ describe("SyncStatusIndicator", () => {
         licenseType: "individual",
         isLoading: false,
       });
+      // Start with running state
+      mockUseSyncQueue.mockReturnValue(createQueueState('running', 'running', 'running', true));
 
       const { rerender } = render(
         <SyncStatusIndicator
@@ -331,7 +386,8 @@ describe("SyncStatusIndicator", () => {
         />
       );
 
-      // Transition to not syncing
+      // Transition to not syncing - update mock to complete state
+      mockUseSyncQueue.mockReturnValue(createQueueState('complete', 'complete', 'complete', false));
       rerender(
         <SyncStatusIndicator
           status={idleSyncStatus}
@@ -355,6 +411,8 @@ describe("SyncStatusIndicator", () => {
         licenseType: "individual",
         isLoading: false,
       });
+      // Start with running state
+      mockUseSyncQueue.mockReturnValue(createQueueState('running', 'running', 'running', true));
 
       const { rerender } = render(
         <SyncStatusIndicator
@@ -364,7 +422,8 @@ describe("SyncStatusIndicator", () => {
         />
       );
 
-      // Transition to not syncing
+      // Transition to not syncing - update mock to complete state
+      mockUseSyncQueue.mockReturnValue(createQueueState('complete', 'complete', 'complete', false));
       rerender(
         <SyncStatusIndicator
           status={idleSyncStatus}
@@ -377,7 +436,8 @@ describe("SyncStatusIndicator", () => {
       fireEvent.click(screen.getByLabelText("Dismiss notification"));
       expect(screen.queryByTestId("sync-status-complete")).not.toBeInTheDocument();
 
-      // Start syncing again
+      // Start syncing again - update mock to running state
+      mockUseSyncQueue.mockReturnValue(createQueueState('running', 'running', 'running', true));
       rerender(
         <SyncStatusIndicator
           status={allSyncingStatus}
