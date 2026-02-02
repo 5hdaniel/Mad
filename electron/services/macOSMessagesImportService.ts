@@ -69,7 +69,7 @@ export type ImportProgressCallback = (progress: {
 const MAX_MESSAGE_TEXT_LENGTH = 100000; // 100KB - truncate extremely long messages
 const MAX_HANDLE_LENGTH = 500; // Phone numbers, emails, etc.
 const MAX_GUID_LENGTH = 100; // Message GUID format
-const BATCH_SIZE = 500; // Messages per batch for storing
+const BATCH_SIZE = 2000; // Messages per batch for storing (larger = less IPC overhead)
 const DELETE_BATCH_SIZE = 5000; // Messages per delete batch (larger for efficiency)
 const YIELD_INTERVAL = 1; // Yield every N batches (reduced from 2 for better UI responsiveness)
 const MIN_QUERY_BATCH_SIZE = 10000; // Minimum query batch size

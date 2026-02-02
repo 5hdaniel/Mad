@@ -398,27 +398,16 @@ export function useAutoRefresh({
   }, []);
 
   /**
-   * Run syncs SEQUENTIALLY to avoid database contention.
-   * Order: Contacts (fast) -> Messages (slow, heavy) -> Emails (disabled)
+   * Run ONLY messages sync on startup.
+   * Contacts and emails are loaded on-demand by their respective UI components.
    *
-   * Running in parallel caused INP to spike to 2000ms+ due to
-   * concurrent database operations fighting for resources.
+   * Running multiple syncs caused INP issues because UI components also
+   * trigger their own data loading concurrently.
    */
   const runAutoRefresh = useCallback(
     async (uid: string, _emailConnected: boolean): Promise<void> => {
-      // 1. Contacts sync first (fast, ~1-2 seconds)
-      if (isMacOS && hasPermissions) {
-        try {
-          await syncContacts(uid);
-        } catch (error) {
-          console.error("[useAutoRefresh] contacts sync failed:", error);
-        }
-      }
-
-      // 2. Messages sync (slow, can take minutes for large imports)
-      // Skip if:
-      // - We just imported during onboarding (skipNextMessagesSync)
-      // - useMacOSMessagesImport hook already triggered import this session
+      // Messages sync only (macOS)
+      // Skip if already imported this session
       const messagesAlreadyImported = skipNextMessagesSync || hasMessagesImportTriggered();
       if (isMacOS && hasPermissions && !messagesAlreadyImported) {
         try {
@@ -430,11 +419,10 @@ export function useAutoRefresh({
         skipNextMessagesSync = false;
       }
 
-      // 3. Email sync - DISABLED
-      // Auto email sync causes performance issues during message import
-      // Users can manually trigger email scan from the dashboard
+      // Contacts - loaded on-demand by useContactList
+      // Emails - disabled, users trigger manually
     },
-    [isMacOS, hasPermissions, syncContacts, syncMessages]
+    [isMacOS, hasPermissions, syncMessages]
   );
 
   /**
