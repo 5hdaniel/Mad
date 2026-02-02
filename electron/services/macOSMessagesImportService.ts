@@ -1276,16 +1276,10 @@ class MacOSMessagesImportService {
         processed++;
         existingHashes.add(contentHash);
       } catch (error) {
-        // Silently skip FOREIGN KEY errors (expected for messages that were skipped)
-        // Only log other errors
-        const errMsg = error instanceof Error ? error.message : "Unknown error";
-        if (!errMsg.includes("FOREIGN KEY")) {
-          logService.warn(
-            `Failed to import attachment: ${errMsg}`,
-            MacOSMessagesImportService.SERVICE_NAME,
-            { guid: attachment.guid }
-          );
-        }
+        // Silently skip expected errors:
+        // - FOREIGN KEY: messages that were skipped
+        // - ENOENT: attachment files that have been deleted
+        // No logging needed - these are normal for old messages
         skipped++;
         processed++;
       }
