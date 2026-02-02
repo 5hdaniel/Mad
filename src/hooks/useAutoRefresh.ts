@@ -415,12 +415,14 @@ export function useAutoRefresh({
 
       // Email sync (all platforms, if email connected)
       // This includes AI transaction detection
-      if (emailConnected) {
-        syncTasks.push({
-          name: "emails",
-          task: syncEmails(uid),
-        });
-      }
+      // DISABLED: Auto email sync causes performance issues during message import
+      // Users can manually trigger email scan from the dashboard
+      // if (emailConnected) {
+      //   syncTasks.push({
+      //     name: "emails",
+      //     task: syncEmails(uid),
+      //   });
+      // }
 
       // Messages sync (macOS only)
       // Skip if:
