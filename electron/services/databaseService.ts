@@ -1241,6 +1241,79 @@ class DatabaseService implements IDatabaseService {
     return userDb.hasCompletedEmailOnboarding(userId);
   }
 
+  /**
+   * Migrate a local user's ID to match Supabase auth.uid()
+   * BACKLOG-600: This handles users created before TASK-1507G (user ID unification)
+   *
+   * Updates all FK references across tables:
+   * - users_local (primary)
+   * - messages, contacts, transactions, emails, etc.
+   * - sessions, oauth_tokens, email_accounts
+   *
+   * @param oldUserId - The current local user ID
+   * @param newUserId - The Supabase auth.uid() to migrate to
+   */
+  async migrateUserIdForUnification(oldUserId: string, newUserId: string): Promise<void> {
+    const db = this.getRawDatabase();
+
+    // Use a transaction to ensure atomicity
+    db.exec("BEGIN TRANSACTION");
+
+    try {
+      // Tables with user_id FK that need to be updated
+      const tablesToUpdate = [
+        "messages",
+        "contacts",
+        "contact_phones",
+        "contact_emails",
+        "transactions",
+        "emails",
+        "communications",
+        "sessions",
+        "oauth_tokens",
+        "email_accounts",
+        "user_preferences",
+        "external_contacts",
+        "attachments",
+        "audit_logs_local",
+      ];
+
+      for (const table of tablesToUpdate) {
+        try {
+          // Check if table exists and has user_id column
+          const tableInfo = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+          const hasUserId = tableInfo.some((col) => col.name === "user_id");
+
+          if (hasUserId) {
+            const result = db.prepare(`UPDATE ${table} SET user_id = ? WHERE user_id = ?`).run(newUserId, oldUserId);
+            if (result.changes > 0) {
+              logService.info(`[DB Migration] Updated ${result.changes} rows in ${table}`, "DatabaseService");
+            }
+          }
+        } catch (tableError) {
+          // Table might not exist, skip it
+          logService.debug(`[DB Migration] Skipping table ${table}: ${tableError}`, "DatabaseService");
+        }
+      }
+
+      // Update the users_local table last (primary record)
+      db.prepare("UPDATE users_local SET id = ? WHERE id = ?").run(newUserId, oldUserId);
+      logService.info("[DB Migration] Updated users_local primary record", "DatabaseService");
+
+      db.exec("COMMIT");
+      logService.info("[DB Migration] User ID migration completed successfully", "DatabaseService", {
+        oldId: oldUserId.substring(0, 8) + "...",
+        newId: newUserId.substring(0, 8) + "...",
+      });
+    } catch (error) {
+      db.exec("ROLLBACK");
+      logService.error("[DB Migration] User ID migration failed, rolled back", "DatabaseService", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
   // ============================================
   // SESSION OPERATIONS (Delegate to sessionDbService)
   // ============================================
