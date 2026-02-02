@@ -10,6 +10,7 @@
 import crypto from "crypto";
 import log from "electron-log";
 import databaseService from "./databaseService";
+import * as externalContactDb from "./db/externalContactDbService";
 import type { iOSMessage, iOSConversation } from "../types/iosMessages";
 import type { iOSContact } from "../types/iosContacts";
 import type { SyncResult } from "./syncOrchestrator";
@@ -334,7 +335,14 @@ class IPhoneSyncStorageService {
   }
 
   /**
-   * Store contacts to the database
+   * Store contacts to the external_contacts table (SPRINT-068, BACKLOG-585)
+   *
+   * ARCHITECTURE CHANGE: iPhone contacts now go to external_contacts table
+   * (same as macOS contacts) instead of the contacts table. This enables:
+   * - Consistent contact name lookup on Windows via external_contacts
+   * - Texts auto-attaching correctly by phone number matching
+   * - Same UI experience as macOS
+   *
    * Uses async yielding to prevent blocking
    */
   private async storeContacts(
@@ -346,173 +354,40 @@ class IPhoneSyncStorageService {
       return { stored: 0, skipped: 0 };
     }
 
-    let stored = 0;
-    let skipped = 0;
+    log.info(`[${IPhoneSyncStorageService.SERVICE_NAME}] Storing ${contacts.length} contacts to external_contacts`);
 
-    // Get database instance via public API
-    const db = databaseService.getRawDatabase();
-
-    // Prepare statements
-    // Note: Schema uses 'display_name' (not 'name')
-    // Set is_imported = 0 so contacts appear in "Available to Import" screen first
-    const insertContactStmt = db.prepare(`
-      INSERT INTO contacts (id, user_id, display_name, company, source, is_imported, metadata, created_at, updated_at)
-      VALUES (?, ?, ?, ?, 'contacts_app', 0, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `);
-
-    const insertPhoneStmt = db.prepare(`
-      INSERT OR IGNORE INTO contact_phones (id, contact_id, phone_e164, phone_display, label, is_primary, source, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'import', CURRENT_TIMESTAMP)
-    `);
-
-    const insertEmailStmt = db.prepare(`
-      INSERT OR IGNORE INTO contact_emails (id, contact_id, email, label, is_primary, source, created_at)
-      VALUES (?, ?, ?, ?, ?, 'import', CURRENT_TIMESTAMP)
-    `);
-
-    // Check if contact exists by looking up phone numbers
-    const checkPhoneStmt = db.prepare(`
-      SELECT c.id FROM contacts c
-      JOIN contact_phones cp ON c.id = cp.contact_id
-      WHERE c.user_id = ? AND cp.phone_e164 = ?
-      LIMIT 1
-    `);
-
-    // Process contacts
-    const processContact = db.transaction((contact: iOSContact) => {
-      // Check if any of the contact's phones already exist
-      let existingContactId: string | null = null;
-      for (const phone of contact.phoneNumbers) {
-        if (phone.normalizedNumber) {
-          const existing = checkPhoneStmt.get(userId, phone.normalizedNumber) as { id: string } | undefined;
-          if (existing) {
-            existingContactId = existing.id;
-            break;
-          }
-        }
-      }
-
-      if (existingContactId) {
-        // Contact already exists - add any new phones/emails (not primary since contact already has data)
-        for (const phone of contact.phoneNumbers) {
-          if (phone.normalizedNumber) {
-            try {
-              insertPhoneStmt.run(
-                crypto.randomUUID(),
-                existingContactId,
-                phone.normalizedNumber,
-                phone.number,
-                phone.label || "mobile",
-                0  // is_primary = 0 for additional phones on existing contact
-              );
-            } catch {
-              // Duplicate phone, ignore
-            }
-          }
-        }
-
-        for (const email of contact.emails) {
-          try {
-            insertEmailStmt.run(
-              crypto.randomUUID(),
-              existingContactId,
-              email.email.toLowerCase(),
-              email.label || "home",
-              0  // is_primary = 0 for additional emails on existing contact
-            );
-          } catch {
-            // Duplicate email, ignore
-          }
-        }
-
-        skipped++;
-        return;
-      }
-
-      // Create new contact with sanitized data
-      const contactId = crypto.randomUUID();
+    // Convert iOSContact[] to iPhoneContact[] for externalContactDbService
+    const iPhoneContacts: externalContactDb.iPhoneContact[] = contacts.map(contact => {
       const sanitizedDisplayName = sanitizeString(contact.displayName, MAX_HANDLE_LENGTH, "Unknown");
       const sanitizedOrganization = sanitizeString(contact.organization, MAX_HANDLE_LENGTH);
-      const sanitizedFirstName = sanitizeString(contact.firstName, MAX_HANDLE_LENGTH);
-      const sanitizedLastName = sanitizeString(contact.lastName, MAX_HANDLE_LENGTH);
 
-      const metadata = JSON.stringify({
-        source: "iphone_sync",
-        originalId: contact.id,
-        firstName: sanitizedFirstName || null,
-        lastName: sanitizedLastName || null,
-      });
-
-      insertContactStmt.run(
-        contactId,
-        userId,
-        sanitizedDisplayName,  // display_name
-        sanitizedOrganization || null,
-        metadata
-      );
-
-      // Add phone numbers with validation (first one is primary)
-      let isFirstPhone = true;
-      for (const phone of contact.phoneNumbers) {
-        if (phone.normalizedNumber) {
-          const sanitizedPhone = sanitizeString(phone.normalizedNumber, MAX_HANDLE_LENGTH);
-          const sanitizedPhoneDisplay = sanitizeString(phone.number, MAX_HANDLE_LENGTH);
-          const sanitizedLabel = sanitizeString(phone.label, 50, "mobile");
-          if (sanitizedPhone) {
-            insertPhoneStmt.run(
-              crypto.randomUUID(),
-              contactId,
-              sanitizedPhone,
-              sanitizedPhoneDisplay,
-              sanitizedLabel,
-              isFirstPhone ? 1 : 0  // is_primary
-            );
-            isFirstPhone = false;
-          }
-        }
-      }
-
-      // Add emails with validation (first one is primary)
-      let isFirstEmail = true;
-      for (const email of contact.emails) {
-        const sanitizedEmail = sanitizeString(email.email, MAX_HANDLE_LENGTH);
-        const sanitizedLabel = sanitizeString(email.label, 50, "home");
-        if (sanitizedEmail) {
-          insertEmailStmt.run(
-            crypto.randomUUID(),
-            contactId,
-            sanitizedEmail.toLowerCase(),
-            sanitizedLabel,
-            isFirstEmail ? 1 : 0  // is_primary
-          );
-          isFirstEmail = false;
-        }
-      }
-
-      stored++;
+      return {
+        name: sanitizedDisplayName,
+        phones: contact.phoneNumbers
+          .map(p => sanitizeString(p.normalizedNumber, MAX_HANDLE_LENGTH))
+          .filter((p): p is string => !!p),
+        emails: contact.emails
+          .map(e => sanitizeString(e.email, MAX_HANDLE_LENGTH)?.toLowerCase())
+          .filter((e): e is string => !!e),
+        company: sanitizedOrganization || undefined,
+        recordId: String(contact.id),  // iPhone contact ID as string
+      };
     });
 
-    // Process each contact with periodic yielding
-    for (let i = 0; i < contacts.length; i++) {
-      try {
-        processContact(contacts[i]);
-      } catch (error) {
-        log.warn(`[${IPhoneSyncStorageService.SERVICE_NAME}] Failed to store contact`, {
-          displayName: contacts[i].displayName,
-          error: error instanceof Error ? error.message : "Unknown",
-        });
-        skipped++;
-      }
+    // Report initial progress
+    onProgress?.(0, contacts.length);
+    await yieldToEventLoop();
 
-      // Report progress every 50 contacts
-      if ((i + 1) % 50 === 0 || i === contacts.length - 1) {
-        onProgress?.(i + 1, contacts.length);
-        // Yield to event loop
-        await yieldToEventLoop();
-      }
-    }
+    // Use the externalContactDbService to upsert contacts
+    // This handles deduplication via UNIQUE(user_id, source, external_record_id)
+    const stored = externalContactDb.upsertFromiPhone(userId, iPhoneContacts);
 
-    return { stored, skipped };
+    // Report completion
+    onProgress?.(contacts.length, contacts.length);
+
+    log.info(`[${IPhoneSyncStorageService.SERVICE_NAME}] Stored ${stored} contacts to external_contacts`);
+
+    return { stored, skipped: contacts.length - stored };
   }
 }
 

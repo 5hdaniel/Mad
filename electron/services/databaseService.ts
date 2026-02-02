@@ -1046,6 +1046,88 @@ class DatabaseService implements IDatabaseService {
       await logService.info("Migration 26 complete: email_id column added to attachments", "DatabaseService");
     }
 
+    // Migration 27: Update external_contacts schema for multi-source support (SPRINT-068, BACKLOG-585)
+    // Renames macos_record_id to external_record_id and adds source column
+    // This enables Windows + iPhone sync to use the same table architecture as macOS
+    const extContactsCols = getColumns('external_contacts');
+    if (extContactsCols.includes('macos_record_id') && !extContactsCols.includes('external_record_id')) {
+      await logService.info("Running migration 27: Update external_contacts for multi-source support", "DatabaseService");
+
+      // Use table recreation pattern (safer than RENAME COLUMN for SQLite compatibility)
+      // Step 1: Create new table with correct schema
+      db.exec(`
+        CREATE TABLE external_contacts_new (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          name TEXT,
+          phones_json TEXT,
+          emails_json TEXT,
+          company TEXT,
+          last_message_at DATETIME,
+          external_record_id TEXT,
+          source TEXT DEFAULT 'macos',
+          synced_at DATETIME,
+          FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
+          UNIQUE(user_id, source, external_record_id)
+        )
+      `);
+
+      // Step 2: Copy data from old table (existing records are macOS contacts)
+      db.exec(`
+        INSERT INTO external_contacts_new
+          (id, user_id, name, phones_json, emails_json, company, last_message_at,
+           external_record_id, source, synced_at)
+        SELECT
+          id, user_id, name, phones_json, emails_json, company, last_message_at,
+          macos_record_id, 'macos', synced_at
+        FROM external_contacts
+      `);
+
+      // Step 3: Drop old table
+      db.exec(`DROP TABLE external_contacts`);
+
+      // Step 4: Rename new table
+      db.exec(`ALTER TABLE external_contacts_new RENAME TO external_contacts`);
+
+      // Step 5: Recreate indexes
+      db.exec(`CREATE INDEX idx_external_contacts_user ON external_contacts(user_id)`);
+      db.exec(`CREATE INDEX idx_external_contacts_last_msg ON external_contacts(user_id, last_message_at DESC)`);
+      db.exec(`CREATE INDEX idx_external_contacts_source ON external_contacts(user_id, source)`);
+
+      await logService.info("Migration 27 complete: external_contacts updated for multi-source support", "DatabaseService");
+    }
+
+    // Migration 27b: Migrate existing iPhone contacts from contacts table to external_contacts (SPRINT-068)
+    // This is a data migration for Windows users who already synced iPhone contacts
+    const iPhoneContactsInContactsTable = db.prepare(`
+      SELECT COUNT(*) as count FROM contacts
+      WHERE source = 'contacts_app' AND is_imported = 0
+    `).get() as { count: number } | undefined;
+
+    if (iPhoneContactsInContactsTable && iPhoneContactsInContactsTable.count > 0) {
+      await logService.info(`Migration 27b: Migrating ${iPhoneContactsInContactsTable.count} iPhone contacts to external_contacts`, "DatabaseService");
+
+      // Insert iPhone contacts into external_contacts if not already present
+      db.exec(`
+        INSERT OR IGNORE INTO external_contacts
+          (id, user_id, name, phones_json, emails_json, company, external_record_id, source, synced_at)
+        SELECT
+          c.id,
+          c.user_id,
+          c.display_name,
+          (SELECT json_group_array(cp.phone_e164) FROM contact_phones cp WHERE cp.contact_id = c.id),
+          (SELECT json_group_array(ce.email) FROM contact_emails ce WHERE ce.contact_id = c.id),
+          c.company,
+          c.id,
+          'iphone',
+          c.updated_at
+        FROM contacts c
+        WHERE c.source = 'contacts_app' AND c.is_imported = 0
+      `);
+
+      await logService.info("Migration 27b complete: iPhone contacts migrated to external_contacts", "DatabaseService");
+    }
+
     // Finalize schema version (create table if missing for backwards compatibility)
     const schemaVersionExists = db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
