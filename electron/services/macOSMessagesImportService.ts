@@ -69,9 +69,9 @@ export type ImportProgressCallback = (progress: {
 const MAX_MESSAGE_TEXT_LENGTH = 100000; // 100KB - truncate extremely long messages
 const MAX_HANDLE_LENGTH = 500; // Phone numbers, emails, etc.
 const MAX_GUID_LENGTH = 100; // Message GUID format
-const BATCH_SIZE = 2000; // Messages per batch for storing (larger = less IPC overhead)
+const BATCH_SIZE = 100; // Messages per batch - small batches yield frequently for UI responsiveness
 const DELETE_BATCH_SIZE = 5000; // Messages per delete batch (larger for efficiency)
-const YIELD_INTERVAL = 1; // Yield every N batches (reduced from 2 for better UI responsiveness)
+const YIELD_INTERVAL = 1; // Yield every batch for UI responsiveness
 const MIN_QUERY_BATCH_SIZE = 10000; // Minimum query batch size
 
 /**
@@ -1010,8 +1010,8 @@ class MacOSMessagesImportService {
       // Update progress bar
       msgProgressBar.update(end);
 
-      // Report progress to UI - throttle to every 10 batches to reduce IPC overhead
-      if (batchNum % 10 === 0 || batchNum === totalBatches - 1) {
+      // Report progress to UI - throttle to every 100 batches to reduce IPC overhead
+      if (batchNum % 100 === 0 || batchNum === totalBatches - 1) {
         onProgress?.({
           phase: "importing",
           current: end,
