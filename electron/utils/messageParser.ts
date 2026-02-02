@@ -150,6 +150,12 @@ interface NSKeyedArchiverPlist {
 }
 
 /**
+ * Maximum buffer size to attempt parsing (5MB)
+ * Very large buffers can cause stack overflow in plist/typedstream parsers
+ */
+const MAX_BUFFER_SIZE = 5 * 1024 * 1024;
+
+/**
  * Extract text from binary plist containing NSAttributedString
  *
  * NSKeyedArchiver stores objects in $objects array with references.
@@ -161,6 +167,15 @@ interface NSKeyedArchiverPlist {
  * @returns Extracted text or null if parsing fails
  */
 export function extractTextFromBinaryPlist(buffer: Buffer): string | null {
+  // Safety check: skip excessively large buffers that could cause stack overflow
+  if (buffer.length > MAX_BUFFER_SIZE) {
+    logService.warn("Binary plist buffer too large, skipping", "MessageParser", {
+      bufferLength: buffer.length,
+      maxAllowed: MAX_BUFFER_SIZE,
+    });
+    return null;
+  }
+
   try {
     const parsed = simplePlist.parse(buffer) as NSKeyedArchiverPlist;
 
@@ -264,6 +279,15 @@ function isNSKeyedArchiverMetadata(text: string): boolean {
  * @returns Extracted text or null if parsing fails
  */
 export function extractTextFromTypedstream(buffer: Buffer): string | null {
+  // Safety check: skip excessively large buffers that could cause stack overflow
+  if (buffer.length > MAX_BUFFER_SIZE) {
+    logService.warn("Typedstream buffer too large, skipping", "MessageParser", {
+      bufferLength: buffer.length,
+      maxAllowed: MAX_BUFFER_SIZE,
+    });
+    return null;
+  }
+
   const results: string[] = [];
   let offset = 0;
   const nsStringMarker = Buffer.from("NSString");
@@ -436,16 +460,25 @@ export async function extractTextFromAttributedBody(
 
     case "typedstream": {
       // Try our custom parser first - handles both regular and mutable NSString preambles
-      const customResult = extractTextFromTypedstream(attributedBodyBuffer);
-      if (customResult && customResult.length >= MIN_MESSAGE_TEXT_LENGTH) {
-        const cleaned = cleanExtractedText(customResult);
-        if (cleaned.length >= MIN_MESSAGE_TEXT_LENGTH && cleaned.length < MAX_MESSAGE_TEXT_LENGTH) {
-          logService.debug(`Custom typedstream parser succeeded: ${cleaned.length} chars`, "MessageParser");
-          return cleaned;
+      // Wrap in try-catch to handle potential stack overflow from malformed data
+      try {
+        const customResult = extractTextFromTypedstream(attributedBodyBuffer);
+        if (customResult && customResult.length >= MIN_MESSAGE_TEXT_LENGTH) {
+          const cleaned = cleanExtractedText(customResult);
+          if (cleaned.length >= MIN_MESSAGE_TEXT_LENGTH && cleaned.length < MAX_MESSAGE_TEXT_LENGTH) {
+            logService.debug(`Custom typedstream parser succeeded: ${cleaned.length} chars`, "MessageParser");
+            return cleaned;
+          }
         }
+      } catch (customError) {
+        logService.warn("Custom typedstream parser error", "MessageParser", {
+          error: (customError as Error).message,
+          bufferLength: attributedBodyBuffer.length,
+        });
       }
 
       // Fall back to imessage-parser library for edge cases
+      // This library can cause stack overflow on certain malformed data
       try {
         const result = parseTypedStream(attributedBodyBuffer, { cleanOutput: true });
         if (result && result.text && result.text.length >= MIN_MESSAGE_TEXT_LENGTH) {
@@ -455,9 +488,17 @@ export async function extractTextFromAttributedBody(
           }
         }
       } catch (e) {
-        logService.debug("imessage-parser failed", "MessageParser", {
-          error: (e as Error).message,
-        });
+        // Catch all errors including potential stack overflow
+        const errorMsg = (e as Error).message || "Unknown error";
+        if (errorMsg.includes("stack") || errorMsg.includes("Maximum call")) {
+          logService.warn("imessage-parser stack overflow, skipping message", "MessageParser", {
+            bufferLength: attributedBodyBuffer.length,
+          });
+        } else {
+          logService.debug("imessage-parser failed", "MessageParser", {
+            error: errorMsg,
+          });
+        }
       }
 
       // Typedstream parse failed

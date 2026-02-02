@@ -818,15 +818,34 @@ class MacOSMessagesImportService {
 
       // Pre-process: Extract text from attributedBody for all messages in batch
       // This must be done BEFORE the transaction since getMessageText is async
+      // TASK-PERF: Wrap each message parsing in try-catch to prevent stack overflow
+      // from a single malformed message killing the entire import
       const messageTexts = new Map<string, string>();
       for (const msg of batch) {
         if (msg.guid && isValidGuid(msg.guid) && !existingIds.has(msg.guid)) {
-          const text = await getMessageText({
-            text: msg.text,
-            attributedBody: msg.attributedBody,
-            cache_has_attachments: msg.cache_has_attachments,
-          });
-          messageTexts.set(msg.guid, text);
+          try {
+            const text = await getMessageText({
+              text: msg.text,
+              attributedBody: msg.attributedBody,
+              cache_has_attachments: msg.cache_has_attachments,
+            });
+            messageTexts.set(msg.guid, text);
+          } catch (parseError) {
+            // Log but don't fail the entire import for one malformed message
+            // This catches stack overflow errors from malformed plist/typedstream data
+            logService.warn(
+              `Failed to parse message text, using fallback`,
+              MacOSMessagesImportService.SERVICE_NAME,
+              {
+                guid: msg.guid,
+                error: parseError instanceof Error ? parseError.message : "Unknown error",
+                hasAttributedBody: !!msg.attributedBody,
+                attributedBodyLength: msg.attributedBody?.length ?? 0,
+              }
+            );
+            // Use empty string - the message will be skipped later due to content filter
+            messageTexts.set(msg.guid, "[Unable to parse message]");
+          }
         }
       }
 
@@ -987,13 +1006,15 @@ class MacOSMessagesImportService {
       // Update progress bar
       msgProgressBar.update(end);
 
-      // Report progress to UI
-      onProgress?.({
-        phase: "importing",
-        current: end,
-        total: messages.length,
-        percent: Math.round((end / messages.length) * 100),
-      });
+      // Report progress to UI - throttle to every 10 batches to reduce IPC overhead
+      if (batchNum % 10 === 0 || batchNum === totalBatches - 1) {
+        onProgress?.({
+          phase: "importing",
+          current: end,
+          total: messages.length,
+          percent: Math.round((end / messages.length) * 100),
+        });
+      }
 
       // Yield to event loop every N batches
       if ((batchNum + 1) % YIELD_INTERVAL === 0) {
