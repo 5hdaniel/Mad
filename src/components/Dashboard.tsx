@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import Joyride from "react-joyride";
 import { useTour } from "../hooks/useTour";
 import { usePendingTransactionCount } from "../hooks/usePendingTransactionCount";
-import { useSyncQueue } from "../hooks/useSyncQueue";
+import { useSyncOrchestrator } from "../hooks/useSyncOrchestrator";
 import { SyncStatusIndicator } from "./dashboard/index";
 import StartNewAuditModal from "./StartNewAuditModal";
 import { LicenseGate } from "./common/LicenseGate";
@@ -13,7 +13,6 @@ import {
   JOYRIDE_STYLES,
   JOYRIDE_LOCALE,
 } from "../config/tourSteps";
-import type { SyncStatus } from "../hooks/useAutoRefresh";
 import type { Transaction } from "../types";
 
 interface DashboardActionProps {
@@ -25,8 +24,6 @@ interface DashboardActionProps {
   showSetupPrompt?: boolean;
   onContinueSetup?: () => void;
   onDismissSetupPrompt?: () => void;
-  // Sync status props (for progress display only - state comes from useSyncQueue)
-  syncStatus?: SyncStatus;
   /** Callback to trigger a manual sync refresh */
   onTriggerRefresh?: () => void;
   /** Callback when user selects a pending transaction to review */
@@ -47,15 +44,14 @@ function Dashboard({
   showSetupPrompt,
   onContinueSetup,
   onDismissSetupPrompt,
-  syncStatus,
   onTriggerRefresh,
   onSelectPendingTransaction,
 }: DashboardActionProps) {
   // State for the Start New Audit modal
   const [showStartNewAuditModal, setShowStartNewAuditModal] = useState(false);
 
-  // Get sync state from SyncQueue (single source of truth for sync status)
-  const { isRunning: isAnySyncing } = useSyncQueue();
+  // Get sync state from SyncOrchestrator (single source of truth for sync status)
+  const { isRunning: isAnySyncing } = useSyncOrchestrator();
 
   // Initialize the onboarding tour for first-time users
   const { runTour, handleJoyrideCallback } = useTour(
@@ -165,11 +161,9 @@ function Dashboard({
         )}
 
         {/* Unified Sync Status - shows progress during sync, completion after */}
-        {/* Sync state from useSyncQueue; progress from status prop if provided */}
         {/* data-tour wrapper always renders so Joyride tour step has a target */}
         <div data-tour="sync-status">
           <SyncStatusIndicator
-            status={syncStatus}
             pendingCount={pendingCount}
             onViewPending={handleViewPending}
           />

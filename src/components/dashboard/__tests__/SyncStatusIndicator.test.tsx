@@ -1,18 +1,19 @@
 /**
  * SyncStatusIndicator Tests
  *
- * TASK-1740: Tests for sync progress indicators on Dashboard
+ * TASK-1785: Tests for sync progress indicators on Dashboard
+ * Updated to use SyncOrchestrator instead of SyncQueue
  *
  * Key test cases:
  * 1. Progress shows for ALL users (not gated by license)
  * 2. AI-specific features (pending count, Review Now) only show with AI add-on
- * 3. All three sync types display correctly
+ * 3. Pills display in queue order
+ * 4. Error state shows red pill with tooltip
  */
 
-import React from "react";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import { SyncStatusIndicator } from "../SyncStatusIndicator";
-import type { SyncStatus } from "../../../hooks/useAutoRefresh";
+import type { SyncItem, SyncType } from "../../../services/SyncOrchestratorService";
 
 // Mock the useLicense hook
 const mockUseLicense = jest.fn();
@@ -20,54 +21,51 @@ jest.mock("../../../contexts/LicenseContext", () => ({
   useLicense: () => mockUseLicense(),
 }));
 
-// Mock the useSyncQueue hook
-const mockUseSyncQueue = jest.fn();
-jest.mock("../../../hooks/useSyncQueue", () => ({
-  useSyncQueue: () => mockUseSyncQueue(),
+// Mock the useSyncOrchestrator hook
+const mockUseSyncOrchestrator = jest.fn();
+jest.mock("../../../hooks/useSyncOrchestrator", () => ({
+  useSyncOrchestrator: () => mockUseSyncOrchestrator(),
 }));
 
-// Helper to create SyncQueue state
-const createQueueState = (
-  contacts: 'idle' | 'queued' | 'running' | 'complete' = 'idle',
-  emails: 'idle' | 'queued' | 'running' | 'complete' = 'idle',
-  messages: 'idle' | 'queued' | 'running' | 'complete' = 'idle',
-  isRunning = false
+// Helper to create SyncItem
+const createSyncItem = (
+  type: SyncType,
+  status: 'pending' | 'running' | 'complete' | 'error' = 'pending',
+  progress = 0,
+  error?: string
+): SyncItem => ({
+  type,
+  status,
+  progress,
+  error,
+});
+
+// Helper to create orchestrator state
+const createOrchestratorState = (
+  queue: SyncItem[] = [],
+  isRunning = false,
+  overallProgress = 0
 ) => ({
   state: {
-    contacts: { type: 'contacts' as const, state: contacts },
-    emails: { type: 'emails' as const, state: emails },
-    messages: { type: 'messages' as const, state: messages },
     isRunning,
-    isComplete: !isRunning && contacts === 'complete' && emails === 'complete' && messages === 'complete',
-    runStartedAt: isRunning ? Date.now() : null,
-    runCompletedAt: null,
+    queue,
+    currentSync: queue.find(item => item.status === 'running')?.type ?? null,
+    overallProgress,
+    pendingRequest: null,
   },
   isRunning,
-  isComplete: false,
+  queue,
+  currentSync: queue.find(item => item.status === 'running')?.type ?? null,
+  overallProgress,
+  pendingRequest: null,
+  requestSync: jest.fn(),
+  forceSync: jest.fn(),
+  acceptPending: jest.fn(),
+  rejectPending: jest.fn(),
+  cancel: jest.fn(),
 });
 
 describe("SyncStatusIndicator", () => {
-  // Default sync status (all idle)
-  const idleSyncStatus: SyncStatus = {
-    emails: { isSyncing: false, progress: null, message: null, error: null },
-    messages: { isSyncing: false, progress: null, message: null, error: null },
-    contacts: { isSyncing: false, progress: null, message: null, error: null },
-  };
-
-  // Active sync status (messages syncing)
-  const messagesSyncingStatus: SyncStatus = {
-    emails: { isSyncing: false, progress: 100, message: "Done", error: null },
-    messages: { isSyncing: true, progress: 50, message: "Importing...", error: null },
-    contacts: { isSyncing: false, progress: null, message: null, error: null },
-  };
-
-  // All syncing status
-  const allSyncingStatus: SyncStatus = {
-    emails: { isSyncing: true, progress: 30, message: "Syncing...", error: null },
-    messages: { isSyncing: true, progress: 50, message: "Importing...", error: null },
-    contacts: { isSyncing: true, progress: 70, message: "Syncing...", error: null },
-  };
-
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
@@ -77,8 +75,8 @@ describe("SyncStatusIndicator", () => {
       licenseType: "individual",
       isLoading: false,
     });
-    // Default: idle sync state (not running)
-    mockUseSyncQueue.mockReturnValue(createQueueState('idle', 'idle', 'idle', false));
+    // Default: empty queue (not running)
+    mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState([], false));
   });
 
   afterEach(() => {
@@ -92,16 +90,14 @@ describe("SyncStatusIndicator", () => {
         licenseType: "individual",
         isLoading: false,
       });
-      // Set up SyncQueue to show messages as running
-      mockUseSyncQueue.mockReturnValue(createQueueState('complete', 'complete', 'running', true));
+      // Set up orchestrator with messages running
+      const queue = [
+        createSyncItem('contacts', 'complete', 100),
+        createSyncItem('messages', 'running', 50),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 75));
 
-      render(
-        <SyncStatusIndicator
-          status={messagesSyncingStatus}
-          isAnySyncing={true}
-          currentMessage="Importing messages..."
-        />
-      );
+      render(<SyncStatusIndicator />);
 
       expect(screen.getByTestId("sync-status-indicator")).toBeInTheDocument();
       expect(screen.getByText("Syncing:")).toBeInTheDocument();
@@ -114,74 +110,143 @@ describe("SyncStatusIndicator", () => {
         licenseType: "individual",
         isLoading: false,
       });
-      // Set up SyncQueue to show messages as running
-      mockUseSyncQueue.mockReturnValue(createQueueState('complete', 'complete', 'running', true));
+      // Set up orchestrator with messages running
+      const queue = [
+        createSyncItem('contacts', 'complete', 100),
+        createSyncItem('emails', 'complete', 100),
+        createSyncItem('messages', 'running', 50),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 83));
 
-      render(
-        <SyncStatusIndicator
-          status={messagesSyncingStatus}
-          isAnySyncing={true}
-          currentMessage="Importing messages..."
-        />
-      );
+      render(<SyncStatusIndicator />);
 
       expect(screen.getByTestId("sync-status-indicator")).toBeInTheDocument();
       expect(screen.getByText("Syncing:")).toBeInTheDocument();
     });
 
-    it("should not render when not syncing and not dismissed", () => {
-      // Default mock is already idle and not running
-      render(
-        <SyncStatusIndicator
-          status={idleSyncStatus}
-          isAnySyncing={false}
-          currentMessage={null}
-        />
-      );
+    it("should not render when not syncing and queue is empty", () => {
+      // Default mock is already empty and not running
+      render(<SyncStatusIndicator />);
 
       expect(screen.queryByTestId("sync-status-indicator")).not.toBeInTheDocument();
     });
   });
 
-  describe("All three sync types display correctly", () => {
-    it("should show all three sync type pills", () => {
-      // Set up SyncQueue to show all as running
-      mockUseSyncQueue.mockReturnValue(createQueueState('running', 'running', 'running', true));
+  describe("Queue order rendering", () => {
+    it("should render pills in queue order", () => {
+      // Queue order: messages first, then contacts, then emails
+      const queue = [
+        createSyncItem('messages', 'running', 30),
+        createSyncItem('contacts', 'pending', 0),
+        createSyncItem('emails', 'pending', 0),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 10));
 
-      render(
-        <SyncStatusIndicator
-          status={allSyncingStatus}
-          isAnySyncing={true}
-          currentMessage="Syncing..."
-        />
-      );
+      render(<SyncStatusIndicator />);
 
-      expect(screen.getByText("Emails")).toBeInTheDocument();
-      expect(screen.getByText("Messages")).toBeInTheDocument();
-      expect(screen.getByText("Contacts")).toBeInTheDocument();
+      const pills = screen.getAllByText(/Messages|Contacts|Emails/);
+      expect(pills[0]).toHaveTextContent("Messages");
+      expect(pills[1]).toHaveTextContent("Contacts");
+      expect(pills[2]).toHaveTextContent("Emails");
     });
 
-    it("should show completed status for finished sync types", () => {
-      const partiallyCompleteStatus: SyncStatus = {
-        emails: { isSyncing: false, progress: 100, message: "Done", error: null },
-        messages: { isSyncing: true, progress: 50, message: "Importing...", error: null },
-        contacts: { isSyncing: false, progress: 100, message: "Done", error: null },
-      };
-      // Set up SyncQueue to show contacts and emails complete, messages running
-      mockUseSyncQueue.mockReturnValue(createQueueState('complete', 'complete', 'running', true));
+    it("should only show pills for items in queue", () => {
+      // Queue only has contacts and messages (no emails)
+      const queue = [
+        createSyncItem('contacts', 'running', 50),
+        createSyncItem('messages', 'pending', 0),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 25));
 
-      render(
-        <SyncStatusIndicator
-          status={partiallyCompleteStatus}
-          isAnySyncing={true}
-          currentMessage="Importing messages..."
-        />
-      );
+      render(<SyncStatusIndicator />);
 
-      // All three labels should be present
-      expect(screen.getByText("Emails")).toBeInTheDocument();
-      expect(screen.getByText("Messages")).toBeInTheDocument();
       expect(screen.getByText("Contacts")).toBeInTheDocument();
+      expect(screen.getByText("Messages")).toBeInTheDocument();
+      expect(screen.queryByText("Emails")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("Status colors", () => {
+    it("should show pending pills with gray styling", () => {
+      const queue = [
+        createSyncItem('contacts', 'pending', 0),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 0));
+
+      render(<SyncStatusIndicator />);
+
+      const pill = screen.getByText("Contacts");
+      expect(pill).toHaveClass("bg-gray-100", "text-gray-500");
+    });
+
+    it("should show running pills with blue styling", () => {
+      const queue = [
+        createSyncItem('contacts', 'running', 50),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 50));
+
+      render(<SyncStatusIndicator />);
+
+      const pill = screen.getByText("Contacts");
+      expect(pill).toHaveClass("bg-blue-100", "text-blue-700");
+    });
+
+    it("should show complete pills with green styling and checkmark", () => {
+      const queue = [
+        createSyncItem('contacts', 'complete', 100),
+        createSyncItem('messages', 'running', 50),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 75));
+
+      render(<SyncStatusIndicator />);
+
+      const pill = screen.getByText("Contacts").closest("span");
+      expect(pill).toHaveClass("bg-green-100", "text-green-700");
+      // Should have a checkmark SVG
+      const svg = pill?.querySelector("svg");
+      expect(svg).toBeInTheDocument();
+    });
+
+    it("should show error pills with red styling and X icon", () => {
+      const queue = [
+        createSyncItem('contacts', 'complete', 100),
+        createSyncItem('messages', 'error', 0, 'Database connection failed'),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, false, 50));
+
+      render(<SyncStatusIndicator />);
+
+      const pill = screen.getByText("Messages").closest("span");
+      expect(pill).toHaveClass("bg-red-100", "text-red-700");
+      // Should have error tooltip
+      expect(pill).toHaveAttribute("title", "Database connection failed");
+    });
+  });
+
+  describe("Error state", () => {
+    it("should show red background when there is an error", () => {
+      const queue = [
+        createSyncItem('contacts', 'complete', 100),
+        createSyncItem('messages', 'error', 0, 'Import failed'),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, false, 50));
+
+      render(<SyncStatusIndicator />);
+
+      const indicator = screen.getByTestId("sync-status-indicator");
+      expect(indicator).toHaveClass("bg-red-50", "border-red-200");
+    });
+
+    it("should show 'Sync Error:' label when there is an error", () => {
+      const queue = [
+        createSyncItem('contacts', 'complete', 100),
+        createSyncItem('messages', 'error', 0, 'Import failed'),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, false, 50));
+
+      render(<SyncStatusIndicator />);
+
+      expect(screen.getByText("Sync Error:")).toBeInTheDocument();
     });
   });
 
@@ -193,27 +258,19 @@ describe("SyncStatusIndicator", () => {
         isLoading: false,
       });
       // Start with running state
-      mockUseSyncQueue.mockReturnValue(createQueueState('running', 'running', 'running', true));
+      const runningQueue = [
+        createSyncItem('contacts', 'running', 50),
+        createSyncItem('messages', 'pending', 0),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(runningQueue, true, 25));
 
       const { rerender } = render(
-        <SyncStatusIndicator
-          status={allSyncingStatus}
-          isAnySyncing={true}
-          currentMessage="Syncing..."
-          pendingCount={5}
-        />
+        <SyncStatusIndicator pendingCount={5} />
       );
 
-      // Transition to not syncing - update mock to complete state
-      mockUseSyncQueue.mockReturnValue(createQueueState('complete', 'complete', 'complete', false));
-      rerender(
-        <SyncStatusIndicator
-          status={idleSyncStatus}
-          isAnySyncing={false}
-          currentMessage={null}
-          pendingCount={5}
-        />
-      );
+      // Transition to not syncing - update mock to empty queue (complete state)
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState([], false, 0));
+      rerender(<SyncStatusIndicator pendingCount={5} />);
 
       // Should show generic completion, NOT "X transactions found"
       expect(screen.getByText("Sync Complete")).toBeInTheDocument();
@@ -229,29 +286,18 @@ describe("SyncStatusIndicator", () => {
         isLoading: false,
       });
       // Start with running state
-      mockUseSyncQueue.mockReturnValue(createQueueState('running', 'running', 'running', true));
+      const runningQueue = [
+        createSyncItem('contacts', 'running', 50),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(runningQueue, true, 50));
 
       const { rerender } = render(
-        <SyncStatusIndicator
-          status={allSyncingStatus}
-          isAnySyncing={true}
-          currentMessage="Syncing..."
-          pendingCount={5}
-          onViewPending={jest.fn()}
-        />
+        <SyncStatusIndicator pendingCount={5} onViewPending={jest.fn()} />
       );
 
-      // Transition to not syncing - update mock to complete state
-      mockUseSyncQueue.mockReturnValue(createQueueState('complete', 'complete', 'complete', false));
-      rerender(
-        <SyncStatusIndicator
-          status={idleSyncStatus}
-          isAnySyncing={false}
-          currentMessage={null}
-          pendingCount={5}
-          onViewPending={jest.fn()}
-        />
-      );
+      // Transition to not syncing
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState([], false, 0));
+      rerender(<SyncStatusIndicator pendingCount={5} onViewPending={jest.fn()} />);
 
       // Should show "X transactions found" with Review Now button
       expect(screen.getByText("5 transactions found")).toBeInTheDocument();
@@ -265,27 +311,18 @@ describe("SyncStatusIndicator", () => {
         isLoading: false,
       });
       // Start with running state
-      mockUseSyncQueue.mockReturnValue(createQueueState('running', 'running', 'running', true));
+      const runningQueue = [
+        createSyncItem('contacts', 'running', 50),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(runningQueue, true, 50));
 
       const { rerender } = render(
-        <SyncStatusIndicator
-          status={allSyncingStatus}
-          isAnySyncing={true}
-          currentMessage="Syncing..."
-          pendingCount={0}
-        />
+        <SyncStatusIndicator pendingCount={0} />
       );
 
-      // Transition to not syncing - update mock to complete state
-      mockUseSyncQueue.mockReturnValue(createQueueState('complete', 'complete', 'complete', false));
-      rerender(
-        <SyncStatusIndicator
-          status={idleSyncStatus}
-          isAnySyncing={false}
-          currentMessage={null}
-          pendingCount={0}
-        />
-      );
+      // Transition to not syncing
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState([], false, 0));
+      rerender(<SyncStatusIndicator pendingCount={0} />);
 
       // Should show generic completion
       expect(screen.getByText("Sync Complete")).toBeInTheDocument();
@@ -299,25 +336,16 @@ describe("SyncStatusIndicator", () => {
         isLoading: false,
       });
       // Start with running state
-      mockUseSyncQueue.mockReturnValue(createQueueState('running', 'running', 'running', true));
+      const runningQueue = [
+        createSyncItem('contacts', 'running', 50),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(runningQueue, true, 50));
 
-      const { rerender } = render(
-        <SyncStatusIndicator
-          status={allSyncingStatus}
-          isAnySyncing={true}
-          currentMessage="Syncing..."
-        />
-      );
+      const { rerender } = render(<SyncStatusIndicator />);
 
-      // Transition to not syncing - update mock to complete state
-      mockUseSyncQueue.mockReturnValue(createQueueState('complete', 'complete', 'complete', false));
-      rerender(
-        <SyncStatusIndicator
-          status={idleSyncStatus}
-          isAnySyncing={false}
-          currentMessage={null}
-        />
-      );
+      // Transition to not syncing
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState([], false, 0));
+      rerender(<SyncStatusIndicator />);
 
       expect(screen.getByTestId("sync-status-complete")).toBeInTheDocument();
 
@@ -336,25 +364,16 @@ describe("SyncStatusIndicator", () => {
         isLoading: false,
       });
       // Start with running state
-      mockUseSyncQueue.mockReturnValue(createQueueState('running', 'running', 'running', true));
+      const runningQueue = [
+        createSyncItem('contacts', 'running', 50),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(runningQueue, true, 50));
 
-      const { rerender } = render(
-        <SyncStatusIndicator
-          status={allSyncingStatus}
-          isAnySyncing={true}
-          currentMessage="Syncing..."
-        />
-      );
+      const { rerender } = render(<SyncStatusIndicator />);
 
-      // Transition to not syncing - update mock to complete state
-      mockUseSyncQueue.mockReturnValue(createQueueState('complete', 'complete', 'complete', false));
-      rerender(
-        <SyncStatusIndicator
-          status={idleSyncStatus}
-          isAnySyncing={false}
-          currentMessage={null}
-        />
-      );
+      // Transition to not syncing
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState([], false, 0));
+      rerender(<SyncStatusIndicator />);
 
       expect(screen.getByTestId("sync-status-complete")).toBeInTheDocument();
 
@@ -374,28 +393,19 @@ describe("SyncStatusIndicator", () => {
         isLoading: false,
       });
       // Start with running state
-      mockUseSyncQueue.mockReturnValue(createQueueState('running', 'running', 'running', true));
+      const runningQueue = [
+        createSyncItem('contacts', 'running', 50),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(runningQueue, true, 50));
 
       const { rerender } = render(
-        <SyncStatusIndicator
-          status={allSyncingStatus}
-          isAnySyncing={true}
-          currentMessage="Syncing..."
-          pendingCount={3}
-          onViewPending={onViewPending}
-        />
+        <SyncStatusIndicator pendingCount={3} onViewPending={onViewPending} />
       );
 
-      // Transition to not syncing - update mock to complete state
-      mockUseSyncQueue.mockReturnValue(createQueueState('complete', 'complete', 'complete', false));
+      // Transition to not syncing
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState([], false, 0));
       rerender(
-        <SyncStatusIndicator
-          status={idleSyncStatus}
-          isAnySyncing={false}
-          currentMessage={null}
-          pendingCount={3}
-          onViewPending={onViewPending}
-        />
+        <SyncStatusIndicator pendingCount={3} onViewPending={onViewPending} />
       );
 
       fireEvent.click(screen.getByText("Review Now"));
@@ -412,42 +422,59 @@ describe("SyncStatusIndicator", () => {
         isLoading: false,
       });
       // Start with running state
-      mockUseSyncQueue.mockReturnValue(createQueueState('running', 'running', 'running', true));
+      const runningQueue = [
+        createSyncItem('contacts', 'running', 50),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(runningQueue, true, 50));
 
-      const { rerender } = render(
-        <SyncStatusIndicator
-          status={allSyncingStatus}
-          isAnySyncing={true}
-          currentMessage="Syncing..."
-        />
-      );
+      const { rerender } = render(<SyncStatusIndicator />);
 
-      // Transition to not syncing - update mock to complete state
-      mockUseSyncQueue.mockReturnValue(createQueueState('complete', 'complete', 'complete', false));
-      rerender(
-        <SyncStatusIndicator
-          status={idleSyncStatus}
-          isAnySyncing={false}
-          currentMessage={null}
-        />
-      );
+      // Transition to not syncing
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState([], false, 0));
+      rerender(<SyncStatusIndicator />);
 
       // Dismiss manually
       fireEvent.click(screen.getByLabelText("Dismiss notification"));
       expect(screen.queryByTestId("sync-status-complete")).not.toBeInTheDocument();
 
-      // Start syncing again - update mock to running state
-      mockUseSyncQueue.mockReturnValue(createQueueState('running', 'running', 'running', true));
-      rerender(
-        <SyncStatusIndicator
-          status={allSyncingStatus}
-          isAnySyncing={true}
-          currentMessage="Syncing..."
-        />
-      );
+      // Start syncing again
+      const newRunningQueue = [
+        createSyncItem('contacts', 'running', 30),
+        createSyncItem('messages', 'pending', 0),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(newRunningQueue, true, 15));
+      rerender(<SyncStatusIndicator />);
 
       // Progress indicator should show again
       expect(screen.getByTestId("sync-status-indicator")).toBeInTheDocument();
+    });
+  });
+
+  describe("Progress display", () => {
+    it("should show progress percentage for running sync", () => {
+      const queue = [
+        createSyncItem('contacts', 'complete', 100),
+        createSyncItem('messages', 'running', 65),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 82));
+
+      render(<SyncStatusIndicator />);
+
+      expect(screen.getByText("65%")).toBeInTheDocument();
+    });
+
+    it("should show overall progress in progress bar", () => {
+      const queue = [
+        createSyncItem('contacts', 'complete', 100),
+        createSyncItem('messages', 'running', 50),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 75));
+
+      render(<SyncStatusIndicator />);
+
+      // Progress bar should be at 75%
+      const progressBar = screen.getByTestId("sync-status-indicator").querySelector('.bg-blue-500');
+      expect(progressBar).toHaveStyle({ width: '75%' });
     });
   });
 });

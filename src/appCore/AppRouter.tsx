@@ -203,7 +203,6 @@ export function AppRouter({ app }: AppRouterProps) {
         showSetupPrompt={!hasEmailConnected && !showSetupPromptDismissed}
         onContinueSetup={handleContinueSetup}
         onDismissSetupPrompt={handleDismissSetupPrompt}
-        syncStatus={app.syncStatus}
         onTriggerRefresh={app.triggerRefresh}
       />
     );
