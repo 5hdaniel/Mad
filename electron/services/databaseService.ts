@@ -1099,12 +1099,21 @@ class DatabaseService implements IDatabaseService {
 
     // Migration 27b: Migrate existing iPhone contacts from contacts table to external_contacts (SPRINT-068)
     // This is a data migration for Windows users who already synced iPhone contacts
+    // TASK-1792: Added idempotency check - skip if already migrated
+    const iPhoneContactsInExternalTable = db.prepare(`
+      SELECT COUNT(*) as count FROM external_contacts WHERE source = 'iphone'
+    `).get() as { count: number } | undefined;
+
     const iPhoneContactsInContactsTable = db.prepare(`
       SELECT COUNT(*) as count FROM contacts
       WHERE source = 'contacts_app' AND is_imported = 0
     `).get() as { count: number } | undefined;
 
-    if (iPhoneContactsInContactsTable && iPhoneContactsInContactsTable.count > 0) {
+    // Only run migration if there are iPhone contacts to migrate AND they haven't been migrated yet
+    const needsMigration = iPhoneContactsInContactsTable && iPhoneContactsInContactsTable.count > 0 &&
+      (!iPhoneContactsInExternalTable || iPhoneContactsInExternalTable.count === 0);
+
+    if (needsMigration) {
       await logService.info(`Migration 27b: Migrating ${iPhoneContactsInContactsTable.count} iPhone contacts to external_contacts`, "DatabaseService");
 
       // Insert iPhone contacts into external_contacts if not already present
