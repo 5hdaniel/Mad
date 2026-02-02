@@ -1256,61 +1256,71 @@ class DatabaseService implements IDatabaseService {
   async migrateUserIdForUnification(oldUserId: string, newUserId: string): Promise<void> {
     const db = this.getRawDatabase();
 
-    // Use a transaction to ensure atomicity
-    db.exec("BEGIN TRANSACTION");
-
     try {
-      // Tables with user_id FK that need to be updated
-      const tablesToUpdate = [
-        "messages",
-        "contacts",
-        "contact_phones",
-        "contact_emails",
-        "transactions",
-        "emails",
-        "communications",
-        "sessions",
-        "oauth_tokens",
-        "email_accounts",
-        "user_preferences",
-        "external_contacts",
-        "attachments",
-        "audit_logs_local",
-      ];
+      // CRITICAL: Disable FK checks during migration to avoid circular dependency issues
+      // The old ID is referenced by child tables, and we need to update both parent and children
+      db.exec("PRAGMA foreign_keys = OFF");
 
-      for (const table of tablesToUpdate) {
-        try {
-          // Check if table exists and has user_id column
-          const tableInfo = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
-          const hasUserId = tableInfo.some((col) => col.name === "user_id");
+      // Use a transaction to ensure atomicity
+      db.exec("BEGIN TRANSACTION");
 
-          if (hasUserId) {
-            const result = db.prepare(`UPDATE ${table} SET user_id = ? WHERE user_id = ?`).run(newUserId, oldUserId);
-            if (result.changes > 0) {
-              logService.info(`[DB Migration] Updated ${result.changes} rows in ${table}`, "DatabaseService");
+      try {
+        // Update the users_local table FIRST (the primary record)
+        // With FK checks off, this won't cause issues
+        db.prepare("UPDATE users_local SET id = ? WHERE id = ?").run(newUserId, oldUserId);
+        logService.info("[DB Migration] Updated users_local primary record", "DatabaseService");
+
+        // Tables with user_id FK that need to be updated
+        const tablesToUpdate = [
+          "messages",
+          "contacts",
+          "contact_phones",
+          "contact_emails",
+          "transactions",
+          "emails",
+          "communications",
+          "sessions",
+          "oauth_tokens",
+          "email_accounts",
+          "user_preferences",
+          "external_contacts",
+          "attachments",
+          "audit_logs_local",
+        ];
+
+        for (const table of tablesToUpdate) {
+          try {
+            // Check if table exists and has user_id column
+            const tableInfo = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+            const hasUserId = tableInfo.some((col) => col.name === "user_id");
+
+            if (hasUserId) {
+              const result = db.prepare(`UPDATE ${table} SET user_id = ? WHERE user_id = ?`).run(newUserId, oldUserId);
+              if (result.changes > 0) {
+                logService.info(`[DB Migration] Updated ${result.changes} rows in ${table}`, "DatabaseService");
+              }
             }
+          } catch (tableError) {
+            // Table might not exist, skip it
+            logService.debug(`[DB Migration] Skipping table ${table}: ${tableError}`, "DatabaseService");
           }
-        } catch (tableError) {
-          // Table might not exist, skip it
-          logService.debug(`[DB Migration] Skipping table ${table}: ${tableError}`, "DatabaseService");
         }
+
+        db.exec("COMMIT");
+        logService.info("[DB Migration] User ID migration completed successfully", "DatabaseService", {
+          oldId: oldUserId.substring(0, 8) + "...",
+          newId: newUserId.substring(0, 8) + "...",
+        });
+      } catch (error) {
+        db.exec("ROLLBACK");
+        logService.error("[DB Migration] User ID migration failed, rolled back", "DatabaseService", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
       }
-
-      // Update the users_local table last (primary record)
-      db.prepare("UPDATE users_local SET id = ? WHERE id = ?").run(newUserId, oldUserId);
-      logService.info("[DB Migration] Updated users_local primary record", "DatabaseService");
-
-      db.exec("COMMIT");
-      logService.info("[DB Migration] User ID migration completed successfully", "DatabaseService", {
-        oldId: oldUserId.substring(0, 8) + "...",
-        newId: newUserId.substring(0, 8) + "...",
-      });
-    } catch (error) {
-      db.exec("ROLLBACK");
-      logService.error("[DB Migration] User ID migration failed, rolled back", "DatabaseService", {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+    } finally {
+      // CRITICAL: Re-enable FK checks
+      db.exec("PRAGMA foreign_keys = ON");
     }
   }
 
