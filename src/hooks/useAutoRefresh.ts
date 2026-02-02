@@ -30,28 +30,9 @@ import { hasMessagesImportTriggered } from "./useMacOSMessagesImport";
 import { syncQueue } from "../services/SyncQueueService";
 import { useSyncQueue } from "./useSyncQueue";
 
-// Module-level flag to track if onboarding import just completed
-// This is more reliable than localStorage across component remounts
-let skipNextMessagesSync = false;
-
 // Module-level flag to track if auto-refresh has been triggered this session
 // Using module-level prevents React strict mode from triggering twice
 let hasTriggeredAutoRefresh = false;
-
-/**
- * Mark that onboarding import just completed - skip the next messages sync
- */
-export function markOnboardingImportComplete(): void {
-  skipNextMessagesSync = true;
-}
-
-/**
- * Check if we should skip the next messages sync
- * Does NOT clear the flag - only runAutoRefresh clears it
- */
-export function shouldSkipMessagesSync(): boolean {
-  return skipNextMessagesSync;
-}
 
 /**
  * Reset the auto-refresh trigger (for testing or logout)
@@ -299,9 +280,9 @@ export function useAutoRefresh({
       syncQueue.reset();
 
       // Messages sync only (macOS)
-      // Skip if already imported this session
-      const messagesAlreadyImported = skipNextMessagesSync || hasMessagesImportTriggered();
-      if (isMacOS && hasPermissions && !messagesAlreadyImported) {
+      // Skip if already imported this session (e.g., during onboarding via PermissionsStep)
+      // Note: PermissionsStep calls setMessagesImportTriggered() which is checked here
+      if (isMacOS && hasPermissions && !hasMessagesImportTriggered()) {
         // Queue messages sync
         syncQueue.queue('messages');
         try {
@@ -309,8 +290,6 @@ export function useAutoRefresh({
         } catch (error) {
           console.error("[useAutoRefresh] messages sync failed:", error);
         }
-      } else if (skipNextMessagesSync) {
-        skipNextMessagesSync = false;
       }
 
       // Contacts - loaded on-demand by useContactList

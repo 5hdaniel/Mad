@@ -10,7 +10,8 @@
  */
 
 import { renderHook, act, waitFor } from "@testing-library/react";
-import { useAutoRefresh, markOnboardingImportComplete, shouldSkipMessagesSync, resetAutoRefreshTrigger } from "../useAutoRefresh";
+import { useAutoRefresh, resetAutoRefreshTrigger } from "../useAutoRefresh";
+import { setMessagesImportTriggered, resetMessagesImportTrigger } from "../useMacOSMessagesImport";
 
 // Mock the platform context
 jest.mock("../../contexts/PlatformContext", () => ({
@@ -90,6 +91,7 @@ describe("useAutoRefresh", () => {
 
     // Reset module-level state between tests (BACKLOG-205)
     resetAutoRefreshTrigger();
+    resetMessagesImportTrigger();
 
     // Setup default useSyncQueue mock
     mockUseSyncQueueFn.mockReturnValue(createQueueState('idle', 'idle', 'idle', false));
@@ -587,13 +589,13 @@ describe("useAutoRefresh", () => {
 
   describe("onboarding import skip", () => {
     beforeEach(() => {
-      // Reset the module-level flag by setting it through the exported function
-      // We need to clear any previous state
+      // Reset the module-level flag between tests
+      resetMessagesImportTrigger();
     });
 
     it("should skip messages sync when marked as just completed onboarding import", async () => {
-      // Mark onboarding import complete
-      markOnboardingImportComplete();
+      // Mark onboarding import complete (simulating PermissionsStep behavior)
+      setMessagesImportTriggered();
 
       const { result } = renderHook(() => useAutoRefresh(defaultOptions));
 
@@ -601,29 +603,21 @@ describe("useAutoRefresh", () => {
         await result.current.triggerRefresh();
       });
 
-      // Messages sync should be skipped
+      // Messages sync should be skipped because hasMessagesImportTriggered() returns true
       expect(mockMessagesImport).not.toHaveBeenCalled();
       // Email sync is disabled on auto-refresh
       expect(mockTransactionsScan).not.toHaveBeenCalled();
     });
 
-    it("should allow messages sync on subsequent refreshes", async () => {
-      // First refresh with skip flag
-      markOnboardingImportComplete();
-
+    it("should allow messages sync when import flag not set", async () => {
+      // Don't set the flag - simulating fresh start without onboarding import
       const { result } = renderHook(() => useAutoRefresh(defaultOptions));
 
       await act(async () => {
         await result.current.triggerRefresh();
       });
 
-      expect(mockMessagesImport).not.toHaveBeenCalled();
-
-      // Second refresh - flag should be cleared
-      await act(async () => {
-        await result.current.triggerRefresh();
-      });
-
+      // Messages sync should run because hasMessagesImportTriggered() returns false
       expect(mockMessagesImport).toHaveBeenCalled();
     });
   });
@@ -760,13 +754,4 @@ describe("useAutoRefresh", () => {
     });
   });
 
-  describe("helper functions", () => {
-    it("shouldSkipMessagesSync should return correct state", () => {
-      expect(shouldSkipMessagesSync()).toBe(false);
-
-      markOnboardingImportComplete();
-
-      expect(shouldSkipMessagesSync()).toBe(true);
-    });
-  });
 });

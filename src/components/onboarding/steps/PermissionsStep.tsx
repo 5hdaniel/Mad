@@ -15,7 +15,7 @@ import type {
   OnboardingStep,
   OnboardingStepContentProps,
 } from "../types";
-import { markOnboardingImportComplete } from "../../../hooks/useAutoRefresh";
+import { setMessagesImportTriggered } from "../../../hooks/useMacOSMessagesImport";
 import { syncQueue } from "../../../services/SyncQueueService";
 
 /**
@@ -250,7 +250,8 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
     hasStartedImportRef.current = true;
 
     // Mark that we're doing the onboarding import - prevents duplicate imports on dashboard
-    markOnboardingImportComplete();
+    // This sets the module-level flag in useMacOSMessagesImport that useAutoRefresh checks
+    setMessagesImportTriggered();
 
     // Reset and queue syncs for SyncQueueService tracking
     syncQueue.reset();

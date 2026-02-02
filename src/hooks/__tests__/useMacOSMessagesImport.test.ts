@@ -4,29 +4,20 @@
  * TASK-1113: Tests sync guard functionality including:
  * - Module-level guard prevents duplicate triggers
  * - React StrictMode double-mount handling
- * - Integration with shouldSkipMessagesSync
  * - Reset functionality for testing/logout
+ * - setMessagesImportTriggered() for onboarding coordination
  */
 
 import { renderHook, act, waitFor } from "@testing-library/react";
 import {
   useMacOSMessagesImport,
   resetMessagesImportTrigger,
+  setMessagesImportTriggered,
 } from "../useMacOSMessagesImport";
-import {
-  markOnboardingImportComplete,
-  shouldSkipMessagesSync,
-} from "../useAutoRefresh";
 
 // Mock the platform context
 jest.mock("../../contexts/PlatformContext", () => ({
   usePlatform: jest.fn(() => ({ isMacOS: true })),
-}));
-
-// Mock useAutoRefresh module
-jest.mock("../useAutoRefresh", () => ({
-  shouldSkipMessagesSync: jest.fn(() => false),
-  markOnboardingImportComplete: jest.fn(),
 }));
 
 import { usePlatform } from "../../contexts/PlatformContext";
@@ -55,9 +46,6 @@ describe("useMacOSMessagesImport", () => {
       success: true,
       messagesImported: 100,
     });
-
-    // Reset shouldSkipMessagesSync mock
-    (shouldSkipMessagesSync as jest.Mock).mockReturnValue(false);
 
     // Setup console spies
     consoleLogSpy = jest.spyOn(console, "log").mockImplementation();
@@ -272,9 +260,9 @@ describe("useMacOSMessagesImport", () => {
       unmount2();
     });
 
-    it("should skip import when shouldSkipMessagesSync returns true", async () => {
-      // Mark that onboarding just completed
-      (shouldSkipMessagesSync as jest.Mock).mockReturnValue(true);
+    it("should skip import when setMessagesImportTriggered was called (onboarding flow)", async () => {
+      // Mark that onboarding just completed (simulates PermissionsStep calling setMessagesImportTriggered)
+      setMessagesImportTriggered();
 
       renderHook(() => useMacOSMessagesImport(defaultOptions));
 
@@ -283,15 +271,13 @@ describe("useMacOSMessagesImport", () => {
         await Promise.resolve();
       });
 
+      // Should not be called because hasTriggeredImport is already true
       expect(mockImportMacOSMessages).not.toHaveBeenCalled();
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        "[useMacOSMessagesImport] Skipping import - just completed onboarding import"
-      );
     });
 
-    it("should prevent future imports after skipping due to onboarding", async () => {
-      // First time: skip due to onboarding flag
-      (shouldSkipMessagesSync as jest.Mock).mockReturnValue(true);
+    it("should prevent future imports after setMessagesImportTriggered was called", async () => {
+      // First: mark as triggered via onboarding
+      setMessagesImportTriggered();
 
       const { unmount: unmount1 } = renderHook(() =>
         useMacOSMessagesImport(defaultOptions)
@@ -305,9 +291,7 @@ describe("useMacOSMessagesImport", () => {
       expect(mockImportMacOSMessages).not.toHaveBeenCalled();
       unmount1();
 
-      // Second mount: even with flag cleared, module-level guard should prevent
-      (shouldSkipMessagesSync as jest.Mock).mockReturnValue(false);
-
+      // Second mount: module-level guard should still prevent
       const { unmount: unmount2 } = renderHook(() =>
         useMacOSMessagesImport(defaultOptions)
       );
