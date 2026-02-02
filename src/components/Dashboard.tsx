@@ -193,10 +193,15 @@ function Dashboard({
           {/* Start New Audit Card */}
           <button
             onClick={handleStartNewAuditClick}
-            className={`group bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 p-6 text-left border-2 transform hover:scale-105 ${
-              pendingCount > 0
-                ? "border-indigo-500 ring-2 ring-indigo-300 ring-offset-2 hover:border-indigo-600"
-                : "border-transparent hover:border-blue-500"
+            disabled={isAnySyncing}
+            className={`group bg-white rounded-2xl shadow-xl transition-all duration-300 p-6 text-left border-2 transform ${
+              isAnySyncing
+                ? "opacity-50 cursor-not-allowed"
+                : `hover:shadow-2xl hover:scale-105 ${
+                    pendingCount > 0
+                      ? "border-indigo-500 ring-2 ring-indigo-300 ring-offset-2 hover:border-indigo-600"
+                      : "border-transparent hover:border-blue-500"
+                  }`
             }`}
             data-tour="new-audit-card"
           >
@@ -248,7 +253,12 @@ function Dashboard({
           {/* Browse Transactions Card */}
           <button
             onClick={onViewTransactions}
-            className="group bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 p-6 text-left border-2 border-transparent hover:border-green-500 transform hover:scale-105"
+            disabled={isAnySyncing}
+            className={`group bg-white rounded-2xl shadow-xl transition-all duration-300 p-6 text-left border-2 transform ${
+              isAnySyncing
+                ? "opacity-50 cursor-not-allowed border-transparent"
+                : "hover:shadow-2xl hover:scale-105 border-transparent hover:border-green-500"
+            }`}
             data-tour="transactions-card"
           >
             <div className="flex items-center gap-4">
@@ -294,7 +304,12 @@ function Dashboard({
           {/* Manage Contacts Card */}
           <button
             onClick={onManageContacts}
-            className="group w-full relative bg-white bg-opacity-70 backdrop-blur rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 text-left border-2 border-transparent hover:border-purple-400 transform hover:scale-[1.02]"
+            disabled={isAnySyncing}
+            className={`group w-full relative bg-white bg-opacity-70 backdrop-blur rounded-2xl shadow-lg transition-all duration-300 p-6 text-left border-2 transform ${
+              isAnySyncing
+                ? "opacity-50 cursor-not-allowed border-transparent"
+                : "hover:shadow-xl hover:scale-[1.02] border-transparent hover:border-purple-400"
+            }`}
             data-tour="contacts-card"
           >
             <div className="flex items-center gap-4">
@@ -338,7 +353,12 @@ function Dashboard({
           {onSyncPhone && (
             <button
               onClick={onSyncPhone}
-              className="group w-full relative bg-white bg-opacity-70 backdrop-blur rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 text-left border-2 border-transparent hover:border-indigo-400 transform hover:scale-[1.02]"
+              disabled={isAnySyncing}
+              className={`group w-full relative bg-white bg-opacity-70 backdrop-blur rounded-2xl shadow-lg transition-all duration-300 p-6 text-left border-2 transform ${
+                isAnySyncing
+                  ? "opacity-50 cursor-not-allowed border-transparent"
+                  : "hover:shadow-xl hover:scale-[1.02] border-transparent hover:border-indigo-400"
+              }`}
               data-tour="sync-phone-card"
             >
               <div className="flex items-center gap-4">

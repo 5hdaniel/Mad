@@ -289,6 +289,11 @@ export function SyncStatusIndicator({
           <div className="bg-blue-500 h-1.5 rounded-full animate-indeterminate" />
         )}
       </div>
+
+      {/* Disabled tools notice */}
+      <p className="text-xs text-blue-600 mt-2 text-center">
+        Audit tools are disabled during sync to ensure accurate data
+      </p>
     </div>
   );
 }
