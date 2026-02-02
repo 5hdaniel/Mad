@@ -27,6 +27,8 @@
 import { useEffect, useCallback, useState, useRef } from "react";
 import { usePlatform } from "../contexts/PlatformContext";
 import { hasMessagesImportTriggered } from "./useMacOSMessagesImport";
+import { syncQueue } from "../services/SyncQueueService";
+import { useSyncQueue } from "./useSyncQueue";
 
 // Module-level flag to track if onboarding import just completed
 // This is more reliable than localStorage across component remounts
@@ -153,93 +155,41 @@ export function useAutoRefresh({
   isOnboarding = false,
 }: UseAutoRefreshOptions): UseAutoRefreshReturn {
   const { isMacOS } = usePlatform();
-  const [status, setStatus] = useState<SyncStatus>(initialSyncStatus);
+
+  // Use SyncQueue as single source of truth for sync state
+  const { state: queueState, isRunning } = useSyncQueue();
+
+  // Progress-only state - IPC listeners update progress, SyncQueue handles state
+  const [progress, setProgress] = useState<{
+    messages: number | null;
+    contacts: number | null;
+    emails: number | null;
+  }>({ messages: null, contacts: null, emails: null });
+
   // Note: using module-level hasTriggeredAutoRefresh instead of ref to prevent
   // React strict mode from triggering twice (each instance would have its own ref)
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
   const [hasLoadedPreference, setHasLoadedPreference] = useState(false);
 
-  // Subscribe to message import progress
+  // Subscribe to message import progress (for progress display only)
+  // Sync state is managed by SyncQueueService
   useEffect(() => {
-    const cleanup = window.api.messages.onImportProgress((progress) => {
-      if (progress.percent >= 100) {
-        setStatus((prev) => ({
-          ...prev,
-          messages: {
-            isSyncing: true,
-            progress: 100,
-            message: `Importing messages... ${progress.current.toLocaleString()} / ${progress.total.toLocaleString()}`,
-            error: null,
-          },
-        }));
-        // Brief delay then mark complete
-        setTimeout(() => {
-          setStatus((prev) => ({
-            ...prev,
-            messages: {
-              isSyncing: false,
-              progress: 100,
-              message: "Messages imported",
-              error: null,
-            },
-          }));
-        }, 500);
-      } else {
-        setStatus((prev) => ({
-          ...prev,
-          messages: {
-            isSyncing: true,
-            progress: progress.percent,
-            message: `Importing messages... ${progress.current.toLocaleString()} / ${progress.total.toLocaleString()}`,
-            error: null,
-          },
-        }));
-      }
+    const cleanup = window.api.messages.onImportProgress((progressData) => {
+      setProgress((prev) => ({ ...prev, messages: progressData.percent }));
     });
 
     return cleanup;
   }, []);
 
-  // Subscribe to contacts import progress
+  // Subscribe to contacts import progress (for progress display only)
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const contactsApi = window.api.contacts as any;
     if (!contactsApi?.onImportProgress) return;
 
     const cleanup = contactsApi.onImportProgress(
-      (progress: { current: number; total: number; percent: number }) => {
-        if (progress.percent >= 100) {
-          setStatus((prev) => ({
-            ...prev,
-            contacts: {
-              isSyncing: true,
-              progress: 100,
-              message: `Importing contacts... ${progress.current.toLocaleString()} / ${progress.total.toLocaleString()}`,
-              error: null,
-            },
-          }));
-          setTimeout(() => {
-            setStatus((prev) => ({
-              ...prev,
-              contacts: {
-                isSyncing: false,
-                progress: 100,
-                message: "Contacts imported",
-                error: null,
-              },
-            }));
-          }, 500);
-        } else {
-          setStatus((prev) => ({
-            ...prev,
-            contacts: {
-              isSyncing: true,
-              progress: progress.percent,
-              message: `Importing contacts... ${progress.current.toLocaleString()} / ${progress.total.toLocaleString()}`,
-              error: null,
-            },
-          }));
-        }
+      (progressData: { current: number; total: number; percent: number }) => {
+        setProgress((prev) => ({ ...prev, contacts: progressData.percent }));
       }
     );
 
@@ -272,128 +222,67 @@ export function useAutoRefresh({
 
   /**
    * Start email sync (scan for real estate emails + AI transaction detection)
+   * State is tracked via SyncQueueService
    */
   const syncEmails = useCallback(async (uid: string): Promise<void> => {
-    setStatus((prev) => ({
-      ...prev,
-      emails: {
-        isSyncing: true,
-        progress: null, // Indeterminate
-        message: "Syncing emails...",
-        error: null,
-      },
-    }));
+    syncQueue.start('emails');
+    setProgress((prev) => ({ ...prev, emails: null }));
 
     try {
       const result = await window.api.transactions.scan(uid);
 
-      setStatus((prev) => ({
-        ...prev,
-        emails: {
-          isSyncing: false,
-          progress: 100,
-          message: result.success ? "Email sync complete" : "Email sync failed",
-          error: result.error || null,
-        },
-      }));
+      if (result.success) {
+        setProgress((prev) => ({ ...prev, emails: 100 }));
+        syncQueue.complete('emails');
+      } else {
+        syncQueue.error('emails', result.error || 'Email sync failed');
+      }
     } catch (error) {
       console.error("[useAutoRefresh] Email sync error:", error);
-      setStatus((prev) => ({
-        ...prev,
-        emails: {
-          isSyncing: false,
-          progress: null,
-          message: "Email sync failed",
-          error: error instanceof Error ? error.message : "Unknown error",
-        },
-      }));
+      syncQueue.error('emails', error instanceof Error ? error.message : 'Unknown error');
     }
   }, []);
 
   /**
    * Start messages sync (macOS Messages app)
+   * State is tracked via SyncQueueService, progress via IPC listener
    */
   const syncMessages = useCallback(async (uid: string): Promise<void> => {
-    setStatus((prev) => ({
-      ...prev,
-      messages: {
-        isSyncing: true,
-        progress: null, // Will be updated via IPC listener
-        message: "Importing messages...",
-        error: null,
-      },
-    }));
+    syncQueue.start('messages');
+    setProgress((prev) => ({ ...prev, messages: null }));
 
     try {
       const result = await window.api.messages.importMacOSMessages(uid);
 
-      setStatus((prev) => ({
-        ...prev,
-        messages: {
-          isSyncing: false,
-          progress: 100,
-          message: result.success
-            ? result.messagesImported > 0
-              ? `Imported ${result.messagesImported.toLocaleString()} messages`
-              : "Messages up to date"
-            : "Message import failed",
-          error: result.error || null,
-        },
-      }));
+      if (result.success) {
+        setProgress((prev) => ({ ...prev, messages: 100 }));
+        syncQueue.complete('messages');
+      } else {
+        syncQueue.error('messages', result.error || 'Message import failed');
+      }
     } catch (error) {
       console.error("[useAutoRefresh] Message sync error:", error);
-      setStatus((prev) => ({
-        ...prev,
-        messages: {
-          isSyncing: false,
-          progress: null,
-          message: "Message import failed",
-          error: error instanceof Error ? error.message : "Unknown error",
-        },
-      }));
+      syncQueue.error('messages', error instanceof Error ? error.message : 'Unknown error');
     }
   }, []);
 
   /**
    * Start contacts sync
    * On macOS, contacts are loaded from the system Contacts database
+   * State is tracked via SyncQueueService
    */
   const syncContacts = useCallback(async (uid: string): Promise<void> => {
-    setStatus((prev) => ({
-      ...prev,
-      contacts: {
-        isSyncing: true,
-        progress: null,
-        message: "Syncing contacts...",
-        error: null,
-      },
-    }));
+    syncQueue.start('contacts');
+    setProgress((prev) => ({ ...prev, contacts: null }));
 
     try {
-      // Contacts are synced automatically with email scan
-      // This ensures contacts are up to date
+      // Load contacts from local database (macOS) or just get all contacts
       await window.api.contacts.getAll(uid);
-
-      setStatus((prev) => ({
-        ...prev,
-        contacts: {
-          isSyncing: false,
-          progress: 100,
-          message: "Contacts synced",
-          error: null,
-        },
-      }));
+      setProgress((prev) => ({ ...prev, contacts: 100 }));
+      syncQueue.complete('contacts');
     } catch (error) {
       console.error("[useAutoRefresh] Contact sync error:", error);
-      setStatus((prev) => ({
-        ...prev,
-        contacts: {
-          isSyncing: false,
-          progress: null,
-          message: "Contact sync failed",
-          error: error instanceof Error ? error.message : "Unknown error",
-        },
-      }));
+      syncQueue.error('contacts', error instanceof Error ? error.message : 'Unknown error');
     }
   }, []);
 
@@ -406,10 +295,15 @@ export function useAutoRefresh({
    */
   const runAutoRefresh = useCallback(
     async (uid: string, _emailConnected: boolean): Promise<void> => {
+      // Reset SyncQueue for new sync run
+      syncQueue.reset();
+
       // Messages sync only (macOS)
       // Skip if already imported this session
       const messagesAlreadyImported = skipNextMessagesSync || hasMessagesImportTriggered();
       if (isMacOS && hasPermissions && !messagesAlreadyImported) {
+        // Queue messages sync
+        syncQueue.queue('messages');
         try {
           await syncMessages(uid);
         } catch (error) {
@@ -468,40 +362,14 @@ export function useAutoRefresh({
   ]);
 
   /**
-   * Check if any sync is in progress
+   * isAnySyncing derived from SyncQueue (single source of truth)
    */
-  const isAnySyncing =
-    status.emails.isSyncing ||
-    status.messages.isSyncing ||
-    status.contacts.isSyncing;
+  const isAnySyncing = isRunning;
 
   /**
-   * Get current status message to display
-   * Prioritizes syncs with actual progress (percentage) over indeterminate syncs
+   * currentSyncMessage simplified - could derive from SyncQueue state if needed
    */
-  const currentSyncMessage = (() => {
-    // First priority: syncs with actual progress updates (more informative)
-    if (status.messages.isSyncing && status.messages.progress !== null) {
-      return status.messages.message;
-    }
-    if (status.contacts.isSyncing && status.contacts.progress !== null) {
-      return status.contacts.message;
-    }
-    if (status.emails.isSyncing && status.emails.progress !== null) {
-      return status.emails.message;
-    }
-    // Second priority: any active sync (indeterminate progress)
-    if (status.messages.isSyncing) {
-      return status.messages.message;
-    }
-    if (status.emails.isSyncing) {
-      return status.emails.message;
-    }
-    if (status.contacts.isSyncing) {
-      return status.contacts.message;
-    }
-    return null;
-  })();
+  const currentSyncMessage: string | null = null;
 
   // Track previous syncing state for notification trigger
   const wasSyncingRef = useRef(false);
@@ -521,8 +389,31 @@ export function useAutoRefresh({
     wasSyncingRef.current = isAnySyncing;
   }, [isAnySyncing]);
 
+  // Construct syncStatus for backward compatibility with Dashboard
+  // isSyncing is derived from SyncQueue, progress from IPC listeners
+  const syncStatus: SyncStatus = {
+    emails: {
+      isSyncing: queueState.emails.state === 'running',
+      progress: progress.emails,
+      message: '',
+      error: queueState.emails.error || null,
+    },
+    messages: {
+      isSyncing: queueState.messages.state === 'running',
+      progress: progress.messages,
+      message: '',
+      error: queueState.messages.error || null,
+    },
+    contacts: {
+      isSyncing: queueState.contacts.state === 'running',
+      progress: progress.contacts,
+      message: '',
+      error: queueState.contacts.error || null,
+    },
+  };
+
   return {
-    syncStatus: status,
+    syncStatus,
     isAnySyncing,
     currentSyncMessage,
     triggerRefresh,
