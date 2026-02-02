@@ -166,8 +166,9 @@ function Dashboard({
 
         {/* Unified Sync Status - shows progress during sync, completion after */}
         {/* Sync progress shows for ALL users; AI-specific features (pending count) are gated internally */}
-        {syncStatus && (
-          <div data-tour="sync-status">
+        {/* data-tour wrapper always renders so Joyride tour step has a target */}
+        <div data-tour="sync-status">
+          {syncStatus && (
             <SyncStatusIndicator
               status={syncStatus}
               isAnySyncing={isAnySyncing}
@@ -175,8 +176,8 @@ function Dashboard({
               pendingCount={pendingCount}
               onViewPending={handleViewPending}
             />
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Header */}
         <div className="text-center mb-12">
