@@ -16,6 +16,7 @@ import type {
   OnboardingStepContentProps,
 } from "../types";
 import { markOnboardingImportComplete } from "../../../hooks/useAutoRefresh";
+import { syncQueue } from "../../../services/SyncQueueService";
 
 /**
  * Shield icon with lock - represents security/permissions
@@ -251,6 +252,11 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
     // Mark that we're doing the onboarding import - prevents duplicate imports on dashboard
     markOnboardingImportComplete();
 
+    // Reset and queue syncs for SyncQueueService tracking
+    syncQueue.reset();
+    syncQueue.queue('contacts');
+    syncQueue.queue('messages');
+
     // Start both imports in parallel
     setIsImportingMessages(true);
     setIsImportingContacts(true);
@@ -259,7 +265,8 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
     setMessagesResult(null);
     setContactsResult(null);
 
-    // Import messages
+    // Import messages - track with SyncQueue
+    syncQueue.start('messages');
     const messagesPromise = window.api.messages.importMacOSMessages(userId)
       .then((result) => {
         setMessagesResult({
@@ -267,20 +274,32 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
           messagesImported: result.messagesImported,
           error: result.error,
         });
+        if (result.success) {
+          syncQueue.complete('messages');
+        } else {
+          syncQueue.error('messages', result.error || 'Import failed');
+        }
       })
       .catch((error) => {
         console.error("Error importing messages:", error);
         setMessagesResult({ success: false, messagesImported: 0, error: String(error) });
+        syncQueue.error('messages', String(error));
       })
       .finally(() => setIsImportingMessages(false));
 
-    // Import contacts (get available, then import all)
+    // Import contacts (get available, then import all) - track with SyncQueue
+    syncQueue.start('contacts');
     const contactsPromise = (async () => {
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const availableResult = await (window.api.contacts as any).getAvailable(userId);
         if (!availableResult.success || !availableResult.contacts?.length) {
           setContactsResult({ success: availableResult.success !== false, contactsImported: 0, error: availableResult.error });
+          if (availableResult.success !== false) {
+            syncQueue.complete('contacts');
+          } else {
+            syncQueue.error('contacts', availableResult.error || 'No contacts available');
+          }
           return;
         }
 
@@ -291,9 +310,15 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
           contactsImported: importResult.contacts?.length || 0,
           error: importResult.error,
         });
+        if (importResult.success) {
+          syncQueue.complete('contacts');
+        } else {
+          syncQueue.error('contacts', importResult.error || 'Contact import failed');
+        }
       } catch (error) {
         console.error("[PermissionsStep] Error importing contacts:", error);
         setContactsResult({ success: false, contactsImported: 0, error: String(error) });
+        syncQueue.error('contacts', String(error));
       } finally {
         setIsImportingContacts(false);
       }
