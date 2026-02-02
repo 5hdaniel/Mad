@@ -40,13 +40,27 @@ export function useSyncQueue(onAllComplete?: () => void): UseSyncQueueReturn {
   // Note: Must wrap in arrow function to preserve `this` binding
   const [state, setState] = useState<SyncQueueState>(() => syncQueue.getState());
   const onCompleteRef = useRef(onAllComplete);
+  const stateRef = useRef(state);
 
-  // Keep callback ref updated
+  // Keep refs updated
   onCompleteRef.current = onAllComplete;
+  stateRef.current = state;
 
-  // Subscribe to state changes
+  // Subscribe to state changes - only update if state actually changed
   useEffect(() => {
-    const unsubscribe = syncQueue.onStateChange(setState);
+    const unsubscribe = syncQueue.onStateChange((newState) => {
+      // Only update if relevant fields changed to avoid unnecessary re-renders
+      const current = stateRef.current;
+      if (
+        current.isRunning !== newState.isRunning ||
+        current.isComplete !== newState.isComplete ||
+        current.contacts.state !== newState.contacts.state ||
+        current.emails.state !== newState.emails.state ||
+        current.messages.state !== newState.messages.state
+      ) {
+        setState(newState);
+      }
+    });
     return unsubscribe;
   }, []);
 
