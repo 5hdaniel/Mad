@@ -69,10 +69,32 @@ export type ImportProgressCallback = (progress: {
 const MAX_MESSAGE_TEXT_LENGTH = 100000; // 100KB - truncate extremely long messages
 const MAX_HANDLE_LENGTH = 500; // Phone numbers, emails, etc.
 const MAX_GUID_LENGTH = 100; // Message GUID format
-const BATCH_SIZE = 500; // Messages per batch
+const BATCH_SIZE = 500; // Messages per batch for storing
 const DELETE_BATCH_SIZE = 5000; // Messages per delete batch (larger for efficiency)
 const YIELD_INTERVAL = 1; // Yield every N batches (reduced from 2 for better UI responsiveness)
-const QUERY_BATCH_SIZE = 10000; // Messages per query batch (for pagination)
+const MIN_QUERY_BATCH_SIZE = 10000; // Minimum query batch size
+
+/**
+ * Calculate dynamic query batch size based on total message count.
+ * Larger imports use larger batches to reduce overhead from yielding/progress updates.
+ *
+ * - Under 100K messages: 10% of total (min 10K)
+ * - 100K - 200K messages: 15% of total
+ * - Over 200K messages: 20% of total
+ */
+function calculateQueryBatchSize(totalMessages: number): number {
+  let percentage: number;
+  if (totalMessages < 100000) {
+    percentage = 0.10; // 10%
+  } else if (totalMessages <= 200000) {
+    percentage = 0.15; // 15%
+  } else {
+    percentage = 0.20; // 20%
+  }
+
+  const calculated = Math.floor(totalMessages * percentage);
+  return Math.max(calculated, MIN_QUERY_BATCH_SIZE);
+}
 
 // Attachment constants (TASK-1012, expanded TASK-1122 to include videos)
 const SUPPORTED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".heic", ".webp", ".bmp", ".tiff", ".tif"];
@@ -452,8 +474,11 @@ class MacOSMessagesImportService {
         `);
         const totalMessageCount = countResult[0]?.count || 0;
 
+        // Calculate dynamic batch size based on total messages
+        const queryBatchSize = calculateQueryBatchSize(totalMessageCount);
+
         logService.info(
-          `Found ${totalMessageCount} messages in macOS Messages, fetching in batches of ${QUERY_BATCH_SIZE}`,
+          `Found ${totalMessageCount} messages in macOS Messages, fetching in batches of ${queryBatchSize}`,
           MacOSMessagesImportService.SERVICE_NAME
         );
 
@@ -572,7 +597,7 @@ class MacOSMessagesImportService {
             WHERE message.guid IS NOT NULL AND message.ROWID > ?
             ORDER BY message.ROWID ASC
             LIMIT ?
-          `, [lastRowId, QUERY_BATCH_SIZE]);
+          `, [lastRowId, queryBatchSize]);
 
           if (messageBatch.length === 0) {
             break; // No more messages
