@@ -1,5 +1,20 @@
 # Sprint Plan: SPRINT-068 - Unified Sync State Architecture
 
+**Status:** IN_PROGRESS
+**Started:** 2026-02-01
+**Branch:** `feature/dynamic-import-batch-size`
+
+## Progress Tracking
+
+| Task | Status | Assigned | Est Tokens | Actual Tokens |
+|------|--------|----------|------------|---------------|
+| TASK-1776 | in_progress | - | ~15K | - |
+| TASK-1777 | pending | - | ~20K | - |
+| TASK-1778 | pending | - | ~8K | - |
+| TASK-1779 | pending | - | ~12K | - |
+| TASK-1780 | pending | - | ~10K | - |
+| TASK-1781 | pending | - | ~15K | - |
+
 ## Sprint Goal
 
 Implement a single source of truth for sync state using SyncQueueService, fixing race conditions with IPC progress events, unreliable pill colors in SyncStatusIndicator, and simplifying coordination between onboarding and dashboard. Expected to remove ~600 lines of dead/duplicate code.
