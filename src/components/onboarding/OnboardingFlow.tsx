@@ -45,6 +45,16 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
   // Access state machine state when feature flag is enabled
   const machineState = useOptionalMachineState();
 
+  // Early exit if state machine is already in "ready" state
+  // This handles the race condition where the async dispatch in completeEmailOnboarding()
+  // completes and sets status to "ready", but we're still mounted because goToNext()
+  // called the no-op goToStep("dashboard") before the dispatch finished.
+  // By returning null here, we let AppRouter render the Dashboard instead of showing
+  // a white screen while waiting for navigation that never comes.
+  if (machineState?.state.status === "ready") {
+    return null;
+  }
+
   // Build app state, deriving from state machine when available
   // This fixes the flicker issue where legacy app properties have stale data during initial load
   const appState: OnboardingAppState = useMemo(() => {
