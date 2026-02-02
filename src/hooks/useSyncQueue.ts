@@ -37,7 +37,8 @@ export interface UseSyncQueueReturn {
  * @param onAllComplete - Optional callback when all syncs complete
  */
 export function useSyncQueue(onAllComplete?: () => void): UseSyncQueueReturn {
-  const [state, setState] = useState<SyncQueueState>(syncQueue.getState);
+  // Note: Must wrap in arrow function to preserve `this` binding
+  const [state, setState] = useState<SyncQueueState>(() => syncQueue.getState());
   const onCompleteRef = useRef(onAllComplete);
 
   // Keep callback ref updated
