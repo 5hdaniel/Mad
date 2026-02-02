@@ -603,7 +603,11 @@ class MacOSMessagesImportService {
             break; // No more messages
           }
 
-          allMessages.push(...messageBatch);
+          // Use concat instead of spread to avoid stack overflow with large batches
+          // The spread operator (...) puts all elements on the call stack, which fails for 100K+ items
+          for (let i = 0; i < messageBatch.length; i++) {
+            allMessages.push(messageBatch[i]);
+          }
           lastRowId = messageBatch[messageBatch.length - 1].id;
           fetchedCount += messageBatch.length;
 
