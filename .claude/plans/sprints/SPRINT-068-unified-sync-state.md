@@ -22,8 +22,8 @@
 | Task | Status | Assigned | Est Tokens | Actual Tokens |
 |------|--------|----------|------------|---------------|
 | TASK-1782 | complete | - | ~20K | TBD |
-| TASK-1783 | in_progress | - | ~15K | - |
-| TASK-1784 | pending | - | ~12K | - |
+| TASK-1783 | complete | - | ~15K | TBD |
+| TASK-1784 | in_progress | - | ~12K | - |
 | TASK-1785 | pending | - | ~10K | - |
 | TASK-1786 | pending | - | ~8K | - |
 
@@ -322,12 +322,12 @@ dependency_graph:
     - id: TASK-1783
       type: task
       phase: 1b
-      status: in_progress
+      status: complete
       title: Migrate useAutoRefresh to SyncOrchestrator
     - id: TASK-1784
       type: task
       phase: 1b
-      status: pending
+      status: in_progress
       title: Migrate PermissionsStep to SyncOrchestrator
     - id: TASK-1785
       type: task
@@ -584,7 +584,7 @@ The following MUST pass before merge:
 ### Phase 1 Gate (Infrastructure)
 
 - [x] TASK-1782 complete - SyncOrchestratorService functional
-- [ ] TASK-1783 complete - useAutoRefresh migrated
+- [x] TASK-1783 complete - useAutoRefresh migrated (469 -> 304 lines, 35% reduction)
 - [ ] TASK-1784 complete - PermissionsStep migrated
 - [ ] TASK-1785 complete - SyncStatusIndicator shows queue-order pills
 - [ ] TASK-1786 complete - Obsolete services removed

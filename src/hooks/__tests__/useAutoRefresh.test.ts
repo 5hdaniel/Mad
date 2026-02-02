@@ -2,11 +2,11 @@
  * Unit tests for useAutoRefresh hook
  *
  * TASK-1003: Tests auto-refresh functionality including:
- * - Parallel sync execution with Promise.allSettled
  * - Platform-specific sync behavior
  * - Delay before auto-trigger
- * - Error handling (silent failures)
  * - Progress state management
+ *
+ * TASK-1783: Updated to mock SyncOrchestrator instead of SyncQueueService
  */
 
 import { renderHook, act, waitFor } from "@testing-library/react";
@@ -18,40 +18,48 @@ jest.mock("../../contexts/PlatformContext", () => ({
   usePlatform: jest.fn(() => ({ isMacOS: true })),
 }));
 
-// Note: useSyncQueue is no longer used by useAutoRefresh (SPRINT-068)
-// useAutoRefresh now manages local state to avoid subscription-based re-renders during onboarding
+// Mock the orchestrator state
+const mockOrchestratorState = {
+  isRunning: false,
+  queue: [] as Array<{ type: string; status: string; progress: number; error?: string }>,
+  currentSync: null,
+  overallProgress: 0,
+  pendingRequest: null,
+};
 
-// Mock SyncQueueService - use inline object in jest.mock factory
-jest.mock("../../services/SyncQueueService", () => ({
-  syncQueue: {
-    reset: jest.fn(),
-    queue: jest.fn(),
-    start: jest.fn(),
-    complete: jest.fn(),
-    error: jest.fn(),
-    skip: jest.fn(),
-    getState: jest.fn(),
-    onStateChange: jest.fn(() => jest.fn()),
-    onAllComplete: jest.fn(() => jest.fn()),
-  },
+const mockRequestSync = jest.fn().mockReturnValue({ started: true, needsConfirmation: false });
+const mockForceSync = jest.fn();
+const mockAcceptPending = jest.fn();
+const mockRejectPending = jest.fn();
+const mockCancel = jest.fn();
+
+// Mock useSyncOrchestrator hook
+jest.mock("../useSyncOrchestrator", () => ({
+  useSyncOrchestrator: jest.fn(() => ({
+    state: mockOrchestratorState,
+    isRunning: mockOrchestratorState.isRunning,
+    queue: mockOrchestratorState.queue,
+    currentSync: mockOrchestratorState.currentSync,
+    overallProgress: mockOrchestratorState.overallProgress,
+    pendingRequest: mockOrchestratorState.pendingRequest,
+    requestSync: mockRequestSync,
+    forceSync: mockForceSync,
+    acceptPending: mockAcceptPending,
+    rejectPending: mockRejectPending,
+    cancel: mockCancel,
+  })),
 }));
 
 // Import the mock after mocking
-import { syncQueue as mockSyncQueue } from "../../services/SyncQueueService";
 import { usePlatform } from "../../contexts/PlatformContext";
+import { useSyncOrchestrator } from "../useSyncOrchestrator";
 
 describe("useAutoRefresh", () => {
   let consoleLogSpy: jest.SpyInstance;
   let consoleErrorSpy: jest.SpyInstance;
 
-  // Store callbacks for triggering events in tests
-  let messagesProgressCallback: ((progress: { current: number; total: number; percent: number }) => void) | null = null;
-  let contactsProgressCallback: ((progress: { current: number; total: number; percent: number }) => void) | null = null;
-
-  const mockTransactionsScan = jest.fn();
-  const mockMessagesImport = jest.fn();
-  const mockContactsGetAll = jest.fn();
   const mockPreferencesGet = jest.fn();
+  const mockNotificationSend = jest.fn();
 
   const defaultOptions = {
     userId: "test-user-123",
@@ -65,26 +73,26 @@ describe("useAutoRefresh", () => {
   beforeEach(() => {
     jest.useFakeTimers();
 
-    // Reset module-level state between tests (BACKLOG-205)
+    // Reset module-level state between tests
     resetAutoRefreshTrigger();
     resetMessagesImportTrigger();
 
-    // Reset SyncQueue mock
-    (mockSyncQueue.reset as jest.Mock).mockClear();
-    (mockSyncQueue.queue as jest.Mock).mockClear();
-    (mockSyncQueue.start as jest.Mock).mockClear();
-    (mockSyncQueue.complete as jest.Mock).mockClear();
-    (mockSyncQueue.error as jest.Mock).mockClear();
-
-    // Reset callbacks
-    messagesProgressCallback = null;
-    contactsProgressCallback = null;
+    // Reset orchestrator mock state
+    mockOrchestratorState.isRunning = false;
+    mockOrchestratorState.queue = [];
+    mockOrchestratorState.currentSync = null;
+    mockOrchestratorState.overallProgress = 0;
+    mockOrchestratorState.pendingRequest = null;
 
     // Reset mocks
-    mockTransactionsScan.mockReset().mockResolvedValue({ success: true });
-    mockMessagesImport.mockReset().mockResolvedValue({ success: true, messagesImported: 100 });
-    mockContactsGetAll.mockReset().mockResolvedValue({ success: true, contacts: [] });
+    mockRequestSync.mockClear().mockReturnValue({ started: true, needsConfirmation: false });
+    mockForceSync.mockClear();
+    mockAcceptPending.mockClear();
+    mockRejectPending.mockClear();
+    mockCancel.mockClear();
+
     mockPreferencesGet.mockReset().mockResolvedValue({ success: true, preferences: { autoSyncOnLogin: true } });
+    mockNotificationSend.mockReset().mockResolvedValue(undefined);
 
     // Setup console spies
     consoleLogSpy = jest.spyOn(console, "log").mockImplementation();
@@ -93,27 +101,28 @@ describe("useAutoRefresh", () => {
     // Reset platform mock to macOS
     (usePlatform as jest.Mock).mockReturnValue({ isMacOS: true });
 
+    // Update useSyncOrchestrator mock to return fresh state
+    (useSyncOrchestrator as jest.Mock).mockReturnValue({
+      state: mockOrchestratorState,
+      isRunning: mockOrchestratorState.isRunning,
+      queue: mockOrchestratorState.queue,
+      currentSync: mockOrchestratorState.currentSync,
+      overallProgress: mockOrchestratorState.overallProgress,
+      pendingRequest: mockOrchestratorState.pendingRequest,
+      requestSync: mockRequestSync,
+      forceSync: mockForceSync,
+      acceptPending: mockAcceptPending,
+      rejectPending: mockRejectPending,
+      cancel: mockCancel,
+    });
+
     // Setup window.api mock
     (window as any).api = {
-      transactions: {
-        scan: mockTransactionsScan,
-      },
-      messages: {
-        importMacOSMessages: mockMessagesImport,
-        onImportProgress: jest.fn((cb) => {
-          messagesProgressCallback = cb;
-          return jest.fn(); // cleanup function
-        }),
-      },
-      contacts: {
-        getAll: mockContactsGetAll,
-        onImportProgress: jest.fn((cb) => {
-          contactsProgressCallback = cb;
-          return jest.fn(); // cleanup function
-        }),
-      },
       preferences: {
         get: mockPreferencesGet,
+      },
+      notification: {
+        send: mockNotificationSend,
       },
     };
   });
@@ -144,8 +153,7 @@ describe("useAutoRefresh", () => {
   });
 
   describe("auto-trigger behavior", () => {
-    // Updated: Auto-refresh now only runs messages sync (not emails)
-    it("should trigger refresh after delay when on dashboard", async () => {
+    it("should trigger orchestrator sync after delay when on dashboard", async () => {
       renderHook(() => useAutoRefresh(defaultOptions));
 
       // Preferences need to load first
@@ -153,15 +161,43 @@ describe("useAutoRefresh", () => {
         await Promise.resolve();
       });
 
-      // Advance timer to trigger auto-refresh (2.5 seconds)
+      // Advance timer to trigger auto-refresh (1.5 seconds)
       await act(async () => {
-        jest.advanceTimersByTime(2500);
+        jest.advanceTimersByTime(1500);
         await Promise.resolve();
       });
 
-      // Only messages sync runs on auto-refresh (emails disabled)
-      expect(mockMessagesImport).toHaveBeenCalledWith("test-user-123");
-      expect(mockTransactionsScan).not.toHaveBeenCalled();
+      // Should have called requestSync with contacts and messages (macOS)
+      expect(mockRequestSync).toHaveBeenCalledWith(
+        ['contacts', 'messages'],
+        'test-user-123'
+      );
+    });
+
+    it("should include emails in sync when hasAIAddon is true", async () => {
+      renderHook(() =>
+        useAutoRefresh({
+          ...defaultOptions,
+          hasAIAddon: true,
+        })
+      );
+
+      // Preferences need to load first
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      // Advance timer to trigger auto-refresh
+      await act(async () => {
+        jest.advanceTimersByTime(1500);
+        await Promise.resolve();
+      });
+
+      // Should include emails since hasAIAddon is true
+      expect(mockRequestSync).toHaveBeenCalledWith(
+        ['contacts', 'emails', 'messages'],
+        'test-user-123'
+      );
     });
 
     it("should NOT trigger refresh when not on dashboard", async () => {
@@ -178,7 +214,7 @@ describe("useAutoRefresh", () => {
         await Promise.resolve();
       });
 
-      expect(mockTransactionsScan).not.toHaveBeenCalled();
+      expect(mockRequestSync).not.toHaveBeenCalled();
     });
 
     it("should NOT trigger refresh during onboarding", async () => {
@@ -195,7 +231,7 @@ describe("useAutoRefresh", () => {
         await Promise.resolve();
       });
 
-      expect(mockTransactionsScan).not.toHaveBeenCalled();
+      expect(mockRequestSync).not.toHaveBeenCalled();
     });
 
     it("should NOT trigger refresh when database not initialized", async () => {
@@ -212,7 +248,7 @@ describe("useAutoRefresh", () => {
         await Promise.resolve();
       });
 
-      expect(mockTransactionsScan).not.toHaveBeenCalled();
+      expect(mockRequestSync).not.toHaveBeenCalled();
     });
 
     it("should NOT trigger refresh when userId is null", async () => {
@@ -229,7 +265,7 @@ describe("useAutoRefresh", () => {
         await Promise.resolve();
       });
 
-      expect(mockTransactionsScan).not.toHaveBeenCalled();
+      expect(mockRequestSync).not.toHaveBeenCalled();
     });
 
     it("should NOT trigger refresh when autoSyncOnLogin is disabled", async () => {
@@ -246,74 +282,54 @@ describe("useAutoRefresh", () => {
         await Promise.resolve();
       });
 
-      expect(mockTransactionsScan).not.toHaveBeenCalled();
+      expect(mockRequestSync).not.toHaveBeenCalled();
     });
 
-    // BACKLOG-205: Fixed flaky timer test - use multiple act() calls to properly flush async state
-    // Updated: Auto-refresh now only runs messages sync (not emails/contacts)
     it("should only trigger once per dashboard entry", async () => {
       renderHook(() => useAutoRefresh(defaultOptions));
 
-      // Step 1: Let preference loading complete (sets hasLoadedPreference = true)
+      // Step 1: Let preference loading complete
       await act(async () => {
-        await Promise.resolve(); // Flush the loadPreference() promise
-        await Promise.resolve(); // Flush any setState calls
+        await Promise.resolve();
+        await Promise.resolve();
       });
 
-      // Step 2: Advance timer to trigger auto-refresh (2.5 seconds)
+      // Step 2: Advance timer to trigger auto-refresh
       await act(async () => {
-        jest.advanceTimersByTime(2500);
-        await Promise.resolve(); // Flush the runAutoRefresh promise
+        jest.advanceTimersByTime(1500);
+        await Promise.resolve();
       });
 
-      // First trigger should have happened (messages only, not emails)
-      expect(mockMessagesImport).toHaveBeenCalledTimes(1);
-      expect(mockTransactionsScan).not.toHaveBeenCalled(); // Emails disabled on auto-refresh
+      // First trigger should have happened
+      expect(mockRequestSync).toHaveBeenCalledTimes(1);
 
-      // Step 3: Advance more time - should not trigger again (hasTriggeredAutoRefresh = true)
+      // Step 3: Advance more time - should not trigger again
       await act(async () => {
         jest.advanceTimersByTime(5000);
         await Promise.resolve();
       });
 
-      expect(mockMessagesImport).toHaveBeenCalledTimes(1);
+      expect(mockRequestSync).toHaveBeenCalledTimes(1);
     });
   });
 
-  describe("messages-only sync execution", () => {
-    // Updated: Auto-refresh now only runs messages sync to avoid INP issues
-    it("should run ONLY messages sync on macOS (emails and contacts disabled)", async () => {
+  describe("platform-specific sync behavior", () => {
+    it("should include contacts and messages on macOS with permissions", async () => {
       (usePlatform as jest.Mock).mockReturnValue({ isMacOS: true });
-
-      let messagesResolve: () => void;
-
-      mockMessagesImport.mockReturnValue(
-        new Promise((resolve) => {
-          messagesResolve = () => resolve({ success: true, messagesImported: 50 });
-        })
-      );
 
       const { result } = renderHook(() => useAutoRefresh(defaultOptions));
 
-      // Trigger manual refresh
-      let refreshPromise: Promise<void>;
       await act(async () => {
-        refreshPromise = result.current.triggerRefresh();
+        await result.current.triggerRefresh();
       });
 
-      // Only messages should be called (emails and contacts are disabled on auto-refresh)
-      expect(mockMessagesImport).toHaveBeenCalled();
-      expect(mockTransactionsScan).not.toHaveBeenCalled();
-      expect(mockContactsGetAll).not.toHaveBeenCalled();
-
-      // Resolve
-      await act(async () => {
-        messagesResolve!();
-        await refreshPromise!;
-      });
+      expect(mockRequestSync).toHaveBeenCalledWith(
+        ['contacts', 'messages'],
+        'test-user-123'
+      );
     });
 
-    it("should NOT run any sync on non-macOS platforms (messages only supported on macOS)", async () => {
+    it("should NOT include contacts or messages on non-macOS platforms", async () => {
       (usePlatform as jest.Mock).mockReturnValue({ isMacOS: false });
 
       const { result } = renderHook(() => useAutoRefresh(defaultOptions));
@@ -322,13 +338,11 @@ describe("useAutoRefresh", () => {
         await result.current.triggerRefresh();
       });
 
-      // No syncs run - messages is macOS only, emails/contacts are disabled
-      expect(mockMessagesImport).not.toHaveBeenCalled();
-      expect(mockTransactionsScan).not.toHaveBeenCalled();
-      expect(mockContactsGetAll).not.toHaveBeenCalled();
+      // No sync types available on non-macOS without AI addon
+      expect(mockRequestSync).not.toHaveBeenCalled();
     });
 
-    it("should NOT run messages sync without permissions", async () => {
+    it("should NOT include contacts or messages without permissions", async () => {
       const { result } = renderHook(() =>
         useAutoRefresh({
           ...defaultOptions,
@@ -340,16 +354,17 @@ describe("useAutoRefresh", () => {
         await result.current.triggerRefresh();
       });
 
-      // No syncs - messages requires permissions, emails/contacts disabled
-      expect(mockMessagesImport).not.toHaveBeenCalled();
-      expect(mockTransactionsScan).not.toHaveBeenCalled();
+      // No sync types available without permissions (and no AI addon)
+      expect(mockRequestSync).not.toHaveBeenCalled();
     });
 
-    it("should still run messages sync when email not connected", async () => {
+    it("should include only emails on non-macOS with AI addon", async () => {
+      (usePlatform as jest.Mock).mockReturnValue({ isMacOS: false });
+
       const { result } = renderHook(() =>
         useAutoRefresh({
           ...defaultOptions,
-          hasEmailConnected: false,
+          hasAIAddon: true,
         })
       );
 
@@ -357,213 +372,186 @@ describe("useAutoRefresh", () => {
         await result.current.triggerRefresh();
       });
 
-      // Messages sync runs regardless of email connection (independent feature)
-      expect(mockMessagesImport).toHaveBeenCalled();
-      // Email sync is disabled on auto-refresh regardless
-      expect(mockTransactionsScan).not.toHaveBeenCalled();
+      expect(mockRequestSync).toHaveBeenCalledWith(
+        ['emails'],
+        'test-user-123'
+      );
     });
   });
 
-  describe("error handling", () => {
-    // Note: Email sync is disabled on auto-refresh, so we only test messages errors
-    // With TASK-1777, errors are tracked via SyncQueue
+  describe("sync status from orchestrator queue", () => {
+    it("should reflect running status from orchestrator queue", async () => {
+      // Update mock to return running state
+      mockOrchestratorState.isRunning = true;
+      mockOrchestratorState.queue = [
+        { type: 'contacts', status: 'complete', progress: 100 },
+        { type: 'messages', status: 'running', progress: 45 },
+      ];
 
-    it("should handle messages sync error silently", async () => {
-      mockMessagesImport.mockRejectedValue(new Error("Permission denied"));
+      (useSyncOrchestrator as jest.Mock).mockReturnValue({
+        state: mockOrchestratorState,
+        isRunning: true,
+        queue: mockOrchestratorState.queue,
+        currentSync: 'messages',
+        overallProgress: 72,
+        pendingRequest: null,
+        requestSync: mockRequestSync,
+        forceSync: mockForceSync,
+        acceptPending: mockAcceptPending,
+        rejectPending: mockRejectPending,
+        cancel: mockCancel,
+      });
 
       const { result } = renderHook(() => useAutoRefresh(defaultOptions));
 
-      await act(async () => {
-        await result.current.triggerRefresh();
-      });
-
-      // Error should be logged
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        "[useAutoRefresh] Message sync error:",
-        expect.any(Error)
-      );
-      // syncQueue.error should have been called
-      expect(mockSyncQueue.error).toHaveBeenCalledWith('messages', "Permission denied");
-    });
-
-    it("should complete gracefully when messages sync fails", async () => {
-      mockMessagesImport.mockRejectedValue(new Error("Import failed"));
-
-      // After error, SyncQueue state would show error
-      // Simulate import failure
-      mockMessagesImport.mockResolvedValue({ success: false, error: "Import failed" });
-
-      const { result } = renderHook(() => useAutoRefresh(defaultOptions));
-
-      await act(async () => {
-        await result.current.triggerRefresh();
-      });
-
-      // Messages sync failed but hook should still be in valid state
-      expect(result.current.syncStatus.messages.error).toBe("Import failed");
-      expect(result.current.syncStatus.messages.isSyncing).toBe(false);
-      expect(result.current.isAnySyncing).toBe(false);
-    });
-  });
-
-  describe("sync status updates", () => {
-    // Note: Email sync is disabled on auto-refresh, only messages sync runs
-    // With SPRINT-068 refactoring, isSyncing comes from local state (not subscription-based)
-
-    it("should update messages sync status during sync", async () => {
-      let resolveMessages: (value: any) => void;
-      mockMessagesImport.mockReturnValue(
-        new Promise((resolve) => {
-          resolveMessages = resolve;
-        })
-      );
-
-      const { result } = renderHook(() => useAutoRefresh(defaultOptions));
-
-      // Start sync - local state will be updated to isSyncing: true
-      let refreshPromise: Promise<void>;
-      await act(async () => {
-        refreshPromise = result.current.triggerRefresh();
-      });
-
-      // isSyncing comes from local state (sync in progress)
-      expect(result.current.syncStatus.messages.isSyncing).toBe(true);
       expect(result.current.isAnySyncing).toBe(true);
-
-      // Complete sync
-      await act(async () => {
-        resolveMessages!({ success: true, messagesImported: 200 });
-        await refreshPromise!;
-      });
-
-      expect(result.current.syncStatus.messages.isSyncing).toBe(false);
+      expect(result.current.syncStatus.contacts.isSyncing).toBe(false); // complete
+      expect(result.current.syncStatus.contacts.progress).toBe(100);
+      expect(result.current.syncStatus.messages.isSyncing).toBe(true); // running
+      expect(result.current.syncStatus.messages.progress).toBe(45);
     });
 
-    it("should complete sync when no new messages", async () => {
-      mockMessagesImport.mockResolvedValue({ success: true, messagesImported: 0 });
+    it("should reflect error status from orchestrator queue", async () => {
+      mockOrchestratorState.queue = [
+        { type: 'contacts', status: 'error', progress: 0, error: 'Permission denied' },
+      ];
+
+      (useSyncOrchestrator as jest.Mock).mockReturnValue({
+        state: mockOrchestratorState,
+        isRunning: false,
+        queue: mockOrchestratorState.queue,
+        currentSync: null,
+        overallProgress: 0,
+        pendingRequest: null,
+        requestSync: mockRequestSync,
+        forceSync: mockForceSync,
+        acceptPending: mockAcceptPending,
+        rejectPending: mockRejectPending,
+        cancel: mockCancel,
+      });
 
       const { result } = renderHook(() => useAutoRefresh(defaultOptions));
 
-      await act(async () => {
-        await result.current.triggerRefresh();
-      });
-
-      // Verify sync completed successfully
-      expect(result.current.syncStatus.messages.isSyncing).toBe(false);
-      // syncQueue.complete should have been called
-      expect(mockSyncQueue.complete).toHaveBeenCalledWith('messages');
+      expect(result.current.syncStatus.contacts.error).toBe('Permission denied');
+      expect(result.current.syncStatus.contacts.isSyncing).toBe(false);
     });
-  });
 
-  describe("progress event handling", () => {
-    it("should update messages progress from IPC events during sync", async () => {
-      // Setup a pending promise so sync stays in progress
-      let resolveMessages: (value: any) => void;
-      mockMessagesImport.mockReturnValue(
-        new Promise((resolve) => {
-          resolveMessages = resolve;
-        })
-      );
+    it("should return default status for types not in queue", async () => {
+      mockOrchestratorState.queue = [
+        { type: 'messages', status: 'running', progress: 50 },
+      ];
+
+      (useSyncOrchestrator as jest.Mock).mockReturnValue({
+        state: mockOrchestratorState,
+        isRunning: true,
+        queue: mockOrchestratorState.queue,
+        currentSync: 'messages',
+        overallProgress: 50,
+        pendingRequest: null,
+        requestSync: mockRequestSync,
+        forceSync: mockForceSync,
+        acceptPending: mockAcceptPending,
+        rejectPending: mockRejectPending,
+        cancel: mockCancel,
+      });
 
       const { result } = renderHook(() => useAutoRefresh(defaultOptions));
 
-      // Trigger the sync to set local state to isSyncing: true
-      await act(async () => {
-        result.current.triggerRefresh();
-      });
-
-      // Now isSyncing should be true from local state (sync in progress)
-      expect(result.current.syncStatus.messages.isSyncing).toBe(true);
-
-      // Progress events update progress
-      act(() => {
-        messagesProgressCallback?.({ current: 50, total: 100, percent: 50 });
-      });
-
-      expect(result.current.syncStatus.messages.progress).toBe(50);
-
-      // Cleanup
-      await act(async () => {
-        resolveMessages!({ success: true, messagesImported: 100 });
-      });
-    });
-
-    it("should mark messages complete at 100%", async () => {
-      jest.useFakeTimers();
-
-      const { result } = renderHook(() => useAutoRefresh(defaultOptions));
-
-      // Trigger sync and complete it
-      await act(async () => {
-        result.current.triggerRefresh();
-        await Promise.resolve();
-      });
-
-      // Send progress event
-      act(() => {
-        messagesProgressCallback?.({ current: 100, total: 100, percent: 100 });
-      });
-
-      expect(result.current.syncStatus.messages.progress).toBe(100);
-
-      // After sync completes, isSyncing becomes false (local state)
-      expect(result.current.syncStatus.messages.isSyncing).toBe(false);
-    });
-
-    it("should update contacts progress from IPC events", async () => {
-      const { result } = renderHook(() => useAutoRefresh(defaultOptions));
-
-      // Progress events update progress regardless of sync state
-      act(() => {
-        contactsProgressCallback?.({ current: 25, total: 50, percent: 50 });
-      });
-
-      expect(result.current.syncStatus.contacts.progress).toBe(50);
-      // Note: contacts sync is not auto-triggered, so isSyncing stays false
-      // unless we explicitly trigger contacts sync
+      // Emails not in queue - should have default values
+      expect(result.current.syncStatus.emails.isSyncing).toBe(false);
+      expect(result.current.syncStatus.emails.progress).toBeNull();
+      expect(result.current.syncStatus.emails.error).toBeNull();
     });
   });
 
-  describe("currentSyncMessage priority", () => {
-    // Note: currentSyncMessage is now simplified (returns null)
-    // State tracking is via local state, not messages
-    it("should return null (simplified implementation)", async () => {
-      let resolveMessages: (value: any) => void;
-      mockMessagesImport.mockReturnValue(
-        new Promise((resolve) => {
-          resolveMessages = resolve;
-        })
+  describe("OS notification", () => {
+    it("should send notification when sync completes", async () => {
+      // Start with syncing
+      (useSyncOrchestrator as jest.Mock).mockReturnValue({
+        state: mockOrchestratorState,
+        isRunning: true,
+        queue: [{ type: 'messages', status: 'running', progress: 50 }],
+        currentSync: 'messages',
+        overallProgress: 50,
+        pendingRequest: null,
+        requestSync: mockRequestSync,
+        forceSync: mockForceSync,
+        acceptPending: mockAcceptPending,
+        rejectPending: mockRejectPending,
+        cancel: mockCancel,
+      });
+
+      const { rerender } = renderHook(() => useAutoRefresh(defaultOptions));
+
+      // Now sync completes
+      (useSyncOrchestrator as jest.Mock).mockReturnValue({
+        state: mockOrchestratorState,
+        isRunning: false,
+        queue: [{ type: 'messages', status: 'complete', progress: 100 }],
+        currentSync: null,
+        overallProgress: 100,
+        pendingRequest: null,
+        requestSync: mockRequestSync,
+        forceSync: mockForceSync,
+        acceptPending: mockAcceptPending,
+        rejectPending: mockRejectPending,
+        cancel: mockCancel,
+      });
+
+      rerender();
+
+      expect(mockNotificationSend).toHaveBeenCalledWith(
+        "Sync Complete",
+        "Magic Audit is ready to use. Your data has been synchronized."
       );
-
-      const { result } = renderHook(() => useAutoRefresh(defaultOptions));
-
-      await act(async () => {
-        result.current.triggerRefresh();
-      });
-
-      // currentSyncMessage is now null (simplified implementation)
-      expect(result.current.currentSyncMessage).toBe(null);
-
-      await act(async () => {
-        resolveMessages!({ success: true, messagesImported: 10 });
-      });
     });
 
-    it("should return null when no sync in progress", () => {
-      const { result } = renderHook(() => useAutoRefresh(defaultOptions));
+    it("should NOT send notification when sync starts", async () => {
+      // Start with not syncing
+      (useSyncOrchestrator as jest.Mock).mockReturnValue({
+        state: mockOrchestratorState,
+        isRunning: false,
+        queue: [],
+        currentSync: null,
+        overallProgress: 0,
+        pendingRequest: null,
+        requestSync: mockRequestSync,
+        forceSync: mockForceSync,
+        acceptPending: mockAcceptPending,
+        rejectPending: mockRejectPending,
+        cancel: mockCancel,
+      });
 
-      expect(result.current.currentSyncMessage).toBeNull();
+      const { rerender } = renderHook(() => useAutoRefresh(defaultOptions));
+
+      // Now sync starts
+      (useSyncOrchestrator as jest.Mock).mockReturnValue({
+        state: mockOrchestratorState,
+        isRunning: true,
+        queue: [{ type: 'messages', status: 'running', progress: 0 }],
+        currentSync: 'messages',
+        overallProgress: 0,
+        pendingRequest: null,
+        requestSync: mockRequestSync,
+        forceSync: mockForceSync,
+        acceptPending: mockAcceptPending,
+        rejectPending: mockRejectPending,
+        cancel: mockCancel,
+      });
+
+      rerender();
+
+      expect(mockNotificationSend).not.toHaveBeenCalled();
     });
   });
 
   describe("onboarding import skip", () => {
     beforeEach(() => {
-      // Reset the module-level flag between tests
       resetMessagesImportTrigger();
     });
 
-    it("should skip messages sync when marked as just completed onboarding import", async () => {
-      // Mark onboarding import complete (simulating PermissionsStep behavior)
+    it("should skip sync when marked as just completed onboarding import", async () => {
+      // Mark onboarding import complete
       setMessagesImportTriggered();
 
       const { result } = renderHook(() => useAutoRefresh(defaultOptions));
@@ -572,22 +560,18 @@ describe("useAutoRefresh", () => {
         await result.current.triggerRefresh();
       });
 
-      // Messages sync should be skipped because hasMessagesImportTriggered() returns true
-      expect(mockMessagesImport).not.toHaveBeenCalled();
-      // Email sync is disabled on auto-refresh
-      expect(mockTransactionsScan).not.toHaveBeenCalled();
+      // Should not call requestSync since import was already triggered
+      expect(mockRequestSync).not.toHaveBeenCalled();
     });
 
-    it("should allow messages sync when import flag not set", async () => {
-      // Don't set the flag - simulating fresh start without onboarding import
+    it("should allow sync when import flag not set", async () => {
       const { result } = renderHook(() => useAutoRefresh(defaultOptions));
 
       await act(async () => {
         await result.current.triggerRefresh();
       });
 
-      // Messages sync should run because hasMessagesImportTriggered() returns false
-      expect(mockMessagesImport).toHaveBeenCalled();
+      expect(mockRequestSync).toHaveBeenCalled();
     });
   });
 
@@ -595,14 +579,14 @@ describe("useAutoRefresh", () => {
     it("should work without waiting for auto-trigger delay", async () => {
       const { result } = renderHook(() => useAutoRefresh(defaultOptions));
 
-      // Trigger immediately without waiting for delay
       await act(async () => {
         await result.current.triggerRefresh();
       });
 
-      // Only messages sync runs on refresh (emails/contacts disabled)
-      expect(mockMessagesImport).toHaveBeenCalled();
-      expect(mockTransactionsScan).not.toHaveBeenCalled();
+      expect(mockRequestSync).toHaveBeenCalledWith(
+        ['contacts', 'messages'],
+        'test-user-123'
+      );
     });
 
     it("should do nothing when userId is null", async () => {
@@ -617,14 +601,11 @@ describe("useAutoRefresh", () => {
         await result.current.triggerRefresh();
       });
 
-      expect(mockMessagesImport).not.toHaveBeenCalled();
-      expect(mockTransactionsScan).not.toHaveBeenCalled();
+      expect(mockRequestSync).not.toHaveBeenCalled();
     });
   });
 
   describe("preference loading", () => {
-    // BACKLOG-205: Fixed flaky timer test using jest.runAllTimersAsync()
-    // Updated: Now only messages sync runs (not emails)
     it("should wait for preferences before triggering", async () => {
       let resolvePrefs: (value: any) => void;
       mockPreferencesGet.mockReturnValue(
@@ -635,69 +616,62 @@ describe("useAutoRefresh", () => {
 
       renderHook(() => useAutoRefresh(defaultOptions));
 
-      // Advance timer before prefs load - use advanceTimersByTimeAsync for proper async handling
+      // Advance timer before prefs load
       await act(async () => {
         await jest.advanceTimersByTimeAsync(3000);
       });
 
-      // Should not have triggered yet (prefs still pending)
-      expect(mockMessagesImport).not.toHaveBeenCalled();
+      // Should not have triggered yet
+      expect(mockRequestSync).not.toHaveBeenCalled();
 
-      // Now resolve preferences and let the hook react
+      // Now resolve preferences
       await act(async () => {
         resolvePrefs!({ success: true, preferences: { autoSyncOnLogin: true } });
-        // Flush microtasks to let the state update
         await Promise.resolve();
       });
 
       // Now advance timer to trigger auto-refresh
       await act(async () => {
-        await jest.advanceTimersByTimeAsync(2500);
+        await jest.advanceTimersByTimeAsync(1500);
       });
 
-      expect(mockMessagesImport).toHaveBeenCalled();
+      expect(mockRequestSync).toHaveBeenCalled();
     });
 
-    // BACKLOG-205: Fixed flaky timer test - use multiple act() calls to properly flush async state
     it("should default to enabled when preference not set", async () => {
       mockPreferencesGet.mockResolvedValue({ success: true, preferences: {} });
 
       renderHook(() => useAutoRefresh(defaultOptions));
 
-      // Step 1: Let preference loading complete (sets hasLoadedPreference = true)
       await act(async () => {
-        await Promise.resolve(); // Flush the loadPreference() promise
-        await Promise.resolve(); // Flush any setState calls
+        await Promise.resolve();
+        await Promise.resolve();
       });
 
-      // Step 2: Advance timer to trigger auto-refresh (2.5 seconds)
       await act(async () => {
-        jest.advanceTimersByTime(2500);
-        await Promise.resolve(); // Flush the runAutoRefresh promise
+        jest.advanceTimersByTime(1500);
+        await Promise.resolve();
       });
 
-      expect(mockMessagesImport).toHaveBeenCalled();
+      expect(mockRequestSync).toHaveBeenCalled();
     });
 
-    // BACKLOG-205: Fixed flaky timer test - use multiple act() calls to properly flush async state
     it("should default to enabled on preference load error", async () => {
       mockPreferencesGet.mockRejectedValue(new Error("Failed to load"));
 
       renderHook(() => useAutoRefresh(defaultOptions));
 
-      // Step 1: Let preference loading complete (catch block sets autoSyncEnabled = true, then finally sets hasLoadedPreference = true)
       await act(async () => {
-        await Promise.resolve(); // Flush the loadPreference() rejection
-        await Promise.resolve(); // Flush any setState calls
+        await Promise.resolve();
+        await Promise.resolve();
       });
 
-      // Step 2: Advance timer to trigger auto-refresh (2.5 seconds)
       await act(async () => {
-        jest.advanceTimersByTime(2500);
-        await Promise.resolve(); // Flush the runAutoRefresh promise
+        jest.advanceTimersByTime(1500);
+        await Promise.resolve();
       });
 
-      expect(mockMessagesImport).toHaveBeenCalled();
+      expect(mockRequestSync).toHaveBeenCalled();
     });
   });
 
@@ -719,8 +693,7 @@ describe("useAutoRefresh", () => {
       });
 
       // Should not have triggered
-      expect(mockTransactionsScan).not.toHaveBeenCalled();
+      expect(mockRequestSync).not.toHaveBeenCalled();
     });
   });
-
 });

@@ -53,14 +53,14 @@ After migration:
 
 ## Acceptance Criteria
 
-- [ ] useAutoRefresh uses `syncOrchestrator.requestSync()` instead of inline sync functions
-- [ ] useAutoRefresh uses `useSyncOrchestrator()` for state instead of local state
-- [ ] IPC progress listeners removed from useAutoRefresh (orchestrator handles them)
-- [ ] Public API unchanged: `triggerRefresh`, `syncStatus`, `isAnySyncing`, `currentSyncMessage`
-- [ ] OS notification still fires when all syncs complete
-- [ ] Auto-sync preference still respected
-- [ ] Type-check passes: `npm run type-check`
-- [ ] Tests pass: `npm test`
+- [x] useAutoRefresh uses `syncOrchestrator.requestSync()` instead of inline sync functions
+- [x] useAutoRefresh uses `useSyncOrchestrator()` for state instead of local state
+- [x] IPC progress listeners removed from useAutoRefresh (orchestrator handles them)
+- [x] Public API unchanged: `triggerRefresh`, `syncStatus`, `isAnySyncing`, `currentSyncMessage`
+- [x] OS notification still fires when all syncs complete
+- [x] Auto-sync preference still respected
+- [x] Type-check passes: `npm run type-check`
+- [x] Tests pass: `npm test` (27 tests)
 - [ ] Manual test: Dashboard auto-refresh works with pill updates
 
 ---
@@ -76,52 +76,70 @@ After migration:
 
 ---
 
-## Implementation Notes
+## Implementation Plan
 
-### Before (current)
+### Analysis Summary
 
-```typescript
-const syncEmails = useCallback(async (uid: string): Promise<void> => {
-  syncQueue.start('emails');
-  setLocalSyncState((prev) => ({ ... }));
-  try {
-    const result = await window.api.transactions.scan(uid);
-    // ... handle result
-  } catch { ... }
-}, []);
-```
+**Current useAutoRefresh (469 lines):**
+- Inline sync functions: `syncEmails`, `syncMessages`, `syncContacts` (lines 220-296)
+- Local state: `localSyncState` and `progress`
+- IPC progress listeners for messages and contacts
+- SyncQueueService coordination
+- Module-level `hasTriggeredAutoRefresh` flag
+- Auto-sync preference loading
+- OS notification on sync complete
 
-### After (with orchestrator)
+**Migration Strategy:**
 
-```typescript
-const triggerRefresh = useCallback(async () => {
-  if (!userId) return;
+| Remove | Keep | Add |
+|--------|------|-----|
+| Inline sync functions | Module-level flags | `useSyncOrchestrator()` |
+| Local state (`localSyncState`, `progress`) | Auto-sync preference loading | Derived `syncStatus` from queue |
+| IPC progress listeners | OS notification logic | |
+| SyncQueueService calls | `hasMessagesImportTriggered()` coordination | |
+| | Public API unchanged | |
 
-  const typesToSync: SyncType[] = [];
-  if (isMacOS && hasPermissions) typesToSync.push('contacts');
-  if (hasAIAddon && hasEmailConnected) typesToSync.push('emails');
-  if (isMacOS && hasPermissions) typesToSync.push('messages');
+### Implementation Steps
 
-  syncOrchestrator.requestSync({ types: typesToSync, userId });
-}, [userId, isMacOS, hasPermissions, hasAIAddon, hasEmailConnected]);
-```
+1. Import `useSyncOrchestrator` and `SyncType`
+2. Remove `syncQueue` import and all its calls
+3. Remove IPC progress listener useEffects
+4. Remove `localSyncState` and `progress` state
+5. Remove inline sync functions
+6. Add `useSyncOrchestrator()` hook call
+7. Create helper to map queue items to `SyncOperation`
+8. Simplify `runAutoRefresh` to call `requestSync()`
+9. Derive `syncStatus` from orchestrator queue
+10. Use `isRunning` for `isAnySyncing`
+11. Update OS notification to use orchestrator state transition
 
 ### State Mapping
 
-The `syncStatus` return value should be derived from orchestrator state:
-
 ```typescript
-const orchestratorState = useSyncOrchestrator();
+// Helper to map SyncItem to SyncOperation
+function mapQueueItemToSyncOperation(item?: SyncItem): SyncOperation {
+  if (!item) return { isSyncing: false, progress: null, message: '', error: null };
+  return {
+    isSyncing: item.status === 'running' || item.status === 'pending',
+    progress: item.progress,
+    message: '',
+    error: item.error ?? null,
+  };
+}
 
 const syncStatus: SyncStatus = {
-  emails: {
-    isSyncing: orchestratorState.queue.find(q => q.type === 'emails')?.status === 'running',
-    progress: orchestratorState.queue.find(q => q.type === 'emails')?.progress ?? null,
-    // ...
-  },
-  // ... similar for contacts, messages
+  emails: mapQueueItemToSyncOperation(queue.find(q => q.type === 'emails')),
+  messages: mapQueueItemToSyncOperation(queue.find(q => q.type === 'messages')),
+  contacts: mapQueueItemToSyncOperation(queue.find(q => q.type === 'contacts')),
 };
 ```
+
+### Test Updates
+
+Tests will need to:
+- Mock `useSyncOrchestrator` instead of SyncQueueService
+- Verify `requestSync` is called with correct types
+- Remove direct sync function call assertions
 
 ---
 
@@ -151,24 +169,24 @@ const syncStatus: SyncStatus = {
 **REQUIRED: Complete this section before creating PR.**
 **See: `.claude/docs/ENGINEER-WORKFLOW.md` for full workflow**
 
-*Completed: <DATE>*
+*Completed: 2026-02-02*
 
 ### Engineer Checklist
 
 ```
 Pre-Work:
-- [ ] Created branch from develop
-- [ ] Noted start time: ___
-- [ ] Read task file completely
+- [x] Created branch from develop
+- [x] Noted start time: Session start
+- [x] Read task file completely
 
 Implementation:
-- [ ] Code complete
-- [ ] Tests pass locally (npm test)
-- [ ] Type check passes (npm run type-check)
-- [ ] Lint passes (npm run lint)
+- [x] Code complete
+- [x] Tests pass locally (npm test)
+- [x] Type check passes (npm run type-check)
+- [x] Lint passes (npm run lint - pre-existing error in unrelated file)
 
 PR Submission:
-- [ ] This summary section completed
+- [x] This summary section completed
 - [ ] PR created with Engineer Metrics (see template)
 - [ ] CI passes (gh pr checks --watch)
 - [ ] SR Engineer review requested
@@ -180,20 +198,50 @@ Completion:
 
 ### Results
 
-- **Before**: useAutoRefresh has ~460 lines with inline sync functions
-- **After**: useAutoRefresh uses orchestrator, expected ~200 lines
-- **Actual Turns**: X (Est: 2-3)
-- **Actual Tokens**: ~XK (Est: 12K-18K)
-- **Actual Time**: X min
+- **Before**: useAutoRefresh has ~469 lines with inline sync functions
+- **After**: useAutoRefresh uses orchestrator, ~304 lines (35% reduction)
+- **Actual Turns**: 1 (Est: 2-3)
+- **Actual Tokens**: ~10K (Est: 12K-18K)
+- **Actual Time**: ~15 min
 - **PR**: [URL after PR created]
+
+### Changes Made
+
+1. **Replaced imports:**
+   - Removed: `syncQueue` from SyncQueueService
+   - Added: `useSyncOrchestrator` hook, `SyncType` and `SyncItem` types
+
+2. **Removed inline sync functions:**
+   - `syncEmails`, `syncMessages`, `syncContacts` (~77 lines removed)
+
+3. **Removed local state:**
+   - `localSyncState` state
+   - `progress` state
+   - IPC progress listener useEffects (~21 lines removed)
+
+4. **Simplified runAutoRefresh:**
+   - Now builds `typesToSync` array and calls `requestSync(typesToSync, uid)`
+   - No longer calls sync functions directly
+
+5. **Derived state from orchestrator:**
+   - `syncStatus` derived from `queue.find()` with `mapQueueItemToSyncOperation`
+   - `isAnySyncing` is now `isRunning` from orchestrator
+
+6. **OS notification updated:**
+   - Uses `isRunning` state transition instead of local `isAnySyncing`
+
+7. **Updated tests:**
+   - Mocks `useSyncOrchestrator` instead of SyncQueueService
+   - Tests verify `requestSync` is called with correct types
+   - 27 tests pass (rewritten to match new implementation)
 
 ### Notes
 
 **Deviations from plan:**
-[If you deviated, explain what and why]
+None - implementation followed the plan exactly.
 
 **Issues encountered:**
-[Document any challenges]
+None - clean migration. Pre-existing lint error in NotificationContext.tsx (unrelated).
 
 ---
 
