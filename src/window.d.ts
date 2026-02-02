@@ -350,6 +350,14 @@ interface MainAPI {
     openFolder: (folderPath: string) => Promise<{ success: boolean }>;
   };
 
+  // OS Notifications
+  notification: {
+    /** Check if notifications are supported on this platform */
+    isSupported: () => Promise<{ success: boolean; supported: boolean }>;
+    /** Send an OS notification */
+    send: (title: string, body: string) => Promise<{ success: boolean; error?: string }>;
+  };
+
   // Apple Driver Management (Windows only)
   drivers: {
     checkApple: () => Promise<{

@@ -24,7 +24,7 @@
  * @module hooks/useAutoRefresh
  */
 
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useState, useRef } from "react";
 import { usePlatform } from "../contexts/PlatformContext";
 import { hasMessagesImportTriggered } from "./useMacOSMessagesImport";
 
@@ -502,6 +502,24 @@ export function useAutoRefresh({
     }
     return null;
   })();
+
+  // Track previous syncing state for notification trigger
+  const wasSyncingRef = useRef(false);
+
+  // Send OS notification when sync completes
+  useEffect(() => {
+    // Detect transition from syncing to not syncing
+    if (wasSyncingRef.current && !isAnySyncing) {
+      // Sync just completed - send notification
+      window.api.notification?.send(
+        "Sync Complete",
+        "Magic Audit is ready to use. Your data has been synchronized."
+      ).catch(() => {
+        // Silently ignore notification failures
+      });
+    }
+    wasSyncingRef.current = isAnySyncing;
+  }, [isAnySyncing]);
 
   return {
     syncStatus: status,
