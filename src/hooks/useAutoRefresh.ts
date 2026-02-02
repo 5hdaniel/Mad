@@ -27,7 +27,7 @@
 
 import { useEffect, useCallback, useState, useRef } from "react";
 import { usePlatform } from "../contexts/PlatformContext";
-import { hasMessagesImportTriggered, setMessagesImportTriggered } from "./useMacOSMessagesImport";
+import { hasMessagesImportTriggered, setMessagesImportTriggered } from "../utils/syncFlags";
 import { useSyncOrchestrator } from "./useSyncOrchestrator";
 import type { SyncType, SyncItem } from "../services/SyncOrchestratorService";
 
@@ -108,7 +108,7 @@ const initialSyncOperation: SyncOperation = {
 };
 
 // Auto-refresh delay in milliseconds
-// Must be LESS than useMacOSMessagesImport's 2s delay to run first and sync contacts+messages
+// Delay before auto-triggering sync on dashboard load
 const AUTO_REFRESH_DELAY_MS = 1500;
 
 /**
@@ -199,7 +199,7 @@ export function useAutoRefresh({
         return;
       }
 
-      // Mark as triggered so useMacOSMessagesImport doesn't also run
+      // Mark as triggered to prevent duplicate syncs
       setMessagesImportTriggered();
 
       // Build list of sync types based on platform and permissions

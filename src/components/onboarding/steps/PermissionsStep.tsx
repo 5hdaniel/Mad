@@ -15,7 +15,7 @@ import type {
   OnboardingStep,
   OnboardingStepContentProps,
 } from "../types";
-import { setMessagesImportTriggered } from "../../../hooks/useMacOSMessagesImport";
+import { setMessagesImportTriggered } from "../../../utils/syncFlags";
 import { useSyncOrchestrator } from "../../../hooks/useSyncOrchestrator";
 
 /**
@@ -225,7 +225,7 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
     setWaitingForDb(false);
 
     // Mark that we're doing the onboarding import - prevents duplicate imports on dashboard
-    // This sets the module-level flag in useMacOSMessagesImport that useAutoRefresh checks
+    // This sets the module-level flag in syncFlags that useAutoRefresh checks
     setMessagesImportTriggered();
 
     // Request sync from orchestrator - runs contacts then messages sequentially

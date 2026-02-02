@@ -11,7 +11,7 @@
 
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { useAutoRefresh, resetAutoRefreshTrigger } from "../useAutoRefresh";
-import { setMessagesImportTriggered, resetMessagesImportTrigger } from "../useMacOSMessagesImport";
+import { setMessagesImportTriggered, resetMessagesImportTrigger } from "../../utils/syncFlags";
 
 // Mock the platform context
 jest.mock("../../contexts/PlatformContext", () => ({

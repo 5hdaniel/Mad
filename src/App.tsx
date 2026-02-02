@@ -37,7 +37,7 @@ function App() {
           <AppShell app={app}>
             <TrialStatusBanner />
             <AppRouter app={app} />
-            <BackgroundServices app={app} />
+            <BackgroundServices />
             <AppModals app={app} />
           </AppShell>
         </LicenseGate>
