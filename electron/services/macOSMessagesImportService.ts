@@ -887,19 +887,9 @@ class MacOSMessagesImportService {
           // Build thread ID from chat
           const threadId = msg.chat_id ? `macos-chat-${msg.chat_id}` : null;
 
-          // TASK-1050: Track messages with NULL thread_id for debugging
+          // TASK-1050: Track messages with NULL thread_id (count only, summary at end)
           if (!threadId) {
             nullThreadIdCount++;
-            logService.warn(
-              "Message has NULL chat_id, will have NULL thread_id",
-              MacOSMessagesImportService.SERVICE_NAME,
-              {
-                messageGuid: msg.guid,
-                handleId: msg.handle_id,
-                sentAt: macTimestampToDate(msg.date).toISOString(),
-                // Don't log text content for privacy
-              }
-            );
           }
 
           // Convert Mac timestamp to ISO date
