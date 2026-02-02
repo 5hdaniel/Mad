@@ -398,79 +398,43 @@ export function useAutoRefresh({
   }, []);
 
   /**
-   * Run all applicable syncs in parallel using Promise.allSettled
-   * This is the main auto-refresh function triggered on dashboard entry.
+   * Run syncs SEQUENTIALLY to avoid database contention.
+   * Order: Contacts (fast) -> Messages (slow, heavy) -> Emails (disabled)
    *
-   * Uses incremental sync:
-   * - Email scan only fetches new emails since last sync
-   * - Message import only imports new messages
-   *
-   * Includes AI transaction detection:
-   * - transactions.scan automatically runs AI detection after fetching emails
+   * Running in parallel caused INP to spike to 2000ms+ due to
+   * concurrent database operations fighting for resources.
    */
   const runAutoRefresh = useCallback(
-    async (uid: string, emailConnected: boolean): Promise<void> => {
-      // Build sync tasks based on platform and connections
-      const syncTasks: Array<{ name: string; task: Promise<void> }> = [];
+    async (uid: string, _emailConnected: boolean): Promise<void> => {
+      // 1. Contacts sync first (fast, ~1-2 seconds)
+      if (isMacOS && hasPermissions) {
+        try {
+          await syncContacts(uid);
+        } catch (error) {
+          console.error("[useAutoRefresh] contacts sync failed:", error);
+        }
+      }
 
-      // Email sync (all platforms, if email connected)
-      // This includes AI transaction detection
-      // DISABLED: Auto email sync causes performance issues during message import
-      // Users can manually trigger email scan from the dashboard
-      // if (emailConnected) {
-      //   syncTasks.push({
-      //     name: "emails",
-      //     task: syncEmails(uid),
-      //   });
-      // }
-
-      // Messages sync (macOS only)
+      // 2. Messages sync (slow, can take minutes for large imports)
       // Skip if:
-      // 1. We just imported during onboarding (skipNextMessagesSync)
-      // 2. useMacOSMessagesImport hook already triggered import this session
-      //    (prevents duplicate sync - that hook runs 500ms before this one)
+      // - We just imported during onboarding (skipNextMessagesSync)
+      // - useMacOSMessagesImport hook already triggered import this session
       const messagesAlreadyImported = skipNextMessagesSync || hasMessagesImportTriggered();
       if (isMacOS && hasPermissions && !messagesAlreadyImported) {
-        syncTasks.push({
-          name: "messages",
-          task: syncMessages(uid),
-        });
+        try {
+          await syncMessages(uid);
+        } catch (error) {
+          console.error("[useAutoRefresh] messages sync failed:", error);
+        }
       } else if (skipNextMessagesSync) {
-        // Clear the flag so future syncs work normally
         skipNextMessagesSync = false;
       }
 
-      // Contacts sync (macOS only, requires permissions)
-      // Run in parallel but only if we have FDA
-      if (isMacOS && hasPermissions && emailConnected) {
-        syncTasks.push({
-          name: "contacts",
-          task: syncContacts(uid),
-        });
-      }
-
-      if (syncTasks.length === 0) {
-        return;
-      }
-
-      // Run all syncs in parallel with Promise.allSettled
-      // This ensures one failure doesn't block others
-      const results = await Promise.allSettled(
-        syncTasks.map((t) => t.task)
-      );
-
-      // Log results for debugging (errors already logged in individual sync functions)
-      results.forEach((result, index) => {
-        const taskName = syncTasks[index].name;
-        if (result.status === "rejected") {
-          console.error(
-            `[useAutoRefresh] ${taskName} sync rejected:`,
-            result.reason
-          );
-        }
-      });
+      // 3. Email sync - DISABLED
+      // Auto email sync causes performance issues during message import
+      // Users can manually trigger email scan from the dashboard
     },
-    [isMacOS, hasPermissions, syncEmails, syncMessages, syncContacts]
+    [isMacOS, hasPermissions, syncContacts, syncMessages]
   );
 
   /**
