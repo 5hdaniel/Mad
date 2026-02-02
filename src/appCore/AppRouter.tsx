@@ -204,8 +204,6 @@ export function AppRouter({ app }: AppRouterProps) {
         onContinueSetup={handleContinueSetup}
         onDismissSetupPrompt={handleDismissSetupPrompt}
         syncStatus={app.syncStatus}
-        isAnySyncing={app.isAnySyncing}
-        currentSyncMessage={app.currentSyncMessage}
         onTriggerRefresh={app.triggerRefresh}
       />
     );

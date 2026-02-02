@@ -27,12 +27,12 @@ import { useSyncQueue } from "../../hooks/useSyncQueue";
 import type { SyncItemState } from "../../services/SyncQueueService";
 
 interface SyncStatusIndicatorProps {
-  /** Current sync status for all operations */
-  status: SyncStatus;
-  /** Whether any sync is in progress */
-  isAnySyncing: boolean;
-  /** Current status message to display */
-  currentMessage: string | null;
+  /** Current sync status for progress display (optional - state from useSyncQueue) */
+  status?: SyncStatus;
+  /** Whether any sync is in progress (deprecated - derived from useSyncQueue) */
+  isAnySyncing?: boolean;
+  /** Current status message to display (deprecated - not used) */
+  currentMessage?: string | null;
   /** Pending transaction count (shown in completion message) */
   pendingCount?: number;
   /** Callback when user clicks "Review Now" */
@@ -64,10 +64,17 @@ const mapToPillState = (itemState: SyncItemState): 'waiting' | 'active' | 'compl
  * Unified sync notification - handles progress and completion.
  * Replaces the need for separate AIStatusCard for sync status.
  */
+// Default empty status for when prop not provided
+const defaultStatus: SyncStatus = {
+  emails: { isSyncing: false, progress: null, message: '', error: null },
+  messages: { isSyncing: false, progress: null, message: '', error: null },
+  contacts: { isSyncing: false, progress: null, message: '', error: null },
+};
+
 export function SyncStatusIndicator({
-  status,
-  isAnySyncing: _isAnySyncingProp, // Keep prop for backward compatibility, but use hook
-  currentMessage: _currentMessage, // Keep prop for backward compatibility
+  status = defaultStatus,
+  isAnySyncing: _isAnySyncingProp, // Deprecated - derived from useSyncQueue
+  currentMessage: _currentMessage, // Deprecated - not used
   pendingCount = 0,
   onViewPending,
 }: SyncStatusIndicatorProps) {
