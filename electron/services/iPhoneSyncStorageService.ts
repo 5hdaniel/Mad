@@ -218,12 +218,13 @@ class IPhoneSyncStorageService {
     log.info(`[${IPhoneSyncStorageService.SERVICE_NAME}] Found ${existingIds.size} existing messages`);
 
     // Prepare the insert statement
+    // SPRINT-068: Added participants_flat for phone number matching (was missing, causing auto-link to fail on Windows)
     const insertStmt = db.prepare(`
       INSERT OR IGNORE INTO messages (
         id, user_id, channel, external_id, direction,
-        body_text, participants, thread_id, sent_at,
+        body_text, participants, participants_flat, thread_id, sent_at,
         has_attachments, metadata, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `);
 
     // Process in batches
@@ -274,6 +275,11 @@ class IPhoneSyncStorageService {
             to: msg.isFromMe ? [sanitizedHandle] : ["me"],
           });
 
+          // SPRINT-068: Build participants_flat for phone number matching
+          // Extract digits from handle for fast LIKE queries (matches macOS import behavior)
+          const handleDigits = sanitizedHandle.replace(/\D/g, "");
+          const participantsFlat = handleDigits || sanitizedHandle;
+
           // Build metadata
           const metadata = JSON.stringify({
             source: "iphone_sync",
@@ -292,6 +298,7 @@ class IPhoneSyncStorageService {
               direction, // direction
               sanitizedText, // body_text - sanitized
               participants, // participants JSON - sanitized
+              participantsFlat, // participants_flat for phone matching (SPRINT-068)
               threadId, // thread_id
               msg.date.toISOString(), // sent_at
               msg.attachments.length > 0 ? 1 : 0, // has_attachments

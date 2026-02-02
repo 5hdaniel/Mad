@@ -1128,6 +1128,41 @@ class DatabaseService implements IDatabaseService {
       await logService.info("Migration 27b complete: iPhone contacts migrated to external_contacts", "DatabaseService");
     }
 
+    // Migration 27c: Backfill participants_flat for iPhone-synced messages (SPRINT-068)
+    // This column was missing from iPhoneSyncStorageService, causing auto-link to fail on Windows
+    const messagesNeedingBackfill = db.prepare(`
+      SELECT COUNT(*) as count FROM messages
+      WHERE channel IN ('sms', 'imessage')
+        AND participants_flat IS NULL
+        AND participants IS NOT NULL
+    `).get() as { count: number } | undefined;
+
+    if (messagesNeedingBackfill && messagesNeedingBackfill.count > 0) {
+      await logService.info(`Migration 27c: Backfilling participants_flat for ${messagesNeedingBackfill.count} messages`, "DatabaseService");
+
+      // Extract phone digits from participants JSON and populate participants_flat
+      // Uses json_extract to get the 'from' or 'to[0]' phone number, then extracts digits
+      db.exec(`
+        UPDATE messages
+        SET participants_flat = (
+          CASE
+            WHEN json_extract(participants, '$.from') != 'me'
+            THEN REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+              json_extract(participants, '$.from'),
+              '+', ''), '-', ''), '(', ''), ')', ''), ' ', '')
+            ELSE REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+              json_extract(participants, '$.to[0]'),
+              '+', ''), '-', ''), '(', ''), ')', ''), ' ', '')
+          END
+        )
+        WHERE channel IN ('sms', 'imessage')
+          AND participants_flat IS NULL
+          AND participants IS NOT NULL
+      `);
+
+      await logService.info("Migration 27c complete: participants_flat backfilled for existing messages", "DatabaseService");
+    }
+
     // Finalize schema version (create table if missing for backwards compatibility)
     const schemaVersionExists = db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
