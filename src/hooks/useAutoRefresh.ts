@@ -28,7 +28,6 @@ import { useEffect, useCallback, useState, useRef } from "react";
 import { usePlatform } from "../contexts/PlatformContext";
 import { hasMessagesImportTriggered } from "./useMacOSMessagesImport";
 import { syncQueue } from "../services/SyncQueueService";
-import { useSyncQueue } from "./useSyncQueue";
 
 // Module-level flag to track if auto-refresh has been triggered this session
 // Using module-level prevents React strict mode from triggering twice
@@ -137,10 +136,19 @@ export function useAutoRefresh({
 }: UseAutoRefreshOptions): UseAutoRefreshReturn {
   const { isMacOS } = usePlatform();
 
-  // Use SyncQueue as single source of truth for sync state
-  const { state: queueState, isRunning } = useSyncQueue();
+  // Local sync state - updated by sync functions, not subscription-based
+  // This avoids re-renders during onboarding when syncQueue state changes
+  const [localSyncState, setLocalSyncState] = useState<{
+    emails: { isSyncing: boolean; error: string | null };
+    messages: { isSyncing: boolean; error: string | null };
+    contacts: { isSyncing: boolean; error: string | null };
+  }>({
+    emails: { isSyncing: false, error: null },
+    messages: { isSyncing: false, error: null },
+    contacts: { isSyncing: false, error: null },
+  });
 
-  // Progress-only state - IPC listeners update progress, SyncQueue handles state
+  // Progress-only state - IPC listeners update progress
   const [progress, setProgress] = useState<{
     messages: number | null;
     contacts: number | null;
@@ -203,10 +211,11 @@ export function useAutoRefresh({
 
   /**
    * Start email sync (scan for real estate emails + AI transaction detection)
-   * State is tracked via SyncQueueService
+   * State is tracked locally and via SyncQueueService
    */
   const syncEmails = useCallback(async (uid: string): Promise<void> => {
     syncQueue.start('emails');
+    setLocalSyncState((prev) => ({ ...prev, emails: { isSyncing: true, error: null } }));
     setProgress((prev) => ({ ...prev, emails: null }));
 
     try {
@@ -215,21 +224,27 @@ export function useAutoRefresh({
       if (result.success) {
         setProgress((prev) => ({ ...prev, emails: 100 }));
         syncQueue.complete('emails');
+        setLocalSyncState((prev) => ({ ...prev, emails: { isSyncing: false, error: null } }));
       } else {
-        syncQueue.error('emails', result.error || 'Email sync failed');
+        const errorMsg = result.error || 'Email sync failed';
+        syncQueue.error('emails', errorMsg);
+        setLocalSyncState((prev) => ({ ...prev, emails: { isSyncing: false, error: errorMsg } }));
       }
     } catch (error) {
       console.error("[useAutoRefresh] Email sync error:", error);
-      syncQueue.error('emails', error instanceof Error ? error.message : 'Unknown error');
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      syncQueue.error('emails', errorMsg);
+      setLocalSyncState((prev) => ({ ...prev, emails: { isSyncing: false, error: errorMsg } }));
     }
   }, []);
 
   /**
    * Start messages sync (macOS Messages app)
-   * State is tracked via SyncQueueService, progress via IPC listener
+   * State is tracked locally and via SyncQueueService, progress via IPC listener
    */
   const syncMessages = useCallback(async (uid: string): Promise<void> => {
     syncQueue.start('messages');
+    setLocalSyncState((prev) => ({ ...prev, messages: { isSyncing: true, error: null } }));
     setProgress((prev) => ({ ...prev, messages: null }));
 
     try {
@@ -238,22 +253,28 @@ export function useAutoRefresh({
       if (result.success) {
         setProgress((prev) => ({ ...prev, messages: 100 }));
         syncQueue.complete('messages');
+        setLocalSyncState((prev) => ({ ...prev, messages: { isSyncing: false, error: null } }));
       } else {
-        syncQueue.error('messages', result.error || 'Message import failed');
+        const errorMsg = result.error || 'Message import failed';
+        syncQueue.error('messages', errorMsg);
+        setLocalSyncState((prev) => ({ ...prev, messages: { isSyncing: false, error: errorMsg } }));
       }
     } catch (error) {
       console.error("[useAutoRefresh] Message sync error:", error);
-      syncQueue.error('messages', error instanceof Error ? error.message : 'Unknown error');
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      syncQueue.error('messages', errorMsg);
+      setLocalSyncState((prev) => ({ ...prev, messages: { isSyncing: false, error: errorMsg } }));
     }
   }, []);
 
   /**
    * Start contacts sync
    * On macOS, contacts are loaded from the system Contacts database
-   * State is tracked via SyncQueueService
+   * State is tracked locally and via SyncQueueService
    */
   const syncContacts = useCallback(async (uid: string): Promise<void> => {
     syncQueue.start('contacts');
+    setLocalSyncState((prev) => ({ ...prev, contacts: { isSyncing: true, error: null } }));
     setProgress((prev) => ({ ...prev, contacts: null }));
 
     try {
@@ -261,9 +282,12 @@ export function useAutoRefresh({
       await window.api.contacts.getAll(uid);
       setProgress((prev) => ({ ...prev, contacts: 100 }));
       syncQueue.complete('contacts');
+      setLocalSyncState((prev) => ({ ...prev, contacts: { isSyncing: false, error: null } }));
     } catch (error) {
       console.error("[useAutoRefresh] Contact sync error:", error);
-      syncQueue.error('contacts', error instanceof Error ? error.message : 'Unknown error');
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      syncQueue.error('contacts', errorMsg);
+      setLocalSyncState((prev) => ({ ...prev, contacts: { isSyncing: false, error: errorMsg } }));
     }
   }, []);
 
@@ -341,12 +365,14 @@ export function useAutoRefresh({
   ]);
 
   /**
-   * isAnySyncing derived from SyncQueue (single source of truth)
+   * isAnySyncing derived from local state (avoids subscription-based re-renders)
    */
-  const isAnySyncing = isRunning;
+  const isAnySyncing = localSyncState.emails.isSyncing ||
+    localSyncState.messages.isSyncing ||
+    localSyncState.contacts.isSyncing;
 
   /**
-   * currentSyncMessage simplified - could derive from SyncQueue state if needed
+   * currentSyncMessage simplified - could derive from state if needed
    */
   const currentSyncMessage: string | null = null;
 
@@ -369,25 +395,25 @@ export function useAutoRefresh({
   }, [isAnySyncing]);
 
   // Construct syncStatus for backward compatibility with Dashboard
-  // isSyncing is derived from SyncQueue, progress from IPC listeners
+  // isSyncing from local state, progress from IPC listeners
   const syncStatus: SyncStatus = {
     emails: {
-      isSyncing: queueState.emails.state === 'running',
+      isSyncing: localSyncState.emails.isSyncing,
       progress: progress.emails,
       message: '',
-      error: queueState.emails.error || null,
+      error: localSyncState.emails.error,
     },
     messages: {
-      isSyncing: queueState.messages.state === 'running',
+      isSyncing: localSyncState.messages.isSyncing,
       progress: progress.messages,
       message: '',
-      error: queueState.messages.error || null,
+      error: localSyncState.messages.error,
     },
     contacts: {
-      isSyncing: queueState.contacts.state === 'running',
+      isSyncing: localSyncState.contacts.isSyncing,
       progress: progress.contacts,
       message: '',
-      error: queueState.contacts.error || null,
+      error: localSyncState.contacts.error,
     },
   };
 

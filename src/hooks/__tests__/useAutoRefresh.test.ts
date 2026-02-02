@@ -18,11 +18,8 @@ jest.mock("../../contexts/PlatformContext", () => ({
   usePlatform: jest.fn(() => ({ isMacOS: true })),
 }));
 
-// Mock useSyncQueue hook - define function first, then use in mock
-const mockUseSyncQueueFn = jest.fn();
-jest.mock("../useSyncQueue", () => ({
-  useSyncQueue: () => mockUseSyncQueueFn(),
-}));
+// Note: useSyncQueue is no longer used by useAutoRefresh (SPRINT-068)
+// useAutoRefresh now manages local state to avoid subscription-based re-renders during onboarding
 
 // Mock SyncQueueService - use inline object in jest.mock factory
 jest.mock("../../services/SyncQueueService", () => ({
@@ -41,27 +38,6 @@ jest.mock("../../services/SyncQueueService", () => ({
 
 // Import the mock after mocking
 import { syncQueue as mockSyncQueue } from "../../services/SyncQueueService";
-
-// Helper to create SyncQueue state for mocking
-const createQueueState = (
-  contacts: 'idle' | 'queued' | 'running' | 'complete' = 'idle',
-  emails: 'idle' | 'queued' | 'running' | 'complete' = 'idle',
-  messages: 'idle' | 'queued' | 'running' | 'complete' = 'idle',
-  isRunning = false
-) => ({
-  state: {
-    contacts: { type: 'contacts' as const, state: contacts },
-    emails: { type: 'emails' as const, state: emails },
-    messages: { type: 'messages' as const, state: messages },
-    isRunning,
-    isComplete: !isRunning && contacts === 'complete' && emails === 'complete' && messages === 'complete',
-    runStartedAt: isRunning ? Date.now() : null,
-    runCompletedAt: null,
-  },
-  isRunning,
-  isComplete: false,
-});
-
 import { usePlatform } from "../../contexts/PlatformContext";
 
 describe("useAutoRefresh", () => {
@@ -92,9 +68,6 @@ describe("useAutoRefresh", () => {
     // Reset module-level state between tests (BACKLOG-205)
     resetAutoRefreshTrigger();
     resetMessagesImportTrigger();
-
-    // Setup default useSyncQueue mock
-    mockUseSyncQueueFn.mockReturnValue(createQueueState('idle', 'idle', 'idle', false));
 
     // Reset SyncQueue mock
     (mockSyncQueue.reset as jest.Mock).mockClear();
@@ -417,20 +390,13 @@ describe("useAutoRefresh", () => {
       mockMessagesImport.mockRejectedValue(new Error("Import failed"));
 
       // After error, SyncQueue state would show error
-      const errorState = {
-        ...createQueueState('idle', 'idle', 'error', false),
-        state: {
-          ...createQueueState('idle', 'idle', 'error', false).state,
-          messages: { type: 'messages' as const, state: 'error' as const, error: 'Import failed' },
-        },
-      };
-      mockUseSyncQueueFn.mockReturnValue(errorState);
+      // Simulate import failure
+      mockMessagesImport.mockResolvedValue({ success: false, error: "Import failed" });
 
-      const { result, rerender } = renderHook(() => useAutoRefresh(defaultOptions));
+      const { result } = renderHook(() => useAutoRefresh(defaultOptions));
 
       await act(async () => {
         await result.current.triggerRefresh();
-        rerender();
       });
 
       // Messages sync failed but hook should still be in valid state
@@ -442,7 +408,7 @@ describe("useAutoRefresh", () => {
 
   describe("sync status updates", () => {
     // Note: Email sync is disabled on auto-refresh, only messages sync runs
-    // With TASK-1777 refactoring, isSyncing comes from SyncQueue, messages are simplified
+    // With SPRINT-068 refactoring, isSyncing comes from local state (not subscription-based)
 
     it("should update messages sync status during sync", async () => {
       let resolveMessages: (value: any) => void;
@@ -452,49 +418,37 @@ describe("useAutoRefresh", () => {
         })
       );
 
-      // Start with idle state
-      mockUseSyncQueueFn.mockReturnValue(createQueueState('idle', 'idle', 'idle', false));
-      const { result, rerender } = renderHook(() => useAutoRefresh(defaultOptions));
+      const { result } = renderHook(() => useAutoRefresh(defaultOptions));
 
-      // Start sync - SyncQueue will be updated
-      mockUseSyncQueueFn.mockReturnValue(createQueueState('idle', 'idle', 'running', true));
+      // Start sync - local state will be updated to isSyncing: true
       let refreshPromise: Promise<void>;
       await act(async () => {
         refreshPromise = result.current.triggerRefresh();
-        rerender();
       });
 
-      // isSyncing comes from SyncQueue mock
+      // isSyncing comes from local state (sync in progress)
       expect(result.current.syncStatus.messages.isSyncing).toBe(true);
-      // message is now empty (simplified - state tracked via SyncQueue)
       expect(result.current.isAnySyncing).toBe(true);
 
       // Complete sync
-      mockUseSyncQueueFn.mockReturnValue(createQueueState('idle', 'idle', 'complete', false));
       await act(async () => {
         resolveMessages!({ success: true, messagesImported: 200 });
         await refreshPromise!;
-        rerender();
       });
 
       expect(result.current.syncStatus.messages.isSyncing).toBe(false);
-      // message tracking removed in TASK-1777
     });
 
     it("should complete sync when no new messages", async () => {
       mockMessagesImport.mockResolvedValue({ success: true, messagesImported: 0 });
-      // Start with running then complete
-      mockUseSyncQueueFn.mockReturnValue(createQueueState('idle', 'idle', 'running', true));
 
-      const { result, rerender } = renderHook(() => useAutoRefresh(defaultOptions));
+      const { result } = renderHook(() => useAutoRefresh(defaultOptions));
 
-      mockUseSyncQueueFn.mockReturnValue(createQueueState('idle', 'idle', 'complete', false));
       await act(async () => {
         await result.current.triggerRefresh();
-        rerender();
       });
 
-      // Verify sync completed successfully (message tracking removed)
+      // Verify sync completed successfully
       expect(result.current.syncStatus.messages.isSyncing).toBe(false);
       // syncQueue.complete should have been called
       expect(mockSyncQueue.complete).toHaveBeenCalledWith('messages');
@@ -502,60 +456,77 @@ describe("useAutoRefresh", () => {
   });
 
   describe("progress event handling", () => {
-    it("should update messages progress from IPC events", async () => {
-      // Mock SyncQueue to show messages as running
-      mockUseSyncQueueFn.mockReturnValue(createQueueState('idle', 'idle', 'running', true));
+    it("should update messages progress from IPC events during sync", async () => {
+      // Setup a pending promise so sync stays in progress
+      let resolveMessages: (value: any) => void;
+      mockMessagesImport.mockReturnValue(
+        new Promise((resolve) => {
+          resolveMessages = resolve;
+        })
+      );
 
       const { result } = renderHook(() => useAutoRefresh(defaultOptions));
 
+      // Trigger the sync to set local state to isSyncing: true
+      await act(async () => {
+        result.current.triggerRefresh();
+      });
+
+      // Now isSyncing should be true from local state (sync in progress)
+      expect(result.current.syncStatus.messages.isSyncing).toBe(true);
+
+      // Progress events update progress
       act(() => {
         messagesProgressCallback?.({ current: 50, total: 100, percent: 50 });
       });
 
-      // isSyncing comes from SyncQueue mock
-      expect(result.current.syncStatus.messages.isSyncing).toBe(true);
       expect(result.current.syncStatus.messages.progress).toBe(50);
-      // message is now empty (messages simplified, state in SyncQueue)
+
+      // Cleanup
+      await act(async () => {
+        resolveMessages!({ success: true, messagesImported: 100 });
+      });
     });
 
     it("should mark messages complete at 100%", async () => {
       jest.useFakeTimers();
-      // Mock SyncQueue to show messages as running first
-      mockUseSyncQueueFn.mockReturnValue(createQueueState('idle', 'idle', 'running', true));
 
-      const { result, rerender } = renderHook(() => useAutoRefresh(defaultOptions));
+      const { result } = renderHook(() => useAutoRefresh(defaultOptions));
 
+      // Trigger sync and complete it
+      await act(async () => {
+        result.current.triggerRefresh();
+        await Promise.resolve();
+      });
+
+      // Send progress event
       act(() => {
         messagesProgressCallback?.({ current: 100, total: 100, percent: 100 });
       });
 
       expect(result.current.syncStatus.messages.progress).toBe(100);
 
-      // After sync completes, SyncQueue state changes to complete
-      mockUseSyncQueueFn.mockReturnValue(createQueueState('idle', 'idle', 'complete', false));
-      rerender();
-
+      // After sync completes, isSyncing becomes false (local state)
       expect(result.current.syncStatus.messages.isSyncing).toBe(false);
     });
 
     it("should update contacts progress from IPC events", async () => {
-      // Mock SyncQueue to show contacts as running
-      mockUseSyncQueueFn.mockReturnValue(createQueueState('running', 'idle', 'idle', true));
-
       const { result } = renderHook(() => useAutoRefresh(defaultOptions));
 
+      // Progress events update progress regardless of sync state
       act(() => {
         contactsProgressCallback?.({ current: 25, total: 50, percent: 50 });
       });
 
-      expect(result.current.syncStatus.contacts.isSyncing).toBe(true);
       expect(result.current.syncStatus.contacts.progress).toBe(50);
+      // Note: contacts sync is not auto-triggered, so isSyncing stays false
+      // unless we explicitly trigger contacts sync
     });
   });
 
   describe("currentSyncMessage priority", () => {
     // Note: currentSyncMessage is now simplified (returns null)
-    // State tracking is via SyncQueue, not messages
+    // State tracking is via local state, not messages
     it("should return null (simplified implementation)", async () => {
       let resolveMessages: (value: any) => void;
       mockMessagesImport.mockReturnValue(
@@ -563,8 +534,6 @@ describe("useAutoRefresh", () => {
           resolveMessages = resolve;
         })
       );
-      // Mock SyncQueue to show messages as running
-      mockUseSyncQueueFn.mockReturnValue(createQueueState('idle', 'idle', 'running', true));
 
       const { result } = renderHook(() => useAutoRefresh(defaultOptions));
 
