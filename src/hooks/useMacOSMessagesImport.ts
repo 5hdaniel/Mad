@@ -15,6 +15,7 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import { usePlatform } from "../contexts/PlatformContext";
+import { syncQueue } from "../services/SyncQueueService";
 
 // Module-level flag to track if import has been triggered this session.
 // This persists across component remounts and React StrictMode double-mounts.
@@ -92,14 +93,22 @@ export function useMacOSMessagesImport({
     if (!userId || isImportingRef.current) return;
 
     isImportingRef.current = true;
+
+    // Update SyncQueueService so SyncStatusIndicator shows progress
+    syncQueue.reset();
+    syncQueue.queue('messages');
+    syncQueue.start('messages');
+
     try {
       const result = await window.api.messages.importMacOSMessages(userId);
       if (result.success) {
+        syncQueue.complete('messages');
         // Log success for debugging
         if (result.messagesImported > 0) {
           // Messages imported successfully - this is normal background operation
         }
       } else if (result.error) {
+        syncQueue.error('messages', result.error);
         // Only log actual errors, not permission issues (expected when FDA not granted)
         if (!result.error.includes("Full Disk Access")) {
           console.warn("[useMacOSMessagesImport] Import failed:", result.error);
@@ -107,6 +116,7 @@ export function useMacOSMessagesImport({
       }
     } catch (error) {
       console.error("[useMacOSMessagesImport] Import error:", error);
+      syncQueue.error('messages', error instanceof Error ? error.message : 'Unknown error');
     } finally {
       isImportingRef.current = false;
     }

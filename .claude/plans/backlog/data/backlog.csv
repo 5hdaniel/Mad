@@ -491,3 +491,4 @@ BACKLOG-582,Joyride onboarding tour not triggering after completing flow,bug,hig
 BACKLOG-583,Dashboard button icons inconsistent sizes and missing gradient on iPhone,ux,medium,pending,,Icon sizes vary (w-14 vs w-12) and iPhone button needs gradient background like others,2026-02-01,,
 BACKLOG-584,System health check fails with invalid provider error,bug,low,pending,,Health check throws "Provider must be one of: google microsoft" error every 2 minutes - passing invalid provider value,2026-02-01,,
 BACKLOG-585,"Group chat with multiple participants shows as 1:1 chat",bug,medium,pending,,,,,2025-02-01,,
+BACKLOG-586,Add attachments progress phase to sync status indicator,enhancement,medium,pending,,Sync progress bar resets from 100% to 0% when moving from messages to attachments phase - add separate pill or phase indicator for better UX,2026-02-02,,

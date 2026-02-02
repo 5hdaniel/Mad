@@ -300,13 +300,19 @@ export function useAutoRefresh({
    */
   const runAutoRefresh = useCallback(
     async (uid: string, _emailConnected: boolean): Promise<void> => {
-      // Reset SyncQueue for new sync run
+      const alreadyTriggered = hasMessagesImportTriggered();
+
+      // Skip if already imported this session (e.g., during onboarding via PermissionsStep)
+      // Don't reset the SyncQueue if import is already in progress from onboarding
+      if (alreadyTriggered) {
+        return;
+      }
+
+      // Reset SyncQueue for new sync run (only if we're starting fresh)
       syncQueue.reset();
 
       // Messages sync only (macOS)
-      // Skip if already imported this session (e.g., during onboarding via PermissionsStep)
-      // Note: PermissionsStep calls setMessagesImportTriggered() which is checked here
-      if (isMacOS && hasPermissions && !hasMessagesImportTriggered()) {
+      if (isMacOS && hasPermissions) {
         // Queue messages sync
         syncQueue.queue('messages');
         try {

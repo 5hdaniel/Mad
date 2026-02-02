@@ -234,6 +234,14 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
 
     // Get user ID from context - if not available, skip import and continue
     const userId = context.userId;
+    const isDatabaseInitialized = context.isDatabaseInitialized;
+
+    if (!isDatabaseInitialized) {
+      // Database not ready yet, just continue to next step (import will happen on dashboard)
+      onAction({ type: "PERMISSION_GRANTED" });
+      return;
+    }
+
     if (!userId) {
       // No user yet, just continue to next step
       onAction({ type: "PERMISSION_GRANTED" });
