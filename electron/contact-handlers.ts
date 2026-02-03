@@ -456,6 +456,16 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           "Contacts",
         );
 
+        // Always run backfill to catch imported contacts missing emails/phones
+        // This is fast (INSERT OR IGNORE) and ensures data consistency
+        const backfillResult = await backfillImportedContactsFromExternal(validatedUserId);
+        if (backfillResult.updated > 0) {
+          logService.info(
+            `[Main] Backfilled ${backfillResult.updated} imported contacts with missing emails/phones`,
+            "Contacts",
+          );
+        }
+
         // STEP 3: Add external contacts (filtering out already imported)
         for (const extContact of externalContacts) {
           const nameLower = extContact.name?.toLowerCase();
