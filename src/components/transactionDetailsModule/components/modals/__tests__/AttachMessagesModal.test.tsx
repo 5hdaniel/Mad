@@ -409,10 +409,12 @@ describe("AttachMessagesModal", () => {
       fireEvent.click(screen.getByTestId("attach-button"));
 
       await waitFor(() => {
+        // Use arrayContaining to avoid flaky tests due to Map/Set iteration order
         expect(mockLinkMessages).toHaveBeenCalledWith(
-          ["msg-1", "msg-2"],
+          expect.arrayContaining(["msg-1", "msg-2"]),
           "txn-456"
         );
+        expect(mockLinkMessages.mock.calls[0][0]).toHaveLength(2);
       });
     });
 

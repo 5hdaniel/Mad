@@ -6,6 +6,7 @@
  * when processing large databases (627k+ messages).
  */
 
+import crypto from "crypto";
 import Database from "better-sqlite3-multiple-ciphers";
 import path from "path";
 import log from "electron-log";
@@ -58,6 +59,62 @@ export class iOSMessagesParser {
 
   // The sms.db hash in iOS backups (SHA-1 of domain + path)
   static readonly SMS_DB_HASH = "3d0d7e5fb2ce288813306e4d4636395e047a3d28";
+
+  /**
+   * Compute the SHA1 hash for an iOS backup file path.
+   * iOS backups store files with SHA1(domain-relativePath) as the filename.
+   * @param domain The iOS domain (e.g., "MediaDomain", "HomeDomain")
+   * @param relativePath The path relative to the domain (without leading ~/)
+   */
+  static computeBackupFileHash(domain: string, relativePath: string): string {
+    const fullPath = `${domain}-${relativePath}`;
+    return crypto.createHash("sha1").update(fullPath).digest("hex");
+  }
+
+  /**
+   * Resolve an attachment's original path to its location in the iOS backup.
+   * @param backupPath Path to the iOS backup directory
+   * @param originalPath The original iOS path (e.g., ~/Library/SMS/Attachments/...)
+   * @returns Full path to the file in the backup, or null if not found/invalid
+   */
+  static resolveAttachmentPath(backupPath: string, originalPath: string): string | null {
+    if (!originalPath) return null;
+
+    // iOS attachment paths are like ~/Library/SMS/Attachments/...
+    // Remove the ~/ prefix to get the relative path
+    let relativePath = originalPath;
+    if (relativePath.startsWith("~/")) {
+      relativePath = relativePath.slice(2);
+    } else if (relativePath.startsWith("/var/mobile/")) {
+      // Some paths may be absolute /var/mobile/Library/...
+      relativePath = relativePath.replace("/var/mobile/", "");
+    }
+
+    // Security: Validate path doesn't contain traversal sequences
+    // This prevents malicious paths like "../../etc/passwd" from escaping the backup
+    if (relativePath.includes("..") || relativePath.includes("\\")) {
+      log.warn("iOSMessagesParser: Rejected potentially malicious path", {
+        originalPath: originalPath.substring(0, 50),
+      });
+      return null;
+    }
+
+    // SMS attachments are in MediaDomain
+    const hash = iOSMessagesParser.computeBackupFileHash("MediaDomain", relativePath);
+    const filePath = iOSMessagesParser.getBackupFilePath(backupPath, hash);
+
+    // Additional security: Verify resolved path is within backup directory
+    const resolvedBackup = path.resolve(backupPath);
+    const resolvedFile = path.resolve(filePath);
+    if (!resolvedFile.startsWith(resolvedBackup)) {
+      log.warn("iOSMessagesParser: Path traversal detected", {
+        backupPath: resolvedBackup.substring(0, 30),
+      });
+      return null;
+    }
+
+    return filePath;
+  }
 
   /**
    * Get the full path to a file in an iOS backup.

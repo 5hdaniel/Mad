@@ -195,8 +195,24 @@ async function syncDeepLinkUserToLocalDb(userData: PendingDeepLinkUser): Promise
         is_active: true,
       });
       log.info("[DeepLink] Created local SQLite user for:", userData.supabaseId);
+    } else if (localUser.id !== userData.supabaseId) {
+      // BACKLOG-600: Local user exists with different ID than Supabase auth.uid()
+      // This happens for users created before TASK-1507G (user ID unification)
+      // Migrate the local user to use the Supabase ID for FK constraint compatibility
+      log.info("[DeepLink] Migrating local user ID to match Supabase", {
+        oldId: localUser.id.substring(0, 8) + "...",
+        newId: userData.supabaseId.substring(0, 8) + "...",
+        email: userData.email,
+      });
+      try {
+        await databaseService.migrateUserIdForUnification(localUser.id, userData.supabaseId);
+        log.info("[DeepLink] Local user ID migrated successfully to:", userData.supabaseId);
+      } catch (migrationError) {
+        log.error("[DeepLink] Failed to migrate local user ID:", migrationError);
+        // Don't throw - auth should continue, but Supabase operations may fail
+      }
     } else {
-      log.info("[DeepLink] Local user already exists for:", userData.email);
+      log.info("[DeepLink] Local user already exists with correct ID for:", userData.email);
     }
   } catch (error) {
     log.error("[DeepLink] Failed to create local user:", error);

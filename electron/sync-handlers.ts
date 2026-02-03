@@ -337,10 +337,13 @@ function setupEventForwarding(): void {
         const persistResult = await iPhoneSyncStorageService.persistSyncResult(
           userIdForPersistence,
           result,
+          result.backupPath, // SPRINT-068: Pass backup path for attachment extraction
           (progress) => {
             const message =
               progress.phase === "messages"
                 ? `Saving messages... ${progress.current.toLocaleString()} of ${progress.total.toLocaleString()}`
+                : progress.phase === "attachments"
+                ? `Saving attachments... ${progress.current} of ${progress.total}`
                 : `Saving contacts... ${progress.current} of ${progress.total}`;
             sendToRenderer("sync:progress", {
               phase: "storing",
@@ -355,14 +358,22 @@ function setupEventForwarding(): void {
           messagesSkipped: persistResult.messagesSkipped,
           contactsStored: persistResult.contactsStored,
           contactsSkipped: persistResult.contactsSkipped,
+          attachmentsStored: persistResult.attachmentsStored,
+          attachmentsSkipped: persistResult.attachmentsSkipped,
           duration: persistResult.duration,
         });
+
+        // SPRINT-068: Cleanup backup after persistence is complete
+        if (result.needsCleanup && result.backupPath && orchestrator) {
+          await orchestrator.cleanupBackup(result.backupPath);
+        }
 
         // Send final completion with storage results
         log.info("[SyncHandlers] Sending sync:storage-complete to renderer");
         sendToRenderer("sync:storage-complete", {
           messagesStored: persistResult.messagesStored,
           contactsStored: persistResult.contactsStored,
+          attachmentsStored: persistResult.attachmentsStored,
           duration: persistResult.duration,
         });
         log.info("[SyncHandlers] sync:storage-complete sent successfully");
@@ -373,6 +384,10 @@ function setupEventForwarding(): void {
         sendToRenderer("sync:storage-error", {
           error: error instanceof Error ? error.message : "Failed to save messages",
         });
+        // SPRINT-068: Still cleanup backup even if persistence fails
+        if (result.needsCleanup && result.backupPath && orchestrator) {
+          await orchestrator.cleanupBackup(result.backupPath);
+        }
       }
     } else if (!userIdForPersistence) {
       log.warn("[SyncHandlers] No user ID available (was not set at sync start), skipping database persistence");

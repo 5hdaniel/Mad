@@ -20,6 +20,7 @@ import { createCommunicationReference } from "./messageMatchingService";
 import { autoLinkCommunicationsForContact, AutoLinkResult } from "./autoLinkService";
 import { createEmail, getEmailByExternalId } from "./db/emailDbService";
 import emailAttachmentService from "./emailAttachmentService";
+import * as externalContactDb from "./db/externalContactDbService";
 
 // Hybrid extraction imports
 import { HybridExtractorService } from "./extraction/hybridExtractorService";
@@ -1594,21 +1595,34 @@ class TransactionService {
   /**
    * Get distinct contacts with unlinked message counts
    * Returns a list of phone numbers/contacts with their message counts
+   *
+   * SPRINT-068: Platform-aware contact resolution
+   * - macOS: Uses native Contacts database via getContactNames()
+   * - Windows: Uses external_contacts table (populated from iPhone sync)
    */
   async getMessageContacts(userId: string): Promise<{ contact: string; contactName: string | null; messageCount: number; lastMessageAt: string }[]> {
     const contacts = await databaseService.getMessageContacts(userId);
 
-    // Resolve contact names from the macOS Contacts database
+    // Resolve contact names based on platform (SPRINT-068, BACKLOG-585)
     let contactNameMap: Record<string, string> = {};
-    try {
-      const { contactMap } = await getContactNames();
-      contactNameMap = contactMap;
-    } catch (err) {
-      await logService.warn(
-        "Failed to load contact names, will use phone numbers only",
-        "TransactionService.getMessageContacts",
-        { error: err instanceof Error ? err.message : String(err) },
-      );
+
+    if (process.platform === 'darwin') {
+      // macOS: Use native Contacts database
+      try {
+        const { contactMap } = await getContactNames();
+        contactNameMap = contactMap;
+      } catch (err) {
+        await logService.warn(
+          "Failed to load contact names from macOS Contacts, falling back to external_contacts",
+          "TransactionService.getMessageContacts",
+          { error: err instanceof Error ? err.message : String(err) },
+        );
+        // Fall back to external_contacts on error
+        contactNameMap = this._getContactNameMapFromExternalContacts(userId);
+      }
+    } else {
+      // Windows: Query external_contacts for iPhone-synced contacts
+      contactNameMap = this._getContactNameMapFromExternalContacts(userId);
     }
 
     // Enrich contacts with names
@@ -1628,10 +1642,41 @@ class TransactionService {
         userId,
         contactCount: contacts.length,
         withNames: enrichedContacts.filter(c => c.contactName).length,
+        platform: process.platform,
       },
     );
 
     return enrichedContacts;
+  }
+
+  /**
+   * Build a phone number to name map from external_contacts table
+   * Used on Windows to resolve contact names from iPhone-synced contacts
+   *
+   * SPRINT-068, BACKLOG-585: Platform-aware contact lookup
+   */
+  private _getContactNameMapFromExternalContacts(userId: string): Record<string, string> {
+    const externalContacts = externalContactDb.getAllForUser(userId);
+    const map: Record<string, string> = {};
+
+    for (const contact of externalContacts) {
+      if (!contact.name) continue;
+
+      for (const phone of contact.phones) {
+        // Store with original format
+        map[phone] = contact.name;
+
+        // Also store normalized (digits only, last 10)
+        const digitsOnly = phone.replace(/\D/g, '');
+        if (digitsOnly.length >= 10) {
+          const last10 = digitsOnly.slice(-10);
+          map[last10] = contact.name;
+          map[digitsOnly] = contact.name;
+        }
+      }
+    }
+
+    return map;
   }
 
   /**

@@ -212,20 +212,31 @@ export function ConversationViewModal({
   const loadedAttachmentsKeyRef = useRef<string>("");
 
   // TASK-1157: Audit date filtering state
-  // Parse audit dates
-  const parsedStartDate = auditStartDate ? new Date(auditStartDate) : null;
-  const parsedEndDate = auditEndDate ? new Date(auditEndDate) : null;
+  // TASK-1795: Validate dates to prevent Invalid Date issues
+  // TODO: Consider consolidating with src/utils/contactSortUtils.ts:parseDate
+  const parseDate = (dateValue: Date | string | null | undefined): Date | null => {
+    if (!dateValue) return null;
+    const d = new Date(dateValue);
+    if (isNaN(d.getTime())) {
+      console.warn('[ConversationViewModal] Invalid audit date:', dateValue);
+      return null;
+    }
+    return d;
+  };
+
+  const parsedStartDate = parseDate(auditStartDate);
+  const parsedEndDate = parseDate(auditEndDate);
   // Show filter if at least one date is set (handles ongoing transactions with only start date)
   const hasAuditDates = !!(parsedStartDate || parsedEndDate);
 
   // Default to showing audit period only when dates are available
   const [showAuditPeriodOnly, setShowAuditPeriodOnly] = useState<boolean>(hasAuditDates);
 
-  // Sort messages chronologically
+  // TASK-1794: Sort messages newest-first (reverse chronological)
   const sortedMessages = [...messages].sort((a, b) => {
     const dateA = new Date(a.sent_at || a.received_at || 0).getTime();
     const dateB = new Date(b.sent_at || b.received_at || 0).getTime();
-    return dateA - dateB;
+    return dateB - dateA; // Newest first
   });
 
   // TASK-1157: Filter messages by audit date range

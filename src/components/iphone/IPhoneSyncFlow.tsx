@@ -97,6 +97,34 @@ export const IPhoneSyncFlow: React.FC<IPhoneSyncFlowProps> = ({ onClose }) => {
           {progress.message && (
             <p className="text-gray-500 mt-2">{progress.message}</p>
           )}
+
+          {/* TASK-1796: iCloud attachment limitation info */}
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-left max-w-sm">
+            <div className="flex items-start gap-2">
+              <svg
+                className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <div>
+                <p className="text-sm font-medium text-blue-800">About iPhone Attachments</p>
+                <p className="text-xs text-blue-700 mt-1">
+                  Photos and videos stored in iCloud are not included in local backups.
+                  To include more attachments, disable iCloud Photos on your iPhone,
+                  wait for media to download, then sync again.
+                </p>
+              </div>
+            </div>
+          </div>
+
           <button
             onClick={onClose}
             className="mt-6 px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-medium rounded-lg hover:from-purple-600 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg"
