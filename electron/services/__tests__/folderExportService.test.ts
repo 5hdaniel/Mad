@@ -13,14 +13,17 @@
 
 import { jest } from "@jest/globals";
 
+// Store HTML content for test verification (TASK-1802)
+let lastLoadedHtmlContent: string | null = null;
+
 // Mock electron
 const mockPrintToPDF = jest.fn().mockResolvedValue(Buffer.from("mock-pdf-data"));
-const mockLoadURL = jest.fn().mockResolvedValue(undefined);
+const mockLoadFile = jest.fn().mockResolvedValue(undefined);
 const mockClose = jest.fn();
 
 jest.mock("electron", () => ({
   BrowserWindow: jest.fn().mockImplementation(() => ({
-    loadURL: mockLoadURL,
+    loadFile: mockLoadFile,
     webContents: {
       printToPDF: mockPrintToPDF,
     },
@@ -29,22 +32,31 @@ jest.mock("electron", () => ({
   app: {
     getPath: jest.fn((pathType: string) => {
       if (pathType === "downloads") return "/mock/downloads";
+      if (pathType === "temp") return "/mock/temp";
       return "/mock/path";
     }),
   },
 }));
 
-// Mock fs/promises
-const mockWriteFile = jest.fn().mockResolvedValue(undefined);
+// Mock fs/promises - capture HTML content for test verification
+const mockWriteFile = jest.fn().mockImplementation(async (filePath: string, content: unknown) => {
+  // Store HTML content for later verification if it's an HTML file
+  if (typeof content === "string" && content.includes("<!DOCTYPE html>")) {
+    lastLoadedHtmlContent = content;
+  }
+  return undefined;
+});
 const mockMkdir = jest.fn().mockResolvedValue(undefined);
 const mockAccess = jest.fn().mockResolvedValue(undefined);
 const mockCopyFile = jest.fn().mockResolvedValue(undefined);
+const mockUnlink = jest.fn().mockResolvedValue(undefined);
 
 jest.mock("fs/promises", () => ({
   writeFile: mockWriteFile,
   mkdir: mockMkdir,
   access: mockAccess,
   copyFile: mockCopyFile,
+  unlink: mockUnlink,
 }));
 
 // Mock logService - use factory to ensure all methods are available
@@ -83,6 +95,9 @@ describe("FolderExportService", () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     jest.resetModules();
+
+    // Reset HTML content capture for special message type tests
+    lastLoadedHtmlContent = null;
 
     // Reset mock implementations
     mockPrepare.mockReturnValue({
@@ -178,19 +193,22 @@ describe("FolderExportService", () => {
         }
       );
 
-      // Should create texts directory
-      expect(mockMkdir).toHaveBeenCalledWith("/mock/output/texts", { recursive: true });
+      // Should create texts directory (path separator varies by OS)
+      const textsDirectoryCreated = mockMkdir.mock.calls.some(
+        (call: unknown[]) => (call[0] as string).includes("texts")
+      );
+      expect(textsDirectoryCreated).toBe(true);
 
-      // Should export 2 PDFs (2 threads)
+      // Should export 2 PDFs (2 threads) - files are named text_XXX not thread_XXX
       const textPdfCalls = mockWriteFile.mock.calls.filter(
-        (call: unknown[]) => (call[0] as string).includes("/texts/thread_")
+        (call: unknown[]) => (call[0] as string).includes("text_") && (call[0] as string).endsWith(".pdf")
       );
       expect(textPdfCalls).toHaveLength(2);
 
       // Check file naming pattern
       const fileNames = textPdfCalls.map((call: unknown[]) => call[0]);
-      expect(fileNames.some((f: unknown) => (f as string).includes("thread_001_"))).toBe(true);
-      expect(fileNames.some((f: unknown) => (f as string).includes("thread_002_"))).toBe(true);
+      expect(fileNames.some((f: unknown) => (f as string).includes("text_001_"))).toBe(true);
+      expect(fileNames.some((f: unknown) => (f as string).includes("text_002_"))).toBe(true);
       expect(fileNames.every((f: unknown) => (f as string).endsWith(".pdf"))).toBe(true);
     });
 
@@ -228,7 +246,7 @@ describe("FolderExportService", () => {
 
       // Should export 1 PDF (same participants = same thread)
       const textPdfCalls = mockWriteFile.mock.calls.filter(
-        (call: unknown[]) => (call[0] as string).includes("/texts/thread_")
+        (call: unknown[]) => (call[0] as string).includes("text_")
       );
       expect(textPdfCalls).toHaveLength(1);
     });
@@ -252,9 +270,8 @@ describe("FolderExportService", () => {
       );
 
       // Check that phone number is used when no contact name is found
-      const lastCall = mockLoadURL.mock.calls[mockLoadURL.mock.calls.length - 1];
-      expect(lastCall).toBeDefined();
-      const htmlContent = decodeURIComponent(lastCall[0] as string);
+      const htmlContent = lastLoadedHtmlContent;
+      expect(htmlContent).not.toBeNull();
       // Phone number should appear in the conversation header
       expect(htmlContent).toContain("+15551234567");
     });
@@ -287,9 +304,8 @@ describe("FolderExportService", () => {
       );
 
       // Check that the HTML contains "Group Chat" badge
-      const lastCall = mockLoadURL.mock.calls[mockLoadURL.mock.calls.length - 1];
-      expect(lastCall).toBeDefined();
-      const htmlContent = decodeURIComponent(lastCall[0] as string);
+      const htmlContent = lastLoadedHtmlContent;
+      expect(htmlContent).not.toBeNull();
       expect(htmlContent).toContain("Group Chat");
     });
 
@@ -311,9 +327,8 @@ describe("FolderExportService", () => {
       );
 
       // Check that the HTML shows "You" as sender
-      const lastCall = mockLoadURL.mock.calls[mockLoadURL.mock.calls.length - 1];
-      expect(lastCall).toBeDefined();
-      const htmlContent = decodeURIComponent(lastCall[0] as string);
+      const htmlContent = lastLoadedHtmlContent;
+      expect(htmlContent).not.toBeNull();
       expect(htmlContent).toContain(">You<");
     });
 
@@ -337,9 +352,8 @@ describe("FolderExportService", () => {
       );
 
       // Check that messages appear in order in the HTML
-      const lastCall = mockLoadURL.mock.calls[mockLoadURL.mock.calls.length - 1];
-      expect(lastCall).toBeDefined();
-      const htmlContent = decodeURIComponent(lastCall[0] as string);
+      const htmlContent = lastLoadedHtmlContent;
+      expect(htmlContent).not.toBeNull();
 
       const firstIndex = htmlContent.indexOf("First");
       const secondIndex = htmlContent.indexOf("Second");
@@ -369,9 +383,8 @@ describe("FolderExportService", () => {
       );
 
       // Check that the HTML contains message count
-      const lastCall = mockLoadURL.mock.calls[mockLoadURL.mock.calls.length - 1];
-      expect(lastCall).toBeDefined();
-      const htmlContent = decodeURIComponent(lastCall[0] as string);
+      const htmlContent = lastLoadedHtmlContent;
+      expect(htmlContent).not.toBeNull();
       expect(htmlContent).toContain("3 messages");
     });
 
@@ -393,9 +406,8 @@ describe("FolderExportService", () => {
       );
 
       // Check singular form "message" not "messages"
-      const lastCall = mockLoadURL.mock.calls[mockLoadURL.mock.calls.length - 1];
-      expect(lastCall).toBeDefined();
-      const htmlContent = decodeURIComponent(lastCall[0] as string);
+      const htmlContent = lastLoadedHtmlContent;
+      expect(htmlContent).not.toBeNull();
       expect(htmlContent).toContain("1 message");
       expect(htmlContent).not.toContain("1 messages");
     });
@@ -418,9 +430,8 @@ describe("FolderExportService", () => {
       );
 
       // Check that script tags are escaped
-      const lastCall = mockLoadURL.mock.calls[mockLoadURL.mock.calls.length - 1];
-      expect(lastCall).toBeDefined();
-      const htmlContent = decodeURIComponent(lastCall[0] as string);
+      const htmlContent = lastLoadedHtmlContent;
+      expect(htmlContent).not.toBeNull();
       expect(htmlContent).not.toContain("<script>alert");
       expect(htmlContent).toContain("&lt;script&gt;");
     });
@@ -443,9 +454,8 @@ describe("FolderExportService", () => {
       );
 
       // Check that timestamp appears
-      const lastCall = mockLoadURL.mock.calls[mockLoadURL.mock.calls.length - 1];
-      expect(lastCall).toBeDefined();
-      const htmlContent = decodeURIComponent(lastCall[0] as string);
+      const htmlContent = lastLoadedHtmlContent;
+      expect(htmlContent).not.toBeNull();
       // Should contain formatted date (e.g., "Jan 15, 2024")
       expect(htmlContent).toContain("Jan");
       expect(htmlContent).toContain("15");
@@ -494,13 +504,13 @@ describe("FolderExportService", () => {
       );
 
       const textPdfCalls = mockWriteFile.mock.calls.filter(
-        (call: unknown[]) => (call[0] as string).includes("/texts/thread_")
+        (call: unknown[]) => (call[0] as string).includes("text_")
       );
 
       const fileNames = textPdfCalls.map((call: unknown[]) => call[0] as string);
-      expect(fileNames.some(f => f.includes("thread_001_"))).toBe(true);
-      expect(fileNames.some(f => f.includes("thread_002_"))).toBe(true);
-      expect(fileNames.some(f => f.includes("thread_003_"))).toBe(true);
+      expect(fileNames.some(f => f.includes("text_001_"))).toBe(true);
+      expect(fileNames.some(f => f.includes("text_002_"))).toBe(true);
+      expect(fileNames.some(f => f.includes("text_003_"))).toBe(true);
     });
 
     it("should include date from first message in filename", async () => {
@@ -534,7 +544,7 @@ describe("FolderExportService", () => {
       );
 
       const textPdfCalls = mockWriteFile.mock.calls.filter(
-        (call: unknown[]) => (call[0] as string).includes("/texts/thread_")
+        (call: unknown[]) => (call[0] as string).includes("text_")
       );
 
       expect(textPdfCalls[0][0]).toContain("2024-03-20");
@@ -583,9 +593,8 @@ describe("FolderExportService", () => {
       );
 
       // Check the HTML contains the attachment CSS styles
-      const lastCall = mockLoadURL.mock.calls[mockLoadURL.mock.calls.length - 1];
-      expect(lastCall).toBeDefined();
-      const htmlContent = decodeURIComponent(lastCall[0] as string);
+      const htmlContent = lastLoadedHtmlContent;
+      expect(htmlContent).not.toBeNull();
       expect(htmlContent).toContain(".attachment-image");
       expect(htmlContent).toContain(".attachment-ref");
     });
@@ -621,12 +630,15 @@ describe("FolderExportService", () => {
         }
       );
 
-      // Verify texts folder was created
-      expect(mockMkdir).toHaveBeenCalledWith("/mock/output/texts", { recursive: true });
+      // Verify texts folder was created (path separator varies by OS)
+      const textsDirectoryCreated = mockMkdir.mock.calls.some(
+        (call: unknown[]) => (call[0] as string).includes("texts")
+      );
+      expect(textsDirectoryCreated).toBe(true);
 
       // Verify a text thread PDF was written
       const textPdfCalls = mockWriteFile.mock.calls.filter(
-        (call: unknown[]) => (call[0] as string).includes("/texts/thread_")
+        (call: unknown[]) => (call[0] as string).includes("text_") && (call[0] as string).endsWith(".pdf")
       );
       expect(textPdfCalls.length).toBeGreaterThan(0);
     });
