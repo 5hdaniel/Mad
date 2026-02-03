@@ -14,6 +14,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { usePlatform } from "../../contexts/PlatformContext";
+import { useSyncOrchestrator } from "../../hooks/useSyncOrchestrator";
 
 interface MacOSContactsImportSettingsProps {
   userId: string;
@@ -27,7 +28,12 @@ export function MacOSContactsImportSettings({
   userId,
 }: MacOSContactsImportSettingsProps) {
   const { isMacOS } = usePlatform();
-  const [isSyncing, setIsSyncing] = useState(false);
+  const { queue, requestSync } = useSyncOrchestrator();
+
+  // Derive syncing state from orchestrator queue
+  const contactsItem = queue.find(q => q.type === 'contacts');
+  const isSyncing = contactsItem?.status === 'running' || contactsItem?.status === 'pending';
+
   const [lastResult, setLastResult] = useState<{
     success: boolean;
     inserted?: number;
@@ -45,6 +51,16 @@ export function MacOSContactsImportSettings({
     if (!isMacOS || !userId) return;
     loadSyncStatus();
   }, [isMacOS, userId]);
+
+  // Update lastResult when contacts sync completes or errors
+  useEffect(() => {
+    if (contactsItem?.status === 'complete') {
+      setLastResult({ success: true });
+      loadSyncStatus();
+    } else if (contactsItem?.status === 'error') {
+      setLastResult({ success: false, error: contactsItem.error });
+    }
+  }, [contactsItem?.status, contactsItem?.error]);
 
   const loadSyncStatus = async () => {
     try {
@@ -64,25 +80,12 @@ export function MacOSContactsImportSettings({
     async (_forceReimport = false) => {
       if (!userId || isSyncing) return;
 
-      setIsSyncing(true);
       setLastResult(null);
 
-      try {
-        const result = await window.api.contacts.syncExternal(userId);
-        setLastResult(result);
-        if (result.success) {
-          await loadSyncStatus();
-        }
-      } catch (error) {
-        setLastResult({
-          success: false,
-          error: error instanceof Error ? error.message : "Sync failed",
-        });
-      } finally {
-        setIsSyncing(false);
-      }
+      // Use orchestrator for coordinated sync
+      requestSync(['contacts'], userId);
     },
-    [userId, isSyncing]
+    [userId, isSyncing, requestSync]
   );
 
   // Format the last sync time for display
