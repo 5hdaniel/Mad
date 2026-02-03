@@ -19,7 +19,7 @@ This sprint combines two related initiatives:
 |------|-------|--------|----------|------------|---------------|
 | TASK-1804 | Users SSO/SCIM columns | complete | PM | ~15K | ~5K |
 | TASK-1805 | Organizations SSO columns | complete | PM | ~10K | ~3K |
-| TASK-1806 | Identity provider tables | pending | - | ~8K | - |
+| TASK-1806 | Identity provider tables | complete | PM | ~8K | ~5K |
 | TASK-1807 | Members provisioning columns | pending | - | ~5K | - |
 
 **Phase 1 Subtotal:** ~38K tokens
