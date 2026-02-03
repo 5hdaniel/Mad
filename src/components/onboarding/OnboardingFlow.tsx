@@ -19,6 +19,7 @@ import {
   selectHasPermissions,
   selectIsDatabaseInitialized,
 } from "../../appCore/state/machine/selectors";
+import { useOnboardingPersistence } from "../../appCore/state/flows";
 import type { AppStateMachine } from "../../appCore/state/types";
 import type { StepAction } from "./types";
 
@@ -63,6 +64,9 @@ export interface OnboardingFlowProps {
 export function OnboardingFlow({ app }: OnboardingFlowProps) {
   // Access state machine state when feature flag is enabled
   const machineState = useOptionalMachineState();
+
+  // TASK-1807: Persist onboarding progress to Supabase and local DB
+  useOnboardingPersistence({ userId: app.currentUser?.id });
 
   // BACKLOG-611: Track whether current user exists in local DB
   // This handles the case where a new user logs in on a machine with a previous install

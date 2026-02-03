@@ -52,3 +52,7 @@ export type {
   UseKeychainHandlersOptions,
   UseKeychainHandlersReturn,
 } from "./useKeychainHandlers";
+
+// TASK-1807: Onboarding persistence hook
+export { useOnboardingPersistence } from "./useOnboardingPersistence";
+

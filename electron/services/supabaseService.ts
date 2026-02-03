@@ -638,6 +638,61 @@ class SupabaseService {
   }
 
   /**
+   * Update the user's current onboarding step
+   * TASK-1807: Persist onboarding progress for resume functionality
+   */
+  async updateOnboardingStep(userId: string, step: string | null): Promise<void> {
+    const client = this._ensureClient();
+
+    try {
+      const { error } = await client
+        .from("users")
+        .update({
+          current_onboarding_step: step,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", userId);
+
+      if (error) {
+        logService.error("[Supabase] Failed to update onboarding step:", "Supabase", { error });
+        return;
+      }
+
+      logService.info("[Supabase] Onboarding step updated:", "Supabase", { userId, step });
+    } catch (error) {
+      logService.error("[Supabase] Error updating onboarding step:", "Supabase", { error });
+    }
+  }
+
+  /**
+   * Mark onboarding as complete
+   * TASK-1807: Sets onboarding_completed_at timestamp and clears current step
+   */
+  async completeOnboarding(userId: string): Promise<void> {
+    const client = this._ensureClient();
+
+    try {
+      const { error } = await client
+        .from("users")
+        .update({
+          current_onboarding_step: null,
+          onboarding_completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", userId);
+
+      if (error) {
+        logService.error("[Supabase] Failed to complete onboarding:", "Supabase", { error });
+        return;
+      }
+
+      logService.info("[Supabase] Onboarding completed for user:", "Supabase", { userId });
+    } catch (error) {
+      logService.error("[Supabase] Error completing onboarding:", "Supabase", { error });
+    }
+  }
+
+  /**
    * Validate user's subscription status
    * @param userId - User UUID
    * @returns Subscription status

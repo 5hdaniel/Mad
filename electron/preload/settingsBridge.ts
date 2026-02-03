@@ -80,6 +80,29 @@ export const userBridge = {
     phoneType: "iphone" | "android"
   ): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke("user:set-phone-type-cloud", userId, phoneType),
+
+  // TASK-1807: Onboarding persistence methods
+  updateOnboardingStep: (
+    userId: string,
+    step: string
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke("user:update-onboarding-step", userId, step),
+
+  updateOnboardingStepCloud: (
+    userId: string,
+    step: string
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke("user:update-onboarding-step-cloud", userId, step),
+
+  completeOnboarding: (
+    userId: string
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke("user:complete-onboarding", userId),
+
+  completeOnboardingCloud: (
+    userId: string
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke("user:complete-onboarding-cloud", userId),
 };
 
 /**

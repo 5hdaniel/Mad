@@ -1213,6 +1213,15 @@ class DatabaseService implements IDatabaseService {
       await logService.info("Migration 28 complete: message_type column and backfill done", "DatabaseService");
     }
 
+    // Migration 29: Add onboarding progress columns to users_local (TASK-1807)
+    const userColumnsM29 = getColumns("users_local");
+    if (!userColumnsM29.includes("current_onboarding_step")) {
+      await logService.info("Running migration 29: Add onboarding progress columns", "DatabaseService");
+      runSafe(`ALTER TABLE users_local ADD COLUMN current_onboarding_step TEXT`);
+      runSafe(`ALTER TABLE users_local ADD COLUMN onboarding_completed_at DATETIME`);
+      await logService.info("Migration 29 complete: Onboarding progress columns added", "DatabaseService");
+    }
+
     // Finalize schema version (create table if missing for backwards compatibility)
     const schemaVersionExists = db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
@@ -1279,6 +1288,22 @@ class DatabaseService implements IDatabaseService {
   }
 
   async hasCompletedEmailOnboarding(userId: string): Promise<boolean> {
+    return userDb.hasCompletedEmailOnboarding(userId);
+  }
+
+  async updateOnboardingStep(userId: string, step: string): Promise<void> {
+    return userDb.updateOnboardingStep(userId, step);
+  }
+
+  async completeOnboarding(userId: string): Promise<void> {
+    return userDb.completeOnboarding(userId);
+  }
+
+  async getCurrentOnboardingStep(userId: string): Promise<string | null> {
+    return userDb.getCurrentOnboardingStep(userId);
+  }
+
+  async hasCompletedOnboarding(userId: string): Promise<boolean> {
     return userDb.hasCompletedEmailOnboarding(userId);
   }
 

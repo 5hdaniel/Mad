@@ -217,3 +217,65 @@ export async function hasCompletedEmailOnboarding(
     result?.email_onboarding_completed_at !== undefined
   );
 }
+
+/**
+ * Update the user's current onboarding step
+ * TASK-1807: Persist onboarding progress for resume functionality
+ */
+export async function updateOnboardingStep(
+  userId: string,
+  step: string,
+): Promise<void> {
+  const sql = `
+    UPDATE users_local
+    SET current_onboarding_step = ?
+    WHERE id = ?
+  `;
+  dbRun(sql, [step, userId]);
+}
+
+/**
+ * Mark onboarding as complete
+ * TASK-1807: Sets onboarding_completed_at timestamp and clears current step
+ */
+export async function completeOnboarding(userId: string): Promise<void> {
+  const sql = `
+    UPDATE users_local
+    SET current_onboarding_step = NULL,
+        onboarding_completed_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `;
+  dbRun(sql, [userId]);
+}
+
+/**
+ * Get user's current onboarding step
+ * TASK-1808: Used to resume onboarding from where user left off
+ */
+export async function getCurrentOnboardingStep(
+  userId: string,
+): Promise<string | null> {
+  const sql = `
+    SELECT current_onboarding_step
+    FROM users_local
+    WHERE id = ?
+  `;
+  const result = dbGet<{ current_onboarding_step: string | null }>(sql, [userId]);
+  return result?.current_onboarding_step ?? null;
+}
+
+/**
+ * Check if user has completed onboarding
+ * TASK-1808: Used to determine if user should resume or skip onboarding
+ */
+export async function hasCompletedOnboarding(
+  userId: string,
+): Promise<boolean> {
+  const sql = `
+    SELECT onboarding_completed_at
+    FROM users_local
+    WHERE id = ?
+  `;
+  const result = dbGet<{ onboarding_completed_at: string | null }>(sql, [userId]);
+  return result?.onboarding_completed_at !== null && result?.onboarding_completed_at !== undefined;
+}

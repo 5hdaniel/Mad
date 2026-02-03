@@ -121,6 +121,58 @@ export const settingsService = {
       return { success: false, error: getErrorMessage(error) };
     }
   },
+
+  // ============================================
+  // ONBOARDING PERSISTENCE METHODS (TASK-1807)
+  // ============================================
+
+  async updateOnboardingStep(userId: string, step: string): Promise<ApiResult> {
+    try {
+      const userApi = window.api.user as typeof window.api.user & {
+        updateOnboardingStep: (userId: string, step: string) => Promise<{ success: boolean; error?: string }>;
+      };
+      const result = await userApi.updateOnboardingStep(userId, step);
+      return { success: result.success, error: result.error };
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) };
+    }
+  },
+
+  async updateOnboardingStepCloud(userId: string, step: string): Promise<ApiResult> {
+    try {
+      const userApi = window.api.user as typeof window.api.user & {
+        updateOnboardingStepCloud: (userId: string, step: string) => Promise<{ success: boolean; error?: string }>;
+      };
+      const result = await userApi.updateOnboardingStepCloud(userId, step);
+      return { success: result.success, error: result.error };
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) };
+    }
+  },
+
+  async completeOnboarding(userId: string): Promise<ApiResult> {
+    try {
+      const userApi = window.api.user as typeof window.api.user & {
+        completeOnboarding: (userId: string) => Promise<{ success: boolean; error?: string }>;
+      };
+      const result = await userApi.completeOnboarding(userId);
+      return { success: result.success, error: result.error };
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) };
+    }
+  },
+
+  async completeOnboardingCloud(userId: string): Promise<ApiResult> {
+    try {
+      const userApi = window.api.user as typeof window.api.user & {
+        completeOnboardingCloud: (userId: string) => Promise<{ success: boolean; error?: string }>;
+      };
+      const result = await userApi.completeOnboardingCloud(userId);
+      return { success: result.success, error: result.error };
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) };
+    }
+  },
 };
 
 export default settingsService;
