@@ -5,21 +5,33 @@
  * Only accessible to admin and it_admin roles.
  *
  * TASK-1808: Initial route structure
+ * TASK-1809: Integrated UserListClient
  */
 
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
+import UserListClient from '@/components/users/UserListClient';
+import type { OrganizationMember, Role } from '@/lib/types/users';
 
-interface AccessCheck {
-  allowed: boolean;
-  reason?: 'unauthenticated' | 'unauthorized';
-  organizationId?: string;
-  role?: string;
+interface AccessCheckResult {
+  allowed: true;
+  organizationId: string;
+  role: Role;
+  userId: string;
 }
+
+interface AccessDeniedResult {
+  allowed: false;
+  reason: 'unauthenticated' | 'unauthorized';
+}
+
+type AccessCheck = AccessCheckResult | AccessDeniedResult;
 
 async function checkUserAccess(): Promise<AccessCheck> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) return { allowed: false, reason: 'unauthenticated' };
 
@@ -30,16 +42,88 @@ async function checkUserAccess(): Promise<AccessCheck> {
     .maybeSingle();
 
   // Only admin and it_admin can access users management
-  const allowedRoles = ['admin', 'it_admin'];
-  if (!membership || !allowedRoles.includes(membership.role)) {
+  const allowedRoles: Role[] = ['admin', 'it_admin'];
+  if (!membership || !allowedRoles.includes(membership.role as Role)) {
     return { allowed: false, reason: 'unauthorized' };
   }
 
   return {
     allowed: true,
     organizationId: membership.organization_id,
-    role: membership.role,
+    role: membership.role as Role,
+    userId: user.id,
   };
+}
+
+async function getOrganizationMembers(
+  organizationId: string
+): Promise<OrganizationMember[]> {
+  const supabase = await createClient();
+
+  const { data: members, error } = await supabase
+    .from('organization_members')
+    .select(
+      `
+      id,
+      organization_id,
+      user_id,
+      role,
+      license_status,
+      invited_email,
+      invitation_token,
+      invitation_expires_at,
+      invited_by,
+      invited_at,
+      joined_at,
+      last_invited_at,
+      created_at,
+      updated_at,
+      provisioned_by,
+      provisioned_at,
+      scim_synced_at,
+      provisioning_metadata,
+      idp_groups,
+      group_sync_enabled,
+      user:users!organization_members_user_id_fkey (
+        id,
+        email,
+        first_name,
+        last_name,
+        display_name,
+        avatar_url,
+        oauth_provider,
+        oauth_id,
+        last_login_at,
+        created_at,
+        updated_at,
+        last_sso_login_at,
+        last_sso_provider,
+        is_managed,
+        scim_external_id,
+        sso_only,
+        jit_provisioned,
+        jit_provisioned_at,
+        provisioning_source,
+        suspended_at,
+        suspension_reason,
+        idp_claims
+      )
+    `
+    )
+    .eq('organization_id', organizationId)
+    .order('joined_at', { ascending: false, nullsFirst: true });
+
+  if (error) {
+    console.error('Error fetching organization members:', error);
+    return [];
+  }
+
+  // Transform to match OrganizationMember type
+  // The join returns user as an array in some cases, normalize to single object
+  return (members || []).map((member) => ({
+    ...member,
+    user: Array.isArray(member.user) ? member.user[0] : member.user,
+  })) as OrganizationMember[];
 }
 
 export default async function UsersPage() {
@@ -48,6 +132,8 @@ export default async function UsersPage() {
   if (!access.allowed) {
     redirect('/dashboard');
   }
+
+  const members = await getOrganizationMembers(access.organizationId);
 
   return (
     <div className="space-y-6">
@@ -62,30 +148,12 @@ export default async function UsersPage() {
         {/* Invite button will be added in TASK-1810 */}
       </div>
 
-      {/* Placeholder - UserListClient will be added in TASK-1809 */}
-      <div className="bg-white shadow-sm border border-gray-200 rounded-lg p-8 text-center">
-        <div className="mx-auto w-16 h-16 mb-4 rounded-full bg-gray-100 flex items-center justify-center">
-          <svg
-            className="w-8 h-8 text-gray-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m9 5.197v1"
-            />
-          </svg>
-        </div>
-        <h3 className="text-lg font-medium text-gray-900 mb-2">
-          Users List Coming Soon
-        </h3>
-        <p className="text-sm text-gray-500">
-          The user list component will be implemented in TASK-1809.
-        </p>
-      </div>
+      {/* User List */}
+      <UserListClient
+        initialMembers={members}
+        currentUserId={access.userId}
+        currentUserRole={access.role}
+      />
     </div>
   );
 }
