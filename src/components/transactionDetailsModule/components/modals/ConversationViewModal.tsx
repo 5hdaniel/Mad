@@ -183,7 +183,7 @@ function AttachmentImage({
  */
 function formatDateRangeLabel(startDate: Date | null, endDate: Date | null): string {
   const formatDate = (d: Date) =>
-    d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 
   if (startDate && endDate) {
     return `${formatDate(startDate)} - ${formatDate(endDate)}`;
@@ -213,9 +213,25 @@ export function ConversationViewModal({
 
   // TASK-1157: Audit date filtering state
   // TASK-1795: Validate dates to prevent Invalid Date issues
-  // TODO: Consider consolidating with src/utils/contactSortUtils.ts:parseDate
+  // Also fixes timezone issue on Windows: "2025-01-08" was being parsed as UTC midnight,
+  // which displays as Jan 7 in US timezones. Now parses as local time on Windows only.
   const parseDate = (dateValue: Date | string | null | undefined): Date | null => {
     if (!dateValue) return null;
+    if (dateValue instanceof Date) {
+      return isNaN(dateValue.getTime()) ? null : dateValue;
+    }
+    // For date-only strings (YYYY-MM-DD) on Windows, parse as local time to avoid timezone shift
+    // Only apply on Windows to avoid breaking Mac which was working correctly
+    const isWindows = navigator.userAgent.includes('Windows');
+    if (isWindows) {
+      const dateOnlyMatch = String(dateValue).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (dateOnlyMatch) {
+        const [, year, month, day] = dateOnlyMatch;
+        const d = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        return isNaN(d.getTime()) ? null : d;
+      }
+    }
+    // For other formats or on Mac, use standard parsing
     const d = new Date(dateValue);
     if (isNaN(d.getTime())) {
       console.warn('[ConversationViewModal] Invalid audit date:', dateValue);
@@ -246,7 +262,8 @@ export function ConversationViewModal({
     }
 
     return sortedMessages.filter((msg) => {
-      const msgDate = new Date(msg.sent_at || msg.received_at || 0);
+      // Use parseDate for consistent timezone handling (Windows-safe)
+      const msgDate = parseDate(msg.sent_at || msg.received_at) || new Date(0);
 
       // Check start date (if set)
       if (parsedStartDate && msgDate < parsedStartDate) {
@@ -568,6 +585,17 @@ export function ConversationViewModal({
                       {msgText}
                     </p>
                   )}
+                  {/* Fallback: show placeholder if message has no content to display */}
+                  {!hasRealText &&
+                    !msg.has_attachments &&
+                    displayableAttachments.length === 0 &&
+                    nonDisplayableAttachments.length === 0 && (
+                      <p
+                        className={`text-xs italic ${isOutbound ? "text-green-100" : "text-gray-400"}`}
+                      >
+                        [Media not available]
+                      </p>
+                    )}
                   <p
                     className={`text-xs mt-1 ${
                       isOutbound ? "text-green-100" : "text-gray-400"
