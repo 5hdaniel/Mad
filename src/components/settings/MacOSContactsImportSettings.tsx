@@ -81,23 +81,14 @@ export function MacOSContactsImportSettings({
 
   const handleSync = useCallback(
     async (_forceReimport = false) => {
-      if (!userId || isSyncing) return;
+      if (!userId || isSyncing || isOtherSyncRunning) return;
 
       setLastResult(null);
 
-      // Request sync - will queue if another sync is running
-      const result = requestSync(['contacts'], userId);
-
-      if (!result.started && result.needsConfirmation) {
-        // Another sync is running - show queued message
-        setLastResult({
-          success: true,
-          inserted: 0,
-          total: 0,
-        });
-      }
+      // Request sync - orchestrator will handle it
+      requestSync(['contacts'], userId);
     },
-    [userId, isSyncing, requestSync]
+    [userId, isSyncing, isOtherSyncRunning, requestSync]
   );
 
   // Format the last sync time for display
@@ -158,8 +149,8 @@ export function MacOSContactsImportSettings({
         </div>
       )}
 
-      {/* Result display */}
-      {lastResult && !isSyncing && (
+      {/* Result display - hide when another sync is running */}
+      {lastResult && !isSyncing && !isOtherSyncRunning && (
         <div
           className={`mb-3 p-2 rounded text-xs ${
             lastResult.success
