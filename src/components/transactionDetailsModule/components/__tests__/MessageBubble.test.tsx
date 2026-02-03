@@ -552,4 +552,124 @@ describe("MessageBubble", () => {
       expect(screen.getByText("Regular message")).toBeInTheDocument();
     });
   });
+
+  describe("audio player for voice messages", () => {
+    it("should render audio player when attachmentPath is provided for voice message", () => {
+      const message = createMockMessage({
+        message_type: "voice_message" as MessageType,
+        body_text: "Voice transcript",
+        has_attachments: true,
+      });
+
+      render(
+        <MessageBubble
+          message={message}
+          attachmentPath="/path/to/voice.m4a"
+        />
+      );
+
+      expect(screen.getByTestId("audio-player")).toBeInTheDocument();
+    });
+
+    it("should not render audio player when attachmentPath is not provided", () => {
+      const message = createMockMessage({
+        message_type: "voice_message" as MessageType,
+        body_text: "Voice transcript",
+        has_attachments: true,
+      });
+
+      render(<MessageBubble message={message} />);
+
+      expect(screen.queryByTestId("audio-player")).not.toBeInTheDocument();
+    });
+
+    it("should not render audio player for non-voice messages", () => {
+      const message = createMockMessage({
+        message_type: "text" as MessageType,
+        body_text: "Regular text",
+      });
+
+      render(
+        <MessageBubble
+          message={message}
+          attachmentPath="/path/to/file.pdf"
+        />
+      );
+
+      expect(screen.queryByTestId("audio-player")).not.toBeInTheDocument();
+    });
+
+    it("should not render audio player for attachment_only messages", () => {
+      const message = createMockMessage({
+        message_type: "attachment_only" as MessageType,
+        has_attachments: true,
+      });
+
+      render(
+        <MessageBubble
+          message={message}
+          attachmentPath="/path/to/image.jpg"
+        />
+      );
+
+      expect(screen.queryByTestId("audio-player")).not.toBeInTheDocument();
+    });
+
+    it("should render audio player with correct path for Windows paths", () => {
+      const message = createMockMessage({
+        message_type: "voice_message" as MessageType,
+        body_text: "Windows voice message",
+        has_attachments: true,
+      });
+
+      render(
+        <MessageBubble
+          message={message}
+          attachmentPath="C:\\Users\\Test\\audio.m4a"
+        />
+      );
+
+      expect(screen.getByTestId("audio-player")).toBeInTheDocument();
+    });
+
+    it("should show both transcript and audio player for voice messages", () => {
+      const message = createMockMessage({
+        message_type: "voice_message" as MessageType,
+        body_text: "This is the transcript",
+        has_attachments: true,
+      });
+
+      render(
+        <MessageBubble
+          message={message}
+          attachmentPath="/path/to/voice.m4a"
+        />
+      );
+
+      // Should show both transcript and audio player
+      expect(screen.getByText("This is the transcript")).toBeInTheDocument();
+      expect(screen.getByTestId("audio-player")).toBeInTheDocument();
+      expect(screen.getByText("Voice Message")).toBeInTheDocument();
+    });
+
+    it("should render audio player for outbound voice messages", () => {
+      const message = createMockMessage({
+        direction: "outbound",
+        message_type: "voice_message" as MessageType,
+        body_text: "Outbound voice",
+        has_attachments: true,
+      });
+
+      render(
+        <MessageBubble
+          message={message}
+          attachmentPath="/path/to/voice.m4a"
+        />
+      );
+
+      expect(screen.getByTestId("audio-player")).toBeInTheDocument();
+      const bubble = screen.getByTestId("message-bubble");
+      expect(bubble).toHaveClass("items-end");
+    });
+  });
 });

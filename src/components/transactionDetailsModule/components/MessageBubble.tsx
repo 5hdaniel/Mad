@@ -6,6 +6,7 @@
  */
 import React from "react";
 import { Mic, MapPin, Paperclip } from "lucide-react";
+import { AudioPlayer } from "@/components/common/AudioPlayer";
 import type { Communication } from "../types";
 import type { MessageType } from "@/types";
 
@@ -16,6 +17,8 @@ export interface MessageBubbleProps {
   senderName?: string;
   /** Whether to show sender name (hide if same as previous message) */
   showSender?: boolean;
+  /** Path to the audio file for voice messages (storage_path from Attachment) */
+  attachmentPath?: string;
 }
 
 /**
@@ -133,7 +136,7 @@ function getAttachmentDescription(message: Communication): string {
  * Uses chat-style bubble UI with inbound/outbound distinction.
  * Supports special message types: voice, location, attachment-only, system.
  */
-export function MessageBubble({ message, senderName, showSender = true }: MessageBubbleProps): React.ReactElement {
+export function MessageBubble({ message, senderName, showSender = true, attachmentPath }: MessageBubbleProps): React.ReactElement {
   const isOutbound = message.direction === "outbound";
   const messageType: MessageType = message.message_type || "text";
 
@@ -223,6 +226,14 @@ export function MessageBubble({ message, senderName, showSender = true }: Messag
         >
           {displayText}
         </p>
+
+        {/* Audio player for voice messages */}
+        {messageType === "voice_message" && attachmentPath && (
+          <AudioPlayer
+            src={attachmentPath}
+            className="mt-2"
+          />
+        )}
 
         {/* Timestamp and sender info */}
         {(timestampDisplay || senderDisplay) && (
