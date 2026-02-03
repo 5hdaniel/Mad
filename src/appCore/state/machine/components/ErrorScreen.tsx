@@ -1,6 +1,7 @@
 /**
  * Error Screen Component
  * TASK-1800: Enhanced with error reporting to Supabase
+ * TASK-1802: Added Reset App Data self-healing feature
  *
  * Displays error information when the application encounters
  * a non-recoverable error during initialization. Users can optionally
@@ -21,7 +22,8 @@ interface ErrorScreenProps {
 
 /**
  * Error screen shown when app encounters a non-recoverable error.
- * Displays error message, code, optional retry button, and error reporting.
+ * Displays error message, code, optional retry button, error reporting,
+ * and a reset app data option for self-healing.
  */
 export function ErrorScreen({
   error,
@@ -31,6 +33,12 @@ export function ErrorScreen({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Reset dialog state
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [resetConfirmation, setResetConfirmation] = useState("");
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
 
   const handleSubmitReport = async () => {
     setIsSubmitting(true);
@@ -60,6 +68,31 @@ export function ErrorScreen({
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleReset = async () => {
+    if (resetConfirmation !== "RESET") return;
+
+    setIsResetting(true);
+    setResetError(null);
+
+    try {
+      const result = await window.api.app.reset();
+      if (!result.success) {
+        setResetError(result.error || "Reset failed. Please try again.");
+        setIsResetting(false);
+      }
+      // If successful, app will quit and relaunch - this code won't execute
+    } catch {
+      setResetError("An unexpected error occurred during reset.");
+      setIsResetting(false);
+    }
+  };
+
+  const handleCloseResetDialog = () => {
+    setShowResetDialog(false);
+    setResetConfirmation("");
+    setResetError(null);
   };
 
   return (
@@ -128,17 +161,89 @@ export function ErrorScreen({
           </div>
         )}
 
-        {/* Retry button */}
-        {onRetry && (
+        {/* Action buttons */}
+        <div className="space-y-3">
+          {/* Retry button */}
+          {onRetry && (
+            <button
+              onClick={onRetry}
+              className="w-full px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              type="button"
+            >
+              Try Again
+            </button>
+          )}
+
+          {/* Reset App Data button */}
           <button
-            onClick={onRetry}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            onClick={() => setShowResetDialog(true)}
+            className="w-full px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
             type="button"
           >
-            Try Again
+            Reset App Data
           </button>
-        )}
+        </div>
       </div>
+
+      {/* Reset Confirmation Dialog */}
+      {showResetDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-xl">
+            <h2 className="text-xl font-bold text-red-600 mb-4">
+              Reset App Data
+            </h2>
+            <p className="text-gray-600 mb-4">
+              This will permanently delete all local data:
+            </p>
+            <ul className="list-disc list-inside text-gray-600 mb-4 text-sm space-y-1">
+              <li>All imported transactions</li>
+              <li>All imported messages and emails</li>
+              <li>Email account connections</li>
+              <li>App preferences and settings</li>
+              <li>Local database and cached data</li>
+            </ul>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+              <p className="text-blue-800 text-sm">
+                <strong>Your Supabase account and cloud data will NOT be affected.</strong>
+                {" "}You will need to reconnect your email accounts after reset.
+              </p>
+            </div>
+            <p className="text-gray-800 font-medium mb-2">
+              Type <span className="font-mono bg-gray-100 px-1">RESET</span> to confirm:
+            </p>
+            <input
+              type="text"
+              value={resetConfirmation}
+              onChange={(e) => setResetConfirmation(e.target.value.toUpperCase())}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              placeholder="Type RESET"
+              disabled={isResetting}
+              autoComplete="off"
+            />
+            {resetError && (
+              <p className="text-red-500 text-sm mb-4">{resetError}</p>
+            )}
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={handleCloseResetDialog}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                disabled={isResetting}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReset}
+                disabled={resetConfirmation !== "RESET" || isResetting}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                type="button"
+              >
+                {isResetting ? "Resetting..." : "Confirm Reset"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -17,3 +17,4 @@ export { eventBridge } from "./eventBridge";
 export { messageBridge } from "./messageBridge";
 export { licenseBridge } from "./licenseBridge";
 export { errorLoggingBridge } from "./errorLoggingBridge";
+export { resetBridge } from "./resetBridge";
