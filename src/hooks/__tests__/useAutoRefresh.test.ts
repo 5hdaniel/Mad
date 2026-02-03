@@ -91,7 +91,7 @@ describe("useAutoRefresh", () => {
     mockRejectPending.mockClear();
     mockCancel.mockClear();
 
-    mockPreferencesGet.mockReset().mockResolvedValue({ success: true, preferences: { autoSyncOnLogin: true } });
+    mockPreferencesGet.mockReset().mockResolvedValue({ success: true, preferences: { sync: { autoSyncOnLogin: true } } });
     mockNotificationSend.mockReset().mockResolvedValue(undefined);
 
     // Setup console spies
@@ -271,7 +271,7 @@ describe("useAutoRefresh", () => {
     it("should NOT trigger refresh when autoSyncOnLogin is disabled", async () => {
       mockPreferencesGet.mockResolvedValue({
         success: true,
-        preferences: { autoSyncOnLogin: false },
+        preferences: { sync: { autoSyncOnLogin: false } },
       });
 
       renderHook(() => useAutoRefresh(defaultOptions));
@@ -626,7 +626,7 @@ describe("useAutoRefresh", () => {
 
       // Now resolve preferences
       await act(async () => {
-        resolvePrefs!({ success: true, preferences: { autoSyncOnLogin: true } });
+        resolvePrefs!({ success: true, preferences: { sync: { autoSyncOnLogin: true } } });
         await Promise.resolve();
       });
 

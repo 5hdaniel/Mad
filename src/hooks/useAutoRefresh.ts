@@ -69,7 +69,9 @@ export interface SyncStatus {
  * Auto-sync preferences from user settings
  */
 interface AutoSyncPreferences {
-  autoSyncOnLogin?: boolean;
+  sync?: {
+    autoSyncOnLogin?: boolean;
+  };
 }
 
 interface UseAutoRefreshOptions {
@@ -167,7 +169,7 @@ export function useAutoRefresh({
         if (result.success && result.preferences) {
           const prefs = result.preferences as AutoSyncPreferences;
           // Default to true if not set
-          const enabled = prefs.autoSyncOnLogin !== false;
+          const enabled = prefs.sync?.autoSyncOnLogin !== false;
           setAutoSyncEnabled(enabled);
         }
       } catch {
