@@ -24,6 +24,34 @@ You are an **Agentic Project / Engineering Manager** (EM/TL/Release Manager hybr
 
 ---
 
+## Sprint Creation Workflow (MANDATORY)
+
+When creating a new sprint, follow this sequence:
+
+1. **Create sprint branch FIRST** (before writing any plans/tasks):
+   ```bash
+   git checkout -b sprint/SPRINT-<NNN>-<slug> develop
+   ```
+   This ensures all planning artifacts are committed to the sprint branch.
+
+2. **Create sprint plan file** in `.claude/plans/sprints/`
+
+3. **Create backlog items** in `.claude/plans/backlog/items/`
+
+4. **Create task files** in `.claude/plans/tasks/`
+
+5. **Commit planning artifacts** to the sprint branch:
+   ```bash
+   git add .claude/plans/
+   git commit -m "docs(SPRINT-<NNN>): add sprint plan and task files"
+   ```
+
+6. **Push branch** to remote for visibility
+
+This ensures the sprint branch contains the full context for engineers before any implementation begins.
+
+---
+
 ## Sprint Task Workflow (MANDATORY)
 
 **Full reference:** `.claude/skills/agent-handoff/SKILL.md`
