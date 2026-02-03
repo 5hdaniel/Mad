@@ -13,6 +13,7 @@ import {
   type MessageLike,
 } from "./MessageThreadCard";
 import { AttachMessagesModal, UnlinkMessageModal } from "./modals";
+import { parseDateSafe } from "../../../utils/dateFormatters";
 
 /**
  * Format a date range for display in the toggle label
@@ -41,7 +42,7 @@ function isMessageInAuditPeriod(
   startDate: Date | null,
   endDate: Date | null
 ): boolean {
-  const msgDate = new Date(msg.sent_at || msg.received_at || 0);
+  const msgDate = parseDateSafe(msg.sent_at || msg.received_at) || new Date(0);
 
   // Check start date (if set)
   if (startDate && msgDate < startDate) {
@@ -147,20 +148,9 @@ export function TransactionMessagesTab({
   const [contactNames, setContactNames] = useState<Record<string, string>>({});
 
   // BACKLOG-357: Audit date filtering state
-  // TASK-1795: Validate dates to prevent Invalid Date issues
-  // TODO: Consider consolidating with src/utils/contactSortUtils.ts:parseDate
-  const parseDate = (dateValue: Date | string | null | undefined): Date | null => {
-    if (!dateValue) return null;
-    const d = new Date(dateValue);
-    if (isNaN(d.getTime())) {
-      console.warn('[TransactionMessagesTab] Invalid audit date:', dateValue);
-      return null;
-    }
-    return d;
-  };
-
-  const parsedStartDate = parseDate(auditStartDate);
-  const parsedEndDate = parseDate(auditEndDate);
+  // TASK-1795: Uses parseDateSafe from utils for Windows timezone handling
+  const parsedStartDate = parseDateSafe(auditStartDate, 'TransactionMessagesTab');
+  const parsedEndDate = parseDateSafe(auditEndDate, 'TransactionMessagesTab');
   // Show filter if at least one date is set (handles ongoing transactions with only start date)
   const hasAuditDates = !!(parsedStartDate || parsedEndDate);
 

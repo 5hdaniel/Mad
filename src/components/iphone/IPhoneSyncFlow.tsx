@@ -94,7 +94,7 @@ export const IPhoneSyncFlow: React.FC<IPhoneSyncFlowProps> = ({ onClose }) => {
             </svg>
           </div>
           <h3 className="text-xl font-semibold text-gray-800">Sync Complete!</h3>
-          {progress.message && (
+          {progress?.message && (
             <p className="text-gray-500 mt-2">{progress.message}</p>
           )}
 

@@ -50,8 +50,16 @@ export function MessageBubble({ message, senderName, showSender = true }: Messag
   // Check if this is an attachment-only message (text is empty or just replacement char)
   const isAttachmentOnly = message.has_attachments && isEmptyOrReplacementChar(rawText);
 
-  // For attachment-only messages, show a placeholder instead of empty/replacement char
-  const messageText = isAttachmentOnly ? "[Attachment]" : rawText;
+  // Check if message has no displayable content at all
+  const hasNoContent = isEmptyOrReplacementChar(rawText);
+
+  // For attachment-only messages, show a placeholder
+  // For messages with no content and no attachment, show a different placeholder
+  const messageText = isAttachmentOnly
+    ? "[Attachment]"
+    : hasNoContent
+      ? "[Message content unavailable]"
+      : rawText;
 
   // Get timestamp - prefer sent_at for outbound, received_at for inbound
   const timestamp = isOutbound
@@ -75,7 +83,7 @@ export function MessageBubble({ message, senderName, showSender = true }: Messag
             : "bg-gray-200 text-gray-900 rounded-bl-sm"
         }`}
       >
-        <p className={`text-sm whitespace-pre-wrap break-words ${isAttachmentOnly ? "italic text-opacity-75" : ""}`}>
+        <p className={`text-sm whitespace-pre-wrap break-words ${(isAttachmentOnly || hasNoContent) ? "italic text-opacity-75" : ""}`}>
           {messageText}
         </p>
         {(timestampDisplay || senderDisplay) && (
