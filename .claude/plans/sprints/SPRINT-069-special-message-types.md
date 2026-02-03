@@ -400,8 +400,8 @@ The following MUST pass before merge:
 |------|--------|-----------------|----------|-----|
 | TASK-1798 | COMPLETED | ~44K | ~15min | #719 (MERGED) |
 | TASK-1799 | COMPLETED | ~92K | ~15min | #720 (MERGED) |
-| TASK-1800 | PENDING | - | - | - |
-| TASK-1801 | PENDING | - | - | - |
+| TASK-1800 | COMPLETED | ~25K | ~10min | #721 (MERGED) |
+| TASK-1801 | COMPLETED | ~20K | ~10min | #722 (MERGED) |
 | TASK-1802 | PENDING | - | - | - |
 | TASK-1803 | PENDING | - | - | - |
 
