@@ -48,28 +48,148 @@ interface CurrentUserResponse extends AuthResponse {
 }
 
 /**
- * Check if user needs to accept or re-accept terms
+ * TASK-1809: Fetch cloud user with retry logic and exponential backoff
+ * Used to reliably get terms data from Supabase
+ * @param userId - Supabase user ID
+ * @param maxRetries - Maximum number of retry attempts (default: 3)
+ * @returns Cloud user data or null if all retries fail
  */
-function needsToAcceptTerms(user: User): boolean {
-  if (!user.terms_accepted_at) {
+async function fetchCloudUserWithRetry(
+  userId: string,
+  maxRetries: number = 3
+): Promise<User | null> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await logService.debug(
+        `[TermsSync] Fetching cloud user (attempt ${attempt}/${maxRetries})`,
+        "SessionHandlers",
+        { userId: userId.substring(0, 8) + "..." }
+      );
+
+      const user = await supabaseService.getUserById(userId);
+      return user;
+    } catch (error) {
+      lastError = error as Error;
+      await logService.warn(
+        `[TermsSync] Supabase fetch attempt ${attempt}/${maxRetries} failed`,
+        "SessionHandlers",
+        { error: lastError.message }
+      );
+
+      if (attempt < maxRetries) {
+        // Exponential backoff: 500ms, 1000ms, 2000ms
+        const delay = 500 * Math.pow(2, attempt - 1);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  await logService.error(
+    "[TermsSync] All Supabase fetch retries failed",
+    "SessionHandlers",
+    { error: lastError?.message || "Unknown error" }
+  );
+  return null; // Fall back to local data
+}
+
+/**
+ * TASK-1809: Sync terms from cloud to local user if needed
+ * This ensures users who accepted terms on cloud (before local DB init) get synced
+ * @param localUser - The local user to potentially update
+ * @param cloudUser - The cloud user with potential terms data
+ * @returns Updated local user if sync was performed, original user otherwise
+ */
+async function syncTermsFromCloudToLocal(
+  localUser: User,
+  cloudUser: User | null
+): Promise<User> {
+  // Nothing to sync if no cloud user or cloud has no terms
+  if (!cloudUser?.terms_accepted_at) {
+    await logService.debug(
+      "[TermsSync] No cloud terms to sync",
+      "SessionHandlers",
+      { cloudTerms: !!cloudUser?.terms_accepted_at }
+    );
+    return localUser;
+  }
+
+  // Already synced if local has terms
+  if (localUser.terms_accepted_at) {
+    await logService.debug(
+      "[TermsSync] Local already has terms, no sync needed",
+      "SessionHandlers"
+    );
+    return localUser;
+  }
+
+  // Sync terms from cloud to local
+  await logService.info(
+    "[TermsSync] Syncing terms from Supabase to local",
+    "SessionHandlers",
+    {
+      userId: localUser.id.substring(0, 8) + "...",
+      cloudTermsAt: cloudUser.terms_accepted_at,
+    }
+  );
+
+  try {
+    await databaseService.updateUser(localUser.id, {
+      terms_accepted_at: cloudUser.terms_accepted_at,
+      terms_version_accepted: cloudUser.terms_version_accepted,
+      privacy_policy_accepted_at: cloudUser.privacy_policy_accepted_at,
+      privacy_policy_version_accepted: cloudUser.privacy_policy_version_accepted,
+    });
+
+    // Re-fetch to get updated user
+    const updatedUser = await databaseService.getUserById(localUser.id);
+    if (updatedUser) {
+      await logService.info(
+        "[TermsSync] Successfully synced terms from cloud",
+        "SessionHandlers",
+        { userId: localUser.id.substring(0, 8) + "..." }
+      );
+      return updatedUser;
+    }
+  } catch (syncError) {
+    await logService.error(
+      "[TermsSync] Failed to sync terms to local",
+      "SessionHandlers",
+      { error: syncError instanceof Error ? syncError.message : "Unknown error" }
+    );
+  }
+
+  return localUser;
+}
+
+/**
+ * Check if user needs to accept or re-accept terms
+ * TASK-1809: Now accepts optional cloud user to check cloud terms as fallback
+ */
+function needsToAcceptTerms(user: User, cloudUser?: User | null): boolean {
+  // Check local user first
+  const localTermsAccepted = user.terms_accepted_at;
+  // Fall back to cloud terms if local is missing
+  const termsAcceptedAt = localTermsAccepted || cloudUser?.terms_accepted_at;
+
+  if (!termsAcceptedAt) {
     return true;
   }
 
-  if (!user.terms_version_accepted && !user.privacy_policy_version_accepted) {
+  // Use local versions if available, otherwise check cloud
+  const termsVersion = user.terms_version_accepted || cloudUser?.terms_version_accepted;
+  const privacyVersion = user.privacy_policy_version_accepted || cloudUser?.privacy_policy_version_accepted;
+
+  if (!termsVersion && !privacyVersion) {
     return false;
   }
 
-  if (
-    user.terms_version_accepted &&
-    user.terms_version_accepted !== CURRENT_TERMS_VERSION
-  ) {
+  if (termsVersion && termsVersion !== CURRENT_TERMS_VERSION) {
     return true;
   }
 
-  if (
-    user.privacy_policy_version_accepted &&
-    user.privacy_policy_version_accepted !== CURRENT_PRIVACY_POLICY_VERSION
-  ) {
+  if (privacyVersion && privacyVersion !== CURRENT_PRIVACY_POLICY_VERSION) {
     return true;
   }
 
@@ -599,6 +719,24 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
       freshUser = await migrateUserToSupabaseId(freshUser, supabaseUserId);
     }
 
+    // TASK-1809: Always fetch cloud user with retry to reliably check terms state
+    // This is critical for users who accepted terms before local DB was initialized
+    await logService.debug(
+      "[TermsSync] Fetching cloud user for terms check",
+      "SessionHandlers",
+      { userId: supabaseUserId.substring(0, 8) + "..." }
+    );
+    const cloudUser = await fetchCloudUserWithRetry(supabaseUserId);
+
+    await logService.debug(
+      "[TermsSync] Cloud user fetch result",
+      "SessionHandlers",
+      {
+        cloudUserFound: !!cloudUser,
+        cloudTermsAt: cloudUser?.terms_accepted_at || null,
+      }
+    );
+
     if (!freshUser && session.user.email) {
       // No local user exists - create one from session data
       // This syncs existing Supabase users to local SQLite (retroactive TASK-1507D fix)
@@ -634,36 +772,8 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
           { userId: freshUser.id }
         );
 
-        // BACKLOG-546: Sync terms data from Supabase if user has already accepted
-        // This ensures returning users on new devices don't see T&C again
-        try {
-          const cloudUser = await supabaseService.getUserById(session.user.id);
-          if (cloudUser?.terms_accepted_at) {
-            await databaseService.updateUser(freshUser.id, {
-              terms_accepted_at: cloudUser.terms_accepted_at,
-              terms_version_accepted: cloudUser.terms_version_accepted,
-              privacy_policy_accepted_at: cloudUser.privacy_policy_accepted_at,
-              privacy_policy_version_accepted: cloudUser.privacy_policy_version_accepted,
-            });
-            // Re-fetch to get updated terms data
-            const updatedUser = await databaseService.getUserById(freshUser.id);
-            if (updatedUser) {
-              freshUser = updatedUser;
-            }
-            await logService.info(
-              "Synced terms data from Supabase to local user (BACKLOG-546)",
-              "SessionHandlers",
-              { userId: freshUser.id }
-            );
-          }
-        } catch (syncError) {
-          // Log but don't fail - terms can be re-accepted if needed
-          await logService.warn(
-            "Failed to sync terms from Supabase",
-            "SessionHandlers",
-            { error: syncError instanceof Error ? syncError.message : "Unknown error" }
-          );
-        }
+        // TASK-1809: Sync terms from cloud user (already fetched with retry)
+        freshUser = await syncTermsFromCloudToLocal(freshUser, cloudUser);
       } catch (createError) {
         // Log but don't fail - auth should succeed even if local user creation fails
         await logService.error(
@@ -674,11 +784,38 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
           }
         );
       }
+    } else if (freshUser && !freshUser.terms_accepted_at && cloudUser?.terms_accepted_at) {
+      // TASK-1809: Existing local user missing terms, but cloud has them
+      // This happens when user accepted terms to Supabase before local DB was initialized
+      await logService.info(
+        "[TermsSync] Existing user missing local terms, syncing from cloud",
+        "SessionHandlers",
+        {
+          userId: freshUser.id.substring(0, 8) + "...",
+          localTerms: !!freshUser.terms_accepted_at,
+          cloudTerms: !!cloudUser.terms_accepted_at,
+        }
+      );
+      freshUser = await syncTermsFromCloudToLocal(freshUser, cloudUser);
     }
 
     const user = freshUser || session.user;
 
     setSyncUserId(user.id);
+
+    // TASK-1809: Pass cloud user to needsToAcceptTerms for fallback check
+    // Even if local sync failed, we can still check cloud terms state
+    const requiresTerms = needsToAcceptTerms(user, cloudUser);
+
+    await logService.debug(
+      "[TermsSync] Final terms check result",
+      "SessionHandlers",
+      {
+        localTermsAt: user.terms_accepted_at || null,
+        cloudTermsAt: cloudUser?.terms_accepted_at || null,
+        requiresTerms,
+      }
+    );
 
     return {
       success: true,
@@ -686,7 +823,7 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
       sessionToken: session.sessionToken,
       subscription: session.subscription,
       provider: session.provider,
-      isNewUser: needsToAcceptTerms(user),
+      isNewUser: requiresTerms,
     };
   } catch (error) {
     await logService.error("Get current user failed", "AuthHandlers", {
