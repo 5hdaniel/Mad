@@ -28,11 +28,14 @@ export function MacOSContactsImportSettings({
   userId,
 }: MacOSContactsImportSettingsProps) {
   const { isMacOS } = usePlatform();
-  const { queue, requestSync } = useSyncOrchestrator();
+  const { queue, isRunning, forceSync } = useSyncOrchestrator();
 
   // Derive syncing state from orchestrator queue
   const contactsItem = queue.find(q => q.type === 'contacts');
   const isSyncing = contactsItem?.status === 'running' || contactsItem?.status === 'pending';
+
+  // Show if any sync is running (to indicate orchestrator is busy)
+  const isOrchestratorBusy = isRunning;
 
   const [lastResult, setLastResult] = useState<{
     success: boolean;
@@ -82,10 +85,11 @@ export function MacOSContactsImportSettings({
 
       setLastResult(null);
 
-      // Use orchestrator for coordinated sync
-      requestSync(['contacts'], userId);
+      // Use forceSync to start contacts sync immediately
+      // This will cancel any running sync (user explicitly clicked button)
+      forceSync(['contacts'], userId);
     },
-    [userId, isSyncing, requestSync]
+    [userId, isSyncing, forceSync]
   );
 
   // Format the last sync time for display
