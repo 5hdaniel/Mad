@@ -466,16 +466,6 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           "Contacts",
         );
 
-        // Always run backfill to catch imported contacts missing emails/phones
-        // This is fast (INSERT OR IGNORE) and ensures data consistency
-        const backfillResult = await backfillImportedContactsFromExternal(validatedUserId);
-        if (backfillResult.updated > 0) {
-          logService.info(
-            `[Main] Backfilled ${backfillResult.updated} imported contacts with missing emails/phones`,
-            "Contacts",
-          );
-        }
-
         // STEP 3: Add external contacts (filtering out already imported)
         for (const extContact of externalContacts) {
           const nameLower = extContact.name?.toLowerCase();
@@ -1406,88 +1396,4 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
     },
   );
 
-  // DEBUG: Backfill emails from external_contacts to contact_emails
-  ipcMain.handle(
-    "contacts:backfillFromExternal",
-    async (
-      _event: IpcMainInvokeEvent,
-      contactId: string,
-    ): Promise<{ success: boolean; added: number; error?: string }> => {
-      try {
-        // Get contact name
-        const contactSql = `SELECT display_name FROM contacts WHERE id = ?`;
-        const contact = dbGet<{ display_name: string }>(contactSql, [contactId]);
-        if (!contact) {
-          return { success: false, added: 0, error: "Contact not found" };
-        }
-
-        // Get emails from external_contacts
-        const externalSql = `SELECT emails_json, phones_json FROM external_contacts WHERE name = ?`;
-        const external = dbGet<{ emails_json: string; phones_json: string }>(externalSql, [contact.display_name]);
-        if (!external) {
-          return { success: false, added: 0, error: "External contact not found" };
-        }
-
-        const externalEmails: string[] = external.emails_json ? JSON.parse(external.emails_json) : [];
-        const externalPhones: string[] = external.phones_json ? JSON.parse(external.phones_json) : [];
-
-        // Backfill emails
-        const emailsAdded = await databaseService.backfillContactEmails(contactId, externalEmails);
-        const phonesAdded = await databaseService.backfillContactPhones(contactId, externalPhones);
-
-        logService.info("[DEBUG] Backfilled contact from external", "Contacts", {
-          contactId,
-          contactName: contact.display_name,
-          emailsAdded,
-          phonesAdded,
-        });
-
-        return { success: true, added: emailsAdded + phonesAdded };
-      } catch (error) {
-        logService.error("[DEBUG] Backfill failed", "Contacts", { error });
-        return { success: false, added: 0, error: error instanceof Error ? error.message : "Unknown" };
-      }
-    },
-  );
-
-  // DEBUG: Check contact emails for a specific contact
-  ipcMain.handle(
-    "contacts:debugEmails",
-    async (
-      _event: IpcMainInvokeEvent,
-      contactId: string,
-    ): Promise<{ contactEmails: string[]; externalEmails: string[]; contactName: string }> => {
-      try {
-        // Get emails from contact_emails table
-        const contactEmailsSql = `SELECT email FROM contact_emails WHERE contact_id = ?`;
-        const contactEmailRows = dbAll<{ email: string }>(contactEmailsSql, [contactId]);
-        const contactEmails = contactEmailRows.map(r => r.email);
-
-        // Get contact name
-        const contactSql = `SELECT display_name FROM contacts WHERE id = ?`;
-        const contact = dbGet<{ display_name: string }>(contactSql, [contactId]);
-
-        // Get emails from external_contacts for this contact name
-        const externalSql = `SELECT emails_json FROM external_contacts WHERE name = ?`;
-        const external = dbGet<{ emails_json: string }>(externalSql, [contact?.display_name || '']);
-        const externalEmails = external?.emails_json ? JSON.parse(external.emails_json) : [];
-
-        logService.info("[DEBUG] Contact emails check", "Contacts", {
-          contactId,
-          contactName: contact?.display_name,
-          contactEmails,
-          externalEmails,
-        });
-
-        return {
-          contactName: contact?.display_name || '',
-          contactEmails,
-          externalEmails,
-        };
-      } catch (error) {
-        logService.error("[DEBUG] Contact emails check failed", "Contacts", { error });
-        return { contactName: '', contactEmails: [], externalEmails: [] };
-      }
-    },
-  );
 }
