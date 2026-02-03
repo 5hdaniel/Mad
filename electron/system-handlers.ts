@@ -1346,6 +1346,102 @@ export function registerSystemHandlers(): void {
     },
   );
 
+  // ============================================
+  // ONBOARDING PERSISTENCE HANDLERS (TASK-1807)
+  // ============================================
+
+  ipcMain.handle(
+    "user:update-onboarding-step",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+      step: string,
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const validatedUserId = validateUserId(userId);
+        if (!databaseService.isInitialized()) {
+          return { success: false, error: "Database not initialized" };
+        }
+        await databaseService.updateOnboardingStep(validatedUserId!, step);
+        logService.info(`[user:update-onboarding-step] Saved: ${step}`, "SystemHandlers");
+        return { success: true };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        if (error instanceof ValidationError) {
+          return { success: false, error: `Validation error: ${error.message}` };
+        }
+        return { success: false, error: errorMessage };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "user:update-onboarding-step-cloud",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+      step: string,
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const validatedUserId = validateUserId(userId);
+        await supabaseService.updateOnboardingStep(validatedUserId!, step);
+        logService.info(`[user:update-onboarding-step-cloud] Saved: ${step}`, "SystemHandlers");
+        return { success: true };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        if (error instanceof ValidationError) {
+          return { success: false, error: `Validation error: ${error.message}` };
+        }
+        return { success: false, error: errorMessage };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "user:complete-onboarding",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const validatedUserId = validateUserId(userId);
+        if (!databaseService.isInitialized()) {
+          return { success: false, error: "Database not initialized" };
+        }
+        await databaseService.completeOnboarding(validatedUserId!);
+        logService.info("[user:complete-onboarding] Completed", "SystemHandlers");
+        return { success: true };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        if (error instanceof ValidationError) {
+          return { success: false, error: `Validation error: ${error.message}` };
+        }
+        return { success: false, error: errorMessage };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "user:complete-onboarding-cloud",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const validatedUserId = validateUserId(userId);
+        await supabaseService.completeOnboarding(validatedUserId!);
+        logService.info("[user:complete-onboarding-cloud] Completed", "SystemHandlers");
+        return { success: true };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        if (error instanceof ValidationError) {
+          return { success: false, error: `Validation error: ${error.message}` };
+        }
+        return { success: false, error: errorMessage };
+      }
+    },
+  );
+
   /**
    * Get diagnostic information for support requests
    */
