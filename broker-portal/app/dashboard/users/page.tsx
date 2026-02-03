@@ -6,6 +6,7 @@
  *
  * TASK-1808: Initial route structure
  * TASK-1809: Integrated UserListClient
+ * TASK-1810: Added organizationId prop for invite modal
  */
 
 import { createClient } from '@/lib/supabase/server';
@@ -145,7 +146,6 @@ export default async function UsersPage() {
             Manage your organization&apos;s team members
           </p>
         </div>
-        {/* Invite button will be added in TASK-1810 */}
       </div>
 
       {/* User List */}
@@ -153,6 +153,7 @@ export default async function UsersPage() {
         initialMembers={members}
         currentUserId={access.userId}
         currentUserRole={access.role}
+        organizationId={access.organizationId}
       />
     </div>
   );

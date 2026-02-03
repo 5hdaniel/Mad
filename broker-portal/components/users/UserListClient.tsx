@@ -8,11 +8,13 @@
  * for instant response.
  *
  * TASK-1809: User list component implementation
+ * TASK-1810: Added invite user modal integration
  */
 
 import { useState, useMemo } from 'react';
 import UserCard from './UserCard';
 import UserSearchFilter from './UserSearchFilter';
+import InviteUserModal from './InviteUserModal';
 import { EmptyState, SearchIcon } from '@/components/ui/EmptyState';
 import type { OrganizationMember, Role } from '@/lib/types/users';
 
@@ -42,16 +44,19 @@ interface UserListClientProps {
   initialMembers: OrganizationMember[];
   currentUserId: string;
   currentUserRole: Role;
+  organizationId: string;
 }
 
 export default function UserListClient({
   initialMembers,
   currentUserId,
   currentUserRole,
+  organizationId,
 }: UserListClientProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
 
   const filteredMembers = useMemo(() => {
     return initialMembers.filter((member) => {
@@ -88,6 +93,31 @@ export default function UserListClient({
 
   return (
     <div className="space-y-4">
+      {/* Action bar with invite button */}
+      {canManage && (
+        <div className="flex justify-end">
+          <button
+            onClick={() => setIsInviteModalOpen(true)}
+            className="inline-flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+              />
+            </svg>
+            Invite User
+          </button>
+        </div>
+      )}
+
       <UserSearchFilter
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -130,6 +160,13 @@ export default function UserListClient({
           </div>
         </>
       )}
+
+      {/* Invite User Modal */}
+      <InviteUserModal
+        isOpen={isInviteModalOpen}
+        onClose={() => setIsInviteModalOpen(false)}
+        organizationId={organizationId}
+      />
     </div>
   );
 }
