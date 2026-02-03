@@ -102,6 +102,8 @@ interface SubmissionMessageRecord {
   thread_id?: string;
   has_attachments: boolean;
   attachment_count: number;
+  /** Message type: text, voice_message, location, attachment_only, system, unknown */
+  message_type?: string;
 }
 
 /** Record structure for submission_attachments table */
@@ -878,6 +880,8 @@ class SubmissionService {
       thread_id: message.thread_id || undefined,
       has_attachments: message.has_attachments || false,
       attachment_count: 0, // Would need to count from attachments table
+      // TASK-1803: Include message_type for broker portal special message display
+      message_type: message.message_type || "text",
     };
   }
 
