@@ -249,8 +249,10 @@ export function SyncStatusIndicator({
   const activeProgress = runningItem?.progress ?? null;
 
   // Render a status pill for each sync item in queue order
-  const renderPill = (type: SyncType, status: SyncItemStatus, progress: number, error?: string) => {
-    const label = getLabelForType(type);
+  const renderPill = (type: SyncType, status: SyncItemStatus, progress: number, error?: string, phase?: string) => {
+    const baseLabel = getLabelForType(type);
+    // Show phase for running messages sync (e.g., "Messages - querying")
+    const label = status === 'running' && phase ? `${baseLabel} - ${phase}` : baseLabel;
     const colorClass = statusColors[status];
 
     // Error state - red with tooltip
@@ -264,7 +266,7 @@ export function SyncStatusIndicator({
           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
-          {label}
+          {baseLabel}
         </span>
       );
     }
@@ -279,12 +281,12 @@ export function SyncStatusIndicator({
           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
-          {label}
+          {baseLabel}
         </span>
       );
     }
 
-    // Running state - blue (progress shown separately)
+    // Running state - blue with optional phase (progress shown separately)
     if (status === 'running') {
       return (
         <span
@@ -302,7 +304,7 @@ export function SyncStatusIndicator({
         key={type}
         className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${colorClass}`}
       >
-        {label}
+        {baseLabel}
       </span>
     );
   };
@@ -329,19 +331,19 @@ export function SyncStatusIndicator({
           {isAnySyncing ? 'Syncing:' : hasError ? 'Sync Error:' : 'Sync:'}
         </span>
         {/* Render pills in queue order */}
-        {queue.map((item) => renderPill(item.type, item.status, item.progress, item.error))}
+        {queue.map((item) => renderPill(item.type, item.status, item.progress, item.error, item.phase))}
         {activeProgress !== null && (
           <span className="text-xs text-blue-600 ml-auto">{activeProgress}%</span>
         )}
       </div>
 
-      {/* Single progress bar */}
+      {/* Single progress bar - shows current item's progress to match the % text */}
       <div className={`w-full ${hasError ? 'bg-red-200' : 'bg-blue-200'} rounded-full h-1.5 overflow-hidden`}>
         {isAnySyncing ? (
-          overallProgress > 0 ? (
+          activeProgress !== null && activeProgress > 0 ? (
             <div
               className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
-              style={{ width: `${overallProgress}%` }}
+              style={{ width: `${activeProgress}%` }}
             />
           ) : (
             <div className="bg-blue-500 h-1.5 rounded-full animate-indeterminate" />

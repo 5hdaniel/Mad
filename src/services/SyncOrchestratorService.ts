@@ -25,6 +25,8 @@ export interface SyncItem {
   status: SyncItemStatus;
   progress: number;  // 0-100
   error?: string;
+  /** Optional phase label for display (e.g., "querying", "attachments") */
+  phase?: string;
 }
 
 export interface SyncOrchestratorState {
@@ -40,7 +42,7 @@ export interface SyncRequest {
   userId: string;
 }
 
-type SyncFunction = (userId: string, onProgress: (percent: number) => void) => Promise<void>;
+type SyncFunction = (userId: string, onProgress: (percent: number, phase?: string) => void) => Promise<void>;
 
 type StateListener = (state: SyncOrchestratorState) => void;
 
@@ -128,9 +130,30 @@ class SyncOrchestratorServiceClass {
     if (macOS) {
       this.registerSyncFunction('messages', async (userId, onProgress) => {
         console.log('[SyncOrchestrator] Starting messages sync');
+
+        // Phase order and weighted progress calculation
+        // Dynamically detect if 'deleting' phase is present (forceReimport mode)
+        let hasDeletePhase = false;
+
         // IPC listener OWNED here - not in consumers
         const cleanup = window.api.messages.onImportProgress((data) => {
-          onProgress(data.percent);
+          // Detect if we're in forceReimport mode (has deleting phase)
+          if (data.phase === 'deleting') {
+            hasDeletePhase = true;
+          }
+
+          // Use 4 phases if deleting is present, otherwise 3
+          const phases = hasDeletePhase
+            ? ['querying', 'deleting', 'importing', 'attachments']
+            : ['querying', 'importing', 'attachments'];
+          const n = phases.length;
+
+          // Calculate weighted progress: step_index * (100/n) + ipc_progress / n
+          const stepIndex = phases.indexOf(data.phase);
+          const weightedProgress = stepIndex >= 0
+            ? Math.round(stepIndex * (100 / n) + data.percent / n)
+            : data.percent;
+          onProgress(weightedProgress, data.phase);
         });
 
         try {
@@ -286,13 +309,13 @@ class SyncOrchestratorServiceClass {
 
       try {
         // Run the sync with progress callback
-        await syncFn(userId, (percent) => {
-          this.updateQueueItem(type, { progress: percent });
+        await syncFn(userId, (percent, phase) => {
+          this.updateQueueItem(type, { progress: percent, phase });
           this.updateOverallProgress();
         });
 
-        // Mark complete
-        this.updateQueueItem(type, { status: 'complete', progress: 100 });
+        // Mark complete (clear phase)
+        this.updateQueueItem(type, { status: 'complete', progress: 100, phase: undefined });
       } catch (error) {
         // Check if it was cancelled
         if (this.abortController?.signal.aborted) {

@@ -12,7 +12,7 @@
  */
 
 import { useState, useCallback, useMemo } from "react";
-import { useAuth, useNetwork, usePlatform } from "../../contexts";
+import { useAuth, useNetwork, usePlatform, useLicense } from "../../contexts";
 import {
   useSecureStorage,
   useEmailOnboardingApi,
@@ -62,6 +62,8 @@ export function useAppStateMachine(): AppStateMachine {
   } = useNetwork();
 
   const { isMacOS, isWindows } = usePlatform();
+
+  const { hasAIAddon } = useLicense();
 
   // ============================================
   // STATE MACHINE (Optional - feature flagged)
@@ -228,6 +230,7 @@ export function useAppStateMachine(): AppStateMachine {
     hasPermissions: permissions.hasPermissions,
     isOnDashboard: nav.currentStep === "dashboard",
     isOnboarding: nav.currentStep !== "dashboard",
+    hasAIAddon,
   });
 
   // ============================================
