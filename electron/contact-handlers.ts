@@ -118,7 +118,17 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           };
         }
 
-        // Get only imported contacts from database
+        // Backfill any missing emails/phones for imported contacts
+        // This ensures contacts have complete data from external sources
+        const backfillResult = await backfillImportedContactsFromExternal(validatedUserId);
+        if (backfillResult.updated > 0) {
+          logService.info(
+            `Backfilled ${backfillResult.updated} imported contacts with missing emails/phones`,
+            "Contacts",
+          );
+        }
+
+        // Get only imported contacts from database (now with backfilled data)
         const importedContacts =
           await databaseService.getImportedContactsByUserId(validatedUserId);
 
