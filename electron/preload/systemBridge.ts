@@ -278,6 +278,20 @@ export const systemBridge = {
       error?: string;
     }>,
 
+  /**
+   * Check if a user exists in the local database
+   * BACKLOG-611: Used to determine if secure-storage step should be shown
+   * even on machines with previous installs (different user)
+   * @param userId - User ID to check
+   * @returns Whether the user exists in the local DB
+   */
+  checkUserInLocalDb: (userId: string) =>
+    ipcRenderer.invoke("system:check-user-in-local-db", userId) as Promise<{
+      success: boolean;
+      exists: boolean;
+      error?: string;
+    }>,
+
   // Spread dev-only diagnostics (empty object in production)
   ...devDiagnostics,
 };

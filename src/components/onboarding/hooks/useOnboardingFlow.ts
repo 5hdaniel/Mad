@@ -51,6 +51,11 @@ export interface OnboardingAppState {
   isDatabaseInitialized: boolean;
   /** Current user ID */
   userId: string | null;
+  /**
+   * Whether the current user exists in the local database.
+   * BACKLOG-611: False when a new user logs in on a machine with a previous install.
+   */
+  currentUserInLocalDb: boolean;
 }
 
 /**
@@ -170,6 +175,7 @@ export function useOnboardingFlow(
       isNewUser: appState.isNewUser,
       isDatabaseInitialized: appState.isDatabaseInitialized,
       userId: appState.userId,
+      currentUserInLocalDb: appState.currentUserInLocalDb,
     }),
     [platform, appState]
   );
