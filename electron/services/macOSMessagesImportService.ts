@@ -27,6 +27,7 @@ import permissionService from "./permissionService";
 import logService from "./logService";
 import { getMessageText } from "../utils/messageParser";
 import { macTimestampToDate } from "../utils/dateUtils";
+import { detectMessageType } from "../utils/messageTypeDetector";
 
 /**
  * Create a tqdm-style progress bar for console output
@@ -785,12 +786,13 @@ class MacOSMessagesImportService {
     // Prepare insert statement for messages table only
     // Note: We no longer need to insert into communications table - that's only for
     // messages that are linked to transactions. The UI now queries messages directly.
+    // TASK-1799: Added message_type for UI differentiation of voice messages, location, etc.
     const insertMessageStmt = db.prepare(`
       INSERT OR IGNORE INTO messages (
         id, user_id, channel, external_id, direction,
         body_text, participants, participants_flat, thread_id, sent_at,
-        has_attachments, metadata, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        has_attachments, message_type, metadata, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `);
 
     // Process in batches
@@ -951,6 +953,16 @@ class MacOSMessagesImportService {
             service: msg.service,
           });
 
+          // TASK-1799: Detect message type for UI differentiation
+          // Note: For macOS, we don't have audioTranscript yet (TASK-1798), so rely on attachment MIME type
+          // and text patterns for detection
+          const messageType = detectMessageType({
+            text: sanitizedText,
+            hasAudioTranscript: false, // macOS doesn't extract transcripts yet
+            attachmentMimeType: null, // Attachment MIME type not available at this stage
+            attachmentCount: msg.cache_has_attachments,
+          });
+
           try {
             // Generate ID for message
             const messageId = crypto.randomUUID();
@@ -968,6 +980,7 @@ class MacOSMessagesImportService {
               threadId, // thread_id
               sentAt.toISOString(), // sent_at
               msg.cache_has_attachments > 0 ? 1 : 0, // has_attachments
+              messageType, // message_type (TASK-1799)
               metadata // metadata
             );
 

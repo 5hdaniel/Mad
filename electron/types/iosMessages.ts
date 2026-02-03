@@ -10,6 +10,7 @@ export interface iOSMessage {
   id: number;
   guid: string;
   text: string | null;
+  audioTranscript?: string | null;
   handle: string; // Phone number or email
   isFromMe: boolean;
   date: Date;
@@ -17,6 +18,8 @@ export interface iOSMessage {
   dateDelivered: Date | null;
   service: "iMessage" | "SMS";
   attachments: iOSAttachment[];
+  /** Transcript of voice message audio (TASK-1798, populated when available) */
+  audioTranscript?: string | null;
 }
 
 /**
@@ -49,6 +52,8 @@ export interface RawMessageRow {
   ROWID: number;
   guid: string;
   text: string | null;
+  attributedBody?: Buffer | null;
+  audio_transcript?: string | null;
   handle_id: number;
   is_from_me: number;
   date: number;
