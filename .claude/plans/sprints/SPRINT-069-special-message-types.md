@@ -1,7 +1,7 @@
 # Sprint Plan: SPRINT-069 - Special Message Type Support
 
 **Created**: 2026-02-02
-**Status**: PLANNING
+**Status**: IN_PROGRESS
 **Goal**: Enable proper display and export of special message types (audio/voice messages, location sharing)
 **Target Branch**: develop
 **Feature Branch**: sprint/SPRINT-069-special-message-types
@@ -398,8 +398,8 @@ The following MUST pass before merge:
 
 | Task | Status | Billable Tokens | Duration | PR |
 |------|--------|-----------------|----------|-----|
-| TASK-1798 | PENDING | - | - | - |
-| TASK-1799 | PENDING | - | - | - |
+| TASK-1798 | COMPLETED | ~44K | ~15min | #719 (MERGED) |
+| TASK-1799 | COMPLETED | ~92K | ~15min | #720 (MERGED) |
 | TASK-1800 | PENDING | - | - | - |
 | TASK-1801 | PENDING | - | - | - |
 | TASK-1802 | PENDING | - | - | - |
