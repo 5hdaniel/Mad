@@ -34,7 +34,7 @@
 | TASK-1776-V | verification | complete | - | ~5K | - |
 | TASK-1777-V | verification | complete | - | ~5K | - |
 | TASK-1778-V | verification | complete | - | ~3K | - |
-| TASK-1779-V | verification | pending | - | ~3K | - |
+| TASK-1779-V | verification | complete | - | ~3K | - |
 | TASK-1780-V | verification | complete | - | ~3K | - |
 | TASK-1781-V | verification | pending | - | ~8K | - |
 
@@ -597,7 +597,7 @@ The following MUST pass before merge:
 - [x] TASK-1776-V: Pills show reliable states: gray (queued) -> blue (running) -> green (complete)
 - [x] TASK-1777-V: useAutoRefresh is simplified (single orchestrator call)
 - [x] TASK-1778-V: Dashboard has no sync-related prop drilling
-- [ ] TASK-1779-V: Onboarding flow works correctly with orchestrator
+- [x] TASK-1779-V: Onboarding flow works correctly with orchestrator + Settings shows sync-in-progress
 - [x] TASK-1780-V: No orphaned SyncQueueService or useMacOSMessagesImport references
 - [ ] TASK-1781-V: Tests cover SyncOrchestratorService patterns
 - [ ] OS notification fires exactly once when all syncs complete
