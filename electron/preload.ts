@@ -29,6 +29,7 @@ import {
   preferencesBridge,
   userBridge,
   shellBridge,
+  notificationBridge,
   llmBridge,
   systemBridge,
   deviceBridge,
@@ -80,6 +81,9 @@ contextBridge.exposeInMainWorld("api", {
 
   // Shell operations
   shell: shellBridge,
+
+  // OS notifications
+  notification: notificationBridge,
 
   // Device detection
   device: deviceBridge,

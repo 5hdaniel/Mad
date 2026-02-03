@@ -15,6 +15,7 @@ import log from "electron-log";
 import databaseService from "./databaseService";
 import * as externalContactDb from "./db/externalContactDbService";
 import { iOSMessagesParser } from "./iosMessagesParser";
+import { detectMessageType } from "../utils/messageTypeDetector";
 import type { iOSMessage, iOSConversation, iOSAttachment } from "../types/iosMessages";
 import type { iOSContact } from "../types/iosContacts";
 import type { SyncResult } from "./syncOrchestrator";
@@ -278,12 +279,13 @@ class IPhoneSyncStorageService {
 
     // Prepare the insert statement
     // SPRINT-068: Added participants_flat for phone number matching (was missing, causing auto-link to fail on Windows)
+    // TASK-1799: Added message_type for UI differentiation of voice messages, location, etc.
     const insertStmt = db.prepare(`
       INSERT OR IGNORE INTO messages (
         id, user_id, channel, external_id, direction,
         body_text, participants, participants_flat, thread_id, sent_at,
-        has_attachments, metadata, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        has_attachments, message_type, metadata, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `);
 
     // Process in batches
@@ -348,6 +350,18 @@ class IPhoneSyncStorageService {
             attachmentCount: msg.attachments.length,
           });
 
+          // TASK-1799: Detect message type for UI differentiation
+          // Get primary attachment MIME type for voice message detection
+          const primaryAttachmentMimeType = msg.attachments.length > 0
+            ? msg.attachments[0].mimeType
+            : null;
+          const messageType = detectMessageType({
+            text: sanitizedText,
+            hasAudioTranscript: !!msg.audioTranscript,
+            attachmentMimeType: primaryAttachmentMimeType,
+            attachmentCount: msg.attachments.length,
+          });
+
           try {
             insertStmt.run(
               crypto.randomUUID(), // id
@@ -361,6 +375,7 @@ class IPhoneSyncStorageService {
               threadId, // thread_id
               msg.date.toISOString(), // sent_at
               msg.attachments.length > 0 ? 1 : 0, // has_attachments
+              messageType, // message_type (TASK-1799)
               metadata // metadata
             );
             stored++;

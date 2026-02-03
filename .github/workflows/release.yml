@@ -110,7 +110,6 @@ jobs:
           name: release-macos
           path: |
             dist/*.dmg
-            dist/*.zip
             dist/*.blockmap
             dist/latest-mac.yml
           retention-days: 30

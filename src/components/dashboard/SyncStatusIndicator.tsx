@@ -20,17 +20,12 @@
  * @module components/dashboard/SyncStatusIndicator
  */
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import type { SyncStatus } from "../../hooks/useAutoRefresh";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLicense } from "../../contexts/LicenseContext";
+import { useSyncOrchestrator } from "../../hooks/useSyncOrchestrator";
+import type { SyncType, SyncItemStatus } from "../../services/SyncOrchestratorService";
 
 interface SyncStatusIndicatorProps {
-  /** Current sync status for all operations */
-  status: SyncStatus;
-  /** Whether any sync is in progress */
-  isAnySyncing: boolean;
-  /** Current status message to display */
-  currentMessage: string | null;
   /** Pending transaction count (shown in completion message) */
   pendingCount?: number;
   /** Callback when user clicks "Review Now" */
@@ -38,13 +33,36 @@ interface SyncStatusIndicatorProps {
 }
 
 /**
+ * Get display label for a sync type
+ */
+const getLabelForType = (type: SyncType): string => {
+  switch (type) {
+    case 'contacts':
+      return 'Contacts';
+    case 'emails':
+      return 'Emails';
+    case 'messages':
+      return 'Messages';
+    default:
+      return type;
+  }
+};
+
+/**
+ * Status to color mapping for pills
+ */
+const statusColors: Record<SyncItemStatus, string> = {
+  pending: 'bg-gray-100 text-gray-500',
+  running: 'bg-blue-100 text-blue-700',
+  complete: 'bg-green-100 text-green-700',
+  error: 'bg-red-100 text-red-700',
+};
+
+/**
  * Unified sync notification - handles progress and completion.
  * Replaces the need for separate AIStatusCard for sync status.
  */
 export function SyncStatusIndicator({
-  status,
-  isAnySyncing,
-  currentMessage,
   pendingCount = 0,
   onViewPending,
 }: SyncStatusIndicatorProps) {
@@ -55,6 +73,15 @@ export function SyncStatusIndicator({
 
   // Get license status for AI-specific features (pending count, Review Now button)
   const { hasAIAddon } = useLicense();
+
+  // Use SyncOrchestrator as single source of truth for sync state
+  const { queue, isRunning, overallProgress } = useSyncOrchestrator();
+
+  // Use isRunning from SyncOrchestrator as authoritative "is syncing" state
+  const isAnySyncing = isRunning;
+
+  // Check if any sync in the queue has an error
+  const hasError = queue.some(item => item.status === 'error');
 
   // Track transition from syncing to not syncing
   useEffect(() => {
@@ -212,47 +239,72 @@ export function SyncStatusIndicator({
     );
   }
 
-  // Check completion status
-  const emailsComplete = !status.emails.isSyncing && status.emails.progress === 100;
-  const messagesComplete = !status.messages.isSyncing && status.messages.progress === 100;
-  const contactsComplete = !status.contacts.isSyncing && status.contacts.progress === 100;
-
-  // Don't render if no sync is in progress
-  if (!isAnySyncing) {
+  // Don't render if no sync is in progress and queue is empty
+  if (!isAnySyncing && queue.length === 0) {
     return null;
   }
 
-  // Get the active sync's progress for the main progress bar
-  const activeProgress = status.messages.isSyncing && status.messages.progress !== null
-    ? status.messages.progress
-    : status.contacts.isSyncing && status.contacts.progress !== null
-      ? status.contacts.progress
-      : status.emails.isSyncing && status.emails.progress !== null
-        ? status.emails.progress
-        : null;
+  // Get the currently running sync's progress for display
+  const runningItem = queue.find(item => item.status === 'running');
+  const activeProgress = runningItem?.progress ?? null;
 
-  // Render a status pill for each sync type (no spinners, just color)
-  const renderPill = (label: string, isSyncing: boolean, isComplete: boolean) => {
-    if (isComplete) {
+  // Render a status pill for each sync item in queue order
+  const renderPill = (type: SyncType, status: SyncItemStatus, progress: number, error?: string, phase?: string) => {
+    const baseLabel = getLabelForType(type);
+    // Show phase for running messages sync (e.g., "Messages - querying")
+    const label = status === 'running' && phase ? `${baseLabel} - ${phase}` : baseLabel;
+    const colorClass = statusColors[status];
+
+    // Error state - red with tooltip
+    if (status === 'error') {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+        <span
+          key={type}
+          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${colorClass} cursor-help`}
+          title={error || 'Sync failed'}
+        >
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+          {baseLabel}
+        </span>
+      );
+    }
+
+    // Complete state - green with checkmark
+    if (status === 'complete') {
+      return (
+        <span
+          key={type}
+          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${colorClass}`}
+        >
           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
-          {label}
+          {baseLabel}
         </span>
       );
     }
-    if (isSyncing) {
+
+    // Running state - blue with optional phase (progress shown separately)
+    if (status === 'running') {
       return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+        <span
+          key={type}
+          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${colorClass}`}
+        >
           {label}
         </span>
       );
     }
+
+    // Pending state - gray
     return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
-        {label}
+      <span
+        key={type}
+        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${colorClass}`}
+      >
+        {baseLabel}
       </span>
     );
   };
@@ -260,35 +312,55 @@ export function SyncStatusIndicator({
   // Show compact sync progress
   return (
     <div
-      className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 mb-3 animate-fade-in"
+      className={`${hasError ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-200'} border rounded-lg px-3 py-2 mb-3 animate-fade-in`}
       data-testid="sync-status-indicator"
     >
-      {/* Status pills row */}
+      {/* Status pills row - render in queue order */}
       <div className="flex items-center gap-2 mb-2">
         {/* Spinning sync icon (counter-clockwise) */}
-        <svg className="w-4 h-4 text-blue-600 animate-spin flex-shrink-0" style={{ animationDirection: 'reverse' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg
+          className={`w-4 h-4 ${hasError ? 'text-red-600' : 'text-blue-600'} ${isAnySyncing ? 'animate-spin' : ''} flex-shrink-0`}
+          style={isAnySyncing ? { animationDirection: 'reverse' } : undefined}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
-        <span className="text-xs font-medium text-blue-800">Syncing:</span>
-        {renderPill("Emails", status.emails.isSyncing, emailsComplete)}
-        {renderPill("Messages", status.messages.isSyncing, messagesComplete)}
-        {renderPill("Contacts", status.contacts.isSyncing, contactsComplete)}
+        <span className={`text-xs font-medium ${hasError ? 'text-red-800' : 'text-blue-800'}`}>
+          {isAnySyncing ? 'Syncing:' : hasError ? 'Sync Error:' : 'Sync:'}
+        </span>
+        {/* Render pills in queue order */}
+        {queue.map((item) => renderPill(item.type, item.status, item.progress, item.error, item.phase))}
         {activeProgress !== null && (
           <span className="text-xs text-blue-600 ml-auto">{activeProgress}%</span>
         )}
       </div>
 
-      {/* Single progress bar */}
-      <div className="w-full bg-blue-200 rounded-full h-1.5 overflow-hidden">
-        {activeProgress !== null ? (
-          <div
-            className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
-            style={{ width: `${activeProgress}%` }}
-          />
+      {/* Single progress bar - shows current item's progress to match the % text */}
+      <div className={`w-full ${hasError ? 'bg-red-200' : 'bg-blue-200'} rounded-full h-1.5 overflow-hidden`}>
+        {isAnySyncing ? (
+          activeProgress !== null && activeProgress > 0 ? (
+            <div
+              className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
+              style={{ width: `${activeProgress}%` }}
+            />
+          ) : (
+            <div className="bg-blue-500 h-1.5 rounded-full animate-indeterminate" />
+          )
+        ) : hasError ? (
+          <div className="bg-red-500 h-1.5 rounded-full w-full" />
         ) : (
-          <div className="bg-blue-500 h-1.5 rounded-full animate-indeterminate" />
+          <div className="bg-green-500 h-1.5 rounded-full w-full" />
         )}
       </div>
+
+      {/* Disabled tools notice - only show when syncing */}
+      {isAnySyncing && (
+        <p className="text-xs text-blue-600 mt-2 text-center">
+          Audit tools are disabled during sync to ensure accurate data
+        </p>
+      )}
     </div>
   );
 }

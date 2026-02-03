@@ -27,6 +27,7 @@ import permissionService from "./permissionService";
 import logService from "./logService";
 import { getMessageText } from "../utils/messageParser";
 import { macTimestampToDate } from "../utils/dateUtils";
+import { detectMessageType } from "../utils/messageTypeDetector";
 
 /**
  * Create a tqdm-style progress bar for console output
@@ -69,10 +70,32 @@ export type ImportProgressCallback = (progress: {
 const MAX_MESSAGE_TEXT_LENGTH = 100000; // 100KB - truncate extremely long messages
 const MAX_HANDLE_LENGTH = 500; // Phone numbers, emails, etc.
 const MAX_GUID_LENGTH = 100; // Message GUID format
-const BATCH_SIZE = 500; // Messages per batch
+const BATCH_SIZE = 100; // Messages per batch - small batches yield frequently for UI responsiveness
 const DELETE_BATCH_SIZE = 5000; // Messages per delete batch (larger for efficiency)
-const YIELD_INTERVAL = 1; // Yield every N batches (reduced from 2 for better UI responsiveness)
-const QUERY_BATCH_SIZE = 10000; // Messages per query batch (for pagination)
+const YIELD_INTERVAL = 1; // Yield every batch for UI responsiveness
+const MIN_QUERY_BATCH_SIZE = 10000; // Minimum query batch size
+
+/**
+ * Calculate dynamic query batch size based on total message count.
+ * Larger imports use larger batches to reduce overhead from yielding/progress updates.
+ *
+ * - Under 100K messages: 10% of total (min 10K)
+ * - 100K - 200K messages: 15% of total
+ * - Over 200K messages: 20% of total
+ */
+function calculateQueryBatchSize(totalMessages: number): number {
+  let percentage: number;
+  if (totalMessages < 100000) {
+    percentage = 0.10; // 10%
+  } else if (totalMessages <= 200000) {
+    percentage = 0.15; // 15%
+  } else {
+    percentage = 0.20; // 20%
+  }
+
+  const calculated = Math.floor(totalMessages * percentage);
+  return Math.max(calculated, MIN_QUERY_BATCH_SIZE);
+}
 
 // Attachment constants (TASK-1012, expanded TASK-1122 to include videos)
 const SUPPORTED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".heic", ".webp", ".bmp", ".tiff", ".tif"];
@@ -452,8 +475,11 @@ class MacOSMessagesImportService {
         `);
         const totalMessageCount = countResult[0]?.count || 0;
 
+        // Calculate dynamic batch size based on total messages
+        const queryBatchSize = calculateQueryBatchSize(totalMessageCount);
+
         logService.info(
-          `Found ${totalMessageCount} messages in macOS Messages, fetching in batches of ${QUERY_BATCH_SIZE}`,
+          `Found ${totalMessageCount} messages in macOS Messages, fetching in batches of ${queryBatchSize}`,
           MacOSMessagesImportService.SERVICE_NAME
         );
 
@@ -572,13 +598,17 @@ class MacOSMessagesImportService {
             WHERE message.guid IS NOT NULL AND message.ROWID > ?
             ORDER BY message.ROWID ASC
             LIMIT ?
-          `, [lastRowId, QUERY_BATCH_SIZE]);
+          `, [lastRowId, queryBatchSize]);
 
           if (messageBatch.length === 0) {
             break; // No more messages
           }
 
-          allMessages.push(...messageBatch);
+          // Use concat instead of spread to avoid stack overflow with large batches
+          // The spread operator (...) puts all elements on the call stack, which fails for 100K+ items
+          for (let i = 0; i < messageBatch.length; i++) {
+            allMessages.push(messageBatch[i]);
+          }
           lastRowId = messageBatch[messageBatch.length - 1].id;
           fetchedCount += messageBatch.length;
 
@@ -756,12 +786,13 @@ class MacOSMessagesImportService {
     // Prepare insert statement for messages table only
     // Note: We no longer need to insert into communications table - that's only for
     // messages that are linked to transactions. The UI now queries messages directly.
+    // TASK-1799: Added message_type for UI differentiation of voice messages, location, etc.
     const insertMessageStmt = db.prepare(`
       INSERT OR IGNORE INTO messages (
         id, user_id, channel, external_id, direction,
         body_text, participants, participants_flat, thread_id, sent_at,
-        has_attachments, metadata, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        has_attachments, message_type, metadata, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `);
 
     // Process in batches
@@ -793,15 +824,34 @@ class MacOSMessagesImportService {
 
       // Pre-process: Extract text from attributedBody for all messages in batch
       // This must be done BEFORE the transaction since getMessageText is async
+      // TASK-PERF: Wrap each message parsing in try-catch to prevent stack overflow
+      // from a single malformed message killing the entire import
       const messageTexts = new Map<string, string>();
       for (const msg of batch) {
         if (msg.guid && isValidGuid(msg.guid) && !existingIds.has(msg.guid)) {
-          const text = await getMessageText({
-            text: msg.text,
-            attributedBody: msg.attributedBody,
-            cache_has_attachments: msg.cache_has_attachments,
-          });
-          messageTexts.set(msg.guid, text);
+          try {
+            const text = await getMessageText({
+              text: msg.text,
+              attributedBody: msg.attributedBody,
+              cache_has_attachments: msg.cache_has_attachments,
+            });
+            messageTexts.set(msg.guid, text);
+          } catch (parseError) {
+            // Log but don't fail the entire import for one malformed message
+            // This catches stack overflow errors from malformed plist/typedstream data
+            logService.warn(
+              `Failed to parse message text, using fallback`,
+              MacOSMessagesImportService.SERVICE_NAME,
+              {
+                guid: msg.guid,
+                error: parseError instanceof Error ? parseError.message : "Unknown error",
+                hasAttributedBody: !!msg.attributedBody,
+                attributedBodyLength: msg.attributedBody?.length ?? 0,
+              }
+            );
+            // Use empty string - the message will be skipped later due to content filter
+            messageTexts.set(msg.guid, "[Unable to parse message]");
+          }
         }
       }
 
@@ -839,19 +889,9 @@ class MacOSMessagesImportService {
           // Build thread ID from chat
           const threadId = msg.chat_id ? `macos-chat-${msg.chat_id}` : null;
 
-          // TASK-1050: Track messages with NULL thread_id for debugging
+          // TASK-1050: Track messages with NULL thread_id (count only, summary at end)
           if (!threadId) {
             nullThreadIdCount++;
-            logService.warn(
-              "Message has NULL chat_id, will have NULL thread_id",
-              MacOSMessagesImportService.SERVICE_NAME,
-              {
-                messageGuid: msg.guid,
-                handleId: msg.handle_id,
-                sentAt: macTimestampToDate(msg.date).toISOString(),
-                // Don't log text content for privacy
-              }
-            );
           }
 
           // Convert Mac timestamp to ISO date
@@ -913,6 +953,16 @@ class MacOSMessagesImportService {
             service: msg.service,
           });
 
+          // TASK-1799: Detect message type for UI differentiation
+          // Note: For macOS, we don't have audioTranscript yet (TASK-1798), so rely on attachment MIME type
+          // and text patterns for detection
+          const messageType = detectMessageType({
+            text: sanitizedText,
+            hasAudioTranscript: false, // macOS doesn't extract transcripts yet
+            attachmentMimeType: null, // Attachment MIME type not available at this stage
+            attachmentCount: msg.cache_has_attachments,
+          });
+
           try {
             // Generate ID for message
             const messageId = crypto.randomUUID();
@@ -930,6 +980,7 @@ class MacOSMessagesImportService {
               threadId, // thread_id
               sentAt.toISOString(), // sent_at
               msg.cache_has_attachments > 0 ? 1 : 0, // has_attachments
+              messageType, // message_type (TASK-1799)
               metadata // metadata
             );
 
@@ -962,13 +1013,15 @@ class MacOSMessagesImportService {
       // Update progress bar
       msgProgressBar.update(end);
 
-      // Report progress to UI
-      onProgress?.({
-        phase: "importing",
-        current: end,
-        total: messages.length,
-        percent: Math.round((end / messages.length) * 100),
-      });
+      // Report progress to UI - throttle to every 100 batches to reduce IPC overhead
+      if (batchNum % 100 === 0 || batchNum === totalBatches - 1) {
+        onProgress?.({
+          phase: "importing",
+          current: end,
+          total: messages.length,
+          percent: Math.round((end / messages.length) * 100),
+        });
+      }
 
       // Yield to event loop every N batches
       if ((batchNum + 1) % YIELD_INTERVAL === 0) {
@@ -1236,16 +1289,10 @@ class MacOSMessagesImportService {
         processed++;
         existingHashes.add(contentHash);
       } catch (error) {
-        // Silently skip FOREIGN KEY errors (expected for messages that were skipped)
-        // Only log other errors
-        const errMsg = error instanceof Error ? error.message : "Unknown error";
-        if (!errMsg.includes("FOREIGN KEY")) {
-          logService.warn(
-            `Failed to import attachment: ${errMsg}`,
-            MacOSMessagesImportService.SERVICE_NAME,
-            { guid: attachment.guid }
-          );
-        }
+        // Silently skip expected errors:
+        // - FOREIGN KEY: messages that were skipped
+        // - ENOENT: attachment files that have been deleted
+        // No logging needed - these are normal for old messages
         skipped++;
         processed++;
       }

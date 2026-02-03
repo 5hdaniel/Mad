@@ -14,6 +14,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { usePlatform } from "../../contexts/PlatformContext";
+import { useSyncOrchestrator } from "../../hooks/useSyncOrchestrator";
 
 interface MacOSContactsImportSettingsProps {
   userId: string;
@@ -27,7 +28,15 @@ export function MacOSContactsImportSettings({
   userId,
 }: MacOSContactsImportSettingsProps) {
   const { isMacOS } = usePlatform();
-  const [isSyncing, setIsSyncing] = useState(false);
+  const { queue, isRunning, requestSync } = useSyncOrchestrator();
+
+  // Derive syncing state from orchestrator queue
+  const contactsItem = queue.find(q => q.type === 'contacts');
+  const isSyncing = contactsItem?.status === 'running' || contactsItem?.status === 'pending';
+
+  // Check if another sync (not contacts) is running
+  const isOtherSyncRunning = isRunning && !isSyncing;
+
   const [lastResult, setLastResult] = useState<{
     success: boolean;
     inserted?: number;
@@ -46,6 +55,16 @@ export function MacOSContactsImportSettings({
     loadSyncStatus();
   }, [isMacOS, userId]);
 
+  // Update lastResult when contacts sync completes or errors
+  useEffect(() => {
+    if (contactsItem?.status === 'complete') {
+      setLastResult({ success: true });
+      loadSyncStatus();
+    } else if (contactsItem?.status === 'error') {
+      setLastResult({ success: false, error: contactsItem.error });
+    }
+  }, [contactsItem?.status, contactsItem?.error]);
+
   const loadSyncStatus = async () => {
     try {
       const result = await window.api.contacts.getExternalSyncStatus(userId);
@@ -62,27 +81,14 @@ export function MacOSContactsImportSettings({
 
   const handleSync = useCallback(
     async (_forceReimport = false) => {
-      if (!userId || isSyncing) return;
+      if (!userId || isSyncing || isOtherSyncRunning) return;
 
-      setIsSyncing(true);
       setLastResult(null);
 
-      try {
-        const result = await window.api.contacts.syncExternal(userId);
-        setLastResult(result);
-        if (result.success) {
-          await loadSyncStatus();
-        }
-      } catch (error) {
-        setLastResult({
-          success: false,
-          error: error instanceof Error ? error.message : "Sync failed",
-        });
-      } finally {
-        setIsSyncing(false);
-      }
+      // Request sync - orchestrator will handle it
+      requestSync(['contacts'], userId);
     },
-    [userId, isSyncing]
+    [userId, isSyncing, isOtherSyncRunning, requestSync]
   );
 
   // Format the last sync time for display
@@ -143,8 +149,8 @@ export function MacOSContactsImportSettings({
         </div>
       )}
 
-      {/* Result display */}
-      {lastResult && !isSyncing && (
+      {/* Result display - hide when another sync is running */}
+      {lastResult && !isSyncing && !isOtherSyncRunning && (
         <div
           className={`mb-3 p-2 rounded text-xs ${
             lastResult.success
@@ -182,17 +188,24 @@ export function MacOSContactsImportSettings({
         </div>
       )}
 
+      {/* Show message if another sync is running */}
+      {isOtherSyncRunning && (
+        <div className="mb-3 p-2 rounded text-xs bg-yellow-50 text-yellow-700 border border-yellow-200">
+          Another sync is in progress. Contacts will sync when it completes.
+        </div>
+      )}
+
       <div className="flex gap-2">
         <button
           onClick={() => handleSync(false)}
-          disabled={isSyncing}
+          disabled={isSyncing || isOtherSyncRunning}
           className="flex-1 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isSyncing ? "Syncing..." : "Import Contacts"}
+          {isSyncing ? "Syncing..." : isOtherSyncRunning ? "Sync in Progress..." : "Import Contacts"}
         </button>
         <button
           onClick={() => handleSync(true)}
-          disabled={isSyncing}
+          disabled={isSyncing || isOtherSyncRunning}
           className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           title="Delete all cached contacts and re-import from scratch"
         >

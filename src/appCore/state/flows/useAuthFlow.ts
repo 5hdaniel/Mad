@@ -39,6 +39,16 @@ export interface UseAuthFlowOptions {
   acceptTerms: () => Promise<void>;
   declineTerms: () => Promise<void>;
   isAuthenticated: boolean;
+  /**
+   * Whether the local database is initialized.
+   * When false, terms acceptance uses Supabase directly (no local DB write).
+   */
+  isDatabaseInitialized: boolean;
+  /**
+   * Current user ID (from AuthContext).
+   * Used for terms acceptance when DB is not initialized.
+   */
+  currentUserId: string | null;
   onCloseProfile: () => void;
   onSetHasSelectedPhoneType: (value: boolean) => void;
   onSetSelectedPhoneType: (value: "iphone" | "android" | null) => void;
@@ -95,6 +105,8 @@ export function useAuthFlow({
   acceptTerms,
   declineTerms,
   isAuthenticated,
+  isDatabaseInitialized,
+  currentUserId,
   onCloseProfile,
   onSetHasSelectedPhoneType,
   onSetSelectedPhoneType,
@@ -246,28 +258,32 @@ export function useAuthFlow({
 
   const handleAcceptTerms = useCallback(async (): Promise<void> => {
     try {
-      if (pendingOAuthData && !isAuthenticated) {
-        const result = await authService.acceptTermsToSupabase(
-          pendingOAuthData.cloudUser.id,
-        );
-        if (result.success) {
+      // Always write to Supabase - it's the source of truth
+      // Local DB will sync from Supabase when it initializes
+      const userId = pendingOAuthData?.cloudUser.id || currentUserId;
+
+      if (!userId) {
+        throw new Error("No user ID available for terms acceptance");
+      }
+
+      const result = await authService.acceptTermsToSupabase(userId);
+
+      if (result.success) {
+        // Update local state for pre-login flow
+        if (pendingOAuthData && !isAuthenticated) {
           setPendingOnboardingData((prev) => ({
             ...prev,
             termsAccepted: true,
           }));
-        } else {
-          console.error(
-            "[useAuthFlow] Failed to save terms to Supabase:",
-            result.error,
-          );
         }
-        return;
+      } else {
+        throw new Error(result.error || "Failed to accept terms");
       }
-      await acceptTerms();
     } catch (error) {
       console.error("[useAuthFlow] Failed to accept terms:", error);
+      throw error;
     }
-  }, [pendingOAuthData, isAuthenticated, acceptTerms]);
+  }, [pendingOAuthData, isAuthenticated, currentUserId]);
 
   const handleDeclineTerms = useCallback(async (): Promise<void> => {
     if (pendingOAuthData && !isAuthenticated) {

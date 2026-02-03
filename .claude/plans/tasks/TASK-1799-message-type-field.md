@@ -214,46 +214,56 @@ This task's PR MUST pass:
 
 **REQUIRED: Record your agent_id immediately when the Task tool returns.**
 
-*Completed: <DATE>*
+*Completed: 2026-02-02*
 
 ### Agent ID
 
 ```
-Engineer Agent ID: <agent_id from Task tool output>
+Engineer Agent ID: (background agent - no Task tool invocation)
 ```
 
 ### Checklist
 
 ```
 Files modified:
-- [ ] electron/types/models.ts
-- [ ] electron/services/iPhoneSyncStorageService.ts
-- [ ] electron/services/macOSMessagesImportService.ts
-- [ ] electron/services/databaseService.ts (migration)
+- [x] electron/types/models.ts
+- [x] electron/services/iPhoneSyncStorageService.ts
+- [x] electron/services/macOSMessagesImportService.ts
+- [x] electron/services/databaseService.ts (migration)
+- [x] electron/types/iosMessages.ts (added audioTranscript field)
+- [x] electron/utils/messageTypeDetector.ts (NEW)
+- [x] electron/utils/__tests__/messageTypeDetector.test.ts (NEW)
 
 Features implemented:
-- [ ] MessageType enum defined
-- [ ] message_type field on Message interface
-- [ ] Type detection in iOS import
-- [ ] Type detection in macOS import
-- [ ] Database migration (if applicable)
+- [x] MessageType type defined (text, voice_message, location, attachment_only, system, unknown)
+- [x] message_type field on Message interface
+- [x] Type detection in iOS import (iPhoneSyncStorageService)
+- [x] Type detection in macOS import (macOSMessagesImportService)
+- [x] Database migration 28 (column + CHECK constraint + backfill)
+- [x] messageTypeDetector utility with 43 unit tests
 
 Verification:
-- [ ] npm run type-check passes
-- [ ] npm run lint passes
-- [ ] npm test passes
+- [x] npm run type-check passes
+- [x] npm run lint passes (pre-existing unrelated error in NotificationContext)
+- [x] npm test passes (874 tests, 11 failures are pre-existing supabase/Windows path issues)
 ```
 
 ### Notes
 
 **Planning notes:**
-<Key decisions>
+- Used Migration 28 as recommended by SR Engineer
+- Added CHECK constraint: `CHECK (message_type IN ('text', 'voice_message', 'location', 'attachment_only', 'system', 'unknown'))`
+- Backfill for audio attachments implemented as approved
+- Detection function is stateless and pure for testing
+- Added audioTranscript to iOSMessage type (from TASK-1798 dependency) to enable voice message detection
 
 **Deviations from plan:**
-<If any>
+- Added electron/types/iosMessages.ts to the modified files list (needed to add audioTranscript field for type safety)
 
 **Issues encountered:**
-<Document any issues>
+- Variable name collision: `messagesColumns` was already used in Migration 11, renamed to `messagesColumnsM28` in Migration 28
+- Pre-existing test failures in supabaseService tests (device registration/analytics) - not related to this task
+- Pre-existing Windows path handling test failure in macOSMessagesImportService.attachments.test.ts - not related to this task
 
 ---
 

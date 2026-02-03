@@ -15,6 +15,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { AuthProvider } from "../../../contexts/AuthContext";
 import { NetworkProvider } from "../../../contexts/NetworkContext";
 import { PlatformProvider } from "../../../contexts/PlatformContext";
+import { LicenseProvider } from "../../../contexts/LicenseContext";
 import { AppStateProvider } from "../machine/AppStateContext";
 import { useAppStateMachine } from "../useAppStateMachine";
 import * as featureFlags from "../machine/utils/featureFlags";
@@ -57,7 +58,9 @@ function TestWrapper({ children }: { children: React.ReactNode }) {
     <PlatformProvider>
       <NetworkProvider>
         <AuthProvider>
-          <AppStateProvider>{children}</AppStateProvider>
+          <LicenseProvider userId={null}>
+            <AppStateProvider>{children}</AppStateProvider>
+          </LicenseProvider>
         </AuthProvider>
       </NetworkProvider>
     </PlatformProvider>

@@ -83,6 +83,31 @@ export const userBridge = {
 };
 
 /**
+ * Notification Bridge
+ * Send OS-level notifications
+ */
+export const notificationBridge = {
+  /**
+   * Check if notifications are supported
+   * @returns Whether notifications are supported on this platform
+   */
+  isSupported: (): Promise<{ success: boolean; supported: boolean }> =>
+    ipcRenderer.invoke("notification:is-supported"),
+
+  /**
+   * Send an OS notification
+   * @param title - Notification title
+   * @param body - Notification body text
+   * @returns Send result
+   */
+  send: (
+    title: string,
+    body: string
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke("notification:send", title, body),
+};
+
+/**
  * Shell Bridge
  * Interaction with system shell and external applications
  */
