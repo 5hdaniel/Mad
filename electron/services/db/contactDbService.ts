@@ -424,6 +424,7 @@ export async function getImportedContactsByUserId(
   userId: string,
 ): Promise<Contact[]> {
   // Get explicitly imported contacts from contacts table
+  // Include all emails/phones as JSON arrays for display in contact details
   const sql = `
     SELECT
       c.*,
@@ -436,20 +437,39 @@ export async function getImportedContactsByUserId(
         (SELECT phone_e164 FROM contact_phones WHERE contact_id = c.id AND is_primary = 1 LIMIT 1),
         (SELECT phone_e164 FROM contact_phones WHERE contact_id = c.id LIMIT 1)
       ) as phone,
+      (SELECT json_group_array(email) FROM contact_emails WHERE contact_id = c.id) as all_emails_json,
+      (SELECT json_group_array(phone_e164) FROM contact_phones WHERE contact_id = c.id) as all_phones_json,
       0 as is_message_derived
     FROM contacts c
     WHERE c.user_id = ? AND c.is_imported = 1
     ORDER BY c.display_name ASC
   `;
-  const importedContacts = dbAll<Contact>(sql, [userId]);
+  const importedContacts = dbAll<Contact & { all_emails_json?: string; all_phones_json?: string }>(sql, [userId]);
+
+  // Parse JSON arrays into allEmails/allPhones fields
+  const contactsWithArrays = importedContacts.map(contact => {
+    const allEmails: string[] = contact.all_emails_json
+      ? JSON.parse(contact.all_emails_json).filter((e: string | null) => e !== null)
+      : [];
+    const allPhones: string[] = contact.all_phones_json
+      ? JSON.parse(contact.all_phones_json).filter((p: string | null) => p !== null)
+      : [];
+    // Remove the JSON fields from the result
+    const { all_emails_json, all_phones_json, ...rest } = contact;
+    return {
+      ...rest,
+      allEmails,
+      allPhones,
+    } as Contact;
+  });
 
   // Get message-derived contacts (unique senders from messages, excluding already-imported)
   const messageDerivedContacts = getMessageDerivedContacts(userId);
 
-  // Merge both lists - imported contacts first, then message-derived
+  // Merge both lists - imported contacts first (with allEmails/allPhones), then message-derived
   // Cast message-derived to Contact type (they have compatible fields)
   const allContacts = [
-    ...importedContacts,
+    ...contactsWithArrays,
     ...messageDerivedContacts.map(mc => ({
       id: mc.id,
       user_id: userId,

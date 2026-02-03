@@ -252,6 +252,12 @@ export interface Contact {
   /** Last communication date (for message-derived contacts and activity tracking) */
   last_communication_at?: Date | string | null;
 
+  // ========== Array Fields (for display) ==========
+  /** All emails for this contact (from contact_emails table) */
+  allEmails?: string[];
+  /** All phones for this contact (from contact_phones table) */
+  allPhones?: string[];
+
   // ========== Legacy Fields (backwards compatibility) ==========
   /** @deprecated Read-only. Use display_name for all writes. */
   name?: string;
