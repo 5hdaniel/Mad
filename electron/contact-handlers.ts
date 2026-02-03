@@ -110,11 +110,13 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         });
 
         // BACKLOG-551: Validate user ID exists in local DB
+        // BACKLOG-615: Return empty array gracefully during deferred DB init (onboarding)
         const validatedUserId = await getValidUserId(userId, "Contacts");
         if (!validatedUserId) {
+          logService.info("[Contacts] No local user yet, returning empty contacts (deferred DB init)", "Contacts");
           return {
-            success: false,
-            error: "No valid user found in database",
+            success: true,
+            contacts: [],
           };
         }
 
@@ -177,11 +179,14 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         );
 
         // BACKLOG-551: Validate user ID exists in local DB
+        // BACKLOG-615: Return empty array gracefully during deferred DB init (onboarding)
         const validatedUserId = await getValidUserId(userId, "Contacts");
         if (!validatedUserId) {
+          logService.info("[Contacts] No local user yet, returning empty available contacts (deferred DB init)", "Contacts");
           return {
-            success: false,
-            error: "No valid user found in database",
+            success: true,
+            contacts: [],
+            contactsStatus: { loaded: true },
           };
         }
 
@@ -760,11 +765,13 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         );
 
         // BACKLOG-551: Validate user ID exists in local DB
+        // BACKLOG-615: Return empty array gracefully during deferred DB init (onboarding)
         const validatedUserId = await getValidUserId(userId, "Contacts");
         if (!validatedUserId) {
+          logService.info("[Contacts] No local user yet, returning empty sorted contacts (deferred DB init)", "Contacts");
           return {
-            success: false,
-            error: "No valid user found in database",
+            success: true,
+            contacts: [],
           };
         }
 
@@ -1174,11 +1181,13 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
     ): Promise<ContactResponse> => {
       try {
         // BACKLOG-551: Validate user ID exists in local DB
+        // BACKLOG-615: Return empty array gracefully during deferred DB init (onboarding)
         const validatedUserId = await getValidUserId(userId, "Contacts");
         if (!validatedUserId) {
+          logService.info("[Contacts] No local user yet, returning empty search results (deferred DB init)", "Contacts");
           return {
-            success: false,
-            error: "No valid user found in database",
+            success: true,
+            contacts: [],
           };
         }
 
