@@ -278,6 +278,9 @@ describe("App", () => {
       success: true,
       completed: true,
     });
+    window.api.system.getAppInfo.mockResolvedValue({
+      version: "1.0.7",
+    });
   });
 
   describe("Authentication", () => {
