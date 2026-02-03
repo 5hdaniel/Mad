@@ -30,6 +30,24 @@ export type MessageDirection = "inbound" | "outbound";
 export type ClassificationMethod = "pattern" | "llm" | "user";
 export type FalsePositiveReason = "signature" | "promotional" | "unrelated" | "other";
 
+/**
+ * Type of message content for UI differentiation (TASK-1799)
+ *
+ * - text: Regular text message
+ * - voice_message: Audio message with optional transcript
+ * - location: Location sharing message
+ * - attachment_only: Has attachment but no text content
+ * - system: System/service message (delivery receipts, etc.)
+ * - unknown: Unable to determine type
+ */
+export type MessageType =
+  | "text"
+  | "voice_message"
+  | "location"
+  | "attachment_only"
+  | "system"
+  | "unknown";
+
 // Transactions
 export type TransactionType = "purchase" | "sale" | "other";
 export type TransactionStatus = "pending" | "active" | "closed" | "rejected";
@@ -336,6 +354,10 @@ export interface Message {
 
   // Attachments
   has_attachments: boolean;
+
+  // Message Type (TASK-1799)
+  /** Type of message content for UI differentiation */
+  message_type?: MessageType;
 
   // Classification Results
   is_transaction_related?: boolean; // null = not classified

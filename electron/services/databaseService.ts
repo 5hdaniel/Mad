@@ -1172,6 +1172,47 @@ class DatabaseService implements IDatabaseService {
       await logService.info("Migration 27c complete: participants_flat backfilled for existing messages", "DatabaseService");
     }
 
+    // Migration 28: Add message_type column to messages table (TASK-1799)
+    // This enables UI differentiation between text, voice messages, location shares, etc.
+    const messagesColumnsM28 = getColumns('messages');
+    if (!messagesColumnsM28.includes('message_type')) {
+      await logService.info("Running migration 28: Add message_type column to messages", "DatabaseService");
+
+      // Add the column with CHECK constraint for valid values
+      db.exec(`
+        ALTER TABLE messages ADD COLUMN message_type TEXT
+        CHECK (message_type IS NULL OR message_type IN ('text', 'voice_message', 'location', 'attachment_only', 'system', 'unknown'))
+      `);
+
+      await logService.info("Migration 28: message_type column added to messages", "DatabaseService");
+
+      // Backfill existing messages with audio attachments as voice_message
+      const audioMessagesCount = db.prepare(`
+        SELECT COUNT(DISTINCT m.id) as count
+        FROM messages m
+        JOIN attachments a ON a.message_id = m.id
+        WHERE a.mime_type LIKE 'audio/%'
+          AND m.message_type IS NULL
+      `).get() as { count: number } | undefined;
+
+      if (audioMessagesCount && audioMessagesCount.count > 0) {
+        await logService.info(`Migration 28: Backfilling ${audioMessagesCount.count} voice messages`, "DatabaseService");
+
+        db.exec(`
+          UPDATE messages SET message_type = 'voice_message'
+          WHERE id IN (
+            SELECT DISTINCT m.id FROM messages m
+            JOIN attachments a ON a.message_id = m.id
+            WHERE a.mime_type LIKE 'audio/%'
+          ) AND message_type IS NULL
+        `);
+
+        await logService.info("Migration 28: Voice messages backfilled", "DatabaseService");
+      }
+
+      await logService.info("Migration 28 complete: message_type column and backfill done", "DatabaseService");
+    }
+
     // Finalize schema version (create table if missing for backwards compatibility)
     const schemaVersionExists = db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
