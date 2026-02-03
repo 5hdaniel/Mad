@@ -13,6 +13,7 @@ import {
   type MessageLike,
 } from "./MessageThreadCard";
 import { AttachMessagesModal, UnlinkMessageModal } from "./modals";
+import { parseDateSafe } from "../../../utils/dateFormatters";
 
 /**
  * Format a date range for display in the toggle label
@@ -31,29 +32,6 @@ function formatDateRangeLabel(startDate: Date | null, endDate: Date | null): str
     return `Through ${formatDate(endDate)}`;
   }
   return "";
-}
-
-/**
- * Parse a date value with Windows timezone fix
- * On Windows, YYYY-MM-DD strings are parsed as local time to avoid off-by-one errors
- */
-function parseDateSafe(dateValue: Date | string | null | undefined): Date | null {
-  if (!dateValue) return null;
-  if (dateValue instanceof Date) {
-    return isNaN(dateValue.getTime()) ? null : dateValue;
-  }
-  // For date-only strings (YYYY-MM-DD) on Windows, parse as local time
-  const isWindows = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows');
-  if (isWindows) {
-    const dateOnlyMatch = String(dateValue).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (dateOnlyMatch) {
-      const [, year, month, day] = dateOnlyMatch;
-      const d = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-      return isNaN(d.getTime()) ? null : d;
-    }
-  }
-  const d = new Date(dateValue);
-  return isNaN(d.getTime()) ? null : d;
 }
 
 /**
@@ -170,36 +148,9 @@ export function TransactionMessagesTab({
   const [contactNames, setContactNames] = useState<Record<string, string>>({});
 
   // BACKLOG-357: Audit date filtering state
-  // TASK-1795: Validate dates to prevent Invalid Date issues
-  // Also fixes timezone issue on Windows: "2025-01-08" was being parsed as UTC midnight,
-  // which displays as Jan 7 in US timezones. Now parses as local time on Windows only.
-  const parseDate = (dateValue: Date | string | null | undefined): Date | null => {
-    if (!dateValue) return null;
-    if (dateValue instanceof Date) {
-      return isNaN(dateValue.getTime()) ? null : dateValue;
-    }
-    // For date-only strings (YYYY-MM-DD) on Windows, parse as local time to avoid timezone shift
-    // Only apply on Windows to avoid breaking Mac which was working correctly
-    const isWindows = navigator.userAgent.includes('Windows');
-    if (isWindows) {
-      const dateOnlyMatch = String(dateValue).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-      if (dateOnlyMatch) {
-        const [, year, month, day] = dateOnlyMatch;
-        const d = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-        return isNaN(d.getTime()) ? null : d;
-      }
-    }
-    // For other formats or on Mac, use standard parsing
-    const d = new Date(dateValue);
-    if (isNaN(d.getTime())) {
-      console.warn('[TransactionMessagesTab] Invalid audit date:', dateValue);
-      return null;
-    }
-    return d;
-  };
-
-  const parsedStartDate = parseDate(auditStartDate);
-  const parsedEndDate = parseDate(auditEndDate);
+  // TASK-1795: Uses parseDateSafe from utils for Windows timezone handling
+  const parsedStartDate = parseDateSafe(auditStartDate, 'TransactionMessagesTab');
+  const parsedEndDate = parseDateSafe(auditEndDate, 'TransactionMessagesTab');
   // Show filter if at least one date is set (handles ongoing transactions with only start date)
   const hasAuditDates = !!(parsedStartDate || parsedEndDate);
 

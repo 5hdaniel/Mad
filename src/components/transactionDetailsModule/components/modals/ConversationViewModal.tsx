@@ -5,6 +5,7 @@
  */
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import type { MessageLike } from "../MessageThreadCard";
+import { parseDateSafe } from "../../../../utils/dateFormatters";
 
 /**
  * Attachment info for display (TASK-1012)
@@ -212,36 +213,9 @@ export function ConversationViewModal({
   const loadedAttachmentsKeyRef = useRef<string>("");
 
   // TASK-1157: Audit date filtering state
-  // TASK-1795: Validate dates to prevent Invalid Date issues
-  // Also fixes timezone issue on Windows: "2025-01-08" was being parsed as UTC midnight,
-  // which displays as Jan 7 in US timezones. Now parses as local time on Windows only.
-  const parseDate = (dateValue: Date | string | null | undefined): Date | null => {
-    if (!dateValue) return null;
-    if (dateValue instanceof Date) {
-      return isNaN(dateValue.getTime()) ? null : dateValue;
-    }
-    // For date-only strings (YYYY-MM-DD) on Windows, parse as local time to avoid timezone shift
-    // Only apply on Windows to avoid breaking Mac which was working correctly
-    const isWindows = navigator.userAgent.includes('Windows');
-    if (isWindows) {
-      const dateOnlyMatch = String(dateValue).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-      if (dateOnlyMatch) {
-        const [, year, month, day] = dateOnlyMatch;
-        const d = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-        return isNaN(d.getTime()) ? null : d;
-      }
-    }
-    // For other formats or on Mac, use standard parsing
-    const d = new Date(dateValue);
-    if (isNaN(d.getTime())) {
-      console.warn('[ConversationViewModal] Invalid audit date:', dateValue);
-      return null;
-    }
-    return d;
-  };
-
-  const parsedStartDate = parseDate(auditStartDate);
-  const parsedEndDate = parseDate(auditEndDate);
+  // TASK-1795: Uses parseDateSafe from utils for Windows timezone handling
+  const parsedStartDate = parseDateSafe(auditStartDate, 'ConversationViewModal');
+  const parsedEndDate = parseDateSafe(auditEndDate, 'ConversationViewModal');
   // Show filter if at least one date is set (handles ongoing transactions with only start date)
   const hasAuditDates = !!(parsedStartDate || parsedEndDate);
 
@@ -262,8 +236,8 @@ export function ConversationViewModal({
     }
 
     return sortedMessages.filter((msg) => {
-      // Use parseDate for consistent timezone handling (Windows-safe)
-      const msgDate = parseDate(msg.sent_at || msg.received_at) || new Date(0);
+      // Use parseDateSafe for consistent timezone handling (Windows-safe)
+      const msgDate = parseDateSafe(msg.sent_at || msg.received_at) || new Date(0);
 
       // Check start date (if set)
       if (parsedStartDate && msgDate < parsedStartDate) {
