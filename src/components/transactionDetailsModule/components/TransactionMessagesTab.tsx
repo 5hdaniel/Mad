@@ -147,9 +147,20 @@ export function TransactionMessagesTab({
   const [contactNames, setContactNames] = useState<Record<string, string>>({});
 
   // BACKLOG-357: Audit date filtering state
-  // Parse audit dates
-  const parsedStartDate = auditStartDate ? new Date(auditStartDate) : null;
-  const parsedEndDate = auditEndDate ? new Date(auditEndDate) : null;
+  // TASK-1795: Validate dates to prevent Invalid Date issues
+  // TODO: Consider consolidating with src/utils/contactSortUtils.ts:parseDate
+  const parseDate = (dateValue: Date | string | null | undefined): Date | null => {
+    if (!dateValue) return null;
+    const d = new Date(dateValue);
+    if (isNaN(d.getTime())) {
+      console.warn('[TransactionMessagesTab] Invalid audit date:', dateValue);
+      return null;
+    }
+    return d;
+  };
+
+  const parsedStartDate = parseDate(auditStartDate);
+  const parsedEndDate = parseDate(auditEndDate);
   // Show filter if at least one date is set (handles ongoing transactions with only start date)
   const hasAuditDates = !!(parsedStartDate || parsedEndDate);
 
