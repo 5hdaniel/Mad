@@ -17,8 +17,8 @@ This sprint combines two related initiatives:
 
 | Task | Title | Status | Assigned | Est Tokens | Actual Tokens |
 |------|-------|--------|----------|------------|---------------|
-| TASK-1804 | Users SSO/SCIM columns | in_progress | Engineer | ~15K | - |
-| TASK-1805 | Organizations SSO columns | pending | - | ~10K | - |
+| TASK-1804 | Users SSO/SCIM columns | complete | PM | ~15K | ~5K |
+| TASK-1805 | Organizations SSO columns | complete | PM | ~10K | ~3K |
 | TASK-1806 | Identity provider tables | pending | - | ~8K | - |
 | TASK-1807 | Members provisioning columns | pending | - | ~5K | - |
 
