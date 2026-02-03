@@ -9,6 +9,7 @@
  *
  * TASK-1809: User list component implementation
  * TASK-1810: Added invite user modal integration
+ * TASK-1812: Added deactivate/remove user modals
  */
 
 import { useState, useMemo } from 'react';
@@ -16,6 +17,8 @@ import UserCard from './UserCard';
 import UserSearchFilter from './UserSearchFilter';
 import InviteUserModal from './InviteUserModal';
 import EditRoleModal from './EditRoleModal';
+import DeactivateUserModal from './DeactivateUserModal';
+import RemoveUserModal from './RemoveUserModal';
 import { EmptyState, SearchIcon } from '@/components/ui/EmptyState';
 import { formatUserDisplayName } from '@/lib/utils/userDisplay';
 import type { OrganizationMember, Role } from '@/lib/types/users';
@@ -60,6 +63,8 @@ export default function UserListClient({
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [editRoleMember, setEditRoleMember] = useState<OrganizationMember | null>(null);
+  const [deactivateMember, setDeactivateMember] = useState<OrganizationMember | null>(null);
+  const [removeMember, setRemoveMember] = useState<OrganizationMember | null>(null);
 
   const filteredMembers = useMemo(() => {
     return initialMembers.filter((member) => {
@@ -159,6 +164,8 @@ export default function UserListClient({
                 isCurrentUser={member.user_id === currentUserId}
                 canManage={canManage}
                 onEditRole={setEditRoleMember}
+                onDeactivate={setDeactivateMember}
+                onRemove={setRemoveMember}
               />
             ))}
           </div>
@@ -181,6 +188,27 @@ export default function UserListClient({
           memberName={formatUserDisplayName(editRoleMember.user ?? null, editRoleMember.invited_email)}
           currentRole={editRoleMember.role}
           currentUserRole={currentUserRole}
+        />
+      )}
+
+      {/* Deactivate User Modal */}
+      {deactivateMember && (
+        <DeactivateUserModal
+          isOpen={!!deactivateMember}
+          onClose={() => setDeactivateMember(null)}
+          memberId={deactivateMember.id}
+          memberName={formatUserDisplayName(deactivateMember.user ?? null, deactivateMember.invited_email)}
+        />
+      )}
+
+      {/* Remove User Modal */}
+      {removeMember && (
+        <RemoveUserModal
+          isOpen={!!removeMember}
+          onClose={() => setRemoveMember(null)}
+          memberId={removeMember.id}
+          memberName={formatUserDisplayName(removeMember.user ?? null, removeMember.invited_email)}
+          isPending={!removeMember.user_id}
         />
       )}
     </div>
