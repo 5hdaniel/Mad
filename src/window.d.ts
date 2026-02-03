@@ -1564,6 +1564,47 @@ interface MainAPI {
     ) => Promise<{ success: boolean; error?: string }>;
   };
 
+  // Error Logging API (TASK-1800)
+  errorLogging: {
+    /**
+     * Submit an error report to Supabase
+     * @param payload - Error details and optional user feedback
+     * @returns Result with success status and error ID
+     */
+    submit: (payload: {
+      errorType: string;
+      errorCode?: string;
+      errorMessage: string;
+      stackTrace?: string;
+      currentScreen?: string;
+      userFeedback?: string;
+      breadcrumbs?: Record<string, unknown>[];
+      appState?: Record<string, unknown>;
+    }) => Promise<{
+      success: boolean;
+      errorId?: string;
+      error?: string;
+    }>;
+    /**
+     * Process queued errors (call when connection restored)
+     * @returns Number of errors successfully processed
+     */
+    processQueue: () => Promise<{
+      success: boolean;
+      processedCount?: number;
+      error?: string;
+    }>;
+    /**
+     * Get current queue size (for diagnostics)
+     * @returns Queue size
+     */
+    getQueueSize: () => Promise<{
+      success: boolean;
+      queueSize?: number;
+      error?: string;
+    }>;
+  };
+
   // License API
   license: {
     /** Get current user's license information */

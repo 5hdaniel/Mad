@@ -41,6 +41,7 @@ import {
   updateBridge,
   messageBridge,
   licenseBridge,
+  errorLoggingBridge,
 } from "./preload/index";
 
 // Expose protected methods that allow the renderer process to use
@@ -105,4 +106,7 @@ contextBridge.exposeInMainWorld("api", {
 
   // License management
   license: licenseBridge,
+
+  // Error logging (production monitoring)
+  errorLogging: errorLoggingBridge,
 });

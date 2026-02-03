@@ -30,6 +30,9 @@ export {
 // Session handlers
 export { registerSessionHandlers } from "./sessionHandlers";
 
+// Error logging handlers
+export { registerErrorLoggingHandlers } from "./errorLoggingHandlers";
+
 // Shared auth handlers
 export {
   registerSharedAuthHandlers,
