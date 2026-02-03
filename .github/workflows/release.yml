@@ -89,17 +89,17 @@ jobs:
           MICROSOFT_CLIENT_SECRET: ${{ secrets.MICROSOFT_CLIENT_SECRET }}
         run: |
           echo "Creating .env.production file..."
-          cat > .env.production <<EOF
-SUPABASE_URL=${SUPABASE_URL}
-SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
-GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
-MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID}
-MICROSOFT_TENANT_ID=${MICROSOFT_TENANT_ID}
-MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET}
-BROKER_PORTAL_URL=https://broker-portal-two.vercel.app
-EOF
+          {
+            echo "SUPABASE_URL=${SUPABASE_URL}"
+            echo "SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}"
+            echo "GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}"
+            echo "GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}"
+            echo "GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}"
+            echo "MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID}"
+            echo "MICROSOFT_TENANT_ID=${MICROSOFT_TENANT_ID}"
+            echo "MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET}"
+            echo "BROKER_PORTAL_URL=https://broker-portal-two.vercel.app"
+          } > .env.production
           echo ".env.production created with $(wc -l < .env.production) lines"
 
       - name: Package and Sign macOS App
@@ -208,17 +208,19 @@ EOF
           MICROSOFT_TENANT_ID: ${{ secrets.MICROSOFT_TENANT_ID }}
           MICROSOFT_CLIENT_SECRET: ${{ secrets.MICROSOFT_CLIENT_SECRET }}
         run: |
-          @"
-SUPABASE_URL=$env:SUPABASE_URL
-SUPABASE_ANON_KEY=$env:SUPABASE_ANON_KEY
-GOOGLE_CLIENT_ID=$env:GOOGLE_CLIENT_ID
-GOOGLE_CLIENT_SECRET=$env:GOOGLE_CLIENT_SECRET
-GOOGLE_MAPS_API_KEY=$env:GOOGLE_MAPS_API_KEY
-MICROSOFT_CLIENT_ID=$env:MICROSOFT_CLIENT_ID
-MICROSOFT_TENANT_ID=$env:MICROSOFT_TENANT_ID
-MICROSOFT_CLIENT_SECRET=$env:MICROSOFT_CLIENT_SECRET
-BROKER_PORTAL_URL=https://broker-portal-two.vercel.app
-"@ | Out-File -FilePath .env.production -Encoding utf8
+          $content = @(
+            "SUPABASE_URL=$env:SUPABASE_URL",
+            "SUPABASE_ANON_KEY=$env:SUPABASE_ANON_KEY",
+            "GOOGLE_CLIENT_ID=$env:GOOGLE_CLIENT_ID",
+            "GOOGLE_CLIENT_SECRET=$env:GOOGLE_CLIENT_SECRET",
+            "GOOGLE_MAPS_API_KEY=$env:GOOGLE_MAPS_API_KEY",
+            "MICROSOFT_CLIENT_ID=$env:MICROSOFT_CLIENT_ID",
+            "MICROSOFT_TENANT_ID=$env:MICROSOFT_TENANT_ID",
+            "MICROSOFT_CLIENT_SECRET=$env:MICROSOFT_CLIENT_SECRET",
+            "BROKER_PORTAL_URL=https://broker-portal-two.vercel.app"
+          ) -join "`n"
+          $content | Out-File -FilePath .env.production -Encoding utf8 -NoNewline
+          Add-Content -Path .env.production -Value ""
           echo ".env.production created"
           Get-Content .env.production
         shell: pwsh
