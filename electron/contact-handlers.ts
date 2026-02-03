@@ -11,6 +11,7 @@ import { getContactNames } from "./services/contactsService";
 import auditService from "./services/auditService";
 import logService from "./services/logService";
 import * as externalContactDb from "./services/db/externalContactDbService";
+import { dbAll, dbGet } from "./services/db/core/dbConnection";
 import type { Contact, Transaction, ContactSource } from "./types/models";
 
 // Import validation utilities
@@ -49,6 +50,48 @@ interface ContactResponse {
 let _mainWindow: BrowserWindow | null = null;
 
 /**
+ * Backfill emails/phones for all imported contacts from external_contacts.
+ * Called after external contacts sync to ensure imported contacts have
+ * all emails/phones from macOS Contacts.
+ */
+async function backfillImportedContactsFromExternal(userId: string): Promise<{ updated: number }> {
+  let updated = 0;
+
+  try {
+    // Get all imported contacts
+    const importedSql = `SELECT id, display_name FROM contacts WHERE user_id = ? AND is_imported = 1`;
+    const importedContacts = dbAll<{ id: string; display_name: string }>(importedSql, [userId]);
+
+    for (const contact of importedContacts) {
+      // Find matching external contact by name
+      const externalSql = `SELECT emails_json, phones_json FROM external_contacts WHERE user_id = ? AND name = ?`;
+      const external = dbGet<{ emails_json: string; phones_json: string }>(externalSql, [userId, contact.display_name]);
+
+      if (external) {
+        const emails: string[] = external.emails_json ? JSON.parse(external.emails_json) : [];
+        const phones: string[] = external.phones_json ? JSON.parse(external.phones_json) : [];
+
+        const emailsAdded = await databaseService.backfillContactEmails(contact.id, emails);
+        const phonesAdded = await databaseService.backfillContactPhones(contact.id, phones);
+
+        if (emailsAdded > 0 || phonesAdded > 0) {
+          updated++;
+          logService.debug(`Backfilled contact ${contact.display_name}: +${emailsAdded} emails, +${phonesAdded} phones`, "Contacts");
+        }
+      }
+    }
+
+    if (updated > 0) {
+      logService.info(`Backfilled ${updated} imported contacts from external_contacts`, "Contacts", { userId });
+    }
+  } catch (error) {
+    logService.warn(`Failed to backfill imported contacts: ${error}`, "Contacts");
+  }
+
+  return { updated };
+}
+
+/**
  * Register all contact-related IPC handlers
  * @param mainWindow - The main browser window for emitting progress events
  */
@@ -75,7 +118,17 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           };
         }
 
-        // Get only imported contacts from database
+        // Backfill any missing emails/phones for imported contacts
+        // This ensures contacts have complete data from external sources
+        const backfillResult = await backfillImportedContactsFromExternal(validatedUserId);
+        if (backfillResult.updated > 0) {
+          logService.info(
+            `Backfilled ${backfillResult.updated} imported contacts with missing emails/phones`,
+            "Contacts",
+          );
+        }
+
+        // Get only imported contacts from database (now with backfilled data)
         const importedContacts =
           await databaseService.getImportedContactsByUserId(validatedUserId);
 
@@ -346,6 +399,15 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
 
               // Full sync: upsert + delete stale + update dates
               externalContactDb.fullSync(validatedUserId, macOSContacts);
+
+              // Backfill any missing emails/phones for already-imported contacts
+              const backfillResult = await backfillImportedContactsFromExternal(validatedUserId);
+              if (backfillResult.updated > 0) {
+                logService.info(
+                  `[Main] Backfilled ${backfillResult.updated} imported contacts with missing emails/phones`,
+                  "Contacts",
+                );
+              }
             }
           } catch (syncErr) {
             logService.warn(`[Main] Initial external contacts sync failed: ${syncErr}`, "Contacts");
@@ -375,6 +437,15 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
                 }
 
                 externalContactDb.fullSync(validatedUserId, macOSContacts);
+
+                // Backfill any missing emails/phones for already-imported contacts
+                const backfillResult = await backfillImportedContactsFromExternal(validatedUserId);
+                if (backfillResult.updated > 0) {
+                  logService.info(
+                    `[Main] Background sync: Backfilled ${backfillResult.updated} imported contacts`,
+                    "Contacts",
+                  );
+                }
 
                 // Notify renderer that sync is complete
                 if (_mainWindow && !_mainWindow.isDestroyed()) {
@@ -1255,10 +1326,14 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         // Full sync: upsert + delete stale + update dates
         const result = externalContactDb.fullSync(validatedUserId, macOSContacts);
 
+        // Backfill any imported contacts with new emails/phones from external_contacts
+        const backfillResult = await backfillImportedContactsFromExternal(validatedUserId);
+
         logService.info("[Main] External contacts manual sync complete", "Contacts", {
           inserted: result.inserted,
           deleted: result.deleted,
           total: result.total,
+          backfilled: backfillResult.updated,
         });
 
         return {
@@ -1320,4 +1395,5 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
       }
     },
   );
+
 }
