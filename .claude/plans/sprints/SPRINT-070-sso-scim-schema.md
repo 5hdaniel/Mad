@@ -28,7 +28,7 @@ This sprint combines two related initiatives:
 
 | Task | Title | Status | Assigned | Est Tokens | Actual Tokens |
 |------|-------|--------|----------|------------|---------------|
-| TASK-1808 | Users Management Route & Layout | pending | - | ~20K | - |
+| TASK-1808 | Users Management Route & Layout | complete | PM | ~20K | ~8K |
 | TASK-1814 | Users List Server Actions | pending | - | ~15K | - |
 | TASK-1809 | User List Component | pending | - | ~25K | - |
 | TASK-1810 | Invite User Modal & Service | pending | - | ~30K | - |
