@@ -14,7 +14,11 @@ Medium
 
 ## Status
 
-Pending
+In Progress
+
+## Sprint
+
+SPRINT-069
 
 ## User Story
 
@@ -104,11 +108,17 @@ CREATE INDEX idx_call_logs_contact ON call_logs(contact_id);
 CREATE INDEX idx_call_logs_timestamp ON call_logs(timestamp);
 ```
 
-### iPhone Backup Location
+### Platform Matrix
 
-Call history is stored in:
-- `HomeDomain/Library/CallHistoryDB/CallHistory.storedata` (iOS 8+)
+**macOS (direct access):**
+- Location: `~/Library/Application Support/CallHistoryDB/CallHistory.storedata`
+- Requires Full Disk Access permission (same as Messages)
+- Core Data SQLite format
+
+**Windows (iPhone backup):**
+- Location in backup: `HomeDomain/Library/CallHistoryDB/CallHistory.storedata`
 - SQLite database with `ZCALLRECORD` table
+- Access via existing backup parsing infrastructure
 
 ### Call Record Fields (iOS)
 
