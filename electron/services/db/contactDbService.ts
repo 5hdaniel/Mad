@@ -567,10 +567,13 @@ export async function backfillContactEmails(contactId: string, emails: string[])
     const emailSql = `
       INSERT OR IGNORE INTO contact_emails (
         id, contact_id, email, is_primary, source, created_at
-      ) VALUES (?, ?, ?, ?, 'backfill', CURRENT_TIMESTAMP)
+      ) VALUES (?, ?, ?, ?, 'import', CURRENT_TIMESTAMP)
     `;
-    dbRun(emailSql, [emailId, contactId, normalizedEmail, isPrimary]);
-    added++;
+    const result = dbRun(emailSql, [emailId, contactId, normalizedEmail, isPrimary]);
+    // Only count as added if the insert actually happened (changes > 0)
+    if (result.changes > 0) {
+      added++;
+    }
   }
 
   if (added > 0) {
@@ -613,10 +616,13 @@ export async function backfillContactPhones(contactId: string, phones: string[])
     const phoneSql = `
       INSERT OR IGNORE INTO contact_phones (
         id, contact_id, phone_e164, phone_display, is_primary, source, created_at
-      ) VALUES (?, ?, ?, ?, ?, 'backfill', CURRENT_TIMESTAMP)
+      ) VALUES (?, ?, ?, ?, ?, 'import', CURRENT_TIMESTAMP)
     `;
-    dbRun(phoneSql, [phoneId, contactId, phoneE164, phone, isPrimary]);
-    added++;
+    const result = dbRun(phoneSql, [phoneId, contactId, phoneE164, phone, isPrimary]);
+    // Only count as added if the insert actually happened (changes > 0)
+    if (result.changes > 0) {
+      added++;
+    }
   }
 
   if (added > 0) {
