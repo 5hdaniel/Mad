@@ -114,9 +114,11 @@ jobs:
           # GitHub token for publishing
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Convert boolean input to electron-builder publish value
+          PUBLISH_VALUE="${{ github.event.inputs.publish == 'true' && 'always' || (github.event.inputs.publish == 'false' && 'never' || 'always') }}"
           if [ -n "$CSC_LINK" ]; then
             echo "Building signed and notarized macOS package..."
-            npm run package -- --publish ${{ github.event.inputs.publish || 'always' }}
+            npm run package -- --publish "$PUBLISH_VALUE"
           else
             echo "Building unsigned macOS package (no certificate configured)..."
             npm run package:unsigned
@@ -232,10 +234,12 @@ jobs:
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
           # GitHub token for publishing
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Convert boolean input to electron-builder publish value
+          PUBLISH_VALUE: ${{ github.event.inputs.publish == 'true' && 'always' || (github.event.inputs.publish == 'false' && 'never' || 'always') }}
         run: |
           if ($env:WIN_CSC_LINK) {
             echo "Building signed Windows package..."
-            npm run package -- --publish ${{ github.event.inputs.publish || 'always' }}
+            npm run package -- --publish $env:PUBLISH_VALUE
           } else {
             echo "Building unsigned Windows package (no certificate configured)..."
             npm run package:unsigned
