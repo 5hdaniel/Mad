@@ -17,21 +17,21 @@
 | TASK-1780 | complete | - | ~10K | - |
 | TASK-1781 | obsolete | - | ~15K | - |
 
-### Phase 1: Infrastructure (SyncOrchestrator) - CURRENT
+### Phase 1: Infrastructure (SyncOrchestrator) - COMPLETE
 
 | Task | Status | Assigned | Est Tokens | Actual Tokens |
 |------|--------|----------|------------|---------------|
 | TASK-1782 | complete | - | ~20K | TBD |
 | TASK-1783 | complete | - | ~15K | TBD |
-| TASK-1784 | in_progress | - | ~12K | - |
-| TASK-1785 | pending | - | ~10K | - |
-| TASK-1786 | pending | - | ~8K | - |
+| TASK-1784 | complete | - | ~12K | TBD |
+| TASK-1785 | complete | - | ~10K | TBD |
+| TASK-1786 | complete | - | ~8K | - |
 
 ### Phase 2: Verification (Original Goals)
 
 | Task | Type | Status | Assigned | Est Tokens | Actual Tokens |
 |------|------|--------|----------|------------|---------------|
-| TASK-1776-V | verification | pending | - | ~5K | - |
+| TASK-1776-V | verification | complete | - | ~5K | - |
 | TASK-1777-V | verification | pending | - | ~5K | - |
 | TASK-1778-V | verification | pending | - | ~3K | - |
 | TASK-1779-V | verification | pending | - | ~3K | - |
@@ -137,7 +137,7 @@ Before starting sprint work, engineers must:
 
 ---
 
-### Phase 1: Infrastructure (SyncOrchestrator) - CURRENT
+### Phase 1: Infrastructure (SyncOrchestrator) - COMPLETE
 
 Build the centralized sync architecture that replaces SyncQueueService.
 
@@ -327,12 +327,12 @@ dependency_graph:
     - id: TASK-1784
       type: task
       phase: 1b
-      status: in_progress
+      status: complete
       title: Migrate PermissionsStep to SyncOrchestrator
     - id: TASK-1785
       type: task
       phase: 1c
-      status: pending
+      status: complete
       title: Update SyncStatusIndicator for queue-order pills
     - id: TASK-1786
       type: task
@@ -585,16 +585,16 @@ The following MUST pass before merge:
 
 - [x] TASK-1782 complete - SyncOrchestratorService functional
 - [x] TASK-1783 complete - useAutoRefresh migrated (469 -> 304 lines, 35% reduction)
-- [ ] TASK-1784 complete - PermissionsStep migrated
-- [ ] TASK-1785 complete - SyncStatusIndicator shows queue-order pills
-- [ ] TASK-1786 complete - Obsolete services removed
-- [ ] All CI checks passing
-- [ ] No TypeScript errors
-- [ ] No lint errors
+- [x] TASK-1784 complete - PermissionsStep migrated (commit: `4b383a50`, ~106 lines reduced, 72/72 tests pass)
+- [x] TASK-1785 complete - SyncStatusIndicator shows queue-order pills (commit: `377fbc39`, 20/20 tests pass)
+- [x] TASK-1786 complete - Obsolete services removed (commit: `4f7be075`)
+- [x] All CI checks passing
+- [x] No TypeScript errors
+- [x] No lint errors
 
 ### Phase 2 Gate (Verification)
 
-- [ ] TASK-1776-V: Pills show reliable states: gray (queued) -> blue (running) -> green (complete)
+- [x] TASK-1776-V: Pills show reliable states: gray (queued) -> blue (running) -> green (complete)
 - [ ] TASK-1777-V: useAutoRefresh is simplified (single orchestrator call)
 - [ ] TASK-1778-V: Dashboard has no sync-related prop drilling
 - [ ] TASK-1779-V: Onboarding flow works correctly with orchestrator
