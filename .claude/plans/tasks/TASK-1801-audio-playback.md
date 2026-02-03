@@ -22,9 +22,13 @@ Add audio playback capability to the MessageBubble component so users can listen
 
 ## Deliverables
 
-1. Update: `src/components/transactionDetailsModule/components/MessageBubble.tsx` - Add audio player
-2. Optional: `src/components/common/AudioPlayer.tsx` - Reusable component if needed
+1. **NEW (MANDATORY)**: `src/components/common/AudioPlayer.tsx` - Reusable audio player component
+2. Update: `src/components/transactionDetailsModule/components/MessageBubble.tsx` - Integrate AudioPlayer
 3. May need: IPC handler for getting attachment file paths
+
+**SR Engineer Requirement:** AudioPlayer MUST be extracted to a separate component to:
+- Prevent MessageBubble from exceeding line budgets
+- Create reusable component for broker portal (TASK-1803)
 
 ## Acceptance Criteria
 

@@ -26,6 +26,8 @@ Direct implementation is PROHIBITED. The correct workflow is:
 
 Extend the iOS message parser to query and parse the `attributedBody`, `audio_transcript`, and `associated_message_type` columns from sms.db, enabling extraction of special message content (voice message transcripts, location sharing text).
 
+**NOTE: This task absorbs TASK-1797 (iOS attributedBody parsing)** - that task was planned but never implemented. All TASK-1797 requirements are included here.
+
 ## Non-Goals
 
 - Do NOT implement UI changes (separate task)

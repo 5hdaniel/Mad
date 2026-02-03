@@ -43,8 +43,8 @@ Update the MessageBubble component to display special message types with appropr
 ### Key Patterns
 
 ```tsx
-// In MessageBubble.tsx
-import { MicrophoneIcon, MapPinIcon, PaperClipIcon } from '@heroicons/react/24/outline';
+// In MessageBubble.tsx - Use lucide-react (already installed)
+import { Mic, MapPin, Paperclip } from 'lucide-react';
 
 export function MessageBubble({ message, senderName, showSender = true }: MessageBubbleProps): React.ReactElement {
   const isOutbound = message.direction === "outbound";
@@ -98,21 +98,21 @@ function getMessageContent(
       return {
         indicator: 'Voice Message',
         displayText: message.audio_transcript || message.body_text || '[No transcript available]',
-        icon: MicrophoneIcon,
+        icon: Mic,
       };
 
     case 'location':
       return {
         indicator: 'Location Shared',
         displayText: message.body_text || 'Location information',
-        icon: MapPinIcon,
+        icon: MapPin,
       };
 
     case 'attachment_only':
       return {
         indicator: 'Media Attachment',
         displayText: getAttachmentDescription(message),
-        icon: PaperClipIcon,
+        icon: Paperclip,
       };
 
     case 'system':

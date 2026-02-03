@@ -4,8 +4,24 @@
 **Status**: PLANNING
 **Goal**: Enable proper display and export of special message types (audio/voice messages, location sharing)
 **Target Branch**: develop
+**Feature Branch**: sprint/SPRINT-069-special-message-types
 **Estimated Duration**: 3-4 days
-**Total Estimated Tokens**: ~85K-110K
+**Total Estimated Tokens**: ~105K-140K (excluding TASK-1803 stretch goal)
+
+---
+
+## SR Engineer Review Notes (2026-02-02)
+
+**Status**: APPROVED with conditions
+
+**Key Changes Applied:**
+1. Phase 1: TASK-1798 and TASK-1799 can run **in parallel** (different files)
+2. Phase 2: TASK-1800 and TASK-1801 must be **sequential** (shared file risk)
+3. TASK-1798 absorbs TASK-1797 (iOS attributedBody - was never implemented)
+4. TASK-1801: AudioPlayer extraction is **mandatory** (not optional)
+5. Use **lucide-react** (already installed) instead of heroicons
+6. Migration 28 available for TASK-1799 if needed
+7. Token estimates adjusted upward based on historical data
 
 ---
 
@@ -116,35 +132,39 @@ Before starting sprint work, engineers must:
 
 ## Phase Plan
 
-### Phase 1: Foundation (Sequential)
+### Phase 1: Foundation (PARALLEL - coordinated merge)
 
-**TASK-1798: iOS attributedBody + audio_transcript parsing (~20K)**
+**TASK-1798: iOS attributedBody + audio_transcript parsing (~20-25K)**
+- **NOTE: Absorbs TASK-1797 scope** (iOS attributedBody was never implemented)
 - Extend `iosMessagesParser.ts` to query `attributedBody`, `associated_message_type`, `audio_transcript` columns
 - Use existing `messageParser.ts` functions to parse binary plist format
 - Extend `RawMessageRow` interface with new fields
 - Return parsed text in `iOSMessage.text` when `text` is null
 
-**TASK-1799: message_type field in Communication (~15K)**
+**TASK-1799: message_type field in Communication (~15-20K)**
 - Add `message_type?: MessageType` to `Communication` interface
 - Define `MessageType = 'text' | 'voice_message' | 'location' | 'attachment' | 'system' | 'unknown'`
-- Update database schema if needed (new column or derive from existing data)
+- Update database schema (Migration 28 available)
 - Update `iPhoneSyncStorageService` to set `message_type` based on mime_type/attributedBody
 
+**Can run in parallel**: Different files, coordinate merge order (1798 before 1799).
 **Integration checkpoint**: Both tasks merge to develop, CI must pass.
 
-### Phase 2: UI Implementation (Parallel after Phase 1)
+### Phase 2: UI Implementation (SEQUENTIAL - shared file risk)
 
-**TASK-1800: MessageBubble special type display (~20K)**
+**TASK-1800: MessageBubble special type display (~20-25K)** - FIRST
 - Read `message_type` from Communication
 - Display appropriate indicator: "[Voice Message]", "[Location Shared]", etc.
 - Show transcript text if available
-- Style differently (italic, icon prefix)
+- Style differently (italic, icon prefix using **lucide-react**)
 
-**TASK-1801: Audio playback in MessageBubble (~25K)**
+**TASK-1801: Audio playback in MessageBubble (~25-35K)** - SECOND (after TASK-1800)
+- **MANDATORY**: Extract `AudioPlayer` to `src/components/common/AudioPlayer.tsx`
 - Add HTML5 audio player for voice messages
 - Locate audio file from attachment storage
 - Handle file-not-found gracefully
-- Consider waveform visualization (stretch)
+
+**Must be sequential**: Both modify MessageBubble.tsx - high merge conflict risk.
 
 **Integration checkpoint**: UI changes visible, manual testing required.
 
@@ -389,9 +409,10 @@ The following MUST pass before merge:
 
 ## Notes
 
-- BACKLOG-604 (iOS attributedBody) is already created but TASK-1797 was created for it; this sprint's TASK-1798 builds on that foundation
-- Consider merging TASK-1797 and TASK-1798 if they overlap significantly
-- Phase 4 (Broker Portal) is a stretch goal - can be deferred if needed
-- Audio playback is medium priority - basic text display is more important
+- **TASK-1797 absorbed into TASK-1798**: iOS attributedBody parsing was planned but never implemented; TASK-1798 now includes that scope
+- **Icon library**: Use `lucide-react` (already installed) - NOT heroicons
+- **Migration number**: Migration 28 is available for TASK-1799 schema changes
+- **Phase 4 (Broker Portal)**: Stretch goal - explicit go/no-go decision after Phase 2
+- **TASK-1803 cutoff**: If sprint runs over 140K tokens by end of Phase 3, defer TASK-1803
 
 ---
