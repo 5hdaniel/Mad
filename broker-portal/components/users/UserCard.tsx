@@ -20,6 +20,7 @@ interface UserCardProps {
   member: OrganizationMember;
   isCurrentUser: boolean;
   canManage: boolean;
+  onEditRole?: (member: OrganizationMember) => void;
 }
 
 const ROLE_COLORS: Record<Role, string> = {
@@ -40,6 +41,7 @@ export default function UserCard({
   member,
   isCurrentUser,
   canManage,
+  onEditRole,
 }: UserCardProps) {
   // Convert undefined to null for utility functions
   const userOrNull = member.user ?? null;
@@ -111,15 +113,14 @@ export default function UserCard({
         )}
       </div>
 
-      {/* Actions placeholder - will be enabled in TASK-1811/1812 */}
-      {canManage && !isCurrentUser && (
+      {/* Actions - edit role (only for members with user_id, not pending invites) */}
+      {canManage && !isCurrentUser && member.user_id && (
         <div className="mt-4 pt-3 border-t border-gray-100">
           <button
-            disabled
-            className="text-sm text-gray-400 cursor-not-allowed"
-            title="User management actions coming soon"
+            onClick={() => onEditRole?.(member)}
+            className="text-sm text-indigo-600 hover:text-indigo-800 focus:outline-none focus:underline transition-colors"
           >
-            Manage user...
+            Change Role
           </button>
         </div>
       )}

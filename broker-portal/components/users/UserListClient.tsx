@@ -15,7 +15,9 @@ import { useState, useMemo } from 'react';
 import UserCard from './UserCard';
 import UserSearchFilter from './UserSearchFilter';
 import InviteUserModal from './InviteUserModal';
+import EditRoleModal from './EditRoleModal';
 import { EmptyState, SearchIcon } from '@/components/ui/EmptyState';
+import { formatUserDisplayName } from '@/lib/utils/userDisplay';
 import type { OrganizationMember, Role } from '@/lib/types/users';
 
 /**
@@ -57,6 +59,7 @@ export default function UserListClient({
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [editRoleMember, setEditRoleMember] = useState<OrganizationMember | null>(null);
 
   const filteredMembers = useMemo(() => {
     return initialMembers.filter((member) => {
@@ -155,6 +158,7 @@ export default function UserListClient({
                 member={member}
                 isCurrentUser={member.user_id === currentUserId}
                 canManage={canManage}
+                onEditRole={setEditRoleMember}
               />
             ))}
           </div>
@@ -167,6 +171,18 @@ export default function UserListClient({
         onClose={() => setIsInviteModalOpen(false)}
         organizationId={organizationId}
       />
+
+      {/* Edit Role Modal */}
+      {editRoleMember && (
+        <EditRoleModal
+          isOpen={!!editRoleMember}
+          onClose={() => setEditRoleMember(null)}
+          memberId={editRoleMember.id}
+          memberName={formatUserDisplayName(editRoleMember.user ?? null, editRoleMember.invited_email)}
+          currentRole={editRoleMember.role}
+          currentUserRole={currentUserRole}
+        />
+      )}
     </div>
   );
 }
