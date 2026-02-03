@@ -7,10 +7,12 @@
  * Shows avatar, name, email, role badge, status badge, and dates.
  *
  * TASK-1809: User list component implementation
+ * TASK-1812: Added user actions dropdown for deactivate/remove
  */
 
 import Image from 'next/image';
 import { Card } from '@/components/ui/Card';
+import UserActionsDropdown from './UserActionsDropdown';
 import type { OrganizationMember, Role, LicenseStatus } from '@/lib/types/users';
 import { ROLE_LABELS, LICENSE_STATUS_LABELS } from '@/lib/types/users';
 import { formatUserDisplayName, getUserInitials } from '@/lib/utils/userDisplay';
@@ -21,6 +23,8 @@ interface UserCardProps {
   isCurrentUser: boolean;
   canManage: boolean;
   onEditRole?: (member: OrganizationMember) => void;
+  onDeactivate?: (member: OrganizationMember) => void;
+  onRemove?: (member: OrganizationMember) => void;
 }
 
 const ROLE_COLORS: Record<Role, string> = {
@@ -42,6 +46,8 @@ export default function UserCard({
   isCurrentUser,
   canManage,
   onEditRole,
+  onDeactivate,
+  onRemove,
 }: UserCardProps) {
   // Convert undefined to null for utility functions
   const userOrNull = member.user ?? null;
@@ -53,7 +59,7 @@ export default function UserCard({
   return (
     <Card hover padding="sm" className="p-4">
       <div className="flex items-start justify-between">
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-3 flex-1 min-w-0">
           {/* Avatar */}
           <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
             {member.user?.avatar_url ? (
@@ -83,6 +89,18 @@ export default function UserCard({
             <p className="text-sm text-gray-500 truncate">{email}</p>
           </div>
         </div>
+
+        {/* Actions dropdown - only for admin/it_admin, not for self */}
+        {canManage && !isCurrentUser && (
+          <UserActionsDropdown
+            memberId={member.id}
+            memberName={displayName}
+            isPending={isPending}
+            isCurrentUser={isCurrentUser}
+            onDeactivate={() => onDeactivate?.(member)}
+            onRemove={() => onRemove?.(member)}
+          />
+        )}
       </div>
 
       {/* Badges */}
