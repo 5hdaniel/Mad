@@ -1,6 +1,7 @@
 /**
  * Tests for MessageBubble component
  * Verifies rendering of inbound/outbound messages with proper styling
+ * and special message types (voice, location, attachment-only, system)
  */
 
 import React from "react";
@@ -8,6 +9,7 @@ import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { MessageBubble } from "../MessageBubble";
 import type { Communication } from "../../types";
+import type { MessageType } from "@/types";
 
 describe("MessageBubble", () => {
   // Base mock message for testing
@@ -282,6 +284,272 @@ describe("MessageBubble", () => {
       expect(timestampElement).toBeInTheDocument();
       // Sender should be present
       expect(screen.getByTestId("message-sender")).toHaveTextContent("Alice");
+    });
+  });
+
+  describe("message type data attribute", () => {
+    it("should include message-type data attribute", () => {
+      const message = createMockMessage({ message_type: "text" as MessageType });
+
+      render(<MessageBubble message={message} />);
+
+      expect(screen.getByTestId("message-bubble")).toHaveAttribute(
+        "data-message-type",
+        "text"
+      );
+    });
+
+    it("should default to text when message_type is undefined", () => {
+      const message = createMockMessage({ message_type: undefined });
+
+      render(<MessageBubble message={message} />);
+
+      expect(screen.getByTestId("message-bubble")).toHaveAttribute(
+        "data-message-type",
+        "text"
+      );
+    });
+  });
+
+  describe("voice message type", () => {
+    it("should display Voice Message indicator with transcript", () => {
+      const message = createMockMessage({
+        message_type: "voice_message" as MessageType,
+        body_text: "This is the voice transcript",
+      });
+
+      render(<MessageBubble message={message} />);
+
+      // Should show indicator
+      expect(screen.getByTestId("message-type-indicator")).toBeInTheDocument();
+      expect(screen.getByText("Voice Message")).toBeInTheDocument();
+      // Should show transcript
+      expect(screen.getByText("This is the voice transcript")).toBeInTheDocument();
+    });
+
+    it("should display fallback when no transcript available", () => {
+      const message = createMockMessage({
+        message_type: "voice_message" as MessageType,
+        body_text: undefined,
+        body_plain: undefined,
+        body: undefined,
+      });
+
+      render(<MessageBubble message={message} />);
+
+      expect(screen.getByText("Voice Message")).toBeInTheDocument();
+      expect(screen.getByText("[No transcript available]")).toBeInTheDocument();
+    });
+
+    it("should include microphone icon", () => {
+      const message = createMockMessage({
+        message_type: "voice_message" as MessageType,
+        body_text: "Transcript text",
+      });
+
+      const { container } = render(<MessageBubble message={message} />);
+
+      // Lucide icons render as SVG
+      const indicator = screen.getByTestId("message-type-indicator");
+      const svg = indicator.querySelector("svg");
+      expect(svg).toBeInTheDocument();
+    });
+
+    it("should work with outbound voice messages", () => {
+      const message = createMockMessage({
+        direction: "outbound",
+        message_type: "voice_message" as MessageType,
+        body_text: "Outbound voice transcript",
+      });
+
+      render(<MessageBubble message={message} />);
+
+      const bubble = screen.getByTestId("message-bubble");
+      expect(bubble).toHaveClass("items-end");
+      expect(screen.getByText("Voice Message")).toBeInTheDocument();
+    });
+  });
+
+  describe("location message type", () => {
+    it("should display Location Shared indicator", () => {
+      const message = createMockMessage({
+        message_type: "location" as MessageType,
+        body_text: "123 Main Street, City, ST 12345",
+      });
+
+      render(<MessageBubble message={message} />);
+
+      expect(screen.getByTestId("message-type-indicator")).toBeInTheDocument();
+      expect(screen.getByText("Location Shared")).toBeInTheDocument();
+      expect(screen.getByText("123 Main Street, City, ST 12345")).toBeInTheDocument();
+    });
+
+    it("should display fallback when no location text", () => {
+      const message = createMockMessage({
+        message_type: "location" as MessageType,
+        body_text: undefined,
+      });
+
+      render(<MessageBubble message={message} />);
+
+      expect(screen.getByText("Location Shared")).toBeInTheDocument();
+      expect(screen.getByText("Location information")).toBeInTheDocument();
+    });
+
+    it("should include map pin icon", () => {
+      const message = createMockMessage({
+        message_type: "location" as MessageType,
+        body_text: "Location text",
+      });
+
+      const { container } = render(<MessageBubble message={message} />);
+
+      const indicator = screen.getByTestId("message-type-indicator");
+      const svg = indicator.querySelector("svg");
+      expect(svg).toBeInTheDocument();
+    });
+  });
+
+  describe("attachment-only message type", () => {
+    it("should display Media Attachment indicator", () => {
+      const message = createMockMessage({
+        message_type: "attachment_only" as MessageType,
+        has_attachments: true,
+        body_text: undefined,
+      });
+
+      render(<MessageBubble message={message} />);
+
+      expect(screen.getByTestId("message-type-indicator")).toBeInTheDocument();
+      expect(screen.getByText("Media Attachment")).toBeInTheDocument();
+      expect(screen.getByText("Attachment")).toBeInTheDocument();
+    });
+
+    it("should include paperclip icon", () => {
+      const message = createMockMessage({
+        message_type: "attachment_only" as MessageType,
+        has_attachments: true,
+      });
+
+      render(<MessageBubble message={message} />);
+
+      const indicator = screen.getByTestId("message-type-indicator");
+      const svg = indicator.querySelector("svg");
+      expect(svg).toBeInTheDocument();
+    });
+
+    it("should have italic styling for attachment text", () => {
+      const message = createMockMessage({
+        message_type: "attachment_only" as MessageType,
+        has_attachments: true,
+      });
+
+      const { container } = render(<MessageBubble message={message} />);
+
+      const textElement = container.querySelector(".italic");
+      expect(textElement).toBeInTheDocument();
+    });
+  });
+
+  describe("system message type", () => {
+    it("should display centered with muted styling", () => {
+      const message = createMockMessage({
+        message_type: "system" as MessageType,
+        body_text: "John joined the conversation",
+      });
+
+      render(<MessageBubble message={message} />);
+
+      const bubble = screen.getByTestId("message-bubble");
+      expect(bubble).toHaveClass("items-center");
+      expect(screen.getByText("John joined the conversation")).toBeInTheDocument();
+    });
+
+    it("should have italic and gray text", () => {
+      const message = createMockMessage({
+        message_type: "system" as MessageType,
+        body_text: "System notification",
+      });
+
+      const { container } = render(<MessageBubble message={message} />);
+
+      const textElement = container.querySelector(".italic.text-gray-500");
+      expect(textElement).toBeInTheDocument();
+    });
+
+    it("should not display regular bubble styling", () => {
+      const message = createMockMessage({
+        message_type: "system" as MessageType,
+        body_text: "System message",
+      });
+
+      const { container } = render(<MessageBubble message={message} />);
+
+      // Should not have the normal blue/gray bubble backgrounds
+      expect(container.querySelector(".bg-blue-500")).not.toBeInTheDocument();
+      expect(container.querySelector(".bg-gray-200")).not.toBeInTheDocument();
+    });
+
+    it("should have accessible role and aria-label", () => {
+      const message = createMockMessage({
+        message_type: "system" as MessageType,
+        body_text: "System notification",
+      });
+
+      render(<MessageBubble message={message} />);
+
+      const systemMessage = screen.getByRole("status");
+      expect(systemMessage).toHaveAttribute("aria-label", "System message");
+    });
+
+    it("should not show indicator (no icon/label)", () => {
+      const message = createMockMessage({
+        message_type: "system" as MessageType,
+        body_text: "System message",
+      });
+
+      render(<MessageBubble message={message} />);
+
+      expect(screen.queryByTestId("message-type-indicator")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("default text message type", () => {
+    it("should not show indicator for text messages", () => {
+      const message = createMockMessage({
+        message_type: "text" as MessageType,
+        body_text: "Regular text message",
+      });
+
+      render(<MessageBubble message={message} />);
+
+      expect(screen.queryByTestId("message-type-indicator")).not.toBeInTheDocument();
+      expect(screen.getByText("Regular text message")).toBeInTheDocument();
+    });
+
+    it("should not show indicator for unknown message type", () => {
+      const message = createMockMessage({
+        message_type: "unknown" as MessageType,
+        body_text: "Unknown type message",
+      });
+
+      render(<MessageBubble message={message} />);
+
+      expect(screen.queryByTestId("message-type-indicator")).not.toBeInTheDocument();
+      expect(screen.getByText("Unknown type message")).toBeInTheDocument();
+    });
+
+    it("should preserve existing behavior for messages without message_type", () => {
+      const message = createMockMessage({
+        body_text: "Regular message",
+      });
+      // Explicitly remove message_type to test backward compatibility
+      delete (message as Record<string, unknown>).message_type;
+
+      render(<MessageBubble message={message} />);
+
+      expect(screen.queryByTestId("message-type-indicator")).not.toBeInTheDocument();
+      expect(screen.getByText("Regular message")).toBeInTheDocument();
     });
   });
 });
