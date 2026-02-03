@@ -8,8 +8,10 @@
  *
  * TASK-1809: User list component implementation
  * TASK-1812: Added user actions dropdown for deactivate/remove
+ * TASK-1813: Added link to user details page
  */
 
+import Link from 'next/link';
 import Image from 'next/image';
 import { Card } from '@/components/ui/Card';
 import UserActionsDropdown from './UserActionsDropdown';
@@ -79,9 +81,12 @@ export default function UserCard({
 
           <div className="min-w-0 flex-1">
             <div className="flex items-center space-x-2">
-              <h3 className="text-sm font-medium text-gray-900 truncate">
+              <Link
+                href={`/dashboard/users/${member.id}`}
+                className="text-sm font-medium text-gray-900 hover:text-indigo-600 truncate transition-colors"
+              >
                 {displayName}
-              </h3>
+              </Link>
               {isCurrentUser && (
                 <span className="text-xs text-gray-500 flex-shrink-0">(You)</span>
               )}
