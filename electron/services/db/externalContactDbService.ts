@@ -26,7 +26,8 @@ export interface ExternalContact {
   emails: string[];        // Parsed from emails_json
   company: string | null;
   last_message_at: string | null;
-  macos_record_id: string;
+  external_record_id: string;  // Renamed from macos_record_id (Migration 27)
+  source: 'macos' | 'iphone';  // New field: source of contact (Migration 27)
   synced_at: string;
 }
 
@@ -41,7 +42,8 @@ interface ExternalContactRow {
   emails_json: string | null;
   company: string | null;
   last_message_at: string | null;
-  macos_record_id: string;
+  external_record_id: string;  // Renamed from macos_record_id (Migration 27)
+  source: string;              // New field: source of contact (Migration 27)
   synced_at: string;
 }
 
@@ -54,6 +56,17 @@ export interface MacOSContact {
   emails?: string[];
   company?: string;
   recordId: string;  // macOS unique identifier
+}
+
+/**
+ * iPhone Contact structure from iPhone sync (SPRINT-068, BACKLOG-585)
+ */
+export interface iPhoneContact {
+  name: string;
+  phones?: string[];
+  emails?: string[];
+  company?: string;
+  recordId: string;  // iPhone backup contact ID (as string)
 }
 
 /**
@@ -78,7 +91,7 @@ export function getAllForUser(userId: string): ExternalContact[] {
   // NULLS LAST: Sort NULL dates after non-NULL dates, then by name
   const sql = `
     SELECT id, user_id, name, phones_json, emails_json, company,
-           last_message_at, macos_record_id, synced_at
+           last_message_at, external_record_id, source, synced_at
     FROM external_contacts
     WHERE user_id = ?
     ORDER BY last_message_at IS NULL, last_message_at DESC, name ASC
@@ -94,7 +107,8 @@ export function getAllForUser(userId: string): ExternalContact[] {
     emails: JSON.parse(row.emails_json || '[]'),
     company: row.company,
     last_message_at: row.last_message_at,
-    macos_record_id: row.macos_record_id,
+    external_record_id: row.external_record_id,
+    source: row.source as 'macos' | 'iphone',
     synced_at: row.synced_at,
   }));
 }
@@ -147,9 +161,9 @@ export function upsertFromMacOS(userId: string, contacts: MacOSContact[]): numbe
   const now = new Date().toISOString();
 
   const stmt = `
-    INSERT INTO external_contacts (id, user_id, name, phones_json, emails_json, company, macos_record_id, synced_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(user_id, macos_record_id) DO UPDATE SET
+    INSERT INTO external_contacts (id, user_id, name, phones_json, emails_json, company, external_record_id, source, synced_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'macos', ?)
+    ON CONFLICT(user_id, source, external_record_id) DO UPDATE SET
       name = excluded.name,
       phones_json = excluded.phones_json,
       emails_json = excluded.emails_json,
@@ -175,7 +189,48 @@ export function upsertFromMacOS(userId: string, contacts: MacOSContact[]): numbe
     }
   });
 
-  logService.info(`Upserted ${count} external contacts`, 'ExternalContactDbService', { userId });
+  logService.info(`Upserted ${count} external contacts from macOS`, 'ExternalContactDbService', { userId });
+
+  return count;
+}
+
+/**
+ * Upsert contacts from iPhone sync (SPRINT-068, BACKLOG-585)
+ * Returns count of contacts processed
+ */
+export function upsertFromiPhone(userId: string, contacts: iPhoneContact[]): number {
+  const now = new Date().toISOString();
+
+  const stmt = `
+    INSERT INTO external_contacts (id, user_id, name, phones_json, emails_json, company, source, external_record_id, synced_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'iphone', ?, ?)
+    ON CONFLICT(user_id, source, external_record_id) DO UPDATE SET
+      name = excluded.name,
+      phones_json = excluded.phones_json,
+      emails_json = excluded.emails_json,
+      company = excluded.company,
+      synced_at = excluded.synced_at
+  `;
+
+  let count = 0;
+
+  dbTransaction(() => {
+    for (const contact of contacts) {
+      dbRun(stmt, [
+        uuidv4(),
+        userId,
+        contact.name || null,
+        JSON.stringify(contact.phones || []),
+        JSON.stringify(contact.emails || []),
+        contact.company || null,
+        contact.recordId,
+        now,
+      ]);
+      count++;
+    }
+  });
+
+  logService.info(`Upserted ${count} external contacts from iPhone`, 'ExternalContactDbService', { userId });
 
   return count;
 }
@@ -239,6 +294,7 @@ export function updateLastMessageAtForPhone(userId: string, normalizedPhone: str
 /**
  * Delete stale contacts that were not updated in the current sync
  * Used during full sync to remove contacts that no longer exist in macOS Contacts
+ * @deprecated Use deleteStaleContactsBySource for source-specific cleanup
  */
 export function deleteStaleContacts(userId: string, currentSyncTime: string): number {
   const result = dbRun(
@@ -254,12 +310,37 @@ export function deleteStaleContacts(userId: string, currentSyncTime: string): nu
 }
 
 /**
+ * Delete stale contacts by source that were not updated in the current sync
+ * Used during full sync to remove contacts that no longer exist in source system
+ */
+export function deleteStaleContactsBySource(userId: string, source: 'macos' | 'iphone', currentSyncTime: string): number {
+  const result = dbRun(
+    `DELETE FROM external_contacts WHERE user_id = ? AND source = ? AND synced_at < ?`,
+    [userId, source, currentSyncTime]
+  );
+
+  if (result.changes > 0) {
+    logService.info(`Deleted ${result.changes} stale ${source} external contacts`, 'ExternalContactDbService', { userId });
+  }
+
+  return result.changes;
+}
+
+/**
+ * Delete stale iPhone contacts (SPRINT-068, BACKLOG-585)
+ * Only deletes contacts with source='iphone' that weren't updated in current sync
+ */
+export function deleteStaleIPhoneContacts(userId: string, currentSyncTime: string): number {
+  return deleteStaleContactsBySource(userId, 'iphone', currentSyncTime);
+}
+
+/**
  * Delete a specific contact by macOS record ID
  */
 export function deleteByMacOSRecordId(userId: string, recordId: string): void {
   dbRun(
-    'DELETE FROM external_contacts WHERE user_id = ? AND macos_record_id = ?',
-    [userId, recordId]
+    'DELETE FROM external_contacts WHERE user_id = ? AND source = ? AND external_record_id = ?',
+    [userId, 'macos', recordId]
   );
 }
 
@@ -321,7 +402,7 @@ export function search(userId: string, query: string, limit: number = 50): Exter
 
   const sql = `
     SELECT id, user_id, name, phones_json, emails_json, company,
-           last_message_at, macos_record_id, synced_at
+           last_message_at, external_record_id, source, synced_at
     FROM external_contacts
     WHERE user_id = ?
       AND (
@@ -351,7 +432,8 @@ export function search(userId: string, query: string, limit: number = 50): Exter
     emails: JSON.parse(row.emails_json || '[]'),
     company: row.company,
     last_message_at: row.last_message_at,
-    macos_record_id: row.macos_record_id,
+    external_record_id: row.external_record_id,
+    source: row.source as 'macos' | 'iphone',
     synced_at: row.synced_at,
   }));
 }

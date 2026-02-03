@@ -712,7 +712,13 @@ describe("TransactionMessagesTab", () => {
 
       await waitFor(() => {
         // TASK-1116: unlinkMessages now requires transactionId for thread-based unlinking
-        expect(mockUnlinkMessages).toHaveBeenCalledWith(["msg-1", "msg-2"], "txn-123");
+        // Use arrayContaining to avoid flaky tests due to Map iteration order
+        expect(mockUnlinkMessages).toHaveBeenCalledWith(
+          expect.arrayContaining(["msg-1", "msg-2"]),
+          "txn-123"
+        );
+        // Verify exact count of message IDs passed
+        expect(mockUnlinkMessages.mock.calls[0][0]).toHaveLength(2);
       });
 
       await waitFor(() => {
