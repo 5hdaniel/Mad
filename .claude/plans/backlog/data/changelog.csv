@@ -203,3 +203,20 @@ date,action,details,items_affected
 2026-01-25,BACKLOG-081,deferred,Pending,Deferred from SPRINT-053 - AI consent in T&C
 2026-01-25,SPRINT-053,completed,Planning,Completed,"License Enhancement & AI Gating - 3 tasks merged (PRs #569, #570, #592)"
 2026-01-27,create,Created BACKLOG-544 - Background import process with progress indicator,BACKLOG-544
+2026-02-02,complete,"**SPRINT-068 COMPLETE** - Windows + iOS Contact Architecture Refactor:",
+2026-02-02,update,"Schema: Migration 27 (external_contacts refactor), 27b (iPhone contacts migration), 27c (participants_flat backfill for 634K messages)",
+2026-02-02,complete,"BACKLOG-590 (Auto-Link Fix) - Fixed via participants_flat population + migration 27c",BACKLOG-590
+2026-02-02,complete,"BACKLOG-589 (Group Chat Sender Names) - No extra work needed, existing logic works with contact fix",BACKLOG-589
+2026-02-02,complete,"BACKLOG-591 (participants_flat group members) - Covered by main fix",BACKLOG-591
+2026-02-02,complete,"BACKLOG-588 (Windows Attachments) - Implemented attachment extraction from iPhone backup",BACKLOG-588
+2026-02-02,complete,"BACKLOG-585 (Texts auto-attach) - Fixed via BACKLOG-590",BACKLOG-585
+2026-02-02,complete,"BACKLOG-587 (Contact names showing) - Fixed via platform-aware contact lookup",BACKLOG-587
+2026-02-02,deferred,"BACKLOG-586 (UI parity) - Deferred to future sprint, core functionality works",BACKLOG-586
+2026-02-02,deferred,"BACKLOG-592 (User account hardcoded) - Low priority cosmetic issue deferred",BACKLOG-592
+2026-02-02,update,"Files modified: databaseService.ts, externalContactDbService.ts, iPhoneSyncStorageService.ts, transactionService.ts, iosMessagesParser.ts, syncOrchestrator.ts, sync-handlers.ts"
+2026-02-02,create,"Added BACKLOG-600 (Message Sort Order Bug), BACKLOG-601 (Audit Period Filter Bug), BACKLOG-602 (Attachment Skip Logging - Deferred), BACKLOG-603 (iCloud UX Message)",BACKLOG-600;BACKLOG-601;BACKLOG-602;BACKLOG-603
+2026-02-02,create,"Created TASK-1794 (Message Sort Order Fix), TASK-1795 (Audit Period Filter Fix), TASK-1796 (iCloud UX Message) for SPRINT-068 testing phase",TASK-1794;TASK-1795;TASK-1796
+2026-02-02,assign,"Added TASK-1794, TASK-1795, TASK-1796 to SPRINT-068 Testing Phase",SPRINT-068
+2026-02-02,create,"Created BACKLOG-604 (iOS attributedBody parsing) - Location sharing messages show wrong text",BACKLOG-604
+2026-02-02,create,"Created TASK-1797 for BACKLOG-604 implementation",TASK-1797
+2026-02-02,assign,"Added TASK-1797 to SPRINT-068 Testing Phase",SPRINT-068

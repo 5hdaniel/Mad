@@ -5,6 +5,7 @@
  */
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import type { MessageLike } from "../MessageThreadCard";
+import { parseDateSafe } from "../../../../utils/dateFormatters";
 
 /**
  * Attachment info for display (TASK-1012)
@@ -183,7 +184,7 @@ function AttachmentImage({
  */
 function formatDateRangeLabel(startDate: Date | null, endDate: Date | null): string {
   const formatDate = (d: Date) =>
-    d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 
   if (startDate && endDate) {
     return `${formatDate(startDate)} - ${formatDate(endDate)}`;
@@ -212,20 +213,9 @@ export function ConversationViewModal({
   const loadedAttachmentsKeyRef = useRef<string>("");
 
   // TASK-1157: Audit date filtering state
-  // TASK-1795: Validate dates to prevent Invalid Date issues
-  // TODO: Consider consolidating with src/utils/contactSortUtils.ts:parseDate
-  const parseDate = (dateValue: Date | string | null | undefined): Date | null => {
-    if (!dateValue) return null;
-    const d = new Date(dateValue);
-    if (isNaN(d.getTime())) {
-      console.warn('[ConversationViewModal] Invalid audit date:', dateValue);
-      return null;
-    }
-    return d;
-  };
-
-  const parsedStartDate = parseDate(auditStartDate);
-  const parsedEndDate = parseDate(auditEndDate);
+  // TASK-1795: Uses parseDateSafe from utils for Windows timezone handling
+  const parsedStartDate = parseDateSafe(auditStartDate, 'ConversationViewModal');
+  const parsedEndDate = parseDateSafe(auditEndDate, 'ConversationViewModal');
   // Show filter if at least one date is set (handles ongoing transactions with only start date)
   const hasAuditDates = !!(parsedStartDate || parsedEndDate);
 
@@ -246,7 +236,8 @@ export function ConversationViewModal({
     }
 
     return sortedMessages.filter((msg) => {
-      const msgDate = new Date(msg.sent_at || msg.received_at || 0);
+      // Use parseDateSafe for consistent timezone handling (Windows-safe)
+      const msgDate = parseDateSafe(msg.sent_at || msg.received_at) || new Date(0);
 
       // Check start date (if set)
       if (parsedStartDate && msgDate < parsedStartDate) {
@@ -568,6 +559,17 @@ export function ConversationViewModal({
                       {msgText}
                     </p>
                   )}
+                  {/* Fallback: show placeholder if message has no content to display */}
+                  {!hasRealText &&
+                    !msg.has_attachments &&
+                    displayableAttachments.length === 0 &&
+                    nonDisplayableAttachments.length === 0 && (
+                      <p
+                        className={`text-xs italic ${isOutbound ? "text-green-100" : "text-gray-400"}`}
+                      >
+                        [Media not available]
+                      </p>
+                    )}
                   <p
                     className={`text-xs mt-1 ${
                       isOutbound ? "text-green-100" : "text-gray-400"
