@@ -96,6 +96,7 @@ import {
   registerMessageImportHandlers,
   registerOutlookHandlers,
   registerUpdaterHandlers,
+  registerErrorLoggingHandlers,
 } from "./handlers";
 
 // Configure logging for auto-updater
@@ -730,6 +731,7 @@ app.whenReady().then(async () => {
   registerMessageImportHandlers(mainWindow!);
   registerOutlookHandlers(mainWindow!);
   registerUpdaterHandlers(mainWindow!);
+  registerErrorLoggingHandlers();
 
   // DEV-ONLY: Manual deep link handler for testing when protocol handler fails
   // Usage from DevTools console: window.api.system.manualDeepLink("magicaudit://callback?access_token=...&refresh_token=...")
