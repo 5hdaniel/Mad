@@ -36,7 +36,7 @@
 | TASK-1778-V | verification | complete | - | ~3K | - |
 | TASK-1779-V | verification | complete | - | ~3K | - |
 | TASK-1780-V | verification | complete | - | ~3K | - |
-| TASK-1781-V | verification | pending | - | ~8K | - |
+| TASK-1781-V | verification | complete | - | ~8K | - |
 
 ## Sprint Goal
 
@@ -599,7 +599,7 @@ The following MUST pass before merge:
 - [x] TASK-1778-V: Dashboard has no sync-related prop drilling
 - [x] TASK-1779-V: Onboarding flow works correctly with orchestrator + Settings shows sync-in-progress
 - [x] TASK-1780-V: No orphaned SyncQueueService or useMacOSMessagesImport references
-- [ ] TASK-1781-V: Tests cover SyncOrchestratorService patterns
+- [x] TASK-1781-V: Tests cover SyncOrchestratorService patterns (309 tests pass)
 - [ ] OS notification fires exactly once when all syncs complete
 
 ## Effort Estimates

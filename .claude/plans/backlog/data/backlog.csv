@@ -504,3 +504,4 @@ BACKLOG-595,Add Idempotency Check to iPhone Contact Migration,optimization,Low,C
 BACKLOG-596,Add Test Coverage for Attachment Extraction,testing,Low,Pending,SPRINT-068,~15K,-,-,2026-02-02,,[BACKLOG-596.md](items/BACKLOG-596.md)
 BACKLOG-597,"Group chat with multiple participants shows as 1:1 chat",bug,medium,pending,,,,,2025-02-01,,
 BACKLOG-598,Add attachments progress phase to sync status indicator,enhancement,medium,pending,,Sync progress bar resets from 100% to 0% when moving from messages to attachments phase - add separate pill or phase indicator for better UX,2026-02-02,,
+BACKLOG-599,Settings Messages Import needs SyncOrchestrator queue awareness,enhancement,low,pending,,MacOSMessagesImportSettings should detect when messages is queued (pending) in the orchestrator queue and show appropriate UI feedback. Currently only shows state when messages is actively running or user-initiated.,2026-02-02,,
