@@ -1346,9 +1346,6 @@ export function registerSystemHandlers(): void {
     },
   );
 
-  /**
-   * Get diagnostic information for support requests
-
   // ============================================
   // ONBOARDING PERSISTENCE HANDLERS (TASK-1807)
   // ============================================
@@ -1444,6 +1441,9 @@ export function registerSystemHandlers(): void {
       }
     },
   );
+
+  /**
+   * Get diagnostic information for support requests
    */
   ipcMain.handle(
     "system:get-diagnostics",
