@@ -463,7 +463,7 @@ describe("SyncStatusIndicator", () => {
       expect(screen.getByText("65%")).toBeInTheDocument();
     });
 
-    it("should show overall progress in progress bar", () => {
+    it("should show active item progress in progress bar (matches % text)", () => {
       const queue = [
         createSyncItem('contacts', 'complete', 100),
         createSyncItem('messages', 'running', 50),
@@ -472,9 +472,9 @@ describe("SyncStatusIndicator", () => {
 
       render(<SyncStatusIndicator />);
 
-      // Progress bar should be at 75%
+      // Progress bar should show activeProgress (50%) to match the displayed % text
       const progressBar = screen.getByTestId("sync-status-indicator").querySelector('.bg-blue-500');
-      expect(progressBar).toHaveStyle({ width: '75%' });
+      expect(progressBar).toHaveStyle({ width: '50%' });
     });
   });
 });
