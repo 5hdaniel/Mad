@@ -1669,6 +1669,24 @@ export interface WindowApi {
     }>;
   };
 
+  // App Reset API (TASK-1802)
+  app: {
+    /**
+     * Perform a complete app data reset
+     * WARNING: This is a destructive operation that will:
+     * - Delete all local data (database, preferences, cached data)
+     * - Restart the app fresh
+     *
+     * Cloud data (Supabase) is NOT affected.
+     *
+     * @returns Result with success status
+     */
+    reset: () => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+  };
+
   // License API (BACKLOG-426, SPRINT-062)
   license: {
     /** Get current user's license information */
