@@ -175,7 +175,7 @@ function Dashboard({
             Welcome to Magic Audit
           </h1>
           <p className="text-lg text-gray-600">
-            Real estate transaction compliance made simple
+            Transaction compliance made simple
           </p>
         </div>
 
