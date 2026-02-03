@@ -3,7 +3,7 @@
 // Permission checks, connection status, system health
 // ============================================
 
-import { ipcMain, shell, app, BrowserWindow } from "electron";
+import { ipcMain, shell, app, BrowserWindow, Notification } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 
 // Import services (TypeScript with default exports)
@@ -1602,6 +1602,64 @@ export function registerSystemHandlers(): void {
         const errorMessage =
           error instanceof Error ? error.message : "Unknown error";
         logService.error("diagnostic:check-email-data failed", "SystemHandlers", {
+          error: errorMessage,
+        });
+        return { success: false, error: errorMessage };
+      }
+    },
+  );
+
+  // ============================================
+  // NOTIFICATION HANDLERS
+  // ============================================
+
+  /**
+   * Check if notifications are supported on this platform
+   */
+  ipcMain.handle(
+    "notification:is-supported",
+    async (): Promise<{ success: boolean; supported: boolean }> => {
+      return {
+        success: true,
+        supported: Notification.isSupported(),
+      };
+    },
+  );
+
+  /**
+   * Send an OS notification
+   * @param title - Notification title
+   * @param body - Notification body text
+   */
+  ipcMain.handle(
+    "notification:send",
+    async (
+      _event: IpcMainInvokeEvent,
+      title: string,
+      body: string,
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        if (!Notification.isSupported()) {
+          return {
+            success: false,
+            error: "Notifications are not supported on this platform",
+          };
+        }
+
+        const notification = new Notification({
+          title,
+          body,
+          silent: false,
+        });
+
+        notification.show();
+        logService.debug("Notification sent", "SystemHandlers", { title });
+
+        return { success: true };
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error("Failed to send notification", "SystemHandlers", {
           error: errorMessage,
         });
         return { success: false, error: errorMessage };

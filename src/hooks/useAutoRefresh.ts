@@ -2,14 +2,15 @@
  * useAutoRefresh Hook
  *
  * TASK-1003: Auto-refresh data sources on app load.
+ * TASK-1783: Migrated to use SyncOrchestratorService.
  *
  * Automatically syncs all available data sources when the user opens
  * the application, eliminating the need to manually click "Auto Detect".
  *
  * Behavior:
  * - Triggers after auth + database ready + on dashboard
- * - Adds 2.5 second delay to not slow startup
- * - Runs syncs in parallel with Promise.allSettled
+ * - Adds 1.5 second delay to not slow startup
+ * - Runs syncs sequentially via SyncOrchestrator (contacts -> emails -> messages)
  * - Uses incremental sync (only new data)
  * - Handles errors silently (log only)
  * - Doesn't block UI
@@ -24,32 +25,15 @@
  * @module hooks/useAutoRefresh
  */
 
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useState, useRef } from "react";
 import { usePlatform } from "../contexts/PlatformContext";
-import { hasMessagesImportTriggered } from "./useMacOSMessagesImport";
-
-// Module-level flag to track if onboarding import just completed
-// This is more reliable than localStorage across component remounts
-let skipNextMessagesSync = false;
+import { hasMessagesImportTriggered, setMessagesImportTriggered } from "../utils/syncFlags";
+import { useSyncOrchestrator } from "./useSyncOrchestrator";
+import type { SyncType, SyncItem } from "../services/SyncOrchestratorService";
 
 // Module-level flag to track if auto-refresh has been triggered this session
 // Using module-level prevents React strict mode from triggering twice
 let hasTriggeredAutoRefresh = false;
-
-/**
- * Mark that onboarding import just completed - skip the next messages sync
- */
-export function markOnboardingImportComplete(): void {
-  skipNextMessagesSync = true;
-}
-
-/**
- * Check if we should skip the next messages sync
- * Does NOT clear the flag - only runAutoRefresh clears it
- */
-export function shouldSkipMessagesSync(): boolean {
-  return skipNextMessagesSync;
-}
 
 /**
  * Reset the auto-refresh trigger (for testing or logout)
@@ -101,6 +85,8 @@ interface UseAutoRefreshOptions {
   isOnDashboard: boolean;
   /** Whether this is during onboarding (skip sync if true) */
   isOnboarding?: boolean;
+  /** Whether user has AI addon (gates email sync with AI transaction detection) */
+  hasAIAddon?: boolean;
 }
 
 interface UseAutoRefreshReturn {
@@ -121,14 +107,22 @@ const initialSyncOperation: SyncOperation = {
   error: null,
 };
 
-const initialSyncStatus: SyncStatus = {
-  emails: { ...initialSyncOperation },
-  messages: { ...initialSyncOperation },
-  contacts: { ...initialSyncOperation },
-};
+// Auto-refresh delay in milliseconds
+// Delay before auto-triggering sync on dashboard load
+const AUTO_REFRESH_DELAY_MS = 1500;
 
-// Auto-refresh delay in milliseconds (2.5 seconds as per task requirements)
-const AUTO_REFRESH_DELAY_MS = 2500;
+/**
+ * Map a SyncItem from orchestrator queue to SyncOperation for public API
+ */
+function mapQueueItemToSyncOperation(item?: SyncItem): SyncOperation {
+  if (!item) return { ...initialSyncOperation };
+  return {
+    isSyncing: item.status === 'running' || item.status === 'pending',
+    progress: item.progress,
+    message: '',
+    error: item.error ?? null,
+  };
+}
 
 /**
  * Hook for automatically refreshing data sources on app load.
@@ -139,10 +133,10 @@ const AUTO_REFRESH_DELAY_MS = 2500;
  * - User is authenticated and database is initialized
  * - Not in onboarding flow
  *
- * Sync runs in parallel:
- * - Emails (if email connected) - includes AI transaction detection
- * - Messages (macOS only, if permissions granted)
+ * Sync runs sequentially via SyncOrchestrator:
  * - Contacts (macOS only, if permissions granted)
+ * - Emails (if email connected and AI addon enabled) - includes AI transaction detection
+ * - Messages (macOS only, if permissions granted)
  */
 export function useAutoRefresh({
   userId,
@@ -151,100 +145,17 @@ export function useAutoRefresh({
   hasPermissions,
   isOnDashboard,
   isOnboarding = false,
+  hasAIAddon = false,
 }: UseAutoRefreshOptions): UseAutoRefreshReturn {
   const { isMacOS } = usePlatform();
-  const [status, setStatus] = useState<SyncStatus>(initialSyncStatus);
+
+  // Get orchestrator state and actions
+  const { queue, isRunning, requestSync } = useSyncOrchestrator();
+
   // Note: using module-level hasTriggeredAutoRefresh instead of ref to prevent
   // React strict mode from triggering twice (each instance would have its own ref)
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
   const [hasLoadedPreference, setHasLoadedPreference] = useState(false);
-
-  // Subscribe to message import progress
-  useEffect(() => {
-    const cleanup = window.api.messages.onImportProgress((progress) => {
-      if (progress.percent >= 100) {
-        setStatus((prev) => ({
-          ...prev,
-          messages: {
-            isSyncing: true,
-            progress: 100,
-            message: `Importing messages... ${progress.current.toLocaleString()} / ${progress.total.toLocaleString()}`,
-            error: null,
-          },
-        }));
-        // Brief delay then mark complete
-        setTimeout(() => {
-          setStatus((prev) => ({
-            ...prev,
-            messages: {
-              isSyncing: false,
-              progress: 100,
-              message: "Messages imported",
-              error: null,
-            },
-          }));
-        }, 500);
-      } else {
-        setStatus((prev) => ({
-          ...prev,
-          messages: {
-            isSyncing: true,
-            progress: progress.percent,
-            message: `Importing messages... ${progress.current.toLocaleString()} / ${progress.total.toLocaleString()}`,
-            error: null,
-          },
-        }));
-      }
-    });
-
-    return cleanup;
-  }, []);
-
-  // Subscribe to contacts import progress
-  useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const contactsApi = window.api.contacts as any;
-    if (!contactsApi?.onImportProgress) return;
-
-    const cleanup = contactsApi.onImportProgress(
-      (progress: { current: number; total: number; percent: number }) => {
-        if (progress.percent >= 100) {
-          setStatus((prev) => ({
-            ...prev,
-            contacts: {
-              isSyncing: true,
-              progress: 100,
-              message: `Importing contacts... ${progress.current.toLocaleString()} / ${progress.total.toLocaleString()}`,
-              error: null,
-            },
-          }));
-          setTimeout(() => {
-            setStatus((prev) => ({
-              ...prev,
-              contacts: {
-                isSyncing: false,
-                progress: 100,
-                message: "Contacts imported",
-                error: null,
-              },
-            }));
-          }, 500);
-        } else {
-          setStatus((prev) => ({
-            ...prev,
-            contacts: {
-              isSyncing: true,
-              progress: progress.percent,
-              message: `Importing contacts... ${progress.current.toLocaleString()} / ${progress.total.toLocaleString()}`,
-              error: null,
-            },
-          }));
-        }
-      }
-    );
-
-    return cleanup;
-  }, []);
 
   // Load auto-sync preference
   useEffect(() => {
@@ -271,204 +182,47 @@ export function useAutoRefresh({
   }, [userId, isDatabaseInitialized]);
 
   /**
-   * Start email sync (scan for real estate emails + AI transaction detection)
-   */
-  const syncEmails = useCallback(async (uid: string): Promise<void> => {
-    setStatus((prev) => ({
-      ...prev,
-      emails: {
-        isSyncing: true,
-        progress: null, // Indeterminate
-        message: "Syncing emails...",
-        error: null,
-      },
-    }));
-
-    try {
-      const result = await window.api.transactions.scan(uid);
-
-      setStatus((prev) => ({
-        ...prev,
-        emails: {
-          isSyncing: false,
-          progress: 100,
-          message: result.success ? "Email sync complete" : "Email sync failed",
-          error: result.error || null,
-        },
-      }));
-    } catch (error) {
-      console.error("[useAutoRefresh] Email sync error:", error);
-      setStatus((prev) => ({
-        ...prev,
-        emails: {
-          isSyncing: false,
-          progress: null,
-          message: "Email sync failed",
-          error: error instanceof Error ? error.message : "Unknown error",
-        },
-      }));
-    }
-  }, []);
-
-  /**
-   * Start messages sync (macOS Messages app)
-   */
-  const syncMessages = useCallback(async (uid: string): Promise<void> => {
-    setStatus((prev) => ({
-      ...prev,
-      messages: {
-        isSyncing: true,
-        progress: null, // Will be updated via IPC listener
-        message: "Importing messages...",
-        error: null,
-      },
-    }));
-
-    try {
-      const result = await window.api.messages.importMacOSMessages(uid);
-
-      setStatus((prev) => ({
-        ...prev,
-        messages: {
-          isSyncing: false,
-          progress: 100,
-          message: result.success
-            ? result.messagesImported > 0
-              ? `Imported ${result.messagesImported.toLocaleString()} messages`
-              : "Messages up to date"
-            : "Message import failed",
-          error: result.error || null,
-        },
-      }));
-    } catch (error) {
-      console.error("[useAutoRefresh] Message sync error:", error);
-      setStatus((prev) => ({
-        ...prev,
-        messages: {
-          isSyncing: false,
-          progress: null,
-          message: "Message import failed",
-          error: error instanceof Error ? error.message : "Unknown error",
-        },
-      }));
-    }
-  }, []);
-
-  /**
-   * Start contacts sync
-   * On macOS, contacts are loaded from the system Contacts database
-   */
-  const syncContacts = useCallback(async (uid: string): Promise<void> => {
-    setStatus((prev) => ({
-      ...prev,
-      contacts: {
-        isSyncing: true,
-        progress: null,
-        message: "Syncing contacts...",
-        error: null,
-      },
-    }));
-
-    try {
-      // Contacts are synced automatically with email scan
-      // This ensures contacts are up to date
-      await window.api.contacts.getAll(uid);
-
-      setStatus((prev) => ({
-        ...prev,
-        contacts: {
-          isSyncing: false,
-          progress: 100,
-          message: "Contacts synced",
-          error: null,
-        },
-      }));
-    } catch (error) {
-      console.error("[useAutoRefresh] Contact sync error:", error);
-      setStatus((prev) => ({
-        ...prev,
-        contacts: {
-          isSyncing: false,
-          progress: null,
-          message: "Contact sync failed",
-          error: error instanceof Error ? error.message : "Unknown error",
-        },
-      }));
-    }
-  }, []);
-
-  /**
-   * Run all applicable syncs in parallel using Promise.allSettled
-   * This is the main auto-refresh function triggered on dashboard entry.
+   * Run sync via orchestrator.
    *
-   * Uses incremental sync:
-   * - Email scan only fetches new emails since last sync
-   * - Message import only imports new messages
+   * This runs when:
+   * 1. User completes onboarding without PermissionsStep (FDA already granted)
+   * 2. User returns to app after session restart
    *
-   * Includes AI transaction detection:
-   * - transactions.scan automatically runs AI detection after fetching emails
+   * If PermissionsStep ran, hasMessagesImportTriggered() returns true and we skip.
    */
   const runAutoRefresh = useCallback(
-    async (uid: string, emailConnected: boolean): Promise<void> => {
-      // Build sync tasks based on platform and connections
-      const syncTasks: Array<{ name: string; task: Promise<void> }> = [];
+    (uid: string, emailConnected: boolean): void => {
+      const alreadyTriggered = hasMessagesImportTriggered();
 
-      // Email sync (all platforms, if email connected)
-      // This includes AI transaction detection
-      if (emailConnected) {
-        syncTasks.push({
-          name: "emails",
-          task: syncEmails(uid),
-        });
-      }
-
-      // Messages sync (macOS only)
-      // Skip if:
-      // 1. We just imported during onboarding (skipNextMessagesSync)
-      // 2. useMacOSMessagesImport hook already triggered import this session
-      //    (prevents duplicate sync - that hook runs 500ms before this one)
-      const messagesAlreadyImported = skipNextMessagesSync || hasMessagesImportTriggered();
-      if (isMacOS && hasPermissions && !messagesAlreadyImported) {
-        syncTasks.push({
-          name: "messages",
-          task: syncMessages(uid),
-        });
-      } else if (skipNextMessagesSync) {
-        // Clear the flag so future syncs work normally
-        skipNextMessagesSync = false;
-      }
-
-      // Contacts sync (macOS only, requires permissions)
-      // Run in parallel but only if we have FDA
-      if (isMacOS && hasPermissions && emailConnected) {
-        syncTasks.push({
-          name: "contacts",
-          task: syncContacts(uid),
-        });
-      }
-
-      if (syncTasks.length === 0) {
+      // Skip if already imported this session (e.g., during onboarding via PermissionsStep)
+      if (alreadyTriggered) {
         return;
       }
 
-      // Run all syncs in parallel with Promise.allSettled
-      // This ensures one failure doesn't block others
-      const results = await Promise.allSettled(
-        syncTasks.map((t) => t.task)
-      );
+      // Mark as triggered to prevent duplicate syncs
+      setMessagesImportTriggered();
 
-      // Log results for debugging (errors already logged in individual sync functions)
-      results.forEach((result, index) => {
-        const taskName = syncTasks[index].name;
-        if (result.status === "rejected") {
-          console.error(
-            `[useAutoRefresh] ${taskName} sync rejected:`,
-            result.reason
-          );
-        }
-      });
+      // Build list of sync types based on platform and permissions
+      // Order: Contacts (fast) → Emails (if AI addon) → Messages (slow)
+      const typesToSync: SyncType[] = [];
+
+      if (isMacOS && hasPermissions) {
+        typesToSync.push('contacts');
+      }
+      // Only sync emails if AI addon enabled and email connected
+      if (hasAIAddon && emailConnected) {
+        typesToSync.push('emails');
+      }
+      if (isMacOS && hasPermissions) {
+        typesToSync.push('messages');
+      }
+
+      // Request sync from orchestrator (runs sequentially)
+      if (typesToSync.length > 0) {
+        requestSync(typesToSync, uid);
+      }
     },
-    [isMacOS, hasPermissions, syncEmails, syncMessages, syncContacts]
+    [isMacOS, hasPermissions, hasAIAddon, requestSync]
   );
 
   /**
@@ -476,7 +230,7 @@ export function useAutoRefresh({
    */
   const triggerRefresh = useCallback(async () => {
     if (!userId) return;
-    await runAutoRefresh(userId, hasEmailConnected);
+    runAutoRefresh(userId, hasEmailConnected);
   }, [userId, hasEmailConnected, runAutoRefresh]);
 
   // Auto-trigger refresh once per app session when first entering dashboard
@@ -494,7 +248,7 @@ export function useAutoRefresh({
     // Mark as triggered to prevent duplicate runs
     hasTriggeredAutoRefresh = true;
 
-    // Run refresh after delay to let UI settle (2.5 seconds as per task)
+    // Run refresh after delay to let UI settle
     const timeoutId = setTimeout(() => {
       runAutoRefresh(userId, hasEmailConnected);
     }, AUTO_REFRESH_DELAY_MS);
@@ -513,46 +267,35 @@ export function useAutoRefresh({
     runAutoRefresh,
   ]);
 
-  /**
-   * Check if any sync is in progress
-   */
-  const isAnySyncing =
-    status.emails.isSyncing ||
-    status.messages.isSyncing ||
-    status.contacts.isSyncing;
+  // Track previous syncing state for notification trigger
+  const wasSyncingRef = useRef(false);
 
-  /**
-   * Get current status message to display
-   * Prioritizes syncs with actual progress (percentage) over indeterminate syncs
-   */
-  const currentSyncMessage = (() => {
-    // First priority: syncs with actual progress updates (more informative)
-    if (status.messages.isSyncing && status.messages.progress !== null) {
-      return status.messages.message;
+  // Send OS notification when sync completes
+  useEffect(() => {
+    // Detect transition from syncing to not syncing
+    if (wasSyncingRef.current && !isRunning) {
+      // Sync just completed - send notification
+      window.api.notification?.send(
+        "Sync Complete",
+        "Magic Audit is ready to use. Your data has been synchronized."
+      ).catch(() => {
+        // Silently ignore notification failures
+      });
     }
-    if (status.contacts.isSyncing && status.contacts.progress !== null) {
-      return status.contacts.message;
-    }
-    if (status.emails.isSyncing && status.emails.progress !== null) {
-      return status.emails.message;
-    }
-    // Second priority: any active sync (indeterminate progress)
-    if (status.messages.isSyncing) {
-      return status.messages.message;
-    }
-    if (status.emails.isSyncing) {
-      return status.emails.message;
-    }
-    if (status.contacts.isSyncing) {
-      return status.contacts.message;
-    }
-    return null;
-  })();
+    wasSyncingRef.current = isRunning;
+  }, [isRunning]);
+
+  // Derive syncStatus from orchestrator queue for backward compatibility
+  const syncStatus: SyncStatus = {
+    emails: mapQueueItemToSyncOperation(queue.find(q => q.type === 'emails')),
+    messages: mapQueueItemToSyncOperation(queue.find(q => q.type === 'messages')),
+    contacts: mapQueueItemToSyncOperation(queue.find(q => q.type === 'contacts')),
+  };
 
   return {
-    syncStatus: status,
-    isAnySyncing,
-    currentSyncMessage,
+    syncStatus,
+    isAnySyncing: isRunning,
+    currentSyncMessage: null,
     triggerRefresh,
   };
 }

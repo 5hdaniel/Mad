@@ -189,7 +189,8 @@ export const registerTransactionHandlers = (
 
         logService.info("Transaction scan complete", "Transactions", {
           userId: validatedUserId,
-          result,
+          transactionsFound: result.transactionsFound,
+          emailsScanned: result.emailsScanned,
         });
 
         return {

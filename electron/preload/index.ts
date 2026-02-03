@@ -8,7 +8,7 @@ export { transactionBridge } from "./transactionBridge";
 export type { ScanOptions, ExportEnhancedOptions, ExportFolderOptions } from "./transactionBridge";
 export { contactBridge, addressBridge } from "./contactBridge";
 export { feedbackBridge } from "./communicationBridge";
-export { preferencesBridge, userBridge, shellBridge } from "./settingsBridge";
+export { preferencesBridge, userBridge, shellBridge, notificationBridge } from "./settingsBridge";
 export { llmBridge } from "./llmBridge";
 export { systemBridge } from "./systemBridge";
 export { deviceBridge, backupBridge, driverBridge, syncBridge } from "./deviceBridge";
