@@ -270,11 +270,11 @@ describe("ConversationViewModal", () => {
         />
       );
 
-      // Should show sender names on messages
+      // TASK-1794: Messages are sorted newest-first, so Bob (10:05) comes before Alice (10:00)
       const senderElements = screen.getAllByTestId("group-message-sender");
       expect(senderElements).toHaveLength(2);
-      expect(senderElements[0]).toHaveTextContent("Alice");
-      expect(senderElements[1]).toHaveTextContent("Bob");
+      expect(senderElements[0]).toHaveTextContent("Bob");
+      expect(senderElements[1]).toHaveTextContent("Alice");
     });
 
     it("hides sender name for consecutive messages from same sender", () => {
@@ -324,11 +324,12 @@ describe("ConversationViewModal", () => {
         />
       );
 
-      // Should only show sender name for first Alice message and for Bob
+      // TASK-1794: Messages are sorted newest-first
+      // Bob (10:02) -> Alice (10:01, consecutive) -> Alice (10:00, hidden as consecutive)
       const senderElements = screen.getAllByTestId("group-message-sender");
       expect(senderElements).toHaveLength(2);
-      expect(senderElements[0]).toHaveTextContent("Alice");
-      expect(senderElements[1]).toHaveTextContent("Bob");
+      expect(senderElements[0]).toHaveTextContent("Bob");
+      expect(senderElements[1]).toHaveTextContent("Alice");
     });
 
     it("does not show sender name on outbound messages", () => {
@@ -378,11 +379,12 @@ describe("ConversationViewModal", () => {
         />
       );
 
-      // Should only show sender names for inbound messages
+      // TASK-1794: Messages are sorted newest-first
+      // Bob (10:02) -> outbound (10:01, no sender) -> Alice (10:00)
       const senderElements = screen.getAllByTestId("group-message-sender");
       expect(senderElements).toHaveLength(2);
-      expect(senderElements[0]).toHaveTextContent("Alice");
-      expect(senderElements[1]).toHaveTextContent("Bob");
+      expect(senderElements[0]).toHaveTextContent("Bob");
+      expect(senderElements[1]).toHaveTextContent("Alice");
     });
 
     it("falls back to phone number when contact name not available", () => {
@@ -422,10 +424,12 @@ describe("ConversationViewModal", () => {
         />
       );
 
+      // TASK-1794: Messages are sorted newest-first
+      // Unknown (10:01) -> Alice (10:00)
       const senderElements = screen.getAllByTestId("group-message-sender");
       expect(senderElements).toHaveLength(2);
-      expect(senderElements[0]).toHaveTextContent("Alice");
-      expect(senderElements[1]).toHaveTextContent("+14155550200");
+      expect(senderElements[0]).toHaveTextContent("+14155550200");
+      expect(senderElements[1]).toHaveTextContent("Alice");
     });
   });
 
@@ -698,16 +702,16 @@ describe("ConversationViewModal", () => {
         />
       );
 
-      // Check that "First" appears before "Second" in the DOM
+      // TASK-1794: Messages are sorted newest-first, so "Second" (11:00) appears before "First" (09:00)
       const firstMsg = screen.getByText("First message text here");
       const secondMsg = screen.getByText("Second message text here");
 
       expect(firstMsg).toBeInTheDocument();
       expect(secondMsg).toBeInTheDocument();
 
-      // Verify ordering by checking DOM positions
+      // Verify ordering by checking DOM positions - newest first means Second appears before First
       expect(
-        firstMsg.compareDocumentPosition(secondMsg) &
+        secondMsg.compareDocumentPosition(firstMsg) &
           Node.DOCUMENT_POSITION_FOLLOWING
       ).toBeTruthy();
     });
