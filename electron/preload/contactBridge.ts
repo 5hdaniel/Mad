@@ -167,6 +167,28 @@ export const contactBridge = {
       ipcRenderer.removeListener("contacts:external-sync-complete", handler);
     };
   },
+
+  /**
+   * DEBUG: Check emails stored for a contact
+   * @param contactId - Contact ID to check
+   * @returns Emails from contact_emails and external_contacts tables
+   */
+  debugEmails: (contactId: string): Promise<{
+    contactName: string;
+    contactEmails: string[];
+    externalEmails: string[];
+  }> => ipcRenderer.invoke("contacts:debugEmails", contactId),
+
+  /**
+   * DEBUG: Backfill emails/phones from external_contacts to contact tables
+   * @param contactId - Contact ID to backfill
+   * @returns Number of emails/phones added
+   */
+  backfillFromExternal: (contactId: string): Promise<{
+    success: boolean;
+    added: number;
+    error?: string;
+  }> => ipcRenderer.invoke("contacts:backfillFromExternal", contactId),
 };
 
 /**
