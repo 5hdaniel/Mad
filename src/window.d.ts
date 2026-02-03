@@ -589,6 +589,16 @@ interface MainAPI {
       durationMs?: number;
       error?: string;
     }>;
+    /**
+     * Check if a user exists in the local database
+     * BACKLOG-611: Used to determine if secure-storage step should be shown
+     * even on machines with previous installs (different user)
+     */
+    checkUserInLocalDb: (userId: string) => Promise<{
+      success: boolean;
+      exists: boolean;
+      error?: string;
+    }>;
   };
   device: {
     /** Lists all currently connected iOS devices */
