@@ -243,15 +243,19 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
 
   // Auto-check permissions on mount and periodically after user starts the flow
   const checkPermissions = useCallback(async () => {
+    console.log('[PermissionsStep] checkPermissions called');
     try {
+      console.log('[PermissionsStep] Calling window.api.system.checkPermissions...');
       const result = await window.api.system.checkPermissions();
+      console.log('[PermissionsStep] checkPermissions result:', result);
       if (result.hasPermission) {
         // Permissions granted - trigger import first, then continue
+        console.log('[PermissionsStep] Permissions granted, calling triggerImport');
         triggerImport();
       }
       return result.hasPermission;
     } catch (error) {
-      console.error("Error checking permissions:", error);
+      console.error("[PermissionsStep] Error checking permissions:", error);
       return false;
     }
   }, [triggerImport]);
@@ -290,8 +294,15 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
   };
 
   const handleManualCheck = async () => {
+    console.log('[PermissionsStep] Check Permissions button clicked');
     setIsChecking(true);
-    await checkPermissions();
+    try {
+      console.log('[PermissionsStep] Calling checkPermissions...');
+      await checkPermissions();
+      console.log('[PermissionsStep] checkPermissions completed');
+    } catch (error) {
+      console.error('[PermissionsStep] checkPermissions error:', error);
+    }
     setIsChecking(false);
   };
 

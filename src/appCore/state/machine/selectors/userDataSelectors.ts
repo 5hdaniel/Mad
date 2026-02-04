@@ -223,14 +223,24 @@ export function selectHasPermissions(state: AppState): boolean {
 export function selectHasEmailConnectedNullable(
   state: AppState
 ): boolean | undefined {
+  let result: boolean | undefined;
+
   if (state.status === "ready") {
-    return state.userData.hasEmailConnected;
+    result = state.userData.hasEmailConnected;
+  } else if (state.status === "onboarding") {
+    result = state.hasEmailConnected ?? false;
+  } else {
+    // Loading/unauthenticated/error: state is unknown
+    result = undefined;
   }
-  if (state.status === "onboarding") {
-    return state.hasEmailConnected ?? false;
-  }
-  // Loading/unauthenticated/error: state is unknown
-  return undefined;
+
+  console.log('[selectHasEmailConnectedNullable]', {
+    status: state.status,
+    'state.hasEmailConnected': state.status === 'onboarding' ? (state as any).hasEmailConnected : 'N/A',
+    result,
+  });
+
+  return result;
 }
 
 /**

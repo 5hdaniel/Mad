@@ -19,6 +19,7 @@ import {
   selectHasPermissionsNullable,
   selectIsDatabaseInitialized,
 } from "../../appCore/state/machine/selectors";
+import { logAllFlags, logNavigation, logStateChange } from "../../appCore/state/machine/debug";
 import type { AppStateMachine } from "../../appCore/state/types";
 import type { StepAction } from "./types";
 
@@ -75,13 +76,28 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
       const emailConnected = selectHasEmailConnectedNullable(state);
       const hasPermissions = selectHasPermissionsNullable(state);
 
-      // DEBUG: Log what we're deriving from state machine
-      console.log('[OnboardingFlow] State machine path:', {
+      // DEBUG: Comprehensive flag logging
+      logAllFlags('OnboardingFlow.appState', {
         status: state.status,
-        emailConnected,
-        hasPermissions,
+        step: (state as any).step,
+        hasEmailConnected: (state as any).hasEmailConnected,
+        hasPermissions: (state as any).hasPermissions,
+        hasCompletedEmailOnboarding: (state as any).hasCompletedEmailOnboarding,
         isDatabaseInitialized,
-        'emailStep shouldShow': emailConnected !== true,  // Show if not connected OR unknown
+        phoneType: selectPhoneType(state),
+        emailConnected,
+        permissionsGranted: hasPermissions,
+        isNewUser: app.isNewUserFlow,
+      });
+
+      logStateChange('OnboardingFlow', 'BUILDING_APP_STATE', {
+        'state.status': state.status,
+        'state.hasEmailConnected (raw)': (state as any).hasEmailConnected,
+        'emailConnected (selector)': emailConnected,
+        'hasPermissions': hasPermissions,
+        'isDatabaseInitialized': isDatabaseInitialized,
+        'emailStep shouldShow': emailConnected !== true,
+        'permissionsStep shouldShow': hasPermissions !== true,
       });
 
       return {
@@ -251,13 +267,29 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
   );
 
   // When DB becomes initialized while we're waiting (after SECURE_STORAGE_SETUP),
-  // advance to the next step. This handles the async nature of macOS keychain initialization.
+  // clear the waiting flag. Navigation is handled automatically by useOnboardingFlow's
+  // step-filtering effect - when secure-storage gets filtered out (isDatabaseInitialized=true),
+  // it auto-advances to the next visible step.
+  //
+  // BUG FIX: Previously this effect called goToNext(), but that caused double-advancement:
+  // 1. Step-filtering effect: secure-storage filtered out → advances to email-connect
+  // 2. This effect: goToNext() → advances from email-connect to permissions
+  // Result: email-connect step was skipped entirely.
   useEffect(() => {
     if (waitingForDbInit && appState.isDatabaseInitialized) {
+      logStateChange('OnboardingFlow', 'DB_INIT_COMPLETE - clearing waitingForDbInit', {
+        waitingForDbInit,
+        isDatabaseInitialized: appState.isDatabaseInitialized,
+        emailConnected: appState.emailConnected,
+        hasPermissions: appState.hasPermissions,
+        currentStepId: currentStep?.meta?.id,
+        visibleSteps: steps.map(s => s.meta.id),
+      });
       setWaitingForDbInit(false);
-      goToNext();
+      // Note: Do NOT call goToNext() here - step filtering in useOnboardingFlow
+      // already handles navigation when secure-storage is filtered out
     }
-  }, [waitingForDbInit, appState.isDatabaseInitialized, goToNext]);
+  }, [waitingForDbInit, appState.isDatabaseInitialized, appState.emailConnected, appState.hasPermissions, currentStep, steps]);
 
   // When all steps are filtered out (returning user with everything complete),
   // navigate to dashboard. This handles the case where a returning user's data
