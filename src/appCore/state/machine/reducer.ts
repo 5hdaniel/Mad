@@ -454,7 +454,8 @@ export function appStateReducer(
           : state.selectedPhoneType;
 
       // If completing permissions on macOS, mark all preceding steps as complete
-      // (you can't get to permissions without going through phone-type, secure-storage, email-connect)
+      // macOS flow order: phone-type → secure-storage → email-connect → permissions
+      // So preceding steps are phone-type, secure-storage, and email-connect
       if (action.step === "permissions") {
         const precedingSteps: OnboardingStep[] = ["phone-type", "email-connect"];
         if (state.platform.isMacOS) {

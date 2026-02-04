@@ -31,8 +31,9 @@ export interface OnboardingContext {
 
   /**
    * Whether an email account has been connected.
+   * undefined means state is unknown (during loading).
    */
-  emailConnected: boolean;
+  emailConnected: boolean | undefined;
 
   /**
    * The email address of the connected account.
@@ -59,8 +60,9 @@ export interface OnboardingContext {
 
   /**
    * Whether required permissions have been granted.
+   * undefined means state is unknown (during loading).
    */
-  permissionsGranted: boolean;
+  permissionsGranted: boolean | undefined;
 
   /**
    * Whether terms of service have been accepted.

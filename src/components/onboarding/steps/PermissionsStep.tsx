@@ -620,8 +620,9 @@ const permissionsStep: OnboardingStep = {
     canProceed: () => false,
     // Step is never "complete" via button - it auto-proceeds via PERMISSION_GRANTED action
     isStepComplete: () => false,
-    // Only show if permissions not yet granted (returning users with FDA skip this)
-    shouldShow: (context) => !context.permissionsGranted,
+    // Only show if permissions not yet granted (or unknown during loading)
+    // Using !== true means: show if false OR undefined (unknown state)
+    shouldShow: (context) => context.permissionsGranted !== true,
   },
   Content: PermissionsStepContent,
 };

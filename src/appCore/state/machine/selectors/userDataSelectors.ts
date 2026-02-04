@@ -202,3 +202,53 @@ export function selectHasPermissions(state: AppState): boolean {
   }
   return false;
 }
+
+// =============================================================================
+// NULLABLE SELECTORS
+// =============================================================================
+// These selectors return `undefined` for unknown states instead of defensive
+// values. Use these in step predicates where unknown should mean "show the step".
+// See: Kent C. Dodds "Stop using isLoading booleans"
+
+/**
+ * Tri-state selector for email connection status.
+ * Returns: true (connected), false (not connected), undefined (unknown/loading)
+ *
+ * Use this in step predicates: `emailConnected !== true` means show step
+ * when either not connected OR unknown (loading).
+ *
+ * @param state - Current application state
+ * @returns true, false, or undefined if state is unknown
+ */
+export function selectHasEmailConnectedNullable(
+  state: AppState
+): boolean | undefined {
+  if (state.status === "ready") {
+    return state.userData.hasEmailConnected;
+  }
+  if (state.status === "onboarding") {
+    return state.hasEmailConnected ?? false;
+  }
+  // Loading/unauthenticated/error: state is unknown
+  return undefined;
+}
+
+/**
+ * Tri-state selector for permissions status.
+ * Returns: true (granted), false (not granted), undefined (unknown/loading)
+ *
+ * @param state - Current application state
+ * @returns true, false, or undefined if state is unknown
+ */
+export function selectHasPermissionsNullable(
+  state: AppState
+): boolean | undefined {
+  if (state.status === "ready") {
+    return state.userData.hasPermissions;
+  }
+  if (state.status === "onboarding") {
+    return state.hasPermissions ?? undefined;
+  }
+  // Loading/unauthenticated/error: state is unknown
+  return undefined;
+}

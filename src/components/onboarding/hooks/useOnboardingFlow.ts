@@ -29,14 +29,14 @@ import type {
 export interface OnboardingAppState {
   /** User's selected phone type */
   phoneType: "iphone" | "android" | null;
-  /** Whether email is connected */
-  emailConnected: boolean;
+  /** Whether email is connected (undefined = unknown/loading) */
+  emailConnected: boolean | undefined;
   /** Connected email address */
   connectedEmail: string | null;
   /** Email provider */
   emailProvider: "google" | "microsoft" | null;
-  /** Whether permissions are granted */
-  hasPermissions: boolean;
+  /** Whether permissions are granted (undefined = unknown/loading) */
+  hasPermissions: boolean | undefined;
   /** Whether secure storage is set up (macOS) */
   hasSecureStorage: boolean;
   /** Whether driver is set up */

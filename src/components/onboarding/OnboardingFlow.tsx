@@ -15,8 +15,8 @@ import { NavigationButtons } from "./shell/NavigationButtons";
 import { useOptionalMachineState } from "../../appCore/state/machine";
 import {
   selectPhoneType,
-  selectHasEmailConnected,
-  selectHasPermissions,
+  selectHasEmailConnectedNullable,
+  selectHasPermissionsNullable,
   selectIsDatabaseInitialized,
 } from "../../appCore/state/machine/selectors";
 import type { AppStateMachine } from "../../appCore/state/types";
@@ -45,13 +45,21 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
   // Access state machine state when feature flag is enabled
   const machineState = useOptionalMachineState();
 
+  // LOADING GATE: Don't render until state machine has finished loading
+  // This prevents race conditions where async checks haven't completed yet,
+  // causing selectors to return defensive defaults that hide steps incorrectly.
+  // By waiting for "loading" to complete, all state is settled before we render.
+  if (!machineState || machineState.state.status === "loading") {
+    return null;
+  }
+
   // Early exit if state machine is already in "ready" state
   // This handles the race condition where the async dispatch in completeEmailOnboarding()
   // completes and sets status to "ready", but we're still mounted because goToNext()
   // called the no-op goToStep("dashboard") before the dispatch finished.
   // By returning null here, we let AppRouter render the Dashboard instead of showing
   // a white screen while waiting for navigation that never comes.
-  if (machineState?.state.status === "ready") {
+  if (machineState.state.status === "ready") {
     return null;
   }
 
@@ -62,13 +70,26 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
       // State machine enabled - derive from state machine for consistent state
       const { state } = machineState;
       const isDatabaseInitialized = selectIsDatabaseInitialized(state);
+      // Use nullable selectors - returns undefined during loading instead of defensive true/false
+      // This ensures steps show correctly when state is unknown
+      const emailConnected = selectHasEmailConnectedNullable(state);
+      const hasPermissions = selectHasPermissionsNullable(state);
+
+      // DEBUG: Log what we're deriving from state machine
+      console.log('[OnboardingFlow] State machine path:', {
+        status: state.status,
+        emailConnected,
+        hasPermissions,
+        isDatabaseInitialized,
+        'emailStep shouldShow': emailConnected !== true,  // Show if not connected OR unknown
+      });
 
       return {
         phoneType: selectPhoneType(state),
-        emailConnected: selectHasEmailConnected(state),
+        emailConnected,
         connectedEmail: app.currentUser?.email ?? null,
         emailProvider: app.pendingOnboardingData?.emailProvider ?? null,
-        hasPermissions: selectHasPermissions(state),
+        hasPermissions,
         hasSecureStorage: app.hasSecureStorageSetup,
         driverSetupComplete: !app.needsDriverSetup,
         termsAccepted: !app.needsTermsAcceptance,
@@ -80,6 +101,7 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
     }
 
     // Legacy fallback - use app properties directly
+    console.log('[OnboardingFlow] Using LEGACY path - machineState is null');
     return {
       phoneType: app.selectedPhoneType,
       emailConnected: app.hasEmailConnected,

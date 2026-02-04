@@ -74,10 +74,11 @@ export const meta: OnboardingStepMeta = {
     label: "Skip for now",
     description: "You can connect your email later in Settings",
   },
-  isStepComplete: (context) => context.emailConnected || context.emailSkipped,
-  canProceed: (context) => context.emailConnected,
-  // Only show if email not yet connected
-  shouldShow: (context) => !context.emailConnected,
+  isStepComplete: (context) => context.emailConnected === true || context.emailSkipped,
+  canProceed: (context) => context.emailConnected === true,
+  // Only show if email not yet connected (or unknown during loading)
+  // Using !== true means: show if false OR undefined (unknown state)
+  shouldShow: (context) => context.emailConnected !== true,
 };
 
 // =============================================================================
@@ -306,11 +307,11 @@ export function Content({
     "google" | "microsoft" | null
   >(null);
 
-  // Connection status from context
+  // Connection status from context (convert undefined to false for boolean checks)
   const primaryConnected =
-    context.emailConnected && context.emailProvider === primaryProvider;
+    context.emailConnected === true && context.emailProvider === primaryProvider;
   const secondaryConnected =
-    context.emailConnected && context.emailProvider === secondaryProvider;
+    context.emailConnected === true && context.emailProvider === secondaryProvider;
 
   // Get connected email for each provider
   const primaryEmail = primaryConnected ? context.connectedEmail : null;
@@ -318,7 +319,7 @@ export function Content({
 
   // Reset connecting state when connection succeeds
   React.useEffect(() => {
-    if (context.emailConnected) {
+    if (context.emailConnected === true) {
       setConnectingProvider(null);
     }
   }, [context.emailConnected]);
@@ -336,7 +337,7 @@ export function Content({
   };
 
   // Check if any email is connected
-  const hasConnection = context.emailConnected;
+  const hasConnection = context.emailConnected === true;
 
   return (
     <>
