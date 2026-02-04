@@ -74,6 +74,34 @@ jobs:
           echo "Certificate imported successfully"
           echo "signing_enabled=true" >> $GITHUB_OUTPUT
 
+      # Create .env.production with secrets for runtime use
+      # The app loads credentials from this file at runtime (electron/main.ts)
+      # NOTE: SUPABASE_SERVICE_KEY is intentionally excluded - it's server-side only
+      - name: Create production environment file
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          MICROSOFT_CLIENT_ID: ${{ secrets.MICROSOFT_CLIENT_ID }}
+          MICROSOFT_TENANT_ID: ${{ secrets.MICROSOFT_TENANT_ID }}
+          MICROSOFT_CLIENT_SECRET: ${{ secrets.MICROSOFT_CLIENT_SECRET }}
+        run: |
+          echo "Creating .env.production file..."
+          {
+            echo "SUPABASE_URL=${SUPABASE_URL}"
+            echo "SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}"
+            echo "GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}"
+            echo "GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}"
+            echo "GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}"
+            echo "MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID}"
+            echo "MICROSOFT_TENANT_ID=${MICROSOFT_TENANT_ID}"
+            echo "MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET}"
+            echo "BROKER_PORTAL_URL=https://broker-portal-two.vercel.app"
+          } > .env.production
+          echo ".env.production created with $(wc -l < .env.production) lines"
+
       - name: Package and Sign macOS App
         env:
           # Code signing
@@ -85,20 +113,12 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           # GitHub token for publishing
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # App environment variables (baked into build)
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
-          MICROSOFT_CLIENT_ID: ${{ secrets.MICROSOFT_CLIENT_ID }}
-          MICROSOFT_TENANT_ID: ${{ secrets.MICROSOFT_TENANT_ID }}
-          MICROSOFT_CLIENT_SECRET: ${{ secrets.MICROSOFT_CLIENT_SECRET }}
         run: |
+          # Convert boolean input to electron-builder publish value
+          PUBLISH_VALUE="${{ github.event.inputs.publish == 'true' && 'always' || (github.event.inputs.publish == 'false' && 'never' || 'always') }}"
           if [ -n "$CSC_LINK" ]; then
             echo "Building signed and notarized macOS package..."
-            npm run package -- --publish ${{ github.event.inputs.publish || 'always' }}
+            npm run package -- --publish "$PUBLISH_VALUE"
           else
             echo "Building unsigned macOS package (no certificate configured)..."
             npm run package:unsigned
@@ -176,17 +196,13 @@ jobs:
           Remove-Item $extractPath -Recurse -Force -ErrorAction SilentlyContinue
         shell: pwsh
 
-      - name: Package and Sign Windows App
+      # Create .env.production with secrets for runtime use
+      # The app loads credentials from this file at runtime (electron/main.ts)
+      # NOTE: SUPABASE_SERVICE_KEY is intentionally excluded - it's server-side only
+      - name: Create production environment file
         env:
-          # Code signing (EV or OV certificate)
-          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
-          # GitHub token for publishing
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # App environment variables (baked into build)
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
@@ -194,9 +210,36 @@ jobs:
           MICROSOFT_TENANT_ID: ${{ secrets.MICROSOFT_TENANT_ID }}
           MICROSOFT_CLIENT_SECRET: ${{ secrets.MICROSOFT_CLIENT_SECRET }}
         run: |
+          $content = @(
+            "SUPABASE_URL=$env:SUPABASE_URL",
+            "SUPABASE_ANON_KEY=$env:SUPABASE_ANON_KEY",
+            "GOOGLE_CLIENT_ID=$env:GOOGLE_CLIENT_ID",
+            "GOOGLE_CLIENT_SECRET=$env:GOOGLE_CLIENT_SECRET",
+            "GOOGLE_MAPS_API_KEY=$env:GOOGLE_MAPS_API_KEY",
+            "MICROSOFT_CLIENT_ID=$env:MICROSOFT_CLIENT_ID",
+            "MICROSOFT_TENANT_ID=$env:MICROSOFT_TENANT_ID",
+            "MICROSOFT_CLIENT_SECRET=$env:MICROSOFT_CLIENT_SECRET",
+            "BROKER_PORTAL_URL=https://broker-portal-two.vercel.app"
+          ) -join "`n"
+          $content | Out-File -FilePath .env.production -Encoding utf8 -NoNewline
+          Add-Content -Path .env.production -Value ""
+          echo ".env.production created"
+          Get-Content .env.production
+        shell: pwsh
+
+      - name: Package and Sign Windows App
+        env:
+          # Code signing (EV or OV certificate)
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          # GitHub token for publishing
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Convert boolean input to electron-builder publish value
+          PUBLISH_VALUE: ${{ github.event.inputs.publish == 'true' && 'always' || (github.event.inputs.publish == 'false' && 'never' || 'always') }}
+        run: |
           if ($env:WIN_CSC_LINK) {
             echo "Building signed Windows package..."
-            npm run package -- --publish ${{ github.event.inputs.publish || 'always' }}
+            npm run package -- --publish $env:PUBLISH_VALUE
           } else {
             echo "Building unsigned Windows package (no certificate configured)..."
             npm run package:unsigned

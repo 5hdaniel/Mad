@@ -1666,4 +1666,51 @@ export function registerSystemHandlers(): void {
       }
     },
   );
+
+  /**
+   * Check if a user exists in the local database
+   * BACKLOG-611: Used to determine if secure-storage step should be shown
+   * even on machines with previous installs (different user)
+   * @param userId - User ID to check
+   * @returns Whether the user exists in the local DB
+   */
+  ipcMain.handle(
+    "system:check-user-in-local-db",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<{ success: boolean; exists: boolean; error?: string }> => {
+      try {
+        // If database is not initialized, user can't exist
+        if (!databaseService.isInitialized()) {
+          return { success: true, exists: false };
+        }
+
+        const validatedUserId = validateUserId(userId, false); // Don't throw if null
+        if (!validatedUserId) {
+          return { success: true, exists: false };
+        }
+
+        const user = await databaseService.getUserById(validatedUserId);
+        const exists = user !== null;
+
+        logService.debug(
+          `[system:check-user-in-local-db] User ${validatedUserId.substring(0, 8)}... exists: ${exists}`,
+          "SystemHandlers",
+        );
+
+        return { success: true, exists };
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error(
+          "[system:check-user-in-local-db] Failed to check user",
+          "SystemHandlers",
+          { error: errorMessage },
+        );
+        // On error, assume user doesn't exist to trigger onboarding
+        return { success: true, exists: false };
+      }
+    },
+  );
 }

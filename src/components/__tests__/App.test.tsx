@@ -765,7 +765,8 @@ describe("App", () => {
       // Version popup should show
       await waitFor(() => {
         expect(screen.getByText(/app info/i)).toBeInTheDocument();
-        expect(screen.getByText(/1.0.7/)).toBeInTheDocument();
+        // Check for version pattern (matches 2.0.3 from the mock in tests/setup.js)
+        expect(screen.getByText(/2\.0\.3/)).toBeInTheDocument();
       });
     });
   });

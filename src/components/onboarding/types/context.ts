@@ -98,4 +98,11 @@ export interface OnboardingContext {
    * null if not logged in yet.
    */
   userId: string | null;
+
+  /**
+   * Whether the current user exists in the local database.
+   * BACKLOG-611: False when a new user logs in on a machine with a previous install.
+   * Used to determine if secure-storage step should be shown even when DB is initialized.
+   */
+  currentUserInLocalDb: boolean;
 }

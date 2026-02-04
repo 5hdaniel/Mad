@@ -36,8 +36,10 @@ export const meta: OnboardingStepMeta = {
   },
   // This step is required for macOS users
   skip: undefined,
-  // Only show if database not yet initialized (pre-DB flow)
-  shouldShow: (context) => !context.isDatabaseInitialized,
+  // Show if database not initialized OR current user doesn't exist in local DB
+  // BACKLOG-611: New users on machines with previous installs need this step
+  // even though the DB is initialized (from a different user)
+  shouldShow: (context) => !context.isDatabaseInitialized || !context.currentUserInLocalDb,
 };
 
 // =============================================================================

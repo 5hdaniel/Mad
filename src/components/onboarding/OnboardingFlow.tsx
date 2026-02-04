@@ -24,6 +24,25 @@ import type { AppStateMachine } from "../../appCore/state/types";
 import type { StepAction } from "./types";
 
 /**
+ * Check if a user exists in the local database.
+ * BACKLOG-611: Used to determine if secure-storage step should be shown
+ * even on machines with previous installs (different user).
+ */
+async function checkUserInLocalDb(userId: string | null): Promise<boolean> {
+  if (!userId) return false;
+  try {
+    // Type assertion needed because window.d.ts type may not be refreshed in all TS caches
+    const systemApi = window.api.system as typeof window.api.system & {
+      checkUserInLocalDb: (userId: string) => Promise<{ success: boolean; exists: boolean; error?: string }>;
+    };
+    const result = await systemApi.checkUserInLocalDb(userId);
+    return result.success && result.exists;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Props for the OnboardingFlow component.
  */
 export interface OnboardingFlowProps {
@@ -45,6 +64,20 @@ export interface OnboardingFlowProps {
 export function OnboardingFlow({ app }: OnboardingFlowProps) {
   // Access state machine state when feature flag is enabled
   const machineState = useOptionalMachineState();
+
+  // BACKLOG-611: Track whether current user exists in local DB
+  // This handles the case where a new user logs in on a machine with a previous install
+  const [currentUserInLocalDb, setCurrentUserInLocalDb] = useState(false);
+  const userId = app.currentUser?.id ?? null;
+
+  // Check if user exists in local DB when userId changes
+  useEffect(() => {
+    if (!userId) {
+      setCurrentUserInLocalDb(false);
+      return;
+    }
+    checkUserInLocalDb(userId).then(setCurrentUserInLocalDb);
+  }, [userId]);
 
   // LOADING GATE: Don't render until state machine has finished loading
   // This prevents race conditions where async checks haven't completed yet,
@@ -113,6 +146,7 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
         isNewUser: app.isNewUserFlow,
         isDatabaseInitialized,
         userId: app.currentUser?.id ?? null,
+        currentUserInLocalDb,
       };
     }
 
@@ -131,8 +165,9 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
       isNewUser: app.isNewUserFlow,
       isDatabaseInitialized: app.isDatabaseInitialized,
       userId: app.currentUser?.id ?? null,
+      currentUserInLocalDb,
     };
-  }, [machineState, app]);
+  }, [machineState, app, currentUserInLocalDb]);
 
   // Track if we're waiting for DB init to complete after clicking Continue on secure-storage
   // This handles the async nature of macOS keychain initialization for first-time users

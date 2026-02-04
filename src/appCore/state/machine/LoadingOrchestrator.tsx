@@ -123,6 +123,13 @@ export function LoadingOrchestrator({
     }
 
     console.log("[LoadingOrchestrator] PHASE 2: Starting database initialization...");
+
+    // Guard: respect deferredDbInit flag - let onboarding SecureStorageStep handle DB init
+    // This prevents the Keychain prompt from appearing before the login screen on fresh macOS installs
+    const loadingState = state as import("./types").LoadingState;
+    if (loadingState.deferredDbInit) {
+      return;
+    }
     const platform = platformRef.current;
 
     // Windows: Auto-initialize (DPAPI is silent, no user interaction needed)

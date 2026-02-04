@@ -363,6 +363,27 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
       error?: string;
     }> => {
       try {
+        // BACKLOG-615: Check if database is initialized before querying
+        if (!databaseService.isInitialized()) {
+          logService.info("[MessageImport] DB not initialized, returning empty import status (deferred DB init)", "MessageImportHandlers");
+          return {
+            success: true,
+            messageCount: 0,
+            lastImportAt: null,
+          };
+        }
+
+        // BACKLOG-615: Verify user exists in database before querying
+        const userExists = await databaseService.getUserById(userId);
+        if (!userExists) {
+          logService.info("[MessageImport] No local user yet, returning empty import status (deferred DB init)", "MessageImportHandlers");
+          return {
+            success: true,
+            messageCount: 0,
+            lastImportAt: null,
+          };
+        }
+
         const db = databaseService.getRawDatabase();
 
         // Get count and most recent created_at for iMessage/SMS

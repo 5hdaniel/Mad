@@ -30,6 +30,12 @@ export {
 // Session handlers
 export { registerSessionHandlers } from "./sessionHandlers";
 
+// Error logging handlers
+export { registerErrorLoggingHandlers } from "./errorLoggingHandlers";
+
+// Reset handlers (TASK-1802)
+export { registerResetHandlers } from "./resetHandlers";
+
 // Shared auth handlers
 export {
   registerSharedAuthHandlers,
