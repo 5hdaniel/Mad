@@ -117,13 +117,23 @@ async function getUserDetails(memberId: string): Promise<UserDetailsResult | Not
       .single();
 
     if (inviterMember?.user) {
-      inviterData = { user: inviterMember.user as { email: string; display_name: string | null } };
+      // Supabase returns joined relations as arrays, get first element
+      const userRecord = Array.isArray(inviterMember.user)
+        ? inviterMember.user[0]
+        : inviterMember.user;
+      if (userRecord) {
+        inviterData = { user: userRecord as { email: string; display_name: string | null } };
+      }
     }
   }
+
+  // Supabase returns joined relations as arrays, extract first element
+  const userData = Array.isArray(member.user) ? member.user[0] : member.user;
 
   return {
     member: {
       ...member,
+      user: userData,
       inviter: inviterData,
     } as MemberDetailsData,
     currentUserId: user.id,
