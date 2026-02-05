@@ -142,6 +142,15 @@ export interface ContinueEmailOnlyAction extends BaseStepAction {
 }
 
 /**
+ * Action dispatched when the user has been verified to exist in the local database.
+ * This is triggered by the account-verification step after successfully
+ * confirming/creating the user in SQLite.
+ */
+export interface UserVerifiedInLocalDbAction extends BaseStepAction {
+  type: "USER_VERIFIED_IN_LOCAL_DB";
+}
+
+/**
  * Union type of all possible step actions.
  * Used for type-safe action handling in step components.
  */
@@ -160,7 +169,8 @@ export type StepAction =
   | NavigateBackAction
   | OnboardingCompleteAction
   | GoBackSelectIphoneAction
-  | ContinueEmailOnlyAction;
+  | ContinueEmailOnlyAction
+  | UserVerifiedInLocalDbAction;
 
 /**
  * Type guard to extract the action type string literal.

@@ -324,11 +324,20 @@ async function handleAcceptTermsToSupabase(
     );
 
     return { success: true };
-  } catch (error) {
+  } catch (error: any) {
+    // Handle both standard Error and PostgrestError from Supabase
+    const errorMessage = error?.message || error?.error_description || String(error) || "Unknown error";
+    const errorCode = error?.code || error?.status || "UNKNOWN";
+
     await logService.error(
       "Accept terms to Supabase failed",
       "AuthHandlers",
-      { error: error instanceof Error ? error.message : "Unknown error" }
+      {
+        error: errorMessage,
+        code: errorCode,
+        details: error?.details,
+        hint: error?.hint,
+      }
     );
     if (error instanceof ValidationError) {
       return {
@@ -338,7 +347,7 @@ async function handleAcceptTermsToSupabase(
     }
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: errorMessage,
     };
   }
 }
@@ -682,6 +691,54 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
     }
 
     sessionSecurityService.recordActivity(session.sessionToken);
+
+    // DORIAN'S T&C FIX: Restore Supabase SDK session for returning users
+    // The Supabase SDK uses persistSession: false, so on app restart the SDK has no session.
+    // This causes RLS policy failures (auth.uid() = null) when accepting T&C.
+    // We manually restore the session from stored tokens.
+    if (session.supabaseTokens) {
+      try {
+        const { error: setSessionError } = await supabaseService.getClient().auth.setSession({
+          access_token: session.supabaseTokens.access_token,
+          refresh_token: session.supabaseTokens.refresh_token,
+        });
+
+        if (setSessionError) {
+          await logService.warn(
+            "Supabase session restoration failed",
+            "SessionHandlers",
+            { error: setSessionError.message }
+          );
+
+          // Clear stale tokens from session file
+          await sessionService.updateSession({ supabaseTokens: undefined });
+
+          // If tokens are expired/invalid, force re-authentication
+          // Otherwise user proceeds with broken Supabase session → T&C fails
+          if (
+            setSessionError.message.includes("expired") ||
+            setSessionError.message.includes("invalid") ||
+            setSessionError.message.includes("refresh")
+          ) {
+            await databaseService.deleteSession(session.sessionToken);
+            await sessionService.clearSession();
+            sessionSecurityService.cleanupSession(session.sessionToken);
+            return { success: false, error: "Session expired, please sign in again" };
+          }
+        } else {
+          await logService.info(
+            "Supabase session restored for returning user",
+            "SessionHandlers"
+          );
+        }
+      } catch (restoreError) {
+        await logService.warn(
+          "Supabase session restoration error",
+          "SessionHandlers",
+          { error: restoreError instanceof Error ? restoreError.message : "Unknown" }
+        );
+      }
+    }
 
     // TASK-1507E: Ensure local SQLite user exists for existing sessions
     // Users who authenticated before TASK-1507D have valid sessions but no local user,

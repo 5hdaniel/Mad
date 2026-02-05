@@ -100,9 +100,9 @@ export interface OnboardingContext {
   userId: string | null;
 
   /**
-   * Whether the current user exists in the local database.
-   * BACKLOG-611: False when a new user logs in on a machine with a previous install.
-   * Used to determine if secure-storage step should be shown even when DB is initialized.
+   * Whether the user has been verified to exist in the local database.
+   * This is set after the account-verification step successfully confirms
+   * the user exists (or creates them) in SQLite.
    */
-  currentUserInLocalDb: boolean;
+  isUserVerifiedInLocalDb: boolean;
 }

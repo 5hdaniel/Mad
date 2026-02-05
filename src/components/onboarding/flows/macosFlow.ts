@@ -20,13 +20,17 @@ export const MACOS_PLATFORM: Platform = "macos";
  * Flow order:
  * 1. phone-type - Select iPhone or Android
  * 2. secure-storage - Set up macOS Keychain for secure credential storage (DB init happens here)
- * 3. email-connect - Connect email account (Google or Microsoft) - DB is ready by this point
- * 4. permissions - Grant required macOS permissions (Full Disk Access for Messages sync)
+ * 3. account-verification - Verify user exists in local DB (creates if missing, auto-retries on failure)
+ * 4. email-connect - Connect email account (Google or Microsoft) - DB and user are ready by this point
+ * 5. data-sync - Sync checkpoint: pulls phone_type from Supabase to local DB before FDA step
+ * 6. permissions - Grant required macOS permissions (Full Disk Access for Messages sync)
  */
 export const MACOS_FLOW_STEPS: readonly OnboardingStepId[] = [
   "phone-type",
   "secure-storage",
+  "account-verification",
   "email-connect",
+  "data-sync",
   "permissions",
 ] as const;
 

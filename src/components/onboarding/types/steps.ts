@@ -26,9 +26,11 @@ export type OnboardingStepId =
   | "phone-type"
   | "android-coming-soon"
   | "secure-storage"
+  | "account-verification"
   | "driver-setup"
   | "apple-driver"
   | "email-connect"
+  | "data-sync"
   | "permissions"
   | "complete";
 

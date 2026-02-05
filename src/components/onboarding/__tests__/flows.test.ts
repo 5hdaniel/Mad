@@ -18,7 +18,9 @@ describe("Onboarding Flows", () => {
       expect(steps).toEqual(MACOS_FLOW_STEPS);
       expect(steps).toContain("phone-type");
       expect(steps).toContain("secure-storage");
+      expect(steps).toContain("account-verification");
       expect(steps).toContain("email-connect");
+      expect(steps).toContain("data-sync");
       expect(steps).toContain("permissions");
     });
 
@@ -26,8 +28,10 @@ describe("Onboarding Flows", () => {
       const steps = getFlowForPlatform("windows");
       expect(steps).toEqual(WINDOWS_FLOW_STEPS);
       expect(steps).toContain("phone-type");
-      expect(steps).toContain("email-connect");
       expect(steps).toContain("apple-driver");
+      expect(steps).toContain("account-verification");
+      expect(steps).toContain("email-connect");
+      expect(steps).toContain("data-sync");
     });
 
     it("returns macOS flow for Linux", () => {
@@ -76,12 +80,12 @@ describe("Onboarding Flows", () => {
   });
 
   describe("Flow Configuration", () => {
-    it("macOS flow has 4 steps", () => {
-      expect(MACOS_FLOW_STEPS.length).toBe(4);
+    it("macOS flow has 6 steps", () => {
+      expect(MACOS_FLOW_STEPS.length).toBe(6);
     });
 
-    it("Windows flow has 3 steps", () => {
-      expect(WINDOWS_FLOW_STEPS.length).toBe(3);
+    it("Windows flow has 5 steps", () => {
+      expect(WINDOWS_FLOW_STEPS.length).toBe(5);
     });
 
     it("macOS includes secure-storage and permissions", () => {
@@ -100,6 +104,26 @@ describe("Onboarding Flows", () => {
 
     it("macOS does not include apple-driver", () => {
       expect(MACOS_FLOW_STEPS).not.toContain("apple-driver");
+    });
+
+    it("both flows include account-verification step", () => {
+      expect(MACOS_FLOW_STEPS).toContain("account-verification");
+      expect(WINDOWS_FLOW_STEPS).toContain("account-verification");
+    });
+
+    it("both flows include data-sync step", () => {
+      expect(MACOS_FLOW_STEPS).toContain("data-sync");
+      expect(WINDOWS_FLOW_STEPS).toContain("data-sync");
+    });
+
+    it("data-sync comes after email-connect", () => {
+      const macosEmailIndex = MACOS_FLOW_STEPS.indexOf("email-connect");
+      const macosSyncIndex = MACOS_FLOW_STEPS.indexOf("data-sync");
+      expect(macosSyncIndex).toBeGreaterThan(macosEmailIndex);
+
+      const windowsEmailIndex = WINDOWS_FLOW_STEPS.indexOf("email-connect");
+      const windowsSyncIndex = WINDOWS_FLOW_STEPS.indexOf("data-sync");
+      expect(windowsSyncIndex).toBeGreaterThan(windowsEmailIndex);
     });
   });
 });

@@ -24,25 +24,6 @@ import type { AppStateMachine } from "../../appCore/state/types";
 import type { StepAction } from "./types";
 
 /**
- * Check if a user exists in the local database.
- * BACKLOG-611: Used to determine if secure-storage step should be shown
- * even on machines with previous installs (different user).
- */
-async function checkUserInLocalDb(userId: string | null): Promise<boolean> {
-  if (!userId) return false;
-  try {
-    // Type assertion needed because window.d.ts type may not be refreshed in all TS caches
-    const systemApi = window.api.system as typeof window.api.system & {
-      checkUserInLocalDb: (userId: string) => Promise<{ success: boolean; exists: boolean; error?: string }>;
-    };
-    const result = await systemApi.checkUserInLocalDb(userId);
-    return result.success && result.exists;
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Props for the OnboardingFlow component.
  */
 export interface OnboardingFlowProps {
@@ -65,20 +46,6 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
   // Access state machine state when feature flag is enabled
   const machineState = useOptionalMachineState();
 
-  // BACKLOG-611: Track whether current user exists in local DB
-  // This handles the case where a new user logs in on a machine with a previous install
-  const [currentUserInLocalDb, setCurrentUserInLocalDb] = useState(false);
-  const userId = app.currentUser?.id ?? null;
-
-  // Check if user exists in local DB when userId changes
-  useEffect(() => {
-    if (!userId) {
-      setCurrentUserInLocalDb(false);
-      return;
-    }
-    checkUserInLocalDb(userId).then(setCurrentUserInLocalDb);
-  }, [userId]);
-
   // LOADING GATE: Don't render until state machine has finished loading
   // This prevents race conditions where async checks haven't completed yet,
   // causing selectors to return defensive defaults that hide steps incorrectly.
@@ -96,6 +63,13 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
   if (machineState.state.status === "ready") {
     return null;
   }
+
+  // Track if we're waiting for DB init to complete after clicking Continue on secure-storage
+  // This handles the async nature of macOS keychain initialization for first-time users
+  const [waitingForDbInit, setWaitingForDbInit] = useState(false);
+
+  // Track if user has been verified in local DB (set by account-verification step)
+  const [isUserVerifiedInLocalDb, setIsUserVerifiedInLocalDb] = useState(false);
 
   // Build app state, deriving from state machine when available
   // This fixes the flicker issue where legacy app properties have stale data during initial load
@@ -146,7 +120,7 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
         isNewUser: app.isNewUserFlow,
         isDatabaseInitialized,
         userId: app.currentUser?.id ?? null,
-        currentUserInLocalDb,
+        isUserVerifiedInLocalDb,
       };
     }
 
@@ -165,13 +139,9 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
       isNewUser: app.isNewUserFlow,
       isDatabaseInitialized: app.isDatabaseInitialized,
       userId: app.currentUser?.id ?? null,
-      currentUserInLocalDb,
+      isUserVerifiedInLocalDb,
     };
-  }, [machineState, app, currentUserInLocalDb]);
-
-  // Track if we're waiting for DB init to complete after clicking Continue on secure-storage
-  // This handles the async nature of macOS keychain initialization for first-time users
-  const [waitingForDbInit, setWaitingForDbInit] = useState(false);
+  }, [machineState, app, isUserVerifiedInLocalDb]);
 
   // Action handler that maps to existing app handlers
   const handleAction = useCallback(
@@ -236,6 +206,11 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
           } else {
             app.handleStartMicrosoftEmailConnect();
           }
+          break;
+
+        case "USER_VERIFIED_IN_LOCAL_DB":
+          // Update local state - this triggers step filtering to hide account-verification
+          setIsUserVerifiedInLocalDb(true);
           break;
 
         case "NAVIGATE_NEXT":

@@ -811,6 +811,17 @@ export interface WindowApi {
       durationMs?: number;
       error?: string;
     }>;
+    // User verification methods
+    checkUserInLocalDb: (userId: string) => Promise<{
+      success: boolean;
+      exists: boolean;
+      error?: string;
+    }>;
+    verifyUserInLocalDb: () => Promise<{
+      success: boolean;
+      userId?: string;
+      error?: string;
+    }>;
   };
 
   // Preferences methods

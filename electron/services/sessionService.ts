@@ -16,6 +16,12 @@ interface SessionData {
   expiresAt: number;
   createdAt: number;
   savedAt?: number;
+  // Supabase auth tokens for SDK session restoration (TASK: Dorian's T&C fix)
+  // These are persisted to allow RLS-protected operations for returning users
+  supabaseTokens?: {
+    access_token: string;
+    refresh_token: string;
+  };
 }
 
 // ============================================

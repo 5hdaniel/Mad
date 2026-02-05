@@ -408,8 +408,14 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
               subscription,
               expiresAt: Date.now() + sessionService.getSessionExpirationMs(),
               createdAt: Date.now(),
+              // Store Supabase tokens for SDK session restoration (Dorian's T&C fix)
+              // Required for RLS-protected operations on app restart
+              supabaseTokens: {
+                access_token: accessToken,
+                refresh_token: refreshToken,
+              },
             });
-            log.info("[DeepLink] Session saved successfully");
+            log.info("[DeepLink] Session saved successfully with Supabase tokens");
           } catch (sessionError) {
             log.error("[DeepLink] Failed to save session:", sessionError);
           }

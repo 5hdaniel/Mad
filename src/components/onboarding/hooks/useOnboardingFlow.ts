@@ -52,11 +52,8 @@ export interface OnboardingAppState {
   isDatabaseInitialized: boolean;
   /** Current user ID */
   userId: string | null;
-  /**
-   * Whether the current user exists in the local database.
-   * BACKLOG-611: False when a new user logs in on a machine with a previous install.
-   */
-  currentUserInLocalDb: boolean;
+  /** Whether user has been verified in local database */
+  isUserVerifiedInLocalDb: boolean;
 }
 
 /**
@@ -176,7 +173,7 @@ export function useOnboardingFlow(
       isNewUser: appState.isNewUser,
       isDatabaseInitialized: appState.isDatabaseInitialized,
       userId: appState.userId,
-      currentUserInLocalDb: appState.currentUserInLocalDb,
+      isUserVerifiedInLocalDb: appState.isUserVerifiedInLocalDb,
     }),
     [platform, appState]
   );
@@ -204,6 +201,10 @@ export function useOnboardingFlow(
             break;
           case 'secure-storage':
             relevantContext.isDatabaseInitialized = context.isDatabaseInitialized;
+            break;
+          case 'account-verification':
+            relevantContext.isDatabaseInitialized = context.isDatabaseInitialized;
+            relevantContext.isUserVerifiedInLocalDb = context.isUserVerifiedInLocalDb;
             break;
           case 'email-connect':
             relevantContext.emailConnected = context.emailConnected;
@@ -418,6 +419,12 @@ export function useOnboardingFlow(
 
         case "CONNECT_EMAIL_START":
           // Don't navigate - OAuth flow will handle this
+          break;
+
+        case "USER_VERIFIED_IN_LOCAL_DB":
+          // User verified - the step's shouldShow will now return false,
+          // triggering automatic advancement via step filtering effect
+          // No explicit navigation needed here
           break;
 
         default:
