@@ -236,11 +236,40 @@ class SupabaseService {
   }
 
   /**
-   * Get current Supabase Auth session
+   * Get current auth session.
+   * Returns local cache if available, otherwise queries Supabase SDK.
+   * This ensures deep link auth sessions are discovered even if local cache wasn't set.
+   *
    * @returns The auth session or null if not authenticated
    */
-  getAuthSession(): SupabaseAuthSession | null {
-    return this.authSession;
+  async getAuthSession(): Promise<SupabaseAuthSession | null> {
+    // Fast path: return local cache if available
+    if (this.authSession) {
+      return this.authSession;
+    }
+
+    // Fallback: query Supabase SDK (handles deep link auth case)
+    try {
+      const { data } = await this._ensureClient().auth.getSession();
+      if (data?.session?.user) {
+        // Cache for future calls
+        this.authSession = {
+          userId: data.session.user.id,
+          accessToken: data.session.access_token,
+          refreshToken: data.session.refresh_token,
+          expiresAt: data.session.expires_at
+            ? new Date(data.session.expires_at * 1000)
+            : undefined,
+        };
+        return this.authSession;
+      }
+    } catch (error) {
+      logService.warn("[Supabase] Failed to get session from SDK", "Supabase", {
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+
+    return null;
   }
 
   /**

@@ -13,7 +13,9 @@ import type { OnboardingStep } from "../types";
 // Import all steps as default exports
 import PhoneTypeStep from "./PhoneTypeStep";
 import SecureStorageStep from "./SecureStorageStep";
+import AccountVerificationStep from "./AccountVerificationStep";
 import EmailConnectStep from "./EmailConnectStep";
+import DataSyncStep from "./DataSyncStep";
 import PermissionsStep from "./PermissionsStep";
 import AppleDriverStep from "./AppleDriverStep";
 import AndroidComingSoonStep from "./AndroidComingSoonStep";
@@ -28,7 +30,9 @@ import AndroidComingSoonStep from "./AndroidComingSoonStep";
 export const STEP_REGISTRY: Record<string, OnboardingStep> = {
   "phone-type": PhoneTypeStep,
   "secure-storage": SecureStorageStep,
+  "account-verification": AccountVerificationStep,
   "email-connect": EmailConnectStep,
+  "data-sync": DataSyncStep,
   "permissions": PermissionsStep,
   "apple-driver": AppleDriverStep,
   "android-coming-soon": AndroidComingSoonStep,

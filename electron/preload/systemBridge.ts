@@ -140,6 +140,18 @@ export const systemBridge = {
     ipcRenderer.invoke("system:has-encryption-key-store"),
 
   /**
+   * Verify user exists in local database, creating if needed.
+   * Called by AccountVerificationStep after DB init and before email connection.
+   * @returns User verification result with userId on success
+   */
+  verifyUserInLocalDb: () =>
+    ipcRenderer.invoke("system:verify-user-in-local-db") as Promise<{
+      success: boolean;
+      userId?: string;
+      error?: string;
+    }>,
+
+  /**
    * Initializes the database after secure storage setup
    * Should be called after the user has authorized keychain access (new users only)
    * @returns Database initialization result
@@ -275,6 +287,20 @@ export const systemBridge = {
       success: boolean;
       indexesRebuilt?: number;
       durationMs?: number;
+      error?: string;
+    }>,
+
+  /**
+   * Check if a user exists in the local database
+   * BACKLOG-611: Used to determine if secure-storage step should be shown
+   * even on machines with previous installs (different user)
+   * @param userId - User ID to check
+   * @returns Whether the user exists in the local DB
+   */
+  checkUserInLocalDb: (userId: string) =>
+    ipcRenderer.invoke("system:check-user-in-local-db", userId) as Promise<{
+      success: boolean;
+      exists: boolean;
       error?: string;
     }>,
 

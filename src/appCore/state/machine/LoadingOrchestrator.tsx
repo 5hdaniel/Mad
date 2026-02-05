@@ -60,19 +60,29 @@ export function LoadingOrchestrator({
   // PHASE 1: Check storage
   // ============================================
   useEffect(() => {
+    console.log("[LoadingOrchestrator] Phase 1 effect triggered", {
+      status: state.status,
+      loadingPhase,
+    });
+
     // Guard: only run in the correct phase
     if (state.status !== "loading" || loadingPhase !== "checking-storage") {
+      console.log("[LoadingOrchestrator] Phase 1 skipped - not in checking-storage phase");
       return;
     }
 
+    console.log("[LoadingOrchestrator] PHASE 1: Starting storage check...");
     let cancelled = false;
 
     const platform = platformRef.current;
+    console.log("[LoadingOrchestrator] Platform detected:", platform);
 
     window.api.system
       .hasEncryptionKeyStore()
       .then((result) => {
+        console.log("[LoadingOrchestrator] PHASE 1: Storage check result:", result);
         if (cancelled) return;
+        console.log("[LoadingOrchestrator] PHASE 1: Dispatching STORAGE_CHECKED", { hasKeyStore: result.hasKeyStore });
         dispatch({
           type: "STORAGE_CHECKED",
           hasKeyStore: result.hasKeyStore,
@@ -80,6 +90,7 @@ export function LoadingOrchestrator({
         });
       })
       .catch((error: Error) => {
+        console.error("[LoadingOrchestrator] PHASE 1: Storage check FAILED:", error);
         if (cancelled) return;
         dispatch({
           type: "ERROR",
@@ -100,11 +111,25 @@ export function LoadingOrchestrator({
   // PHASE 2: Initialize database (platform-specific)
   // ============================================
   useEffect(() => {
+    console.log("[LoadingOrchestrator] Phase 2 effect triggered", {
+      status: state.status,
+      loadingPhase,
+    });
+
     // Guard: only run in the correct phase
     if (state.status !== "loading" || loadingPhase !== "initializing-db") {
+      console.log("[LoadingOrchestrator] Phase 2 skipped - not in initializing-db phase");
       return;
     }
 
+    console.log("[LoadingOrchestrator] PHASE 2: Starting database initialization...");
+
+    // Guard: respect deferredDbInit flag - let onboarding SecureStorageStep handle DB init
+    // This prevents the Keychain prompt from appearing before the login screen on fresh macOS installs
+    const loadingState = state as import("./types").LoadingState;
+    if (loadingState.deferredDbInit) {
+      return;
+    }
     const platform = platformRef.current;
 
     // Windows: Auto-initialize (DPAPI is silent, no user interaction needed)
@@ -112,6 +137,7 @@ export function LoadingOrchestrator({
     // Future: macOS may wait for user to click Continue before triggering init
     if (autoInitializesStorage(platform)) {
       // Windows path: Silent auto-initialization
+      console.log("[LoadingOrchestrator] PHASE 2: Windows auto-init path");
       let cancelled = false;
 
       dispatch({ type: "DB_INIT_STARTED" });
@@ -119,6 +145,7 @@ export function LoadingOrchestrator({
       window.api.system
         .initializeSecureStorage()
         .then((result) => {
+          console.log("[LoadingOrchestrator] PHASE 2: DB init result (Windows):", result);
           if (cancelled) return;
           dispatch({
             type: "DB_INIT_COMPLETE",
@@ -127,6 +154,7 @@ export function LoadingOrchestrator({
           });
         })
         .catch((error: Error) => {
+          console.error("[LoadingOrchestrator] PHASE 2: DB init FAILED (Windows):", error);
           if (cancelled) return;
           dispatch({
             type: "DB_INIT_COMPLETE",
@@ -143,6 +171,7 @@ export function LoadingOrchestrator({
       // Note: For new users, the UI may show a keychain explanation first,
       // but the actual initialization happens here. The Keychain prompt
       // is a system-level dialog that appears during initializeSecureStorage.
+      console.log("[LoadingOrchestrator] PHASE 2: macOS init path (may trigger Keychain)");
       let cancelled = false;
 
       dispatch({ type: "DB_INIT_STARTED" });
@@ -150,6 +179,7 @@ export function LoadingOrchestrator({
       window.api.system
         .initializeSecureStorage()
         .then((result) => {
+          console.log("[LoadingOrchestrator] PHASE 2: DB init result (macOS):", result);
           if (cancelled) return;
           dispatch({
             type: "DB_INIT_COMPLETE",
@@ -158,6 +188,7 @@ export function LoadingOrchestrator({
           });
         })
         .catch((error: Error) => {
+          console.error("[LoadingOrchestrator] PHASE 2: DB init FAILED (macOS):", error);
           if (cancelled) return;
           dispatch({
             type: "DB_INIT_COMPLETE",
@@ -176,11 +207,18 @@ export function LoadingOrchestrator({
   // PHASE 3: Load auth state
   // ============================================
   useEffect(() => {
+    console.log("[LoadingOrchestrator] Phase 3 effect triggered", {
+      status: state.status,
+      loadingPhase,
+    });
+
     // Guard: only run in the correct phase
     if (state.status !== "loading" || loadingPhase !== "loading-auth") {
+      console.log("[LoadingOrchestrator] Phase 3 skipped - not in loading-auth phase");
       return;
     }
 
+    console.log("[LoadingOrchestrator] PHASE 3: Checking auth state...");
     let cancelled = false;
 
     const platform = getPlatformInfo();
@@ -188,6 +226,11 @@ export function LoadingOrchestrator({
     window.api.auth
       .getCurrentUser()
       .then((result) => {
+        console.log("[LoadingOrchestrator] PHASE 3: Auth check result:", {
+          success: result.success,
+          hasUser: !!result.user,
+          isNewUser: result.isNewUser,
+        });
         if (cancelled) return;
 
         if (result.success && result.user) {
@@ -224,6 +267,7 @@ export function LoadingOrchestrator({
             result.isNewUser ?? false,
           );
 
+          console.log("[LoadingOrchestrator] PHASE 3: Dispatching AUTH_LOADED with user:", user.email);
           dispatch({
             type: "AUTH_LOADED",
             user,
@@ -232,6 +276,7 @@ export function LoadingOrchestrator({
           });
         } else {
           // No session - user needs to login
+          console.log("[LoadingOrchestrator] PHASE 3: No session, dispatching AUTH_LOADED with null user");
           dispatch({
             type: "AUTH_LOADED",
             user: null,
@@ -243,7 +288,7 @@ export function LoadingOrchestrator({
       .catch((error: Error) => {
         if (cancelled) return;
         // No session is not necessarily an error - just means user needs to login
-        console.warn("[LoadingOrchestrator] Auth check failed:", error);
+        console.warn("[LoadingOrchestrator] PHASE 3: Auth check failed:", error);
         dispatch({
           type: "AUTH_LOADED",
           user: null,
@@ -261,11 +306,18 @@ export function LoadingOrchestrator({
   // PHASE 4: Load user data (if authenticated)
   // ============================================
   useEffect(() => {
+    console.log("[LoadingOrchestrator] Phase 4 effect triggered", {
+      status: state.status,
+      loadingPhase,
+    });
+
     // Guard: only run in the correct phase
     if (state.status !== "loading" || loadingPhase !== "loading-user-data") {
+      console.log("[LoadingOrchestrator] Phase 4 skipped - not in loading-user-data phase");
       return;
     }
 
+    console.log("[LoadingOrchestrator] PHASE 4: Loading user data...");
     // User/platform context can come from:
     // 1. authDataRef (app restart flow - set during AUTH_LOADED phase)
     // 2. state.user/state.platform (fresh login flow - set by LOGIN_SUCCESS action)
@@ -437,9 +489,14 @@ export function LoadingOrchestrator({
   // ============================================
   // RENDER BASED ON STATE
   // ============================================
+  console.log("[LoadingOrchestrator] Render decision:", {
+    status: state.status,
+    loadingPhase,
+  });
 
   // Loading states - show loading screen with platform-specific messages
   if (state.status === "loading" && loadingPhase) {
+    console.log("[LoadingOrchestrator] Rendering LoadingScreen for phase:", loadingPhase);
     return (
       <LoadingScreen
         phase={loadingPhase}

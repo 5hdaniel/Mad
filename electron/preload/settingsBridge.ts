@@ -80,6 +80,17 @@ export const userBridge = {
     phoneType: "iphone" | "android"
   ): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke("user:set-phone-type-cloud", userId, phoneType),
+
+  /**
+   * Syncs user's phone type from Supabase cloud to local database
+   * Used by DataSyncStep to ensure local DB has phone_type before FDA step
+   * @param userId - User ID to sync phone type for
+   * @returns Sync result
+   */
+  syncPhoneTypeFromCloud: (
+    userId: string
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke("user:sync-phone-type-from-cloud", userId),
 };
 
 /**

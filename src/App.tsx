@@ -3,6 +3,7 @@
  *
  * This is the root component that composes the application from modular pieces:
  * - NotificationProvider: Unified notification system (toasts)
+ * - UpdateNotification: Auto-update notification (BACKLOG-610: always visible)
  * - LicenseGate: Blocks app when license invalid (SPRINT-062)
  * - AppShell: Layout structure (title bar, offline banner, version info)
  * - TrialStatusBanner: Shows trial days remaining (SPRINT-062)
@@ -26,12 +27,16 @@ import {
 } from "./appCore";
 import { NotificationProvider } from "./contexts/NotificationContext";
 import { LicenseGate, TrialStatusBanner } from "./components/license";
+import UpdateNotification from "./components/UpdateNotification";
 
 function App() {
   const app = useAppStateMachine();
 
   return (
     <NotificationProvider>
+      {/* BACKLOG-610: UpdateNotification must be outside LicenseGate
+          so it's visible even when license is blocked/loading or user is stuck */}
+      <UpdateNotification />
       <LicenseGate>
         <AppShell app={app}>
           <TrialStatusBanner />

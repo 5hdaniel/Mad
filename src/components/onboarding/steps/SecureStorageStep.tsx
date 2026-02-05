@@ -36,8 +36,17 @@ export const meta: OnboardingStepMeta = {
   },
   // This step is required for macOS users
   skip: undefined,
-  // Only show if database not yet initialized (pre-DB flow)
-  shouldShow: (context) => !context.isDatabaseInitialized,
+  // Show only if database not initialized
+  // The secure-storage step explains keychain access - if DB is initialized, keychain is already set up
+  shouldShow: (context) => {
+    const shouldShow = !context.isDatabaseInitialized;
+    console.log(
+      `%c[STEP] secure-storage: ${shouldShow ? 'SHOW' : 'HIDE'}`,
+      `background: ${shouldShow ? '#DAA520' : '#228B22'}; color: white; font-weight: bold; padding: 2px 8px;`,
+      { isDatabaseInitialized: context.isDatabaseInitialized }
+    );
+    return shouldShow;
+  },
 };
 
 // =============================================================================

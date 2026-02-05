@@ -51,6 +51,7 @@ export function useAppStateMachine(): AppStateMachine {
     logout,
     acceptTerms,
     declineTerms,
+    clearTermsRequirement,
   } = useAuth();
 
   const {
@@ -102,6 +103,7 @@ export function useAppStateMachine(): AppStateMachine {
     logout,
     acceptTerms,
     declineTerms,
+    clearTermsRequirement,
     isAuthenticated,
     isDatabaseInitialized: isDatabaseInitializedFromMachine,
     currentUserId: currentUser?.id ?? null,

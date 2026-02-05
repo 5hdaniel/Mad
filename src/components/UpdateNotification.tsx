@@ -43,9 +43,10 @@ export default function UpdateNotification() {
     setUpdateAvailable(false);
   };
 
+  // BACKLOG-610: Use z-[110] to ensure visibility above all modals and toasts (z-[100])
   if (updateDownloaded) {
     return (
-      <div className="fixed bottom-4 right-4 bg-green-500 text-white p-4 rounded-lg shadow-lg max-w-sm z-50">
+      <div className="fixed bottom-4 right-4 bg-green-500 text-white p-4 rounded-lg shadow-lg max-w-sm z-[110]">
         <h3 className="font-bold text-lg mb-2">Update Ready!</h3>
         <p className="text-sm mb-3">
           Version {updateInfo?.version} has been downloaded and is ready to
@@ -71,7 +72,7 @@ export default function UpdateNotification() {
 
   if (updateAvailable) {
     return (
-      <div className="fixed bottom-4 right-4 bg-blue-500 text-white p-4 rounded-lg shadow-lg max-w-sm z-50">
+      <div className="fixed bottom-4 right-4 bg-blue-500 text-white p-4 rounded-lg shadow-lg max-w-sm z-[110]">
         <h3 className="font-bold text-lg mb-2">Downloading Update...</h3>
         <p className="text-sm mb-3">Version {updateInfo?.version}</p>
         <div className="w-full bg-white/30 rounded-full h-2 mb-2">

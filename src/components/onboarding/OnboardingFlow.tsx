@@ -15,10 +15,11 @@ import { NavigationButtons } from "./shell/NavigationButtons";
 import { useOptionalMachineState } from "../../appCore/state/machine";
 import {
   selectPhoneType,
-  selectHasEmailConnected,
-  selectHasPermissions,
+  selectHasEmailConnectedNullable,
+  selectHasPermissionsNullable,
   selectIsDatabaseInitialized,
 } from "../../appCore/state/machine/selectors";
+import { logAllFlags, logNavigation, logStateChange } from "../../appCore/state/machine/debug";
 import type { AppStateMachine } from "../../appCore/state/types";
 import type { StepAction } from "./types";
 
@@ -45,15 +46,30 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
   // Access state machine state when feature flag is enabled
   const machineState = useOptionalMachineState();
 
+  // LOADING GATE: Don't render until state machine has finished loading
+  // This prevents race conditions where async checks haven't completed yet,
+  // causing selectors to return defensive defaults that hide steps incorrectly.
+  // By waiting for "loading" to complete, all state is settled before we render.
+  if (!machineState || machineState.state.status === "loading") {
+    return null;
+  }
+
   // Early exit if state machine is already in "ready" state
   // This handles the race condition where the async dispatch in completeEmailOnboarding()
   // completes and sets status to "ready", but we're still mounted because goToNext()
   // called the no-op goToStep("dashboard") before the dispatch finished.
   // By returning null here, we let AppRouter render the Dashboard instead of showing
   // a white screen while waiting for navigation that never comes.
-  if (machineState?.state.status === "ready") {
+  if (machineState.state.status === "ready") {
     return null;
   }
+
+  // Track if we're waiting for DB init to complete after clicking Continue on secure-storage
+  // This handles the async nature of macOS keychain initialization for first-time users
+  const [waitingForDbInit, setWaitingForDbInit] = useState(false);
+
+  // Track if user has been verified in local DB (set by account-verification step)
+  const [isUserVerifiedInLocalDb, setIsUserVerifiedInLocalDb] = useState(false);
 
   // Build app state, deriving from state machine when available
   // This fixes the flicker issue where legacy app properties have stale data during initial load
@@ -62,13 +78,41 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
       // State machine enabled - derive from state machine for consistent state
       const { state } = machineState;
       const isDatabaseInitialized = selectIsDatabaseInitialized(state);
+      // Use nullable selectors - returns undefined during loading instead of defensive true/false
+      // This ensures steps show correctly when state is unknown
+      const emailConnected = selectHasEmailConnectedNullable(state);
+      const hasPermissions = selectHasPermissionsNullable(state);
+
+      // DEBUG: Comprehensive flag logging
+      logAllFlags('OnboardingFlow.appState', {
+        status: state.status,
+        step: (state as any).step,
+        hasEmailConnected: (state as any).hasEmailConnected,
+        hasPermissions: (state as any).hasPermissions,
+        hasCompletedEmailOnboarding: (state as any).hasCompletedEmailOnboarding,
+        isDatabaseInitialized,
+        phoneType: selectPhoneType(state),
+        emailConnected,
+        permissionsGranted: hasPermissions,
+        isNewUser: app.isNewUserFlow,
+      });
+
+      logStateChange('OnboardingFlow', 'BUILDING_APP_STATE', {
+        'state.status': state.status,
+        'state.hasEmailConnected (raw)': (state as any).hasEmailConnected,
+        'emailConnected (selector)': emailConnected,
+        'hasPermissions': hasPermissions,
+        'isDatabaseInitialized': isDatabaseInitialized,
+        'emailStep shouldShow': emailConnected !== true,
+        'permissionsStep shouldShow': hasPermissions !== true,
+      });
 
       return {
         phoneType: selectPhoneType(state),
-        emailConnected: selectHasEmailConnected(state),
+        emailConnected,
         connectedEmail: app.currentUser?.email ?? null,
         emailProvider: app.pendingOnboardingData?.emailProvider ?? null,
-        hasPermissions: selectHasPermissions(state),
+        hasPermissions,
         hasSecureStorage: app.hasSecureStorageSetup,
         driverSetupComplete: !app.needsDriverSetup,
         termsAccepted: !app.needsTermsAcceptance,
@@ -76,10 +120,12 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
         isNewUser: app.isNewUserFlow,
         isDatabaseInitialized,
         userId: app.currentUser?.id ?? null,
+        isUserVerifiedInLocalDb,
       };
     }
 
     // Legacy fallback - use app properties directly
+    console.log('[OnboardingFlow] Using LEGACY path - machineState is null');
     return {
       phoneType: app.selectedPhoneType,
       emailConnected: app.hasEmailConnected,
@@ -93,12 +139,9 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
       isNewUser: app.isNewUserFlow,
       isDatabaseInitialized: app.isDatabaseInitialized,
       userId: app.currentUser?.id ?? null,
+      isUserVerifiedInLocalDb,
     };
-  }, [machineState, app]);
-
-  // Track if we're waiting for DB init to complete after clicking Continue on secure-storage
-  // This handles the async nature of macOS keychain initialization for first-time users
-  const [waitingForDbInit, setWaitingForDbInit] = useState(false);
+  }, [machineState, app, isUserVerifiedInLocalDb]);
 
   // Action handler that maps to existing app handlers
   const handleAction = useCallback(
@@ -165,6 +208,11 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
           }
           break;
 
+        case "USER_VERIFIED_IN_LOCAL_DB":
+          // Update local state - this triggers step filtering to hide account-verification
+          setIsUserVerifiedInLocalDb(true);
+          break;
+
         case "NAVIGATE_NEXT":
         case "NAVIGATE_BACK":
         case "ONBOARDING_COMPLETE":
@@ -229,13 +277,29 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
   );
 
   // When DB becomes initialized while we're waiting (after SECURE_STORAGE_SETUP),
-  // advance to the next step. This handles the async nature of macOS keychain initialization.
+  // clear the waiting flag. Navigation is handled automatically by useOnboardingFlow's
+  // step-filtering effect - when secure-storage gets filtered out (isDatabaseInitialized=true),
+  // it auto-advances to the next visible step.
+  //
+  // BUG FIX: Previously this effect called goToNext(), but that caused double-advancement:
+  // 1. Step-filtering effect: secure-storage filtered out → advances to email-connect
+  // 2. This effect: goToNext() → advances from email-connect to permissions
+  // Result: email-connect step was skipped entirely.
   useEffect(() => {
     if (waitingForDbInit && appState.isDatabaseInitialized) {
+      logStateChange('OnboardingFlow', 'DB_INIT_COMPLETE - clearing waitingForDbInit', {
+        waitingForDbInit,
+        isDatabaseInitialized: appState.isDatabaseInitialized,
+        emailConnected: appState.emailConnected,
+        hasPermissions: appState.hasPermissions,
+        currentStepId: currentStep?.meta?.id,
+        visibleSteps: steps.map(s => s.meta.id),
+      });
       setWaitingForDbInit(false);
-      goToNext();
+      // Note: Do NOT call goToNext() here - step filtering in useOnboardingFlow
+      // already handles navigation when secure-storage is filtered out
     }
-  }, [waitingForDbInit, appState.isDatabaseInitialized, goToNext]);
+  }, [waitingForDbInit, appState.isDatabaseInitialized, appState.emailConnected, appState.hasPermissions, currentStep, steps]);
 
   // When all steps are filtered out (returning user with everything complete),
   // navigate to dashboard. This handles the case where a returning user's data

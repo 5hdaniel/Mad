@@ -811,6 +811,17 @@ export interface WindowApi {
       durationMs?: number;
       error?: string;
     }>;
+    // User verification methods
+    checkUserInLocalDb: (userId: string) => Promise<{
+      success: boolean;
+      exists: boolean;
+      error?: string;
+    }>;
+    verifyUserInLocalDb: () => Promise<{
+      success: boolean;
+      userId?: string;
+      error?: string;
+    }>;
   };
 
   // Preferences methods
@@ -1627,6 +1638,65 @@ export interface WindowApi {
   onExportFolderProgress: (
     callback: (progress: { stage: string; current: number; total: number; message: string }) => void,
   ) => () => void;
+
+  // Error Logging API (TASK-1800)
+  errorLogging: {
+    /**
+     * Submit an error report to Supabase
+     * @param payload - Error details and optional user feedback
+     * @returns Result with success status and error ID
+     */
+    submit: (payload: {
+      errorType: string;
+      errorCode?: string;
+      errorMessage: string;
+      stackTrace?: string;
+      currentScreen?: string;
+      userFeedback?: string;
+      breadcrumbs?: Record<string, unknown>[];
+      appState?: Record<string, unknown>;
+    }) => Promise<{
+      success: boolean;
+      errorId?: string;
+      error?: string;
+    }>;
+    /**
+     * Process queued errors (call when connection restored)
+     * @returns Number of errors successfully processed
+     */
+    processQueue: () => Promise<{
+      success: boolean;
+      processedCount?: number;
+      error?: string;
+    }>;
+    /**
+     * Get current queue size (for diagnostics)
+     * @returns Queue size
+     */
+    getQueueSize: () => Promise<{
+      success: boolean;
+      queueSize?: number;
+      error?: string;
+    }>;
+  };
+
+  // App Reset API (TASK-1802)
+  app: {
+    /**
+     * Perform a complete app data reset
+     * WARNING: This is a destructive operation that will:
+     * - Delete all local data (database, preferences, cached data)
+     * - Restart the app fresh
+     *
+     * Cloud data (Supabase) is NOT affected.
+     *
+     * @returns Result with success status
+     */
+    reset: () => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+  };
 
   // License API (BACKLOG-426, SPRINT-062)
   license: {

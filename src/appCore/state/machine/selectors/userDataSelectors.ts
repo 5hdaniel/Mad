@@ -202,3 +202,63 @@ export function selectHasPermissions(state: AppState): boolean {
   }
   return false;
 }
+
+// =============================================================================
+// NULLABLE SELECTORS
+// =============================================================================
+// These selectors return `undefined` for unknown states instead of defensive
+// values. Use these in step predicates where unknown should mean "show the step".
+// See: Kent C. Dodds "Stop using isLoading booleans"
+
+/**
+ * Tri-state selector for email connection status.
+ * Returns: true (connected), false (not connected), undefined (unknown/loading)
+ *
+ * Use this in step predicates: `emailConnected !== true` means show step
+ * when either not connected OR unknown (loading).
+ *
+ * @param state - Current application state
+ * @returns true, false, or undefined if state is unknown
+ */
+export function selectHasEmailConnectedNullable(
+  state: AppState
+): boolean | undefined {
+  let result: boolean | undefined;
+
+  if (state.status === "ready") {
+    result = state.userData.hasEmailConnected;
+  } else if (state.status === "onboarding") {
+    result = state.hasEmailConnected ?? false;
+  } else {
+    // Loading/unauthenticated/error: state is unknown
+    result = undefined;
+  }
+
+  console.log('[selectHasEmailConnectedNullable]', {
+    status: state.status,
+    'state.hasEmailConnected': state.status === 'onboarding' ? (state as any).hasEmailConnected : 'N/A',
+    result,
+  });
+
+  return result;
+}
+
+/**
+ * Tri-state selector for permissions status.
+ * Returns: true (granted), false (not granted), undefined (unknown/loading)
+ *
+ * @param state - Current application state
+ * @returns true, false, or undefined if state is unknown
+ */
+export function selectHasPermissionsNullable(
+  state: AppState
+): boolean | undefined {
+  if (state.status === "ready") {
+    return state.userData.hasPermissions;
+  }
+  if (state.status === "onboarding") {
+    return state.hasPermissions ?? undefined;
+  }
+  // Loading/unauthenticated/error: state is unknown
+  return undefined;
+}

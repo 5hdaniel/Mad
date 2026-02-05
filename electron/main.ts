@@ -96,6 +96,8 @@ import {
   registerMessageImportHandlers,
   registerOutlookHandlers,
   registerUpdaterHandlers,
+  registerErrorLoggingHandlers,
+  registerResetHandlers,
 } from "./handlers";
 
 // Configure logging for auto-updater
@@ -406,8 +408,14 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
               subscription,
               expiresAt: Date.now() + sessionService.getSessionExpirationMs(),
               createdAt: Date.now(),
+              // Store Supabase tokens for SDK session restoration (Dorian's T&C fix)
+              // Required for RLS-protected operations on app restart
+              supabaseTokens: {
+                access_token: accessToken,
+                refresh_token: refreshToken,
+              },
             });
-            log.info("[DeepLink] Session saved successfully");
+            log.info("[DeepLink] Session saved successfully with Supabase tokens");
           } catch (sessionError) {
             log.error("[DeepLink] Failed to save session:", sessionError);
           }
@@ -425,23 +433,26 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
 
       // BACKLOG-546: Check if user needs to accept terms
       // Fetch from Supabase to get terms acceptance status
-      let needsTermsAcceptance = true; // Default to showing T&C
+      // BACKLOG-614: Default to false - don't show T&C unless we confirm they haven't accepted
+      // This prevents returning users from seeing T&C again due to fetch failures
+      let needsTermsAcceptance = false;
       try {
         const cloudUser = await supabaseService.getUserById(user.id);
-        if (cloudUser?.terms_accepted_at) {
-          // No version tracking (legacy) - they're good
-          if (!cloudUser.terms_version_accepted && !cloudUser.privacy_policy_version_accepted) {
-            needsTermsAcceptance = false;
-          } else {
-            // Check if versions match current (imported from constants)
-            const termsOutdated = cloudUser.terms_version_accepted !== CURRENT_TERMS_VERSION;
-            const privacyOutdated = cloudUser.privacy_policy_version_accepted !== CURRENT_PRIVACY_POLICY_VERSION;
-            needsTermsAcceptance = termsOutdated || privacyOutdated;
-          }
+        if (!cloudUser?.terms_accepted_at) {
+          // No terms acceptance record - they need to accept
+          needsTermsAcceptance = true;
+        } else if (cloudUser.terms_version_accepted || cloudUser.privacy_policy_version_accepted) {
+          // Has versioned acceptance - check if current versions match
+          const termsOutdated = cloudUser.terms_version_accepted !== CURRENT_TERMS_VERSION;
+          const privacyOutdated = cloudUser.privacy_policy_version_accepted !== CURRENT_PRIVACY_POLICY_VERSION;
+          needsTermsAcceptance = termsOutdated || privacyOutdated;
         }
+        // else: has terms_accepted_at but no version = legacy acceptance, they're good
         log.info("[DeepLink] Terms acceptance check:", { needsTermsAcceptance, termsAcceptedAt: cloudUser?.terms_accepted_at });
       } catch (termsCheckError) {
-        log.warn("[DeepLink] Failed to check terms acceptance, defaulting to show T&C:", termsCheckError);
+        // BACKLOG-614: If fetch fails, DON'T show T&C - better UX for returning users
+        // They'll see T&C on next successful check if actually needed
+        log.warn("[DeepLink] Failed to check terms acceptance, skipping T&C screen:", termsCheckError);
       }
 
       // TASK-1507: Step 6 - Success! Send all data to renderer
@@ -727,6 +738,8 @@ app.whenReady().then(async () => {
   registerMessageImportHandlers(mainWindow!);
   registerOutlookHandlers(mainWindow!);
   registerUpdaterHandlers(mainWindow!);
+  registerErrorLoggingHandlers();
+  registerResetHandlers();
 
   // DEV-ONLY: Manual deep link handler for testing when protocol handler fails
   // Usage from DevTools console: window.api.system.manualDeepLink("magicaudit://callback?access_token=...&refresh_token=...")

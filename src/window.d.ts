@@ -589,6 +589,26 @@ interface MainAPI {
       durationMs?: number;
       error?: string;
     }>;
+    /**
+     * Check if a user exists in the local database
+     * BACKLOG-611: Used to determine if secure-storage step should be shown
+     * even on machines with previous installs (different user)
+     */
+    checkUserInLocalDb: (userId: string) => Promise<{
+      success: boolean;
+      exists: boolean;
+      error?: string;
+    }>;
+    /**
+     * Verify user exists in local database, creating if needed.
+     * Called by AccountVerificationStep after DB init and before email connection.
+     * @returns User verification result with userId on success
+     */
+    verifyUserInLocalDb: () => Promise<{
+      success: boolean;
+      userId?: string;
+      error?: string;
+    }>;
   };
   device: {
     /** Lists all currently connected iOS devices */
@@ -1552,6 +1572,75 @@ interface MainAPI {
       userId: string,
       phoneType: "iphone" | "android"
     ) => Promise<{ success: boolean; error?: string }>;
+
+    /**
+     * Syncs user's phone type from Supabase cloud to local database
+     * Used by DataSyncStep to ensure local DB has phone_type before FDA step
+     * @param userId - User ID to sync phone type for
+     * @returns Sync result
+     */
+    syncPhoneTypeFromCloud: (
+      userId: string
+    ) => Promise<{ success: boolean; error?: string }>;
+  };
+
+  // Error Logging API (TASK-1800)
+  errorLogging: {
+    /**
+     * Submit an error report to Supabase
+     * @param payload - Error details and optional user feedback
+     * @returns Result with success status and error ID
+     */
+    submit: (payload: {
+      errorType: string;
+      errorCode?: string;
+      errorMessage: string;
+      stackTrace?: string;
+      currentScreen?: string;
+      userFeedback?: string;
+      breadcrumbs?: Record<string, unknown>[];
+      appState?: Record<string, unknown>;
+    }) => Promise<{
+      success: boolean;
+      errorId?: string;
+      error?: string;
+    }>;
+    /**
+     * Process queued errors (call when connection restored)
+     * @returns Number of errors successfully processed
+     */
+    processQueue: () => Promise<{
+      success: boolean;
+      processedCount?: number;
+      error?: string;
+    }>;
+    /**
+     * Get current queue size (for diagnostics)
+     * @returns Queue size
+     */
+    getQueueSize: () => Promise<{
+      success: boolean;
+      queueSize?: number;
+      error?: string;
+    }>;
+  };
+
+  // App Reset API (TASK-1802)
+  app: {
+    /**
+     * Perform a complete app data reset
+     * WARNING: This is a destructive operation that will:
+     * - Delete all local data (database, preferences, cached data)
+     * - Restart the app fresh
+     *
+     * Cloud data (Supabase) is NOT affected.
+     *
+     * @returns Result with success status
+     */
+    reset: () => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
   };
 
   // License API
