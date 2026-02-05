@@ -599,6 +599,16 @@ interface MainAPI {
       exists: boolean;
       error?: string;
     }>;
+    /**
+     * Verify user exists in local database, creating if needed.
+     * Called by AccountVerificationStep after DB init and before email connection.
+     * @returns User verification result with userId on success
+     */
+    verifyUserInLocalDb: () => Promise<{
+      success: boolean;
+      userId?: string;
+      error?: string;
+    }>;
   };
   device: {
     /** Lists all currently connected iOS devices */
@@ -1561,6 +1571,16 @@ interface MainAPI {
     setPhoneTypeCloud: (
       userId: string,
       phoneType: "iphone" | "android"
+    ) => Promise<{ success: boolean; error?: string }>;
+
+    /**
+     * Syncs user's phone type from Supabase cloud to local database
+     * Used by DataSyncStep to ensure local DB has phone_type before FDA step
+     * @param userId - User ID to sync phone type for
+     * @returns Sync result
+     */
+    syncPhoneTypeFromCloud: (
+      userId: string
     ) => Promise<{ success: boolean; error?: string }>;
   };
 

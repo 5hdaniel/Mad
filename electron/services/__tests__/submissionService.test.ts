@@ -86,7 +86,7 @@ describe("SubmissionService", () => {
 
       // Second query for email attachments (TASK-1779)
       const secondQuery = mockPrepare.mock.calls[1][0];
-      expect(secondQuery).toContain("c.email_id = a.email_id");
+      expect(secondQuery).toContain("c.email_id = e.id");
       expect(secondQuery).toContain("a.email_id IS NOT NULL");
       expect(secondQuery).toContain("a.storage_path IS NOT NULL");
 

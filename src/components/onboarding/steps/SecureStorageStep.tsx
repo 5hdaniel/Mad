@@ -36,10 +36,17 @@ export const meta: OnboardingStepMeta = {
   },
   // This step is required for macOS users
   skip: undefined,
-  // Show if database not initialized OR current user doesn't exist in local DB
-  // BACKLOG-611: New users on machines with previous installs need this step
-  // even though the DB is initialized (from a different user)
-  shouldShow: (context) => !context.isDatabaseInitialized || !context.currentUserInLocalDb,
+  // Show only if database not initialized
+  // The secure-storage step explains keychain access - if DB is initialized, keychain is already set up
+  shouldShow: (context) => {
+    const shouldShow = !context.isDatabaseInitialized;
+    console.log(
+      `%c[STEP] secure-storage: ${shouldShow ? 'SHOW' : 'HIDE'}`,
+      `background: ${shouldShow ? '#DAA520' : '#228B22'}; color: white; font-weight: bold; padding: 2px 8px;`,
+      { isDatabaseInitialized: context.isDatabaseInitialized }
+    );
+    return shouldShow;
+  },
 };
 
 // =============================================================================

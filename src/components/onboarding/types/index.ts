@@ -34,6 +34,7 @@ export type {
   OnboardingCompleteAction,
   GoBackSelectIphoneAction,
   ContinueEmailOnlyAction,
+  UserVerifiedInLocalDbAction,
   StepAction,
   StepActionType,
 } from "./actions";

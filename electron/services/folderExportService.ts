@@ -288,6 +288,9 @@ class FolderExportService {
       c.communication_type === "text"  // Legacy fallback
     );
 
+    // Calculate message type breakdown (TASK-1802)
+    const messageTypeCounts = this.getMessageTypeCounts(texts);
+
     // Sort emails for the list
     const sortedEmails = [...emails].sort((a, b) => {
       const dateA = new Date(a.sent_at as string).getTime();
@@ -441,6 +444,30 @@ class FolderExportService {
     </div>
   </div>
 
+  ${(messageTypeCounts.voiceMessages > 0 || messageTypeCounts.locationMessages > 0 || messageTypeCounts.attachmentOnlyMessages > 0) ? `
+  <div class="section">
+    <h3>Message Type Breakdown</h3>
+    <div class="details-grid" style="grid-template-columns: repeat(4, 1fr);">
+      <div class="detail-card">
+        <div class="label">Text Messages</div>
+        <div class="value">${messageTypeCounts.textMessages}</div>
+      </div>
+      <div class="detail-card">
+        <div class="label">Voice Messages</div>
+        <div class="value">${messageTypeCounts.voiceMessages}</div>
+      </div>
+      <div class="detail-card">
+        <div class="label">Location Shares</div>
+        <div class="value">${messageTypeCounts.locationMessages}</div>
+      </div>
+      <div class="detail-card">
+        <div class="label">Media Only</div>
+        <div class="value">${messageTypeCounts.attachmentOnlyMessages}</div>
+      </div>
+    </div>
+  </div>
+  ` : ""}
+
   ${emails.length > 0 ? `
   <div class="section">
     <h3>Email Threads Index (${emails.length})</h3>
@@ -495,6 +522,25 @@ class FolderExportService {
       threads.add(this.getThreadKey(msg));
     }
     return threads.size;
+  }
+
+  /**
+   * Get message type counts for summary statistics (TASK-1802)
+   */
+  private getMessageTypeCounts(texts: Communication[]): {
+    textMessages: number;
+    voiceMessages: number;
+    locationMessages: number;
+    attachmentOnlyMessages: number;
+    systemMessages: number;
+  } {
+    return {
+      textMessages: texts.filter(m => m.message_type === "text" || !m.message_type).length,
+      voiceMessages: texts.filter(m => m.message_type === "voice_message").length,
+      locationMessages: texts.filter(m => m.message_type === "location").length,
+      attachmentOnlyMessages: texts.filter(m => m.message_type === "attachment_only").length,
+      systemMessages: texts.filter(m => m.message_type === "system").length,
+    };
   }
 
   /**
@@ -1295,6 +1341,53 @@ class FolderExportService {
       font-size: 12px;
       color: #4a5568;
     }
+    .special-indicator {
+      font-size: 11px;
+      font-style: italic;
+      color: #718096;
+      margin-bottom: 4px;
+      padding: 4px 8px;
+      background: #f0f4f8;
+      border-radius: 4px;
+      display: inline-block;
+    }
+    .special-indicator.voice-message {
+      background: #e6f3ff;
+      color: #2563eb;
+    }
+    .special-indicator.location-message {
+      background: #e6fff0;
+      color: #059669;
+    }
+    .special-indicator.attachment-only {
+      background: #fff7e6;
+      color: #d97706;
+    }
+    .audio-file-ref {
+      font-size: 10px;
+      color: #718096;
+      font-style: italic;
+      margin-top: 2px;
+    }
+    .message.system-message {
+      max-width: 100%;
+      background: transparent;
+      text-align: center;
+      margin: 12px 0;
+      padding: 8px;
+    }
+    .system-content {
+      font-size: 12px;
+      color: #718096;
+      font-style: italic;
+    }
+    .message.outbound .special-indicator {
+      background: rgba(255,255,255,0.2);
+      color: rgba(255,255,255,0.95);
+    }
+    .message.outbound .audio-file-ref {
+      color: rgba(255,255,255,0.8);
+    }
     .badge {
       display: inline-block;
       padding: 2px 8px;
@@ -1356,7 +1449,7 @@ class FolderExportService {
 
   /**
    * Generate HTML for a single text message within a thread
-   * Includes inline images for attachments
+   * Includes inline images for attachments and handles special message types (TASK-1802)
    */
   private generateTextMessageHTML(
     msg: Communication,
@@ -1411,47 +1504,133 @@ class FolderExportService {
       );
     }
 
-    // Generate attachment HTML
-    let attachmentHtml = "";
-    for (const att of attachments) {
-      if (att.mime_type?.startsWith("image/") && att.storage_path) {
-        // Use file:// URL to reference image directly (more efficient than base64)
-        try {
-          if (fsSync.existsSync(att.storage_path)) {
-            // Use file:// URL - works because we load HTML from temp file
-            const fileUrl = `file://${att.storage_path}`;
-            attachmentHtml += `<div class="attachment-image"><img src="${fileUrl}" alt="${this.escapeHtml(att.filename)}" /></div>`;
-          } else {
-            // Image file not found - show placeholder
-            attachmentHtml += `<div class="attachment-ref">[Image: ${this.escapeHtml(att.filename)} - file not found]</div>`;
-          }
-        } catch (error) {
-          // Failed to read image - show placeholder
-          logService.warn("[Folder Export] Failed to embed image in PDF", "FolderExport", {
-            filename: att.filename,
-            error,
-          });
-          attachmentHtml += `<div class="attachment-ref">[Image: ${this.escapeHtml(att.filename)}]</div>`;
+    // Handle special message types (TASK-1802)
+    const messageType = msg.message_type || "text";
+    let specialIndicatorHtml = "";
+    let bodyContent = "";
+
+    switch (messageType) {
+      case "voice_message": {
+        // Voice message: show indicator and transcript
+        const transcript = msg.body_text || msg.body_plain || "";
+        specialIndicatorHtml = `<div class="special-indicator voice-message">[Voice Message${transcript ? " - Transcript:" : ""}]</div>`;
+        if (transcript) {
+          bodyContent = this.escapeHtml(transcript);
+        } else {
+          bodyContent = "<em>[No transcript available]</em>";
         }
-      } else {
-        // Non-image attachment - show reference with specific type
-        const attachmentType = this.getAttachmentTypeLabel(att.mime_type, att.filename);
-        attachmentHtml += `<div class="attachment-ref">[${attachmentType}: ${this.escapeHtml(att.filename)}]</div>`;
+        // Reference audio file if available
+        const audioAttachment = attachments.find(att =>
+          att.mime_type?.startsWith("audio/") ||
+          att.filename.toLowerCase().endsWith(".caf") ||
+          att.filename.toLowerCase().endsWith(".m4a")
+        );
+        if (audioAttachment) {
+          specialIndicatorHtml += `<div class="audio-file-ref">[Audio file: ${this.escapeHtml(audioAttachment.filename)}]</div>`;
+        }
+        break;
+      }
+
+      case "location": {
+        // Location message: show indicator and location text
+        const locationText = msg.body_text || msg.body_plain || "";
+        specialIndicatorHtml = `<div class="special-indicator location-message">[Location Shared]</div>`;
+        bodyContent = locationText ? this.escapeHtml(locationText) : "<em>Location information</em>";
+        break;
+      }
+
+      case "attachment_only": {
+        // Attachment-only: show indicator, attachments will be rendered below
+        const attachmentDesc = attachments.length > 0
+          ? attachments.map(a => a.filename).join(", ")
+          : "attachment";
+        specialIndicatorHtml = `<div class="special-indicator attachment-only">[Media Attachment: ${this.escapeHtml(attachmentDesc)}]</div>`;
+        // No body content for attachment-only messages
+        break;
+      }
+
+      case "system": {
+        // System message: distinctive styling
+        const systemText = msg.body_text || msg.body_plain || "System message";
+        return `
+    <div class="message system-message">
+      <div class="system-content">-- ${this.escapeHtml(systemText)} --</div>
+      <span class="time">${time}</span>
+    </div>
+    `;
+      }
+
+      case "text":
+      default: {
+        // Regular text message
+        const bodyText = msg.body_text || msg.body_plain || "";
+        const hasBody = bodyText.trim().length > 0;
+        bodyContent = hasBody
+          ? this.escapeHtml(bodyText)
+          : (attachments.length > 0 ? "" : ""); // Empty if no text and no attachments
+        break;
       }
     }
 
-    // Determine body content - show attachment indicator for attachment-only messages
-    const bodyText = msg.body_text || msg.body_plain || "";
-    const hasBody = bodyText.trim().length > 0;
-    const bodyContent = hasBody
-      ? this.escapeHtml(bodyText)
-      : (attachments.length > 0 ? "" : ""); // Empty if no text and no attachments
+    // Generate attachment HTML (skip for attachment_only as it's already indicated)
+    let attachmentHtml = "";
+    if (messageType !== "attachment_only") {
+      for (const att of attachments) {
+        // Skip audio attachments for voice messages (already referenced above)
+        if (messageType === "voice_message" &&
+            (att.mime_type?.startsWith("audio/") ||
+             att.filename.toLowerCase().endsWith(".caf") ||
+             att.filename.toLowerCase().endsWith(".m4a"))) {
+          continue;
+        }
+
+        if (att.mime_type?.startsWith("image/") && att.storage_path) {
+          // Use file:// URL to reference image directly (more efficient than base64)
+          try {
+            if (fsSync.existsSync(att.storage_path)) {
+              // Use file:// URL - works because we load HTML from temp file
+              const fileUrl = `file://${att.storage_path}`;
+              attachmentHtml += `<div class="attachment-image"><img src="${fileUrl}" alt="${this.escapeHtml(att.filename)}" /></div>`;
+            } else {
+              // Image file not found - show placeholder
+              attachmentHtml += `<div class="attachment-ref">[Image: ${this.escapeHtml(att.filename)} - file not found]</div>`;
+            }
+          } catch (error) {
+            // Failed to read image - show placeholder
+            logService.warn("[Folder Export] Failed to embed image in PDF", "FolderExport", {
+              filename: att.filename,
+              error,
+            });
+            attachmentHtml += `<div class="attachment-ref">[Image: ${this.escapeHtml(att.filename)}]</div>`;
+          }
+        } else {
+          // Non-image attachment - show reference with specific type
+          const attachmentType = this.getAttachmentTypeLabel(att.mime_type, att.filename);
+          attachmentHtml += `<div class="attachment-ref">[${attachmentType}: ${this.escapeHtml(att.filename)}]</div>`;
+        }
+      }
+    } else {
+      // For attachment_only, still show inline images
+      for (const att of attachments) {
+        if (att.mime_type?.startsWith("image/") && att.storage_path) {
+          try {
+            if (fsSync.existsSync(att.storage_path)) {
+              const fileUrl = `file://${att.storage_path}`;
+              attachmentHtml += `<div class="attachment-image"><img src="${fileUrl}" alt="${this.escapeHtml(att.filename)}" /></div>`;
+            }
+          } catch {
+            // Ignore errors for inline images
+          }
+        }
+      }
+    }
 
     return `
     <div class="message${isOutbound ? " outbound" : ""}">
       <span class="sender">${this.escapeHtml(senderName)}</span>
       <span class="time">${time}</span>
       ${senderPhone && isGroupChat ? `<span class="phone">${this.escapeHtml(senderPhone)}</span>` : ""}
+      ${specialIndicatorHtml}
       ${bodyContent ? `<div class="body">${bodyContent}</div>` : ""}
       ${attachmentHtml}
     </div>

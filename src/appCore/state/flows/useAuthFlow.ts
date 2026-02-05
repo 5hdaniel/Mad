@@ -38,6 +38,11 @@ export interface UseAuthFlowOptions {
   logout: () => Promise<void>;
   acceptTerms: () => Promise<void>;
   declineTerms: () => Promise<void>;
+  /**
+   * Clear needsTermsAcceptance flag in AuthContext.
+   * Called after terms are accepted to Supabase (pre-DB flow).
+   */
+  clearTermsRequirement: () => void;
   isAuthenticated: boolean;
   /**
    * Whether the local database is initialized.
@@ -104,6 +109,7 @@ export function useAuthFlow({
   logout,
   acceptTerms,
   declineTerms,
+  clearTermsRequirement,
   isAuthenticated,
   isDatabaseInitialized,
   currentUserId,
@@ -269,6 +275,9 @@ export function useAuthFlow({
       const result = await authService.acceptTermsToSupabase(userId);
 
       if (result.success) {
+        // Clear needsTermsAcceptance in AuthContext so WelcomeTerms modal closes
+        clearTermsRequirement();
+
         // Update local state for pre-login flow
         if (pendingOAuthData && !isAuthenticated) {
           setPendingOnboardingData((prev) => ({
@@ -283,7 +292,7 @@ export function useAuthFlow({
       console.error("[useAuthFlow] Failed to accept terms:", error);
       throw error;
     }
-  }, [pendingOAuthData, isAuthenticated, currentUserId]);
+  }, [pendingOAuthData, isAuthenticated, currentUserId, clearTermsRequirement]);
 
   const handleDeclineTerms = useCallback(async (): Promise<void> => {
     if (pendingOAuthData && !isAuthenticated) {

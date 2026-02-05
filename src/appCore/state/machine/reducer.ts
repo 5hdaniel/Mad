@@ -113,15 +113,17 @@ export function getNextOnboardingStep(
  * Email onboarding is optional for returning users - they can skip it
  * and connect email later from the dashboard.
  */
-function isOnboardingComplete(userData: UserData, platform: PlatformInfo, isNewUser: boolean = false): boolean {
+function isOnboardingComplete(userData: UserData, platform: PlatformInfo, _isNewUser: boolean = false): boolean {
   // Must have phone type selected
   if (!userData.phoneType) {
     return false;
   }
 
-  // For NEW users, email onboarding is required during initial setup
-  // For RETURNING users, email is optional (can be done later)
-  if (isNewUser && !userData.hasCompletedEmailOnboarding) {
+  // Email onboarding is required for ALL users (new and returning)
+  // This ensures the email-connect step is shown if not completed
+  // BUG FIX: Previously only checked for new users, causing returning users
+  // to skip the email step entirely
+  if (!userData.hasCompletedEmailOnboarding) {
     return false;
   }
 
@@ -454,7 +456,8 @@ export function appStateReducer(
           : state.selectedPhoneType;
 
       // If completing permissions on macOS, mark all preceding steps as complete
-      // (you can't get to permissions without going through phone-type, secure-storage, email-connect)
+      // macOS flow order: phone-type → secure-storage → email-connect → permissions
+      // So preceding steps are phone-type, secure-storage, and email-connect
       if (action.step === "permissions") {
         const precedingSteps: OnboardingStep[] = ["phone-type", "email-connect"];
         if (state.platform.isMacOS) {

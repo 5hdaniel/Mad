@@ -21,6 +21,8 @@ interface Message {
   has_attachments: boolean;
   attachment_count: number;
   thread_id: string | null;
+  /** Message type: text, voice_message, location, attachment_only, system, unknown */
+  message_type: string | null;
   participants: {
     from?: string;
     to?: string | string[];

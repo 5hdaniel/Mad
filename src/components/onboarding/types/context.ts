@@ -31,8 +31,9 @@ export interface OnboardingContext {
 
   /**
    * Whether an email account has been connected.
+   * undefined means state is unknown (during loading).
    */
-  emailConnected: boolean;
+  emailConnected: boolean | undefined;
 
   /**
    * The email address of the connected account.
@@ -59,8 +60,9 @@ export interface OnboardingContext {
 
   /**
    * Whether required permissions have been granted.
+   * undefined means state is unknown (during loading).
    */
-  permissionsGranted: boolean;
+  permissionsGranted: boolean | undefined;
 
   /**
    * Whether terms of service have been accepted.
@@ -98,9 +100,9 @@ export interface OnboardingContext {
   userId: string | null;
 
   /**
-   * Whether the current user exists in the local database.
-   * BACKLOG-611: False when a new user logs in on a machine with a previous install.
-   * Used to determine if secure-storage step should be shown even when DB is initialized.
+   * Whether the user has been verified to exist in the local database.
+   * This is set after the account-verification step successfully confirms
+   * the user exists (or creates them) in SQLite.
    */
-  currentUserInLocalDb: boolean;
+  isUserVerifiedInLocalDb: boolean;
 }
