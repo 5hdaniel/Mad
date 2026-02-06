@@ -86,7 +86,7 @@ function SetupForm() {
           <h1 className="text-3xl font-bold text-gray-900">Magic Audit</h1>
           <h2 className="mt-2 text-xl text-gray-600">Set Up Your Organization</h2>
           <p className="mt-4 text-gray-500">
-            Connect your Microsoft work account to create your organization and get started.
+            Sign in with a Microsoft work account from the organization you want to set up.
           </p>
         </div>
 
