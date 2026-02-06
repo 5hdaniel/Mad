@@ -209,7 +209,15 @@
           "**/*"
         ]
       },
-      ".env.production"
+      ".env.production",
+      {
+        "from": "scripts/cleanup-macos.sh",
+        "to": "cleanup-macos.sh"
+      },
+      {
+        "from": "scripts/cleanup-windows.ps1",
+        "to": "cleanup-windows.ps1"
+      }
     ]
   },
   "overrides": {
