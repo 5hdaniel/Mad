@@ -16,6 +16,7 @@ interface UserActionsDropdownProps {
   memberName: string;
   isPending: boolean; // No user_id yet (pending invite)
   isCurrentUser: boolean;
+  onEditRole?: () => void;
   onDeactivate: () => void;
   onRemove: () => void;
 }
@@ -25,6 +26,7 @@ export default function UserActionsDropdown({
   memberName,
   isPending,
   isCurrentUser,
+  onEditRole,
   onDeactivate,
   onRemove,
 }: UserActionsDropdownProps) {
@@ -79,6 +81,19 @@ export default function UserActionsDropdown({
           aria-orientation="vertical"
         >
           <div className="py-1">
+            {/* Edit Role - for active members */}
+            {onEditRole && !isPending && (
+              <button
+                onClick={() => {
+                  setIsOpen(false);
+                  onEditRole();
+                }}
+                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
+                role="menuitem"
+              >
+                Edit Role
+              </button>
+            )}
             {/* Deactivate - only for active members, not pending invites */}
             {!isPending && (
               <button
