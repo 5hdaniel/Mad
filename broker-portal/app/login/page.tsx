@@ -150,9 +150,17 @@ function LoginForm() {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-sm text-gray-500">
-          Only authorized brokers can access this portal.
-        </p>
+        <div className="text-center space-y-2">
+          <p className="text-sm text-gray-500">
+            Only authorized brokers can access this portal.
+          </p>
+          <p className="text-sm text-gray-400">
+            Need to set up a new organization?{' '}
+            <a href="/setup" className="text-blue-600 hover:text-blue-500">
+              Get started here
+            </a>
+          </p>
+        </div>
       </div>
     </div>
   );
