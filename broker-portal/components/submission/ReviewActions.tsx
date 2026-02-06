@@ -61,7 +61,9 @@ export function ReviewActions({ submission, disabled }: ReviewActionsProps) {
         throw new Error('You must be logged in to review submissions.');
       }
 
-      console.log('Review action by user:', user.id, 'on submission:', submission.id);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Review action on submission:', submission.id);
+      }
 
       const statusMap: Record<Exclude<ReviewAction, null>, string> = {
         approve: 'approved',
@@ -92,8 +94,10 @@ export function ReviewActions({ submission, disabled }: ReviewActionsProps) {
         throw updateError;
       }
 
-      // Log success for debugging
-      console.log('Review action successful:', updateData);
+      // Log success for debugging (dev only)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Review action successful:', updateData);
+      }
 
       // Add a comment for the record if notes provided
       if (notes && user) {
