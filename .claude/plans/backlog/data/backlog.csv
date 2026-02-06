@@ -435,7 +435,7 @@ BACKLOG-464,OAuth Reconnect Popup Not Opening,bug,Critical,Completed,SPRINT-052,
 BACKLOG-475,Verify Auto-Updater End-to-End,infrastructure,High,Pending,SPRINT-056,~15K,-,-,2026-01-24,,[BACKLOG-475.md](items/BACKLOG-475.md)
 BACKLOG-476,Complete Signed Release Cycle Test,infrastructure,Medium,Pending,SPRINT-056,~5K,-,-,2026-01-24,,[BACKLOG-476.md](items/BACKLOG-476.md)
 BACKLOG-477,User License Schema in Supabase,schema,Critical,Testing,SPRINT-062,~25K,~28K,+12%,2026-01-24,2026-01-27,[BACKLOG-477.md](items/BACKLOG-477.md)
-BACKLOG-478,License Validation Service,service,Critical,Done,SPRINT-062,~30K,~45K,+50%,2026-01-24,2026-01-27,[BACKLOG-478.md](items/BACKLOG-478.md)
+BACKLOG-478,License Validation Service,service,Critical,Completed,SPRINT-062,~30K,~45K,+50%,2026-01-24,2026-01-27,[BACKLOG-478.md](items/BACKLOG-478.md)
 BACKLOG-479,Device Registration Service,service,High,Testing,SPRINT-062,~20K,-,Implemented as part of TASK-1504 (PR #632),2026-01-24,2026-01-27,[BACKLOG-479.md](items/BACKLOG-479.md)
 BACKLOG-480,License Check at App Start,service,Critical,Testing,SPRINT-062,~15K,-,TASK-1506 (PR #633),2026-01-24,2026-01-27,[BACKLOG-480.md](items/BACKLOG-480.md)
 BACKLOG-481,Trial Limit Enforcement UI,ui,High,Testing,SPRINT-062,~10K,-,Components created in TASK-1506 (TrialStatusBanner/UpgradeScreen/DeviceLimitScreen/LicenseGate),2026-01-24,2026-01-27,[BACKLOG-481.md](items/BACKLOG-481.md)
@@ -520,3 +520,4 @@ BACKLOG-613,Enhanced ErrorScreen with Reset and User Feedback,ui,Critical,In Pro
 BACKLOG-614,Fix onboarding race condition - needsTermsAcceptance default,bug,Critical,Completed,,~5K,-,"Fix: Change needsTermsAcceptance default from true to false in electron/main.ts. Returning users with terms already accepted in Supabase shouldnt see terms screen again.",2026-02-03,2026-02-03,
 BACKLOG-615,Graceful skip for syncs when no local user exists,bug,Critical,Completed,,~8K,-,"Fix: SyncOrchestrator and handlers should gracefully skip (return empty) when getValidUserId returns null instead of erroring. Prevents No valid user found crashes during deferred DB init. PR #737 merged.",2026-02-03,2026-02-03,
 BACKLOG-621,Domain Claim & User Capture,feature,High,Pending,-,~120K,-,"IT admin claims email domain via DNS TXT verification then captures existing users with matching domain emails into org during 14-day window. Includes capture report and SSO migration.",2026-02-06,,[BACKLOG-621.md](items/BACKLOG-621.md)
+BACKLOG-623,Bulk Edit Role Feature for User Management,feature,Medium,In Progress,,~15K,-,"Add bulk role editing: BulkEditRoleModal component, UserTableRow with selection, bulkUpdateRole server action, UserActionsDropdown Edit Role option.",2026-02-06,,items/BACKLOG-623.md
