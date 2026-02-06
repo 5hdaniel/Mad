@@ -10,30 +10,11 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import type { User } from '@supabase/supabase-js';
+import { extractEmail, orgNameFromEmail } from '@/lib/auth/helpers';
 
 // Allowed roles for broker portal access
 const ALLOWED_ROLES = ['broker', 'admin', 'it_admin'];
-
-/**
- * Extract organization name from email domain
- * e.g., "daniel@izzyrescue.org" -> "Izzy Rescue"
- */
-function orgNameFromEmail(email: string): string {
-  const domain = email.split('@')[1];
-  if (!domain) return 'Unknown Organization';
-
-  // Get the main part of the domain (before TLD)
-  const name = domain.split('.')[0];
-
-  // Convert to title case with spaces
-  // e.g., "izzyrescue" -> "Izzy Rescue", "acme-corp" -> "Acme Corp"
-  return name
-    .replace(/[-_]/g, ' ')
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .split(' ')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ');
-}
 
 /**
  * Auto-provision organization and user for Microsoft IT admins
@@ -41,7 +22,7 @@ function orgNameFromEmail(email: string): string {
  */
 async function autoProvisionITAdmin(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  user: { id: string; email?: string; user_metadata: Record<string, unknown> }
+  user: User
 ): Promise<{ success: boolean; organizationId?: string }> {
   // Extract Microsoft tenant ID from user metadata
   const customClaims = user.user_metadata?.custom_claims as { tid?: string } | undefined;
@@ -52,7 +33,7 @@ async function autoProvisionITAdmin(
     return { success: false };
   }
 
-  const email = user.email || '';
+  const email = extractEmail(user) || '';
   const orgName = orgNameFromEmail(email);
   const slug = orgName.toLowerCase().replace(/\s+/g, '-');
 
@@ -119,7 +100,7 @@ export async function GET(request: Request) {
       }
 
       // No membership by user_id - check if there's a pending invite for this email
-      const userEmail = user.email?.toLowerCase();
+      const userEmail = extractEmail(user);
       if (userEmail) {
         const { data: pendingInvite } = await supabase
           .from('organization_members')
