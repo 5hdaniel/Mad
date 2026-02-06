@@ -2,9 +2,13 @@
 
 **Category**: service
 **Priority**: P0
-**Sprint**: SPRINT-058
+**Sprint**: SPRINT-062
 **Estimated Tokens**: ~15K
-**Status**: Pending
+**Actual Tokens**: ~22K
+**Status**: Testing
+**Completed**: 2026-01-27
+**PR**: #634 (feat(license): add license validation at auth via deep link)
+**Task**: TASK-1507
 
 ---
 
