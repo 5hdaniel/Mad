@@ -70,6 +70,18 @@ export interface iPhoneContact {
 }
 
 /**
+ * Outlook Contact structure from Microsoft Graph API (TASK-1921)
+ * Re-exported from outlookFetchService for convenience
+ */
+export interface OutlookContactInput {
+  external_record_id: string;  // Graph API contact id
+  name: string | null;
+  emails: string[];
+  phones: string[];
+  company: string | null;
+}
+
+/**
  * Sync result statistics
  */
 export interface SyncResult {
@@ -233,6 +245,82 @@ export function upsertFromiPhone(userId: string, contacts: iPhoneContact[]): num
   logService.info(`Upserted ${count} external contacts from iPhone`, 'ExternalContactDbService', { userId });
 
   return count;
+}
+
+/**
+ * Upsert contacts from Outlook via Microsoft Graph API (TASK-1921)
+ * Returns count of contacts processed
+ */
+export function upsertFromOutlook(userId: string, contacts: OutlookContactInput[]): number {
+  const now = new Date().toISOString();
+
+  const stmt = `
+    INSERT INTO external_contacts (id, user_id, name, phones_json, emails_json, company, source, external_record_id, synced_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'outlook', ?, ?)
+    ON CONFLICT(user_id, source, external_record_id) DO UPDATE SET
+      name = excluded.name,
+      phones_json = excluded.phones_json,
+      emails_json = excluded.emails_json,
+      company = excluded.company,
+      synced_at = excluded.synced_at
+  `;
+
+  let count = 0;
+
+  dbTransaction(() => {
+    for (const contact of contacts) {
+      dbRun(stmt, [
+        uuidv4(),
+        userId,
+        contact.name || null,
+        JSON.stringify(contact.phones || []),
+        JSON.stringify(contact.emails || []),
+        contact.company || null,
+        contact.external_record_id,
+        now,
+      ]);
+      count++;
+    }
+  });
+
+  logService.info(`Upserted ${count} external contacts from Outlook`, 'ExternalContactDbService', { userId });
+
+  return count;
+}
+
+/**
+ * Full sync from Outlook contacts (TASK-1921)
+ * - Upserts all contacts from Outlook
+ * - Deletes Outlook contacts that no longer exist (only source='outlook')
+ * - Updates last_message_at from phone_last_message lookup
+ *
+ * CRITICAL: Does NOT touch macos/iphone contacts — only manages 'outlook' source
+ */
+export function syncOutlookContacts(userId: string, outlookContacts: OutlookContactInput[]): SyncResult {
+  const syncStartTime = new Date().toISOString();
+
+  // Step 1: Upsert all Outlook contacts (sets synced_at to current time)
+  const upsertCount = upsertFromOutlook(userId, outlookContacts);
+
+  // Step 2: Delete stale Outlook contacts only (synced_at < syncStartTime, source='outlook')
+  const deleteCount = deleteStaleContactsBySource(userId, 'outlook', syncStartTime);
+
+  // Step 3: Update last_message_at from phone_last_message lookup table
+  updateLastMessageAtFromLookupTable(userId);
+
+  const result: SyncResult = {
+    inserted: upsertCount,
+    updated: 0,
+    deleted: deleteCount,
+    total: getCount(userId),
+  };
+
+  logService.info('Outlook contacts sync complete', 'ExternalContactDbService', {
+    userId,
+    ...result,
+  });
+
+  return result;
 }
 
 /**
