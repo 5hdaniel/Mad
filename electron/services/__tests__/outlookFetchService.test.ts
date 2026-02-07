@@ -757,4 +757,223 @@ describe("OutlookFetchService", () => {
       expect(results[0].messageIdHeader).toBe(specialMessageId);
     });
   });
+
+  describe("fetchContacts (TASK-1920)", () => {
+    beforeEach(async () => {
+      mockDatabaseService.getOAuthToken.mockResolvedValue({
+        ...mockTokenRecord,
+        scopes_granted: "openid profile email User.Read Mail.Read Mail.ReadWrite Contacts.Read offline_access",
+      });
+      await outlookFetchService.initialize(mockUserId);
+    });
+
+    it("should fetch and map contacts successfully", async () => {
+      const mockContacts = [
+        {
+          id: "contact-1",
+          displayName: "John Doe",
+          emailAddresses: [
+            { address: "john@example.com", name: "John Doe" },
+            { address: "john.doe@work.com", name: "John D" },
+          ],
+          mobilePhone: "+1-555-0101",
+          homePhones: ["+1-555-0102"],
+          businessPhones: ["+1-555-0103"],
+          companyName: "Acme Corp",
+        },
+        {
+          id: "contact-2",
+          displayName: "Jane Smith",
+          emailAddresses: [{ address: "jane@example.com" }],
+          mobilePhone: null,
+          homePhones: [],
+          businessPhones: [],
+          companyName: null,
+        },
+      ];
+
+      mockAxios.mockResolvedValue({
+        data: { value: mockContacts },
+      });
+
+      const result = await outlookFetchService.fetchContacts(mockUserId);
+
+      expect(result.success).toBe(true);
+      expect(result.contacts).toHaveLength(2);
+
+      // Verify first contact mapping
+      expect(result.contacts[0]).toEqual({
+        external_record_id: "contact-1",
+        name: "John Doe",
+        emails: ["john@example.com", "john.doe@work.com"],
+        phones: ["+1-555-0101", "+1-555-0102", "+1-555-0103"],
+        company: "Acme Corp",
+      });
+
+      // Verify second contact mapping (minimal fields)
+      expect(result.contacts[1]).toEqual({
+        external_record_id: "contact-2",
+        name: "Jane Smith",
+        emails: ["jane@example.com"],
+        phones: [],
+        company: null,
+      });
+    });
+
+    it("should handle pagination via @odata.nextLink", async () => {
+      const page1Contacts = Array.from({ length: 250 }, (_, i) => ({
+        id: `contact-${i}`,
+        displayName: `Contact ${i}`,
+        emailAddresses: [],
+        mobilePhone: null,
+        homePhones: [],
+        businessPhones: [],
+        companyName: null,
+      }));
+
+      const page2Contacts = [
+        {
+          id: "contact-250",
+          displayName: "Contact 250",
+          emailAddresses: [],
+          mobilePhone: null,
+          homePhones: [],
+          businessPhones: [],
+          companyName: null,
+        },
+      ];
+
+      let callCount = 0;
+      mockAxios.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve({
+            data: {
+              value: page1Contacts,
+              "@odata.nextLink":
+                "https://graph.microsoft.com/v1.0/me/contacts?$top=250&$skip=250",
+            },
+          });
+        }
+        return Promise.resolve({
+          data: { value: page2Contacts },
+        });
+      });
+
+      const result = await outlookFetchService.fetchContacts(mockUserId);
+
+      expect(result.success).toBe(true);
+      expect(result.contacts).toHaveLength(251);
+      expect(callCount).toBe(2);
+    });
+
+    it("should return empty array for empty contact list", async () => {
+      mockAxios.mockResolvedValue({
+        data: { value: [] },
+      });
+
+      const result = await outlookFetchService.fetchContacts(mockUserId);
+
+      expect(result.success).toBe(true);
+      expect(result.contacts).toHaveLength(0);
+    });
+
+    it("should return reconnect-required error when Contacts.Read scope is missing", async () => {
+      // Override with token that lacks Contacts.Read
+      mockDatabaseService.getOAuthToken.mockResolvedValue({
+        ...mockTokenRecord,
+        scopes_granted: "openid profile email User.Read Mail.Read Mail.ReadWrite offline_access",
+      });
+      await outlookFetchService.initialize(mockUserId);
+
+      const result = await outlookFetchService.fetchContacts(mockUserId);
+
+      expect(result.success).toBe(false);
+      expect(result.reconnectRequired).toBe(true);
+      expect(result.error).toContain("Contacts.Read");
+      expect(result.contacts).toHaveLength(0);
+      // Should NOT have made any API calls
+      expect(mockAxios).not.toHaveBeenCalled();
+    });
+
+    it("should handle 403 Forbidden gracefully", async () => {
+      const error403 = {
+        response: { status: 403 },
+        message: "Forbidden",
+      };
+      mockAxios.mockRejectedValue(error403);
+
+      const result = await outlookFetchService.fetchContacts(mockUserId);
+
+      expect(result.success).toBe(false);
+      expect(result.reconnectRequired).toBe(true);
+      expect(result.error).toContain("Access denied");
+      expect(result.contacts).toHaveLength(0);
+    });
+
+    it("should throw on non-403 errors", async () => {
+      mockAxios.mockRejectedValue(new Error("Network error"));
+
+      await expect(
+        outlookFetchService.fetchContacts(mockUserId),
+      ).rejects.toThrow("Network error");
+    });
+
+    it("should handle contacts with missing optional fields", async () => {
+      const mockContacts = [
+        {
+          id: "contact-minimal",
+          // No displayName, no emailAddresses, no phones, no company
+        },
+      ];
+
+      mockAxios.mockResolvedValue({
+        data: { value: mockContacts },
+      });
+
+      const result = await outlookFetchService.fetchContacts(mockUserId);
+
+      expect(result.success).toBe(true);
+      expect(result.contacts[0]).toEqual({
+        external_record_id: "contact-minimal",
+        name: null,
+        emails: [],
+        phones: [],
+        company: null,
+      });
+    });
+
+    it("should filter out empty email addresses", async () => {
+      const mockContacts = [
+        {
+          id: "contact-bad-emails",
+          displayName: "Bad Emails",
+          emailAddresses: [
+            { address: "valid@example.com" },
+            { address: "" },
+            { name: "No Address" }, // missing address field
+          ],
+        },
+      ];
+
+      mockAxios.mockResolvedValue({
+        data: { value: mockContacts },
+      });
+
+      const result = await outlookFetchService.fetchContacts(mockUserId);
+
+      expect(result.contacts[0].emails).toEqual(["valid@example.com"]);
+    });
+
+    it("should throw error when not initialized", async () => {
+      const uninitializedService = Object.create(
+        Object.getPrototypeOf(outlookFetchService),
+      );
+      uninitializedService.accessToken = null;
+
+      await expect(
+        uninitializedService.fetchContacts(mockUserId),
+      ).rejects.toThrow("Outlook API not initialized");
+    });
+  });
 });
