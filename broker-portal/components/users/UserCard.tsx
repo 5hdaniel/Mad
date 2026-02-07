@@ -102,6 +102,8 @@ export default function UserCard({
             memberName={displayName}
             isPending={isPending}
             isCurrentUser={isCurrentUser}
+            invitationToken={member.invitation_token}
+            onEditRole={() => onEditRole?.(member)}
             onDeactivate={() => onDeactivate?.(member)}
             onRemove={() => onRemove?.(member)}
           />

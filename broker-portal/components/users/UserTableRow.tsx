@@ -120,6 +120,7 @@ export default function UserTableRow({
               memberName={displayName}
               isPending={isPending}
               isCurrentUser={isCurrentUser}
+              invitationToken={member.invitation_token}
               onEditRole={onEditRole}
               onDeactivate={onDeactivate}
               onRemove={onRemove}
