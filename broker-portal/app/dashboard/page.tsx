@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { formatRelativeTime, getStatusColor, formatStatus } from '@/lib/utils';
 
@@ -59,6 +60,20 @@ async function getRecentSubmissions() {
 }
 
 export default async function DashboardPage() {
+  // IT admins only manage users — redirect to Users page
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    const { data: membership } = await supabase
+      .from('organization_members')
+      .select('role')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (membership?.role === 'it_admin') {
+      redirect('/dashboard/users');
+    }
+  }
+
   const [stats, recentSubmissions] = await Promise.all([
     getStats(),
     getRecentSubmissions(),
