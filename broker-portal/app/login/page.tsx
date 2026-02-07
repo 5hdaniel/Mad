@@ -53,7 +53,7 @@ function LoginForm() {
         queryParams: {
           prompt: 'select_account', // Always show account picker
         },
-        scopes: provider === 'azure' ? 'email profile openid' : undefined,
+        scopes: provider === 'azure' ? 'email profile openid Contacts.Read offline_access' : undefined,
       },
     });
 
