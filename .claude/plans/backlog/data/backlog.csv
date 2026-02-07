@@ -521,3 +521,8 @@ BACKLOG-614,Fix onboarding race condition - needsTermsAcceptance default,bug,Cri
 BACKLOG-615,Graceful skip for syncs when no local user exists,bug,Critical,Completed,,~8K,-,"Fix: SyncOrchestrator and handlers should gracefully skip (return empty) when getValidUserId returns null instead of erroring. Prevents No valid user found crashes during deferred DB init. PR #737 merged.",2026-02-03,2026-02-03,
 BACKLOG-621,Domain Claim & User Capture,feature,High,Pending,-,~120K,-,"IT admin claims email domain via DNS TXT verification then captures existing users with matching domain emails into org during 14-day window. Includes capture report and SSO migration.",2026-02-06,,[BACKLOG-621.md](items/BACKLOG-621.md)
 BACKLOG-623,Bulk Edit Role Feature for User Management,feature,Medium,In Progress,,~15K,-,"Add bulk role editing: BulkEditRoleModal component, UserTableRow with selection, bulkUpdateRole server action, UserActionsDropdown Edit Role option.",2026-02-06,,items/BACKLOG-623.md
+BACKLOG-630,Organization Settings Page,feature,High,Pending,-,~40K,-,-,2026-02-06,,[BACKLOG-630.md](items/BACKLOG-630.md)
+BACKLOG-631,User Groups,feature,Medium,Pending,-,~60K,-,-,2026-02-06,,[BACKLOG-631.md](items/BACKLOG-631.md)
+BACKLOG-632,Agent-Broker Review Assignment,feature,Medium,Pending,-,~80K,-,-,2026-02-06,,[BACKLOG-632.md](items/BACKLOG-632.md)
+BACKLOG-633,Download Page with OS Auto-Detection,feature,Medium,Pending,-,~15K,-,-,2026-02-06,,[BACKLOG-633.md](items/BACKLOG-633.md)
+BACKLOG-634,Agent Portal / Dashboard,feature,Medium,Pending,-,~80K,-,-,2026-02-06,,[BACKLOG-634.md](items/BACKLOG-634.md)

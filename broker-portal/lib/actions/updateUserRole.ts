@@ -86,14 +86,9 @@ export async function updateUserRole(input: UpdateRoleInput): Promise<UpdateRole
     return { success: false, error: 'Cannot change your own role' };
   }
 
-  // Only it_admin can assign it_admin role
-  if (input.newRole === 'it_admin' && currentUserRole !== 'it_admin') {
-    return { success: false, error: 'Only IT Admins can assign IT Admin role' };
-  }
-
-  // Only it_admin can demote an it_admin
-  if (targetMember.role === 'it_admin' && currentUserRole !== 'it_admin') {
-    return { success: false, error: 'Only IT Admins can change IT Admin roles' };
+  // Admin-tier users cannot change other admin-tier users' roles
+  if (['admin', 'it_admin'].includes(targetMember.role as string)) {
+    return { success: false, error: 'Cannot change roles for other administrators' };
   }
 
   // Check if this would remove the last admin/it_admin

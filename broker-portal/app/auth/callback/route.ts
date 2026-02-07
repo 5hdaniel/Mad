@@ -84,78 +84,44 @@ export async function GET(request: Request) {
     } = await supabase.auth.getUser();
 
     if (user) {
-      // Check for existing membership with allowed role
+      // Check for existing membership (any role)
       const { data: membership } = await supabase
         .from('organization_members')
         .select('role, organization_id')
         .eq('user_id', user.id)
-        .in('role', ALLOWED_ROLES)
         .limit(1)
         .single();
 
       if (membership) {
-        // User has valid role - redirect to dashboard
-        // IT admins go to a limited view (handled by dashboard)
-        return NextResponse.redirect(`${origin}${next}`);
+        if (ALLOWED_ROLES.includes(membership.role)) {
+          // Portal user (broker/admin/it_admin) - go to dashboard
+          return NextResponse.redirect(`${origin}${next}`);
+        }
+        // Agent or other non-portal role - redirect to download page
+        return NextResponse.redirect(`${origin}/download`);
       }
 
-      // No membership by user_id - check if there's a pending invite for this email
-      const userEmail = extractEmail(user);
-      if (userEmail) {
-        const { data: pendingInvite } = await supabase
-          .from('organization_members')
-          .select('id, role, organization_id')
-          .eq('invited_email', userEmail)
-          .is('user_id', null)
-          .limit(1)
-          .single();
+      // No membership with allowed role - try to claim a pending invite via RPC
+      // The RPC uses SECURITY DEFINER to bypass RLS (invite rows have user_id = NULL)
+      const { data: claimResult, error: claimError } = await supabase.rpc('claim_pending_invite');
 
-        if (pendingInvite) {
-          // Found pending invite - link user to the membership
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`Linking user to pending invite for ${userEmail}`);
-          }
+      if (claimError) {
+        console.error('claim_pending_invite RPC error:', claimError);
+      }
 
-          // First ensure user exists in users table
-          const provider = user.app_metadata?.provider || 'email';
-          const oauthId = user.user_metadata?.provider_id || user.id;
-
-          const { error: upsertError } = await supabase
-            .from('users')
-            .upsert({
-              id: user.id,
-              email: userEmail,
-              oauth_provider: provider,
-              oauth_id: oauthId,
-              display_name: user.user_metadata?.full_name || user.user_metadata?.name || null,
-              first_name: user.user_metadata?.given_name || null,
-              last_name: user.user_metadata?.family_name || null,
-            }, { onConflict: 'id' });
-
-          if (upsertError) {
-            console.error('Error creating user record:', upsertError);
-          }
-
-          // Update the membership to link user_id and mark as joined
-          const { error: updateError } = await supabase
-            .from('organization_members')
-            .update({
-              user_id: user.id,
-              license_status: 'active',
-              joined_at: new Date().toISOString(),
-              invitation_token: null, // Clear the token
-            })
-            .eq('id', pendingInvite.id);
-
-          if (updateError) {
-            console.error('Error linking invite:', updateError);
-          } else {
-            if (process.env.NODE_ENV === 'development') {
-              console.log('Successfully linked invite to user');
-            }
-            return NextResponse.redirect(`${origin}${next}`);
-          }
+      if (claimResult?.success) {
+        const claimedRole = claimResult.role as string;
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`Claimed invite: role=${claimedRole}, org=${claimResult.organization_id}`);
         }
+
+        if (ALLOWED_ROLES.includes(claimedRole)) {
+          // Portal user (broker/admin/it_admin) - go to dashboard
+          return NextResponse.redirect(`${origin}${next}`);
+        }
+
+        // Agent or other non-portal role - redirect to download page
+        return NextResponse.redirect(`${origin}/download`);
       }
 
       // No membership and no pending invite - check if this is a Microsoft user for auto-provisioning

@@ -80,9 +80,9 @@ export async function removeUser(input: RemoveInput): Promise<RemoveResult> {
     return { success: false, error: 'Cannot remove yourself' };
   }
 
-  // Only it_admin can remove an it_admin
-  if (targetMember.role === 'it_admin' && currentUserRole !== 'it_admin') {
-    return { success: false, error: 'Only IT Admins can remove IT Admin users' };
+  // Admin-tier users cannot remove other admin-tier users
+  if (['admin', 'it_admin'].includes(targetMember.role as string)) {
+    return { success: false, error: 'Cannot remove other administrators' };
   }
 
   // Check last admin protection (only for actual users, not pending invites)

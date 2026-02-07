@@ -85,9 +85,9 @@ export async function deactivateUser(input: DeactivateInput): Promise<Deactivate
     return { success: false, error: 'Cannot deactivate yourself' };
   }
 
-  // Only it_admin can deactivate an it_admin
-  if (targetMember.role === 'it_admin' && currentUserRole !== 'it_admin') {
-    return { success: false, error: 'Only IT Admins can deactivate IT Admin users' };
+  // Admin-tier users cannot deactivate other admin-tier users
+  if (['admin', 'it_admin'].includes(targetMember.role as string)) {
+    return { success: false, error: 'Cannot deactivate other administrators' };
   }
 
   // Check if this would remove the last active admin/it_admin

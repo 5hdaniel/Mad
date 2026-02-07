@@ -121,10 +121,10 @@ export async function inviteUser(input: InviteUserInput): Promise<InviteUserResu
     }
   }
 
-  // Check organization seat limits (optional - get org info)
+  // Check organization seat limits and get provider info
   const { data: organization } = await supabase
     .from('organizations')
-    .select('max_seats')
+    .select('max_seats, microsoft_tenant_id, google_domain')
     .eq('id', input.organizationId)
     .maybeSingle();
 
@@ -166,9 +166,13 @@ export async function inviteUser(input: InviteUserInput): Promise<InviteUserResu
     return { success: false, error: 'Failed to create invitation' };
   }
 
-  // Generate invite link
+  // Generate invite link with provider hint
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://portal.magicaudit.com';
-  const inviteLink = `${baseUrl}/invite/${invitationToken}`;
+  const hasMicrosoft = !!organization?.microsoft_tenant_id;
+  const hasGoogle = !!organization?.google_domain;
+  const provider = hasMicrosoft && !hasGoogle ? 'microsoft' : hasGoogle && !hasMicrosoft ? 'google' : '';
+  const providerParam = provider ? `?provider=${provider}` : '';
+  const inviteLink = `${baseUrl}/invite/${invitationToken}${providerParam}`;
 
   return {
     success: true,
