@@ -27,7 +27,7 @@ export interface ExternalContact {
   company: string | null;
   last_message_at: string | null;
   external_record_id: string;  // Renamed from macos_record_id (Migration 27)
-  source: 'macos' | 'iphone';  // New field: source of contact (Migration 27)
+  source: 'macos' | 'iphone' | 'outlook';  // Source of contact (Migration 27, TASK-1920: added outlook)
   synced_at: string;
 }
 
@@ -108,7 +108,7 @@ export function getAllForUser(userId: string): ExternalContact[] {
     company: row.company,
     last_message_at: row.last_message_at,
     external_record_id: row.external_record_id,
-    source: row.source as 'macos' | 'iphone',
+    source: row.source as 'macos' | 'iphone' | 'outlook',
     synced_at: row.synced_at,
   }));
 }
@@ -313,7 +313,7 @@ export function deleteStaleContacts(userId: string, currentSyncTime: string): nu
  * Delete stale contacts by source that were not updated in the current sync
  * Used during full sync to remove contacts that no longer exist in source system
  */
-export function deleteStaleContactsBySource(userId: string, source: 'macos' | 'iphone', currentSyncTime: string): number {
+export function deleteStaleContactsBySource(userId: string, source: 'macos' | 'iphone' | 'outlook', currentSyncTime: string): number {
   const result = dbRun(
     `DELETE FROM external_contacts WHERE user_id = ? AND source = ? AND synced_at < ?`,
     [userId, source, currentSyncTime]
@@ -433,7 +433,7 @@ export function search(userId: string, query: string, limit: number = 50): Exter
     company: row.company,
     last_message_at: row.last_message_at,
     external_record_id: row.external_record_id,
-    source: row.source as 'macos' | 'iphone',
+    source: row.source as 'macos' | 'iphone' | 'outlook',
     synced_at: row.synced_at,
   }));
 }

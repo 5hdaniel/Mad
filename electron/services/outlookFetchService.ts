@@ -161,6 +161,43 @@ function extractMessageIdHeader(message: GraphMessage): string | null {
 }
 
 /**
+ * Microsoft Graph API contact (TASK-1920)
+ */
+interface GraphContact {
+  id: string;
+  displayName?: string;
+  emailAddresses?: Array<{
+    address?: string;
+    name?: string;
+  }>;
+  mobilePhone?: string | null;
+  homePhones?: string[];
+  businessPhones?: string[];
+  companyName?: string | null;
+}
+
+/**
+ * Mapped Outlook contact matching external_contacts schema (TASK-1920)
+ */
+export interface OutlookContact {
+  external_record_id: string;
+  name: string | null;
+  emails: string[];
+  phones: string[];
+  company: string | null;
+}
+
+/**
+ * Result of a contacts fetch operation (TASK-1920)
+ */
+export interface FetchContactsResult {
+  success: boolean;
+  contacts: OutlookContact[];
+  error?: string;
+  reconnectRequired?: boolean;
+}
+
+/**
  * Outlook Fetch Service
  * Fetches emails from Outlook/Office 365 using Microsoft Graph API
  */
@@ -660,6 +697,173 @@ class OutlookFetchService {
       // Return original emails without duplicate info on error
       return emails;
     }
+  }
+
+  /**
+   * Fetch contacts from Outlook via Microsoft Graph API (TASK-1920)
+   *
+   * Checks scopes_granted before attempting fetch. If the token lacks
+   * Contacts.Read scope, returns a reconnect-required error without
+   * making API calls. Handles 403/Forbidden gracefully.
+   *
+   * @param userId - User ID to fetch contacts for
+   * @returns FetchContactsResult with mapped contacts or error info
+   */
+  async fetchContacts(userId: string): Promise<FetchContactsResult> {
+    try {
+      if (!this.accessToken) {
+        throw new Error(
+          "Outlook API not initialized. Call initialize() first.",
+        );
+      }
+
+      // Check scopes_granted before attempting fetch (TASK-1920)
+      // Existing users may have tokens without Contacts.Read scope
+      const tokenRecord = await databaseService.getOAuthToken(
+        userId,
+        "microsoft",
+        "mailbox",
+      );
+
+      if (tokenRecord?.scopes_granted) {
+        const grantedScopes =
+          typeof tokenRecord.scopes_granted === "string"
+            ? tokenRecord.scopes_granted
+            : String(tokenRecord.scopes_granted);
+
+        if (
+          !grantedScopes.toLowerCase().includes("contacts.read")
+        ) {
+          logService.info(
+            "Contacts.Read scope not granted. User needs to reconnect mailbox.",
+            "OutlookFetch",
+          );
+          return {
+            success: false,
+            contacts: [],
+            error:
+              "Contacts.Read permission not granted. Please disconnect and reconnect your Microsoft mailbox to grant contact access.",
+            reconnectRequired: true,
+          };
+        }
+      }
+
+      logService.info("Fetching Outlook contacts", "OutlookFetch", { userId });
+
+      const allContacts: GraphContact[] = [];
+      const selectFields =
+        "$select=id,displayName,emailAddresses,mobilePhone,homePhones,businessPhones,companyName";
+      let nextLink: string | null = null;
+      let pageCount = 0;
+
+      // First request
+      let endpoint = `/me/contacts?$top=250&${selectFields}`;
+
+      do {
+        pageCount++;
+        logService.debug(
+          `Fetching contacts page ${pageCount}`,
+          "OutlookFetch",
+        );
+
+        let data: { value: GraphContact[]; "@odata.nextLink"?: string };
+
+        if (nextLink) {
+          // For pagination, use the full nextLink URL directly
+          // _graphRequest prepends graphApiUrl, so strip it from nextLink
+          const relativePath = nextLink.replace(this.graphApiUrl, "");
+          data = await this._graphRequest<typeof data>(relativePath);
+        } else {
+          data = await this._graphRequest<typeof data>(endpoint);
+        }
+
+        const contacts = data.value || [];
+        logService.debug(
+          `Page ${pageCount}: Found ${contacts.length} contacts`,
+          "OutlookFetch",
+        );
+
+        allContacts.push(...contacts);
+        nextLink = data["@odata.nextLink"] || null;
+      } while (nextLink);
+
+      logService.info(
+        `Total contacts fetched: ${allContacts.length}`,
+        "OutlookFetch",
+      );
+
+      // Map Graph API contacts to OutlookContact format
+      const mappedContacts: OutlookContact[] = allContacts.map((contact) =>
+        this._mapGraphContact(contact),
+      );
+
+      return {
+        success: true,
+        contacts: mappedContacts,
+      };
+    } catch (error: any) {
+      // Handle 403 Forbidden — token lacks Contacts.Read scope
+      if (error?.response?.status === 403) {
+        logService.info(
+          "403 Forbidden fetching contacts — token lacks Contacts.Read scope",
+          "OutlookFetch",
+        );
+        return {
+          success: false,
+          contacts: [],
+          error:
+            "Access denied to contacts. Please disconnect and reconnect your Microsoft mailbox to grant contact access.",
+          reconnectRequired: true,
+        };
+      }
+
+      logService.error("Failed to fetch contacts", "OutlookFetch", { error });
+      throw error;
+    }
+  }
+
+  /**
+   * Map a Microsoft Graph contact to OutlookContact format (TASK-1920)
+   * @private
+   */
+  private _mapGraphContact(contact: GraphContact): OutlookContact {
+    // Extract email addresses
+    const emails: string[] = [];
+    if (contact.emailAddresses) {
+      for (const emailEntry of contact.emailAddresses) {
+        if (emailEntry.address) {
+          emails.push(emailEntry.address);
+        }
+      }
+    }
+
+    // Flatten all phone fields into a single array
+    const phones: string[] = [];
+    if (contact.mobilePhone) {
+      phones.push(contact.mobilePhone);
+    }
+    if (contact.homePhones) {
+      for (const phone of contact.homePhones) {
+        if (phone) {
+          phones.push(phone);
+        }
+      }
+    }
+    if (contact.businessPhones) {
+      for (const phone of contact.businessPhones) {
+        if (phone) {
+          phones.push(phone);
+        }
+      }
+    }
+
+    return {
+      external_record_id: contact.id,
+      name: contact.displayName || null,
+      emails,
+      phones,
+      company: contact.companyName || null,
+    };
   }
 }
 
