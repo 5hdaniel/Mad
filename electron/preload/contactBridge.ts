@@ -134,6 +134,19 @@ export const contactBridge = {
   }> => ipcRenderer.invoke("contacts:getExternalSyncStatus", userId),
 
   /**
+   * TASK-1921: Sync Outlook contacts to external_contacts table
+   * Fetches contacts from Microsoft Graph API and syncs to local SQLite
+   * @param userId - User ID to sync contacts for
+   * @returns Sync result (count of contacts synced, reconnectRequired flag)
+   */
+  syncOutlookContacts: (userId: string): Promise<{
+    success: boolean;
+    count?: number;
+    reconnectRequired?: boolean;
+    error?: string;
+  }> => ipcRenderer.invoke("contacts:syncOutlookContacts", userId),
+
+  /**
    * Listen for import progress updates
    * @param callback - Called with progress updates during contact import
    * @returns Cleanup function to remove listener

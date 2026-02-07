@@ -10,7 +10,8 @@ export type ContactSource =
   | "manual"
   | "contacts_app"
   | "sms"
-  | "messages";
+  | "messages"
+  | "email";
 
 export interface SourcePillProps {
   /** The contact source - mapped to visual variant */
@@ -21,7 +22,7 @@ export interface SourcePillProps {
   className?: string;
 }
 
-type Variant = "imported" | "external" | "message" | "manual";
+type Variant = "imported" | "external" | "message" | "manual" | "email";
 
 const VARIANT_STYLES: Record<Variant, { bg: string; text: string; label: string }> = {
   imported: {
@@ -43,6 +44,11 @@ const VARIANT_STYLES: Record<Variant, { bg: string; text: string; label: string 
     bg: "bg-amber-100",
     text: "text-amber-700",
     label: "Message",
+  },
+  email: {
+    bg: "bg-sky-100",
+    text: "text-sky-700",
+    label: "Email",
   },
 };
 
@@ -70,6 +76,8 @@ function getVariant(source: ContactSource): Variant {
     case "sms":
     case "messages":
       return "message";
+    case "email":
+      return "email";
     default:
       return "imported";
   }
