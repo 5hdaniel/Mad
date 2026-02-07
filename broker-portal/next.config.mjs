@@ -22,7 +22,7 @@ const nextConfig = {
       // next/font/google downloads at build time and self-hosts - no external font CDN needed
       "font-src 'self'",
       // Supabase API and Realtime WebSocket connections
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.clarity.ms https://graph.microsoft.com https://login.microsoftonline.com",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.clarity.ms",
       // PDF preview uses iframes with signed Supabase storage URLs
       "frame-src 'self' https://*.supabase.co",
       // Video preview uses <video src={signedUrl}> from Supabase storage
