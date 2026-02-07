@@ -107,7 +107,6 @@ export async function GET(request: Request) {
           .select('id, role, organization_id')
           .eq('invited_email', userEmail)
           .is('user_id', null)
-          .in('role', ALLOWED_ROLES)
           .limit(1)
           .single();
 
