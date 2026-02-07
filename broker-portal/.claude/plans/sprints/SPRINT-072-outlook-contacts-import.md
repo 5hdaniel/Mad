@@ -44,8 +44,8 @@ Import Outlook contacts into the broker portal via Microsoft Graph API, storing 
 |---------|-------|----------|-------|--------|------------------|
 | TASK-1910 | Supabase schema: external_contacts + provider_tokens tables | P0 | 1 | COMPLETE (PR #758) | ~8K |
 | TASK-1911 | OAuth scope upgrade + provider token capture | P0 | 2 | COMPLETE (PR #759) | ~15K |
-| TASK-1912 | Microsoft Graph contacts API integration | P1 | 3 | COMPLETE (PR #760) | ~20K |
-| TASK-1913 | Contacts dashboard page + import UI | P1 | 4 | In Progress | ~25K |
+| TASK-1912 | Microsoft Graph contacts API integration | P1 | 3 | In Progress | ~20K |
+| TASK-1913 | Contacts dashboard page + import UI | P1 | 4 | Pending | ~25K |
 
 ## Phase 1: Database Schema (Sequential prerequisite)
 
