@@ -14,15 +14,15 @@ const nextConfig = {
       "default-src 'self'",
       // Development needs unsafe-eval for HMR/Fast Refresh; production does not
       isDev
-        ? "script-src 'self' 'unsafe-eval' 'unsafe-inline'"
-        : "script-src 'self' 'unsafe-inline'",
+        ? "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.clarity.ms"
+        : "script-src 'self' 'unsafe-inline' https://www.clarity.ms",
       "style-src 'self' 'unsafe-inline'",
       // blob: required for HEIC image conversion (AttachmentViewerModal, AttachmentList)
       "img-src 'self' data: blob: https:",
       // next/font/google downloads at build time and self-hosts - no external font CDN needed
       "font-src 'self'",
       // Supabase API and Realtime WebSocket connections
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.clarity.ms",
       // PDF preview uses iframes with signed Supabase storage URLs
       "frame-src 'self' https://*.supabase.co",
       // Video preview uses <video src={signedUrl}> from Supabase storage
