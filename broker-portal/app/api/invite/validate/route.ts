@@ -48,7 +48,7 @@ export async function GET(request: Request) {
     }
   }
 
-  const org = invite.organizations as { name: string } | null;
+  const org = invite.organizations as unknown as { name: string } | null;
 
   return NextResponse.json({
     valid: true,
