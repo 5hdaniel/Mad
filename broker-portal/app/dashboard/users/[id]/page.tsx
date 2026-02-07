@@ -79,7 +79,7 @@ async function getUserDetails(memberId: string): Promise<UserDetailsResult | Not
       last_invited_at,
       created_at,
       updated_at,
-      user:users!organization_members_user_id_fkey (
+      user:users!organization_members_user_id_public_users_fkey (
         id,
         email,
         first_name,
@@ -108,7 +108,7 @@ async function getUserDetails(memberId: string): Promise<UserDetailsResult | Not
     const { data: inviterMember } = await supabase
       .from('organization_members')
       .select(`
-        user:users!organization_members_user_id_fkey (
+        user:users!organization_members_user_id_public_users_fkey (
           email,
           display_name
         )
