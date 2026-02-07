@@ -20,15 +20,29 @@ const PERSONAL_DOMAINS = new Set([
   'gmail.com',
   'googlemail.com',
   'yahoo.com',
+  'ymail.com',
   'hotmail.com',
+  'hotmail.co.uk',
+  'hotmail.de',
+  'hotmail.fr',
   'outlook.com',
+  'outlook.co.uk',
+  'outlook.de',
+  'outlook.fr',
   'live.com',
+  'live.co.uk',
   'aol.com',
   'icloud.com',
   'me.com',
   'mac.com',
   'protonmail.com',
   'proton.me',
+  'mail.com',
+  'zoho.com',
+  'yandex.com',
+  'hey.com',
+  'tutanota.com',
+  'fastmail.com',
 ]);
 
 export async function GET(request: Request) {
@@ -130,7 +144,7 @@ export async function GET(request: Request) {
   }
 
   // Google-specific: validate work domain
-  const domain = email.split('@')[1];
+  const domain = email.split('@')[1]?.toLowerCase();
 
   if (!domain || PERSONAL_DOMAINS.has(domain)) {
     await supabase.auth.signOut();
