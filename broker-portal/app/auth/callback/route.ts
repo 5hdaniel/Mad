@@ -71,11 +71,40 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (error) {
       console.error('Auth exchange error:', error);
       return NextResponse.redirect(`${origin}/login?error=auth_failed`);
+    }
+
+    // Capture provider tokens BEFORE any membership/invite/auto-provision logic.
+    // This must happen first because early returns in the logic below would bypass token storage.
+    if (sessionData.session) {
+      const { provider_token, provider_refresh_token } = sessionData.session;
+      const sessionUser = sessionData.session.user;
+
+      if (provider_token && sessionUser.app_metadata?.provider === 'azure') {
+        try {
+          const { encrypt } = await import('@/lib/auth/provider-tokens');
+          await supabase.from('provider_tokens').upsert(
+            {
+              user_id: sessionUser.id,
+              provider: 'microsoft',
+              access_token_encrypted: encrypt(provider_token),
+              refresh_token_encrypted: provider_refresh_token
+                ? encrypt(provider_refresh_token)
+                : null,
+              expires_at: new Date(Date.now() + 3600 * 1000).toISOString(), // ~1 hour (approximate)
+              scopes: 'Contacts.Read offline_access',
+            },
+            { onConflict: 'user_id,provider' }
+          );
+        } catch (tokenError) {
+          // Log but do not block auth flow -- tokens can be re-captured on next login
+          console.error('Failed to store provider tokens:', tokenError);
+        }
+      }
     }
 
     // Get authenticated user
