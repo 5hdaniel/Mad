@@ -421,7 +421,7 @@ BACKLOG-428,License Context Provider,service,Critical,Completed,SPRINT-051,~25K,
 BACKLOG-429,Team Workflow E2E Testing,test,Critical,Completed,SPRINT-051,~25K,-,-,2026-01-22,2026-01-23,[BACKLOG-429.md](items/BACKLOG-429.md)
 BACKLOG-452,Admin User Management UI,ui,Medium,Pending,-,~30K,-,-,2026-01-23,,[BACKLOG-452.md](items/BACKLOG-452.md)
 BACKLOG-453,Multi-org broker auth fix,fix,Critical,Completed,SPRINT-051,~10K,-,-,2026-01-23,2026-01-23,[BACKLOG-453.md](items/BACKLOG-453.md)
-BACKLOG-454,Azure AD OAuth email config,auth,Critical,Pending,-,~20K,-,-,2026-01-23,,[BACKLOG-454.md](items/BACKLOG-454.md)
+BACKLOG-454,Azure AD OAuth email config,auth,Critical,Completed,-,~20K,-,-,2026-01-23,2026-02-06,[BACKLOG-454.md](items/BACKLOG-454.md)
 BACKLOG-455,RLS enablement on tables,security,Critical,Completed,SPRINT-051,~5K,-,-,2026-01-23,2026-01-23,[BACKLOG-455.md](items/BACKLOG-455.md)
 BACKLOG-456,Unify Loading Animation UI,ui,Low,Pending,-,~10K,-,-,2026-01-23,,[BACKLOG-456.md](items/BACKLOG-456.md)
 BACKLOG-457,Sync Emails must fetch from provider,feature,Critical,Completed,SPRINT-052,~50K,-,-,2026-01-23,,[BACKLOG-457.md](items/BACKLOG-457.md)
@@ -434,14 +434,14 @@ BACKLOG-463,Single-Screen Contact Management Flow,ux,High,Pending,SPRINT-055b,~4
 BACKLOG-464,OAuth Reconnect Popup Not Opening,bug,Critical,Completed,SPRINT-052,~20K,-,-,2026-01-24,,[BACKLOG-464.md](items/BACKLOG-464.md)
 BACKLOG-475,Verify Auto-Updater End-to-End,infrastructure,High,Pending,SPRINT-056,~15K,-,-,2026-01-24,,[BACKLOG-475.md](items/BACKLOG-475.md)
 BACKLOG-476,Complete Signed Release Cycle Test,infrastructure,Medium,Pending,SPRINT-056,~5K,-,-,2026-01-24,,[BACKLOG-476.md](items/BACKLOG-476.md)
-BACKLOG-477,User License Schema in Supabase,schema,Critical,Pending,SPRINT-057,~25K,-,-,2026-01-24,,[BACKLOG-477.md](items/BACKLOG-477.md)
-BACKLOG-478,License Validation Service,service,Critical,Pending,SPRINT-057,~30K,-,-,2026-01-24,,[BACKLOG-478.md](items/BACKLOG-478.md)
-BACKLOG-479,Device Registration Service,service,High,Pending,SPRINT-057,~20K,-,-,2026-01-24,,[BACKLOG-479.md](items/BACKLOG-479.md)
-BACKLOG-480,License Check at App Start,service,Critical,Pending,SPRINT-057,~15K,-,-,2026-01-24,,[BACKLOG-480.md](items/BACKLOG-480.md)
-BACKLOG-481,Trial Limit Enforcement UI,ui,High,Pending,SPRINT-057,~10K,-,-,2026-01-24,,[BACKLOG-481.md](items/BACKLOG-481.md)
-BACKLOG-482,Desktop Deep Link Handler,infrastructure,Critical,Pending,SPRINT-058,~25K,-,-,2026-01-24,,[BACKLOG-482.md](items/BACKLOG-482.md)
-BACKLOG-483,Browser Auth Landing Page,ui,Critical,Pending,SPRINT-058,~30K,-,-,2026-01-24,,[BACKLOG-483.md](items/BACKLOG-483.md)
-BACKLOG-484,License Validation at Auth,service,Critical,Pending,SPRINT-058,~15K,-,-,2026-01-24,,[BACKLOG-484.md](items/BACKLOG-484.md)
+BACKLOG-477,User License Schema in Supabase,schema,Critical,Testing,SPRINT-062,~25K,~28K,+12%,2026-01-24,2026-01-27,[BACKLOG-477.md](items/BACKLOG-477.md)
+BACKLOG-478,License Validation Service,service,Critical,Completed,SPRINT-062,~30K,~45K,+50%,2026-01-24,2026-01-27,[BACKLOG-478.md](items/BACKLOG-478.md)
+BACKLOG-479,Device Registration Service,service,High,Testing,SPRINT-062,~20K,-,Implemented as part of TASK-1504 (PR #632),2026-01-24,2026-01-27,[BACKLOG-479.md](items/BACKLOG-479.md)
+BACKLOG-480,License Check at App Start,service,Critical,Testing,SPRINT-062,~15K,-,TASK-1506 (PR #633),2026-01-24,2026-01-27,[BACKLOG-480.md](items/BACKLOG-480.md)
+BACKLOG-481,Trial Limit Enforcement UI,ui,High,Testing,SPRINT-062,~10K,-,Components created in TASK-1506 (TrialStatusBanner/UpgradeScreen/DeviceLimitScreen/LicenseGate),2026-01-24,2026-01-27,[BACKLOG-481.md](items/BACKLOG-481.md)
+BACKLOG-482,Desktop Deep Link Handler,infrastructure,Critical,Testing,SPRINT-062,~25K,~53K,+112%,2026-01-24,2026-01-26,[BACKLOG-482.md](items/BACKLOG-482.md)
+BACKLOG-483,Browser Auth Landing Page,ui,Critical,Testing,SPRINT-062,~30K,~37K,+23%,2026-01-24,2026-01-26,[BACKLOG-483.md](items/BACKLOG-483.md)
+BACKLOG-484,License Validation at Auth,service,Critical,Testing,SPRINT-062,~15K,~22K,+47%,2026-01-24,2026-01-27,[BACKLOG-484.md](items/BACKLOG-484.md)
 BACKLOG-485,Deprecate OAuth Popup Flow,refactor,Medium,Pending,SPRINT-058,~10K,-,-,2026-01-24,,[BACKLOG-485.md](items/BACKLOG-485.md)
 BACKLOG-486,PostHog SDK Integration,infrastructure,Critical,Pending,SPRINT-059,~15K,-,-,2026-01-24,,[BACKLOG-486.md](items/BACKLOG-486.md)
 BACKLOG-487,Core Lifecycle Events,service,Critical,Pending,SPRINT-059,~10K,-,-,2026-01-24,,[BACKLOG-487.md](items/BACKLOG-487.md)
@@ -505,11 +505,11 @@ BACKLOG-596,Add Test Coverage for Attachment Extraction,testing,Low,Pending,SPRI
 BACKLOG-597,iPhone Sync Progress - Attach to Running Sync,enhancement,High,Pending,,~20K,-,When sync already in progress show progress UI instead of blocking warning. Depends on progress bar service from dynamic import batch work,2026-02-02,,
 BACKLOG-598,Add Visible Sync Cancel/Reset Button,ui,Medium,Pending,,~10K,-,Add cancel button during sync and reset option when sync appears stuck. Currently requires DevTools console or app restart,2026-02-02,,
 BACKLOG-599,SubmissionSyncService starts before database ready,bug,High,Pending,,~8K,-,Race condition - sync service attempts initial sync before database initialization completes,2026-02-02,,
-BACKLOG-600,Message Sort Order Bug - Oldest First Instead of Newest,bug,High,Pending,SPRINT-068,~5K,-,Message preview panel sorts oldest-first - should be newest-first,2026-02-02,,[BACKLOG-600-message-sort-order.md](items/BACKLOG-600-message-sort-order.md)
-BACKLOG-601,Audit Period Filter Checkbox Not Working - Invalid Date,bug,High,Pending,SPRINT-068,~10K,-,new Date(auditStartDate) returns Invalid Date causing all comparisons to fail,2026-02-02,,[BACKLOG-601-audit-period-filter.md](items/BACKLOG-601-audit-period-filter.md)
+BACKLOG-600,Message Sort Order Bug - Oldest First Instead of Newest,bug,High,Testing,SPRINT-068,~5K,-,TASK-1794 (PR #717) - Fixed message sort to newest-first,2026-02-02,2026-02-03,[BACKLOG-600-message-sort-order.md](items/BACKLOG-600-message-sort-order.md)
+BACKLOG-601,Audit Period Filter Checkbox Not Working - Invalid Date,bug,High,Testing,SPRINT-068,~10K,-,TASK-1795 (PR #717) - Fixed Windows timezone handling for YYYY-MM-DD dates,2026-02-02,2026-02-03,[BACKLOG-601-audit-period-filter.md](items/BACKLOG-601-audit-period-filter.md)
 BACKLOG-602,Attachment Skip Diagnostic Logging for iCloud,enhancement,Low,Deferred,-,~5K,-,Add diagnostic logging to confirm iCloud attachment skip reasons - platform limitation not a bug,2026-02-02,,[BACKLOG-602-attachment-skip-logging.md](items/BACKLOG-602-attachment-skip-logging.md)
-BACKLOG-603,iCloud Attachment Limitation UX Message,enhancement,Medium,Pending,SPRINT-068,~8K,-,Add info box to sync completion explaining iCloud attachment limitation,2026-02-02,,[BACKLOG-603-icloud-ux-message.md](items/BACKLOG-603-icloud-ux-message.md)
-BACKLOG-604,iOS messages missing text when stored in attributedBody field,bug,Medium,Pending,SPRINT-068,~15K,-,Location sharing messages show "[Media not available]" - need to parse attributedBody,2026-02-02,,[BACKLOG-604-ios-attributed-body.md](items/BACKLOG-604-ios-attributed-body.md)
+BACKLOG-603,iCloud Attachment Limitation UX Message,enhancement,Medium,Testing,SPRINT-068,~8K,-,TASK-1796 (PR #717) - Added iCloud info box on sync completion,2026-02-02,2026-02-03,[BACKLOG-603-icloud-ux-message.md](items/BACKLOG-603-icloud-ux-message.md)
+BACKLOG-604,iOS messages missing text when stored in attributedBody field,bug,Medium,Testing,SPRINT-068,~15K,-,TASK-1798 (PR #719) - Parse attributedBody and audio_transcript from sms.db,2026-02-02,2026-02-03,[BACKLOG-604-ios-attributed-body.md](items/BACKLOG-604-ios-attributed-body.md)
 BACKLOG-605,"Group chat with multiple participants shows as 1:1 chat",bug,medium,pending,,,,,2025-02-01,,
 BACKLOG-606,Add attachments progress phase to sync status indicator,enhancement,medium,pending,,Sync progress bar resets from 100% to 0% when moving from messages to attachments phase - add separate pill or phase indicator for better UX,2026-02-02,,
 BACKLOG-607,Settings Messages Import needs SyncOrchestrator queue awareness,enhancement,low,pending,,MacOSMessagesImportSettings should detect when messages is queued (pending) in the orchestrator queue and show appropriate UI feedback. Currently only shows state when messages is actively running or user-initiated.,2026-02-02,,
@@ -519,3 +519,5 @@ BACKLOG-612,Error Logging Service + Supabase Dashboard,infrastructure,Critical,P
 BACKLOG-613,Enhanced ErrorScreen with Reset and User Feedback,ui,Critical,In Progress,SPRINT-069,~40K,-,"CRITICAL: Extend ErrorScreen. Add: 1) Retry button 2) User feedback textarea 3) Submit logs to Supabase 4) RESET APP DATA button - clears local storage + keychain then restarts fresh 5) Confirmation dialog 6) Self-healing for corrupted state. Split into TASK-1800 (logging) and TASK-1802 (reset). Depends on BACKLOG-612.",2026-02-03,,
 BACKLOG-614,Fix onboarding race condition - needsTermsAcceptance default,bug,Critical,Completed,,~5K,-,"Fix: Change needsTermsAcceptance default from true to false in electron/main.ts. Returning users with terms already accepted in Supabase shouldnt see terms screen again.",2026-02-03,2026-02-03,
 BACKLOG-615,Graceful skip for syncs when no local user exists,bug,Critical,Completed,,~8K,-,"Fix: SyncOrchestrator and handlers should gracefully skip (return empty) when getValidUserId returns null instead of erroring. Prevents No valid user found crashes during deferred DB init. PR #737 merged.",2026-02-03,2026-02-03,
+BACKLOG-621,Domain Claim & User Capture,feature,High,Pending,-,~120K,-,"IT admin claims email domain via DNS TXT verification then captures existing users with matching domain emails into org during 14-day window. Includes capture report and SSO migration.",2026-02-06,,[BACKLOG-621.md](items/BACKLOG-621.md)
+BACKLOG-623,Bulk Edit Role Feature for User Management,feature,Medium,In Progress,,~15K,-,"Add bulk role editing: BulkEditRoleModal component, UserTableRow with selection, bulkUpdateRole server action, UserActionsDropdown Edit Role option.",2026-02-06,,items/BACKLOG-623.md

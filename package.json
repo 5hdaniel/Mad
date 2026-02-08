@@ -209,10 +209,21 @@
           "**/*"
         ]
       },
-      ".env.production"
+      ".env.production",
+      {
+        "from": "scripts/cleanup-macos.sh",
+        "to": "cleanup-macos.sh"
+      },
+      {
+        "from": "scripts/cleanup-windows.ps1",
+        "to": "cleanup-windows.ps1"
+      }
     ]
   },
   "overrides": {
-    "diff": ">=8.0.3"
+    "diff": ">=8.0.3",
+    "@next/eslint-plugin-next": {
+      "glob": ">=10.5.0"
+    }
   }
 }

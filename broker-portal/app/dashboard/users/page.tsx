@@ -85,7 +85,7 @@ async function getOrganizationMembers(
       provisioning_metadata,
       idp_groups,
       group_sync_enabled,
-      user:users!organization_members_user_id_fkey (
+      user:users!organization_members_user_id_public_users_fkey (
         id,
         email,
         first_name,

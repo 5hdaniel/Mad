@@ -3,12 +3,66 @@
  *
  * Handles the OAuth redirect from Supabase Auth:
  * 1. Exchanges authorization code for session
- * 2. Verifies user has broker/admin role
- * 3. Redirects to dashboard or login with error
+ * 2. Verifies user has broker/admin/it_admin role
+ * 3. Auto-provisions IT admins from Microsoft OAuth (creates org + user)
+ * 4. Redirects to dashboard or login with error
  */
 
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import type { User } from '@supabase/supabase-js';
+import { extractEmail, orgNameFromEmail } from '@/lib/auth/helpers';
+
+// Allowed roles for broker portal access
+const ALLOWED_ROLES = ['broker', 'admin', 'it_admin'];
+
+/**
+ * Auto-provision organization and user for Microsoft IT admins
+ * Uses the auto_provision_it_admin RPC function which has elevated permissions
+ */
+async function autoProvisionITAdmin(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  user: User
+): Promise<{ success: boolean; organizationId?: string }> {
+  // Extract Microsoft tenant ID from user metadata
+  const customClaims = user.user_metadata?.custom_claims as { tid?: string } | undefined;
+  const tenantId = customClaims?.tid;
+
+  if (!tenantId) {
+    console.warn('No Microsoft tenant ID found for user');
+    return { success: false };
+  }
+
+  const email = extractEmail(user) || '';
+  const orgName = orgNameFromEmail(email);
+  const slug = orgName.toLowerCase().replace(/\s+/g, '-');
+
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`Auto-provisioning IT admin: ${email}, tenant: ${tenantId}, org: ${orgName}`);
+  }
+
+  // Call the RPC function which handles all provisioning with elevated permissions
+  const { data, error } = await supabase.rpc('auto_provision_it_admin', {
+    p_tenant_id: tenantId,
+    p_org_name: orgName,
+    p_org_slug: slug,
+  });
+
+  if (error) {
+    console.error('Auto-provision RPC failed:', error);
+    return { success: false };
+  }
+
+  if (!data?.success) {
+    console.error('Auto-provision failed:', data?.error);
+    return { success: false };
+  }
+
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`Successfully provisioned: org=${data.organization_id}, user=${data.user_id}`);
+  }
+  return { success: true, organizationId: data.organization_id };
+}
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -24,29 +78,105 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${origin}/login?error=auth_failed`);
     }
 
-    // Verify user has broker or admin role
+    // Get authenticated user
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
     if (user) {
+      // Check for existing membership with allowed role
       const { data: membership } = await supabase
         .from('organization_members')
         .select('role, organization_id')
         .eq('user_id', user.id)
-        .in('role', ['broker', 'admin'])
+        .in('role', ALLOWED_ROLES)
         .limit(1)
         .single();
 
-      if (!membership) {
-        // User exists but is not a broker/admin - sign them out
-        console.warn(`User ${user.id} attempted portal access without broker role`);
-        await supabase.auth.signOut();
-        return NextResponse.redirect(`${origin}/login?error=not_authorized`);
+      if (membership) {
+        // User has valid role - redirect to dashboard
+        // IT admins go to a limited view (handled by dashboard)
+        return NextResponse.redirect(`${origin}${next}`);
       }
 
-      // Success - user has valid role
-      return NextResponse.redirect(`${origin}${next}`);
+      // No membership by user_id - check if there's a pending invite for this email
+      const userEmail = extractEmail(user);
+      if (userEmail) {
+        const { data: pendingInvite } = await supabase
+          .from('organization_members')
+          .select('id, role, organization_id')
+          .eq('invited_email', userEmail)
+          .is('user_id', null)
+          .limit(1)
+          .single();
+
+        if (pendingInvite) {
+          // Found pending invite - link user to the membership
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`Linking user to pending invite for ${userEmail}`);
+          }
+
+          // First ensure user exists in users table
+          const provider = user.app_metadata?.provider || 'email';
+          const oauthId = user.user_metadata?.provider_id || user.id;
+
+          const { error: upsertError } = await supabase
+            .from('users')
+            .upsert({
+              id: user.id,
+              email: userEmail,
+              oauth_provider: provider,
+              oauth_id: oauthId,
+              display_name: user.user_metadata?.full_name || user.user_metadata?.name || null,
+              first_name: user.user_metadata?.given_name || null,
+              last_name: user.user_metadata?.family_name || null,
+            }, { onConflict: 'id' });
+
+          if (upsertError) {
+            console.error('Error creating user record:', upsertError);
+          }
+
+          // Update the membership to link user_id and mark as joined
+          const { error: updateError } = await supabase
+            .from('organization_members')
+            .update({
+              user_id: user.id,
+              license_status: 'active',
+              joined_at: new Date().toISOString(),
+              invitation_token: null, // Clear the token
+            })
+            .eq('id', pendingInvite.id);
+
+          if (updateError) {
+            console.error('Error linking invite:', updateError);
+          } else {
+            if (process.env.NODE_ENV === 'development') {
+              console.log('Successfully linked invite to user');
+            }
+            return NextResponse.redirect(`${origin}${next}`);
+          }
+        }
+      }
+
+      // No membership and no pending invite - check if this is a Microsoft user for auto-provisioning
+      const provider = user.app_metadata?.provider;
+
+      if (provider === 'azure') {
+        // Auto-provision as IT admin
+        const result = await autoProvisionITAdmin(supabase, user);
+
+        if (result.success) {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('Successfully provisioned IT admin');
+          }
+          return NextResponse.redirect(`${origin}${next}`);
+        }
+      }
+
+      // User not authorized and not auto-provisionable - sign them out
+      console.warn('User attempted portal access without valid role');
+      await supabase.auth.signOut();
+      return NextResponse.redirect(`${origin}/login?error=not_authorized`);
     }
   }
 

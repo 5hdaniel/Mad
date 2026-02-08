@@ -24,6 +24,7 @@ import {
 } from "./utils/validation";
 import { normalizePhoneNumber } from "./utils/phoneNormalization";
 import { getValidUserId } from "./utils/userIdHelper";
+import outlookFetchService from "./services/outlookFetchService";
 
 // Import handler types
 import type {
@@ -524,7 +525,7 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
             phone: extContact.phones?.[0] || null,
             email: extContact.emails?.[0] || null,
             company: extContact.company || null,
-            source: "contacts_app",
+            source: extContact.source === "outlook" ? "outlook" : "contacts_app",
             allPhones: extContact.phones || [],
             allEmails: extContact.emails || [],
             isFromDatabase: false,
@@ -1395,6 +1396,79 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         };
       } catch (error) {
         logService.error("[Main] Get external sync status failed", "Contacts", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // TASK-1921: Sync Outlook contacts to external_contacts table
+  ipcMain.handle(
+    "contacts:syncOutlookContacts",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<{
+      success: boolean;
+      count?: number;
+      reconnectRequired?: boolean;
+      error?: string;
+    }> => {
+      try {
+        logService.info("[Main] Outlook contacts sync requested", "Contacts", { userId });
+
+        // Validate user ID
+        const validatedUserId = await getValidUserId(userId, "Contacts");
+        if (!validatedUserId) {
+          return { success: false, error: "No valid user found in database" };
+        }
+
+        // Initialize the Outlook fetch service with user tokens
+        const initialized = await outlookFetchService.initialize(validatedUserId);
+        if (!initialized) {
+          return { success: false, error: "Failed to initialize Outlook service. Please reconnect your Microsoft mailbox." };
+        }
+
+        // Fetch contacts from Microsoft Graph API
+        const fetchResult = await outlookFetchService.fetchContacts(validatedUserId);
+
+        if (!fetchResult.success) {
+          return {
+            success: false,
+            error: fetchResult.error || "Failed to fetch Outlook contacts",
+            reconnectRequired: fetchResult.reconnectRequired,
+          };
+        }
+
+        // Map OutlookContact to OutlookContactInput format for DB sync
+        const outlookContacts = fetchResult.contacts.map((contact) => ({
+          external_record_id: contact.external_record_id,
+          name: contact.name,
+          emails: contact.emails,
+          phones: contact.phones,
+          company: contact.company,
+        }));
+
+        // Sync to external_contacts table (upsert + delete stale outlook records)
+        const syncResult = externalContactDb.syncOutlookContacts(validatedUserId, outlookContacts);
+
+        logService.info("[Main] Outlook contacts sync complete", "Contacts", {
+          userId: validatedUserId,
+          inserted: syncResult.inserted,
+          deleted: syncResult.deleted,
+          total: syncResult.total,
+        });
+
+        return {
+          success: true,
+          count: syncResult.inserted,
+        };
+      } catch (error) {
+        logService.error("[Main] Outlook contacts sync failed", "Contacts", {
           error: error instanceof Error ? error.message : "Unknown error",
         });
         return {

@@ -4,8 +4,8 @@
  * User List Client Component
  *
  * Main client component for displaying and filtering organization members.
- * Provides search, role filter, and status filter with client-side filtering
- * for instant response.
+ * Provides search, role filter, status filter, card/list view toggle,
+ * and bulk actions.
  *
  * TASK-1809: User list component implementation
  * TASK-1810: Added invite user modal integration
@@ -14,9 +14,11 @@
 
 import { useState, useMemo } from 'react';
 import UserCard from './UserCard';
+import UserTableRow from './UserTableRow';
 import UserSearchFilter from './UserSearchFilter';
 import InviteUserModal from './InviteUserModal';
 import EditRoleModal from './EditRoleModal';
+import BulkEditRoleModal from './BulkEditRoleModal';
 import DeactivateUserModal from './DeactivateUserModal';
 import RemoveUserModal from './RemoveUserModal';
 import { EmptyState, SearchIcon } from '@/components/ui/EmptyState';
@@ -45,6 +47,8 @@ function UsersIcon({ className }: { className?: string }) {
   );
 }
 
+type ViewMode = 'cards' | 'list';
+
 interface UserListClientProps {
   initialMembers: OrganizationMember[];
   currentUserId: string;
@@ -61,14 +65,16 @@ export default function UserListClient({
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [editRoleMember, setEditRoleMember] = useState<OrganizationMember | null>(null);
+  const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
   const [deactivateMember, setDeactivateMember] = useState<OrganizationMember | null>(null);
   const [removeMember, setRemoveMember] = useState<OrganizationMember | null>(null);
 
   const filteredMembers = useMemo(() => {
     return initialMembers.filter((member) => {
-      // Search filter
       const searchLower = searchQuery.toLowerCase();
       const displayName =
         member.user?.display_name ||
@@ -83,10 +89,7 @@ export default function UserListClient({
         email.toLowerCase().includes(searchLower) ||
         invitedEmail.toLowerCase().includes(searchLower);
 
-      // Role filter
       const matchesRole = roleFilter === 'all' || member.role === roleFilter;
-
-      // Status filter
       const matchesStatus =
         statusFilter === 'all' || member.license_status === statusFilter;
 
@@ -99,32 +102,85 @@ export default function UserListClient({
   const canManage =
     currentUserRole === 'admin' || currentUserRole === 'it_admin';
 
+  // Bulk selection helpers
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredMembers.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredMembers.map((m) => m.id)));
+    }
+  };
+
+  const allSelected =
+    filteredMembers.length > 0 && selectedIds.size === filteredMembers.length;
+
+  // Only count non-self selected members for bulk actions
+  const selectedNonSelf = filteredMembers.filter(
+    (m) => selectedIds.has(m.id) && m.user_id !== currentUserId
+  );
+
   return (
     <div className="space-y-4">
-      {/* Action bar with invite button */}
-      {canManage && (
-        <div className="flex justify-end">
+      {/* Action bar */}
+      <div className="flex items-center justify-between">
+        {/* View toggle */}
+        <div className="flex items-center gap-1 bg-gray-200 rounded-md p-1">
           <button
-            onClick={() => setIsInviteModalOpen(true)}
-            className="inline-flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+            onClick={() => setViewMode('list')}
+            className={`p-2 rounded ${viewMode === 'list' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+            aria-label="List view"
+            title="List view"
           >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-              />
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
-            Invite User
+          </button>
+          <button
+            onClick={() => { setViewMode('cards'); setSelectedIds(new Set()); }}
+            className={`p-2 rounded ${viewMode === 'cards' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+            aria-label="Card view"
+            title="Card view"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+            </svg>
           </button>
         </div>
-      )}
+
+        <div className="flex items-center gap-2">
+          {/* Bulk actions */}
+          {canManage && selectedNonSelf.length > 0 && (
+            <button
+              onClick={() => setIsBulkEditOpen(true)}
+              className="inline-flex items-center gap-1.5 bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-md hover:bg-gray-50 text-sm transition-colors"
+            >
+              Change Role ({selectedNonSelf.length})
+            </button>
+          )}
+
+          {/* Invite button */}
+          {canManage && (
+            <button
+              onClick={() => setIsInviteModalOpen(true)}
+              className="inline-flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              Invite User
+            </button>
+          )}
+        </div>
+      </div>
 
       <UserSearchFilter
         searchQuery={searchQuery}
@@ -155,20 +211,62 @@ export default function UserListClient({
             {initialMembers.length !== 1 ? 's' : ''}
           </div>
 
-          {/* User cards grid - responsive layout */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredMembers.map((member) => (
-              <UserCard
-                key={member.id}
-                member={member}
-                isCurrentUser={member.user_id === currentUserId}
-                canManage={canManage}
-                onEditRole={setEditRoleMember}
-                onDeactivate={setDeactivateMember}
-                onRemove={setRemoveMember}
-              />
-            ))}
-          </div>
+          {viewMode === 'cards' ? (
+            /* Card grid view */
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredMembers.map((member) => (
+                <UserCard
+                  key={member.id}
+                  member={member}
+                  isCurrentUser={member.user_id === currentUserId}
+                  canManage={canManage}
+                  onEditRole={setEditRoleMember}
+                  onDeactivate={setDeactivateMember}
+                  onRemove={setRemoveMember}
+                />
+              ))}
+            </div>
+          ) : (
+            /* Table/list view */
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    {canManage && (
+                      <th className="w-12 px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={allSelected}
+                          onChange={toggleSelectAll}
+                          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                      </th>
+                    )}
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
+                    {canManage && <th className="w-12 px-4 py-3" />}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {filteredMembers.map((member) => (
+                    <UserTableRow
+                      key={member.id}
+                      member={member}
+                      isSelected={selectedIds.has(member.id)}
+                      isCurrentUser={member.user_id === currentUserId}
+                      canManage={canManage}
+                      onToggleSelect={() => toggleSelect(member.id)}
+                      onEditRole={() => setEditRoleMember(member)}
+                      onDeactivate={() => setDeactivateMember(member)}
+                      onRemove={() => setRemoveMember(member)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </>
       )}
 
@@ -179,7 +277,7 @@ export default function UserListClient({
         organizationId={organizationId}
       />
 
-      {/* Edit Role Modal */}
+      {/* Edit Role Modal (single user) */}
       {editRoleMember && (
         <EditRoleModal
           isOpen={!!editRoleMember}
@@ -190,6 +288,15 @@ export default function UserListClient({
           currentUserRole={currentUserRole}
         />
       )}
+
+      {/* Bulk Edit Role Modal */}
+      <BulkEditRoleModal
+        isOpen={isBulkEditOpen}
+        onClose={() => { setIsBulkEditOpen(false); setSelectedIds(new Set()); }}
+        memberIds={selectedNonSelf.map((m) => m.id)}
+        memberCount={selectedNonSelf.length}
+        currentUserRole={currentUserRole}
+      />
 
       {/* Deactivate User Modal */}
       {deactivateMember && (

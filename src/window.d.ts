@@ -1038,6 +1038,18 @@ interface MainAPI {
       contactCount?: number;
       error?: string;
     }>;
+    /**
+     * Sync Outlook contacts to external_contacts table (TASK-1921)
+     * Fetches contacts from Microsoft Graph API and syncs to local SQLite
+     * @param userId - User ID to sync contacts for
+     * @returns Sync result (count of contacts synced, reconnectRequired flag)
+     */
+    syncOutlookContacts: (userId: string) => Promise<{
+      success: boolean;
+      count?: number;
+      reconnectRequired?: boolean;
+      error?: string;
+    }>;
   };
 
   // Transactions API

@@ -9,13 +9,15 @@
  * TASK-1812: Deactivate/Remove user flow
  */
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
 interface UserActionsDropdownProps {
   memberId: string;
   memberName: string;
   isPending: boolean; // No user_id yet (pending invite)
   isCurrentUser: boolean;
+  invitationToken?: string | null;
+  onEditRole?: () => void;
   onDeactivate: () => void;
   onRemove: () => void;
 }
@@ -25,11 +27,28 @@ export default function UserActionsDropdown({
   memberName,
   isPending,
   isCurrentUser,
+  invitationToken,
+  onEditRole,
   onDeactivate,
   onRemove,
 }: UserActionsDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const handleCopyInviteLink = useCallback(async () => {
+    if (!invitationToken) return;
+    const baseUrl = window.location.origin;
+    const link = `${baseUrl}/invite/${invitationToken}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      // silent fail
+    }
+    setIsOpen(false);
+  }, [invitationToken]);
 
   // Close on click outside
   useEffect(() => {
@@ -79,6 +98,29 @@ export default function UserActionsDropdown({
           aria-orientation="vertical"
         >
           <div className="py-1">
+            {/* Copy Invite Link - for pending invites */}
+            {isPending && invitationToken && (
+              <button
+                onClick={handleCopyInviteLink}
+                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
+                role="menuitem"
+              >
+                {linkCopied ? 'Copied!' : 'Copy Invite Link'}
+              </button>
+            )}
+            {/* Edit Role - for active members */}
+            {onEditRole && !isPending && (
+              <button
+                onClick={() => {
+                  setIsOpen(false);
+                  onEditRole();
+                }}
+                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
+                role="menuitem"
+              >
+                Edit Role
+              </button>
+            )}
             {/* Deactivate - only for active members, not pending invites */}
             {!isPending && (
               <button
