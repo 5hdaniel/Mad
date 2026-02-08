@@ -366,7 +366,7 @@ async function handleCreateUser(
       .eq("id", auth.orgId)
       .single();
 
-    const role = org?.default_member_role || "member";
+    const role = org?.default_member_role || "agent";
 
     await supabaseAdmin.from("organization_members").insert({
       organization_id: auth.orgId,
@@ -418,7 +418,7 @@ async function handleCreateUser(
       first_name: nameObj?.givenName || null,
       last_name: nameObj?.familyName || null,
       display_name: displayName || null,
-      oauth_provider: "scim",
+      oauth_provider: "azure",
       oauth_id: externalId || email,
       scim_external_id: externalId || null,
       provisioning_source: "scim",
@@ -450,7 +450,7 @@ async function handleCreateUser(
     .eq("id", auth.orgId)
     .single();
 
-  const role = org?.default_member_role || "member";
+  const role = org?.default_member_role || "agent";
 
   // Create org membership
   await supabaseAdmin.from("organization_members").insert({

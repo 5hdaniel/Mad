@@ -106,7 +106,7 @@ export async function listScimSyncLogs(limit = 50) {
   const { data: logs } = await supabase
     .from('scim_sync_log')
     .select(
-      'id, operation, scim_resource_type, external_id, status, error_message, created_at'
+      'id, operation, resource_type, external_id, response_status, error_message, created_at'
     )
     .eq('organization_id', membership.organization_id)
     .order('created_at', { ascending: false })

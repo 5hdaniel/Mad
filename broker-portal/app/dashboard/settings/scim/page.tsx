@@ -21,9 +21,9 @@ interface ScimToken {
 interface SyncLogEntry {
   id: string;
   operation: string;
-  scim_resource_type: string;
+  resource_type: string;
   external_id: string | null;
-  status: string;
+  response_status: number | null;
   error_message: string | null;
   created_at: string;
 }
@@ -366,7 +366,7 @@ export default function ScimSettingsPage() {
                       {log.operation}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {log.scim_resource_type}
+                      {log.resource_type}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
                       {log.external_id || '-'}
@@ -374,14 +374,14 @@ export default function ScimSettingsPage() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          log.status === 'success'
+                          log.response_status && log.response_status < 400
                             ? 'bg-green-100 text-green-800'
-                            : log.status === 'error'
+                            : log.response_status && log.response_status >= 400
                               ? 'bg-red-100 text-red-800'
                               : 'bg-yellow-100 text-yellow-800'
                         }`}
                       >
-                        {log.status}
+                        {log.response_status ?? 'pending'}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-red-600 max-w-xs truncate">
