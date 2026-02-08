@@ -15,6 +15,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   auth_failed: 'Authentication failed. Please try again.',
   not_authorized:
     'Your account is not authorized to access the broker portal. Contact your administrator.',
+  org_not_setup:
+    "Your organization hasn't been set up yet. Ask your IT administrator to visit the setup page first.",
 };
 
 function LoginForm() {
