@@ -108,5 +108,9 @@ export async function GET(request: Request) {
     console.log(`Setup complete: org=${data.organization_id}, user=${data.user_id}`);
   }
 
-  return NextResponse.redirect(`${origin}/dashboard`);
+  // After successful provisioning, redirect to admin consent page
+  // so IT admin can pre-approve Graph API permissions for all tenant users
+  return NextResponse.redirect(
+    `${origin}/setup/consent?tenant=${encodeURIComponent(tenantId)}&org=${encodeURIComponent(data.organization_id)}`
+  );
 }
