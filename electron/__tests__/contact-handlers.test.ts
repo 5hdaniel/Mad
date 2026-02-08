@@ -192,12 +192,12 @@ describe("Contact Handlers", () => {
       );
     });
 
-    it("should handle invalid user ID", async () => {
+    it("should return empty contacts for invalid user ID (graceful deferred DB init)", async () => {
       const handler = registeredHandlers.get("contacts:get-all");
       const result = await handler(mockEvent, "");
 
-      expect(result.success).toBe(false);
-      expect(result.error).toContain("No valid user found");
+      expect(result.success).toBe(true);
+      expect(result.contacts).toEqual([]);
     });
 
     it("should handle database error", async () => {
@@ -300,12 +300,12 @@ describe("Contact Handlers", () => {
       expect(result.contacts[0].name).toBe("Jane Smith");
     });
 
-    it("should handle invalid user ID", async () => {
+    it("should return empty contacts for invalid user ID (graceful deferred DB init)", async () => {
       const handler = registeredHandlers.get("contacts:get-available");
       const result = await handler(mockEvent, "");
 
-      expect(result.success).toBe(false);
-      expect(result.error).toContain("No valid user found");
+      expect(result.success).toBe(true);
+      expect(result.contacts).toEqual([]);
     });
 
     it("should handle contacts service error", async () => {
@@ -727,12 +727,12 @@ describe("Contact Handlers", () => {
       ).toHaveBeenCalledWith(TEST_USER_ID, undefined);
     });
 
-    it("should handle invalid user ID", async () => {
+    it("should return empty contacts for invalid user ID (graceful deferred DB init)", async () => {
       const handler = registeredHandlers.get("contacts:get-sorted-by-activity");
       const result = await handler(mockEvent, "", null);
 
-      expect(result.success).toBe(false);
-      expect(result.error).toContain("No valid user found");
+      expect(result.success).toBe(true);
+      expect(result.contacts).toEqual([]);
     });
   });
 
