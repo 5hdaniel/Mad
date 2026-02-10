@@ -153,6 +153,3 @@ This ensures all native modules are compiled correctly for your system.
 - Cross-platform support (Windows, Linux via Android Messages)
 - Authentication and subscription features
 
-## License
-
-MIT
