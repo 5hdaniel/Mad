@@ -226,6 +226,23 @@ async function syncDeepLinkUserToLocalDb(userData: PendingDeepLinkUser): Promise
 }
 
 // ==========================================
+// DEEP LINK URL REDACTION (TASK-1939)
+// ==========================================
+/**
+ * Redact sensitive OAuth tokens/codes from deep link URLs before logging.
+ * Prevents credential leakage in log files.
+ */
+function redactDeepLinkUrl(url: string): string {
+  return url.replace(
+    /(?:code|token|access_token|refresh_token)=[^&#]+/gi,
+    (match) => {
+      const key = match.split("=")[0];
+      return `${key}=[REDACTED]`;
+    },
+  );
+}
+
+// ==========================================
 // DEEP LINK HANDLER (TASK-1500, enhanced TASK-1507)
 // ==========================================
 /**
@@ -264,7 +281,7 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
 
       if (!accessToken || !refreshToken) {
         // Missing tokens - send error to renderer
-        log.error("[DeepLink] Callback URL missing tokens:", url);
+        log.error("[DeepLink] Callback URL missing tokens:", redactDeepLinkUrl(url));
         sendToRenderer("auth:deep-link-error", {
           error: "Missing tokens in callback URL",
           code: "MISSING_TOKENS",
@@ -517,7 +534,7 @@ function focusMainWindow(): void {
 // This fires when the app is already running and a deep link is clicked
 app.on("open-url", (event, url) => {
   event.preventDefault();
-  log.info("[DeepLink] Received URL (macOS):", url);
+  log.info("[DeepLink] Received URL (macOS):", redactDeepLinkUrl(url));
   handleDeepLinkCallback(url);
 });
 
@@ -531,7 +548,7 @@ app.on("second-instance", (_event, commandLine) => {
   // Find the deep link URL in command line args
   const url = commandLine.find((arg) => arg.startsWith("magicaudit://"));
   if (url) {
-    log.info("[DeepLink] Received URL (Windows):", url);
+    log.info("[DeepLink] Received URL (Windows):", redactDeepLinkUrl(url));
     handleDeepLinkCallback(url);
   }
 
@@ -729,7 +746,7 @@ app.whenReady().then(async () => {
   if (process.platform === "win32") {
     const deepLinkUrl = process.argv.find((arg) => arg.startsWith("magicaudit://"));
     if (deepLinkUrl) {
-      log.info("[DeepLink] Cold start with URL (Windows):", deepLinkUrl);
+      log.info("[DeepLink] Cold start with URL (Windows):", redactDeepLinkUrl(deepLinkUrl));
       // Wait for window to be ready before processing
       mainWindow?.webContents.once("did-finish-load", () => {
         // Small delay to ensure renderer is fully initialized
@@ -772,7 +789,7 @@ app.whenReady().then(async () => {
   // Usage from DevTools console: window.api.system.manualDeepLink("magicaudit://callback?access_token=...&refresh_token=...")
   if (process.defaultApp) {
     ipcMain.handle("system:manual-deep-link", async (_event, url: string) => {
-      log.info("[DeepLink] Manual trigger from DevTools:", url);
+      log.info("[DeepLink] Manual trigger from DevTools:", redactDeepLinkUrl(url));
       await handleDeepLinkCallback(url);
       return { success: true };
     });
