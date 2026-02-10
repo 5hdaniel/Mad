@@ -174,7 +174,7 @@ export function NotificationProvider({
     (window as any).__notify = notify;
     // Log once on initial mount only (not on every re-render)
     // The empty dep array below ensures this runs once
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <NotificationContext.Provider value={contextValue}>
