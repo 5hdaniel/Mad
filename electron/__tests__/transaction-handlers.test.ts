@@ -63,6 +63,15 @@ jest.mock("../services/pdfExportService", () => ({
   },
 }));
 
+jest.mock("../services/folderExportService", () => ({
+  __esModule: true,
+  default: {
+    getDefaultExportPath: jest.fn().mockReturnValue("/exports/transaction"),
+    exportTransactionToCombinedPDF: jest.fn().mockResolvedValue("/path/to/export.pdf"),
+    exportTransactionToFolder: jest.fn().mockResolvedValue("/exports/transaction"),
+  },
+}));
+
 jest.mock("../services/enhancedExportService", () => ({
   __esModule: true,
   default: {
@@ -98,6 +107,7 @@ import transactionService from "../services/transactionService";
 import auditService from "../services/auditService";
 import logService from "../services/logService";
 import pdfExportService from "../services/pdfExportService";
+import folderExportService from "../services/folderExportService";
 import enhancedExportService from "../services/enhancedExportService";
 import databaseService from "../services/databaseService";
 
@@ -109,6 +119,9 @@ const mockAuditService = auditService as jest.Mocked<typeof auditService>;
 const mockLogService = logService as jest.Mocked<typeof logService>;
 const mockPdfExportService = pdfExportService as jest.Mocked<
   typeof pdfExportService
+>;
+const mockFolderExportService = folderExportService as jest.Mocked<
+  typeof folderExportService
 >;
 const mockEnhancedExportService = enhancedExportService as jest.Mocked<
   typeof enhancedExportService
@@ -689,7 +702,7 @@ describe("Transaction Handlers", () => {
       mockTransactionService.getTransactionDetails.mockResolvedValue(
         mockDetails,
       );
-      mockPdfExportService.generateTransactionPDF.mockResolvedValue(
+      mockFolderExportService.exportTransactionToCombinedPDF.mockResolvedValue(
         "/path/to/export.pdf",
       );
 
@@ -710,7 +723,7 @@ describe("Transaction Handlers", () => {
       mockTransactionService.getTransactionDetails.mockResolvedValue(
         mockDetails,
       );
-      mockPdfExportService.generateTransactionPDF.mockResolvedValue(
+      mockFolderExportService.exportTransactionToCombinedPDF.mockResolvedValue(
         "/custom/path.pdf",
       );
 
@@ -718,7 +731,7 @@ describe("Transaction Handlers", () => {
       const result = await handler(mockEvent, TEST_TXN_ID, "/custom/path.pdf");
 
       expect(result.success).toBe(true);
-      expect(mockPdfExportService.generateTransactionPDF).toHaveBeenCalledWith(
+      expect(mockFolderExportService.exportTransactionToCombinedPDF).toHaveBeenCalledWith(
         mockDetails,
         expect.any(Array),
         "/custom/path.pdf",
@@ -747,7 +760,7 @@ describe("Transaction Handlers", () => {
       mockTransactionService.getTransactionDetails.mockResolvedValue(
         mockDetails,
       );
-      mockPdfExportService.generateTransactionPDF.mockRejectedValue(
+      mockFolderExportService.exportTransactionToCombinedPDF.mockRejectedValue(
         new Error("Export failed"),
       );
 
