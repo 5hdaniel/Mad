@@ -2,10 +2,11 @@
 
 **Status:** COMPLETED
 **Completed:** 2026-02-10
-**PR:** #780 (merged at 5e42a5fb)
+**PRs:** #780 (merged at 5e42a5fb), #781 (merged at 7ce7c06f), #782 (merged at 7ae4c8b5)
 **Created:** 2026-02-10
 **Branch Strategy:** Single fix branch `fix/repo-cleanup-hardening` from `develop`
 **Target Branch:** `develop`
+**Production Verified:** 2026-02-10 -- Clarity CSP fix confirmed working in production (no CSP violations in browser console)
 
 ## Sprint Goal
 
@@ -205,17 +206,19 @@ The following MUST pass before merge:
 ## Sprint Results
 
 ### PR & Merge
-- **PR:** #780
-- **Merge Commit:** 5e42a5fb
-- **Merged At:** 2026-02-10T09:50:29Z
-- **Files Changed:** 6 files, +124/-41 lines
+
+| PR | Title | Merge Commit | Merged At |
+|----|-------|-------------|-----------|
+| #780 | fix: repo cleanup and hardening (SPRINT-075) | 5e42a5fb | 2026-02-10T09:50:29Z |
+| #781 | fix(tests): update stale export mocks in transaction-handlers unit tests | 7ce7c06f | 2026-02-10T09:57:16Z |
+| #782 | chore: close SPRINT-075 and archive completed tasks | 7ae4c8b5 | 2026-02-10T09:54:21Z |
 
 ### Task Results
 
 | Task | Status | Key Outcome |
 |------|--------|-------------|
 | TASK-1933 | COMPLETED | Lint error removed, `npm run lint` passes |
-| TASK-1934 | COMPLETED | 12 failing tests fixed (system-handlers + supabaseService) |
+| TASK-1934 | COMPLETED | 12 failing tests fixed (system-handlers + supabaseService); PR #781 fixed 2 remaining transaction-handler test failures |
 | TASK-1935 | COMPLETED | Production CSP includes `unsafe-eval` for Clarity |
 | TASK-1936 | COMPLETED | axios 1.13.4->1.13.5, tar override added |
 | TASK-1937 | COMPLETED | npm audit high-severity: 14 -> 1 (remaining is Next.js 15 upgrade) |
@@ -236,7 +239,7 @@ The following MUST pass before merge:
 - [x] All acceptance criteria verified
 - [x] `npm run lint` returns 0 errors
 - [x] `npm test` shows 0 failing suites (2 pre-existing in transaction-handlers, out of scope)
-- [ ] Browser console shows no CSP errors for Clarity in production build (manual verification post-deploy)
+- [x] Browser console shows no CSP errors for Clarity in production build (verified 2026-02-10 post-deploy)
 - [x] `npm audit` shows reduced high-severity count (14 -> 1)
 - [x] Dependabot alerts resolved (verified on GitHub)
 - [x] SR Engineer review complete
