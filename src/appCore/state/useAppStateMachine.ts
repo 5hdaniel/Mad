@@ -271,20 +271,36 @@ export function useAppStateMachine(): AppStateMachine {
   // ============================================
   // CONTEXT STATE OBJECT (for helper functions)
   // ============================================
-  const contextState = {
-    isAuthenticated,
-    isAuthLoading,
-    currentUser,
-    sessionToken,
-    authProvider,
-    subscription,
-    needsTermsAcceptance,
-    isOnline,
-    isChecking,
-    connectionError,
-    isMacOS,
-    isWindows,
-  };
+  const contextState = useMemo(
+    () => ({
+      isAuthenticated,
+      isAuthLoading,
+      currentUser,
+      sessionToken,
+      authProvider,
+      subscription,
+      needsTermsAcceptance,
+      isOnline,
+      isChecking,
+      connectionError,
+      isMacOS,
+      isWindows,
+    }),
+    [
+      isAuthenticated,
+      isAuthLoading,
+      currentUser,
+      sessionToken,
+      authProvider,
+      subscription,
+      needsTermsAcceptance,
+      isOnline,
+      isChecking,
+      connectionError,
+      isMacOS,
+      isWindows,
+    ],
+  );
 
   // ============================================
   // RETURN STATE MACHINE
