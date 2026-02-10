@@ -41,7 +41,7 @@ export default function ScimSettingsPage() {
   const [copied, setCopied] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
 
-  const scimEndpoint = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/scim/v2/Users`;
+  const scimEndpoint = `${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim()}/functions/v1/scim/v2/Users`;
 
   const loadData = useCallback(async () => {
     try {
@@ -194,7 +194,7 @@ export default function ScimSettingsPage() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="e.g. Okta SCIM Integration"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
             <button

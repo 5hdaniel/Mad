@@ -27,6 +27,8 @@ const nextConfig = {
       "frame-src 'self' https://*.supabase.co",
       // Video preview uses <video src={signedUrl}> from Supabase storage
       "media-src 'self' https://*.supabase.co",
+      // Supabase Realtime creates blob: workers for WebSocket connections
+      "worker-src 'self' blob:",
       // Prevent clickjacking
       "frame-ancestors 'none'",
       "base-uri 'self'",

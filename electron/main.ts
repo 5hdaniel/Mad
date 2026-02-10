@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  dialog,
   session,
   ipcMain,
 } from "electron";
@@ -83,6 +84,7 @@ import { registerDevice } from "./services/deviceService";
 import supabaseService from "./services/supabaseService";
 import databaseService from "./services/databaseService";
 import sessionService from "./services/sessionService";
+import submissionService from "./services/submissionService";
 import {
   CURRENT_TERMS_VERSION,
   CURRENT_PRIVACY_POLICY_VERSION,
@@ -334,7 +336,8 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
 
       // TASK-1507D: Step 5.5 - Create local SQLite user
       // This is required for FK constraints (mailbox connection, audit logs, contacts)
-      const provider = (user.app_metadata?.provider as OAuthProvider) || "google";
+      const rawProvider = (user.app_metadata?.provider as string) || "google";
+      const provider = (rawProvider === "azure" ? "microsoft" : rawProvider) as OAuthProvider;
 
       // Map license type to subscription tier
       // licenseType: 'trial' | 'individual' | 'team' -> subscriptionTier: 'free' | 'pro' | 'enterprise'
@@ -626,6 +629,30 @@ function createWindow(): void {
       | "hiddenInset"
       | "customButtonsOnHover",
     backgroundColor: WINDOW_CONFIG.BACKGROUND_COLOR,
+  });
+
+  // Prevent closing while a submission is uploading
+  mainWindow.on("close", (e) => {
+    if (submissionService.isSubmitting) {
+      e.preventDefault();
+      dialog
+        .showMessageBox(mainWindow!, {
+          type: "warning",
+          buttons: ["Keep Uploading", "Quit Anyway"],
+          defaultId: 0,
+          cancelId: 0,
+          title: "Submission In Progress",
+          message: "A transaction is being submitted to your broker.",
+          detail:
+            "Closing now will result in an incomplete submission. Are you sure you want to quit?",
+        })
+        .then(({ response }) => {
+          if (response === 1) {
+            // User chose "Quit Anyway" — force close
+            mainWindow?.destroy();
+          }
+        });
+    }
   });
 
   // Load the app

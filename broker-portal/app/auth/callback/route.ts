@@ -45,8 +45,22 @@ export async function GET(request: Request) {
         .single();
 
       if (membership) {
+        // If IT admin, check if org needs admin consent for desktop app permissions
+        if (membership.role === 'it_admin' || membership.role === 'admin') {
+          const { data: org } = await supabase
+            .from('organizations')
+            .select('graph_admin_consent_granted, microsoft_tenant_id')
+            .eq('id', membership.organization_id)
+            .single();
+
+          if (org && !org.graph_admin_consent_granted && org.microsoft_tenant_id) {
+            return NextResponse.redirect(
+              `${origin}/setup/consent?tenant=${encodeURIComponent(org.microsoft_tenant_id)}&org=${encodeURIComponent(membership.organization_id)}`
+            );
+          }
+        }
+
         // User has valid role - redirect to dashboard
-        // IT admins go to a limited view (handled by dashboard)
         return NextResponse.redirect(`${origin}${next}`);
       }
 
@@ -128,9 +142,10 @@ export async function GET(request: Request) {
           if (jitError) {
             console.error('JIT join RPC failed:', jitError);
           }
-          // Org not found for this tenant - tell user to contact admin
+          // Determine appropriate error for user
+          const jitErrorCode = jitResult?.error === 'jit_disabled' ? 'jit_disabled' : 'org_not_setup';
           await supabase.auth.signOut();
-          return NextResponse.redirect(`${origin}/login?error=org_not_setup`);
+          return NextResponse.redirect(`${origin}/login?error=${jitErrorCode}`);
         }
       }
 

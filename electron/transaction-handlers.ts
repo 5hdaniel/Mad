@@ -15,6 +15,7 @@ import { createEmail, getEmailByExternalId } from "./services/db/emailDbService"
 import { createCommunication } from "./services/db/communicationDbService";
 import submissionService from "./services/submissionService";
 import submissionSyncService from "./services/submissionSyncService";
+import supabaseService from "./services/supabaseService";
 import type { SubmissionProgress } from "./services/submissionService";
 import type {
   Transaction,
@@ -76,8 +77,8 @@ interface ExportOptions {
  * Cleanup transaction handlers (call on app quit)
  */
 export const cleanupTransactionHandlers = (): void => {
-  // Stop submission sync service
-  submissionSyncService.stopPeriodicSync();
+  // Stop all submission sync (polling + realtime)
+  submissionSyncService.stopAllSync();
 };
 
 /**
@@ -2909,12 +2910,19 @@ export const registerTransactionHandlers = (
   // SYNC HANDLERS (BACKLOG-395)
   // ============================================
 
-  // Set main window reference for sync service and start periodic sync
+  // Set main window reference for sync service and start sync
   if (mainWindow) {
     submissionSyncService.setMainWindow(mainWindow);
-    // Start periodic sync with 1 minute interval
-    // Sync will only query for transactions that have been submitted but not in terminal states
+    // Start periodic sync with 1 minute interval (fallback for missed realtime events)
     submissionSyncService.startPeriodicSync(60000);
+    // Start realtime subscription for instant status change notifications
+    supabaseService.getAuthSession().then((session) => {
+      if (session?.userId) {
+        submissionSyncService.startRealtimeSubscription(session.userId);
+      }
+    }).catch((err) => {
+      logService.error("Failed to start realtime subscription", "SubmissionSync", { error: String(err) });
+    });
   }
 
   // Sync all submission statuses from cloud

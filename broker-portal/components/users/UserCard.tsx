@@ -131,8 +131,10 @@ export default function UserCard({
       <div className="mt-3 text-xs text-gray-500">
         {member.joined_at ? (
           <p>Joined {formatDate(member.joined_at)}</p>
-        ) : member.invited_at ? (
+        ) : isPending && member.invited_at ? (
           <p>Invited {formatDate(member.invited_at)}</p>
+        ) : member.invited_at ? (
+          <p>Joined {formatDate(member.invited_at)}</p>
         ) : (
           <p>Created {formatDate(member.created_at)}</p>
         )}

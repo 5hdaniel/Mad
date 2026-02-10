@@ -355,7 +355,6 @@ class MicrosoftAuthService {
       "email",
       "User.Read",
       "Mail.Read",
-      "Mail.ReadWrite",
       "Contacts.Read",
       "offline_access",
     ];

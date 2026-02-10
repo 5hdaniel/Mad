@@ -15,10 +15,11 @@ interface SubmissionStats {
 async function getStats(): Promise<SubmissionStats> {
   const supabase = await createClient();
 
-  // Get all submissions for the user's organization
+  // Get all submissions for the user's organization (exclude incomplete uploads)
   const { data, error } = await supabase
     .from('transaction_submissions')
-    .select('status');
+    .select('status')
+    .neq('status', 'uploading');
 
   if (error || !data) {
     console.error('Error fetching stats:', error);
@@ -48,6 +49,7 @@ async function getRecentSubmissions() {
   const { data, error } = await supabase
     .from('transaction_submissions')
     .select('*')
+    .neq('status', 'uploading')
     .order('created_at', { ascending: false })
     .limit(5);
 
