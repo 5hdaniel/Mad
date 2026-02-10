@@ -96,6 +96,9 @@ export function useRealtimeSubmissions({
         },
         (payload: RealtimePayload) => {
           const submission = payload.new;
+          // Ignore 'uploading' status — two-phase commit, not yet finalized
+          if (submission.status === 'uploading') return;
+
           if (process.env.NODE_ENV === 'development') {
             console.log('[Realtime] New submission:', submission.id);
           }

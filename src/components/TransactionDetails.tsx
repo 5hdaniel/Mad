@@ -412,10 +412,6 @@ function TransactionDetails({
           {transaction.submission_status === "needs_changes" && transaction.last_review_notes && (
             <ReviewNotesPanel
               reviewNotes={transaction.last_review_notes}
-              onResubmit={() => {
-                // Will be handled by TransactionHeader submit button
-                // This is just a visual shortcut
-              }}
             />
           )}
 

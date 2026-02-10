@@ -554,15 +554,6 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           "Contacts",
         );
 
-        // Log top 5 for debugging
-        logService.info("[Main] Top 5 external contacts by last message:", "Contacts", {
-          top5: availableContacts.slice(0, 5).map(c => ({
-            name: c.name,
-            lastMsg: c.last_communication_at,
-            phone: c.phone,
-          })),
-        });
-
         return {
           success: true,
           contacts: availableContacts,

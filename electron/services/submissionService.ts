@@ -16,6 +16,7 @@
  */
 
 import * as crypto from "crypto";
+import * as os from "os";
 import { app } from "electron";
 import supabaseService from "./supabaseService";
 import supabaseStorageService, {
@@ -136,6 +137,14 @@ const MESSAGE_BATCH_SIZE = 50;
 // ============================================
 
 class SubmissionService {
+  /** Track whether a submission is currently in progress */
+  private _isSubmitting = false;
+
+  /** Check if a submission is currently in progress */
+  get isSubmitting(): boolean {
+    return this._isSubmitting;
+  }
+
   /**
    * Submit a transaction for broker review
    *
@@ -241,6 +250,7 @@ class SubmissionService {
     const submissionId = crypto.randomUUID();
     let attachmentUploadResults: AttachmentUploadResult[] = [];
 
+    this._isSubmitting = true;
     try {
       // Stage 1: Prepare (10%)
       onProgress?.({
@@ -260,8 +270,13 @@ class SubmissionService {
         ? new Date(transaction.closed_at)
         : null;
 
-      // Load messages filtered by audit period
+      // Load messages and emails filtered by audit period
       const messages = await this.loadTransactionMessages(
+        transactionId,
+        auditStartDate,
+        auditEndDate
+      );
+      const emails = await this.loadTransactionEmails(
         transactionId,
         auditStartDate,
         auditEndDate
@@ -272,6 +287,7 @@ class SubmissionService {
         auditEndDate
       );
       const orgId = await this.getUserOrganizationId();
+      const currentUserId = await this.getCurrentUserId();
 
       // Load contact names for phone number resolution
       let contactMap: ContactMap = {};
@@ -332,11 +348,12 @@ class SubmissionService {
           .eq("id", existingSubmission.id);
       }
 
+      const totalMessageCount = messages.length + emails.length;
       onProgress?.({
         stage: "preparing",
         stageProgress: 100,
         overallProgress: 10,
-        currentItem: `Found ${messages.length} messages, ${attachments.length} attachments`,
+        currentItem: `Found ${messages.length} texts, ${emails.length} emails, ${attachments.length} attachments`,
       });
 
       // Stage 2: Upload attachments (30%)
@@ -389,11 +406,42 @@ class SubmissionService {
       const submissionRecord = this.mapToSubmission(
         transaction,
         orgId,
+        currentUserId,
         submissionId,
-        messages.length,
+        totalMessageCount,
         attachmentUploadResults.filter((r) => r.success).length,
         options
       );
+
+      // Two-phase commit: insert as 'uploading' first, then finalize to 'submitted'
+      // after all messages and attachments are written. This prevents partial
+      // submissions from being visible on the broker portal if the app crashes mid-upload.
+      submissionRecord.status = "uploading";
+
+      // Clean up any stale 'uploading' record from a previous failed attempt
+      // (same org + local transaction = unique constraint)
+      const { data: staleRows } = await client
+        .from("transaction_submissions")
+        .select("id")
+        .eq("organization_id", orgId)
+        .eq("local_transaction_id", submissionRecord.local_transaction_id)
+        .eq("status", "uploading");
+
+      if (staleRows && staleRows.length > 0) {
+        const staleIds = staleRows.map((r: { id: string }) => r.id);
+        await client
+          .from("submission_attachments")
+          .delete()
+          .in("submission_id", staleIds);
+        await client
+          .from("submission_messages")
+          .delete()
+          .in("submission_id", staleIds);
+        await client
+          .from("transaction_submissions")
+          .delete()
+          .in("id", staleIds);
+      }
 
       const { error: insertError } = await client
         .from("transaction_submissions")
@@ -412,21 +460,27 @@ class SubmissionService {
         currentItem: "Submission record created",
       });
 
-      // Stage 4: Insert messages (30%)
-      if (messages.length > 0) {
+      // Stage 4: Insert messages + emails (30%)
+      if (totalMessageCount > 0) {
         onProgress?.({
           stage: "messages",
           stageProgress: 0,
           overallProgress: 60,
-          currentItem: `Uploading ${messages.length} messages...`,
+          currentItem: `Uploading ${messages.length} texts, ${emails.length} emails...`,
         });
 
-        const messageRecords = messages.map((m) =>
+        // Map text messages
+        const textRecords = messages.map((m) =>
           this.mapToSubmissionMessage(m, submissionId, contactMap)
         );
+        // Map emails
+        const emailRecords = emails.map((e) =>
+          this.mapEmailToSubmissionMessage(e, submissionId)
+        );
+        const allMessageRecords = [...textRecords, ...emailRecords];
 
         await this.insertMessagesBatched(
-          messageRecords,
+          allMessageRecords,
           (batchProgress) => {
             onProgress?.({
               stage: "messages",
@@ -464,7 +518,21 @@ class SubmissionService {
         }
       }
 
-      // Stage 6: Update local status
+      // Stage 6: Finalize submission — all data written, mark as 'submitted'
+      // This is the commit point: only now does the submission become visible to brokers
+      const finalStatus = options?.version ? "resubmitted" : "submitted";
+      const { error: finalizeError } = await client
+        .from("transaction_submissions")
+        .update({ status: finalStatus })
+        .eq("id", submissionId);
+
+      if (finalizeError) {
+        throw new Error(
+          `Failed to finalize submission: ${finalizeError.message}`
+        );
+      }
+
+      // Stage 7: Update local status
       await this.updateLocalSubmissionStatus(transactionId, {
         submission_status: options?.version
           ? "resubmitted"
@@ -484,17 +552,20 @@ class SubmissionService {
         `[Submission] Transaction ${transactionId} submitted successfully as ${submissionId}`,
         "SubmissionService",
         {
-          messagesCount: messages.length,
+          textsCount: messages.length,
+          emailsCount: emails.length,
+          totalMessages: totalMessageCount,
           attachmentsCount: successfulUploads.length,
           attachmentsFailed: attachmentUploadResults.filter((r) => !r.success)
             .length,
         }
       );
 
+      this._isSubmitting = false;
       return {
         success: true,
         submissionId,
-        messagesCount: messages.length,
+        messagesCount: totalMessageCount,
         attachmentsCount: successfulUploads.length,
         attachmentsFailed: attachmentUploadResults.filter((r) => !r.success)
           .length,
@@ -508,6 +579,27 @@ class SubmissionService {
         "SubmissionService"
       );
 
+      // Log to Supabase error_logs (fire-and-forget)
+      try {
+        const client = supabaseService.getClient();
+        const session = await supabaseService.getAuthSession();
+        await client.from("error_logs").insert({
+          user_id: session?.userId ?? null,
+          app_version: app.getVersion(),
+          electron_version: process.versions.electron ?? null,
+          os_name: os.platform(),
+          os_version: os.release(),
+          platform: process.arch,
+          error_type: "submission_failure",
+          error_message: errorMessage,
+          stack_trace: error instanceof Error ? error.stack : null,
+          current_screen: "SubmitForReviewModal",
+          app_state: { transactionId, submissionId },
+        });
+      } catch {
+        // Don't let error logging prevent the main error flow
+      }
+
       onProgress?.({
         stage: "failed",
         stageProgress: 0,
@@ -518,6 +610,7 @@ class SubmissionService {
       // Cleanup on failure
       await this.cleanupFailedSubmission(submissionId);
 
+      this._isSubmitting = false;
       return {
         success: false,
         submissionId: null,
@@ -582,7 +675,54 @@ class SubmissionService {
     const rows = db.prepare(sql).all(...params) as Message[];
 
     logService.info(
-      `[Submission] Loaded ${rows.length} messages for audit period`,
+      `[Submission] Loaded ${rows.length} text messages for audit period`,
+      "SubmissionService",
+      {
+        transactionId,
+        auditStart: auditStartDate?.toISOString(),
+        auditEnd: auditEndDate?.toISOString(),
+      }
+    );
+
+    return rows;
+  }
+
+  /**
+   * Load emails linked to a transaction via communications.email_id
+   * Returns raw email rows from the emails table
+   */
+  private async loadTransactionEmails(
+    transactionId: string,
+    auditStartDate?: Date | null,
+    auditEndDate?: Date | null
+  ): Promise<Record<string, unknown>[]> {
+    const db = databaseService.getRawDatabase();
+
+    let sql = `
+      SELECT DISTINCT e.*
+      FROM emails e
+      INNER JOIN communications c ON c.email_id = e.id
+      WHERE c.transaction_id = ?
+    `;
+    const params: (string | number)[] = [transactionId];
+
+    if (auditStartDate) {
+      sql += ` AND e.sent_at >= ?`;
+      params.push(auditStartDate.toISOString());
+    }
+    if (auditEndDate) {
+      const endOfDay = new Date(auditEndDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      sql += ` AND e.sent_at <= ?`;
+      params.push(endOfDay.toISOString());
+    }
+
+    sql += ` ORDER BY e.sent_at ASC`;
+
+    const rows = db.prepare(sql).all(...params) as Record<string, unknown>[];
+
+    logService.info(
+      `[Submission] Loaded ${rows.length} emails for audit period`,
       "SubmissionService",
       {
         transactionId,
@@ -693,19 +833,17 @@ class SubmissionService {
   }
 
   private async getUserOrganizationId(): Promise<string | null> {
-    // For demo: Use a hardcoded org ID or get from user's organization membership
-    // In production: Query organization_members for current user
-
-    // Check if user has Supabase auth session
-    const userId = supabaseService.getAuthUserId();
+    // Use async getAuthSession() to discover sessions restored via deep-link auth
+    // The sync getAuthUserId() only checks local cache which may be empty after app restart
+    const session = await supabaseService.getAuthSession();
+    const userId = session?.userId ?? null;
 
     if (!userId) {
-      // Fallback: Use demo org ID for testing
       logService.warn(
-        "[Submission] No Supabase auth session, using demo org ID",
+        "[Submission] No Supabase auth session — cannot determine organization",
         "SubmissionService"
       );
-      return "a0000000-0000-0000-0000-000000000001"; // Demo org from seed
+      return null;
     }
 
     try {
@@ -721,27 +859,26 @@ class SubmissionService {
           `[Submission] Failed to get org: ${error.message}`,
           "SubmissionService"
         );
-        return "a0000000-0000-0000-0000-000000000001"; // Fallback to demo
+        return null;
       }
 
-      return data?.organization_id || "a0000000-0000-0000-0000-000000000001";
-    } catch {
-      return "a0000000-0000-0000-0000-000000000001";
+      return data?.organization_id || null;
+    } catch (err) {
+      logService.error(
+        `[Submission] Error fetching org: ${err instanceof Error ? err.message : "Unknown"}`,
+        "SubmissionService"
+      );
+      return null;
     }
   }
 
-  private getCurrentUserId(): string {
-    // Get from Supabase auth session or fallback
-    const userId = supabaseService.getAuthUserId();
+  private async getCurrentUserId(): Promise<string> {
+    // Use async getAuthSession() to discover sessions restored via deep-link auth
+    const session = await supabaseService.getAuthSession();
+    const userId = session?.userId ?? null;
     if (userId) return userId;
 
-    // Fallback for demo - use the demo user ID from seed data
-    // This user must exist in auth.users for foreign key constraint
-    logService.warn(
-      "[Submission] No Supabase auth user, using demo user ID",
-      "SubmissionService"
-    );
-    return "d5283d52-f612-4ab4-9e85-f3a5adc01bea"; // Demo user: magicauditwa@gmail.com
+    throw new Error("No authenticated user — cannot submit");
   }
 
   // ============================================
@@ -751,6 +888,7 @@ class SubmissionService {
   private mapToSubmission(
     transaction: Transaction,
     orgId: string,
+    userId: string,
     submissionId: string,
     messageCount: number,
     attachmentCount: number,
@@ -771,7 +909,7 @@ class SubmissionService {
     return {
       id: submissionId,
       organization_id: orgId,
-      submitted_by: this.getCurrentUserId(),
+      submitted_by: userId,
       local_transaction_id: transaction.id,
       property_address: transaction.property_address || "",
       property_city: city || undefined,
@@ -882,6 +1020,47 @@ class SubmissionService {
       attachment_count: 0, // Would need to count from attachments table
       // TASK-1803: Include message_type for broker portal special message display
       message_type: message.message_type || "text",
+    };
+  }
+
+  /**
+   * Map an email row from the emails table to a SubmissionMessageRecord
+   */
+  private mapEmailToSubmissionMessage(
+    email: Record<string, unknown>,
+    submissionId: string
+  ): SubmissionMessageRecord {
+    // Build participants from email fields
+    const participants: Record<string, unknown> = {};
+    if (email.sender) participants.from = email.sender;
+    if (email.recipients) {
+      const recipientStr = email.recipients as string;
+      participants.to = recipientStr.split(",").map((r: string) => r.trim());
+    }
+    if (email.cc) {
+      const ccStr = email.cc as string;
+      participants.cc = ccStr.split(",").map((r: string) => r.trim());
+    }
+    if (email.bcc) {
+      const bccStr = email.bcc as string;
+      participants.bcc = bccStr.split(",").map((r: string) => r.trim());
+    }
+
+    return {
+      submission_id: submissionId,
+      local_message_id: email.id as string,
+      channel: "email",
+      direction: (email.direction as string) || "inbound",
+      subject: (email.subject as string) || undefined,
+      body_text: (email.body_plain as string) || undefined,
+      participants,
+      sent_at: email.sent_at
+        ? new Date(email.sent_at as string).toISOString()
+        : undefined,
+      thread_id: (email.thread_id as string) || undefined,
+      has_attachments: (email.has_attachments as number) === 1,
+      attachment_count: (email.attachment_count as number) || 0,
+      message_type: "email",
     };
   }
 

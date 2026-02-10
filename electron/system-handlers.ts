@@ -357,11 +357,6 @@ export function registerSystemHandlers(): void {
         // TASK-1507D: Create pending deep link user if exists
         // This handles the case where deep link auth completed before DB was ready
         const pendingUser = getAndClearPendingDeepLinkUser();
-        logService.info(
-          "Checking pendingDeepLinkUser",
-          "SystemHandlers",
-          { exists: !!pendingUser, email: pendingUser?.email },
-        );
         if (pendingUser) {
           logService.info(
             "Processing pending deep link user",
@@ -416,19 +411,9 @@ export function registerSystemHandlers(): void {
 
         // ALWAYS verify user exists in local DB before returning success
         // This catches cases where pendingDeepLinkUser was null (non-deep-link auth flows)
-        logService.info("Running fallback user verification/creation", "SystemHandlers");
+        logService.debug("Running fallback user verification/creation", "SystemHandlers");
         try {
           const authSession = await supabaseService.getAuthSession();
-          logService.info(
-            "Auth session check",
-            "SystemHandlers",
-            { exists: !!authSession, userId: authSession?.userId?.substring(0, 8) + "..." },
-          );
-          logService.debug(
-            "Auth session details",
-            "SystemHandlers",
-            authSession ? { userId: authSession.userId.substring(0, 8) + "..." } : {},
-          );
           if (authSession?.userId) {
             const userId = authSession.userId;
 
