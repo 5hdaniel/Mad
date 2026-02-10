@@ -25,11 +25,21 @@ jest.mock("electron", () => ({
   },
   app: {
     getPath: jest.fn().mockReturnValue("/tmp/test-user-data"),
+    setAsDefaultProtocolClient: jest.fn(),
+    requestSingleInstanceLock: jest.fn().mockReturnValue(true),
+    isPackaged: false,
+    quit: jest.fn(),
+    on: jest.fn(),
+    whenReady: jest.fn().mockResolvedValue(undefined),
   },
   shell: {
     openExternal: mockShellOpenExternal,
     showItemInFolder: mockShellShowItemInFolder,
   },
+  BrowserWindow: jest.fn(),
+  dialog: { showErrorBox: jest.fn() },
+  session: { defaultSession: { webRequest: { onHeadersReceived: jest.fn() } } },
+  Notification: jest.fn(),
 }));
 
 // Mock services
@@ -105,6 +115,21 @@ jest.mock("../services/connectionStatusService", () => ({
 
 jest.mock("../services/macOSPermissionHelper", () => ({
   default: mockMacOSPermissionHelper,
+}));
+
+// Mock supabaseService (imported by system-handlers)
+jest.mock("../services/supabaseService", () => ({
+  __esModule: true,
+  default: {
+    initialize: jest.fn(),
+    syncUser: jest.fn(),
+    trackEvent: jest.fn(),
+  },
+}));
+
+// Mock main module to prevent top-level side effects (deep link registration, etc.)
+jest.mock("../main", () => ({
+  getAndClearPendingDeepLinkUser: jest.fn().mockReturnValue(null),
 }));
 
 // Import after mocks are set up

@@ -107,7 +107,7 @@
     "@azure/msal-node": "^2.15.0",
     "@microsoft/microsoft-graph-client": "^3.0.7",
     "@supabase/supabase-js": "^2.38.0",
-    "axios": "^1.7.9",
+    "axios": "^1.13.5",
     "better-sqlite3-multiple-ciphers": "^12.5.0",
     "canvas-confetti": "^1.9.3",
     "check-disk-space": "^3.4.0",
@@ -224,6 +224,7 @@
     "diff": ">=8.0.3",
     "@next/eslint-plugin-next": {
       "glob": ">=10.5.0"
-    }
+    },
+    "tar": ">=7.5.7"
   }
 }
