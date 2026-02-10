@@ -34,6 +34,8 @@ import type {
   DetectedTransaction,
   MessageInput,
 } from "./extraction/types";
+import type { AnalysisResult } from "./transactionExtractorService";
+import type { TransactionContactResult } from "./db/transactionContactDbService";
 
 // ============================================
 // TYPES
@@ -92,19 +94,29 @@ interface AnalyzedEmail {
   confidence?: number;
 }
 
+/**
+ * Normalized email message shape used within transactionService.
+ * Compatible with ParsedEmail from both Gmail and Outlook fetch services.
+ * Uses `| null` to match provider return types where fields may be null.
+ */
 interface EmailMessage {
-  subject?: string;
-  from: string;
+  id?: string;
+  subject?: string | null;
+  from: string | null;
   date?: string | Date;
-  to?: string;
-  cc?: string;
-  bcc?: string;
+  to?: string | null;
+  cc?: string | null;
+  bcc?: string | null;
   body?: string;
   bodyPlain?: string;
+  snippet?: string;
+  bodyPreview?: string;
   threadId?: string;
   hasAttachments?: boolean;
   attachmentCount?: number;
-  attachments?: string;
+  attachments?: RawEmailAttachment[];
+  /** RFC 5322 Message-ID header for deduplication */
+  messageIdHeader?: string | null;
 }
 
 interface TransactionSummary {
@@ -152,6 +164,29 @@ interface ContactRoleUpdate {
   role_category?: string;
   is_primary?: boolean;
   notes?: string;
+}
+
+/**
+ * Transaction with communications and contact assignments populated.
+ * Returned by getTransactionDetails and getTransactionWithContacts.
+ */
+interface TransactionWithDetails extends Transaction {
+  communications?: Communication[];
+  contact_assignments?: TransactionContactResult[];
+}
+
+/**
+ * Raw attachment metadata from email providers (Gmail/Outlook).
+ * Shape varies by provider; properties are optional to handle both.
+ */
+interface RawEmailAttachment {
+  filename?: string;
+  name?: string;
+  mimeType?: string;
+  contentType?: string;
+  size?: number;
+  attachmentId?: string;
+  id?: string;
 }
 
 interface DateRange {
@@ -318,7 +353,7 @@ class TransactionService {
 
     try {
       // Step 1: Fetch emails from all connected providers
-      const allEmails: any[] = [];
+      const allEmails: EmailMessage[] = [];
       // Track which providers we successfully fetched from (for updating last_sync_at later)
       const successfulProviders: OAuthProvider[] = [];
 
@@ -551,7 +586,7 @@ class TransactionService {
     userId: string,
     provider: OAuthProvider | undefined,
     options: EmailFetchOptions,
-  ): Promise<any[]> {
+  ): Promise<EmailMessage[]> {
     if (provider === "google") {
       await gmailFetchService.initialize(userId);
       return await gmailFetchService.searchEmails(options);
@@ -569,13 +604,13 @@ class TransactionService {
    */
   private async _createTransactionFromSummary(
     userId: string,
-    summary: any,
+    summary: TransactionSummary,
   ): Promise<string> {
     // Parse address into components
     const addressParts = this._parseAddress(summary.propertyAddress);
 
     // Helper to convert date to ISO string safely
-    const toISOString = (date: any): string | undefined => {
+    const toISOString = (date: string | Date | number | null | undefined): string | undefined => {
       if (!date) return undefined;
       if (date instanceof Date) return date.toISOString();
       if (typeof date === "string") return date;
@@ -622,13 +657,13 @@ class TransactionService {
   private async _saveCommunications(
     userId: string,
     transactionId: string,
-    analyzedEmails: any[],
-    originalEmails: any[],
+    analyzedEmails: AnalyzedEmail[],
+    originalEmails: EmailMessage[],
   ): Promise<void> {
     for (const analyzed of analyzedEmails) {
       // Find original email
       const originalEmail = originalEmails.find(
-        (e: any) => e.subject === analyzed.subject && e.from === analyzed.from,
+        (e) => e.subject === analyzed.subject && e.from === analyzed.from,
       );
 
       if (!originalEmail) continue;
@@ -664,7 +699,6 @@ class TransactionService {
 
       // BACKLOG-506: Determine external ID for deduplication
       // originalEmail comes from Gmail/Outlook fetch, check available identifiers
-      // Note: originalEmails is typed as any[], so handle defensively
       const externalId = originalEmail.id ||  // Gmail/Outlook message ID
         originalEmail.messageIdHeader ||      // RFC 5322 Message-ID header
         `${analyzed.from}_${analyzed.subject}_${sentAt}`;  // Fallback composite key
@@ -689,9 +723,9 @@ class TransactionService {
           source: analyzed.from.includes("@gmail") ? "gmail" : "outlook",
           thread_id: originalEmail.threadId,
           sender: analyzed.from,
-          recipients: originalEmail.to,
-          cc: originalEmail.cc,
-          bcc: originalEmail.bcc,
+          recipients: originalEmail.to || undefined,
+          cc: originalEmail.cc || undefined,
+          bcc: originalEmail.bcc || undefined,
           subject: analyzed.subject,
           body_html: originalEmail.body,
           body_plain: originalEmail.bodyPlain,
@@ -699,7 +733,7 @@ class TransactionService {
           received_at: sentAt,
           has_attachments: originalEmail.hasAttachments || false,
           attachment_count: originalEmail.attachmentCount || 0,
-          message_id_header: originalEmail.messageIdHeader,  // RFC 5322 Message-ID
+          message_id_header: originalEmail.messageIdHeader || undefined,
         });
       }
 
@@ -708,6 +742,7 @@ class TransactionService {
       // Failed downloads are logged but don't fail the email linking flow
       if (
         originalEmail.hasAttachments &&
+        originalEmail.id &&
         originalEmail.attachments &&
         originalEmail.attachments.length > 0
       ) {
@@ -721,11 +756,11 @@ class TransactionService {
             emailRecord.id,
             originalEmail.id, // External email ID (Gmail/Outlook message ID)
             source,
-            originalEmail.attachments.map((att: any) => ({
+            originalEmail.attachments.map((att: RawEmailAttachment) => ({
               filename: att.filename || att.name || "attachment",
               mimeType: att.mimeType || att.contentType || "application/octet-stream",
               size: att.size || 0,
-              attachmentId: att.attachmentId || att.id,
+              attachmentId: att.attachmentId || att.id || "",
             }))
           );
         } catch (error) {
@@ -906,10 +941,16 @@ class TransactionService {
       });
     }
 
-    // batchAnalyze expects Email[] with required date field
-    // EmailMessage has optional date, so we provide a default
+    // batchAnalyze expects Email[] with required date and string-only optional fields
+    // EmailMessage uses `| null` for provider compatibility, so normalize to undefined
     const emailsWithDate = emails.map((email) => ({
-      ...email,
+      subject: email.subject || undefined,
+      from: email.from || undefined,
+      to: email.to || undefined,
+      body: email.body,
+      bodyPlain: email.bodyPlain,
+      snippet: email.snippet,
+      bodyPreview: email.bodyPreview,
       date: email.date || new Date().toISOString(),
     }));
 
@@ -1167,7 +1208,7 @@ class TransactionService {
    */
   async getTransactionDetails(
     transactionId: string,
-  ): Promise<Transaction | null> {
+  ): Promise<TransactionWithDetails | null> {
     const transaction = await databaseService.getTransactionById(transactionId);
 
     if (!transaction) {
@@ -1184,7 +1225,7 @@ class TransactionService {
       ...transaction,
       communications,
       contact_assignments,
-    } as any;
+    };
   }
 
   /**
@@ -1334,7 +1375,7 @@ class TransactionService {
    */
   async getTransactionWithContacts(
     transactionId: string,
-  ): Promise<Transaction | null> {
+  ): Promise<TransactionWithDetails | null> {
     const transaction = await databaseService.getTransactionById(transactionId);
 
     if (!transaction) {
@@ -1348,7 +1389,7 @@ class TransactionService {
     return {
       ...transaction,
       contact_assignments: contactAssignments,
-    } as any;
+    };
   }
 
   /**
@@ -1454,7 +1495,7 @@ class TransactionService {
     transactionId: string,
     contactId: string,
     updates: ContactRoleUpdate,
-  ): Promise<any> {
+  ): Promise<void> {
     return await databaseService.updateContactRole(transactionId, contactId, {
       ...updates,
       role: updates.role || undefined,
@@ -1467,7 +1508,7 @@ class TransactionService {
   async updateTransaction(
     transactionId: string,
     updates: Partial<UpdateTransaction>,
-  ): Promise<any> {
+  ): Promise<void> {
     return await databaseService.updateTransaction(transactionId, updates);
   }
 
@@ -1543,13 +1584,36 @@ class TransactionService {
       before: dateRange.end || new Date(),
     });
 
-    const analyzed = transactionExtractorService.batchAnalyze(emails);
-    const realEstateEmails = analyzed.filter((a: any) => a.isRealEstateRelated);
+    // batchAnalyze expects Email[] with required date and string-only optional fields
+    const emailsForAnalysis = emails.map((email) => ({
+      subject: email.subject || undefined,
+      from: email.from || undefined,
+      to: email.to || undefined,
+      body: email.body,
+      bodyPlain: email.bodyPlain,
+      snippet: email.snippet,
+      bodyPreview: email.bodyPreview,
+      date: email.date || new Date().toISOString(),
+    }));
+    const analyzed = transactionExtractorService.batchAnalyze(emailsForAnalysis);
+    const realEstateEmails = analyzed.filter((a) => a.isRealEstateRelated);
 
     return {
       emailsFound: emails.length,
       realEstateEmailsFound: realEstateEmails.length,
-      analyzed: realEstateEmails as any,
+      analyzed: realEstateEmails.map((result) => ({
+        subject: result.subject,
+        from: result.from || "",
+        date: result.date,
+        isRealEstateRelated: result.isRealEstateRelated,
+        keywords: Array.isArray(result.keywords)
+          ? result.keywords.map((k) => k.keyword).join(", ")
+          : undefined,
+        parties: Array.isArray(result.parties)
+          ? result.parties.map((p) => p.name || p.email || "").join(", ")
+          : undefined,
+        confidence: result.confidence,
+      })),
     };
   }
 
