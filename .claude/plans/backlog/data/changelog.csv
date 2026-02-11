@@ -229,3 +229,6 @@ date,action,details,items_affected
 2026-02-10,complete,"BACKLOG-653 (Auto-download updates toggle) - PR #795 merged",BACKLOG-653
 2026-02-10,complete,"BACKLOG-654, 655, 656 (Toolbar polish, version popup removal, settings cleanup) - PR #796",BACKLOG-654;BACKLOG-655;BACKLOG-656
 2026-02-10,update,"SPRINT-077 completed: 4 planned tasks + 4 unplanned items. PRs #792-796.",SPRINT-077
+2026-02-10,complete,"SPRINT-078 completed: 4 tasks (TASK-1949-1952). Contact source prefs UI (PR #797), message import filter (PR #798), wire direct imports (PR #799), wire inferred contacts (PR #800). All merged to develop.",SPRINT-078
+2026-02-10,complete,"BACKLOG-634 (Message Import Date Filter) - Implemented by TASK-1952 (PR #798) in SPRINT-078",BACKLOG-634
+2026-02-10,create,"Created BACKLOG-657 (Message Import Cap Warning & Default Filters) - Follow-up to SPRINT-078. Sets default 6-month/250K filters, adds cap warning UI. PR #801 on branch fix/message-import-default-filters.",BACKLOG-657
