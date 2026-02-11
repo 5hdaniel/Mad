@@ -388,6 +388,82 @@ describe("Settings", () => {
 
   });
 
+  describe("Auto-Download Updates Toggle", () => {
+    it("should show auto-download updates toggle", async () => {
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      await waitFor(() => {
+        expect(screen.getByText("Auto-download Updates")).toBeInTheDocument();
+      });
+
+      expect(
+        screen.getByText(/automatically download new software updates/i),
+      ).toBeInTheDocument();
+    });
+
+    it("should default to off (disabled)", async () => {
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      await waitFor(() => {
+        const toggle = screen.getByRole("switch", {
+          name: /auto-download updates/i,
+        });
+        expect(toggle).toHaveAttribute("aria-checked", "false");
+      });
+    });
+
+    it("should load saved auto-download preference", async () => {
+      window.api.preferences.get.mockResolvedValue({
+        success: true,
+        preferences: {
+          export: { defaultFormat: "pdf" },
+          updates: { autoDownload: true },
+        },
+      });
+
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      await waitFor(() => {
+        const toggle = screen.getByRole("switch", {
+          name: /auto-download updates/i,
+        });
+        expect(toggle).toHaveAttribute("aria-checked", "true");
+      });
+    });
+
+    it("should toggle auto-download and save preference", async () => {
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("switch", { name: /auto-download updates/i }),
+        ).toBeInTheDocument();
+      });
+
+      const toggle = screen.getByRole("switch", {
+        name: /auto-download updates/i,
+      });
+      await userEvent.click(toggle);
+
+      expect(window.api.preferences.update).toHaveBeenCalledWith(mockUserId, {
+        updates: { autoDownload: true },
+      });
+    });
+
+    it("should disable toggle while loading preferences", () => {
+      window.api.preferences.get.mockImplementation(
+        () => new Promise((resolve) => setTimeout(resolve, 1000)),
+      );
+
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      const toggle = screen.getByRole("switch", {
+        name: /auto-download updates/i,
+      });
+      expect(toggle).toBeDisabled();
+    });
+  });
+
   describe("Data & Privacy", () => {
     it("should show view stored data button (disabled)", async () => {
       renderSettings({ userId: mockUserId, onClose: mockOnClose });
