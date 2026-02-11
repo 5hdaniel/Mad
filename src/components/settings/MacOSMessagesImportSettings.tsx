@@ -49,10 +49,15 @@ export function MacOSMessagesImportSettings({
     lastImportAt?: string | null;
   } | null>(null);
 
-  // Load import status on mount
+  // TASK-1952: Import filter state
+  const [lookbackMonths, setLookbackMonths] = useState<number | null>(null);
+  const [maxMessages, setMaxMessages] = useState<number | null>(null);
+
+  // Load import status and filter preferences on mount
   useEffect(() => {
     if (!isMacOS || !userId) return;
     loadImportStatus();
+    loadFilterPreferences();
   }, [isMacOS, userId]);
 
   const loadImportStatus = async () => {
@@ -66,6 +71,59 @@ export function MacOSMessagesImportSettings({
       }
     } catch (error) {
       console.error("Failed to load import status:", error);
+    }
+  };
+
+  // TASK-1952: Load filter preferences from user preferences
+  const loadFilterPreferences = async () => {
+    try {
+      const result = await window.api.preferences.get(userId);
+      if (result?.success && result.preferences) {
+        const prefs = result.preferences as Record<string, unknown>;
+        const messageImport = prefs.messageImport as
+          | { filters?: { lookbackMonths?: number | null; maxMessages?: number | null } }
+          | undefined;
+        if (messageImport?.filters) {
+          setLookbackMonths(messageImport.filters.lookbackMonths ?? null);
+          setMaxMessages(messageImport.filters.maxMessages ?? null);
+        }
+      }
+    } catch {
+      // Silently handle - use defaults
+    }
+  };
+
+  // TASK-1952: Save lookback months filter
+  const handleLookbackChange = async (value: string) => {
+    const months = value === "all" ? null : Number(value);
+    setLookbackMonths(months);
+    try {
+      await window.api.preferences.update(userId, {
+        messageImport: {
+          filters: {
+            lookbackMonths: months,
+          },
+        },
+      });
+    } catch {
+      // Silently handle
+    }
+  };
+
+  // TASK-1952: Save max messages filter
+  const handleMaxMessagesChange = async (value: string) => {
+    const cap = value === "unlimited" ? null : Number(value);
+    setMaxMessages(cap);
+    try {
+      await window.api.preferences.update(userId, {
+        messageImport: {
+          filters: {
+            maxMessages: cap,
+          },
+        },
+      });
+    } catch {
+      // Silently handle
     }
   };
 
@@ -196,6 +254,61 @@ export function MacOSMessagesImportSettings({
           )}
         </div>
       )}
+
+      {/* TASK-1952: Import Filters */}
+      <div className="mb-3 p-3 bg-white rounded border border-gray-200">
+        <h5 className="text-xs font-medium text-gray-700 mb-2">
+          Import Filters
+        </h5>
+
+        {/* Date Range Filter */}
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-gray-600">Import messages from</span>
+          <select
+            value={lookbackMonths ?? "all"}
+            onChange={(e) => handleLookbackChange(e.target.value)}
+            disabled={isImporting}
+            className="text-xs border border-gray-300 rounded px-2 py-1 bg-white disabled:opacity-50"
+          >
+            <option value="3">Last 3 months</option>
+            <option value="6">Last 6 months</option>
+            <option value="9">Last 9 months</option>
+            <option value="12">Last 12 months</option>
+            <option value="18">Last 18 months</option>
+            <option value="24">Last 24 months</option>
+            <option value="all">All time</option>
+          </select>
+        </div>
+
+        {/* Message Count Cap */}
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-gray-600">Maximum messages</span>
+          <select
+            value={maxMessages ?? "unlimited"}
+            onChange={(e) => handleMaxMessagesChange(e.target.value)}
+            disabled={isImporting}
+            className="text-xs border border-gray-300 rounded px-2 py-1 bg-white disabled:opacity-50"
+          >
+            <option value="10000">10,000</option>
+            <option value="50000">50,000</option>
+            <option value="100000">100,000</option>
+            <option value="250000">250,000</option>
+            <option value="500000">500,000</option>
+            <option value="unlimited">Unlimited</option>
+          </select>
+        </div>
+
+        {/* Active filter indicator */}
+        {(lookbackMonths !== null || maxMessages !== null) && (
+          <p className="text-xs text-blue-600 mt-2">
+            {lookbackMonths !== null && maxMessages !== null
+              ? `Importing last ${lookbackMonths} months, up to ${maxMessages.toLocaleString()} messages`
+              : lookbackMonths !== null
+                ? `Importing messages from the last ${lookbackMonths} months`
+                : `Importing up to ${maxMessages!.toLocaleString()} messages`}
+          </p>
+        )}
+      </div>
 
       {/* Result display */}
       {lastResult && !isImporting && (

@@ -1,77 +1,44 @@
 /**
  * Preference Helper
- * Utility for checking user contact source preferences.
  *
- * TASK-1951: Created for checking inferred contact source preferences.
- * TASK-1950: Also used for direct contact import preferences.
+ * Shared utility for checking contact source preferences.
+ * Used by contact-handlers.ts and iPhoneSyncStorageService.ts
+ * to gate imports based on user preference toggles.
  *
- * This helper reads preferences from Supabase and provides a clean API
- * for checking whether specific contact sources are enabled/disabled.
+ * Reusable by TASK-1951 for inferred contact source preferences.
  */
 
 import supabaseService from "../services/supabaseService";
 import logService from "../services/logService";
 
 /**
- * Contact source category: 'direct' for imports, 'inferred' for discovery
- */
-type ContactSourceCategory = "direct" | "inferred";
-
-/**
- * Direct contact source keys
- */
-type DirectSourceKey = "outlookContacts" | "gmailContacts" | "macosContacts";
-
-/**
- * Inferred contact source keys
- */
-type InferredSourceKey = "outlookEmails" | "gmailEmails" | "messages";
-
-/**
- * All possible contact source keys
- */
-type ContactSourceKey = DirectSourceKey | InferredSourceKey;
-
-/**
- * Check if a specific contact source is enabled for a user.
+ * Check if a specific contact source is enabled in user preferences.
  *
- * @param userId - The user ID to check preferences for
- * @param category - 'direct' or 'inferred'
- * @param key - The specific source key (e.g., 'outlookEmails', 'gmailContacts')
- * @param defaultValue - Default value if preference is not set
- * @returns Whether the contact source is enabled
+ * Follows a fail-open strategy: if preferences cannot be loaded
+ * (e.g., Supabase offline), defaults to enabled (true) so that
+ * existing import flows are not silently broken.
  *
- * Defaults:
- * - direct sources default to true (ON) -- existing behavior for imports
- * - inferred sources default to false (OFF) -- safe default, opt-in
+ * @param userId - The user's UUID
+ * @param category - 'direct' for direct imports, 'inferred' for auto-discovered
+ * @param key - The specific source key (e.g., 'outlookContacts', 'macosContacts')
+ * @param defaultValue - Default if preference is not set (defaults to true)
+ * @returns Whether the source is enabled
  */
 export async function isContactSourceEnabled(
   userId: string,
-  category: ContactSourceCategory,
-  key: ContactSourceKey,
-  defaultValue: boolean,
+  category: "direct" | "inferred",
+  key: string,
+  defaultValue: boolean = true,
 ): Promise<boolean> {
   try {
     const preferences = await supabaseService.getPreferences(userId);
     const value = preferences?.contactSources?.[category]?.[key];
-
-    if (typeof value === "boolean") {
-      return value;
-    }
-
-    return defaultValue;
-  } catch (error) {
-    // Fail open with default value if preferences unavailable
-    await logService.warn(
-      `Failed to read contact source preference, using default: ${defaultValue}`,
-      "preferenceHelper.isContactSourceEnabled",
-      {
-        userId,
-        category,
-        key,
-        defaultValue,
-        error: error instanceof Error ? error.message : String(error),
-      },
+    return typeof value === "boolean" ? value : defaultValue;
+  } catch {
+    logService.warn(
+      `[PreferenceHelper] Could not load preferences for contact source check, defaulting to ${defaultValue}`,
+      "Preferences",
+      { userId, category, key },
     );
     return defaultValue;
   }
