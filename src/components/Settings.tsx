@@ -497,42 +497,6 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                     <span className="inline-block h-4 w-4 transform rounded-full bg-white translate-x-1" />
                   </button>
                 </div>
-
-                {/* Auto Export */}
-                {/* TODO: Implement automatic daily export functionality */}
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 opacity-50">
-                  <div className="flex-1">
-                    <h4 className="text-sm font-medium text-gray-900">
-                      Auto Export
-                    </h4>
-                    <p className="text-xs text-gray-600 mt-1">
-                      Automatically export new transactions daily
-                    </p>
-                  </div>
-                  <button
-                    disabled
-                    className="ml-4 relative inline-flex h-6 w-11 items-center rounded-full bg-gray-300 cursor-not-allowed"
-                  >
-                    <span className="inline-block h-4 w-4 transform rounded-full bg-white translate-x-1" />
-                  </button>
-                </div>
-
-                {/* Dark Mode */}
-                {/* TODO: Implement dark mode theme system */}
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 opacity-50">
-                  <div className="flex-1">
-                    <h4 className="text-sm font-medium text-gray-900">
-                      Dark Mode
-                    </h4>
-                    <p className="text-xs text-gray-600 mt-1">Coming soon...</p>
-                  </div>
-                  <button
-                    disabled
-                    className="ml-4 relative inline-flex h-6 w-11 items-center rounded-full bg-gray-300 cursor-not-allowed"
-                  >
-                    <span className="inline-block h-4 w-4 transform rounded-full bg-white translate-x-1" />
-                  </button>
-                </div>
               </div>
             </div>
 
