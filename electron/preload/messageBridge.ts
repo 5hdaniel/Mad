@@ -80,8 +80,8 @@ export const messageBridge = {
    * Get count of messages available for import from macOS Messages
    * @returns Count of available messages
    */
-  getImportCount: (): Promise<{ success: boolean; count?: number; error?: string }> =>
-    ipcRenderer.invoke("messages:get-import-count"),
+  getImportCount: (filters?: { lookbackMonths?: number | null; maxMessages?: number | null }): Promise<{ success: boolean; count?: number; filteredCount?: number; error?: string }> =>
+    ipcRenderer.invoke("messages:get-import-count", filters),
 
   /**
    * Listen for import progress updates

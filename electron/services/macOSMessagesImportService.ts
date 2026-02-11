@@ -1586,11 +1586,6 @@ class MacOSMessagesImportService {
           filteredCount = filteredResult?.count || 0;
         }
 
-        // Apply count cap
-        if (filters?.maxMessages && filters.maxMessages > 0) {
-          filteredCount = Math.min(filteredCount, filters.maxMessages);
-        }
-
         await dbClose();
 
         return {

@@ -55,12 +55,33 @@ export function MacOSMessagesImportSettings({
   const [lookbackMonths, setLookbackMonths] = useState<number | null>(6);
   const [maxMessages, setMaxMessages] = useState<number | null>(250000);
 
+  // Available message count for pre-import cap warning
+  const [availableCount, setAvailableCount] = useState<number | null>(null);
+
   // Load import status and filter preferences on mount
   useEffect(() => {
     if (!isMacOS || !userId) return;
     loadImportStatus();
     loadFilterPreferences();
   }, [isMacOS, userId]);
+
+  // Fetch available count when filters change (for pre-import cap warning)
+  useEffect(() => {
+    if (!isMacOS) return;
+    const fetchCount = async () => {
+      try {
+        const result = await window.api.messages.getImportCount({
+          lookbackMonths,
+        });
+        if (result.success) {
+          setAvailableCount(result.filteredCount ?? result.count ?? null);
+        }
+      } catch {
+        // Silently handle
+      }
+    };
+    fetchCount();
+  }, [isMacOS, lookbackMonths]);
 
   const loadImportStatus = async () => {
     try {
@@ -342,6 +363,23 @@ export function MacOSMessagesImportSettings({
                 ? `Importing messages from the last ${lookbackMonths} months`
                 : `Importing up to ${maxMessages!.toLocaleString()} messages`}
           </p>
+        )}
+
+        {/* Pre-import cap warning */}
+        {!isImporting && availableCount !== null && maxMessages !== null && availableCount > maxMessages && (
+          <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded">
+            <p className="text-xs text-amber-700">
+              This time period contains <strong>{availableCount.toLocaleString()}</strong> messages,
+              which exceeds the <strong>{maxMessages.toLocaleString()}</strong> limit.
+              Only the most recent {maxMessages.toLocaleString()} will be imported.
+            </p>
+            <button
+              onClick={() => handleImport(false, true)}
+              className="mt-1 px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium rounded transition-all"
+            >
+              Import all {availableCount.toLocaleString()} messages
+            </button>
+          </div>
         )}
       </div>
 

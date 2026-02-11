@@ -282,7 +282,7 @@ interface MainAPI {
     /** Import messages from macOS Messages app into the app database (macOS only) */
     importMacOSMessages: (userId: string, forceReimport?: boolean) => Promise<MacOSImportResult>;
     /** Get count of messages available for import from macOS Messages */
-    getImportCount: () => Promise<{ success: boolean; count?: number; error?: string }>;
+    getImportCount: (filters?: { lookbackMonths?: number | null; maxMessages?: number | null }) => Promise<{ success: boolean; count?: number; filteredCount?: number; error?: string }>;
     /** Listen for import progress updates */
     onImportProgress: (callback: (progress: MacOSImportProgress) => void) => () => void;
     /** Get attachments for a message with base64 data (TASK-1012) */
