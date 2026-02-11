@@ -16,6 +16,7 @@ import databaseService from "./databaseService";
 import * as externalContactDb from "./db/externalContactDbService";
 import { iOSMessagesParser } from "./iosMessagesParser";
 import { detectMessageType } from "../utils/messageTypeDetector";
+import { isContactSourceEnabled } from "../utils/preferenceHelper";
 import type { iOSMessage, iOSConversation, iOSAttachment } from "../types/iosMessages";
 import type { iOSContact } from "../types/iosContacts";
 import type { SyncResult } from "./syncOrchestrator";
@@ -433,6 +434,13 @@ class IPhoneSyncStorageService {
   ): Promise<{ stored: number; skipped: number }> {
     if (contacts.length === 0) {
       return { stored: 0, skipped: 0 };
+    }
+
+    // TASK-1950: Check if macOS/iPhone contacts source is enabled
+    const macosEnabled = await isContactSourceEnabled(userId, "direct", "macosContacts", true);
+    if (!macosEnabled) {
+      log.info(`[${IPhoneSyncStorageService.SERVICE_NAME}] iPhone contacts storage skipped (disabled in preferences)`);
+      return { stored: 0, skipped: contacts.length };
     }
 
     log.info(`[${IPhoneSyncStorageService.SERVICE_NAME}] Storing ${contacts.length} contacts to external_contacts`);
