@@ -64,6 +64,10 @@ export interface MacOSImportResult {
   attachmentsSkipped: number;
   duration: number;
   error?: string;
+  /** Total messages available for the date range (before cap) */
+  totalAvailable?: number;
+  /** True when maxMessages cap truncated results */
+  wasCapped?: boolean;
 }
 
 /**
@@ -519,6 +523,7 @@ class MacOSMessagesImportService {
         const targetMessageCount = maxMessages && maxMessages > 0
           ? Math.min(filteredMessageCount, maxMessages)
           : filteredMessageCount;
+        const importWasCapped = maxMessages !== null && maxMessages > 0 && filteredMessageCount > maxMessages;
 
         // Use filtered count for progress (or capped count)
         const totalMessageCount = targetMessageCount;
@@ -766,6 +771,8 @@ class MacOSMessagesImportService {
           attachmentsUpdated: attachmentResult.updated,
           attachmentsSkipped: attachmentResult.skipped,
           duration,
+          totalAvailable: filteredMessageCount,
+          wasCapped: importWasCapped,
         };
       } catch (error) {
         await dbClose();

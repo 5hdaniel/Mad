@@ -43,6 +43,8 @@ export function MacOSMessagesImportSettings({
     messagesImported: number;
     error?: string;
     cancelled?: boolean;
+    wasCapped?: boolean;
+    totalAvailable?: number;
   } | null>(null);
   const [importStatus, setImportStatus] = useState<{
     messageCount?: number;
@@ -158,8 +160,21 @@ export function MacOSMessagesImportSettings({
   }, [isMacOS]);
 
   const handleImport = useCallback(
-    async (forceReimport = false) => {
+    async (forceReimport = false, overrideCap = false) => {
       if (!userId || isImporting) return;
+
+      // Temporarily remove cap for this import if overriding
+      let previousMaxMessages = maxMessages;
+      if (overrideCap) {
+        setMaxMessages(null);
+        try {
+          await window.api.preferences.update(userId, {
+            messageImport: { filters: { maxMessages: null } },
+          });
+        } catch {
+          // Continue with override anyway
+        }
+      }
 
       setIsImporting(true);
       setImportProgress(null);
@@ -175,6 +190,8 @@ export function MacOSMessagesImportSettings({
           success: boolean;
           messagesImported: number;
           error?: string;
+          wasCapped?: boolean;
+          totalAvailable?: number;
         }>;
         const result = await importFn(userId, forceReimport);
 
@@ -186,11 +203,25 @@ export function MacOSMessagesImportSettings({
           messagesImported: result.messagesImported,
           error: wasCancelled ? undefined : result.error,
           cancelled: wasCancelled,
+          wasCapped: result.wasCapped,
+          totalAvailable: result.totalAvailable,
         });
 
         // Reload status after successful import
         if (result.success) {
           await loadImportStatus();
+        }
+
+        // Restore cap after override import completes
+        if (overrideCap && previousMaxMessages !== null) {
+          setMaxMessages(previousMaxMessages);
+          try {
+            await window.api.preferences.update(userId, {
+              messageImport: { filters: { maxMessages: previousMaxMessages } },
+            });
+          } catch {
+            // Silently handle
+          }
         }
       } catch (error) {
         setLastResult({
@@ -198,12 +229,16 @@ export function MacOSMessagesImportSettings({
           messagesImported: 0,
           error: error instanceof Error ? error.message : "Import failed",
         });
+        // Restore cap on error too
+        if (overrideCap && previousMaxMessages !== null) {
+          setMaxMessages(previousMaxMessages);
+        }
       } finally {
         setIsImporting(false);
         setImportProgress(null);
       }
     },
-    [userId, isImporting]
+    [userId, isImporting, maxMessages]
   );
 
   const handleCancel = useCallback(() => {
@@ -338,6 +373,20 @@ export function MacOSMessagesImportSettings({
               Successfully imported{" "}
               <strong>{lastResult.messagesImported.toLocaleString()}</strong>{" "}
               new messages.
+              {lastResult.wasCapped && lastResult.totalAvailable && (
+                <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded">
+                  <p className="text-amber-700">
+                    <strong>{(lastResult.totalAvailable - lastResult.messagesImported).toLocaleString()}</strong>{" "}
+                    additional messages were available for this time period but excluded by the message limit.
+                  </p>
+                  <button
+                    onClick={() => handleImport(true, true)}
+                    className="mt-1 px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium rounded transition-all"
+                  >
+                    Re-import all {lastResult.totalAvailable.toLocaleString()} messages
+                  </button>
+                </div>
+              )}
             </>
           ) : (
             <>Import failed: {lastResult.error}</>
