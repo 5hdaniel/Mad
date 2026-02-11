@@ -43,6 +43,8 @@ export function MacOSMessagesImportSettings({
     messagesImported: number;
     error?: string;
     cancelled?: boolean;
+    wasCapped?: boolean;
+    totalAvailable?: number;
   } | null>(null);
   const [importStatus, setImportStatus] = useState<{
     messageCount?: number;
@@ -50,8 +52,17 @@ export function MacOSMessagesImportSettings({
   } | null>(null);
 
   // TASK-1952: Import filter state
-  const [lookbackMonths, setLookbackMonths] = useState<number | null>(null);
-  const [maxMessages, setMaxMessages] = useState<number | null>(null);
+  const [lookbackMonths, setLookbackMonths] = useState<number | null>(6);
+  const [maxMessages, setMaxMessages] = useState<number | null>(250000);
+
+  // Available message count for pre-import cap warning
+  const [availableCount, setAvailableCount] = useState<number | null>(null);
+
+  // Confirmation prompt when cap would be exceeded
+  // Stores whether the pending import is a force re-import, or null if no prompt
+  const [capPromptForce, setCapPromptForce] = useState<boolean | null>(null);
+  const showCapPrompt = capPromptForce !== null;
+  const capExceeded = availableCount !== null && maxMessages !== null && availableCount > maxMessages;
 
   // Load import status and filter preferences on mount
   useEffect(() => {
@@ -59,6 +70,24 @@ export function MacOSMessagesImportSettings({
     loadImportStatus();
     loadFilterPreferences();
   }, [isMacOS, userId]);
+
+  // Fetch available count when filters change (for pre-import cap warning)
+  useEffect(() => {
+    if (!isMacOS) return;
+    const fetchCount = async () => {
+      try {
+        const result = await window.api.messages.getImportCount({
+          lookbackMonths,
+        });
+        if (result.success) {
+          setAvailableCount(result.filteredCount ?? result.count ?? null);
+        }
+      } catch {
+        // Silently handle
+      }
+    };
+    fetchCount();
+  }, [isMacOS, lookbackMonths]);
 
   const loadImportStatus = async () => {
     try {
@@ -97,6 +126,8 @@ export function MacOSMessagesImportSettings({
   const handleLookbackChange = async (value: string) => {
     const months = value === "all" ? null : Number(value);
     setLookbackMonths(months);
+    setLastResult(null);
+    setCapPromptForce(null);
     try {
       await window.api.preferences.update(userId, {
         messageImport: {
@@ -114,6 +145,8 @@ export function MacOSMessagesImportSettings({
   const handleMaxMessagesChange = async (value: string) => {
     const cap = value === "unlimited" ? null : Number(value);
     setMaxMessages(cap);
+    setLastResult(null);
+    setCapPromptForce(null);
     try {
       await window.api.preferences.update(userId, {
         messageImport: {
@@ -158,8 +191,21 @@ export function MacOSMessagesImportSettings({
   }, [isMacOS]);
 
   const handleImport = useCallback(
-    async (forceReimport = false) => {
+    async (forceReimport = false, overrideCap = false) => {
       if (!userId || isImporting) return;
+
+      // Temporarily remove cap for this import if overriding
+      let previousMaxMessages = maxMessages;
+      if (overrideCap) {
+        setMaxMessages(null);
+        try {
+          await window.api.preferences.update(userId, {
+            messageImport: { filters: { maxMessages: null } },
+          });
+        } catch {
+          // Continue with override anyway
+        }
+      }
 
       setIsImporting(true);
       setImportProgress(null);
@@ -175,6 +221,8 @@ export function MacOSMessagesImportSettings({
           success: boolean;
           messagesImported: number;
           error?: string;
+          wasCapped?: boolean;
+          totalAvailable?: number;
         }>;
         const result = await importFn(userId, forceReimport);
 
@@ -186,11 +234,25 @@ export function MacOSMessagesImportSettings({
           messagesImported: result.messagesImported,
           error: wasCancelled ? undefined : result.error,
           cancelled: wasCancelled,
+          wasCapped: result.wasCapped,
+          totalAvailable: result.totalAvailable,
         });
 
         // Reload status after successful import
         if (result.success) {
           await loadImportStatus();
+        }
+
+        // Restore cap after override import completes
+        if (overrideCap && previousMaxMessages !== null) {
+          setMaxMessages(previousMaxMessages);
+          try {
+            await window.api.preferences.update(userId, {
+              messageImport: { filters: { maxMessages: previousMaxMessages } },
+            });
+          } catch {
+            // Silently handle
+          }
         }
       } catch (error) {
         setLastResult({
@@ -198,12 +260,16 @@ export function MacOSMessagesImportSettings({
           messagesImported: 0,
           error: error instanceof Error ? error.message : "Import failed",
         });
+        // Restore cap on error too
+        if (overrideCap && previousMaxMessages !== null) {
+          setMaxMessages(previousMaxMessages);
+        }
       } finally {
         setIsImporting(false);
         setImportProgress(null);
       }
     },
-    [userId, isImporting]
+    [userId, isImporting, maxMessages]
   );
 
   const handleCancel = useCallback(() => {
@@ -308,6 +374,14 @@ export function MacOSMessagesImportSettings({
                 : `Importing up to ${maxMessages!.toLocaleString()} messages`}
           </p>
         )}
+
+        {/* Pre-import cap info */}
+        {!isImporting && capExceeded && (
+          <p className="text-xs text-amber-600 mt-2">
+            This time period contains {availableCount!.toLocaleString()} messages,
+            which exceeds the {maxMessages!.toLocaleString()} limit.
+          </p>
+        )}
       </div>
 
       {/* Result display */}
@@ -345,16 +419,57 @@ export function MacOSMessagesImportSettings({
         </div>
       )}
 
+      {/* Cap exceeded confirmation prompt */}
+      {showCapPrompt && !isImporting && (
+        <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded">
+          <p className="text-xs text-amber-800 font-medium mb-2">
+            This time period has {availableCount!.toLocaleString()} messages but your limit is {maxMessages!.toLocaleString()}.
+          </p>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={() => { setCapPromptForce(null); handleImport(!!capPromptForce); }}
+              className="w-full px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded transition-all"
+            >
+              {capPromptForce ? "Re-import" : "Import"} most recent {maxMessages!.toLocaleString()} only
+            </button>
+            <button
+              onClick={() => { setCapPromptForce(null); handleImport(!!capPromptForce, true); }}
+              className="w-full px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium rounded transition-all"
+            >
+              {capPromptForce ? "Re-import" : "Import"} all {availableCount!.toLocaleString()} messages
+            </button>
+            <button
+              onClick={() => setCapPromptForce(null)}
+              className="w-full px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-medium rounded transition-all"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-2">
         <button
-          onClick={() => handleImport(false)}
+          onClick={() => {
+            if (capExceeded) {
+              setCapPromptForce(false);
+            } else {
+              handleImport(false);
+            }
+          }}
           disabled={isImporting}
           className="flex-1 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isImporting ? "Importing..." : "Import Messages"}
         </button>
         <button
-          onClick={() => handleImport(true)}
+          onClick={() => {
+            if (capExceeded) {
+              setCapPromptForce(true);
+            } else {
+              handleImport(true);
+            }
+          }}
           disabled={isImporting}
           className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           title="Delete all existing messages and re-import from scratch"
