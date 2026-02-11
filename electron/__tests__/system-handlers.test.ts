@@ -659,6 +659,55 @@ describe("System Handlers", () => {
         );
       });
 
+      it("should handle azure provider by normalizing to microsoft", async () => {
+        mockPermissionService.checkAllPermissions.mockResolvedValue({
+          allGranted: true,
+          errors: [],
+        });
+        mockConnectionStatusService.checkMicrosoftConnection.mockResolvedValue({
+          connected: true,
+        });
+        mockPermissionService.checkContactsLoading.mockResolvedValue({
+          canLoadContacts: true,
+        });
+
+        const handler = registeredHandlers.get("system:health-check");
+        const result = await handler(mockEvent, TEST_USER_ID, "azure");
+
+        expect(result.success).toBe(true);
+        expect(result.healthy).toBe(true);
+        // Should use Microsoft connection check since azure normalizes to microsoft
+        expect(
+          mockConnectionStatusService.checkMicrosoftConnection,
+        ).toHaveBeenCalledWith(TEST_USER_ID);
+        expect(
+          mockConnectionStatusService.checkGoogleConnection,
+        ).not.toHaveBeenCalled();
+      });
+
+      it("should handle empty string provider gracefully", async () => {
+        mockPermissionService.checkAllPermissions.mockResolvedValue({
+          allGranted: true,
+          errors: [],
+        });
+        mockPermissionService.checkContactsLoading.mockResolvedValue({
+          canLoadContacts: true,
+        });
+
+        const handler = registeredHandlers.get("system:health-check");
+        const result = await handler(mockEvent, TEST_USER_ID, "");
+
+        expect(result.success).toBe(true);
+        expect(result.healthy).toBe(true);
+        // Empty string is falsy, so no connection check should happen
+        expect(
+          mockConnectionStatusService.checkGoogleConnection,
+        ).not.toHaveBeenCalled();
+        expect(
+          mockConnectionStatusService.checkMicrosoftConnection,
+        ).not.toHaveBeenCalled();
+      });
+
       it("should report contacts loading issues", async () => {
         mockPermissionService.checkAllPermissions.mockResolvedValue({
           allGranted: true,
