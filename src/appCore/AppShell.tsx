@@ -10,7 +10,7 @@
 
 import React from "react";
 import type { AppStateMachine } from "./state/types";
-import { OfflineBanner, VersionPopup } from "./shell";
+import { OfflineBanner } from "./shell";
 import SystemHealthMonitor from "../components/SystemHealthMonitor";
 import { isOnboardingStep } from "./routing";
 
@@ -39,8 +39,6 @@ export function AppShell({ app, children }: AppShellProps) {
     modalState,
     openProfile,
     openSettings,
-    toggleVersion,
-    closeVersion,
     handleRetryConnection,
     getPageTitle,
   } = app;
@@ -122,33 +120,6 @@ export function AppShell({ app, children }: AppShellProps) {
       {/* Scrollable Content Area */}
       <div className="flex-1 min-h-0 overflow-y-auto relative">
         {children}
-
-        {/* Version Info Button - Bottom Left */}
-        <button
-          onClick={toggleVersion}
-          className="fixed bottom-4 left-4 w-8 h-8 bg-gray-200 hover:bg-gray-300 rounded-full flex items-center justify-center text-gray-600 hover:text-gray-800 transition-all shadow-md z-50"
-          title="Version Info"
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-        </button>
-
-        {/* Version Info Popup */}
-        <VersionPopup
-          isVisible={modalState.showVersion}
-          onClose={closeVersion}
-        />
       </div>
     </div>
   );
