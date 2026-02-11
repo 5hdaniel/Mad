@@ -76,43 +76,10 @@ export function TransactionsToolbar({
 
   return (
     <div className="flex-shrink-0 p-6 bg-white shadow-md">
-      {/* Status Filter Toggle */}
-      <div className="inline-flex items-center bg-gray-200 rounded-lg p-1 mb-3">
-        <button
-          onClick={() => onStatusFilterChange("active")}
-          className={`px-4 py-2 rounded-md font-medium transition-all ${
-            statusFilter === "active"
-              ? "bg-white text-blue-600 shadow-sm"
-              : "text-gray-600 hover:text-gray-900"
-          }`}
-        >
-          Active ({activeCount})
-        </button>
-        <button
-          onClick={() => onStatusFilterChange("closed")}
-          className={`px-4 py-2 rounded-md font-medium transition-all ${
-            statusFilter === "closed"
-              ? "bg-white text-gray-800 shadow-sm"
-              : "text-gray-600 hover:text-gray-900"
-          }`}
-        >
-          Closed ({closedCount})
-        </button>
-        <button
-          onClick={() => onStatusFilterChange("all")}
-          className={`px-4 py-2 rounded-md font-medium transition-all ${
-            statusFilter === "all"
-              ? "bg-white text-purple-600 shadow-sm"
-              : "text-gray-600 hover:text-gray-900"
-          }`}
-        >
-          All ({transactionCount})
-        </button>
-      </div>
-
-      <div className="flex items-center gap-3">
-        {/* Search */}
-        <div className="flex-1 relative">
+      {/* Responsive Toolbar: stacked on narrow, single row on wide */}
+      <div className="flex flex-col md:flex-row md:items-center gap-3">
+        {/* Search - full width on narrow, flex-1 on wide */}
+        <div className="w-full md:w-auto md:flex-1 relative">
           <input
             type="text"
             placeholder="Search by address..."
@@ -135,100 +102,137 @@ export function TransactionsToolbar({
           </svg>
         </div>
 
-        {/* Edit Mode Button */}
-        <button
-          onClick={onToggleSelectionMode}
-          className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${
-            selectionMode
-              ? "bg-purple-500 text-white hover:bg-purple-600 shadow-md"
-              : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-          }`}
-        >
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-            />
-          </svg>
-          {selectionMode ? "Done" : "Edit"}
-        </button>
-
-        {/* Audit New Transaction Button */}
-        <button
-          onClick={onNewTransaction}
-          className="px-4 py-2 rounded-lg font-semibold transition-all bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg flex items-center gap-2"
-        >
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-            />
-          </svg>
-          New Transaction
-        </button>
-
-        {/* Scan/Stop Button - AI add-on only (BACKLOG-462) */}
-        <LicenseGate requires="ai_addon">
-          {scanning ? (
+        {/* Filter tabs + action buttons - wrap on narrow, inline on wide */}
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Status Filter Toggle */}
+          <div className="inline-flex items-center bg-gray-200 rounded-lg p-1">
             <button
-              onClick={onStopScan}
-              className="px-4 py-2 rounded-lg font-semibold transition-all bg-red-500 text-white hover:bg-red-600 shadow-md hover:shadow-lg"
+              onClick={() => onStatusFilterChange("active")}
+              className={`px-4 py-2 rounded-md font-medium transition-all ${
+                statusFilter === "active"
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
             >
-              <span className="flex items-center gap-2">
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-                Stop Scan
-              </span>
+              Active ({activeCount})
             </button>
-          ) : (
             <button
-              onClick={onStartScan}
-              className="px-4 py-2 rounded-lg font-semibold transition-all bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 shadow-md hover:shadow-lg"
+              onClick={() => onStatusFilterChange("closed")}
+              className={`px-4 py-2 rounded-md font-medium transition-all ${
+                statusFilter === "closed"
+                  ? "bg-white text-gray-800 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
             >
-              <span className="flex items-center gap-2">
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
-                Auto Detect
-              </span>
+              Closed ({closedCount})
             </button>
-          )}
-        </LicenseGate>
+            <button
+              onClick={() => onStatusFilterChange("all")}
+              className={`px-4 py-2 rounded-md font-medium transition-all ${
+                statusFilter === "all"
+                  ? "bg-white text-purple-600 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              All ({transactionCount})
+            </button>
+          </div>
+
+          {/* Edit Mode Button */}
+          <button
+            onClick={onToggleSelectionMode}
+            className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${
+              selectionMode
+                ? "bg-purple-500 text-white hover:bg-purple-600 shadow-md"
+                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+            }`}
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+              />
+            </svg>
+            {selectionMode ? "Done" : "Edit"}
+          </button>
+
+          {/* Audit New Transaction Button */}
+          <button
+            onClick={onNewTransaction}
+            className="px-4 py-2 rounded-lg font-semibold transition-all bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg flex items-center gap-2"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+              />
+            </svg>
+            New Transaction
+          </button>
+
+          {/* Scan/Stop Button - AI add-on only (BACKLOG-462) */}
+          <LicenseGate requires="ai_addon">
+            {scanning ? (
+              <button
+                onClick={onStopScan}
+                className="px-4 py-2 rounded-lg font-semibold transition-all bg-red-500 text-white hover:bg-red-600 shadow-md hover:shadow-lg"
+              >
+                <span className="flex items-center gap-2">
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                  Stop Scan
+                </span>
+              </button>
+            ) : (
+              <button
+                onClick={onStartScan}
+                className="px-4 py-2 rounded-lg font-semibold transition-all bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 shadow-md hover:shadow-lg"
+              >
+                <span className="flex items-center gap-2">
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                  Auto Detect
+                </span>
+              </button>
+            )}
+          </LicenseGate>
+        </div>
       </div>
 
       {/* Scan Progress */}
