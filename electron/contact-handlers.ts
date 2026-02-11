@@ -24,6 +24,7 @@ import {
 } from "./utils/validation";
 import { normalizePhoneNumber } from "./utils/phoneNormalization";
 import { getValidUserId } from "./utils/userIdHelper";
+import { isContactSourceEnabled } from "./utils/preferenceHelper";
 import outlookFetchService from "./services/outlookFetchService";
 
 // Import handler types
@@ -212,6 +213,10 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           }
         }
 
+        // TASK-1950: Check contact source preferences
+        const macosEnabled = await isContactSourceEnabled(validatedUserId, "direct", "macosContacts", true);
+        const outlookEnabled = await isContactSourceEnabled(validatedUserId, "direct", "outlookContacts", true);
+
         // Convert Contacts app data to contact objects
         const availableContacts: AvailableContact[] = [];
 
@@ -328,8 +333,10 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
 
         // STEP 1: Get unimported contacts from database (iPhone synced contacts)
         // These take precedence because they have real DB IDs
-        const unimportedDbContacts =
-          await databaseService.getUnimportedContactsByUserId(validatedUserId);
+        // TASK-1950: Skip if macOS/iPhone contacts source is disabled
+        const unimportedDbContacts = macosEnabled
+          ? await databaseService.getUnimportedContactsByUserId(validatedUserId)
+          : [];
 
         logService.info(
           `[Main] Found ${unimportedDbContacts.length} unimported contacts from database (iPhone sync)`,
@@ -375,62 +382,25 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         }
 
         // STEP 2: TASK-1773 - Read from external_contacts shadow table
-        // Check if shadow table is populated, if not trigger background sync
-        const cachedCount = externalContactDb.getCount(validatedUserId);
+        // TASK-1950: Only sync macOS contacts if source is enabled
+        if (macosEnabled) {
+          // Check if shadow table is populated, if not trigger background sync
+          const cachedCount = externalContactDb.getCount(validatedUserId);
 
-        if (cachedCount === 0) {
-          // Shadow table is empty - need initial population
-          // Do blocking sync on first load only (non-blocking after)
-          logService.info(
-            "[Main] External contacts shadow table empty, doing initial sync",
-            "Contacts",
-          );
+          if (cachedCount === 0) {
+            // Shadow table is empty - need initial population
+            // Do blocking sync on first load only (non-blocking after)
+            logService.info(
+              "[Main] External contacts shadow table empty, doing initial sync",
+              "Contacts",
+            );
 
-          try {
-            // Read from macOS Contacts API
-            const { phoneToContactInfo } = await getContactNames();
-
-            if (phoneToContactInfo && Object.keys(phoneToContactInfo).length > 0) {
-              // Convert to MacOSContact format
-              const macOSContacts: externalContactDb.MacOSContact[] = [];
-              for (const [_phone, contactInfo] of Object.entries(phoneToContactInfo)) {
-                macOSContacts.push({
-                  name: contactInfo.name,
-                  phones: contactInfo.phones,
-                  emails: contactInfo.emails,
-                  company: contactInfo.company,
-                  recordId: contactInfo.recordId || `auto-${randomUUID().slice(0, 8)}`,
-                });
-              }
-
-              // Full sync: upsert + delete stale + update dates
-              externalContactDb.fullSync(validatedUserId, macOSContacts);
-
-              // Backfill any missing emails/phones for already-imported contacts
-              const backfillResult = await backfillImportedContactsFromExternal(validatedUserId);
-              if (backfillResult.updated > 0) {
-                logService.info(
-                  `[Main] Backfilled ${backfillResult.updated} imported contacts with missing emails/phones`,
-                  "Contacts",
-                );
-              }
-            }
-          } catch (syncErr) {
-            logService.warn(`[Main] Initial external contacts sync failed: ${syncErr}`, "Contacts");
-          }
-        } else if (externalContactDb.isStale(validatedUserId, 24)) {
-          // Shadow table has data but is stale - trigger background sync
-          // SR Engineer requirement: Non-blocking first load
-          logService.info(
-            "[Main] External contacts shadow table stale, triggering background sync",
-            "Contacts",
-          );
-
-          setImmediate(async () => {
             try {
+              // Read from macOS Contacts API
               const { phoneToContactInfo } = await getContactNames();
 
               if (phoneToContactInfo && Object.keys(phoneToContactInfo).length > 0) {
+                // Convert to MacOSContact format
                 const macOSContacts: externalContactDb.MacOSContact[] = [];
                 for (const [_phone, contactInfo] of Object.entries(phoneToContactInfo)) {
                   macOSContacts.push({
@@ -442,26 +412,66 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
                   });
                 }
 
+                // Full sync: upsert + delete stale + update dates
                 externalContactDb.fullSync(validatedUserId, macOSContacts);
 
                 // Backfill any missing emails/phones for already-imported contacts
                 const backfillResult = await backfillImportedContactsFromExternal(validatedUserId);
                 if (backfillResult.updated > 0) {
                   logService.info(
-                    `[Main] Background sync: Backfilled ${backfillResult.updated} imported contacts`,
+                    `[Main] Backfilled ${backfillResult.updated} imported contacts with missing emails/phones`,
                     "Contacts",
                   );
                 }
-
-                // Notify renderer that sync is complete
-                if (_mainWindow && !_mainWindow.isDestroyed()) {
-                  _mainWindow.webContents.send("contacts:external-sync-complete");
-                }
               }
-            } catch (err) {
-              logService.warn(`[Main] Background external contacts sync failed: ${err}`, "Contacts");
+            } catch (syncErr) {
+              logService.warn(`[Main] Initial external contacts sync failed: ${syncErr}`, "Contacts");
             }
-          });
+          } else if (externalContactDb.isStale(validatedUserId, 24)) {
+            // Shadow table has data but is stale - trigger background sync
+            // SR Engineer requirement: Non-blocking first load
+            logService.info(
+              "[Main] External contacts shadow table stale, triggering background sync",
+              "Contacts",
+            );
+
+            setImmediate(async () => {
+              try {
+                const { phoneToContactInfo } = await getContactNames();
+
+                if (phoneToContactInfo && Object.keys(phoneToContactInfo).length > 0) {
+                  const macOSContacts: externalContactDb.MacOSContact[] = [];
+                  for (const [_phone, contactInfo] of Object.entries(phoneToContactInfo)) {
+                    macOSContacts.push({
+                      name: contactInfo.name,
+                      phones: contactInfo.phones,
+                      emails: contactInfo.emails,
+                      company: contactInfo.company,
+                      recordId: contactInfo.recordId || `auto-${randomUUID().slice(0, 8)}`,
+                    });
+                  }
+
+                  externalContactDb.fullSync(validatedUserId, macOSContacts);
+
+                  // Backfill any missing emails/phones for already-imported contacts
+                  const backfillResult = await backfillImportedContactsFromExternal(validatedUserId);
+                  if (backfillResult.updated > 0) {
+                    logService.info(
+                      `[Main] Background sync: Backfilled ${backfillResult.updated} imported contacts`,
+                      "Contacts",
+                    );
+                  }
+
+                  // Notify renderer that sync is complete
+                  if (_mainWindow && !_mainWindow.isDestroyed()) {
+                    _mainWindow.webContents.send("contacts:external-sync-complete");
+                  }
+                }
+              } catch (err) {
+                logService.warn(`[Main] Background external contacts sync failed: ${err}`, "Contacts");
+              }
+            });
+          }
         }
 
         // Read from shadow table (already sorted by last_message_at DESC, NULLS LAST)
@@ -473,7 +483,16 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         );
 
         // STEP 3: Add external contacts (filtering out already imported)
+        // TASK-1950: Also filter by source preference
         for (const extContact of externalContacts) {
+          // Skip contacts from disabled sources
+          if (extContact.source === "outlook" && !outlookEnabled) {
+            continue;
+          }
+          if (extContact.source !== "outlook" && !macosEnabled) {
+            continue;
+          }
+
           const nameLower = extContact.name?.toLowerCase();
           const primaryEmail = extContact.emails?.[0]?.toLowerCase();
 
@@ -1305,6 +1324,13 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           return { success: false, error: "No valid user found in database" };
         }
 
+        // TASK-1950: Check if macOS contacts source is enabled
+        const macosEnabled = await isContactSourceEnabled(validatedUserId, "direct", "macosContacts", true);
+        if (!macosEnabled) {
+          logService.info("[Main] macOS contacts sync skipped (disabled in preferences)", "Contacts", { userId: validatedUserId });
+          return { success: true, inserted: 0, deleted: 0, total: 0 };
+        }
+
         // Read from macOS Contacts API
         const { phoneToContactInfo } = await getContactNames();
 
@@ -1416,6 +1442,13 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         const validatedUserId = await getValidUserId(userId, "Contacts");
         if (!validatedUserId) {
           return { success: false, error: "No valid user found in database" };
+        }
+
+        // TASK-1950: Check if Outlook contacts source is enabled
+        const outlookEnabled = await isContactSourceEnabled(validatedUserId, "direct", "outlookContacts", true);
+        if (!outlookEnabled) {
+          logService.info("[Main] Outlook contacts sync skipped (disabled in preferences)", "Contacts", { userId: validatedUserId });
+          return { success: true, count: 0 };
         }
 
         // Initialize the Outlook fetch service with user tokens
