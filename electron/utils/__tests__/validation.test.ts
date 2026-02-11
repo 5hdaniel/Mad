@@ -11,6 +11,7 @@ import {
   validateContactId,
   validateTransactionId,
   validateTransactionData,
+  validateProvider,
   validateDeviceUdid,
   isValidDeviceUdid,
   validateExecutablePath,
@@ -314,6 +315,73 @@ describe("Transaction Validation", () => {
       // And they must have the correct values
       expect(validated.sale_price).toBe(500000);
       expect(validated.listing_price).toBe(525000);
+    });
+  });
+});
+
+describe("Provider Validation", () => {
+  describe("validateProvider", () => {
+    it("should accept 'google' provider", () => {
+      expect(validateProvider("google")).toBe("google");
+    });
+
+    it("should accept 'microsoft' provider", () => {
+      expect(validateProvider("microsoft")).toBe("microsoft");
+    });
+
+    it("should accept 'Google' (case-insensitive)", () => {
+      expect(validateProvider("Google")).toBe("google");
+    });
+
+    it("should accept 'Microsoft' (case-insensitive)", () => {
+      expect(validateProvider("Microsoft")).toBe("microsoft");
+    });
+
+    it("should normalize 'azure' to 'microsoft'", () => {
+      expect(validateProvider("azure")).toBe("microsoft");
+    });
+
+    it("should normalize 'Azure' to 'microsoft' (case-insensitive)", () => {
+      expect(validateProvider("Azure")).toBe("microsoft");
+    });
+
+    it("should normalize 'AZURE' to 'microsoft' (case-insensitive)", () => {
+      expect(validateProvider("AZURE")).toBe("microsoft");
+    });
+
+    it("should reject invalid providers", () => {
+      expect(() => validateProvider("invalid-provider")).toThrow(
+        ValidationError,
+      );
+      expect(() => validateProvider("invalid-provider")).toThrow(
+        "Provider must be one of: google, microsoft",
+      );
+    });
+
+    it("should reject empty string", () => {
+      expect(() => validateProvider("")).toThrow(ValidationError);
+      expect(() => validateProvider("")).toThrow(
+        "Provider is required and must be a string",
+      );
+    });
+
+    it("should reject null", () => {
+      expect(() => validateProvider(null)).toThrow(ValidationError);
+      expect(() => validateProvider(null)).toThrow(
+        "Provider is required and must be a string",
+      );
+    });
+
+    it("should reject undefined", () => {
+      expect(() => validateProvider(undefined)).toThrow(ValidationError);
+      expect(() => validateProvider(undefined)).toThrow(
+        "Provider is required and must be a string",
+      );
+    });
+
+    it("should reject non-string values", () => {
+      expect(() => validateProvider(123)).toThrow(ValidationError);
+      expect(() => validateProvider({})).toThrow(ValidationError);
     });
   });
 });
