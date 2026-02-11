@@ -15,6 +15,7 @@ import {
   createThreadCommunicationReference,
   isThreadLinkedToTransaction,
 } from "./db/communicationDbService";
+import { isContactSourceEnabled } from "../utils/preferenceHelper";
 
 // ============================================
 // TYPES
@@ -507,22 +508,34 @@ export async function autoLinkCommunicationsForContact(
     );
 
     // 5. Find matching text messages (from messages table)
-    const messagesWithThreads = await findMessagesByContactPhones(
-      userId,
-      contactInfo.phoneNumbers,
-      transactionId,
-      dateRange,
-      limit
-    );
+    // TASK-1951: Check if message-based contact inference is enabled
+    const inferMessages = await isContactSourceEnabled(userId, "inferred", "messages", false);
 
-    await logService.debug(
-      `Found ${messagesWithThreads.length} matching messages for contact ${contactId}`,
-      "AutoLinkService",
-      {
-        messageCount: messagesWithThreads.length,
-        contactPhones: contactInfo.phoneNumbers,
-      }
-    );
+    let messagesWithThreads: MessageWithThread[] = [];
+    if (inferMessages) {
+      messagesWithThreads = await findMessagesByContactPhones(
+        userId,
+        contactInfo.phoneNumbers,
+        transactionId,
+        dateRange,
+        limit
+      );
+
+      await logService.debug(
+        `Found ${messagesWithThreads.length} matching messages for contact ${contactId}`,
+        "AutoLinkService",
+        {
+          messageCount: messagesWithThreads.length,
+          contactPhones: contactInfo.phoneNumbers,
+        }
+      );
+    } else {
+      await logService.info(
+        `Skipping message auto-link for contact ${contactId} (messages inference disabled)`,
+        "AutoLinkService",
+        { userId, contactId, transactionId }
+      );
+    }
 
     // 6. Link emails to transaction
     // Emails are already in the communications table, so we update
