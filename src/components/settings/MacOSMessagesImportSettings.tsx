@@ -58,6 +58,12 @@ export function MacOSMessagesImportSettings({
   // Available message count for pre-import cap warning
   const [availableCount, setAvailableCount] = useState<number | null>(null);
 
+  // Confirmation prompt when cap would be exceeded
+  // Stores whether the pending import is a force re-import, or null if no prompt
+  const [capPromptForce, setCapPromptForce] = useState<boolean | null>(null);
+  const showCapPrompt = capPromptForce !== null;
+  const capExceeded = availableCount !== null && maxMessages !== null && availableCount > maxMessages;
+
   // Load import status and filter preferences on mount
   useEffect(() => {
     if (!isMacOS || !userId) return;
@@ -120,7 +126,8 @@ export function MacOSMessagesImportSettings({
   const handleLookbackChange = async (value: string) => {
     const months = value === "all" ? null : Number(value);
     setLookbackMonths(months);
-    setLastResult(null); // Clear stale result from previous filter settings
+    setLastResult(null);
+    setCapPromptForce(null);
     try {
       await window.api.preferences.update(userId, {
         messageImport: {
@@ -138,7 +145,8 @@ export function MacOSMessagesImportSettings({
   const handleMaxMessagesChange = async (value: string) => {
     const cap = value === "unlimited" ? null : Number(value);
     setMaxMessages(cap);
-    setLastResult(null); // Clear stale result from previous filter settings
+    setLastResult(null);
+    setCapPromptForce(null);
     try {
       await window.api.preferences.update(userId, {
         messageImport: {
@@ -367,21 +375,12 @@ export function MacOSMessagesImportSettings({
           </p>
         )}
 
-        {/* Pre-import cap warning */}
-        {!isImporting && availableCount !== null && maxMessages !== null && availableCount > maxMessages && (
-          <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded">
-            <p className="text-xs text-amber-700">
-              This time period contains <strong>{availableCount.toLocaleString()}</strong> messages,
-              which exceeds the <strong>{maxMessages.toLocaleString()}</strong> limit.
-              Only the most recent {maxMessages.toLocaleString()} will be imported.
-            </p>
-            <button
-              onClick={() => handleImport(false, true)}
-              className="mt-1 px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium rounded transition-all"
-            >
-              Import all {availableCount.toLocaleString()} messages
-            </button>
-          </div>
+        {/* Pre-import cap info */}
+        {!isImporting && capExceeded && (
+          <p className="text-xs text-amber-600 mt-2">
+            This time period contains {availableCount!.toLocaleString()} messages,
+            which exceeds the {maxMessages!.toLocaleString()} limit.
+          </p>
         )}
       </div>
 
@@ -413,20 +412,6 @@ export function MacOSMessagesImportSettings({
               Successfully imported{" "}
               <strong>{lastResult.messagesImported.toLocaleString()}</strong>{" "}
               new messages.
-              {lastResult.wasCapped && lastResult.totalAvailable && (
-                <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded">
-                  <p className="text-amber-700">
-                    <strong>{(lastResult.totalAvailable - lastResult.messagesImported).toLocaleString()}</strong>{" "}
-                    additional messages were available for this time period but excluded by the message limit.
-                  </p>
-                  <button
-                    onClick={() => handleImport(true, true)}
-                    className="mt-1 px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium rounded transition-all"
-                  >
-                    Re-import all {lastResult.totalAvailable.toLocaleString()} messages
-                  </button>
-                </div>
-              )}
             </>
           ) : (
             <>Import failed: {lastResult.error}</>
@@ -434,16 +419,57 @@ export function MacOSMessagesImportSettings({
         </div>
       )}
 
+      {/* Cap exceeded confirmation prompt */}
+      {showCapPrompt && !isImporting && (
+        <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded">
+          <p className="text-xs text-amber-800 font-medium mb-2">
+            This time period has {availableCount!.toLocaleString()} messages but your limit is {maxMessages!.toLocaleString()}.
+          </p>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={() => { setCapPromptForce(null); handleImport(!!capPromptForce); }}
+              className="w-full px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded transition-all"
+            >
+              {capPromptForce ? "Re-import" : "Import"} most recent {maxMessages!.toLocaleString()} only
+            </button>
+            <button
+              onClick={() => { setCapPromptForce(null); handleImport(!!capPromptForce, true); }}
+              className="w-full px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium rounded transition-all"
+            >
+              {capPromptForce ? "Re-import" : "Import"} all {availableCount!.toLocaleString()} messages
+            </button>
+            <button
+              onClick={() => setCapPromptForce(null)}
+              className="w-full px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-medium rounded transition-all"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-2">
         <button
-          onClick={() => handleImport(false)}
+          onClick={() => {
+            if (capExceeded) {
+              setCapPromptForce(false);
+            } else {
+              handleImport(false);
+            }
+          }}
           disabled={isImporting}
           className="flex-1 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isImporting ? "Importing..." : "Import Messages"}
         </button>
         <button
-          onClick={() => handleImport(true)}
+          onClick={() => {
+            if (capExceeded) {
+              setCapPromptForce(true);
+            } else {
+              handleImport(true);
+            }
+          }}
           disabled={isImporting}
           className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           title="Delete all existing messages and re-import from scratch"
