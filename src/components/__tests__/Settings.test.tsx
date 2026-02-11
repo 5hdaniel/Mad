@@ -130,11 +130,11 @@ describe("Settings", () => {
       expect(screen.getByText("About")).toBeInTheDocument();
     });
 
-    it("should show version information", async () => {
+    it("should show app name and copyright", async () => {
       renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByText("MagicAudit")).toBeInTheDocument();
-      expect(screen.getByText("Version 1.0.7")).toBeInTheDocument();
+      expect(screen.getByText(/© 2026 Blue Spaces LLC/)).toBeInTheDocument();
     });
   });
 
@@ -567,17 +567,15 @@ describe("Settings", () => {
   });
 
   describe("About Section", () => {
-    it("should show app name and version", async () => {
+    it("should show app name", async () => {
       renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByText("MagicAudit")).toBeInTheDocument();
-      expect(screen.getByText("Version 1.0.7")).toBeInTheDocument();
     });
 
     it("should show disabled action buttons", async () => {
       renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
-      expect(screen.getByText("Check for Updates")).toBeInTheDocument();
       expect(screen.getByText("View Release Notes")).toBeInTheDocument();
       expect(screen.getByText("Privacy Policy")).toBeInTheDocument();
       expect(screen.getByText("Terms of Service")).toBeInTheDocument();
