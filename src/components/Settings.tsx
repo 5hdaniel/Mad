@@ -503,30 +503,38 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                 </div>
 
                 {/* Auto-Download Updates */}
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <div className="flex-1">
-                    <h4 className="text-sm font-medium text-gray-900">
-                      Auto-download Updates
-                    </h4>
-                    <p className="text-xs text-gray-600 mt-1">
-                      Automatically download new software updates in the background
-                    </p>
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <h4 className="text-sm font-medium text-gray-900">
+                        Auto-download Updates
+                      </h4>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Automatically download new software updates in the background
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleAutoDownloadToggle}
+                      disabled={loadingPreferences}
+                      className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                        autoDownloadUpdates ? "bg-blue-500" : "bg-gray-300"
+                      }`}
+                      role="switch"
+                      aria-checked={autoDownloadUpdates}
+                      aria-label="Auto-download updates"
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          autoDownloadUpdates ? "translate-x-6" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
                   </div>
                   <button
-                    onClick={handleAutoDownloadToggle}
-                    disabled={loadingPreferences}
-                    className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                      autoDownloadUpdates ? "bg-blue-500" : "bg-gray-300"
-                    }`}
-                    role="switch"
-                    aria-checked={autoDownloadUpdates}
-                    aria-label="Auto-download updates"
+                    disabled
+                    className="mt-3 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        autoDownloadUpdates ? "translate-x-6" : "translate-x-1"
-                      }`}
-                    />
+                    Check for Updates
                   </button>
                 </div>
 
@@ -984,17 +992,9 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                     <h4 className="text-sm font-semibold text-gray-900">
                       MagicAudit
                     </h4>
-                    <p className="text-xs text-gray-600">Version 1.0.7</p>
                   </div>
                 </div>
                 <div className="space-y-2 text-xs">
-                  {/* TODO: Implement manual update check using electron-updater */}
-                  <button
-                    disabled
-                    className="w-full text-left text-gray-400 font-medium cursor-not-allowed"
-                  >
-                    Check for Updates
-                  </button>
                   {/* TODO: Implement release notes viewer/link to GitHub releases */}
                   <button
                     disabled
@@ -1017,6 +1017,9 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                     Terms of Service
                   </button>
                 </div>
+                <p className="mt-3 text-xs text-gray-500">
+                  &copy; 2026 Blue Spaces LLC. All rights reserved.
+                </p>
               </div>
             </div>
           </div>

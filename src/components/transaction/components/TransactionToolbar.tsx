@@ -138,10 +138,10 @@ function TransactionToolbar({
               placeholder="Search by address..."
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full h-10 pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
             <svg
-              className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"
+              className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -155,13 +155,13 @@ function TransactionToolbar({
             </svg>
           </div>
 
-          {/* Filter tabs + action buttons - wrap on narrow, inline on wide */}
-          <div className="flex items-center gap-3 flex-wrap">
+          {/* Filter tabs + action buttons - no wrap, shrink to fit */}
+          <div className="flex items-center gap-2 min-w-0">
             {/* Consolidated Filter Tabs */}
-            <div className="inline-flex items-center bg-gray-200 rounded-lg p-1">
+            <div className="inline-flex items-center bg-gray-200 rounded-lg p-1 min-w-0 h-10">
               <button
                 onClick={() => onFilterChange("all")}
-                className={`px-4 py-2 rounded-md font-medium transition-all ${
+                className={`px-2 sm:px-4 py-2 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
                   filter === "all"
                     ? "bg-white text-purple-600 shadow-sm"
                     : "text-gray-600 hover:text-gray-900"
@@ -176,7 +176,7 @@ function TransactionToolbar({
               <LicenseGate requires="ai_addon">
                 <button
                   onClick={() => onFilterChange("pending")}
-                  className={`px-4 py-2 rounded-md font-medium transition-all ${
+                  className={`px-2 sm:px-4 py-2 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
                     filter === "pending"
                       ? "bg-white text-amber-600 shadow-sm"
                       : "text-gray-600 hover:text-gray-900"
@@ -192,7 +192,7 @@ function TransactionToolbar({
               </LicenseGate>
               <button
                 onClick={() => onFilterChange("active")}
-                className={`px-4 py-2 rounded-md font-medium transition-all ${
+                className={`px-2 sm:px-4 py-2 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
                   filter === "active"
                     ? "bg-white text-blue-600 shadow-sm"
                     : "text-gray-600 hover:text-gray-900"
@@ -205,7 +205,7 @@ function TransactionToolbar({
               </button>
               <button
                 onClick={() => onFilterChange("closed")}
-                className={`px-4 py-2 rounded-md font-medium transition-all ${
+                className={`px-2 sm:px-4 py-2 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
                   filter === "closed"
                     ? "bg-white text-gray-800 shadow-sm"
                     : "text-gray-600 hover:text-gray-900"
@@ -220,7 +220,7 @@ function TransactionToolbar({
               <LicenseGate requires="ai_addon">
                 <button
                   onClick={() => onFilterChange("rejected")}
-                  className={`px-4 py-2 rounded-md font-medium transition-all ${
+                  className={`px-2 sm:px-4 py-2 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
                     filter === "rejected"
                       ? "bg-white text-red-600 shadow-sm"
                       : "text-gray-600 hover:text-gray-900"
@@ -301,14 +301,14 @@ function TransactionToolbar({
             {/* Edit Button */}
             <button
               onClick={onToggleSelectionMode}
-              className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${
+              className={`px-2 sm:px-4 py-2 h-10 rounded-lg font-semibold transition-all flex items-center gap-1 sm:gap-2 text-sm whitespace-nowrap ${
                 selectionMode
                   ? "bg-blue-500 text-white hover:bg-blue-600"
                   : "bg-gray-200 text-gray-700 hover:bg-gray-300"
               }`}
             >
               <svg
-                className="w-5 h-5"
+                className="w-5 h-5 flex-shrink-0"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -326,7 +326,7 @@ function TransactionToolbar({
             {/* Audit New Transaction Button */}
             <button
               onClick={onNewTransaction}
-              className="px-4 py-2 rounded-lg font-semibold transition-all bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg flex items-center gap-2"
+              className="px-2 sm:px-4 py-2 h-10 rounded-lg font-semibold transition-all bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg flex items-center gap-1 sm:gap-2 text-sm whitespace-nowrap"
             >
               <svg
                 className="w-5 h-5"
