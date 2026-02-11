@@ -1268,6 +1268,8 @@ export interface WindowApi {
       attachmentsSkipped: number;
       duration: number;
       error?: string;
+      totalAvailable?: number;
+      wasCapped?: boolean;
     }>;
     /** Get count of messages available for import from macOS Messages */
     getImportCount: (filters?: { lookbackMonths?: number | null; maxMessages?: number | null }) => Promise<{ success: boolean; count?: number; filteredCount?: number; error?: string }>;

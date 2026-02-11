@@ -93,18 +93,24 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
       }
 
       // TASK-1952: Load message import filter preferences
-      let importFilters: MessageImportFilters = {};
+      // Defaults: 6 months lookback, 250K max messages (matches UI defaults)
+      const DEFAULT_LOOKBACK_MONTHS = 6;
+      const DEFAULT_MAX_MESSAGES = 250000;
+      let importFilters: MessageImportFilters = {
+        lookbackMonths: DEFAULT_LOOKBACK_MONTHS,
+        maxMessages: DEFAULT_MAX_MESSAGES,
+      };
       try {
         const preferences = await supabaseService.getPreferences(validUserId);
         const messageImportPrefs = preferences?.messageImport;
         if (messageImportPrefs?.filters) {
           importFilters = {
-            lookbackMonths: messageImportPrefs.filters.lookbackMonths ?? null,
-            maxMessages: messageImportPrefs.filters.maxMessages ?? null,
+            lookbackMonths: messageImportPrefs.filters.lookbackMonths ?? DEFAULT_LOOKBACK_MONTHS,
+            maxMessages: messageImportPrefs.filters.maxMessages ?? DEFAULT_MAX_MESSAGES,
           };
         }
       } catch {
-        // Use defaults (no filters) if preferences unavailable
+        // Use defaults if preferences unavailable
         logService.warn(
           "Failed to load import filter preferences, using defaults",
           "MessageImportHandlers"
