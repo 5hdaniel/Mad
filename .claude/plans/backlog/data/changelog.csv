@@ -221,3 +221,11 @@ date,action,details,items_affected
 2026-02-02,create,"Created TASK-1797 for BACKLOG-604 implementation",TASK-1797
 2026-02-02,assign,"Added TASK-1797 to SPRINT-068 Testing Phase",SPRINT-068
 2026-02-10,create,"Created BACKLOG-649 (Onboarding data-sync step stuck for returning users with email connected) - HIGH priority bug introduced by SPRINT-070 PR #744",BACKLOG-649
+2026-02-10,complete,"BACKLOG-649 (Remove auto export stub) - PR #792 merged",BACKLOG-649
+2026-02-10,complete,"BACKLOG-650 (Remove dark mode stub) - PR #792 merged",BACKLOG-650
+2026-02-10,complete,"BACKLOG-651 (Responsive toolbar layout) - PR #794 merged",BACKLOG-651
+2026-02-10,complete,"BACKLOG-652 (Health check provider fix) - PR #793 merged",BACKLOG-652
+2026-02-10,create,"Created BACKLOG-653 (Auto-download updates toggle), BACKLOG-654 (Toolbar height consistency), BACKLOG-655 (Remove VersionPopup), BACKLOG-656 (Move Check for Updates to settings)",BACKLOG-653;BACKLOG-654;BACKLOG-655;BACKLOG-656
+2026-02-10,complete,"BACKLOG-653 (Auto-download updates toggle) - PR #795 merged",BACKLOG-653
+2026-02-10,complete,"BACKLOG-654, 655, 656 (Toolbar polish, version popup removal, settings cleanup) - PR #796",BACKLOG-654;BACKLOG-655;BACKLOG-656
+2026-02-10,update,"SPRINT-077 completed: 4 planned tasks + 4 unplanned items. PRs #792-796.",SPRINT-077
