@@ -531,4 +531,7 @@ BACKLOG-645,Decompose transaction-handlers.ts (3302 lines),refactor,High,Deferre
 BACKLOG-646,Remove any types from transactionService.ts,type-safety,High,Completed,SPRINT-076,~25K,~13.5K,-46%,2026-02-10,2026-02-10,
 BACKLOG-647,Add tests for AppRouter.tsx and AppModals.tsx,test,Medium,Completed,SPRINT-076,~35K,~7K,-80%,2026-02-10,2026-02-10,
 BACKLOG-648,DMG vs Dev Mode Keychain Conflict Breaks Database Init,bug,High,Completed,,~5K,-,-,2026-02-10,2026-02-10,items/BACKLOG-648.md
-BACKLOG-649,Onboarding data-sync step stuck for returning users with email connected,bug,High,In-Progress,,~20K,-,-,2026-02-10,,items/BACKLOG-649.md
+BACKLOG-649,Remove auto export stub from Settings,cleanup,Medium,In Progress,SPRINT-077,~5K,-,-,2026-02-10,,
+BACKLOG-650,Remove dark mode coming soon from Settings,cleanup,Medium,In Progress,SPRINT-077,~5K,-,-,2026-02-10,,
+BACKLOG-651,Responsive toolbar layout redesign,ui,High,In Progress,SPRINT-077,~25K,-,-,2026-02-10,,
+BACKLOG-652,Fix system health check provider validation error,bug,Critical,In Progress,SPRINT-077,~10K,-,-,2026-02-10,,
