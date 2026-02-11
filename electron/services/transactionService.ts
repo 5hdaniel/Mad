@@ -21,6 +21,7 @@ import { autoLinkCommunicationsForContact, AutoLinkResult } from "./autoLinkServ
 import { createEmail, getEmailByExternalId } from "./db/emailDbService";
 import emailAttachmentService from "./emailAttachmentService";
 import * as externalContactDb from "./db/externalContactDbService";
+import { isContactSourceEnabled } from "../utils/preferenceHelper";
 
 // Hybrid extraction imports
 import { HybridExtractorService } from "./extraction/hybridExtractorService";
@@ -296,6 +297,32 @@ class TransactionService {
       // Use default if preferences unavailable
     }
 
+    // TASK-1951: Fetch inferred contact source preferences
+    // Default is OFF (false) for inferred sources -- safe default, opt-in
+    let inferOutlookContacts = false;
+    let inferGmailContacts = false;
+    let inferMessageContacts = false;
+    try {
+      [inferOutlookContacts, inferGmailContacts, inferMessageContacts] = await Promise.all([
+        isContactSourceEnabled(userId, "inferred", "outlookEmails", false),
+        isContactSourceEnabled(userId, "inferred", "gmailEmails", false),
+        isContactSourceEnabled(userId, "inferred", "messages", false),
+      ]);
+
+      await logService.info(
+        "Inferred contact source preferences loaded",
+        "TransactionService.scanAndExtractTransactions",
+        {
+          userId,
+          inferOutlookContacts,
+          inferGmailContacts,
+          inferMessageContacts,
+        },
+      );
+    } catch {
+      // Use defaults (all OFF) if preferences unavailable
+    }
+
     const defaultStartDate = new Date(
       Date.now() - lookbackMonths * 30 * 24 * 60 * 60 * 1000,
     );
@@ -513,6 +540,32 @@ class TransactionService {
 
       // Check for cancellation before saving
       this.checkCancelled();
+
+      // TASK-1951: Gate inferred contact extraction based on preferences
+      // If email inference is disabled for all scanned providers, clear suggestedContacts
+      // This prevents contact discovery from email headers while still detecting transactions
+      const anyEmailInferenceEnabled = providers.some((p) => {
+        if (p === "google") return inferGmailContacts;
+        if (p === "microsoft") return inferOutlookContacts;
+        return false;
+      });
+
+      if (!anyEmailInferenceEnabled) {
+        let contactsCleared = 0;
+        for (const tx of extractionResult.detectedTransactions) {
+          if (tx.suggestedContacts?.assignments?.length > 0) {
+            contactsCleared += tx.suggestedContacts.assignments.length;
+            tx.suggestedContacts = { assignments: [] };
+          }
+        }
+        if (contactsCleared > 0) {
+          await logService.info(
+            `Cleared ${contactsCleared} inferred contacts (email inference disabled for scanned providers)`,
+            "TransactionService.scanAndExtractTransactions",
+            { userId, providers, inferOutlookContacts, inferGmailContacts },
+          );
+        }
+      }
 
       // Step 4: Save transactions with detection metadata
       if (onProgress)
