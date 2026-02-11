@@ -212,6 +212,7 @@ export function AppRouter({ app }: AppRouterProps) {
         onContinueSetup={handleContinueSetup}
         onDismissSetupPrompt={handleDismissSetupPrompt}
         onTriggerRefresh={app.triggerRefresh}
+        onOpenSettings={openSettings}
       />
     );
   }

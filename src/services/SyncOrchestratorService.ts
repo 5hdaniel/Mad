@@ -27,6 +27,8 @@ export interface SyncItem {
   error?: string;
   /** Optional phase label for display (e.g., "querying", "attachments") */
   phase?: string;
+  /** Optional warning message (e.g., message cap exceeded) */
+  warning?: string;
 }
 
 export interface SyncOrchestratorState {
@@ -42,7 +44,8 @@ export interface SyncRequest {
   userId: string;
 }
 
-type SyncFunction = (userId: string, onProgress: (percent: number, phase?: string) => void) => Promise<void>;
+/** Sync functions can optionally return a warning string (e.g., "cap exceeded") */
+type SyncFunction = (userId: string, onProgress: (percent: number, phase?: string) => void) => Promise<string | void>;
 
 type StateListener = (state: SyncOrchestratorState) => void;
 
@@ -163,6 +166,12 @@ class SyncOrchestratorServiceClass {
           }
           onProgress(100);
           console.log('[SyncOrchestrator] Messages sync complete, imported:', result.messagesImported);
+
+          // Return warning if message cap was exceeded
+          if (result.wasCapped && result.totalAvailable) {
+            const excluded = result.totalAvailable - result.messagesImported;
+            return `${excluded.toLocaleString()} messages excluded by import limit. Adjust in Settings.`;
+          }
         } finally {
           cleanup();
         }
@@ -309,13 +318,13 @@ class SyncOrchestratorServiceClass {
 
       try {
         // Run the sync with progress callback
-        await syncFn(userId, (percent, phase) => {
+        const warning = await syncFn(userId, (percent, phase) => {
           this.updateQueueItem(type, { progress: percent, phase });
           this.updateOverallProgress();
         });
 
-        // Mark complete (clear phase)
-        this.updateQueueItem(type, { status: 'complete', progress: 100, phase: undefined });
+        // Mark complete (clear phase), attach warning if returned
+        this.updateQueueItem(type, { status: 'complete', progress: 100, phase: undefined, warning: warning || undefined });
       } catch (error) {
         // Check if it was cancelled
         if (this.abortController?.signal.aborted) {
