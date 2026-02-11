@@ -530,3 +530,4 @@ BACKLOG-644,Extract AppModals.tsx below 150-line trigger,refactor,High,Completed
 BACKLOG-645,Decompose transaction-handlers.ts (3302 lines),refactor,High,Deferred,,-,-,-,2026-02-10,,"Too risky for overnight autonomous execution — defer to supervised session"
 BACKLOG-646,Remove any types from transactionService.ts,type-safety,High,Completed,SPRINT-076,~25K,~13.5K,-46%,2026-02-10,2026-02-10,
 BACKLOG-647,Add tests for AppRouter.tsx and AppModals.tsx,test,Medium,Completed,SPRINT-076,~35K,~7K,-80%,2026-02-10,2026-02-10,
+BACKLOG-648,DMG vs Dev Mode Keychain Conflict Breaks Database Init,bug,High,Completed,,~5K,-,-,2026-02-10,2026-02-10,items/BACKLOG-648.md
