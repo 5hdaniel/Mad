@@ -208,7 +208,10 @@ export function useAutoRefresh({
       // Order: Contacts (fast) → Emails (if AI addon) → Messages (slow)
       const typesToSync: SyncType[] = [];
 
-      if (isMacOS && hasPermissions) {
+      // TASK-1953: Contacts sync includes both macOS Contacts and Outlook contacts.
+      // Trigger contacts sync if macOS with permissions OR if email is connected
+      // (Outlook contacts work on all platforms via Graph API).
+      if ((isMacOS && hasPermissions) || emailConnected) {
         typesToSync.push('contacts');
       }
       // Only sync emails if AI addon enabled and email connected
