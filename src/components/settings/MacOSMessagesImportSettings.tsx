@@ -120,6 +120,7 @@ export function MacOSMessagesImportSettings({
   const handleLookbackChange = async (value: string) => {
     const months = value === "all" ? null : Number(value);
     setLookbackMonths(months);
+    setLastResult(null); // Clear stale result from previous filter settings
     try {
       await window.api.preferences.update(userId, {
         messageImport: {
@@ -137,6 +138,7 @@ export function MacOSMessagesImportSettings({
   const handleMaxMessagesChange = async (value: string) => {
     const cap = value === "unlimited" ? null : Number(value);
     setMaxMessages(cap);
+    setLastResult(null); // Clear stale result from previous filter settings
     try {
       await window.api.preferences.update(userId, {
         messageImport: {
