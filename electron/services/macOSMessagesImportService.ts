@@ -28,6 +28,16 @@ import logService from "./logService";
 import { getMessageText } from "../utils/messageParser";
 import { macTimestampToDate } from "../utils/dateUtils";
 import { detectMessageType } from "../utils/messageTypeDetector";
+import { MAC_EPOCH } from "../constants";
+
+/**
+ * Filter options for message import (TASK-1952)
+ * Controls which messages are imported based on date range and count cap
+ */
+export interface MessageImportFilters {
+  lookbackMonths?: number | null; // null = all time
+  maxMessages?: number | null; // null = unlimited
+}
 
 /**
  * Create a tqdm-style progress bar for console output
@@ -286,11 +296,13 @@ class MacOSMessagesImportService {
    * @param userId - User ID
    * @param onProgress - Progress callback
    * @param forceReimport - If true, delete existing messages first and re-import all
+   * @param filters - Optional date range and count cap filters (TASK-1952)
    */
   async importMessages(
     userId: string,
     onProgress?: ImportProgressCallback,
-    forceReimport = false
+    forceReimport = false,
+    filters?: MessageImportFilters
   ): Promise<MacOSImportResult> {
     const startTime = Date.now();
 
@@ -364,7 +376,7 @@ class MacOSMessagesImportService {
     }
 
     try {
-      return await this.doImport(userId, onProgress, startTime, forceReimport);
+      return await this.doImport(userId, onProgress, startTime, forceReimport, filters);
     } finally {
       this.isImporting = false;
       this.importStartedAt = null;
@@ -407,7 +419,8 @@ class MacOSMessagesImportService {
     userId: string,
     onProgress: ImportProgressCallback | undefined,
     startTime: number,
-    forceReimport: boolean
+    forceReimport: boolean,
+    filters?: MessageImportFilters
   ): Promise<MacOSImportResult> {
     // Check platform - macOS only
     if (os.platform() !== "darwin") {
@@ -469,14 +482,54 @@ class MacOSMessagesImportService {
       const dbClose = promisify(db.close.bind(db));
 
       try {
-        // First, get total message count for progress reporting
-        const countResult = await dbAll<{ count: number }>(`
+        // TASK-1952: Calculate Apple epoch cutoff for date range filter
+        // macOS Messages stores dates as nanoseconds since 2001-01-01 (Apple epoch)
+        let appleDateCutoffNano: number | null = null;
+        if (filters?.lookbackMonths && filters.lookbackMonths > 0) {
+          const cutoffDate = new Date();
+          cutoffDate.setMonth(cutoffDate.getMonth() - filters.lookbackMonths);
+          // Convert JS milliseconds to Apple epoch nanoseconds
+          const cutoffMs = cutoffDate.getTime() - MAC_EPOCH;
+          appleDateCutoffNano = cutoffMs * 1000000; // Convert ms to nanoseconds
+          logService.info(
+            `Date filter: lookback ${filters.lookbackMonths} months, cutoff ${cutoffDate.toISOString()}`,
+            MacOSMessagesImportService.SERVICE_NAME
+          );
+        }
+
+        // Build date filter clause for SQL queries
+        const dateFilterClause = appleDateCutoffNano !== null
+          ? `AND message.date > ${appleDateCutoffNano}`
+          : "";
+
+        // First, get total message count (unfiltered for "X of Y" display)
+        const totalCountResult = await dbAll<{ count: number }>(`
           SELECT COUNT(*) as count FROM message WHERE guid IS NOT NULL
         `);
-        const totalMessageCount = countResult[0]?.count || 0;
+        const totalAvailableCount = totalCountResult[0]?.count || 0;
+
+        // Get filtered count (with date filter applied)
+        const filteredCountResult = await dbAll<{ count: number }>(`
+          SELECT COUNT(*) as count FROM message WHERE guid IS NOT NULL ${dateFilterClause}
+        `);
+        const filteredMessageCount = filteredCountResult[0]?.count || 0;
+
+        // Apply count cap to determine actual target count
+        const maxMessages = filters?.maxMessages ?? null;
+        const targetMessageCount = maxMessages && maxMessages > 0
+          ? Math.min(filteredMessageCount, maxMessages)
+          : filteredMessageCount;
+
+        // Use filtered count for progress (or capped count)
+        const totalMessageCount = targetMessageCount;
 
         // Calculate dynamic batch size based on total messages
         const queryBatchSize = calculateQueryBatchSize(totalMessageCount);
+
+        logService.info(
+          `Message counts: ${totalAvailableCount} total, ${filteredMessageCount} after date filter, ${targetMessageCount} target (cap: ${maxMessages ?? "none"})`,
+          MacOSMessagesImportService.SERVICE_NAME
+        );
 
         logService.info(
           `Found ${totalMessageCount} messages in macOS Messages, fetching in batches of ${queryBatchSize}`,
@@ -551,6 +604,8 @@ class MacOSMessagesImportService {
 
         // Fetch messages using cursor-based pagination to avoid loading all 600K+ at once
         // This prevents the UI from freezing during the initial query
+        // TASK-1952: When maxMessages cap is set, fetch most recent messages first (ORDER BY date DESC)
+        // then reverse for chronological processing
         const allMessages: RawMacMessage[] = [];
         let lastRowId = 0;
         let fetchedCount = 0;
@@ -579,7 +634,12 @@ class MacOSMessagesImportService {
             };
           }
 
+          // TASK-1952: Calculate remaining messages to fetch (respect count cap)
+          const remaining = totalMessageCount - fetchedCount;
+          const batchLimit = Math.min(queryBatchSize, remaining);
+
           // Fetch next batch using cursor-based pagination (ROWID for efficient indexing)
+          // TASK-1952: Added date filter clause when lookback filter is active
           const messageBatch = await dbAll<RawMacMessage>(`
             SELECT
               message.ROWID as id,
@@ -596,9 +656,10 @@ class MacOSMessagesImportService {
             LEFT JOIN handle ON message.handle_id = handle.ROWID
             LEFT JOIN chat_message_join ON message.ROWID = chat_message_join.message_id
             WHERE message.guid IS NOT NULL AND message.ROWID > ?
+              ${dateFilterClause}
             ORDER BY message.ROWID ASC
             LIMIT ?
-          `, [lastRowId, queryBatchSize]);
+          `, [lastRowId, batchLimit]);
 
           if (messageBatch.length === 0) {
             break; // No more messages
@@ -613,12 +674,13 @@ class MacOSMessagesImportService {
           fetchedCount += messageBatch.length;
 
           // Update progress
-          queryProgressBar.update(fetchedCount);
+          const progressTotal = totalMessageCount;
+          queryProgressBar.update(Math.min(fetchedCount, progressTotal));
           onProgress?.({
             phase: "querying",
-            current: fetchedCount,
-            total: totalMessageCount,
-            percent: Math.round((fetchedCount / totalMessageCount) * 100),
+            current: Math.min(fetchedCount, progressTotal),
+            total: progressTotal,
+            percent: Math.round((Math.min(fetchedCount, progressTotal) / progressTotal) * 100),
           });
 
           // Yield to event loop to keep UI responsive
@@ -1458,10 +1520,12 @@ class MacOSMessagesImportService {
 
   /**
    * Get count of messages available for import
+   * TASK-1952: Supports optional filters to show filtered vs total count
    */
-  async getAvailableMessageCount(): Promise<{
+  async getAvailableMessageCount(filters?: MessageImportFilters): Promise<{
     success: boolean;
     count?: number;
+    filteredCount?: number;
     error?: string;
   }> {
     // Check platform
@@ -1494,15 +1558,38 @@ class MacOSMessagesImportService {
       const dbClose = promisify(db.close.bind(db));
 
       try {
-        const result = await dbGet(`
+        // Total count (unfiltered)
+        const totalResult = await dbGet(`
           SELECT COUNT(*) as count FROM message WHERE guid IS NOT NULL
         `);
+        const totalCount = totalResult?.count || 0;
+
+        // TASK-1952: Calculate filtered count when filters are active
+        let filteredCount = totalCount;
+        if (filters?.lookbackMonths && filters.lookbackMonths > 0) {
+          const cutoffDate = new Date();
+          cutoffDate.setMonth(cutoffDate.getMonth() - filters.lookbackMonths);
+          const cutoffMs = cutoffDate.getTime() - MAC_EPOCH;
+          const appleDateCutoffNano = cutoffMs * 1000000;
+
+          const filteredResult = await dbGet(`
+            SELECT COUNT(*) as count FROM message
+            WHERE guid IS NOT NULL AND date > ${appleDateCutoffNano}
+          `);
+          filteredCount = filteredResult?.count || 0;
+        }
+
+        // Apply count cap
+        if (filters?.maxMessages && filters.maxMessages > 0) {
+          filteredCount = Math.min(filteredCount, filters.maxMessages);
+        }
 
         await dbClose();
 
         return {
           success: true,
-          count: result?.count || 0,
+          count: totalCount,
+          filteredCount: filteredCount !== totalCount ? filteredCount : undefined,
         };
       } catch (error) {
         await dbClose();
