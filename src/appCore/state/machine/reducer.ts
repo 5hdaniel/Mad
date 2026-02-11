@@ -428,6 +428,11 @@ export function appStateReducer(
         // Preserve hasPermissions from loaded data so selector can access it
         // Fixes bug where users with FDA granted were stuck on permissions step
         hasPermissions: data.hasPermissions,
+        // Preserve hasEmailConnected so returning users with email already
+        // connected don't get shown the email-connect step unnecessarily.
+        // Without this, OnboardingState.hasEmailConnected defaults to undefined,
+        // causing selectHasEmailConnectedNullable to return false.
+        hasEmailConnected: data.hasEmailConnected,
         // Preserve deferredDbInit for first-time macOS installs (even for returning users)
         deferredDbInit,
       };

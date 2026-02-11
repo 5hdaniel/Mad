@@ -223,10 +223,70 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
     [app]
   );
 
-  // Handle onboarding completion
+  // Handle onboarding completion - called when last visible step completes.
+  // Dispatches state machine actions for any steps that were hidden (already
+  // satisfied) but never formally completed. This bridges the UI flow (which
+  // hides satisfied steps) and the state machine (which requires explicit
+  // ONBOARDING_STEP_COMPLETE dispatches to transition to "ready").
+  //
+  // BUG FIX: Previously called app.goToStep("dashboard") which is a no-op
+  // since navigation is derived from the state machine (commit 2485bc5d).
+  // This caused returning users with email already connected to get stuck
+  // on the data-sync step permanently (SPRINT-070 regression).
   const handleComplete = useCallback(() => {
-    app.goToStep("dashboard");
-  }, [app]);
+    if (!machineState || machineState.state.status !== "onboarding") return;
+
+    const { state, dispatch } = machineState;
+    const completed = state.completedSteps;
+
+    // phone-type: if already selected but not in completedSteps
+    if (!completed.includes("phone-type") && appState.phoneType) {
+      dispatch({
+        type: "ONBOARDING_STEP_COMPLETE",
+        step: "phone-type",
+        phoneType: appState.phoneType,
+      });
+    }
+
+    // apple-driver (Windows + iPhone): if driver set up but not completed
+    if (
+      state.platform.isWindows &&
+      appState.phoneType === "iphone" &&
+      !completed.includes("apple-driver") &&
+      appState.driverSetupComplete
+    ) {
+      dispatch({
+        type: "ONBOARDING_STEP_COMPLETE",
+        step: "apple-driver",
+      });
+    }
+
+    // permissions (macOS): if granted but not completed
+    if (
+      state.platform.isMacOS &&
+      appState.hasPermissions === true &&
+      !completed.includes("permissions")
+    ) {
+      dispatch({
+        type: "ONBOARDING_STEP_COMPLETE",
+        step: "permissions",
+      });
+    }
+
+    // email-connect: the critical blocking step. Dispatch synchronously to
+    // unblock the state machine, then persist to API fire-and-forget so
+    // it doesn't recur on next login.
+    if (!completed.includes("email-connect")) {
+      dispatch({
+        type: "ONBOARDING_STEP_COMPLETE",
+        step: "email-connect",
+      });
+      // Persist to API (async, fire-and-forget)
+      app.handleEmailOnboardingComplete().catch((err: unknown) => {
+        console.error("[OnboardingFlow] Failed to persist email onboarding:", err);
+      });
+    }
+  }, [machineState, appState, app]);
 
   // Map app's currentStep to onboarding step ID
   // This ensures the OnboardingFlow starts at the correct step based on routing
@@ -308,11 +368,25 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
   const hasNavigatedRef = useRef(false);
 
   useEffect(() => {
-    if (steps.length === 0 && !hasNavigatedRef.current) {
+    if (steps.length === 0 && !hasNavigatedRef.current && machineState) {
       hasNavigatedRef.current = true;
-      app.goToStep("dashboard");
+      const { state, dispatch } = machineState;
+      if (state.status === "onboarding") {
+        // All steps filtered out means all conditions are met.
+        // Dispatch email-connect completion if needed (the blocking step).
+        // BUG FIX: app.goToStep("dashboard") is a no-op.
+        if (!state.completedSteps.includes("email-connect")) {
+          dispatch({
+            type: "ONBOARDING_STEP_COMPLETE",
+            step: "email-connect",
+          });
+          app.handleEmailOnboardingComplete().catch((err: unknown) => {
+            console.error("[OnboardingFlow] Failed to persist email onboarding:", err);
+          });
+        }
+      }
     }
-  }, [steps.length, app]);
+  }, [steps.length, machineState, app]);
 
   // CRITICAL: Return null immediately when no steps are visible
   // This prevents the flicker where onboarding screens briefly appear

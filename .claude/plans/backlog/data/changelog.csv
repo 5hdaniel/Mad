@@ -220,3 +220,4 @@ date,action,details,items_affected
 2026-02-02,create,"Created BACKLOG-604 (iOS attributedBody parsing) - Location sharing messages show wrong text",BACKLOG-604
 2026-02-02,create,"Created TASK-1797 for BACKLOG-604 implementation",TASK-1797
 2026-02-02,assign,"Added TASK-1797 to SPRINT-068 Testing Phase",SPRINT-068
+2026-02-10,create,"Created BACKLOG-649 (Onboarding data-sync step stuck for returning users with email connected) - HIGH priority bug introduced by SPRINT-070 PR #744",BACKLOG-649
