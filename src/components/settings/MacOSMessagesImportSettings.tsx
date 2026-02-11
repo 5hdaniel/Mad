@@ -50,8 +50,8 @@ export function MacOSMessagesImportSettings({
   } | null>(null);
 
   // TASK-1952: Import filter state
-  const [lookbackMonths, setLookbackMonths] = useState<number | null>(null);
-  const [maxMessages, setMaxMessages] = useState<number | null>(null);
+  const [lookbackMonths, setLookbackMonths] = useState<number | null>(6);
+  const [maxMessages, setMaxMessages] = useState<number | null>(250000);
 
   // Load import status and filter preferences on mount
   useEffect(() => {
