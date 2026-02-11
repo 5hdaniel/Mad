@@ -42,6 +42,9 @@ interface PreferencesResult {
     sync?: {
       autoSyncOnLogin?: boolean;
     };
+    updates?: {
+      autoDownload?: boolean;
+    };
   };
 }
 
@@ -77,6 +80,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
   const [exportFormat, setExportFormat] = useState<string>("pdf"); // Default export format
   const [scanLookbackMonths, setScanLookbackMonths] = useState<number>(9); // Default 9 months
   const [autoSyncOnLogin, setAutoSyncOnLogin] = useState<boolean>(true); // Default auto-sync ON
+  const [autoDownloadUpdates, setAutoDownloadUpdates] = useState<boolean>(false); // Default auto-download OFF
   const [loadingPreferences, setLoadingPreferences] = useState<boolean>(true);
 
   // Database maintenance state
@@ -172,6 +176,10 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         if (typeof result.preferences.sync?.autoSyncOnLogin === "boolean") {
           setAutoSyncOnLogin(result.preferences.sync.autoSyncOnLogin);
         }
+        // Load auto-download updates preference (default is false if not set)
+        if (typeof result.preferences.updates?.autoDownload === "boolean") {
+          setAutoDownloadUpdates(result.preferences.updates.autoDownload);
+        }
       } else if (!result.success) {
         console.error("[Settings] Failed to load preferences:", result.error);
       }
@@ -222,6 +230,22 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
       await window.api.preferences.update(userId, {
         sync: {
           autoSyncOnLogin: newValue,
+        },
+      });
+      // Silently handle - preference will still be applied locally for this session
+    } catch {
+      // Silently handle - preference will still be applied locally for this session
+    }
+  };
+
+  const handleAutoDownloadToggle = async (): Promise<void> => {
+    const newValue = !autoDownloadUpdates;
+    setAutoDownloadUpdates(newValue);
+    try {
+      // Update auto-download updates preference
+      await window.api.preferences.update(userId, {
+        updates: {
+          autoDownload: newValue,
         },
       });
       // Silently handle - preference will still be applied locally for this session
@@ -473,6 +497,34 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                     <span
                       className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
                         autoSyncOnLogin ? "translate-x-6" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Auto-Download Updates */}
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex-1">
+                    <h4 className="text-sm font-medium text-gray-900">
+                      Auto-download Updates
+                    </h4>
+                    <p className="text-xs text-gray-600 mt-1">
+                      Automatically download new software updates in the background
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleAutoDownloadToggle}
+                    disabled={loadingPreferences}
+                    className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                      autoDownloadUpdates ? "bg-blue-500" : "bg-gray-300"
+                    }`}
+                    role="switch"
+                    aria-checked={autoDownloadUpdates}
+                    aria-label="Auto-download updates"
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        autoDownloadUpdates ? "translate-x-6" : "translate-x-1"
                       }`}
                     />
                   </button>

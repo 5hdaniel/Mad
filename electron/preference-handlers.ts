@@ -7,6 +7,7 @@ import { ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import supabaseService from "./services/supabaseService";
 import logService from "./services/logService";
+import updateService from "./services/updateService";
 
 // Import validation utilities
 import {
@@ -152,6 +153,19 @@ export function registerPreferenceHandlers(): void {
           validatedUserId,
           updatedPreferences,
         );
+
+        // TASK-1948: Sync auto-download preference to UpdateService
+        const updatesPrefs = sanitizedPartialPreferences as Record<string, unknown>;
+        if (updatesPrefs.updates && typeof updatesPrefs.updates === "object") {
+          const updates = updatesPrefs.updates as Record<string, unknown>;
+          if (typeof updates.autoDownload === "boolean") {
+            await updateService.updateConfig({ autoDownload: updates.autoDownload });
+            logService.info(
+              `[Preferences] Updated autoDownload to ${updates.autoDownload}`,
+              "Preferences"
+            );
+          }
+        }
 
         return {
           success: true,
