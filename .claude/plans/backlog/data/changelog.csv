@@ -232,3 +232,4 @@ date,action,details,items_affected
 2026-02-10,complete,"SPRINT-078 completed: 4 tasks (TASK-1949-1952). Contact source prefs UI (PR #797), message import filter (PR #798), wire direct imports (PR #799), wire inferred contacts (PR #800). All merged to develop.",SPRINT-078
 2026-02-10,complete,"BACKLOG-634 (Message Import Date Filter) - Implemented by TASK-1952 (PR #798) in SPRINT-078",BACKLOG-634
 2026-02-10,create,"Created BACKLOG-657 (Message Import Cap Warning & Default Filters) - Follow-up to SPRINT-078. Sets default 6-month/250K filters, adds cap warning UI. PR #801 on branch fix/message-import-default-filters.",BACKLOG-657
+2026-02-10,sprint_created,"SPRINT-079 created with 3 contact bug fixes: BACKLOG-658 (Outlook auto-sync), BACKLOG-659 (source filter), BACKLOG-660 (import refresh)","BACKLOG-658,BACKLOG-659,BACKLOG-660"
