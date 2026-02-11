@@ -33,6 +33,12 @@ describe("SourcePill", () => {
       expect(screen.getByText("Message")).toBeInTheDocument();
       expect(screen.getByTestId("source-pill-message")).toBeInTheDocument();
     });
+
+    it('renders "Outlook" for source="outlook"', () => {
+      render(<SourcePill source="outlook" />);
+      expect(screen.getByText("Outlook")).toBeInTheDocument();
+      expect(screen.getByTestId("source-pill-outlook")).toBeInTheDocument();
+    });
   });
 
   describe("size variants", () => {
@@ -72,6 +78,12 @@ describe("SourcePill", () => {
       render(<SourcePill source="manual" />);
       const pill = screen.getByTestId("source-pill-manual");
       expect(pill).toHaveClass("bg-green-100", "text-green-700");
+    });
+
+    it("applies indigo styles for outlook variant", () => {
+      render(<SourcePill source="outlook" />);
+      const pill = screen.getByTestId("source-pill-outlook");
+      expect(pill).toHaveClass("bg-indigo-100", "text-indigo-700");
     });
 
     it("applies custom className", () => {

@@ -61,6 +61,9 @@ function ContactSelectModal({
     }
   });
 
+  // TASK-1954: Source filter for contact selection
+  const [sourceFilter, setSourceFilter] = useState<string>("all");
+
   // Persist toggle state to localStorage
   useEffect(() => {
     try {
@@ -214,8 +217,20 @@ function ContactSelectModal({
       result = result.filter((c) => !isMessageDerived(c));
     }
 
+    // TASK-1954: Apply source filter
+    if (sourceFilter !== "all") {
+      result = result.filter((c) => {
+        const contactSource = (c.source ?? "").toLowerCase();
+        // Map "sms" filter to include both "sms" and "messages" sources
+        if (sourceFilter === "sms") {
+          return contactSource === "sms" || contactSource === "messages";
+        }
+        return contactSource === sourceFilter;
+      });
+    }
+
     return result;
-  }, [searchResults, searchQuery, availableContacts, excludeIds, showMessageContacts]);
+  }, [searchResults, searchQuery, availableContacts, excludeIds, showMessageContacts, sourceFilter]);
 
   const handleToggleContact = (contactId: string) => {
     if (multiple) {
@@ -351,6 +366,30 @@ function ContactSelectModal({
               </button>
             )}
           </div>
+        </div>
+
+        {/* TASK-1954: Source Filter Pills */}
+        <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 flex items-center gap-2 flex-wrap">
+          {[
+            { value: "all", label: "All Sources" },
+            { value: "contacts_app", label: "Contacts App" },
+            { value: "outlook", label: "Outlook" },
+            { value: "email", label: "Email" },
+            { value: "sms", label: "Message" },
+            { value: "manual", label: "Manual" },
+          ].map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setSourceFilter(opt.value)}
+              className={`px-3 py-1 text-xs rounded-full font-medium transition-all ${
+                sourceFilter === opt.value
+                  ? "bg-purple-500 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
         </div>
 
         {/* Contacts List */}

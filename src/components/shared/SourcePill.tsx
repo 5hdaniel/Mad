@@ -9,6 +9,7 @@ export type ContactSource =
   | "external"
   | "manual"
   | "contacts_app"
+  | "outlook"
   | "sms"
   | "messages"
   | "email";
@@ -22,7 +23,7 @@ export interface SourcePillProps {
   className?: string;
 }
 
-type Variant = "imported" | "external" | "message" | "manual" | "email";
+type Variant = "imported" | "external" | "message" | "manual" | "email" | "outlook";
 
 const VARIANT_STYLES: Record<Variant, { bg: string; text: string; label: string }> = {
   imported: {
@@ -50,6 +51,11 @@ const VARIANT_STYLES: Record<Variant, { bg: string; text: string; label: string 
     text: "text-sky-700",
     label: "Email",
   },
+  outlook: {
+    bg: "bg-indigo-100",
+    text: "text-indigo-700",
+    label: "Outlook",
+  },
 };
 
 const SIZE_STYLES: Record<"sm" | "md", string> = {
@@ -62,7 +68,9 @@ const SIZE_STYLES: Record<"sm" | "md", string> = {
  * - manual -> 'manual' (green)
  * - imported, contacts_app -> 'imported' (blue)
  * - external -> 'external' (violet)
+ * - outlook -> 'outlook' (indigo)
  * - sms, messages -> 'message' (amber)
+ * - email -> 'email' (sky)
  */
 function getVariant(source: ContactSource): Variant {
   switch (source) {
@@ -73,6 +81,8 @@ function getVariant(source: ContactSource): Variant {
       return "imported";
     case "external":
       return "external";
+    case "outlook":
+      return "outlook";
     case "sms":
     case "messages":
       return "message";
