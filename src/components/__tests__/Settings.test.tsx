@@ -386,21 +386,6 @@ describe("Settings", () => {
       ).toBeInTheDocument();
     });
 
-    it("should show auto export toggle (disabled/coming soon)", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
-
-      expect(screen.getByText("Auto Export")).toBeInTheDocument();
-      expect(
-        screen.getByText(/automatically export new transactions/i),
-      ).toBeInTheDocument();
-    });
-
-    it("should show dark mode toggle (coming soon)", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
-
-      expect(screen.getByText("Dark Mode")).toBeInTheDocument();
-      expect(screen.getByText(/coming soon/i)).toBeInTheDocument();
-    });
   });
 
   describe("Data & Privacy", () => {

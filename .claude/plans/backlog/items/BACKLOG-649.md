@@ -1,4 +1,4 @@
-# BACKLOG-648: Onboarding data-sync step stuck for returning users with email connected
+# BACKLOG-649: Onboarding data-sync step stuck for returning users with email connected
 
 ## Priority: High
 ## Category: Bug
