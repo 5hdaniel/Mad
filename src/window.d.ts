@@ -282,7 +282,7 @@ interface MainAPI {
     /** Import messages from macOS Messages app into the app database (macOS only) */
     importMacOSMessages: (userId: string, forceReimport?: boolean) => Promise<MacOSImportResult>;
     /** Get count of messages available for import from macOS Messages */
-    getImportCount: () => Promise<{ success: boolean; count?: number; error?: string }>;
+    getImportCount: (filters?: { lookbackMonths?: number | null; maxMessages?: number | null }) => Promise<{ success: boolean; count?: number; filteredCount?: number; error?: string }>;
     /** Listen for import progress updates */
     onImportProgress: (callback: (progress: MacOSImportProgress) => void) => () => void;
     /** Get attachments for a message with base64 data (TASK-1012) */
@@ -1061,6 +1061,23 @@ interface MainAPI {
       transactions?: Transaction[];
       error?: string;
     }>;
+
+    /**
+     * Get earliest communication date for a set of contacts (TASK-1974)
+     * Used by audit wizard to auto-detect transaction start date
+     * @param contactIds - Array of contact IDs to search
+     * @param userId - User ID who owns the communications
+     * @returns Earliest communication date (ISO string) or null
+     */
+    getEarliestCommunicationDate: (
+      contactIds: string[],
+      userId: string,
+    ) => Promise<{
+      success: boolean;
+      date?: string | null;
+      error?: string;
+    }>;
+
     scan: (
       userId: string,
       options?: Record<string, unknown>,

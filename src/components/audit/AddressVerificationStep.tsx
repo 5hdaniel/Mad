@@ -2,6 +2,8 @@
  * AddressVerificationStep Component
  * Step 1 of the AuditTransactionModal - Address input and verification
  * Extracted from AuditTransactionModal as part of TASK-974 decomposition
+ *
+ * TASK-1974: Added Auto/Manual toggle for start date auto-detection
  */
 import React from "react";
 import type { AddressData, AddressSuggestion } from "../../hooks/useAuditTransaction";
@@ -16,6 +18,24 @@ interface AddressVerificationStepProps {
   showAutocomplete: boolean;
   suggestions: AddressSuggestion[];
   onSelectSuggestion: (suggestion: AddressSuggestion) => void;
+  // Auto-detect start date props (TASK-1974)
+  startDateMode?: "auto" | "manual";
+  onStartDateModeChange?: (mode: "auto" | "manual") => void;
+  autoDetectedDate?: string | null | undefined;
+  isAutoDetecting?: boolean;
+}
+
+/**
+ * Format a date string (YYYY-MM-DD) to readable format (e.g., "Sep 1, 2019")
+ */
+function formatDateReadable(dateStr: string): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function AddressVerificationStep({
@@ -28,7 +48,17 @@ function AddressVerificationStep({
   showAutocomplete,
   suggestions,
   onSelectSuggestion,
+  startDateMode = "manual",
+  onStartDateModeChange,
+  autoDetectedDate,
+  isAutoDetecting = false,
 }: AddressVerificationStepProps): React.ReactElement {
+  const isAutoMode = startDateMode === "auto";
+  const hasAutoDate = isAutoMode && autoDetectedDate !== null && autoDetectedDate !== undefined;
+  const showNoCommsHint = isAutoMode && !isAutoDetecting && autoDetectedDate === null;
+  const awaitingContacts = isAutoMode && !hasAutoDate && !showNoCommsHint && !isAutoDetecting;
+  const todayFormatted = formatDateReadable(new Date().toISOString().split("T")[0]);
+
   return (
     <div className="space-y-6">
       <div>
@@ -102,13 +132,109 @@ function AddressVerificationStep({
         </div>
       </div>
 
-      {/* Transaction Date Range */}
+      {/* Transaction Dates */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-3">
-          Transaction Dates
-        </label>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div>
+        <div className="flex items-center justify-between mb-3">
+          <label className="block text-sm font-medium text-gray-700">
+            {isAutoMode ? "Audit Period" : "Transaction Dates"}
+          </label>
+          {/* Auto/Manual toggle (TASK-1974) */}
+          {onStartDateModeChange && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => onStartDateModeChange("auto")}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                  isAutoMode
+                    ? "bg-indigo-500 text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                Auto
+              </button>
+              <button
+                type="button"
+                onClick={() => onStartDateModeChange("manual")}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                  !isAutoMode
+                    ? "bg-indigo-500 text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                Manual
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Auto mode: formatted audit period display */}
+        {isAutoMode && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 mb-4">
+            {isAutoDetecting ? (
+              <div className="flex items-center gap-2">
+                <svg
+                  className="animate-spin h-4 w-4 text-indigo-500"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+                <span className="text-sm text-indigo-700">
+                  Detecting from communications...
+                </span>
+              </div>
+            ) : awaitingContacts ? (
+              <div>
+                <p className="text-sm font-medium text-indigo-900">
+                  auto <span className="text-indigo-500">(pending...)</span>{" "}
+                  <span className="text-indigo-400">—</span>{" "}
+                  {todayFormatted}
+                </p>
+                <p className="text-xs text-indigo-600 mt-1">
+                  Start date will be set after selecting contacts in Step 2
+                </p>
+              </div>
+            ) : (
+              <div>
+                <p className="text-sm font-medium text-indigo-900">
+                  auto{" "}
+                  <span className="text-indigo-700">
+                    ({formatDateReadable(addressData.started_at)})
+                  </span>{" "}
+                  <span className="text-indigo-400">—</span>{" "}
+                  {todayFormatted}
+                </p>
+                {hasAutoDate && (
+                  <p className="text-xs text-indigo-600 mt-1">
+                    Based on earliest client communication
+                  </p>
+                )}
+                {showNoCommsHint && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    No communications found — using default (60 days ago)
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Manual mode: start date input */}
+        {!isAutoMode && (
+          <div className="mb-4">
             <label className="block text-xs font-medium text-gray-600 mb-1">
               Representation Start Date *
               <span
@@ -132,9 +258,13 @@ function AddressVerificationStep({
               required
             />
             <p className="text-xs text-gray-500 mt-1">
-              Required - The date you began representing this client
+              Required — The date you began representing this client
             </p>
           </div>
+        )}
+
+        {/* Closing date and end date — always visible */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
               Closing Date

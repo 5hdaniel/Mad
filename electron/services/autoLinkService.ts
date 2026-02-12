@@ -16,6 +16,7 @@ import {
   isThreadLinkedToTransaction,
 } from "./db/communicationDbService";
 
+
 // ============================================
 // TYPES
 // ============================================
@@ -301,10 +302,14 @@ async function findMessagesByContactPhones(
 
   const params: (string | number)[] = [userId, transactionId, transactionId];
 
-  // Add phone patterns (extract digits for matching)
+  // Add phone patterns — use last 10 digits for suffix matching.
+  // participants_flat may store phones with or without country code
+  // (e.g. "13609181693" vs "3609181693"), so matching on the last 10
+  // digits ensures both formats are found.
   for (const phone of phoneNumbers) {
     const digits = phone.replace(/\D/g, "");
-    params.push(`%${digits}%`);
+    const matchDigits = digits.length > 10 ? digits.slice(-10) : digits;
+    params.push(`%${matchDigits}%`);
   }
 
   // Add date range
@@ -507,22 +512,28 @@ export async function autoLinkCommunicationsForContact(
     );
 
     // 5. Find matching text messages (from messages table)
-    const messagesWithThreads = await findMessagesByContactPhones(
-      userId,
-      contactInfo.phoneNumbers,
-      transactionId,
-      dateRange,
-      limit
-    );
+    // Auto-linking messages to a transaction for an assigned contact is always
+    // enabled. The "inferred messages" preference only gates contact *discovery*
+    // from messages — it should NOT prevent linking messages for known contacts.
+    let messagesWithThreads: MessageWithThread[] = [];
+    if (contactInfo.phoneNumbers.length > 0) {
+      messagesWithThreads = await findMessagesByContactPhones(
+        userId,
+        contactInfo.phoneNumbers,
+        transactionId,
+        dateRange,
+        limit
+      );
 
-    await logService.debug(
-      `Found ${messagesWithThreads.length} matching messages for contact ${contactId}`,
-      "AutoLinkService",
-      {
-        messageCount: messagesWithThreads.length,
-        contactPhones: contactInfo.phoneNumbers,
-      }
-    );
+      await logService.debug(
+        `Found ${messagesWithThreads.length} matching messages for contact ${contactId}`,
+        "AutoLinkService",
+        {
+          messageCount: messagesWithThreads.length,
+          contactPhones: contactInfo.phoneNumbers,
+        }
+      );
+    }
 
     // 6. Link emails to transaction
     // Emails are already in the communications table, so we update

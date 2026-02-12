@@ -4,9 +4,12 @@
  * StatusHistory Component
  *
  * Displays a timeline of status changes for a submission.
- * Shows who made the change, when, and any notes.
+ * When a resubmission exists, shows only the current round by default
+ * with previous history collapsed behind a toggle.
  */
 
+import { useState } from 'react';
+import Link from 'next/link';
 import { formatDate } from '@/lib/utils';
 
 interface StatusHistoryEntry {
@@ -14,18 +17,15 @@ interface StatusHistoryEntry {
   changed_at: string;
   changed_by?: string;
   notes?: string;
+  parentSubmissionId?: string;
 }
 
 interface StatusHistoryProps {
   history: StatusHistoryEntry[];
   currentStatus: string;
-  submittedBy?: string;
   submittedAt?: string;
 }
 
-/**
- * Get status display info
- */
 function getStatusInfo(status: string): { label: string; color: string; bgColor: string; icon: string } {
   const statusMap: Record<string, { label: string; color: string; bgColor: string; icon: string }> = {
     submitted: {
@@ -77,22 +77,41 @@ function getStatusInfo(status: string): { label: string; color: string; bgColor:
 export function StatusHistory({
   history,
   currentStatus,
-  submittedBy,
   submittedAt,
 }: StatusHistoryProps) {
-  // Build timeline entries from history
-  const timelineEntries = [...history].sort(
-    (a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime()
-  );
+  // Build full timeline
+  const timelineEntries: StatusHistoryEntry[] = [];
 
-  // If no history but we have submission info, show at least the initial submission
-  if (timelineEntries.length === 0 && submittedAt) {
+  if (submittedAt) {
     timelineEntries.push({
       status: 'submitted',
       changed_at: submittedAt,
-      changed_by: submittedBy,
     });
   }
+
+  const sorted = [...history].sort(
+    (a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime()
+  );
+  for (const entry of sorted) {
+    if (entry.status === 'submitted' && timelineEntries.length > 0) continue;
+    timelineEntries.push(entry);
+  }
+
+  // Find the last "resubmitted" entry to split previous vs current round
+  const lastResubmitIdx = timelineEntries.reduce(
+    (acc, entry, idx) => (entry.status === 'resubmitted' ? idx : acc),
+    -1
+  );
+
+  const hasPreviousHistory = lastResubmitIdx > 0;
+  const previousEntries = hasPreviousHistory ? timelineEntries.slice(0, lastResubmitIdx) : [];
+  const currentEntries = hasPreviousHistory ? timelineEntries.slice(lastResubmitIdx) : timelineEntries;
+
+  // Get the parent submission ID from the resubmitted entry for linking
+  const resubmitEntry = hasPreviousHistory ? timelineEntries[lastResubmitIdx] : null;
+  const parentSubmissionId = resubmitEntry?.parentSubmissionId;
+
+  const [showPrevious, setShowPrevious] = useState(false);
 
   return (
     <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
@@ -107,84 +126,175 @@ export function StatusHistory({
           </p>
         ) : (
           <div className="flow-root">
+            {/* Collapsible previous history */}
+            {hasPreviousHistory && (
+              <div className="mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <button
+                    onClick={() => setShowPrevious(!showPrevious)}
+                    className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                  >
+                    <svg
+                      className={`h-3.5 w-3.5 transition-transform ${showPrevious ? 'rotate-90' : ''}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    {showPrevious ? 'Hide' : 'Show'} previous review ({previousEntries.length} steps)
+                  </button>
+                  {parentSubmissionId && (
+                    <Link
+                      href={`/dashboard/submissions/${parentSubmissionId}`}
+                      className="text-sm text-blue-500 hover:text-blue-700 underline"
+                    >
+                      View previous version
+                    </Link>
+                  )}
+                </div>
+
+                {showPrevious && (
+                  <div className="ml-1 pl-3 border-l-2 border-gray-200">
+                    <ul className="-mb-8">
+                      {previousEntries.map((entry, idx) => (
+                        <TimelineEntry
+                          key={`prev-${idx}`}
+                          entry={entry}
+                          isLast={idx === previousEntries.length - 1}
+                          isCurrent={false}
+                          dimmed
+                        />
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Current round */}
             <ul className="-mb-8">
-              {timelineEntries.map((entry, idx) => {
-                const isLast = idx === timelineEntries.length - 1;
-                const statusInfo = getStatusInfo(entry.status);
+              {currentEntries.map((entry, idx) => {
+                const isLast = idx === currentEntries.length - 1;
                 const isCurrent = isLast && entry.status === currentStatus;
 
                 return (
-                  <li key={idx}>
-                    <div className="relative pb-8">
-                      {/* Connecting line */}
-                      {!isLast && (
-                        <span
-                          className="absolute left-4 top-4 -ml-px h-full w-0.5 bg-gray-200"
-                          aria-hidden="true"
-                        />
-                      )}
-
-                      <div className="relative flex items-start space-x-3">
-                        {/* Icon */}
-                        <div>
-                          <span
-                            className={`h-8 w-8 rounded-full flex items-center justify-center ring-8 ring-white ${statusInfo.bgColor}`}
-                          >
-                            <svg
-                              className={`h-4 w-4 ${statusInfo.color}`}
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d={statusInfo.icon}
-                              />
-                            </svg>
-                          </span>
-                        </div>
-
-                        {/* Content */}
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-sm font-medium text-gray-900">
-                                {statusInfo.label}
-                                {isCurrent && (
-                                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
-                                    Current
-                                  </span>
-                                )}
-                              </p>
-                              {entry.changed_by && (
-                                <p className="mt-0.5 text-sm text-gray-500">
-                                  by {entry.changed_by}
-                                </p>
-                              )}
-                            </div>
-                            <time className="text-sm text-gray-400">
-                              {formatDate(entry.changed_at)}
-                            </time>
-                          </div>
-
-                          {/* Notes */}
-                          {entry.notes && (
-                            <div className="mt-2 text-sm text-gray-600 bg-gray-50 rounded-md p-3">
-                              {entry.notes}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </li>
+                  <TimelineEntry
+                    key={`curr-${idx}`}
+                    entry={entry}
+                    isLast={isLast}
+                    isCurrent={isCurrent}
+                  />
                 );
               })}
             </ul>
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function TimelineEntry({
+  entry,
+  isLast,
+  isCurrent,
+  dimmed = false,
+}: {
+  entry: StatusHistoryEntry;
+  isLast: boolean;
+  isCurrent: boolean;
+  dimmed?: boolean;
+}) {
+  const statusInfo = getStatusInfo(entry.status);
+
+  return (
+    <li className={dimmed ? 'opacity-60' : ''}>
+      <div className="relative pb-8">
+        {!isLast && (
+          <span
+            className="absolute left-4 top-4 -ml-px h-full w-0.5 bg-gray-200"
+            aria-hidden="true"
+          />
+        )}
+
+        <div className="relative flex items-start space-x-3">
+          <div>
+            <span
+              className={`h-8 w-8 rounded-full flex items-center justify-center ring-8 ring-white ${statusInfo.bgColor}`}
+            >
+              <svg
+                className={`h-4 w-4 ${statusInfo.color}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d={statusInfo.icon}
+                />
+              </svg>
+            </span>
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-900">
+                  {statusInfo.label}
+                  {isCurrent && (
+                    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
+                      Current
+                    </span>
+                  )}
+                </p>
+                {entry.changed_by && (
+                  <p className="mt-0.5 text-sm text-gray-500">
+                    by {entry.changed_by}
+                  </p>
+                )}
+              </div>
+              <time className="text-sm text-gray-400">
+                {formatDate(entry.changed_at)}
+              </time>
+            </div>
+
+            {entry.notes && (
+              <CollapsibleNote note={entry.notes} defaultOpen={isCurrent} />
+            )}
+          </div>
+        </div>
+      </div>
+    </li>
+  );
+}
+
+function CollapsibleNote({ note, defaultOpen = false }: { note: string; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <div className="mt-2">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+      >
+        <svg
+          className={`h-3 w-3 transition-transform ${open ? 'rotate-90' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+        {open ? 'Hide note' : 'Show note'}
+      </button>
+      {open && (
+        <div className="mt-1.5 text-sm text-gray-600 bg-gray-50 rounded-md p-3">
+          {note}
+        </div>
+      )}
     </div>
   );
 }

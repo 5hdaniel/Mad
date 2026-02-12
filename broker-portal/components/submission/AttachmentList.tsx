@@ -285,7 +285,7 @@ function DocumentIcon({ type, className }: { type: string; className?: string })
 
 export function AttachmentList({ attachments }: AttachmentListProps) {
   const [selectedAttachment, setSelectedAttachment] = useState<Attachment | null>(null);
-  const [activeTab, setActiveTab] = useState<'all' | 'media' | 'documents'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'media' | 'documents'>('documents');
 
   // Split attachments into media and documents
   const { mediaFiles, documentFiles } = useMemo(() => {

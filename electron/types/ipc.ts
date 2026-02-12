@@ -1268,9 +1268,11 @@ export interface WindowApi {
       attachmentsSkipped: number;
       duration: number;
       error?: string;
+      totalAvailable?: number;
+      wasCapped?: boolean;
     }>;
     /** Get count of messages available for import from macOS Messages */
-    getImportCount: () => Promise<{ success: boolean; count?: number; error?: string }>;
+    getImportCount: (filters?: { lookbackMonths?: number | null; maxMessages?: number | null }) => Promise<{ success: boolean; count?: number; filteredCount?: number; error?: string }>;
     /** Listen for import progress updates */
     onImportProgress: (callback: (progress: { phase: "deleting" | "importing" | "attachments"; current: number; total: number; percent: number }) => void) => () => void;
     /** Get attachments for a message with base64 data (TASK-1012) */

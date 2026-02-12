@@ -1,6 +1,6 @@
 {
   "name": "magic-audit",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Magic Audit - Export and archive iMessage conversations and emails",
   "main": "electron/main.js",
   "engines": {
@@ -59,6 +59,7 @@
   "devDependencies": {
     "@babel/preset-env": "^7.23.6",
     "@babel/preset-react": "^7.23.3",
+    "@electron/fuses": "^2.0.0",
     "@electron/notarize": "^2.4.1",
     "@jest/globals": "^30.2.0",
     "@testing-library/dom": "^10.4.1",
@@ -107,7 +108,7 @@
     "@azure/msal-node": "^2.15.0",
     "@microsoft/microsoft-graph-client": "^3.0.7",
     "@supabase/supabase-js": "^2.38.0",
-    "axios": "^1.7.9",
+    "axios": "^1.13.5",
     "better-sqlite3-multiple-ciphers": "^12.5.0",
     "canvas-confetti": "^1.9.3",
     "check-disk-space": "^3.4.0",
@@ -133,6 +134,7 @@
     "sqlite3": "^5.1.7"
   },
   "build": {
+    "asar": true,
     "appId": "com.realestate.archiveapp",
     "productName": "MagicAudit",
     "protocols": [
@@ -192,6 +194,7 @@
         }
       ]
     },
+    "afterPack": "scripts/afterPack.js",
     "afterSign": "scripts/notarize.js",
     "files": [
       "dist/**/*",
@@ -224,6 +227,7 @@
     "diff": ">=8.0.3",
     "@next/eslint-plugin-next": {
       "glob": ">=10.5.0"
-    }
+    },
+    "tar": ">=7.5.7"
   }
 }

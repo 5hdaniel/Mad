@@ -72,6 +72,9 @@ interface AutoSyncPreferences {
   sync?: {
     autoSyncOnLogin?: boolean;
   };
+  notifications?: {
+    enabled?: boolean;
+  };
 }
 
 interface UseAutoRefreshOptions {
@@ -157,9 +160,10 @@ export function useAutoRefresh({
   // Note: using module-level hasTriggeredAutoRefresh instead of ref to prevent
   // React strict mode from triggering twice (each instance would have its own ref)
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [hasLoadedPreference, setHasLoadedPreference] = useState(false);
 
-  // Load auto-sync preference
+  // Load auto-sync and notification preferences
   useEffect(() => {
     if (!userId || !isDatabaseInitialized) return;
 
@@ -171,10 +175,14 @@ export function useAutoRefresh({
           // Default to true if not set
           const enabled = prefs.sync?.autoSyncOnLogin !== false;
           setAutoSyncEnabled(enabled);
+          // Load notification preference (default to true if not set)
+          const notifEnabled = prefs.notifications?.enabled !== false;
+          setNotificationsEnabled(notifEnabled);
         }
       } catch {
         // Default to enabled on error
         setAutoSyncEnabled(true);
+        setNotificationsEnabled(true);
       } finally {
         setHasLoadedPreference(true);
       }
@@ -208,7 +216,10 @@ export function useAutoRefresh({
       // Order: Contacts (fast) → Emails (if AI addon) → Messages (slow)
       const typesToSync: SyncType[] = [];
 
-      if (isMacOS && hasPermissions) {
+      // TASK-1953: Contacts sync includes both macOS Contacts and Outlook contacts.
+      // Trigger contacts sync if macOS with permissions OR if email is connected
+      // (Outlook contacts work on all platforms via Graph API).
+      if ((isMacOS && hasPermissions) || emailConnected) {
         typesToSync.push('contacts');
       }
       // Only sync emails if AI addon enabled and email connected
@@ -272,10 +283,10 @@ export function useAutoRefresh({
   // Track previous syncing state for notification trigger
   const wasSyncingRef = useRef(false);
 
-  // Send OS notification when sync completes
+  // Send OS notification when sync completes (gated on user preference)
   useEffect(() => {
     // Detect transition from syncing to not syncing
-    if (wasSyncingRef.current && !isRunning) {
+    if (wasSyncingRef.current && !isRunning && notificationsEnabled) {
       // Sync just completed - send notification
       window.api.notification?.send(
         "Sync Complete",
@@ -285,7 +296,7 @@ export function useAutoRefresh({
       });
     }
     wasSyncingRef.current = isRunning;
-  }, [isRunning]);
+  }, [isRunning, notificationsEnabled]);
 
   // Derive syncStatus from orchestrator queue for backward compatibility
   const syncStatus: SyncStatus = {

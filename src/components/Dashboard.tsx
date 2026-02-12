@@ -28,6 +28,8 @@ interface DashboardActionProps {
   onTriggerRefresh?: () => void;
   /** Callback when user selects a pending transaction to review */
   onSelectPendingTransaction?: (transaction: Transaction) => void;
+  /** Callback to open Settings modal */
+  onOpenSettings?: () => void;
 }
 
 /**
@@ -46,6 +48,7 @@ function Dashboard({
   onDismissSetupPrompt,
   onTriggerRefresh,
   onSelectPendingTransaction,
+  onOpenSettings,
 }: DashboardActionProps) {
   // State for the Start New Audit modal
   const [showStartNewAuditModal, setShowStartNewAuditModal] = useState(false);
@@ -166,6 +169,7 @@ function Dashboard({
           <SyncStatusIndicator
             pendingCount={pendingCount}
             onViewPending={handleViewPending}
+            onOpenSettings={onOpenSettings}
           />
         </div>
 

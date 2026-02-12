@@ -152,6 +152,11 @@ export const TABLE_FIELDS = {
     "suggested_contacts",
     "reviewed_at",
     "rejection_reason",
+    // B2B Submission Tracking (BACKLOG-390)
+    "submission_status",
+    "submission_id",
+    "submitted_at",
+    "last_review_notes",
   ]),
 
   communications: new Set([

@@ -172,6 +172,7 @@ function TransactionDetails({
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const [showEditContactsModal, setShowEditContactsModal] = useState<boolean>(false);
   const [syncingCommunications, setSyncingCommunications] = useState<boolean>(false);
+  const [syncingMessages, setSyncingMessages] = useState<boolean>(false);
   const [showSubmitModal, setShowSubmitModal] = useState<boolean>(false);
 
   // Submit for Review hook (BACKLOG-391)
@@ -375,6 +376,47 @@ function TransactionDetails({
     }
   }, [transaction.id, showSuccess, showError, loadDetails, refreshMessages]);
 
+  // Sync messages handler - re-links text messages from assigned contacts (phone-based matching)
+  const handleSyncMessages = useCallback(async () => {
+    setSyncingMessages(true);
+    try {
+      const result = await (window.api.transactions as typeof window.api.transactions & {
+        resyncAutoLink: (transactionId: string) => Promise<{
+          success: boolean;
+          totalEmailsLinked?: number;
+          totalMessagesLinked?: number;
+          totalAlreadyLinked?: number;
+          totalErrors?: number;
+          message?: string;
+          error?: string;
+        }>;
+      }).resyncAutoLink(transaction.id);
+
+      if (result.success) {
+        const messagesLinked = result.totalMessagesLinked || 0;
+        const alreadyLinked = result.totalAlreadyLinked || 0;
+
+        if (messagesLinked > 0) {
+          showSuccess(`${messagesLinked} message thread${messagesLinked !== 1 ? "s" : ""} linked`);
+          refreshMessages();
+        } else if (alreadyLinked > 0) {
+          showSuccess(`All messages already linked (${alreadyLinked} found)`);
+        } else if (result.message === "No contacts to sync") {
+          showSuccess("No contacts assigned — assign contacts first to sync messages");
+        } else {
+          showSuccess("No new messages found for assigned contacts");
+        }
+      } else {
+        showError(result.error || "Failed to sync messages");
+      }
+    } catch (err) {
+      console.error("Failed to sync messages:", err);
+      showError("Failed to sync messages. Please try again.");
+    } finally {
+      setSyncingMessages(false);
+    }
+  }, [transaction.id, showSuccess, showError, refreshMessages]);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[70vh] max-h-[90vh] flex flex-col">
@@ -412,10 +454,6 @@ function TransactionDetails({
           {transaction.submission_status === "needs_changes" && transaction.last_review_notes && (
             <ReviewNotesPanel
               reviewNotes={transaction.last_review_notes}
-              onResubmit={() => {
-                // Will be handled by TransactionHeader submit button
-                // This is just a visual shortcut
-              }}
             />
           )}
 
@@ -470,6 +508,9 @@ function TransactionDetails({
               onShowError={showError}
               auditStartDate={transaction.started_at}
               auditEndDate={transaction.closed_at}
+              onSyncMessages={handleSyncMessages}
+              syncingMessages={syncingMessages}
+              hasContacts={contactAssignments.length > 0}
             />
           )}
 
@@ -584,7 +625,7 @@ function TransactionDetails({
                 }
                 showSuccess(`Contacts updated. Linked ${parts.join(" and ")}.`);
               } else {
-                showSuccess("Contacts updated successfully");
+                showSuccess("Contacts updated. Use 'Sync' on the Emails tab to fetch new emails from your provider.");
               }
             } else {
               showSuccess("Contacts updated successfully");

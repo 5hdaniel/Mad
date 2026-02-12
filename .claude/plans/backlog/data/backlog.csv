@@ -521,3 +521,44 @@ BACKLOG-614,Fix onboarding race condition - needsTermsAcceptance default,bug,Cri
 BACKLOG-615,Graceful skip for syncs when no local user exists,bug,Critical,Completed,,~8K,-,"Fix: SyncOrchestrator and handlers should gracefully skip (return empty) when getValidUserId returns null instead of erroring. Prevents No valid user found crashes during deferred DB init. PR #737 merged.",2026-02-03,2026-02-03,
 BACKLOG-621,Domain Claim & User Capture,feature,High,Pending,-,~120K,-,"IT admin claims email domain via DNS TXT verification then captures existing users with matching domain emails into org during 14-day window. Includes capture report and SSO migration.",2026-02-06,,[BACKLOG-621.md](items/BACKLOG-621.md)
 BACKLOG-623,Bulk Edit Role Feature for User Management,feature,Medium,In Progress,,~15K,-,"Add bulk role editing: BulkEditRoleModal component, UserTableRow with selection, bulkUpdateRole server action, UserActionsDropdown Edit Role option.",2026-02-06,,items/BACKLOG-623.md
+BACKLOG-634,Message Import Date Filter (Default 6 Months),performance,High,Completed,SPRINT-078,~8K,-,"Implemented in TASK-1952 (PR #798). Date range and count cap filters added to macOS message import. Extended by BACKLOG-657 with default values and cap warnings.",2026-02-09,2026-02-10,items/BACKLOG-634.md
+BACKLOG-635,Auto-Link Search Cloud Email Providers,feature,High,Pending,,~15K,-,"Extend autoLinkService to search Outlook Graph API and Gmail API when a contact is added to a transaction. Currently auto-link only finds emails already saved locally. New flow: search local first then hit cloud APIs using contact email addresses and save new matches to local emails table before linking. Building blocks exist in OutlookFetchService.searchEmails() and GmailFetchService.",2026-02-09,,items/BACKLOG-635.md
+BACKLOG-636,Sync Status Indicator Stuck After Completion,bug,Medium,Pending,,~5K,-,"Sync status bar shows Contacts and Messages as complete (green checkmarks and full progress bar) but never auto-dismisses. Observed with agent@izzyrescue.org. Sync completes successfully (358 messages imported) but indicator stays visible. May be related to auth state transition: status goes ready -> unauthenticated -> ready during deep-link auth flow which may prevent the dismiss timer from firing.",2026-02-09,,items/BACKLOG-636.md
+BACKLOG-642,Fix AppleDriverSetup render-time callback,bug,Critical,Completed,SPRINT-076,~15K,~2.4K,-84%,2026-02-10,2026-02-10,
+BACKLOG-643,Quick wins (useMemo dup notification DOM OAuth logs),cleanup,High,Completed,SPRINT-076,~30K,~6.3K,-79%,2026-02-10,2026-02-10,
+BACKLOG-644,Extract AppModals.tsx below 150-line trigger,refactor,High,Completed,SPRINT-076,~20K,~3.4K,-83%,2026-02-10,2026-02-10,
+BACKLOG-645,Decompose transaction-handlers.ts (3302 lines),refactor,High,Deferred,,-,-,-,2026-02-10,,"Too risky for overnight autonomous execution — defer to supervised session"
+BACKLOG-646,Remove any types from transactionService.ts,type-safety,High,Completed,SPRINT-076,~25K,~13.5K,-46%,2026-02-10,2026-02-10,
+BACKLOG-647,Add tests for AppRouter.tsx and AppModals.tsx,test,Medium,Completed,SPRINT-076,~35K,~7K,-80%,2026-02-10,2026-02-10,
+BACKLOG-648,DMG vs Dev Mode Keychain Conflict Breaks Database Init,bug,High,Completed,,~5K,-,-,2026-02-10,2026-02-10,items/BACKLOG-648.md
+BACKLOG-649,Remove auto export stub from Settings,cleanup,Medium,Completed,SPRINT-077,~5K,-,-,2026-02-10,2026-02-10,
+BACKLOG-650,Remove dark mode coming soon from Settings,cleanup,Medium,Completed,SPRINT-077,~5K,-,-,2026-02-10,2026-02-10,
+BACKLOG-651,Responsive toolbar layout redesign,ui,High,Completed,SPRINT-077,~25K,-,-,2026-02-10,2026-02-10,
+BACKLOG-652,Fix system health check provider validation error,bug,Critical,Completed,SPRINT-077,~10K,-,-,2026-02-10,2026-02-10,
+BACKLOG-653,Add auto-download updates toggle to Settings,feature,Medium,Completed,SPRINT-077,~10K,-,-,2026-02-10,2026-02-10,
+BACKLOG-654,Toolbar button height consistency (h-10),ui,Low,Completed,SPRINT-077,~3K,-,-,2026-02-10,2026-02-10,
+BACKLOG-655,Remove stale version number and VersionPopup from AppShell,cleanup,Low,Completed,SPRINT-077,~3K,-,-,2026-02-10,2026-02-10,
+BACKLOG-656,Move Check for Updates to auto-download settings section,ui,Low,Completed,SPRINT-077,~2K,-,-,2026-02-10,2026-02-10,
+BACKLOG-657,Message Import Cap Warning & Default Filters,feature,High,In Progress,-,~15K,-,-,2026-02-10,,
+BACKLOG-658,Outlook contacts not synced during auto-refresh,bug,High,Completed,SPRINT-079,~25K,-,-,2026-02-10,2026-02-10,
+BACKLOG-659,Source filter missing on contact selection screens,bug,Medium,Completed,SPRINT-079,~30K,-,-,2026-02-10,2026-02-10,
+BACKLOG-660,ImportContactsModal does not refresh after manual sync,bug,Medium,Completed,SPRINT-079,~15K,-,-,2026-02-10,2026-02-10,
+BACKLOG-661,Move external contacts query to worker thread (main process freeze fix),enhancement,High,Completed,SPRINT-080,~25K,-,-,2026-02-11,2026-02-11,BACKLOG-661.md
+BACKLOG-662,Configure Electron Fuses for production hardening,security,Critical,Pending,SPRINT-080A,~30K,-,-,2026-02-11,,
+BACKLOG-663,Enable explicit ASAR integrity,security,Critical,Pending,SPRINT-080A,~10K,-,-,2026-02-11,,
+BACKLOG-664,Add deny-by-default permission request handler,security,Critical,Pending,SPRINT-080A,~15K,-,-,2026-02-11,,
+BACKLOG-665,Windows code signing setup,security,Critical,Pending,SPRINT-080A,~20K,-,-,2026-02-11,,
+BACKLOG-666,Broker portal submission list pagination,feature,High,Pending,SPRINT-080B,~60K,-,-,2026-02-11,,
+BACKLOG-667,Enable SQLite WAL mode,feature,High,Pending,SPRINT-080B,~15K,-,-,2026-02-11,,
+BACKLOG-668,Email sync depth filter UI,feature,Medium,Pending,SPRINT-080B,~35K,-,-,2026-02-11,,
+BACKLOG-669,Sentry integration for error tracking,feature,High,Pending,SPRINT-080C,~50K,-,-,2026-02-11,,
+BACKLOG-670,Renderer crash recovery dialog,feature,High,Pending,SPRINT-080C,~15K,-,-,2026-02-11,,
+BACKLOG-671,Pre-migration database backup,feature,Medium,Pending,SPRINT-080C,~15K,-,-,2026-02-11,,
+BACKLOG-672,Periodic 4-hour update checks,feature,Medium,Pending,SPRINT-080C,~10K,-,-,2026-02-11,,
+BACKLOG-673,Supabase system-health monitoring Edge Function,feature,Medium,Pending,SPRINT-080C,~25K,-,-,2026-02-11,,
+BACKLOG-674,Settings message import routes through SyncOrchestrator,enhancement,Medium,Pending,SPRINT-081,~5K,-,-,2026-02-11,,Deferred from SPRINT-081 — reverted due to 'Import already in progress' error; needs investigation into orchestrator routing
+BACKLOG-675,Settings loading state spinner prevents flash of defaults,ui,Low,Completed,SPRINT-081,~3K,-,-,2026-02-11,2026-02-11,Passed user testing with no additional changes needed
+BACKLOG-676,TransactionMessagesTab sync button shows toast guidance,ui,Low,Completed,SPRINT-081,~5K,-,-,2026-02-11,2026-02-11,Scope expanded: created separate handleSyncMessages handler calling resyncAutoLink instead of email fetch; added syncingMessages state; contextual toasts for linked/no-contacts/no-messages
+BACKLOG-677,Text message auto-linking inference gate removal and phone matching fix,fix,Medium,Completed,SPRINT-081,~3K,-,-,2026-02-12,2026-02-12,Removed inference gate in autoLinkService.ts that blocked matching; fixed phone number matching logic
+BACKLOG-678,Summary sync button runs auto-link for phone-only contacts,fix,Medium,Completed,SPRINT-081,~3K,-,-,2026-02-12,2026-02-12,transaction-handlers.ts updated so summary sync triggers auto-link for contacts with phone numbers only
+BACKLOG-679,SyncStatusIndicator auto-dismiss removed — manual dismiss only,enhancement,Low,Completed,SPRINT-081,~2K,-,-,2026-02-12,2026-02-12,Removed auto-dismiss timer from SyncStatusIndicator; users now dismiss manually to avoid missing status info

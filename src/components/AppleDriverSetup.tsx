@@ -191,7 +191,7 @@ function AppleDriverSetup({ onComplete, onSkip, onBack }: AppleDriverSetupProps)
     };
 
     checkDriverStatus();
-  }, [onComplete]);
+  }, []);
 
   const handleInstall = async () => {
     setStatus("installing");
@@ -251,9 +251,15 @@ function AppleDriverSetup({ onComplete, onSkip, onBack }: AppleDriverSetupProps)
     }
   }, [status, onComplete]);
 
+  // On non-Windows platforms, trigger onComplete via effect (not during render)
+  useEffect(() => {
+    if (!isWindows) {
+      onComplete();
+    }
+  }, [isWindows, onComplete]);
+
   // Only show on Windows
   if (!isWindows) {
-    onComplete();
     return null;
   }
 

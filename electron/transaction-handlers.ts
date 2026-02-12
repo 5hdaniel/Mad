@@ -6,6 +6,7 @@
 import { ipcMain, BrowserWindow, shell } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import transactionService from "./services/transactionService";
+import { getEarliestCommunicationDate } from "./services/transactionService";
 import auditService from "./services/auditService";
 import logService from "./services/logService";
 import { autoLinkAllToTransaction } from "./services/messageMatchingService";
@@ -15,6 +16,7 @@ import { createEmail, getEmailByExternalId } from "./services/db/emailDbService"
 import { createCommunication } from "./services/db/communicationDbService";
 import submissionService from "./services/submissionService";
 import submissionSyncService from "./services/submissionSyncService";
+import supabaseService from "./services/supabaseService";
 import type { SubmissionProgress } from "./services/submissionService";
 import type {
   Transaction,
@@ -76,8 +78,8 @@ interface ExportOptions {
  * Cleanup transaction handlers (call on app quit)
  */
 export const cleanupTransactionHandlers = (): void => {
-  // Stop submission sync service
-  submissionSyncService.stopPeriodicSync();
+  // Stop all submission sync (polling + realtime)
+  submissionSyncService.stopAllSync();
 };
 
 /**
@@ -2617,14 +2619,37 @@ export const registerTransactionHandlers = (
         }
 
         if (contactEmails.length === 0) {
-          // No contact emails, just run the regular auto-link
+          // No contact emails — still run auto-link for phone-based message matching
+          let totalMessagesLinked = 0;
+          let totalAlreadyLinked = 0;
+          let totalErrors = 0;
+
+          for (const assignment of contactAssignments) {
+            try {
+              const result = await autoLinkCommunicationsForContact({
+                contactId: assignment.contact_id,
+                transactionId: validatedTransactionId,
+              });
+              totalMessagesLinked += result.messagesLinked;
+              totalAlreadyLinked += result.alreadyLinked;
+              totalErrors += result.errors;
+            } catch (error) {
+              totalErrors++;
+              logService.warn(
+                `Auto-link failed for contact ${assignment.contact_id}`,
+                "Transactions",
+                { error: error instanceof Error ? error.message : "Unknown" }
+              );
+            }
+          }
+
           return {
             success: true,
-            message: "No contact emails found, running local auto-link only",
             emailsFetched: 0,
             emailsStored: 0,
             totalEmailsLinked: 0,
-            totalMessagesLinked: 0,
+            totalMessagesLinked,
+            totalAlreadyLinked,
           };
         }
 
@@ -2909,12 +2934,19 @@ export const registerTransactionHandlers = (
   // SYNC HANDLERS (BACKLOG-395)
   // ============================================
 
-  // Set main window reference for sync service and start periodic sync
+  // Set main window reference for sync service and start sync
   if (mainWindow) {
     submissionSyncService.setMainWindow(mainWindow);
-    // Start periodic sync with 1 minute interval
-    // Sync will only query for transactions that have been submitted but not in terminal states
+    // Start periodic sync with 1 minute interval (fallback for missed realtime events)
     submissionSyncService.startPeriodicSync(60000);
+    // Start realtime subscription for instant status change notifications
+    supabaseService.getAuthSession().then((session) => {
+      if (session?.userId) {
+        submissionSyncService.startRealtimeSubscription(session.userId);
+      }
+    }).catch((err) => {
+      logService.error("Failed to start realtime subscription", "SubmissionSync", { error: String(err) });
+    });
   }
 
   // Sync all submission statuses from cloud
@@ -3287,6 +3319,59 @@ export const registerTransactionHandlers = (
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // ============================================
+  // AUTO-DETECT START DATE (TASK-1974)
+  // ============================================
+
+  /**
+   * Get the earliest communication date for a set of contacts.
+   * Used by the audit wizard to auto-detect the transaction start date.
+   */
+  ipcMain.handle(
+    "transactions:get-earliest-communication-date",
+    async (
+      _event: IpcMainInvokeEvent,
+      contactIds: string[],
+      userId: string,
+    ): Promise<{ success: boolean; date?: string | null; error?: string }> => {
+      try {
+        validateUserId(userId);
+
+        if (!Array.isArray(contactIds) || contactIds.length === 0) {
+          return { success: true, date: null };
+        }
+
+        // Validate each contact ID
+        for (const id of contactIds) {
+          validateContactId(id);
+        }
+
+        const date = getEarliestCommunicationDate(contactIds, userId);
+
+        return { success: true, date: date || null };
+      } catch (error) {
+        logService.error(
+          "Failed to get earliest communication date",
+          "Transactions",
+          {
+            contactIds,
+            userId,
+            error: error instanceof Error ? error.message : "Unknown error",
+          },
+        );
+
+        if (error instanceof ValidationError) {
+          return { success: false, error: error.message };
+        }
+
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Failed to get earliest communication date",
         };
       }
     },

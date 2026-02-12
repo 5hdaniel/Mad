@@ -75,8 +75,8 @@ export async function createTransaction(
     INSERT INTO transactions (
       id, user_id, property_address, property_street, property_city,
       property_state, property_zip, property_coordinates,
-      transaction_type, status, closing_deadline
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      transaction_type, status, closing_deadline, started_at, closed_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   // Validate status - reject invalid values, use 'active' as default for null/undefined
@@ -97,6 +97,8 @@ export async function createTransaction(
     transactionData.transaction_type || null,
     validatedStatus,
     transactionData.closing_deadline || null,
+    transactionData.started_at || null,
+    transactionData.closed_at || null,
   ];
 
   dbRun(sql, params);
@@ -381,11 +383,10 @@ export async function updateTransaction(
   const sql = `UPDATE transactions SET ${fields.join(", ")} WHERE id = ?`;
   const result = dbRun(sql, values);
 
-  logService.info("Transaction update result", "TransactionDbService", {
+  logService.debug("Transaction update result", "TransactionDbService", {
     transactionId,
     fields,
     rowsChanged: result.changes,
-    sql,
   });
 
   if (result.changes === 0) {

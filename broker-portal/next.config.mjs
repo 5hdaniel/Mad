@@ -7,15 +7,10 @@ const nextConfig = {
   transpilePackages: ['@shared'],
 
   async headers() {
-    // CSP directives - production removes unsafe-eval, dev needs it for HMR
-    const isDev = process.env.NODE_ENV === 'development';
-
     const cspDirectives = [
       "default-src 'self'",
-      // Development needs unsafe-eval for HMR/Fast Refresh; production does not
-      isDev
-        ? "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.clarity.ms https://scripts.clarity.ms"
-        : "script-src 'self' 'unsafe-inline' https://www.clarity.ms https://scripts.clarity.ms",
+      // unsafe-eval required in both dev (HMR) and prod (Clarity uses new Function())
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.clarity.ms https://scripts.clarity.ms",
       "style-src 'self' 'unsafe-inline'",
       // blob: required for HEIC image conversion (AttachmentViewerModal, AttachmentList)
       "img-src 'self' data: blob: https:",
@@ -27,6 +22,8 @@ const nextConfig = {
       "frame-src 'self' https://*.supabase.co",
       // Video preview uses <video src={signedUrl}> from Supabase storage
       "media-src 'self' https://*.supabase.co",
+      // Supabase Realtime creates blob: workers for WebSocket connections
+      "worker-src 'self' blob:",
       // Prevent clickjacking
       "frame-ancestors 'none'",
       "base-uri 'self'",

@@ -133,7 +133,7 @@ async function getContactNames(): Promise<ContactNamesResult> {
 
           // If this database has sufficient records, use it
           if (recordCount[0].count > MIN_CONTACT_RECORD_COUNT) {
-            logService.info(
+            logService.debug(
               `[ContactsService] Successfully loaded contacts from ${dbPath}`,
               "ContactsService",
             );
@@ -278,7 +278,7 @@ async function loadContactsFromDatabase(
 
     await dbClose();
 
-    logService.info(
+    logService.debug(
       `[ContactsService] Loaded ${contactsResult.length} contact records, ${phonesResult.length} phones, ${emailsResult.length} emails`,
       "ContactsService",
     );

@@ -75,6 +75,21 @@ export async function GET(request: Request) {
     .single();
 
   if (membership) {
+    // If IT admin and consent not yet granted, redirect to consent page
+    if (membership.role === 'it_admin' || membership.role === 'admin') {
+      const { data: org } = await supabase
+        .from('organizations')
+        .select('graph_admin_consent_granted, microsoft_tenant_id')
+        .eq('id', membership.organization_id)
+        .single();
+
+      if (org && !org.graph_admin_consent_granted) {
+        return NextResponse.redirect(
+          `${origin}/setup/consent?tenant=${encodeURIComponent(org.microsoft_tenant_id || tenantId)}&org=${encodeURIComponent(membership.organization_id)}`
+        );
+      }
+    }
+
     return NextResponse.redirect(`${origin}/dashboard`);
   }
 
@@ -108,5 +123,9 @@ export async function GET(request: Request) {
     console.log(`Setup complete: org=${data.organization_id}, user=${data.user_id}`);
   }
 
-  return NextResponse.redirect(`${origin}/dashboard`);
+  // After successful provisioning, redirect to admin consent page
+  // so IT admin can pre-approve Graph API permissions for all tenant users
+  return NextResponse.redirect(
+    `${origin}/setup/consent?tenant=${encodeURIComponent(tenantId)}&org=${encodeURIComponent(data.organization_id)}`
+  );
 }

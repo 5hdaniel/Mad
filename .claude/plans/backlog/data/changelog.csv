@@ -220,3 +220,21 @@ date,action,details,items_affected
 2026-02-02,create,"Created BACKLOG-604 (iOS attributedBody parsing) - Location sharing messages show wrong text",BACKLOG-604
 2026-02-02,create,"Created TASK-1797 for BACKLOG-604 implementation",TASK-1797
 2026-02-02,assign,"Added TASK-1797 to SPRINT-068 Testing Phase",SPRINT-068
+2026-02-10,create,"Created BACKLOG-649 (Onboarding data-sync step stuck for returning users with email connected) - HIGH priority bug introduced by SPRINT-070 PR #744",BACKLOG-649
+2026-02-10,complete,"BACKLOG-649 (Remove auto export stub) - PR #792 merged",BACKLOG-649
+2026-02-10,complete,"BACKLOG-650 (Remove dark mode stub) - PR #792 merged",BACKLOG-650
+2026-02-10,complete,"BACKLOG-651 (Responsive toolbar layout) - PR #794 merged",BACKLOG-651
+2026-02-10,complete,"BACKLOG-652 (Health check provider fix) - PR #793 merged",BACKLOG-652
+2026-02-10,create,"Created BACKLOG-653 (Auto-download updates toggle), BACKLOG-654 (Toolbar height consistency), BACKLOG-655 (Remove VersionPopup), BACKLOG-656 (Move Check for Updates to settings)",BACKLOG-653;BACKLOG-654;BACKLOG-655;BACKLOG-656
+2026-02-10,complete,"BACKLOG-653 (Auto-download updates toggle) - PR #795 merged",BACKLOG-653
+2026-02-10,complete,"BACKLOG-654, 655, 656 (Toolbar polish, version popup removal, settings cleanup) - PR #796",BACKLOG-654;BACKLOG-655;BACKLOG-656
+2026-02-10,update,"SPRINT-077 completed: 4 planned tasks + 4 unplanned items. PRs #792-796.",SPRINT-077
+2026-02-10,complete,"SPRINT-078 completed: 4 tasks (TASK-1949-1952). Contact source prefs UI (PR #797), message import filter (PR #798), wire direct imports (PR #799), wire inferred contacts (PR #800). All merged to develop.",SPRINT-078
+2026-02-10,complete,"BACKLOG-634 (Message Import Date Filter) - Implemented by TASK-1952 (PR #798) in SPRINT-078",BACKLOG-634
+2026-02-10,create,"Created BACKLOG-657 (Message Import Cap Warning & Default Filters) - Follow-up to SPRINT-078. Sets default 6-month/250K filters, adds cap warning UI. PR #801 on branch fix/message-import-default-filters.",BACKLOG-657
+2026-02-10,sprint_created,"SPRINT-079 created with 3 contact bug fixes: BACKLOG-658 (Outlook auto-sync), BACKLOG-659 (source filter), BACKLOG-660 (import refresh)","BACKLOG-658,BACKLOG-659,BACKLOG-660"
+2026-02-10,sprint_completed,"SPRINT-079 completed: 3 contact bug fixes merged (PRs #804-806). BACKLOG-658/659/660 all Completed.","BACKLOG-658,BACKLOG-659,BACKLOG-660"
+2026-02-11,sprint_completed,"SPRINT-080 completed: Worker thread for external contacts query (PRs #810-811). BACKLOG-661 Completed. Fixes ~3.7s UI freeze with 1000+ contacts.",BACKLOG-661
+2026-02-11,create,"Created BACKLOG-674 (Settings message import via SyncOrchestrator), BACKLOG-675 (Settings loading spinner), BACKLOG-676 (TransactionMessagesTab toast guidance). Retroactive tracking for in-session work on branch feature/sync-messages-toast-guidance.","BACKLOG-674;BACKLOG-675;BACKLOG-676"
+2026-02-11,sprint_completed,"SPRINT-081 (Retroactive) completed: 3 small UX improvements. BACKLOG-674/675/676 all Completed. Branch: feature/sync-messages-toast-guidance.","BACKLOG-674;BACKLOG-675;BACKLOG-676"
+2026-02-11,update,"SPRINT-081 additional testing fixes: BACKLOG-674 added SyncStatusIndicator.tsx timeout 5s->15s for Settings modal timing; BACKLOG-676 scope expanded from toast-only to new handleSyncMessages handler with resyncAutoLink + separate syncingMessages state. 5 files total modified.","BACKLOG-674;BACKLOG-676"

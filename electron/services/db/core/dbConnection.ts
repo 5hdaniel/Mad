@@ -98,6 +98,11 @@ export function openDatabase(): DatabaseType {
   // 5 seconds is sufficient for most operations while still detecting true deadlocks
   database.pragma("busy_timeout = 5000");
 
+  // TASK-1956: Enable WAL mode for concurrent reader/writer access.
+  // This allows worker threads to read while the main process writes,
+  // preventing SQLITE_BUSY errors during contact query offloading.
+  database.pragma("journal_mode = WAL");
+
   // Verify database is accessible (will throw if key is wrong)
   try {
     database.pragma("cipher_integrity_check");

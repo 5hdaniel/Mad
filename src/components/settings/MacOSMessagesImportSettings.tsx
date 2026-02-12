@@ -43,17 +43,54 @@ export function MacOSMessagesImportSettings({
     messagesImported: number;
     error?: string;
     cancelled?: boolean;
+    wasCapped?: boolean;
+    totalAvailable?: number;
   } | null>(null);
   const [importStatus, setImportStatus] = useState<{
     messageCount?: number;
     lastImportAt?: string | null;
   } | null>(null);
 
-  // Load import status on mount
+  // TASK-1952: Import filter state
+  const [lookbackMonths, setLookbackMonths] = useState<number | null>(6);
+  const [maxMessages, setMaxMessages] = useState<number | null>(250000);
+
+  // Available message count for pre-import cap warning
+  const [availableCount, setAvailableCount] = useState<number | null>(null);
+
+  // Confirmation prompt when cap would be exceeded
+  // Stores whether the pending import is a force re-import, or null if no prompt
+  const [capPromptForce, setCapPromptForce] = useState<boolean | null>(null);
+  const showCapPrompt = capPromptForce !== null;
+  const capExceeded = availableCount !== null && maxMessages !== null && availableCount > maxMessages;
+
+  // Force re-import warning confirmation
+  const [showForceWarning, setShowForceWarning] = useState(false);
+
+  // Load import status and filter preferences on mount
   useEffect(() => {
     if (!isMacOS || !userId) return;
     loadImportStatus();
+    loadFilterPreferences();
   }, [isMacOS, userId]);
+
+  // Fetch available count when filters change (for pre-import cap warning)
+  useEffect(() => {
+    if (!isMacOS) return;
+    const fetchCount = async () => {
+      try {
+        const result = await window.api.messages.getImportCount({
+          lookbackMonths,
+        });
+        if (result.success) {
+          setAvailableCount(result.filteredCount ?? result.count ?? null);
+        }
+      } catch {
+        // Silently handle
+      }
+    };
+    fetchCount();
+  }, [isMacOS, lookbackMonths]);
 
   const loadImportStatus = async () => {
     try {
@@ -66,6 +103,63 @@ export function MacOSMessagesImportSettings({
       }
     } catch (error) {
       console.error("Failed to load import status:", error);
+    }
+  };
+
+  // TASK-1952: Load filter preferences from user preferences
+  const loadFilterPreferences = async () => {
+    try {
+      const result = await window.api.preferences.get(userId);
+      if (result?.success && result.preferences) {
+        const prefs = result.preferences as Record<string, unknown>;
+        const messageImport = prefs.messageImport as
+          | { filters?: { lookbackMonths?: number | null; maxMessages?: number | null } }
+          | undefined;
+        if (messageImport?.filters) {
+          setLookbackMonths(messageImport.filters.lookbackMonths ?? null);
+          setMaxMessages(messageImport.filters.maxMessages ?? null);
+        }
+      }
+    } catch {
+      // Silently handle - use defaults
+    }
+  };
+
+  // TASK-1952: Save lookback months filter
+  const handleLookbackChange = async (value: string) => {
+    const months = value === "all" ? null : Number(value);
+    setLookbackMonths(months);
+    setLastResult(null);
+    setCapPromptForce(null);
+    try {
+      await window.api.preferences.update(userId, {
+        messageImport: {
+          filters: {
+            lookbackMonths: months,
+          },
+        },
+      });
+    } catch {
+      // Silently handle
+    }
+  };
+
+  // TASK-1952: Save max messages filter
+  const handleMaxMessagesChange = async (value: string) => {
+    const cap = value === "unlimited" ? null : Number(value);
+    setMaxMessages(cap);
+    setLastResult(null);
+    setCapPromptForce(null);
+    try {
+      await window.api.preferences.update(userId, {
+        messageImport: {
+          filters: {
+            maxMessages: cap,
+          },
+        },
+      });
+    } catch {
+      // Silently handle
     }
   };
 
@@ -100,8 +194,21 @@ export function MacOSMessagesImportSettings({
   }, [isMacOS]);
 
   const handleImport = useCallback(
-    async (forceReimport = false) => {
+    async (forceReimport = false, overrideCap = false) => {
       if (!userId || isImporting) return;
+
+      // Temporarily remove cap for this import if overriding
+      let previousMaxMessages = maxMessages;
+      if (overrideCap) {
+        setMaxMessages(null);
+        try {
+          await window.api.preferences.update(userId, {
+            messageImport: { filters: { maxMessages: null } },
+          });
+        } catch {
+          // Continue with override anyway
+        }
+      }
 
       setIsImporting(true);
       setImportProgress(null);
@@ -117,6 +224,8 @@ export function MacOSMessagesImportSettings({
           success: boolean;
           messagesImported: number;
           error?: string;
+          wasCapped?: boolean;
+          totalAvailable?: number;
         }>;
         const result = await importFn(userId, forceReimport);
 
@@ -128,11 +237,25 @@ export function MacOSMessagesImportSettings({
           messagesImported: result.messagesImported,
           error: wasCancelled ? undefined : result.error,
           cancelled: wasCancelled,
+          wasCapped: result.wasCapped,
+          totalAvailable: result.totalAvailable,
         });
 
         // Reload status after successful import
         if (result.success) {
           await loadImportStatus();
+        }
+
+        // Restore cap after override import completes
+        if (overrideCap && previousMaxMessages !== null) {
+          setMaxMessages(previousMaxMessages);
+          try {
+            await window.api.preferences.update(userId, {
+              messageImport: { filters: { maxMessages: previousMaxMessages } },
+            });
+          } catch {
+            // Silently handle
+          }
         }
       } catch (error) {
         setLastResult({
@@ -140,12 +263,16 @@ export function MacOSMessagesImportSettings({
           messagesImported: 0,
           error: error instanceof Error ? error.message : "Import failed",
         });
+        // Restore cap on error too
+        if (overrideCap && previousMaxMessages !== null) {
+          setMaxMessages(previousMaxMessages);
+        }
       } finally {
         setIsImporting(false);
         setImportProgress(null);
       }
     },
-    [userId, isImporting]
+    [userId, isImporting, maxMessages]
   );
 
   const handleCancel = useCallback(() => {
@@ -197,6 +324,69 @@ export function MacOSMessagesImportSettings({
         </div>
       )}
 
+      {/* TASK-1952: Import Filters */}
+      <div className="mb-3 p-3 bg-white rounded border border-gray-200">
+        <h5 className="text-xs font-medium text-gray-700 mb-2">
+          Import Filters
+        </h5>
+
+        {/* Date Range Filter */}
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-gray-600">Import messages from</span>
+          <select
+            value={lookbackMonths ?? "all"}
+            onChange={(e) => handleLookbackChange(e.target.value)}
+            disabled={isImporting}
+            className="text-xs border border-gray-300 rounded px-2 py-1 bg-white disabled:opacity-50"
+          >
+            <option value="3">Last 3 months</option>
+            <option value="6">Last 6 months</option>
+            <option value="9">Last 9 months</option>
+            <option value="12">Last 12 months</option>
+            <option value="18">Last 18 months</option>
+            <option value="24">Last 24 months</option>
+            <option value="all">All time</option>
+          </select>
+        </div>
+
+        {/* Message Count Cap */}
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-gray-600">Maximum messages</span>
+          <select
+            value={maxMessages ?? "unlimited"}
+            onChange={(e) => handleMaxMessagesChange(e.target.value)}
+            disabled={isImporting}
+            className="text-xs border border-gray-300 rounded px-2 py-1 bg-white disabled:opacity-50"
+          >
+            <option value="10000">10,000</option>
+            <option value="50000">50,000</option>
+            <option value="100000">100,000</option>
+            <option value="250000">250,000</option>
+            <option value="500000">500,000</option>
+            <option value="unlimited">Unlimited</option>
+          </select>
+        </div>
+
+        {/* Active filter indicator */}
+        {(lookbackMonths !== null || maxMessages !== null) && (
+          <p className="text-xs text-blue-600 mt-2">
+            {lookbackMonths !== null && maxMessages !== null
+              ? `Importing last ${lookbackMonths} months, up to ${maxMessages.toLocaleString()} messages`
+              : lookbackMonths !== null
+                ? `Importing messages from the last ${lookbackMonths} months`
+                : `Importing up to ${maxMessages!.toLocaleString()} messages`}
+          </p>
+        )}
+
+        {/* Pre-import cap info */}
+        {!isImporting && capExceeded && (
+          <p className="text-xs text-amber-600 mt-2">
+            This time period contains {availableCount!.toLocaleString()} messages,
+            which exceeds the {maxMessages!.toLocaleString()} limit.
+          </p>
+        )}
+      </div>
+
       {/* Result display */}
       {lastResult && !isImporting && (
         <div
@@ -232,16 +422,51 @@ export function MacOSMessagesImportSettings({
         </div>
       )}
 
+      {/* Cap exceeded confirmation prompt */}
+      {showCapPrompt && !isImporting && (
+        <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded">
+          <p className="text-xs text-amber-800 font-medium mb-2">
+            This time period has {availableCount!.toLocaleString()} messages but your limit is {maxMessages!.toLocaleString()}.
+          </p>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={() => { setCapPromptForce(null); handleImport(!!capPromptForce); }}
+              className="w-full px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded transition-all"
+            >
+              {capPromptForce ? "Re-import" : "Import"} most recent {maxMessages!.toLocaleString()} only
+            </button>
+            <button
+              onClick={() => { setCapPromptForce(null); handleImport(!!capPromptForce, true); }}
+              className="w-full px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium rounded transition-all"
+            >
+              {capPromptForce ? "Re-import" : "Import"} all {availableCount!.toLocaleString()} messages
+            </button>
+            <button
+              onClick={() => setCapPromptForce(null)}
+              className="w-full px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-medium rounded transition-all"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-2">
         <button
-          onClick={() => handleImport(false)}
+          onClick={() => {
+            if (capExceeded) {
+              setCapPromptForce(false);
+            } else {
+              handleImport(false);
+            }
+          }}
           disabled={isImporting}
           className="flex-1 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isImporting ? "Importing..." : "Import Messages"}
         </button>
         <button
-          onClick={() => handleImport(true)}
+          onClick={() => setShowForceWarning(true)}
           disabled={isImporting}
           className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           title="Delete all existing messages and re-import from scratch"
@@ -249,6 +474,46 @@ export function MacOSMessagesImportSettings({
           Force Re-import
         </button>
       </div>
+
+      {/* Force re-import warning confirmation */}
+      {showForceWarning && (
+        <div className="mt-3 p-3 bg-amber-50 border border-amber-300 rounded-lg">
+          <div className="flex items-start gap-2">
+            <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-amber-800">
+                Force re-import will delete all existing messages
+              </p>
+              <p className="text-xs text-amber-700 mt-1">
+                This will remove all imported messages and re-import them from scratch. Any manual changes or edits to messages will be lost. This action cannot be reversed.
+              </p>
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={() => {
+                    setShowForceWarning(false);
+                    if (capExceeded) {
+                      setCapPromptForce(true);
+                    } else {
+                      handleImport(true);
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium rounded transition-all"
+                >
+                  Continue with Re-import
+                </button>
+                <button
+                  onClick={() => setShowForceWarning(false)}
+                  className="px-3 py-1.5 bg-white hover:bg-gray-100 text-gray-700 text-xs font-medium rounded border border-gray-300 transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Inline progress bar during import (TASK-1752) */}
       {isImporting && (

@@ -762,7 +762,7 @@ describe("OutlookFetchService", () => {
     beforeEach(async () => {
       mockDatabaseService.getOAuthToken.mockResolvedValue({
         ...mockTokenRecord,
-        scopes_granted: "openid profile email User.Read Mail.Read Mail.ReadWrite Contacts.Read offline_access",
+        scopes_granted: "openid profile email User.Read Mail.Read Contacts.Read offline_access",
       });
       await outlookFetchService.initialize(mockUserId);
     });
@@ -882,7 +882,7 @@ describe("OutlookFetchService", () => {
       // Override with token that lacks Contacts.Read
       mockDatabaseService.getOAuthToken.mockResolvedValue({
         ...mockTokenRecord,
-        scopes_granted: "openid profile email User.Read Mail.Read Mail.ReadWrite offline_access",
+        scopes_granted: "openid profile email User.Read Mail.Read offline_access",
       });
       await outlookFetchService.initialize(mockUserId);
 

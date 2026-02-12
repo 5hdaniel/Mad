@@ -4,65 +4,16 @@
  * Handles the OAuth redirect from Supabase Auth:
  * 1. Exchanges authorization code for session
  * 2. Verifies user has broker/admin/it_admin role
- * 3. Auto-provisions IT admins from Microsoft OAuth (creates org + user)
+ * 3. JIT-joins Azure users to their tenant's existing org
  * 4. Redirects to dashboard or login with error
  */
 
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
-import type { User } from '@supabase/supabase-js';
-import { extractEmail, orgNameFromEmail } from '@/lib/auth/helpers';
+import { extractEmail } from '@/lib/auth/helpers';
 
 // Allowed roles for broker portal access
 const ALLOWED_ROLES = ['broker', 'admin', 'it_admin'];
-
-/**
- * Auto-provision organization and user for Microsoft IT admins
- * Uses the auto_provision_it_admin RPC function which has elevated permissions
- */
-async function autoProvisionITAdmin(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  user: User
-): Promise<{ success: boolean; organizationId?: string }> {
-  // Extract Microsoft tenant ID from user metadata
-  const customClaims = user.user_metadata?.custom_claims as { tid?: string } | undefined;
-  const tenantId = customClaims?.tid;
-
-  if (!tenantId) {
-    console.warn('No Microsoft tenant ID found for user');
-    return { success: false };
-  }
-
-  const email = extractEmail(user) || '';
-  const orgName = orgNameFromEmail(email);
-  const slug = orgName.toLowerCase().replace(/\s+/g, '-');
-
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`Auto-provisioning IT admin: ${email}, tenant: ${tenantId}, org: ${orgName}`);
-  }
-
-  // Call the RPC function which handles all provisioning with elevated permissions
-  const { data, error } = await supabase.rpc('auto_provision_it_admin', {
-    p_tenant_id: tenantId,
-    p_org_name: orgName,
-    p_org_slug: slug,
-  });
-
-  if (error) {
-    console.error('Auto-provision RPC failed:', error);
-    return { success: false };
-  }
-
-  if (!data?.success) {
-    console.error('Auto-provision failed:', data?.error);
-    return { success: false };
-  }
-
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`Successfully provisioned: org=${data.organization_id}, user=${data.user_id}`);
-  }
-  return { success: true, organizationId: data.organization_id };
-}
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -94,8 +45,22 @@ export async function GET(request: Request) {
         .single();
 
       if (membership) {
+        // If IT admin, check if org needs admin consent for desktop app permissions
+        if (membership.role === 'it_admin' || membership.role === 'admin') {
+          const { data: org } = await supabase
+            .from('organizations')
+            .select('graph_admin_consent_granted, microsoft_tenant_id')
+            .eq('id', membership.organization_id)
+            .single();
+
+          if (org && !org.graph_admin_consent_granted && org.microsoft_tenant_id) {
+            return NextResponse.redirect(
+              `${origin}/setup/consent?tenant=${encodeURIComponent(org.microsoft_tenant_id)}&org=${encodeURIComponent(membership.organization_id)}`
+            );
+          }
+        }
+
         // User has valid role - redirect to dashboard
-        // IT admins go to a limited view (handled by dashboard)
         return NextResponse.redirect(`${origin}${next}`);
       }
 
@@ -158,22 +123,33 @@ export async function GET(request: Request) {
         }
       }
 
-      // No membership and no pending invite - check if this is a Microsoft user for auto-provisioning
+      // No membership and no pending invite - check if Azure user can JIT-join an existing org
       const provider = user.app_metadata?.provider;
 
       if (provider === 'azure') {
-        // Auto-provision as IT admin
-        const result = await autoProvisionITAdmin(supabase, user);
-
-        if (result.success) {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('Successfully provisioned IT admin');
+        const customClaims = user.user_metadata?.custom_claims as { tid?: string } | undefined;
+        const tenantId = customClaims?.tid;
+        if (tenantId) {
+          const { data: jitResult, error: jitError } = await supabase.rpc('jit_join_organization', {
+            p_tenant_id: tenantId,
+          });
+          if (jitResult?.success) {
+            if (process.env.NODE_ENV === 'development') {
+              console.log(`JIT joined org ${jitResult.organization_id} with role ${jitResult.role}`);
+            }
+            return NextResponse.redirect(`${origin}${next}`);
           }
-          return NextResponse.redirect(`${origin}${next}`);
+          if (jitError) {
+            console.error('JIT join RPC failed:', jitError);
+          }
+          // Determine appropriate error for user
+          const jitErrorCode = jitResult?.error === 'jit_disabled' ? 'jit_disabled' : 'org_not_setup';
+          await supabase.auth.signOut();
+          return NextResponse.redirect(`${origin}/login?error=${jitErrorCode}`);
         }
       }
 
-      // User not authorized and not auto-provisionable - sign them out
+      // User not authorized - sign them out
       console.warn('User attempted portal access without valid role');
       await supabase.auth.signOut();
       return NextResponse.redirect(`${origin}/login?error=not_authorized`);

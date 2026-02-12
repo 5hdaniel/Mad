@@ -27,6 +27,8 @@ export interface SyncItem {
   error?: string;
   /** Optional phase label for display (e.g., "querying", "attachments") */
   phase?: string;
+  /** Optional warning message (e.g., message cap exceeded) */
+  warning?: string;
 }
 
 export interface SyncOrchestratorState {
@@ -42,7 +44,8 @@ export interface SyncRequest {
   userId: string;
 }
 
-type SyncFunction = (userId: string, onProgress: (percent: number, phase?: string) => void) => Promise<void>;
+/** Sync functions can optionally return a warning string (e.g., "cap exceeded") */
+type SyncFunction = (userId: string, onProgress: (percent: number, phase?: string) => void) => Promise<string | void>;
 
 type StateListener = (state: SyncOrchestratorState) => void;
 
@@ -86,18 +89,20 @@ class SyncOrchestratorServiceClass {
     const macOS = isMacOS();
     console.log('[SyncOrchestrator] Initializing sync functions, isMacOS:', macOS);
 
-    // Register contacts sync (macOS only - uses local Contacts database)
-    if (macOS) {
-      this.registerSyncFunction('contacts', async (userId, onProgress) => {
-        console.log('[SyncOrchestrator] Starting contacts sync');
-        onProgress(0);
+    // Register contacts sync (macOS Contacts + Outlook contacts on all platforms)
+    // TASK-1953: Always register contacts sync so Outlook contacts work on all platforms
+    this.registerSyncFunction('contacts', async (userId, onProgress) => {
+      console.log('[SyncOrchestrator] Starting contacts sync');
+      onProgress(0);
 
+      // Phase 1: macOS Contacts sync (macOS only)
+      if (macOS) {
         // IPC listener OWNED here - not in consumers
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const contactsApi = window.api.contacts as any;
         const cleanup = contactsApi?.onImportProgress
           ? contactsApi.onImportProgress((data: { percent: number }) => {
-              onProgress(data.percent);
+              onProgress(Math.round(data.percent * 0.5)); // 0-50% for macOS contacts
             })
           : () => {};
 
@@ -106,13 +111,35 @@ class SyncOrchestratorServiceClass {
           if (!result.success) {
             throw new Error(result.error || 'Contacts sync failed');
           }
-          onProgress(100);
-          console.log('[SyncOrchestrator] Contacts sync complete');
+          console.log('[SyncOrchestrator] macOS Contacts sync complete');
         } finally {
           cleanup();
         }
-      });
-    }
+      }
+
+      onProgress(50);
+
+      // Phase 2: Outlook contacts sync (all platforms, non-fatal)
+      // TASK-1953: Outlook contacts sync via Graph API
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const contactsApi = window.api.contacts as any;
+        const outlookResult = await contactsApi.syncOutlookContacts(userId);
+        if (outlookResult.success) {
+          console.log('[SyncOrchestrator] Outlook contacts synced:', outlookResult.count);
+        } else if (outlookResult.reconnectRequired) {
+          console.warn('[SyncOrchestrator] Outlook contacts need reconnection');
+        } else {
+          console.warn('[SyncOrchestrator] Outlook contacts sync returned error:', outlookResult.error);
+        }
+      } catch (err) {
+        // Don't fail the whole contacts sync if Outlook fails
+        console.warn('[SyncOrchestrator] Outlook contacts sync failed (non-fatal):', err);
+      }
+
+      onProgress(100);
+      console.log('[SyncOrchestrator] All contacts sync complete');
+    });
 
     // Register emails sync (all platforms - API-based)
     this.registerSyncFunction('emails', async (userId, onProgress) => {
@@ -163,6 +190,12 @@ class SyncOrchestratorServiceClass {
           }
           onProgress(100);
           console.log('[SyncOrchestrator] Messages sync complete, imported:', result.messagesImported);
+
+          // Return warning if message cap was exceeded
+          if (result.wasCapped && result.totalAvailable) {
+            const excluded = result.totalAvailable - result.messagesImported;
+            return `${excluded.toLocaleString()} messages excluded by import limit. Adjust in Settings.`;
+          }
         } finally {
           cleanup();
         }
@@ -309,13 +342,13 @@ class SyncOrchestratorServiceClass {
 
       try {
         // Run the sync with progress callback
-        await syncFn(userId, (percent, phase) => {
+        const warning = await syncFn(userId, (percent, phase) => {
           this.updateQueueItem(type, { progress: percent, phase });
           this.updateOverallProgress();
         });
 
-        // Mark complete (clear phase)
-        this.updateQueueItem(type, { status: 'complete', progress: 100, phase: undefined });
+        // Mark complete (clear phase), attach warning if returned
+        this.updateQueueItem(type, { status: 'complete', progress: 100, phase: undefined, warning: warning || undefined });
       } catch (error) {
         // Check if it was cancelled
         if (this.abortController?.signal.aborted) {

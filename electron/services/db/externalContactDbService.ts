@@ -14,6 +14,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { dbAll, dbRun, dbGet, dbTransaction, ensureDb } from './core/dbConnection';
 import logService from '../logService';
+import { queryContacts, isPoolReady } from '../../workers/contactWorkerPool';
 
 /**
  * External contact as stored in database
@@ -112,6 +113,41 @@ export function getAllForUser(userId: string): ExternalContact[] {
   const rows = dbAll<ExternalContactRow>(sql, [userId]);
 
   return rows.map(row => ({
+    id: row.id,
+    user_id: row.user_id,
+    name: row.name,
+    phones: JSON.parse(row.phones_json || '[]'),
+    emails: JSON.parse(row.emails_json || '[]'),
+    company: row.company,
+    last_message_at: row.last_message_at,
+    external_record_id: row.external_record_id,
+    source: row.source as 'macos' | 'iphone' | 'outlook',
+    synced_at: row.synced_at,
+  }));
+}
+
+/**
+ * TASK-1956: Async version of getAllForUser that runs the query via the
+ * persistent worker pool. No new Worker() spawn per query.
+ *
+ * Falls back to sync getAllForUser if pool is not ready.
+ *
+ * @param userId - The user ID to query contacts for
+ * @param timeoutMs - Maximum time to wait for the worker (default: 30000ms)
+ * @returns Promise resolving to the same ExternalContact[] as getAllForUser
+ */
+export async function getAllForUserAsync(
+  userId: string,
+  timeoutMs: number = 30_000,
+): Promise<ExternalContact[]> {
+  if (!isPoolReady()) {
+    // Fallback to sync version if pool not initialized
+    return getAllForUser(userId);
+  }
+
+  const rawRows = await queryContacts('external', userId, timeoutMs) as ExternalContactRow[];
+
+  return rawRows.map((row) => ({
     id: row.id,
     user_id: row.user_id,
     name: row.name,

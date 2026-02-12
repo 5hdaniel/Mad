@@ -329,7 +329,7 @@ describe("SyncStatusIndicator", () => {
       expect(screen.queryByText("Review Now")).not.toBeInTheDocument();
     });
 
-    it("should auto-dismiss completion after 5 seconds", () => {
+    it("should NOT auto-dismiss completion (requires manual dismiss)", () => {
       mockUseLicense.mockReturnValue({
         hasAIAddon: false,
         licenseType: "individual",
@@ -349,12 +349,13 @@ describe("SyncStatusIndicator", () => {
 
       expect(screen.getByTestId("sync-status-complete")).toBeInTheDocument();
 
-      // Fast-forward 5 seconds
+      // Fast-forward well past old auto-dismiss timeout
       act(() => {
-        jest.advanceTimersByTime(5000);
+        jest.advanceTimersByTime(30000);
       });
 
-      expect(screen.queryByTestId("sync-status-complete")).not.toBeInTheDocument();
+      // Completion should STILL be visible (no auto-dismiss)
+      expect(screen.getByTestId("sync-status-complete")).toBeInTheDocument();
     });
 
     it("should allow manual dismiss of completion message", () => {

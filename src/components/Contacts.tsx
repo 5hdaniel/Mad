@@ -193,7 +193,7 @@ function Contacts({ userId, onClose }: ContactsProps) {
   return (
     <div className="h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex-shrink-0 bg-gradient-to-r from-purple-500 to-pink-600 px-6 py-4 flex items-center justify-between shadow-lg">
+      <div className="flex-shrink-0 bg-gradient-to-r from-purple-500 to-pink-600 px-6 pt-10 pb-4 flex items-center justify-between shadow-lg">
         <button
           onClick={onClose}
           className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-4 py-2 transition-all flex items-center gap-2 font-medium"

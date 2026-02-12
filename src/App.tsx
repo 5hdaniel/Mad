@@ -9,7 +9,6 @@
  * - TrialStatusBanner: Shows trial days remaining (SPRINT-062)
  * - AppRouter: Screen routing based on current step
  * - AppModals: Modal dialogs (profile, settings, etc.)
- * - BackgroundServices: Background monitors and notifications
  *
  * Note: LicenseProvider is in main.tsx (must wrap App for useAppStateMachine to use useLicense).
  *
@@ -22,7 +21,6 @@ import {
   AppShell,
   AppRouter,
   AppModals,
-  BackgroundServices,
   useAppStateMachine,
 } from "./appCore";
 import { NotificationProvider } from "./contexts/NotificationContext";
@@ -41,7 +39,6 @@ function App() {
         <AppShell app={app}>
           <TrialStatusBanner />
           <AppRouter app={app} />
-          <BackgroundServices />
           <AppModals app={app} />
         </AppShell>
       </LicenseGate>

@@ -108,8 +108,10 @@ export default function UserTableRow({
       <td className="px-4 py-3 text-sm text-gray-500">
         {member.joined_at
           ? formatDate(member.joined_at)
-          : member.invited_at
+          : isPending && member.invited_at
           ? `Invited ${formatDate(member.invited_at)}`
+          : member.invited_at
+          ? formatDate(member.invited_at)
           : '-'}
       </td>
       {canManage && (

@@ -25,11 +25,21 @@ jest.mock("electron", () => ({
   },
   app: {
     getPath: jest.fn().mockReturnValue("/tmp/test-user-data"),
+    setAsDefaultProtocolClient: jest.fn(),
+    requestSingleInstanceLock: jest.fn().mockReturnValue(true),
+    isPackaged: false,
+    quit: jest.fn(),
+    on: jest.fn(),
+    whenReady: jest.fn().mockResolvedValue(undefined),
   },
   shell: {
     openExternal: mockShellOpenExternal,
     showItemInFolder: mockShellShowItemInFolder,
   },
+  BrowserWindow: jest.fn(),
+  dialog: { showErrorBox: jest.fn() },
+  session: { defaultSession: { webRequest: { onHeadersReceived: jest.fn() } } },
+  Notification: jest.fn(),
 }));
 
 // Mock services
@@ -105,6 +115,21 @@ jest.mock("../services/connectionStatusService", () => ({
 
 jest.mock("../services/macOSPermissionHelper", () => ({
   default: mockMacOSPermissionHelper,
+}));
+
+// Mock supabaseService (imported by system-handlers)
+jest.mock("../services/supabaseService", () => ({
+  __esModule: true,
+  default: {
+    initialize: jest.fn(),
+    syncUser: jest.fn(),
+    trackEvent: jest.fn(),
+  },
+}));
+
+// Mock main module to prevent top-level side effects (deep link registration, etc.)
+jest.mock("../main", () => ({
+  getAndClearPendingDeepLinkUser: jest.fn().mockReturnValue(null),
 }));
 
 // Import after mocks are set up
@@ -632,6 +657,55 @@ describe("System Handlers", () => {
             provider: "microsoft",
           }),
         );
+      });
+
+      it("should handle azure provider by normalizing to microsoft", async () => {
+        mockPermissionService.checkAllPermissions.mockResolvedValue({
+          allGranted: true,
+          errors: [],
+        });
+        mockConnectionStatusService.checkMicrosoftConnection.mockResolvedValue({
+          connected: true,
+        });
+        mockPermissionService.checkContactsLoading.mockResolvedValue({
+          canLoadContacts: true,
+        });
+
+        const handler = registeredHandlers.get("system:health-check");
+        const result = await handler(mockEvent, TEST_USER_ID, "azure");
+
+        expect(result.success).toBe(true);
+        expect(result.healthy).toBe(true);
+        // Should use Microsoft connection check since azure normalizes to microsoft
+        expect(
+          mockConnectionStatusService.checkMicrosoftConnection,
+        ).toHaveBeenCalledWith(TEST_USER_ID);
+        expect(
+          mockConnectionStatusService.checkGoogleConnection,
+        ).not.toHaveBeenCalled();
+      });
+
+      it("should handle empty string provider gracefully", async () => {
+        mockPermissionService.checkAllPermissions.mockResolvedValue({
+          allGranted: true,
+          errors: [],
+        });
+        mockPermissionService.checkContactsLoading.mockResolvedValue({
+          canLoadContacts: true,
+        });
+
+        const handler = registeredHandlers.get("system:health-check");
+        const result = await handler(mockEvent, TEST_USER_ID, "");
+
+        expect(result.success).toBe(true);
+        expect(result.healthy).toBe(true);
+        // Empty string is falsy, so no connection check should happen
+        expect(
+          mockConnectionStatusService.checkGoogleConnection,
+        ).not.toHaveBeenCalled();
+        expect(
+          mockConnectionStatusService.checkMicrosoftConnection,
+        ).not.toHaveBeenCalled();
       });
 
       it("should report contacts loading issues", async () => {

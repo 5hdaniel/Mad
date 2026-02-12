@@ -30,6 +30,8 @@ interface SyncStatusIndicatorProps {
   pendingCount?: number;
   /** Callback when user clicks "Review Now" */
   onViewPending?: () => void;
+  /** Callback to open Settings modal (for message cap warnings) */
+  onOpenSettings?: () => void;
 }
 
 /**
@@ -65,11 +67,11 @@ const statusColors: Record<SyncItemStatus, string> = {
 export function SyncStatusIndicator({
   pendingCount = 0,
   onViewPending,
+  onOpenSettings,
 }: SyncStatusIndicatorProps) {
   const [showCompletion, setShowCompletion] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const wasSyncingRef = useRef(false);
-  const autoDismissTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Get license status for AI-specific features (pending count, Review Now button)
   const { hasAIAddon } = useLicense();
@@ -83,6 +85,9 @@ export function SyncStatusIndicator({
   // Check if any sync in the queue has an error
   const hasError = queue.some(item => item.status === 'error');
 
+  // Check if any sync item has a warning (e.g., message cap exceeded)
+  const syncWarning = queue.find(item => item.warning)?.warning;
+
   // Track transition from syncing to not syncing
   useEffect(() => {
     if (isAnySyncing) {
@@ -92,26 +97,14 @@ export function SyncStatusIndicator({
       // Just finished syncing - show completion message
       setShowCompletion(true);
       wasSyncingRef.current = false;
-
-      // Auto-dismiss after 5 seconds
-      autoDismissTimeoutRef.current = setTimeout(() => {
-        setShowCompletion(false);
-        setDismissed(true);
-      }, 5000);
+      // No auto-dismiss — user must click the X to dismiss.
+      // This ensures the completion message is visible even if sync
+      // finishes while a modal (e.g. Settings) covers the dashboard.
     }
-
-    return () => {
-      if (autoDismissTimeoutRef.current) {
-        clearTimeout(autoDismissTimeoutRef.current);
-      }
-    };
   }, [isAnySyncing]);
 
   // Handle manual dismiss
   const handleDismiss = useCallback(() => {
-    if (autoDismissTimeoutRef.current) {
-      clearTimeout(autoDismissTimeoutRef.current);
-    }
     setShowCompletion(false);
     setDismissed(true);
   }, []);
@@ -235,6 +228,24 @@ export function SyncStatusIndicator({
             </button>
           </div>
         </div>
+
+        {/* Message cap warning */}
+        {syncWarning && onOpenSettings && (
+          <div className="mt-2 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-xl p-3">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+              <p className="text-xs text-amber-700">{syncWarning}</p>
+            </div>
+            <button
+              onClick={onOpenSettings}
+              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap ml-3"
+            >
+              Adjust Limits
+            </button>
+          </div>
+        )}
       </div>
     );
   }

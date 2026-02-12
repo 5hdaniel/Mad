@@ -5,7 +5,7 @@
  * This is a pure extraction of the routing logic from App.tsx.
  */
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import Login from "../components/Login";
 import MicrosoftLogin from "../components/MicrosoftLogin";
 import ConversationList from "../components/ConversationList";
@@ -51,6 +51,11 @@ export function AppRouter({ app }: AppRouterProps) {
     handleDismissSetupPrompt, setIsTourActive, openIPhoneSync, openSettings,
     handleLogout,
   } = app;
+
+  // Ref for the email connections section in Settings modal (cross-component).
+  // The Settings modal mounts/unmounts dynamically, so the ref is re-resolved
+  // each time via the callback below.
+  const emailSectionRef = useRef<HTMLElement | null>(null);
 
   // Track license blocked state for login screen
   const [licenseBlocked, setLicenseBlocked] = useState<{
@@ -107,12 +112,16 @@ export function AppRouter({ app }: AppRouterProps) {
       );
     }
     return (
-      <Login
-        onLoginSuccess={handleLoginSuccess}
-        onLoginPending={handleLoginPending}
-        onDeepLinkAuthSuccess={handleDeepLinkAuthSuccess}
-        onLicenseBlocked={handleLicenseBlocked}
-      />
+      <div className="relative">
+        {/* Invisible drag region at top for window dragging on login screen */}
+        <div className="fixed top-0 left-0 right-0 h-12 z-50 drag-region" />
+        <Login
+          onLoginSuccess={handleLoginSuccess}
+          onLoginPending={handleLoginPending}
+          onDeepLinkAuthSuccess={handleDeepLinkAuthSuccess}
+          onLicenseBlocked={handleLicenseBlocked}
+        />
+      </div>
     );
   }
 
@@ -178,16 +187,19 @@ export function AppRouter({ app }: AppRouterProps) {
     // Handler to open Settings and scroll to Email Connections section
     const handleContinueSetup = () => {
       openSettings();
-      // Scroll to and highlight email connections section after modal opens
+      // Scroll to and highlight email connections section after modal opens.
+      // The email-connections element is in the Settings modal (cross-component),
+      // so we resolve the ref after the modal mounts via setTimeout.
       setTimeout(() => {
-        const emailSection = document.getElementById("email-connections");
-        if (emailSection) {
-          emailSection.scrollIntoView({ behavior: "smooth", block: "start" });
+        emailSectionRef.current = document.getElementById("email-connections");
+        if (emailSectionRef.current) {
+          emailSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
           // Add highlight effect
-          emailSection.classList.add("ring-2", "ring-amber-400", "ring-offset-2", "rounded-lg");
+          emailSectionRef.current.classList.add("ring-2", "ring-amber-400", "ring-offset-2", "rounded-lg");
           // Remove highlight after 3 seconds
+          const el = emailSectionRef.current;
           setTimeout(() => {
-            emailSection.classList.remove("ring-2", "ring-amber-400", "ring-offset-2", "rounded-lg");
+            el.classList.remove("ring-2", "ring-amber-400", "ring-offset-2", "rounded-lg");
           }, 3000);
         }
       }, 150);
@@ -204,6 +216,7 @@ export function AppRouter({ app }: AppRouterProps) {
         onContinueSetup={handleContinueSetup}
         onDismissSetupPrompt={handleDismissSetupPrompt}
         onTriggerRefresh={app.triggerRefresh}
+        onOpenSettings={openSettings}
       />
     );
   }

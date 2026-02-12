@@ -7,11 +7,13 @@ import { ipcMain, BrowserWindow } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import logService from "../services/logService";
 import databaseService from "../services/databaseService";
+import supabaseService from "../services/supabaseService";
 import macOSMessagesImportService from "../services/macOSMessagesImportService";
 import * as externalContactDb from "../services/db/externalContactDbService";
 import type {
   MacOSImportResult,
   ImportProgressCallback,
+  MessageImportFilters,
 } from "../services/macOSMessagesImportService";
 
 /**
@@ -90,10 +92,35 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
         }
       }
 
+      // TASK-1952: Load message import filter preferences
+      // Defaults: 6 months lookback, 250K max messages (matches UI defaults)
+      const DEFAULT_LOOKBACK_MONTHS = 6;
+      const DEFAULT_MAX_MESSAGES = 250000;
+      let importFilters: MessageImportFilters = {
+        lookbackMonths: DEFAULT_LOOKBACK_MONTHS,
+        maxMessages: DEFAULT_MAX_MESSAGES,
+      };
+      try {
+        const preferences = await supabaseService.getPreferences(validUserId);
+        const messageImportPrefs = preferences?.messageImport;
+        if (messageImportPrefs?.filters) {
+          importFilters = {
+            lookbackMonths: messageImportPrefs.filters.lookbackMonths ?? DEFAULT_LOOKBACK_MONTHS,
+            maxMessages: messageImportPrefs.filters.maxMessages ?? DEFAULT_MAX_MESSAGES,
+          };
+        }
+      } catch {
+        // Use defaults if preferences unavailable
+        logService.warn(
+          "Failed to load import filter preferences, using defaults",
+          "MessageImportHandlers"
+        );
+      }
+
       logService.info(
         `Starting macOS Messages import for user`,
         "MessageImportHandlers",
-        { userId: validUserId, forceReimport }
+        { userId: validUserId, forceReimport, filters: importFilters }
       );
 
       // TASK-1710: Track import start time for elapsed time calculation
@@ -114,7 +141,8 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
         const result = await macOSMessagesImportService.importMessages(
           validUserId,
           onProgress,
-          forceReimport
+          forceReimport,
+          importFilters
         );
 
         if (result.success) {
@@ -205,20 +233,26 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
 
   /**
    * Get count of messages available for import from macOS Messages
+   * TASK-1952: Supports optional filters parameter for filtered count
    * IPC: messages:get-import-count
    *
-   * @returns Count of available messages
+   * @param filters - Optional import filters (lookbackMonths, maxMessages)
+   * @returns Count of available messages (total and optionally filtered)
    */
   ipcMain.handle(
     "messages:get-import-count",
-    async (): Promise<{ success: boolean; count?: number; error?: string }> => {
+    async (
+      _event: IpcMainInvokeEvent,
+      filters?: MessageImportFilters
+    ): Promise<{ success: boolean; count?: number; filteredCount?: number; error?: string }> => {
       logService.info(
         `Getting macOS Messages count`,
-        "MessageImportHandlers"
+        "MessageImportHandlers",
+        { filters }
       );
 
       try {
-        return await macOSMessagesImportService.getAvailableMessageCount();
+        return await macOSMessagesImportService.getAvailableMessageCount(filters);
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : "Unknown error";

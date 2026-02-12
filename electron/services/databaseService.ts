@@ -561,8 +561,8 @@ class DatabaseService implements IDatabaseService {
           success INTEGER NOT NULL DEFAULT 1,
           error_message TEXT,
           synced_at DATETIME,
-          CHECK (action IN ('LOGIN', 'LOGOUT', 'LOGIN_FAILED', 'DATA_ACCESS', 'DATA_EXPORT', 'DATA_DELETE', 'TRANSACTION_CREATE', 'TRANSACTION_UPDATE', 'TRANSACTION_DELETE', 'CONTACT_CREATE', 'CONTACT_UPDATE', 'CONTACT_DELETE', 'SETTINGS_CHANGE', 'MAILBOX_CONNECT', 'MAILBOX_DISCONNECT')),
-          CHECK (resource_type IN ('USER', 'SESSION', 'TRANSACTION', 'CONTACT', 'COMMUNICATION', 'EXPORT', 'MAILBOX', 'SETTINGS'))
+          CHECK (action IN ('LOGIN', 'LOGOUT', 'LOGIN_FAILED', 'SESSION_REFRESH', 'DATA_ACCESS', 'DATA_EXPORT', 'DATA_DELETE', 'TRANSACTION_CREATE', 'TRANSACTION_UPDATE', 'TRANSACTION_DELETE', 'TRANSACTION_SUBMIT', 'CONTACT_CREATE', 'CONTACT_UPDATE', 'CONTACT_DELETE', 'EXPORT_START', 'EXPORT_COMPLETE', 'EXPORT_FAIL', 'SETTINGS_CHANGE', 'SETTINGS_UPDATE', 'TERMS_ACCEPT', 'MAILBOX_CONNECT', 'MAILBOX_DISCONNECT')),
+          CHECK (resource_type IN ('USER', 'SESSION', 'TRANSACTION', 'CONTACT', 'COMMUNICATION', 'EXPORT', 'MAILBOX', 'SETTINGS', 'SUBMISSION'))
         )
       `);
       runSafe(`CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id)`);
@@ -1213,6 +1213,10 @@ class DatabaseService implements IDatabaseService {
       await logService.info("Migration 28 complete: message_type column and backfill done", "DatabaseService");
     }
 
+    // Note: Migration 29 (TRANSACTION_SUBMIT in audit_logs) is handled by the
+    // updated CHECK constraint in Migration 7's CREATE TABLE statement.
+    // No separate migration needed for fresh databases.
+
     // Finalize schema version (create table if missing for backwards compatibility)
     const schemaVersionExists = db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
@@ -1422,6 +1426,11 @@ class DatabaseService implements IDatabaseService {
 
   async getImportedContactsByUserId(userId: string): Promise<Contact[]> {
     return contactDb.getImportedContactsByUserId(userId);
+  }
+
+  /** TASK-1956: Non-blocking version using worker thread */
+  async getImportedContactsByUserIdAsync(userId: string): Promise<Contact[]> {
+    return contactDb.getImportedContactsByUserIdAsync(userId);
   }
 
   async getUnimportedContactsByUserId(userId: string): Promise<Contact[]> {

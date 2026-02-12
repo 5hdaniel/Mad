@@ -2,7 +2,9 @@ import React, { useState, useEffect, useCallback } from "react";
 import { LLMSettings } from "./settings/LLMSettings";
 import { MacOSMessagesImportSettings } from "./settings/MacOSMessagesImportSettings";
 import { MacOSContactsImportSettings } from "./settings/MacOSContactsImportSettings";
+import { ImportSourceSettings } from "./settings/ImportSourceSettings";
 import { LicenseGate } from "./common/LicenseGate";
+import { useNotification } from "@/hooks/useNotification";
 import {
   emitEmailConnectionChanged,
   useEmailConnectionListener,
@@ -42,6 +44,24 @@ interface PreferencesResult {
     sync?: {
       autoSyncOnLogin?: boolean;
     };
+    updates?: {
+      autoDownload?: boolean;
+    };
+    notifications?: {
+      enabled?: boolean;
+    };
+    contactSources?: {
+      direct?: {
+        outlookContacts?: boolean;
+        gmailContacts?: boolean;
+        macosContacts?: boolean;
+      };
+      inferred?: {
+        outlookEmails?: boolean;
+        gmailEmails?: boolean;
+        messages?: boolean;
+      };
+    };
   };
 }
 
@@ -63,6 +83,7 @@ interface SettingsComponentProps {
  * Application settings and preferences
  */
 function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: SettingsComponentProps) {
+  const { notify } = useNotification();
   const [connections, setConnections] = useState<Connections>({
     google: null,
     microsoft: null,
@@ -77,6 +98,16 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
   const [exportFormat, setExportFormat] = useState<string>("pdf"); // Default export format
   const [scanLookbackMonths, setScanLookbackMonths] = useState<number>(9); // Default 9 months
   const [autoSyncOnLogin, setAutoSyncOnLogin] = useState<boolean>(true); // Default auto-sync ON
+  const [autoDownloadUpdates, setAutoDownloadUpdates] = useState<boolean>(false); // Default auto-download OFF
+  const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(true); // Default notifications ON
+  // Contact source preferences - direct imports (default ON)
+  const [outlookContactsEnabled, setOutlookContactsEnabled] = useState<boolean>(true);
+  const [gmailContactsEnabled, setGmailContactsEnabled] = useState<boolean>(true);
+  const [macosContactsEnabled, setMacosContactsEnabled] = useState<boolean>(true);
+  // Contact source preferences - inferred from conversations (default OFF)
+  const [outlookEmailsInferred, setOutlookEmailsInferred] = useState<boolean>(false);
+  const [gmailEmailsInferred, setGmailEmailsInferred] = useState<boolean>(false);
+  const [messagesInferred, setMessagesInferred] = useState<boolean>(false);
   const [loadingPreferences, setLoadingPreferences] = useState<boolean>(true);
 
   // Database maintenance state
@@ -172,6 +203,28 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         if (typeof result.preferences.sync?.autoSyncOnLogin === "boolean") {
           setAutoSyncOnLogin(result.preferences.sync.autoSyncOnLogin);
         }
+        // Load auto-download updates preference (default is false if not set)
+        if (typeof result.preferences.updates?.autoDownload === "boolean") {
+          setAutoDownloadUpdates(result.preferences.updates.autoDownload);
+        }
+        // Load notifications preference (default is true if not set)
+        if (typeof result.preferences.notifications?.enabled === "boolean") {
+          setNotificationsEnabled(result.preferences.notifications.enabled);
+        }
+        // Load contact source preferences
+        if (result.preferences.contactSources) {
+          const cs = result.preferences.contactSources;
+          if (cs.direct) {
+            if (typeof cs.direct.outlookContacts === "boolean") setOutlookContactsEnabled(cs.direct.outlookContacts);
+            if (typeof cs.direct.gmailContacts === "boolean") setGmailContactsEnabled(cs.direct.gmailContacts);
+            if (typeof cs.direct.macosContacts === "boolean") setMacosContactsEnabled(cs.direct.macosContacts);
+          }
+          if (cs.inferred) {
+            if (typeof cs.inferred.outlookEmails === "boolean") setOutlookEmailsInferred(cs.inferred.outlookEmails);
+            if (typeof cs.inferred.gmailEmails === "boolean") setGmailEmailsInferred(cs.inferred.gmailEmails);
+            if (typeof cs.inferred.messages === "boolean") setMessagesInferred(cs.inferred.messages);
+          }
+        }
       } else if (!result.success) {
         console.error("[Settings] Failed to load preferences:", result.error);
       }
@@ -225,6 +278,75 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         },
       });
       // Silently handle - preference will still be applied locally for this session
+    } catch {
+      // Silently handle - preference will still be applied locally for this session
+    }
+  };
+
+  const handleAutoDownloadToggle = async (): Promise<void> => {
+    const newValue = !autoDownloadUpdates;
+    setAutoDownloadUpdates(newValue);
+    try {
+      // Update auto-download updates preference
+      await window.api.preferences.update(userId, {
+        updates: {
+          autoDownload: newValue,
+        },
+      });
+      // Silently handle - preference will still be applied locally for this session
+    } catch {
+      // Silently handle - preference will still be applied locally for this session
+    }
+  };
+
+  const handleNotificationsToggle = async (): Promise<void> => {
+    const newValue = !notificationsEnabled;
+    setNotificationsEnabled(newValue);
+    try {
+      // Update notifications preference
+      await window.api.preferences.update(userId, {
+        notifications: {
+          enabled: newValue,
+        },
+      });
+      // Silently handle - preference will still be applied locally for this session
+    } catch {
+      // Silently handle - preference will still be applied locally for this session
+    }
+  };
+
+  const handleTestNotification = async (): Promise<void> => {
+    try {
+      const result = await window.api.notification?.send(
+        "Test Notification",
+        "Desktop notifications are working correctly."
+      );
+      if (result?.success) {
+        notify.success("Desktop notification sent! Check your notification center if you don't see a banner.");
+      } else {
+        notify.warning(result?.error || "Notifications may not be supported on this system.");
+      }
+    } catch {
+      notify.error("Failed to send test notification.");
+    }
+  };
+
+  const handleContactSourceToggle = async (
+    category: "direct" | "inferred",
+    key: string,
+    currentValue: boolean,
+    setter: React.Dispatch<React.SetStateAction<boolean>>,
+  ): Promise<void> => {
+    const newValue = !currentValue;
+    setter(newValue);
+    try {
+      await window.api.preferences.update(userId, {
+        contactSources: {
+          [category]: {
+            [key]: newValue,
+          },
+        },
+      });
     } catch {
       // Silently handle - preference will still be applied locally for this session
     }
@@ -417,6 +539,13 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
 
         {/* Settings Content - Scrollable area */}
         <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
+          {loadingPreferences ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-3" />
+              <p className="text-sm text-gray-500">Loading settings...</p>
+            </div>
+          ) : (
+          <>
             {/* General Settings */}
             <div className="mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
@@ -478,59 +607,76 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                   </button>
                 </div>
 
-                {/* Coming Soon Settings */}
+                {/* Auto-Download Updates */}
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <h4 className="text-sm font-medium text-gray-900">
+                        Auto-download Updates
+                      </h4>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Automatically download new software updates in the background
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleAutoDownloadToggle}
+                      disabled={loadingPreferences}
+                      className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                        autoDownloadUpdates ? "bg-blue-500" : "bg-gray-300"
+                      }`}
+                      role="switch"
+                      aria-checked={autoDownloadUpdates}
+                      aria-label="Auto-download updates"
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          autoDownloadUpdates ? "translate-x-6" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  <button
+                    disabled
+                    className="mt-3 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Check for Updates
+                  </button>
+                </div>
+
                 {/* Notifications */}
-                {/* TODO: Implement desktop notifications system */}
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 opacity-50">
-                  <div className="flex-1">
-                    <h4 className="text-sm font-medium text-gray-900">
-                      Notifications
-                    </h4>
-                    <p className="text-xs text-gray-600 mt-1">
-                      Show desktop notifications for important events
-                    </p>
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <h4 className="text-sm font-medium text-gray-900">
+                        Notifications
+                      </h4>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Show desktop notifications for important events
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleNotificationsToggle}
+                      disabled={loadingPreferences}
+                      className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                        notificationsEnabled ? "bg-blue-500" : "bg-gray-300"
+                      }`}
+                      role="switch"
+                      aria-checked={notificationsEnabled}
+                      aria-label="Desktop notifications"
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          notificationsEnabled ? "translate-x-6" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
                   </div>
                   <button
-                    disabled
-                    className="ml-4 relative inline-flex h-6 w-11 items-center rounded-full bg-gray-300 cursor-not-allowed"
+                    onClick={handleTestNotification}
+                    disabled={!notificationsEnabled}
+                    className="mt-3 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <span className="inline-block h-4 w-4 transform rounded-full bg-white translate-x-1" />
-                  </button>
-                </div>
-
-                {/* Auto Export */}
-                {/* TODO: Implement automatic daily export functionality */}
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 opacity-50">
-                  <div className="flex-1">
-                    <h4 className="text-sm font-medium text-gray-900">
-                      Auto Export
-                    </h4>
-                    <p className="text-xs text-gray-600 mt-1">
-                      Automatically export new transactions daily
-                    </p>
-                  </div>
-                  <button
-                    disabled
-                    className="ml-4 relative inline-flex h-6 w-11 items-center rounded-full bg-gray-300 cursor-not-allowed"
-                  >
-                    <span className="inline-block h-4 w-4 transform rounded-full bg-white translate-x-1" />
-                  </button>
-                </div>
-
-                {/* Dark Mode */}
-                {/* TODO: Implement dark mode theme system */}
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 opacity-50">
-                  <div className="flex-1">
-                    <h4 className="text-sm font-medium text-gray-900">
-                      Dark Mode
-                    </h4>
-                    <p className="text-xs text-gray-600 mt-1">Coming soon...</p>
-                  </div>
-                  <button
-                    disabled
-                    className="ml-4 relative inline-flex h-6 w-11 items-center rounded-full bg-gray-300 cursor-not-allowed"
-                  >
-                    <span className="inline-block h-4 w-4 transform rounded-full bg-white translate-x-1" />
+                    Test Notification
                   </button>
                 </div>
               </div>
@@ -763,6 +909,9 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                 Messages
               </h3>
               <div className="space-y-4">
+                {/* Import Source Selector (macOS only) */}
+                <ImportSourceSettings userId={userId} />
+                {/* Manual Import Settings */}
                 <MacOSMessagesImportSettings userId={userId} />
               </div>
             </div>
@@ -773,6 +922,172 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                 Contacts
               </h3>
               <div className="space-y-4">
+                {/* Contact Sources (TASK-1949) */}
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <h4 className="text-sm font-medium text-gray-900 mb-3">Contact Sources</h4>
+
+                  {/* Import From (direct) */}
+                  <div className="mb-4">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                      Import From
+                    </p>
+                    <div className="space-y-2">
+                      {/* Outlook Contacts toggle */}
+                      <div className="flex items-center justify-between py-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-700">Outlook Contacts</span>
+                          {!connections.microsoft?.connected && (
+                            <span className="text-xs text-gray-400">(not connected)</span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => handleContactSourceToggle("direct", "outlookContacts", outlookContactsEnabled, setOutlookContactsEnabled)}
+                          disabled={loadingPreferences || !connections.microsoft?.connected}
+                          className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                            outlookContactsEnabled ? "bg-blue-500" : "bg-gray-300"
+                          }`}
+                          role="switch"
+                          aria-checked={outlookContactsEnabled}
+                          aria-label="Outlook Contacts import"
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              outlookContactsEnabled ? "translate-x-6" : "translate-x-1"
+                            }`}
+                          />
+                        </button>
+                      </div>
+
+                      {/* Gmail Contacts toggle - Coming soon */}
+                      <div className="flex items-center justify-between py-1 opacity-50">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-700">Gmail Contacts</span>
+                          <span className="text-xs text-gray-400">Coming soon</span>
+                        </div>
+                        <button
+                          disabled
+                          className="ml-4 relative inline-flex h-6 w-11 items-center rounded-full bg-gray-300 cursor-not-allowed"
+                          role="switch"
+                          aria-checked={gmailContactsEnabled}
+                          aria-label="Gmail Contacts import"
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              gmailContactsEnabled ? "translate-x-6" : "translate-x-1"
+                            }`}
+                          />
+                        </button>
+                      </div>
+
+                      {/* macOS/iPhone Contacts toggle */}
+                      <div className="flex items-center justify-between py-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-700">macOS / iPhone Contacts</span>
+                        </div>
+                        <button
+                          onClick={() => handleContactSourceToggle("direct", "macosContacts", macosContactsEnabled, setMacosContactsEnabled)}
+                          disabled={loadingPreferences}
+                          className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                            macosContactsEnabled ? "bg-blue-500" : "bg-gray-300"
+                          }`}
+                          role="switch"
+                          aria-checked={macosContactsEnabled}
+                          aria-label="macOS iPhone Contacts import"
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              macosContactsEnabled ? "translate-x-6" : "translate-x-1"
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Auto-discover from conversations (inferred) */}
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                      Auto-discover from conversations
+                    </p>
+                    <div className="space-y-2">
+                      {/* Outlook emails toggle */}
+                      <div className="flex items-center justify-between py-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-700">Outlook emails</span>
+                          {!connections.microsoft?.connected && (
+                            <span className="text-xs text-gray-400">(not connected)</span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => handleContactSourceToggle("inferred", "outlookEmails", outlookEmailsInferred, setOutlookEmailsInferred)}
+                          disabled={loadingPreferences || !connections.microsoft?.connected}
+                          className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                            outlookEmailsInferred ? "bg-blue-500" : "bg-gray-300"
+                          }`}
+                          role="switch"
+                          aria-checked={outlookEmailsInferred}
+                          aria-label="Outlook emails auto-discover"
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              outlookEmailsInferred ? "translate-x-6" : "translate-x-1"
+                            }`}
+                          />
+                        </button>
+                      </div>
+
+                      {/* Gmail emails toggle */}
+                      <div className="flex items-center justify-between py-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-700">Gmail emails</span>
+                          {!connections.google?.connected && (
+                            <span className="text-xs text-gray-400">(not connected)</span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => handleContactSourceToggle("inferred", "gmailEmails", gmailEmailsInferred, setGmailEmailsInferred)}
+                          disabled={loadingPreferences || !connections.google?.connected}
+                          className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                            gmailEmailsInferred ? "bg-blue-500" : "bg-gray-300"
+                          }`}
+                          role="switch"
+                          aria-checked={gmailEmailsInferred}
+                          aria-label="Gmail emails auto-discover"
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              gmailEmailsInferred ? "translate-x-6" : "translate-x-1"
+                            }`}
+                          />
+                        </button>
+                      </div>
+
+                      {/* Messages/SMS toggle */}
+                      <div className="flex items-center justify-between py-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-700">Messages / SMS</span>
+                        </div>
+                        <button
+                          onClick={() => handleContactSourceToggle("inferred", "messages", messagesInferred, setMessagesInferred)}
+                          disabled={loadingPreferences}
+                          className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                            messagesInferred ? "bg-blue-500" : "bg-gray-300"
+                          }`}
+                          role="switch"
+                          aria-checked={messagesInferred}
+                          aria-label="Messages SMS auto-discover"
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              messagesInferred ? "translate-x-6" : "translate-x-1"
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <MacOSContactsImportSettings userId={userId} />
               </div>
             </div>
@@ -968,17 +1283,9 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                     <h4 className="text-sm font-semibold text-gray-900">
                       MagicAudit
                     </h4>
-                    <p className="text-xs text-gray-600">Version 1.0.7</p>
                   </div>
                 </div>
                 <div className="space-y-2 text-xs">
-                  {/* TODO: Implement manual update check using electron-updater */}
-                  <button
-                    disabled
-                    className="w-full text-left text-gray-400 font-medium cursor-not-allowed"
-                  >
-                    Check for Updates
-                  </button>
                   {/* TODO: Implement release notes viewer/link to GitHub releases */}
                   <button
                     disabled
@@ -1001,8 +1308,13 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                     Terms of Service
                   </button>
                 </div>
+                <p className="mt-3 text-xs text-gray-500">
+                  &copy; 2026 Blue Spaces LLC. All rights reserved.
+                </p>
               </div>
             </div>
+          </>
+          )}
           </div>
 
         {/* Footer */}

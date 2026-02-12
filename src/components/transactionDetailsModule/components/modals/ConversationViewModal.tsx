@@ -526,7 +526,8 @@ export function ConversationViewModal({
                       {nonDisplayableAttachments.map((att) => (
                         <div
                           key={att.id}
-                          className={`text-xs italic ${isOutbound ? "text-green-100" : "text-gray-500"}`}
+                          className={`text-xs italic ${isOutbound ? "text-green-100" : "text-gray-500"} cursor-help`}
+                          title="Some attachments can only be viewed during export or submission for review"
                         >
                           [{getAttachmentLabel(att.mime_type, att.filename)}: {att.filename}]
                         </div>
@@ -548,7 +549,8 @@ export function ConversationViewModal({
                     messageAttachments.length === 0 &&
                     !attachmentsLoading && (
                       <div
-                        className={`text-xs italic mb-1 ${isOutbound ? "text-green-100" : "text-gray-400"}`}
+                        className={`text-xs italic mb-1 ${isOutbound ? "text-green-100" : "text-gray-400"} cursor-help`}
+                        title="Some attachments can only be viewed during export or submission for review"
                       >
                         [Attachment]
                       </div>

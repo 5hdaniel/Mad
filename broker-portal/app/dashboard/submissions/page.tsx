@@ -38,6 +38,7 @@ async function getSubmissions(status?: string): Promise<Submission[]> {
   let query = supabase
     .from('transaction_submissions')
     .select('*')
+    .neq('status', 'uploading')  // Hide incomplete uploads (two-phase commit)
     .order('created_at', { ascending: false });
 
   // Apply status filter if provided and not 'all'

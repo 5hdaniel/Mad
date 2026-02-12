@@ -17,6 +17,8 @@ import databaseService from "./services/databaseService";
 import supabaseService from "./services/supabaseService";
 import { initializeDatabase } from "./auth-handlers";
 import { getAndClearPendingDeepLinkUser } from "./main";
+import { initializePool } from "./workers/contactWorkerPool";
+import { getDbPath, getEncryptionKey } from "./services/db/core/dbConnection";
 import os from "os";
 
 // Import validation utilities
@@ -345,6 +347,15 @@ export function registerSystemHandlers(): void {
           "SystemHandlers",
         );
 
+        // TASK-1956: Initialize persistent worker pool for contact queries
+        const poolDbPath = getDbPath();
+        const poolEncKey = getEncryptionKey();
+        if (poolDbPath && poolEncKey) {
+          initializePool(poolDbPath, poolEncKey).catch((err) => {
+            logService.warn("Failed to initialize contact worker pool: " + (err instanceof Error ? err.message : String(err)), "SystemHandlers");
+          });
+        }
+
         // Sessions persist across app restarts for better UX
         // Security is maintained via 24hr expiry on session tokens
         // NOTE: Previously cleared sessions on startup causing issues (file session
@@ -357,11 +368,6 @@ export function registerSystemHandlers(): void {
         // TASK-1507D: Create pending deep link user if exists
         // This handles the case where deep link auth completed before DB was ready
         const pendingUser = getAndClearPendingDeepLinkUser();
-        logService.info(
-          "Checking pendingDeepLinkUser",
-          "SystemHandlers",
-          { exists: !!pendingUser, email: pendingUser?.email },
-        );
         if (pendingUser) {
           logService.info(
             "Processing pending deep link user",
@@ -416,19 +422,9 @@ export function registerSystemHandlers(): void {
 
         // ALWAYS verify user exists in local DB before returning success
         // This catches cases where pendingDeepLinkUser was null (non-deep-link auth flows)
-        logService.info("Running fallback user verification/creation", "SystemHandlers");
+        logService.debug("Running fallback user verification/creation", "SystemHandlers");
         try {
           const authSession = await supabaseService.getAuthSession();
-          logService.info(
-            "Auth session check",
-            "SystemHandlers",
-            { exists: !!authSession, userId: authSession?.userId?.substring(0, 8) + "..." },
-          );
-          logService.debug(
-            "Auth session details",
-            "SystemHandlers",
-            authSession ? { userId: authSession.userId.substring(0, 8) + "..." } : {},
-          );
           if (authSession?.userId) {
             const userId = authSession.userId;
 
@@ -594,6 +590,16 @@ export function registerSystemHandlers(): void {
         await initializeDatabase();
         initializationComplete = true;
         logService.debug("Database initialized successfully", "SystemHandlers");
+
+        // TASK-1956: Initialize persistent worker pool for contact queries
+        const poolDbPath2 = getDbPath();
+        const poolEncKey2 = getEncryptionKey();
+        if (poolDbPath2 && poolEncKey2) {
+          initializePool(poolDbPath2, poolEncKey2).catch((err) => {
+            logService.warn("Failed to initialize contact worker pool: " + (err instanceof Error ? err.message : String(err)), "SystemHandlers");
+          });
+        }
+
         return { success: true };
       } catch (error) {
         const errorMessage =

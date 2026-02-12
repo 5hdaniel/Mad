@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  dialog,
   session,
   ipcMain,
 } from "electron";
@@ -83,6 +84,7 @@ import { registerDevice } from "./services/deviceService";
 import supabaseService from "./services/supabaseService";
 import databaseService from "./services/databaseService";
 import sessionService from "./services/sessionService";
+import submissionService from "./services/submissionService";
 import {
   CURRENT_TERMS_VERSION,
   CURRENT_PRIVACY_POLICY_VERSION,
@@ -224,6 +226,23 @@ async function syncDeepLinkUserToLocalDb(userData: PendingDeepLinkUser): Promise
 }
 
 // ==========================================
+// DEEP LINK URL REDACTION (TASK-1939)
+// ==========================================
+/**
+ * Redact sensitive OAuth tokens/codes from deep link URLs before logging.
+ * Prevents credential leakage in log files.
+ */
+function redactDeepLinkUrl(url: string): string {
+  return url.replace(
+    /(?:code|token|access_token|refresh_token)=[^&#]+/gi,
+    (match) => {
+      const key = match.split("=")[0];
+      return `${key}=[REDACTED]`;
+    },
+  );
+}
+
+// ==========================================
 // DEEP LINK HANDLER (TASK-1500, enhanced TASK-1507)
 // ==========================================
 /**
@@ -262,7 +281,7 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
 
       if (!accessToken || !refreshToken) {
         // Missing tokens - send error to renderer
-        log.error("[DeepLink] Callback URL missing tokens:", url);
+        log.error("[DeepLink] Callback URL missing tokens:", redactDeepLinkUrl(url));
         sendToRenderer("auth:deep-link-error", {
           error: "Missing tokens in callback URL",
           code: "MISSING_TOKENS",
@@ -334,7 +353,8 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
 
       // TASK-1507D: Step 5.5 - Create local SQLite user
       // This is required for FK constraints (mailbox connection, audit logs, contacts)
-      const provider = (user.app_metadata?.provider as OAuthProvider) || "google";
+      const rawProvider = (user.app_metadata?.provider as string) || "google";
+      const provider = (rawProvider === "azure" ? "microsoft" : rawProvider) as OAuthProvider;
 
       // Map license type to subscription tier
       // licenseType: 'trial' | 'individual' | 'team' -> subscriptionTier: 'free' | 'pro' | 'enterprise'
@@ -514,7 +534,7 @@ function focusMainWindow(): void {
 // This fires when the app is already running and a deep link is clicked
 app.on("open-url", (event, url) => {
   event.preventDefault();
-  log.info("[DeepLink] Received URL (macOS):", url);
+  log.info("[DeepLink] Received URL (macOS):", redactDeepLinkUrl(url));
   handleDeepLinkCallback(url);
 });
 
@@ -528,7 +548,7 @@ app.on("second-instance", (_event, commandLine) => {
   // Find the deep link URL in command line args
   const url = commandLine.find((arg) => arg.startsWith("magicaudit://"));
   if (url) {
-    log.info("[DeepLink] Received URL (Windows):", url);
+    log.info("[DeepLink] Received URL (Windows):", redactDeepLinkUrl(url));
     handleDeepLinkCallback(url);
   }
 
@@ -628,6 +648,30 @@ function createWindow(): void {
     backgroundColor: WINDOW_CONFIG.BACKGROUND_COLOR,
   });
 
+  // Prevent closing while a submission is uploading
+  mainWindow.on("close", (e) => {
+    if (submissionService.isSubmitting) {
+      e.preventDefault();
+      dialog
+        .showMessageBox(mainWindow!, {
+          type: "warning",
+          buttons: ["Keep Uploading", "Quit Anyway"],
+          defaultId: 0,
+          cancelId: 0,
+          title: "Submission In Progress",
+          message: "A transaction is being submitted to your broker.",
+          detail:
+            "Closing now will result in an incomplete submission. Are you sure you want to quit?",
+        })
+        .then(({ response }) => {
+          if (response === 1) {
+            // User chose "Quit Anyway" — force close
+            mainWindow?.destroy();
+          }
+        });
+    }
+  });
+
   // Load the app
   if (process.env.NODE_ENV === "development" || !app.isPackaged) {
     mainWindow.loadURL(DEV_SERVER_URL);
@@ -702,7 +746,7 @@ app.whenReady().then(async () => {
   if (process.platform === "win32") {
     const deepLinkUrl = process.argv.find((arg) => arg.startsWith("magicaudit://"));
     if (deepLinkUrl) {
-      log.info("[DeepLink] Cold start with URL (Windows):", deepLinkUrl);
+      log.info("[DeepLink] Cold start with URL (Windows):", redactDeepLinkUrl(deepLinkUrl));
       // Wait for window to be ready before processing
       mainWindow?.webContents.once("did-finish-load", () => {
         // Small delay to ensure renderer is fully initialized
@@ -745,7 +789,7 @@ app.whenReady().then(async () => {
   // Usage from DevTools console: window.api.system.manualDeepLink("magicaudit://callback?access_token=...&refresh_token=...")
   if (process.defaultApp) {
     ipcMain.handle("system:manual-deep-link", async (_event, url: string) => {
-      log.info("[DeepLink] Manual trigger from DevTools:", url);
+      log.info("[DeepLink] Manual trigger from DevTools:", redactDeepLinkUrl(url));
       await handleDeepLinkCallback(url);
       return { success: true };
     });
@@ -759,6 +803,11 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  // TASK-1956: Shutdown persistent contact worker pool
+  try {
+    const { shutdownPool } = require("./workers/contactWorkerPool");
+    shutdownPool();
+  } catch { /* pool may not have been imported */ }
   // Clean up device detection polling
   cleanupDeviceHandlers();
   // Clean up sync handlers

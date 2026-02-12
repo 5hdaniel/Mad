@@ -51,6 +51,12 @@ const mockPdfExportService = {
   getDefaultExportPath: jest.fn().mockReturnValue("/exports/transaction.pdf"),
 };
 
+const mockFolderExportService = {
+  getDefaultExportPath: jest.fn().mockReturnValue("/exports/transaction"),
+  exportTransactionToCombinedPDF: jest.fn().mockResolvedValue("/exports/transaction.pdf"),
+  exportTransactionToFolder: jest.fn().mockResolvedValue("/exports/transaction"),
+};
+
 const mockEnhancedExportService = {
   exportTransaction: jest.fn(),
 };
@@ -80,6 +86,11 @@ jest.mock("../services/logService", () => ({
 jest.mock("../services/pdfExportService", () => ({
   __esModule: true,
   default: mockPdfExportService,
+}));
+
+jest.mock("../services/folderExportService", () => ({
+  __esModule: true,
+  default: mockFolderExportService,
 }));
 
 jest.mock("../services/enhancedExportService", () => ({
@@ -359,7 +370,7 @@ describe("Transaction Handlers Integration Tests", () => {
           { id: "comm-1", type: "email", subject: "Offer accepted" },
         ],
       });
-      mockPdfExportService.generateTransactionPDF.mockResolvedValue(
+      mockFolderExportService.exportTransactionToCombinedPDF.mockResolvedValue(
         "/exports/123-main-st.pdf",
       );
 
@@ -721,7 +732,7 @@ describe("Transaction Handlers Integration Tests", () => {
         property_address: "123 Main St",
         communications: [],
       });
-      mockPdfExportService.generateTransactionPDF.mockRejectedValue(
+      mockFolderExportService.exportTransactionToCombinedPDF.mockRejectedValue(
         new Error("ENOSPC: no space left on device"),
       );
 
