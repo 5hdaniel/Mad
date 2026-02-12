@@ -43,6 +43,7 @@ function AddressVerificationStep({
   const isAutoMode = startDateMode === "auto";
   const hasAutoDate = isAutoMode && autoDetectedDate !== null && autoDetectedDate !== undefined;
   const showNoCommsHint = isAutoMode && !isAutoDetecting && autoDetectedDate === null;
+  const awaitingContacts = isAutoMode && !hasAutoDate && !showNoCommsHint && !isAutoDetecting;
 
   return (
     <div className="space-y-6">
@@ -191,22 +192,25 @@ function AddressVerificationStep({
               </div>
             )}
 
-            <input
-              type="date"
-              value={addressData.started_at}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                onStartDateChange(e.target.value)
-              }
-              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
-                !addressData.started_at
-                  ? "border-red-300 bg-red-50"
-                  : hasAutoDate
-                    ? "border-indigo-300 bg-indigo-50"
-                    : "border-gray-300"
-              }`}
-              required
-              disabled={isAutoMode && hasAutoDate}
-            />
+            {/* Only show date input in manual mode or when auto-detect has a result */}
+            {!awaitingContacts && (
+              <input
+                type="date"
+                value={addressData.started_at}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  onStartDateChange(e.target.value)
+                }
+                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+                  !addressData.started_at
+                    ? "border-red-300 bg-red-50"
+                    : hasAutoDate
+                      ? "border-indigo-300 bg-indigo-50"
+                      : "border-gray-300"
+                }`}
+                required
+                disabled={isAutoMode && hasAutoDate}
+              />
+            )}
 
             {/* Context-sensitive help text (TASK-1974) */}
             {hasAutoDate && (
@@ -224,7 +228,7 @@ function AddressVerificationStep({
                 Required - The date you began representing this client
               </p>
             )}
-            {isAutoMode && !hasAutoDate && !showNoCommsHint && !isAutoDetecting && (
+            {awaitingContacts && (
               <p className="text-xs text-gray-500 mt-1">
                 Select contacts in Step 2 to auto-detect start date
               </p>

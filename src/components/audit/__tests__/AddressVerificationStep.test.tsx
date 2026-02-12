@@ -141,7 +141,7 @@ describe("AddressVerificationStep - Start Date Auto/Manual Toggle", () => {
     expect(screen.getByText(/no communications found.*60 days/i)).toBeInTheDocument();
   });
 
-  it("should show select-contacts hint in auto mode with no detection yet", () => {
+  it("should show select-contacts hint and hide date input in auto mode with no detection yet", () => {
     render(
       <AddressVerificationStep
         {...defaultProps}
@@ -153,6 +153,9 @@ describe("AddressVerificationStep - Start Date Auto/Manual Toggle", () => {
     );
 
     expect(screen.getByText(/select contacts in step 2/i)).toBeInTheDocument();
+    // Date input should be hidden when awaiting contact selection
+    const dateInputs = screen.queryAllByDisplayValue(defaultAddressData.started_at);
+    expect(dateInputs).toHaveLength(0);
   });
 
   it("should disable date input when auto mode has detected date", () => {
