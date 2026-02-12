@@ -475,7 +475,8 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         }
 
         // Read from shadow table (already sorted by last_message_at DESC, NULLS LAST)
-        const externalContacts = externalContactDb.getAllForUser(validatedUserId);
+        // TASK-1956: Use async worker thread to avoid blocking main process (~3.7s freeze with 1000+ contacts)
+        const externalContacts = await externalContactDb.getAllForUserAsync(validatedUserId);
 
         logService.info(
           `[Main] Read ${externalContacts.length} contacts from shadow table`,

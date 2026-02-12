@@ -120,6 +120,8 @@ jest.mock("../services/db/externalContactDbService", () => ({
   __esModule: true,
   getCount: jest.fn().mockImplementation(() => mockExternalContacts.length),
   getAllForUser: jest.fn().mockImplementation(() => mockExternalContacts),
+  // TASK-1956: contacts:get-available now uses getAllForUserAsync (worker thread)
+  getAllForUserAsync: jest.fn().mockImplementation(() => Promise.resolve(mockExternalContacts)),
   isStale: jest.fn().mockReturnValue(false),
   fullSync: jest.fn().mockImplementation((_userId: string, contacts: any[]) => {
     // Store the contacts that were synced
@@ -167,6 +169,8 @@ function resetExternalContactsMock() {
   const externalContactDb = require("../services/db/externalContactDbService");
   (externalContactDb.getCount as jest.Mock).mockReturnValue(0);
   (externalContactDb.getAllForUser as jest.Mock).mockReturnValue([]);
+  // TASK-1956: Also reset the async version used by contacts:get-available
+  (externalContactDb.getAllForUserAsync as jest.Mock).mockResolvedValue([]);
 }
 
 // Test UUIDs
@@ -245,7 +249,8 @@ describe("Contact Handlers", () => {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const externalContactDb = require("../services/db/externalContactDbService");
       (externalContactDb.getCount as jest.Mock).mockReturnValue(2); // Shadow table has data
-      (externalContactDb.getAllForUser as jest.Mock).mockReturnValue([
+      // TASK-1956: Handler now uses getAllForUserAsync (worker thread)
+      (externalContactDb.getAllForUserAsync as jest.Mock).mockResolvedValue([
         {
           id: "ext-1",
           user_id: TEST_USER_ID,
@@ -287,7 +292,8 @@ describe("Contact Handlers", () => {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const externalContactDb = require("../services/db/externalContactDbService");
       (externalContactDb.getCount as jest.Mock).mockReturnValue(2); // Shadow table has data
-      (externalContactDb.getAllForUser as jest.Mock).mockReturnValue([
+      // TASK-1956: Handler now uses getAllForUserAsync (worker thread)
+      (externalContactDb.getAllForUserAsync as jest.Mock).mockResolvedValue([
         {
           id: "ext-1",
           user_id: TEST_USER_ID,
@@ -567,7 +573,8 @@ describe("Contact Handlers", () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const externalContactDb = require("../services/db/externalContactDbService");
         (externalContactDb.getCount as jest.Mock).mockReturnValue(1); // Shadow table has data
-        (externalContactDb.getAllForUser as jest.Mock).mockReturnValue([
+        // TASK-1956: Handler now uses getAllForUserAsync (worker thread)
+        (externalContactDb.getAllForUserAsync as jest.Mock).mockResolvedValue([
           {
             id: "ext-2",
             user_id: TEST_USER_ID,
@@ -1123,7 +1130,8 @@ describe("Contact Handlers", () => {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const externalContactDb = require("../services/db/externalContactDbService");
       (externalContactDb.getCount as jest.Mock).mockReturnValue(2);
-      (externalContactDb.getAllForUser as jest.Mock).mockReturnValue([
+      // TASK-1956: Handler now uses getAllForUserAsync (worker thread)
+      (externalContactDb.getAllForUserAsync as jest.Mock).mockResolvedValue([
         {
           id: "ext-1",
           name: "Mac Contact",
@@ -1170,7 +1178,8 @@ describe("Contact Handlers", () => {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const externalContactDb = require("../services/db/externalContactDbService");
       (externalContactDb.getCount as jest.Mock).mockReturnValue(1);
-      (externalContactDb.getAllForUser as jest.Mock).mockReturnValue([
+      // TASK-1956: Handler now uses getAllForUserAsync (worker thread)
+      (externalContactDb.getAllForUserAsync as jest.Mock).mockResolvedValue([
         {
           id: "ext-1",
           name: "Outlook Contact",
