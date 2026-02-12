@@ -112,12 +112,16 @@ export function AppRouter({ app }: AppRouterProps) {
       );
     }
     return (
-      <Login
-        onLoginSuccess={handleLoginSuccess}
-        onLoginPending={handleLoginPending}
-        onDeepLinkAuthSuccess={handleDeepLinkAuthSuccess}
-        onLicenseBlocked={handleLicenseBlocked}
-      />
+      <div className="relative">
+        {/* Invisible drag region at top for window dragging on login screen */}
+        <div className="fixed top-0 left-0 right-0 h-12 z-50 drag-region" />
+        <Login
+          onLoginSuccess={handleLoginSuccess}
+          onLoginPending={handleLoginPending}
+          onDeepLinkAuthSuccess={handleDeepLinkAuthSuccess}
+          onLicenseBlocked={handleLicenseBlocked}
+        />
+      </div>
     );
   }
 

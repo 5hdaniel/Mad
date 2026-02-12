@@ -329,7 +329,7 @@ describe("useAutoRefresh", () => {
       );
     });
 
-    it("should NOT include contacts or messages on non-macOS platforms", async () => {
+    it("should sync only Outlook contacts on non-macOS platforms with email connected", async () => {
       (usePlatform as jest.Mock).mockReturnValue({ isMacOS: false });
 
       const { result } = renderHook(() => useAutoRefresh(defaultOptions));
@@ -338,11 +338,32 @@ describe("useAutoRefresh", () => {
         await result.current.triggerRefresh();
       });
 
-      // No sync types available on non-macOS without AI addon
+      // TASK-1953: Outlook contacts sync via Graph API on all platforms when email connected
+      expect(mockRequestSync).toHaveBeenCalledWith(
+        ['contacts'],
+        'test-user-123'
+      );
+    });
+
+    it("should NOT sync anything on non-macOS without email connected", async () => {
+      (usePlatform as jest.Mock).mockReturnValue({ isMacOS: false });
+
+      const { result } = renderHook(() =>
+        useAutoRefresh({
+          ...defaultOptions,
+          hasEmailConnected: false,
+        })
+      );
+
+      await act(async () => {
+        await result.current.triggerRefresh();
+      });
+
+      // No sync types available on non-macOS without email connection or AI addon
       expect(mockRequestSync).not.toHaveBeenCalled();
     });
 
-    it("should NOT include contacts or messages without permissions", async () => {
+    it("should sync only Outlook contacts without macOS permissions", async () => {
       const { result } = renderHook(() =>
         useAutoRefresh({
           ...defaultOptions,
@@ -354,11 +375,14 @@ describe("useAutoRefresh", () => {
         await result.current.triggerRefresh();
       });
 
-      // No sync types available without permissions (and no AI addon)
-      expect(mockRequestSync).not.toHaveBeenCalled();
+      // TASK-1953: Outlook contacts still sync without macOS permissions (uses Graph API)
+      expect(mockRequestSync).toHaveBeenCalledWith(
+        ['contacts'],
+        'test-user-123'
+      );
     });
 
-    it("should include only emails on non-macOS with AI addon", async () => {
+    it("should include contacts and emails on non-macOS with AI addon", async () => {
       (usePlatform as jest.Mock).mockReturnValue({ isMacOS: false });
 
       const { result } = renderHook(() =>
@@ -372,8 +396,9 @@ describe("useAutoRefresh", () => {
         await result.current.triggerRefresh();
       });
 
+      // TASK-1953: contacts (Outlook) + emails (AI addon)
       expect(mockRequestSync).toHaveBeenCalledWith(
-        ['emails'],
+        ['contacts', 'emails'],
         'test-user-123'
       );
     });

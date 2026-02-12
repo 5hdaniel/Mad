@@ -11,6 +11,7 @@ import { getContactNames } from "./services/contactsService";
 import auditService from "./services/auditService";
 import logService from "./services/logService";
 import * as externalContactDb from "./services/db/externalContactDbService";
+import { queryContacts, isPoolReady } from "./workers/contactWorkerPool";
 import { dbAll, dbGet } from "./services/db/core/dbConnection";
 import type { Contact, Transaction, ContactSource } from "./types/models";
 
@@ -56,16 +57,34 @@ let _mainWindow: BrowserWindow | null = null;
  * Called after external contacts sync to ensure imported contacts have
  * all emails/phones from macOS Contacts.
  */
+// Track which users have already been backfilled this session
+const backfilledUsers = new Set<string>();
+
 async function backfillImportedContactsFromExternal(userId: string): Promise<{ updated: number }> {
-  let updated = 0;
+  // Only run once per user per session — this is a maintenance task, not needed on every load
+  if (backfilledUsers.has(userId)) {
+    return { updated: 0 };
+  }
+  backfilledUsers.add(userId);
 
   try {
-    // Get all imported contacts
+    // TASK-1956: Use worker pool to run backfill off main thread when available
+    if (isPoolReady()) {
+      const result = await queryContacts('backfill', userId) as Array<{ updated: number }>;
+      const updated = result[0]?.updated ?? 0;
+      if (updated > 0) {
+        logService.info(`Backfilled ${updated} imported contacts from external_contacts (worker)`, "Contacts", { userId });
+      }
+      return { updated };
+    }
+
+    // Fallback: run on main thread if pool not ready
+    let updated = 0;
+
     const importedSql = `SELECT id, display_name FROM contacts WHERE user_id = ? AND is_imported = 1`;
     const importedContacts = dbAll<{ id: string; display_name: string }>(importedSql, [userId]);
 
     for (const contact of importedContacts) {
-      // Find matching external contact by name
       const externalSql = `SELECT emails_json, phones_json FROM external_contacts WHERE user_id = ? AND name = ?`;
       const external = dbGet<{ emails_json: string; phones_json: string }>(externalSql, [userId, contact.display_name]);
 
@@ -86,11 +105,12 @@ async function backfillImportedContactsFromExternal(userId: string): Promise<{ u
     if (updated > 0) {
       logService.info(`Backfilled ${updated} imported contacts from external_contacts`, "Contacts", { userId });
     }
+
+    return { updated };
   } catch (error) {
     logService.warn(`Failed to backfill imported contacts: ${error}`, "Contacts");
+    return { updated: 0 };
   }
-
-  return { updated };
 }
 
 /**
@@ -122,19 +142,22 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
           };
         }
 
-        // Backfill any missing emails/phones for imported contacts
-        // This ensures contacts have complete data from external sources
-        const backfillResult = await backfillImportedContactsFromExternal(validatedUserId);
-        if (backfillResult.updated > 0) {
-          logService.info(
-            `Backfilled ${backfillResult.updated} imported contacts with missing emails/phones`,
-            "Contacts",
-          );
-        }
-
-        // Get only imported contacts from database (now with backfilled data)
+        // TASK-1956: Use worker thread to avoid blocking main process during contact load
         const importedContacts =
-          await databaseService.getImportedContactsByUserId(validatedUserId);
+          await databaseService.getImportedContactsByUserIdAsync(validatedUserId);
+
+        // Backfill missing emails/phones in background (once per session, non-blocking)
+        // Deferred so it doesn't block the initial contact list render
+        backfillImportedContactsFromExternal(validatedUserId).then((backfillResult) => {
+          if (backfillResult.updated > 0) {
+            logService.info(
+              `Backfilled ${backfillResult.updated} imported contacts with missing emails/phones`,
+              "Contacts",
+            );
+          }
+        }).catch((err) => {
+          logService.warn(`Background backfill failed: ${err}`, "Contacts");
+        });
 
         logService.info(
           `Found ${importedContacts.length} imported contacts`,
@@ -193,8 +216,9 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         }
 
         // Get already imported contact identifiers to filter them out
+        // TASK-1956: Use async worker version to avoid blocking main process
         const importedContacts =
-          await databaseService.getImportedContactsByUserId(validatedUserId);
+          await databaseService.getImportedContactsByUserIdAsync(validatedUserId);
         const importedNames = new Set(
           importedContacts.map((c) => c.name?.toLowerCase()),
         );

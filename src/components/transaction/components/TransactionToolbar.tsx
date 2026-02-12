@@ -99,7 +99,7 @@ function TransactionToolbar({
   return (
     <>
       {/* Header */}
-      <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-6 flex items-center justify-between shadow-lg">
+      <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-purple-600 px-6 pt-10 pb-4 flex items-center justify-between shadow-lg">
         <button
           onClick={onClose}
           className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-4 py-2 transition-all flex items-center gap-2 font-medium"
