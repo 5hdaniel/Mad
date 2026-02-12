@@ -62,6 +62,9 @@ interface PreferencesResult {
         messages?: boolean;
       };
     };
+    emailSync?: {
+      lookbackMonths?: number;
+    };
   };
 }
 
@@ -97,6 +100,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
   >(null);
   const [exportFormat, setExportFormat] = useState<string>("pdf"); // Default export format
   const [scanLookbackMonths, setScanLookbackMonths] = useState<number>(9); // Default 9 months
+  const [emailSyncLookbackMonths, setEmailSyncLookbackMonths] = useState<number>(3); // TASK-1966: Default 3 months (matches legacy 90-day behavior)
   const [autoSyncOnLogin, setAutoSyncOnLogin] = useState<boolean>(true); // Default auto-sync ON
   const [autoDownloadUpdates, setAutoDownloadUpdates] = useState<boolean>(false); // Default auto-download OFF
   const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(true); // Default notifications ON
@@ -199,6 +203,11 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         if (typeof loadedLookback === "number" && loadedLookback > 0) {
           setScanLookbackMonths(loadedLookback);
         }
+        // TASK-1966: Load email sync lookback preference
+        const loadedEmailSyncLookback = result.preferences.emailSync?.lookbackMonths;
+        if (typeof loadedEmailSyncLookback === "number" && loadedEmailSyncLookback > 0) {
+          setEmailSyncLookbackMonths(loadedEmailSyncLookback);
+        }
         // Load auto-sync preference (default is true if not set)
         if (typeof result.preferences.sync?.autoSyncOnLogin === "boolean") {
           setAutoSyncOnLogin(result.preferences.sync.autoSyncOnLogin);
@@ -264,6 +273,23 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
       }
     } catch (error) {
       console.error("[Settings] Error saving scan lookback:", error);
+    }
+  };
+
+  // TASK-1966: Handle email sync lookback change
+  const handleEmailSyncLookbackChange = async (months: number): Promise<void> => {
+    setEmailSyncLookbackMonths(months);
+    try {
+      const result = await window.api.preferences.update(userId, {
+        emailSync: {
+          lookbackMonths: months,
+        },
+      });
+      if (!result.success) {
+        console.error("[Settings] Failed to save email sync lookback:", result);
+      }
+    } catch (error) {
+      console.error("[Settings] Error saving email sync lookback:", error);
     }
   };
 
@@ -899,6 +925,34 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                         : "Connect Outlook"}
                     </button>
                   )}
+                </div>
+
+                {/* TASK-1966: Email Sync Depth Filter */}
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <h4 className="text-sm font-medium text-gray-900">
+                        First Sync Lookback
+                      </h4>
+                      <p className="text-xs text-gray-600 mt-1">
+                        How far back to fetch emails on first sync. Takes effect
+                        on next sync.
+                      </p>
+                    </div>
+                    <select
+                      value={emailSyncLookbackMonths}
+                      onChange={(e) =>
+                        handleEmailSyncLookbackChange(Number(e.target.value))
+                      }
+                      disabled={loadingPreferences}
+                      className="ml-4 text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value={1}>1 month</option>
+                      <option value={3}>3 months (default)</option>
+                      <option value={6}>6 months</option>
+                      <option value={12}>12 months</option>
+                    </select>
+                  </div>
                 </div>
               </div>
             </div>
