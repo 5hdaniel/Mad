@@ -543,7 +543,7 @@ BACKLOG-657,Message Import Cap Warning & Default Filters,feature,High,In Progres
 BACKLOG-658,Outlook contacts not synced during auto-refresh,bug,High,Completed,SPRINT-079,~25K,-,-,2026-02-10,2026-02-10,
 BACKLOG-659,Source filter missing on contact selection screens,bug,Medium,Completed,SPRINT-079,~30K,-,-,2026-02-10,2026-02-10,
 BACKLOG-660,ImportContactsModal does not refresh after manual sync,bug,Medium,Completed,SPRINT-079,~15K,-,-,2026-02-10,2026-02-10,
-BACKLOG-661,Move external contacts query to worker thread (main process freeze fix),enhancement,High,In Progress,SPRINT-080,~25K,-,-,2026-02-11,,BACKLOG-661.md
+BACKLOG-661,Move external contacts query to worker thread (main process freeze fix),enhancement,High,Completed,SPRINT-080,~25K,-,-,2026-02-11,2026-02-11,BACKLOG-661.md
 BACKLOG-662,Configure Electron Fuses for production hardening,security,Critical,Pending,SPRINT-080A,~30K,-,-,2026-02-11,,
 BACKLOG-663,Enable explicit ASAR integrity,security,Critical,Pending,SPRINT-080A,~10K,-,-,2026-02-11,,
 BACKLOG-664,Add deny-by-default permission request handler,security,Critical,Pending,SPRINT-080A,~15K,-,-,2026-02-11,,

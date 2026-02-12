@@ -234,3 +234,4 @@ date,action,details,items_affected
 2026-02-10,create,"Created BACKLOG-657 (Message Import Cap Warning & Default Filters) - Follow-up to SPRINT-078. Sets default 6-month/250K filters, adds cap warning UI. PR #801 on branch fix/message-import-default-filters.",BACKLOG-657
 2026-02-10,sprint_created,"SPRINT-079 created with 3 contact bug fixes: BACKLOG-658 (Outlook auto-sync), BACKLOG-659 (source filter), BACKLOG-660 (import refresh)","BACKLOG-658,BACKLOG-659,BACKLOG-660"
 2026-02-10,sprint_completed,"SPRINT-079 completed: 3 contact bug fixes merged (PRs #804-806). BACKLOG-658/659/660 all Completed.","BACKLOG-658,BACKLOG-659,BACKLOG-660"
+2026-02-11,sprint_completed,"SPRINT-080 completed: Worker thread for external contacts query (PRs #810-811). BACKLOG-661 Completed. Fixes ~3.7s UI freeze with 1000+ contacts.",BACKLOG-661
