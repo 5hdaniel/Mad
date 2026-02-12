@@ -47,4 +47,4 @@ SPRINT-066,Contact Management UX Overhaul,completed,"12 tasks (TASK-1761-1771): 
 SPRINT-077,Desktop UI Cleanup,complete,"4 tasks (TASK-1944-1948) + polish PR: Settings stubs removed, responsive toolbar, health check azure fix, auto-download toggle. PRs #792-796. BACKLOG-649 to BACKLOG-656."
 SPRINT-078,Contact Source Selection & Message Filtering,completed,"4 tasks (TASK-1949-1952): Contact source prefs UI, wire direct imports, wire inferred contacts, message import filter. PRs #797-800. Follow-up: BACKLOG-657 (default filters + cap warning)."
 SPRINT-079,Contact Bug Fixes,completed,"3 tasks (TASK-1953-1955): Outlook auto-sync, source filter UI, import modal refresh. PRs #804-806. BACKLOG-658 to BACKLOG-660."
-SPRINT-080,Contact Query Worker Thread,active,"1 task (TASK-1956): Move external contacts query to worker thread to fix ~3.7s UI freeze. BACKLOG-661."
+SPRINT-080,Contact Query Worker Thread,completed,"1 task (TASK-1956): Move external contacts query to worker thread to fix ~3.7s UI freeze. PRs #810-811. BACKLOG-661."

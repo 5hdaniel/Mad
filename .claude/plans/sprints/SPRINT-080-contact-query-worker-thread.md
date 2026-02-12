@@ -1,7 +1,8 @@
 # SPRINT-080: Contact Query Worker Thread (Main Process Freeze Fix)
 
-**Status:** Active
+**Status:** Completed
 **Created:** 2026-02-11
+**Completed:** 2026-02-11
 **Branch From:** develop
 **Target:** develop
 
@@ -108,7 +109,7 @@ All PRs must pass:
 
 | Task | Status | Billable Tokens | Duration | PR |
 |------|--------|----------------|----------|-----|
-| TASK-1956 | In Progress | - | - | - |
+| TASK-1956 | MERGED | - | - | #810, #811 |
 
 ---
 
@@ -122,8 +123,24 @@ All PRs must pass:
 
 ## Validation Checklist (End of Sprint)
 
-- [ ] External contacts load without freezing the main process
-- [ ] WAL mode enabled in database initialization
-- [ ] Worker thread spawns, queries, and terminates cleanly
-- [ ] All CI checks pass on develop after merge
-- [ ] No regressions in contact flows
+- [x] External contacts load without freezing the main process
+- [x] WAL mode enabled in database initialization
+- [x] Worker thread spawns, queries, and terminates cleanly
+- [x] All CI checks pass on develop after merge
+- [x] No regressions in contact flows
+
+---
+
+## Completion Summary
+
+**TASK-1956 completed and merged to develop on 2026-02-11.**
+
+| Task | PR | Status | Notes |
+|------|----|--------|-------|
+| TASK-1956 | PR #810 | Merged | Original worker thread implementation |
+| (follow-up) | PR #811 | Merged | Worker path fix, drag regions, diagnostic query removal, header padding |
+
+**Manual verification passed by user:**
+1. Window remains draggable during contact load (no UI freeze)
+2. ContactSelectModal contacts appear correctly
+3. App startup and shutdown work correctly with WAL mode
