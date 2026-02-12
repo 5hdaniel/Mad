@@ -75,3 +75,4 @@ export const WINDOW_CONFIG: WindowConfig = {
 // Development
 export const DEV_SERVER_URL: string = "http://localhost:5173";
 export const UPDATE_CHECK_DELAY: number = 5000; // 5 seconds after window loads
+export const UPDATE_CHECK_INTERVAL: number = 4 * 60 * 60 * 1000; // 4 hours in ms (TASK-1970)
