@@ -362,11 +362,11 @@ describe("ContactRow", () => {
       expect(screen.getByTestId("source-pill-message")).toBeInTheDocument();
     });
 
-    it("shows imported variant for email source", () => {
+    it("shows email variant for email source", () => {
       renderContactRow({
         contact: createTestContact({ source: "email", is_message_derived: false }),
       });
-      expect(screen.getByTestId("source-pill-imported")).toBeInTheDocument();
+      expect(screen.getByTestId("source-pill-email")).toBeInTheDocument();
     });
   });
 

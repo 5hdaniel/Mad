@@ -89,10 +89,13 @@ function Contacts({ userId, onClose }: ContactsProps) {
   // DEFENSIVE CHECK: Return loading state if database not initialized
   if (!isDatabaseInitialized) {
     return (
-      <div className="h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-          <p className="text-gray-500 text-sm">Waiting for database...</p>
+      <div className="h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col">
+        <div className="flex-shrink-0 h-8" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties} />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+            <p className="text-gray-500 text-sm">Waiting for database...</p>
+          </div>
         </div>
       </div>
     );
@@ -193,10 +196,11 @@ function Contacts({ userId, onClose }: ContactsProps) {
   return (
     <div className="h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex-shrink-0 bg-gradient-to-r from-purple-500 to-pink-600 px-6 py-4 flex items-center justify-between shadow-lg">
+      <div className="flex-shrink-0 bg-gradient-to-r from-purple-500 to-pink-600 px-6 py-4 flex items-center justify-between shadow-lg" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
         <button
           onClick={onClose}
           className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-4 py-2 transition-all flex items-center gap-2 font-medium"
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           <svg
             className="w-5 h-5"

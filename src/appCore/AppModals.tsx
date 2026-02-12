@@ -94,7 +94,7 @@ export function AppModals({ app }: AppModalsProps) {
 
       {/* Transactions View */}
       {modalState.showTransactions && currentUser && authProvider && isDatabaseInitialized && (
-        <div className="fixed inset-0 z-[60]">
+        <div className="fixed inset-0 z-[60]" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
           <TransactionList
             userId={currentUser.id}
             provider={authProvider as "google" | "microsoft"}
@@ -105,7 +105,7 @@ export function AppModals({ app }: AppModalsProps) {
 
       {/* Contacts View */}
       {modalState.showContacts && currentUser && isDatabaseInitialized && (
-        <div className="fixed inset-0 z-[60]">
+        <div className="fixed inset-0 z-[60]" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
           <Contacts userId={currentUser.id} onClose={closeContacts} />
         </div>
       )}

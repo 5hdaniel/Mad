@@ -70,6 +70,13 @@ function mapToSourcePillSource(
   source: ModelContactSource | string | undefined,
   isExternal: boolean
 ): SourcePillSource {
+  // Source-specific pills take priority over isExternal flag
+  if (source === "outlook") {
+    return "outlook";
+  }
+  if (source === "email") {
+    return "email";
+  }
   // sms/messages source takes priority - always show "Message" pill
   if (source === "sms" || source === "messages") {
     return source;
