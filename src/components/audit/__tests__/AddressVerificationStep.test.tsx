@@ -138,7 +138,7 @@ describe("AddressVerificationStep - Start Date Auto/Manual Toggle", () => {
       />,
     );
 
-    expect(screen.getByText(/no communications found/i)).toBeInTheDocument();
+    expect(screen.getByText(/no communications found.*60 days/i)).toBeInTheDocument();
   });
 
   it("should show select-contacts hint in auto mode with no detection yet", () => {

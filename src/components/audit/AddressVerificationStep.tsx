@@ -21,7 +21,7 @@ interface AddressVerificationStepProps {
   // Auto-detect start date props (TASK-1974)
   startDateMode?: "auto" | "manual";
   onStartDateModeChange?: (mode: "auto" | "manual") => void;
-  autoDetectedDate?: string | null;
+  autoDetectedDate?: string | null | undefined;
   isAutoDetecting?: boolean;
 }
 
@@ -216,7 +216,7 @@ function AddressVerificationStep({
             )}
             {showNoCommsHint && (
               <p className="text-xs text-amber-600 mt-1">
-                No communications found for selected contacts - using default (1 year ago)
+                No communications found for selected contacts - using default (60 days ago)
               </p>
             )}
             {!isAutoMode && (

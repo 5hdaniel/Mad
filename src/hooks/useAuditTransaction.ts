@@ -101,7 +101,7 @@ export interface UseAuditTransactionReturn {
 
   // Auto-detect start date state (TASK-1974)
   startDateMode: "auto" | "manual";
-  autoDetectedDate: string | null;
+  autoDetectedDate: string | null | undefined;
   isAutoDetecting: boolean;
 
   // Contact loading state (lazy-loaded when reaching step 2)
@@ -131,12 +131,12 @@ export interface UseAuditTransactionReturn {
 }
 
 /**
- * Get default start date (one year ago from today)
- * Common transaction timeframe for real estate
+ * Get default start date (60 days ago from today)
+ * Typical recent transaction timeframe for real estate audits
  */
 function getDefaultStartDate(): string {
   const date = new Date();
-  date.setFullYear(date.getFullYear() - 1);
+  date.setDate(date.getDate() - 60);
   return date.toISOString().split("T")[0]; // YYYY-MM-DD format
 }
 
@@ -202,7 +202,7 @@ export function useAuditTransaction({
   const [startDateMode, setStartDateModeState] = useState<"auto" | "manual">(
     isEditing ? "manual" : "auto",
   );
-  const [autoDetectedDate, setAutoDetectedDate] = useState<string | null>(null);
+  const [autoDetectedDate, setAutoDetectedDate] = useState<string | null | undefined>(undefined);
   const [isAutoDetecting, setIsAutoDetecting] = useState(false);
 
   /**
@@ -372,7 +372,7 @@ export function useAuditTransaction({
         });
       } else {
         setAutoDetectedDate(null);
-        // Keep default (1 year ago) if no communications found
+        // Keep default (60 days ago) if no communications found
       }
     } catch {
       if (!isMountedRef.current) return;
