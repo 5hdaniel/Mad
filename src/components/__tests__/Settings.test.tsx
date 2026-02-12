@@ -25,12 +25,17 @@ jest.mock("@/contexts/LicenseContext", () => ({
 }));
 
 // Wrap Settings in PlatformProvider for tests
-const renderSettings = (props: { onClose: () => void; userId: string }) => {
-  return render(
+const renderSettings = async (props: { onClose: () => void; userId: string }) => {
+  const result = render(
     <PlatformProvider>
       <Settings {...props} />
     </PlatformProvider>
   );
+  // Wait for preferences to load (spinner to disappear) before returning
+  await waitFor(() => {
+    expect(screen.queryByText("Loading settings...")).not.toBeInTheDocument();
+  });
+  return result;
 };
 
 describe("Settings", () => {
@@ -111,13 +116,13 @@ describe("Settings", () => {
 
   describe("Rendering", () => {
     it("should render settings modal with title", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByText("Settings")).toBeInTheDocument();
     });
 
     it("should show all settings sections", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(screen.getByText("General")).toBeInTheDocument();
@@ -131,7 +136,7 @@ describe("Settings", () => {
     });
 
     it("should show app name and copyright", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByText("MagicAudit")).toBeInTheDocument();
       expect(screen.getByText(/© 2026 Blue Spaces LLC/)).toBeInTheDocument();
@@ -140,7 +145,7 @@ describe("Settings", () => {
 
   describe("Email Connections", () => {
     it("should show Gmail connection status", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(screen.getByText("Gmail")).toBeInTheDocument();
@@ -150,7 +155,7 @@ describe("Settings", () => {
     });
 
     it("should show Outlook connection status", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(screen.getByText("Outlook")).toBeInTheDocument();
@@ -164,7 +169,7 @@ describe("Settings", () => {
         microsoft: { connected: false },
       });
 
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(screen.getAllByText("Connected").length).toBeGreaterThan(0);
@@ -180,7 +185,7 @@ describe("Settings", () => {
         microsoft: { connected: true, email: "user@outlook.com" },
       });
 
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(screen.getAllByText("Connected").length).toBeGreaterThan(0);
@@ -189,18 +194,18 @@ describe("Settings", () => {
       expect(screen.getByText("user@outlook.com")).toBeInTheDocument();
     });
 
-    it("should show loading state while checking connections", () => {
+    it("should show loading state while checking connections", async () => {
       window.api.system.checkAllConnections.mockImplementation(
         () => new Promise((resolve) => setTimeout(resolve, 1000)),
       );
 
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getAllByText("Checking...").length).toBeGreaterThan(0);
     });
 
     it("should call connect Gmail when button is clicked", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(screen.getByText("Gmail")).toBeInTheDocument();
@@ -217,7 +222,7 @@ describe("Settings", () => {
     });
 
     it("should call connect Outlook when button is clicked", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(screen.getByText("Outlook")).toBeInTheDocument();
@@ -240,7 +245,7 @@ describe("Settings", () => {
         microsoft: { connected: false },
       });
 
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(
@@ -261,7 +266,7 @@ describe("Settings", () => {
         microsoft: { connected: false },
       });
 
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(
@@ -286,7 +291,7 @@ describe("Settings", () => {
         microsoft: { connected: true, email: "user@outlook.com" },
       });
 
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(
@@ -307,7 +312,7 @@ describe("Settings", () => {
 
   describe("Export Settings", () => {
     it("should show export format dropdown", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(screen.getByText("Default Format")).toBeInTheDocument();
@@ -318,7 +323,7 @@ describe("Settings", () => {
     });
 
     it("should show all export format options", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         const select = getExportFormatSelect();
@@ -341,7 +346,7 @@ describe("Settings", () => {
         },
       });
 
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         const select = getExportFormatSelect();
@@ -350,7 +355,7 @@ describe("Settings", () => {
     });
 
     it("should save export format when changed", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(getExportFormatSelect()).toBeInTheDocument();
@@ -364,21 +369,24 @@ describe("Settings", () => {
       });
     });
 
-    it("should disable format selector while loading preferences", () => {
+    it("should show loading spinner while loading preferences", async () => {
       window.api.preferences.get.mockImplementation(
         () => new Promise((resolve) => setTimeout(resolve, 1000)),
       );
 
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      render(
+        <PlatformProvider>
+          <Settings userId={mockUserId} onClose={mockOnClose} />
+        </PlatformProvider>
+      );
 
-      const select = getExportFormatSelect();
-      expect(select).toBeDisabled();
+      expect(screen.getByText("Loading settings...")).toBeInTheDocument();
     });
   });
 
   describe("General Settings", () => {
     it("should show notifications toggle (disabled/coming soon)", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByText("Notifications")).toBeInTheDocument();
       expect(
@@ -390,7 +398,7 @@ describe("Settings", () => {
 
   describe("Auto-Download Updates Toggle", () => {
     it("should show auto-download updates toggle", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(screen.getByText("Auto-download Updates")).toBeInTheDocument();
@@ -402,7 +410,7 @@ describe("Settings", () => {
     });
 
     it("should default to off (disabled)", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         const toggle = screen.getByRole("switch", {
@@ -421,7 +429,7 @@ describe("Settings", () => {
         },
       });
 
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         const toggle = screen.getByRole("switch", {
@@ -432,7 +440,7 @@ describe("Settings", () => {
     });
 
     it("should toggle auto-download and save preference", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(
@@ -450,23 +458,24 @@ describe("Settings", () => {
       });
     });
 
-    it("should disable toggle while loading preferences", () => {
+    it("should show loading spinner while loading preferences", async () => {
       window.api.preferences.get.mockImplementation(
         () => new Promise((resolve) => setTimeout(resolve, 1000)),
       );
 
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      render(
+        <PlatformProvider>
+          <Settings userId={mockUserId} onClose={mockOnClose} />
+        </PlatformProvider>
+      );
 
-      const toggle = screen.getByRole("switch", {
-        name: /auto-download updates/i,
-      });
-      expect(toggle).toBeDisabled();
+      expect(screen.getByText("Loading settings...")).toBeInTheDocument();
     });
   });
 
   describe("Data & Privacy", () => {
     it("should show view stored data button (disabled)", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByText("View Stored Data")).toBeInTheDocument();
       expect(
@@ -475,14 +484,14 @@ describe("Settings", () => {
     });
 
     it("should show clear all data button (disabled)", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByText("Clear All Data")).toBeInTheDocument();
       expect(screen.getByText(/delete all local data/i)).toBeInTheDocument();
     });
 
     it("should show reindex database button", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByText("Reindex Database")).toBeInTheDocument();
       expect(
@@ -500,7 +509,7 @@ describe("Settings", () => {
         durationMs: 150,
       });
 
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       const reindexButton = screen
         .getByText("Reindex Database")
@@ -524,7 +533,7 @@ describe("Settings", () => {
         durationMs: 150,
       });
 
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       const reindexButton = screen
         .getByText("Reindex Database")
@@ -551,7 +560,7 @@ describe("Settings", () => {
         error: "Database is locked",
       });
 
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       const reindexButton = screen
         .getByText("Reindex Database")
@@ -568,13 +577,13 @@ describe("Settings", () => {
 
   describe("About Section", () => {
     it("should show app name", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByText("MagicAudit")).toBeInTheDocument();
     });
 
     it("should show disabled action buttons", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByText("View Release Notes")).toBeInTheDocument();
       expect(screen.getByText("Privacy Policy")).toBeInTheDocument();
@@ -584,7 +593,7 @@ describe("Settings", () => {
 
   describe("Close Modal", () => {
     it("should call onClose when close button is clicked", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       const closeButton = screen
         .getAllByRole("button")
@@ -597,7 +606,7 @@ describe("Settings", () => {
     });
 
     it("should call onClose when done button is clicked", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       const doneButton = screen.getByRole("button", { name: /done/i });
       await userEvent.click(doneButton);
@@ -608,7 +617,7 @@ describe("Settings", () => {
 
   describe("API Integration", () => {
     it("should check connections on mount", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(window.api.system.checkAllConnections).toHaveBeenCalledWith(
@@ -618,14 +627,14 @@ describe("Settings", () => {
     });
 
     it("should load preferences on mount", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(window.api.preferences.get).toHaveBeenCalledWith(mockUserId);
       });
     });
 
-    it("should have all required APIs available", () => {
+    it("should have all required APIs available", async () => {
       expect(window.api.system.checkAllConnections).toBeDefined();
       expect(window.api.preferences.get).toBeDefined();
       expect(window.api.preferences.update).toBeDefined();
@@ -643,7 +652,7 @@ describe("Settings", () => {
         error: "Network error",
       });
 
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       // Should still render without crashing
       await waitFor(() => {
@@ -657,7 +666,7 @@ describe("Settings", () => {
         error: "Failed to load preferences",
       });
 
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       // Should still render with default values
       await waitFor(() => {
@@ -672,7 +681,7 @@ describe("Settings", () => {
         error: "Failed to save preferences",
       });
 
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(getExportFormatSelect()).toBeInTheDocument();
@@ -688,7 +697,7 @@ describe("Settings", () => {
 
   describe("Accessibility", () => {
     it("should have accessible form controls", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(getExportFormatSelect()).toBeInTheDocument();
@@ -700,7 +709,7 @@ describe("Settings", () => {
     });
 
     it("should have accessible buttons", async () => {
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByRole("button", { name: /done/i })).toBeInTheDocument();
     });
@@ -721,7 +730,7 @@ describe("Settings", () => {
         refresh: jest.fn(),
       });
 
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(screen.getByText("AI Settings")).toBeInTheDocument();
@@ -740,7 +749,7 @@ describe("Settings", () => {
         refresh: jest.fn(),
       });
 
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         // AI Settings should NOT be visible
@@ -760,7 +769,7 @@ describe("Settings", () => {
         refresh: jest.fn(),
       });
 
-      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
         expect(screen.getByText("AI Settings")).toBeInTheDocument();
