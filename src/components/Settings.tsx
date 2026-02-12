@@ -4,6 +4,7 @@ import { MacOSMessagesImportSettings } from "./settings/MacOSMessagesImportSetti
 import { MacOSContactsImportSettings } from "./settings/MacOSContactsImportSettings";
 import { ImportSourceSettings } from "./settings/ImportSourceSettings";
 import { LicenseGate } from "./common/LicenseGate";
+import { useNotification } from "@/hooks/useNotification";
 import {
   emitEmailConnectionChanged,
   useEmailConnectionListener,
@@ -82,6 +83,7 @@ interface SettingsComponentProps {
  * Application settings and preferences
  */
 function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: SettingsComponentProps) {
+  const { notify } = useNotification();
   const [connections, setConnections] = useState<Connections>({
     google: null,
     microsoft: null,
@@ -315,12 +317,17 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
 
   const handleTestNotification = async (): Promise<void> => {
     try {
-      await window.api.notification?.send(
+      const result = await window.api.notification?.send(
         "Test Notification",
         "Desktop notifications are working correctly."
       );
+      if (result?.success) {
+        notify.success("Desktop notification sent! Check your notification center if you don't see a banner.");
+      } else {
+        notify.warning(result?.error || "Notifications may not be supported on this system.");
+      }
     } catch {
-      // Silently handle notification failures
+      notify.error("Failed to send test notification.");
     }
   };
 
