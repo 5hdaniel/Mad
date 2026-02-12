@@ -25,6 +25,19 @@ interface AddressVerificationStepProps {
   isAutoDetecting?: boolean;
 }
 
+/**
+ * Format a date string (YYYY-MM-DD) to readable format (e.g., "Sep 1, 2019")
+ */
+function formatDateReadable(dateStr: string): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 function AddressVerificationStep({
   addressData,
   onAddressChange,
@@ -44,6 +57,7 @@ function AddressVerificationStep({
   const hasAutoDate = isAutoMode && autoDetectedDate !== null && autoDetectedDate !== undefined;
   const showNoCommsHint = isAutoMode && !isAutoDetecting && autoDetectedDate === null;
   const awaitingContacts = isAutoMode && !hasAutoDate && !showNoCommsHint && !isAutoDetecting;
+  const todayFormatted = formatDateReadable(new Date().toISOString().split("T")[0]);
 
   return (
     <div className="space-y-6">
@@ -118,54 +132,46 @@ function AddressVerificationStep({
         </div>
       </div>
 
-      {/* Transaction Date Range */}
+      {/* Transaction Dates */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-3">
-          Transaction Dates
-        </label>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Representation Start Date *
-              <span
-                className="ml-1 text-gray-400 cursor-help"
-                title="The date you officially started representing this client in this transaction"
+        <div className="flex items-center justify-between mb-3">
+          <label className="block text-sm font-medium text-gray-700">
+            {isAutoMode ? "Audit Period" : "Transaction Dates"}
+          </label>
+          {/* Auto/Manual toggle (TASK-1974) */}
+          {onStartDateModeChange && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => onStartDateModeChange("auto")}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                  isAutoMode
+                    ? "bg-indigo-500 text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
               >
-                (?)
-              </span>
-            </label>
+                Auto
+              </button>
+              <button
+                type="button"
+                onClick={() => onStartDateModeChange("manual")}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                  !isAutoMode
+                    ? "bg-indigo-500 text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                Manual
+              </button>
+            </div>
+          )}
+        </div>
 
-            {/* Auto/Manual toggle (TASK-1974) */}
-            {onStartDateModeChange && (
-              <div className="flex items-center gap-1 mb-2">
-                <button
-                  type="button"
-                  onClick={() => onStartDateModeChange("auto")}
-                  className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
-                    isAutoMode
-                      ? "bg-indigo-500 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-                >
-                  Auto
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onStartDateModeChange("manual")}
-                  className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
-                    !isAutoMode
-                      ? "bg-indigo-500 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-                >
-                  Manual
-                </button>
-              </div>
-            )}
-
-            {/* Loading spinner for auto-detect */}
-            {isAutoDetecting && (
-              <div className="flex items-center gap-2 mb-1">
+        {/* Auto mode: formatted audit period display */}
+        {isAutoMode && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3">
+            {isAutoDetecting ? (
+              <div className="flex items-center gap-2">
                 <svg
                   className="animate-spin h-4 w-4 text-indigo-500"
                   xmlns="http://www.w3.org/2000/svg"
@@ -186,14 +192,59 @@ function AddressVerificationStep({
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                   />
                 </svg>
-                <span className="text-xs text-indigo-600">
+                <span className="text-sm text-indigo-700">
                   Detecting from communications...
                 </span>
               </div>
+            ) : awaitingContacts ? (
+              <div>
+                <p className="text-sm font-medium text-indigo-900">
+                  auto <span className="text-indigo-500">(pending...)</span>{" "}
+                  <span className="text-indigo-400">—</span>{" "}
+                  {todayFormatted}
+                </p>
+                <p className="text-xs text-indigo-600 mt-1">
+                  Start date will be set after selecting contacts in Step 2
+                </p>
+              </div>
+            ) : (
+              <div>
+                <p className="text-sm font-medium text-indigo-900">
+                  auto{" "}
+                  <span className="text-indigo-700">
+                    ({formatDateReadable(addressData.started_at)})
+                  </span>{" "}
+                  <span className="text-indigo-400">—</span>{" "}
+                  {todayFormatted}
+                </p>
+                {hasAutoDate && (
+                  <p className="text-xs text-indigo-600 mt-1">
+                    Based on earliest client communication
+                  </p>
+                )}
+                {showNoCommsHint && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    No communications found — using default (60 days ago)
+                  </p>
+                )}
+              </div>
             )}
+          </div>
+        )}
 
-            {/* Only show date input in manual mode or when auto-detect has a result */}
-            {!awaitingContacts && (
+        {/* Manual mode: standard date inputs */}
+        {!isAutoMode && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Representation Start Date *
+                <span
+                  className="ml-1 text-gray-400 cursor-help"
+                  title="The date you officially started representing this client in this transaction"
+                >
+                  (?)
+                </span>
+              </label>
               <input
                 type="date"
                 value={addressData.started_at}
@@ -203,72 +254,50 @@ function AddressVerificationStep({
                 className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
                   !addressData.started_at
                     ? "border-red-300 bg-red-50"
-                    : hasAutoDate
-                      ? "border-indigo-300 bg-indigo-50"
-                      : "border-gray-300"
+                    : "border-gray-300"
                 }`}
                 required
-                disabled={isAutoMode && hasAutoDate}
               />
-            )}
-
-            {/* Context-sensitive help text (TASK-1974) */}
-            {hasAutoDate && (
-              <p className="text-xs text-indigo-600 mt-1">
-                Auto-detected from earliest client communication
-              </p>
-            )}
-            {showNoCommsHint && (
-              <p className="text-xs text-amber-600 mt-1">
-                No communications found for selected contacts - using default (60 days ago)
-              </p>
-            )}
-            {!isAutoMode && (
               <p className="text-xs text-gray-500 mt-1">
-                Required - The date you began representing this client
+                Required — The date you began representing this client
               </p>
-            )}
-            {awaitingContacts && (
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Closing Date
+              </label>
+              <input
+                type="date"
+                value={addressData.closing_deadline || ""}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  onClosingDateChange(e.target.value || undefined)
+                }
+                min={addressData.started_at}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              />
               <p className="text-xs text-gray-500 mt-1">
-                Select contacts in Step 2 to auto-detect start date
+                Scheduled closing date
               </p>
-            )}
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                End Date
+              </label>
+              <input
+                type="date"
+                value={addressData.closed_at || ""}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  onEndDateChange(e.target.value || undefined)
+                }
+                min={addressData.started_at}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                When transaction ended
+              </p>
+            </div>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Closing Date
-            </label>
-            <input
-              type="date"
-              value={addressData.closing_deadline || ""}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                onClosingDateChange(e.target.value || undefined)
-              }
-              min={addressData.started_at}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Scheduled closing date
-            </p>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              End Date
-            </label>
-            <input
-              type="date"
-              value={addressData.closed_at || ""}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                onEndDateChange(e.target.value || undefined)
-              }
-              min={addressData.started_at}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              When transaction ended
-            </p>
-          </div>
-        </div>
+        )}
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">

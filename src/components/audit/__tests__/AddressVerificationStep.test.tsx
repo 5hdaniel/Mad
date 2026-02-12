@@ -114,17 +114,20 @@ describe("AddressVerificationStep - Start Date Auto/Manual Toggle", () => {
     expect(screen.getByText(/detecting from communications/i)).toBeInTheDocument();
   });
 
-  it("should show auto-detected hint when date is found", () => {
+  it("should show formatted audit period with auto-detected date", () => {
     render(
       <AddressVerificationStep
         {...defaultProps}
+        addressData={{ ...defaultAddressData, started_at: "2024-06-15" }}
         startDateMode="auto"
         onStartDateModeChange={jest.fn()}
         autoDetectedDate="2024-06-15"
       />,
     );
 
-    expect(screen.getByText(/auto-detected from earliest client communication/i)).toBeInTheDocument();
+    // Should show the formatted date and "Based on earliest"
+    expect(screen.getByText(/Jun 15, 2024/)).toBeInTheDocument();
+    expect(screen.getByText(/based on earliest client communication/i)).toBeInTheDocument();
   });
 
   it("should show no-communications hint in auto mode with null date", () => {
@@ -141,7 +144,7 @@ describe("AddressVerificationStep - Start Date Auto/Manual Toggle", () => {
     expect(screen.getByText(/no communications found.*60 days/i)).toBeInTheDocument();
   });
 
-  it("should show select-contacts hint and hide date input in auto mode with no detection yet", () => {
+  it("should show pending state when awaiting contact selection", () => {
     render(
       <AddressVerificationStep
         {...defaultProps}
@@ -152,29 +155,24 @@ describe("AddressVerificationStep - Start Date Auto/Manual Toggle", () => {
       />,
     );
 
-    expect(screen.getByText(/select contacts in step 2/i)).toBeInTheDocument();
-    // Date input should be hidden when awaiting contact selection
-    const dateInputs = screen.queryAllByDisplayValue(defaultAddressData.started_at);
-    expect(dateInputs).toHaveLength(0);
+    expect(screen.getByText(/pending/i)).toBeInTheDocument();
+    expect(screen.getByText(/start date will be set after selecting contacts/i)).toBeInTheDocument();
   });
 
-  it("should disable date input when auto mode has detected date", () => {
-    render(
+  it("should hide date inputs in auto mode and show them in manual mode", () => {
+    const { rerender } = render(
       <AddressVerificationStep
         {...defaultProps}
         startDateMode="auto"
         onStartDateModeChange={jest.fn()}
-        autoDetectedDate="2024-06-15"
+        autoDetectedDate={undefined}
       />,
     );
 
-    const dateInputs = screen.getAllByDisplayValue(defaultAddressData.started_at);
-    const startDateInput = dateInputs[0];
-    expect(startDateInput).toBeDisabled();
-  });
+    // Auto mode: no date inputs visible
+    expect(screen.queryByLabelText(/representation start date/i)).not.toBeInTheDocument();
 
-  it("should not disable date input in manual mode", () => {
-    render(
+    rerender(
       <AddressVerificationStep
         {...defaultProps}
         startDateMode="manual"
@@ -182,9 +180,8 @@ describe("AddressVerificationStep - Start Date Auto/Manual Toggle", () => {
       />,
     );
 
-    const dateInputs = screen.getAllByDisplayValue(defaultAddressData.started_at);
-    const startDateInput = dateInputs[0];
-    expect(startDateInput).not.toBeDisabled();
+    // Manual mode: date inputs visible
+    expect(screen.getByText(/representation start date/i)).toBeInTheDocument();
   });
 
   it("should show manual help text in manual mode", () => {
@@ -196,22 +193,28 @@ describe("AddressVerificationStep - Start Date Auto/Manual Toggle", () => {
       />,
     );
 
-    expect(screen.getByText(/required - the date you began/i)).toBeInTheDocument();
+    expect(screen.getByText(/required.*the date you began/i)).toBeInTheDocument();
   });
 
-  it("should apply indigo border when auto-detected date is set", () => {
-    render(
+  it("should show Audit Period label in auto mode and Transaction Dates in manual", () => {
+    const { rerender } = render(
       <AddressVerificationStep
         {...defaultProps}
         startDateMode="auto"
         onStartDateModeChange={jest.fn()}
-        autoDetectedDate="2024-06-15"
       />,
     );
 
-    const dateInputs = screen.getAllByDisplayValue(defaultAddressData.started_at);
-    const startDateInput = dateInputs[0];
-    expect(startDateInput.className).toContain("border-indigo-300");
-    expect(startDateInput.className).toContain("bg-indigo-50");
+    expect(screen.getByText("Audit Period")).toBeInTheDocument();
+
+    rerender(
+      <AddressVerificationStep
+        {...defaultProps}
+        startDateMode="manual"
+        onStartDateModeChange={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Transaction Dates")).toBeInTheDocument();
   });
 });
