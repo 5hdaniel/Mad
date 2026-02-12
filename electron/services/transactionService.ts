@@ -23,6 +23,7 @@ import { createEmail, getEmailByExternalId } from "./db/emailDbService";
 import emailAttachmentService from "./emailAttachmentService";
 import * as externalContactDb from "./db/externalContactDbService";
 import { isContactSourceEnabled } from "../utils/preferenceHelper";
+import { DEFAULT_EMAIL_SYNC_LOOKBACK_MONTHS } from "../constants";
 
 // Hybrid extraction imports
 import { HybridExtractorService } from "./extraction/hybridExtractorService";
@@ -286,13 +287,23 @@ class TransactionService {
     this.scanCancelled = false;
     this.currentScanUserId = userId;
 
-    // Fetch user preferences for scan lookback
-    let lookbackMonths = 9; // Default 9 months
+    // Fetch user preferences for scan lookback and email sync depth
+    let lookbackMonths = 9; // Default 9 months for overall scan
+    let emailSyncLookbackMonths = DEFAULT_EMAIL_SYNC_LOOKBACK_MONTHS; // Default 3 months for first email sync
     try {
       const preferences = await supabaseService.getPreferences(userId);
       const savedLookback = preferences?.scan?.lookbackMonths;
       if (typeof savedLookback === "number" && savedLookback > 0) {
         lookbackMonths = savedLookback;
+      }
+      // TASK-1966: User-configurable email sync depth
+      const savedEmailSyncLookback =
+        preferences?.emailSync?.lookbackMonths;
+      if (
+        typeof savedEmailSyncLookback === "number" &&
+        savedEmailSyncLookback > 0
+      ) {
+        emailSyncLookbackMonths = savedEmailSyncLookback;
       }
     } catch {
       // Use default if preferences unavailable
@@ -408,13 +419,22 @@ class TransactionService {
             { userId, provider, lastSyncAt: lastSyncAt.toISOString() },
           );
         } else {
-          // First sync: use 90-day lookback (or user preference if shorter)
-          const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-          effectiveStartDate = startDate > ninetyDaysAgo ? startDate : ninetyDaysAgo;
+          // TASK-1966: First sync uses configurable lookback (default 3 months)
+          const lookbackDate = new Date();
+          lookbackDate.setMonth(
+            lookbackDate.getMonth() - emailSyncLookbackMonths,
+          );
+          effectiveStartDate =
+            startDate > lookbackDate ? startDate : lookbackDate;
           await logService.info(
-            `First sync: fetching last 90 days of emails`,
+            `First sync: fetching last ${emailSyncLookbackMonths} months of emails`,
             "TransactionService.scanAndExtractTransactions",
-            { userId, provider, startDate: effectiveStartDate.toISOString() },
+            {
+              userId,
+              provider,
+              emailSyncLookbackMonths,
+              startDate: effectiveStartDate.toISOString(),
+            },
           );
         }
 

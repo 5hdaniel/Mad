@@ -289,6 +289,28 @@ class DatabaseService implements IDatabaseService {
     const schemaPath = path.join(__dirname, "../database/schema.sql");
     const schemaSql = fs.readFileSync(schemaPath, "utf8");
 
+    // Pre-migration backup (TASK-1969)
+    // Create a backup before any schema changes in case a migration fails
+    if (this.dbPath && fs.existsSync(this.dbPath)) {
+      try {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "").slice(0, 15);
+        const backupPath = this.dbPath.replace(".db", `-backup-${timestamp}.db`);
+
+        // Checkpoint WAL if enabled (ensures all data is in main file before copy)
+        try {
+          db.pragma("wal_checkpoint(TRUNCATE)");
+        } catch {
+          // WAL may not be enabled - safe to ignore
+        }
+
+        fs.copyFileSync(this.dbPath, backupPath);
+        console.log(`[DB] Pre-migration backup created: ${backupPath}`);
+      } catch (backupError) {
+        // Backup failure should not prevent migrations from running
+        console.warn("[DB] Pre-migration backup failed:", backupError);
+      }
+    }
+
     try {
       await this._runPreSchemaMigrations();
       db.exec(schemaSql);

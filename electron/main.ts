@@ -57,6 +57,7 @@ import {
   WINDOW_CONFIG,
   DEV_SERVER_URL,
   UPDATE_CHECK_DELAY,
+  UPDATE_CHECK_INTERVAL,
 } from "./constants";
 
 // Import handler registration functions
@@ -105,9 +106,24 @@ import {
 // Configure logging for auto-updater
 log.transports.file.level = "info";
 
+// ==========================================
+// SENTRY ERROR TRACKING (TASK-1967)
+// ==========================================
+// Initialize Sentry as early as possible for error monitoring
+import * as Sentry from "@sentry/electron/main";
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  environment: app.isPackaged ? "production" : "development",
+  release: app.getVersion(),
+  // Don't send events in development unless DSN is explicitly set
+  enabled: app.isPackaged || !!process.env.SENTRY_DSN,
+});
+
 // Global error handlers - must be registered early, before any async operations
 // These catch uncaught exceptions and unhandled promise rejections to prevent silent crashes
 process.on("uncaughtException", (error: Error) => {
+  Sentry.captureException(error);
   console.error("[FATAL] Uncaught Exception:", error);
   log.error("[FATAL] Uncaught Exception:", error);
   // Do NOT call process.exit() - let Electron handle graceful shutdown
@@ -115,6 +131,7 @@ process.on("uncaughtException", (error: Error) => {
 });
 
 process.on("unhandledRejection", (reason: unknown) => {
+  Sentry.captureException(reason);
   console.error("[ERROR] Unhandled Rejection:", reason);
   log.error("[ERROR] Unhandled Rejection:", reason);
   // Log but do not crash - unhandled rejections are often recoverable
@@ -631,6 +648,44 @@ function setupContentSecurityPolicy(): void {
   });
 }
 
+/**
+ * Set up permission handlers to deny all web permissions by default,
+ * whitelisting only the permissions the app actually needs.
+ *
+ * This prevents the Electron app from granting permissions that could
+ * be exploited (camera, microphone, geolocation, etc.) while allowing
+ * clipboard and notification access needed for normal operation.
+ */
+function setupPermissionHandlers(): void {
+  const allowedPermissions = new Set([
+    "clipboard-read",
+    "clipboard-sanitized-write",
+    "notifications",
+  ]);
+
+  session.defaultSession.setPermissionRequestHandler(
+    (_webContents, permission, callback) => {
+      const allowed = allowedPermissions.has(permission);
+      if (!allowed) {
+        log.debug(
+          `[Permissions] Denied permission request: ${permission}`
+        );
+      }
+      callback(allowed);
+    }
+  );
+
+  session.defaultSession.setPermissionCheckHandler(
+    (_webContents, permission) => {
+      return allowedPermissions.has(permission);
+    }
+  );
+
+  log.info(
+    "[Permissions] Permission handlers configured (deny-by-default, allowed: clipboard-read, clipboard-sanitized-write, notifications)"
+  );
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: WINDOW_CONFIG.DEFAULT_WIDTH,
@@ -728,6 +783,9 @@ app.whenReady().then(async () => {
   // Set up Content Security Policy
   setupContentSecurityPolicy();
 
+  // Set up permission handlers (deny-by-default)
+  setupPermissionHandlers();
+
   // Database initialization is now ALWAYS deferred to the renderer process
   // This allows us to show an explanation screen (KeychainExplanation) before the keychain prompt
   //
@@ -736,6 +794,69 @@ app.whenReady().then(async () => {
   // 2. Clearing sessions/tokens for session-only OAuth
 
   createWindow();
+
+  // ==========================================
+  // RENDERER CRASH RECOVERY (TASK-1968)
+  // ==========================================
+  // Handle renderer process crashes and unresponsive states
+  // Uses native dialog (not renderer-based) since the renderer may be dead
+  if (mainWindow) {
+    mainWindow.webContents.on("render-process-gone", async (_event, details) => {
+      console.error("[Main] Renderer process gone:", details.reason, details.exitCode);
+      log.error("[Main] Renderer process gone:", details.reason, details.exitCode);
+
+      // Skip dialog in development for 'killed' reason (DevTools reload causes this)
+      if (!app.isPackaged && details.reason === "killed") {
+        return;
+      }
+
+      // Capture crash in Sentry (TASK-1967)
+      Sentry.captureMessage(`Renderer process gone: ${details.reason}`, {
+        level: "fatal",
+        extra: { reason: details.reason, exitCode: details.exitCode },
+      });
+
+      const { response } = await dialog.showMessageBox({
+        type: "error",
+        title: "Application Error",
+        message: "The application encountered an error.",
+        detail: `Reason: ${details.reason}`,
+        buttons: ["Reload", "Quit"],
+        defaultId: 0,
+        cancelId: 1,
+      });
+
+      if (response === 0) {
+        mainWindow?.webContents.reload();
+      } else {
+        app.quit();
+      }
+    });
+
+    mainWindow.on("unresponsive", async () => {
+      console.warn("[Main] Window became unresponsive");
+      log.warn("[Main] Window became unresponsive");
+
+      Sentry.captureMessage("Window became unresponsive", { level: "warning" });
+
+      const { response } = await dialog.showMessageBox({
+        type: "warning",
+        title: "Application Not Responding",
+        message: "The application is not responding.",
+        detail: "Would you like to wait or reload?",
+        buttons: ["Wait", "Reload", "Quit"],
+        defaultId: 0,
+        cancelId: 0,
+      });
+
+      if (response === 1) {
+        mainWindow?.webContents.reload();
+      } else if (response === 2) {
+        app.quit();
+      }
+      // response === 0: Wait (do nothing)
+    });
+  }
 
   // ==========================================
   // COLD START DEEP LINK HANDLING (TASK-1500)
@@ -792,6 +913,23 @@ app.whenReady().then(async () => {
       log.info("[DeepLink] Manual trigger from DevTools:", redactDeepLinkUrl(url));
       await handleDeepLinkCallback(url);
       return { success: true };
+    });
+  }
+
+  // ==========================================
+  // PERIODIC UPDATE CHECKS (TASK-1970)
+  // ==========================================
+  // Check for updates every 4 hours (production only)
+  if (app.isPackaged) {
+    const updateInterval = setInterval(() => {
+      autoUpdater.checkForUpdates().catch((err: Error) => {
+        console.warn("[Update] Periodic check failed:", err.message);
+      });
+    }, UPDATE_CHECK_INTERVAL);
+
+    // Clean up interval on quit (prevent memory leak)
+    app.on("before-quit", () => {
+      clearInterval(updateInterval);
     });
   }
 });

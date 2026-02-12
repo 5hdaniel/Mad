@@ -87,6 +87,7 @@ jobs:
           MICROSOFT_CLIENT_ID: ${{ secrets.MICROSOFT_CLIENT_ID }}
           MICROSOFT_TENANT_ID: ${{ secrets.MICROSOFT_TENANT_ID }}
           MICROSOFT_CLIENT_SECRET: ${{ secrets.MICROSOFT_CLIENT_SECRET }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: |
           echo "Creating .env.production file..."
           {
@@ -99,6 +100,7 @@ jobs:
             echo "MICROSOFT_TENANT_ID=${MICROSOFT_TENANT_ID}"
             echo "MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET}"
             echo "BROKER_PORTAL_URL=https://broker-portal-two.vercel.app"
+            echo "SENTRY_DSN=${SENTRY_DSN}"
           } > .env.production
           echo ".env.production created with $(wc -l < .env.production) lines"
 
@@ -113,6 +115,9 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           # GitHub token for publishing
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Sentry source map upload (TASK-1967)
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: |
           # Convert boolean input to electron-builder publish value
           PUBLISH_VALUE="${{ github.event.inputs.publish == 'true' && 'always' || (github.event.inputs.publish == 'false' && 'never' || 'always') }}"
@@ -209,6 +214,7 @@ jobs:
           MICROSOFT_CLIENT_ID: ${{ secrets.MICROSOFT_CLIENT_ID }}
           MICROSOFT_TENANT_ID: ${{ secrets.MICROSOFT_TENANT_ID }}
           MICROSOFT_CLIENT_SECRET: ${{ secrets.MICROSOFT_CLIENT_SECRET }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: |
           $content = @(
             "SUPABASE_URL=$env:SUPABASE_URL",
@@ -219,7 +225,8 @@ jobs:
             "MICROSOFT_CLIENT_ID=$env:MICROSOFT_CLIENT_ID",
             "MICROSOFT_TENANT_ID=$env:MICROSOFT_TENANT_ID",
             "MICROSOFT_CLIENT_SECRET=$env:MICROSOFT_CLIENT_SECRET",
-            "BROKER_PORTAL_URL=https://broker-portal-two.vercel.app"
+            "BROKER_PORTAL_URL=https://broker-portal-two.vercel.app",
+            "SENTRY_DSN=$env:SENTRY_DSN"
           ) -join "`n"
           $content | Out-File -FilePath .env.production -Encoding utf8 -NoNewline
           Add-Content -Path .env.production -Value ""
@@ -234,6 +241,9 @@ jobs:
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
           # GitHub token for publishing
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Sentry source map upload (TASK-1967)
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           # Convert boolean input to electron-builder publish value
           PUBLISH_VALUE: ${{ github.event.inputs.publish == 'true' && 'always' || (github.event.inputs.publish == 'false' && 'never' || 'always') }}
         run: |
