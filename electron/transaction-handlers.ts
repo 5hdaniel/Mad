@@ -2618,14 +2618,37 @@ export const registerTransactionHandlers = (
         }
 
         if (contactEmails.length === 0) {
-          // No contact emails, just run the regular auto-link
+          // No contact emails — still run auto-link for phone-based message matching
+          let totalMessagesLinked = 0;
+          let totalAlreadyLinked = 0;
+          let totalErrors = 0;
+
+          for (const assignment of contactAssignments) {
+            try {
+              const result = await autoLinkCommunicationsForContact({
+                contactId: assignment.contact_id,
+                transactionId: validatedTransactionId,
+              });
+              totalMessagesLinked += result.messagesLinked;
+              totalAlreadyLinked += result.alreadyLinked;
+              totalErrors += result.errors;
+            } catch (error) {
+              totalErrors++;
+              logService.warn(
+                `Auto-link failed for contact ${assignment.contact_id}`,
+                "Transactions",
+                { error: error instanceof Error ? error.message : "Unknown" }
+              );
+            }
+          }
+
           return {
             success: true,
-            message: "No contact emails found, running local auto-link only",
             emailsFetched: 0,
             emailsStored: 0,
             totalEmailsLinked: 0,
-            totalMessagesLinked: 0,
+            totalMessagesLinked,
+            totalAlreadyLinked,
           };
         }
 
