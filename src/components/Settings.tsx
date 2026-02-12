@@ -4,6 +4,7 @@ import { MacOSMessagesImportSettings } from "./settings/MacOSMessagesImportSetti
 import { MacOSContactsImportSettings } from "./settings/MacOSContactsImportSettings";
 import { ImportSourceSettings } from "./settings/ImportSourceSettings";
 import { LicenseGate } from "./common/LicenseGate";
+import { useNotification } from "@/hooks/useNotification";
 import {
   emitEmailConnectionChanged,
   useEmailConnectionListener,
@@ -46,6 +47,9 @@ interface PreferencesResult {
     updates?: {
       autoDownload?: boolean;
     };
+    notifications?: {
+      enabled?: boolean;
+    };
     contactSources?: {
       direct?: {
         outlookContacts?: boolean;
@@ -79,6 +83,7 @@ interface SettingsComponentProps {
  * Application settings and preferences
  */
 function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: SettingsComponentProps) {
+  const { notify } = useNotification();
   const [connections, setConnections] = useState<Connections>({
     google: null,
     microsoft: null,
@@ -94,6 +99,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
   const [scanLookbackMonths, setScanLookbackMonths] = useState<number>(9); // Default 9 months
   const [autoSyncOnLogin, setAutoSyncOnLogin] = useState<boolean>(true); // Default auto-sync ON
   const [autoDownloadUpdates, setAutoDownloadUpdates] = useState<boolean>(false); // Default auto-download OFF
+  const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(true); // Default notifications ON
   // Contact source preferences - direct imports (default ON)
   const [outlookContactsEnabled, setOutlookContactsEnabled] = useState<boolean>(true);
   const [gmailContactsEnabled, setGmailContactsEnabled] = useState<boolean>(true);
@@ -201,6 +207,10 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         if (typeof result.preferences.updates?.autoDownload === "boolean") {
           setAutoDownloadUpdates(result.preferences.updates.autoDownload);
         }
+        // Load notifications preference (default is true if not set)
+        if (typeof result.preferences.notifications?.enabled === "boolean") {
+          setNotificationsEnabled(result.preferences.notifications.enabled);
+        }
         // Load contact source preferences
         if (result.preferences.contactSources) {
           const cs = result.preferences.contactSources;
@@ -286,6 +296,38 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
       // Silently handle - preference will still be applied locally for this session
     } catch {
       // Silently handle - preference will still be applied locally for this session
+    }
+  };
+
+  const handleNotificationsToggle = async (): Promise<void> => {
+    const newValue = !notificationsEnabled;
+    setNotificationsEnabled(newValue);
+    try {
+      // Update notifications preference
+      await window.api.preferences.update(userId, {
+        notifications: {
+          enabled: newValue,
+        },
+      });
+      // Silently handle - preference will still be applied locally for this session
+    } catch {
+      // Silently handle - preference will still be applied locally for this session
+    }
+  };
+
+  const handleTestNotification = async (): Promise<void> => {
+    try {
+      const result = await window.api.notification?.send(
+        "Test Notification",
+        "Desktop notifications are working correctly."
+      );
+      if (result?.success) {
+        notify.success("Desktop notification sent! Check your notification center if you don't see a banner.");
+      } else {
+        notify.warning(result?.error || "Notifications may not be supported on this system.");
+      }
+    } catch {
+      notify.error("Failed to send test notification.");
     }
   };
 
@@ -601,23 +643,40 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                   </button>
                 </div>
 
-                {/* Coming Soon Settings */}
                 {/* Notifications */}
-                {/* TODO: Implement desktop notifications system */}
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 opacity-50">
-                  <div className="flex-1">
-                    <h4 className="text-sm font-medium text-gray-900">
-                      Notifications
-                    </h4>
-                    <p className="text-xs text-gray-600 mt-1">
-                      Show desktop notifications for important events
-                    </p>
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <h4 className="text-sm font-medium text-gray-900">
+                        Notifications
+                      </h4>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Show desktop notifications for important events
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleNotificationsToggle}
+                      disabled={loadingPreferences}
+                      className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                        notificationsEnabled ? "bg-blue-500" : "bg-gray-300"
+                      }`}
+                      role="switch"
+                      aria-checked={notificationsEnabled}
+                      aria-label="Desktop notifications"
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          notificationsEnabled ? "translate-x-6" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
                   </div>
                   <button
-                    disabled
-                    className="ml-4 relative inline-flex h-6 w-11 items-center rounded-full bg-gray-300 cursor-not-allowed"
+                    onClick={handleTestNotification}
+                    disabled={!notificationsEnabled}
+                    className="mt-3 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <span className="inline-block h-4 w-4 transform rounded-full bg-white translate-x-1" />
+                    Test Notification
                   </button>
                 </div>
               </div>

@@ -165,6 +165,11 @@ if (typeof window !== 'undefined') {
       onDeviceCode: jest.fn(() => jest.fn()),
       onExportProgress: jest.fn(() => jest.fn()),
     },
+    // Desktop notification support (TASK-1972)
+    notification: {
+      isSupported: jest.fn().mockResolvedValue(true),
+      send: jest.fn().mockResolvedValue(undefined),
+    },
     // Auto-update functionality - migrated from window.electron
     update: {
       onAvailable: jest.fn(() => jest.fn()),

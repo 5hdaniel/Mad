@@ -9,6 +9,7 @@ import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
 import Settings from "../Settings";
 import { PlatformProvider } from "../../contexts/PlatformContext";
+import { NotificationProvider } from "../../contexts/NotificationContext";
 
 // Mock the useLicense hook for LicenseGate (BACKLOG-462)
 jest.mock("@/contexts/LicenseContext", () => ({
@@ -27,9 +28,11 @@ jest.mock("@/contexts/LicenseContext", () => ({
 // Wrap Settings in PlatformProvider for tests
 const renderSettings = async (props: { onClose: () => void; userId: string }) => {
   const result = render(
-    <PlatformProvider>
-      <Settings {...props} />
-    </PlatformProvider>
+    <NotificationProvider>
+      <PlatformProvider>
+        <Settings {...props} />
+      </PlatformProvider>
+    </NotificationProvider>
   );
   // Wait for preferences to load (spinner to disappear) before returning
   await waitFor(() => {
@@ -375,9 +378,11 @@ describe("Settings", () => {
       );
 
       render(
-        <PlatformProvider>
-          <Settings userId={mockUserId} onClose={mockOnClose} />
-        </PlatformProvider>
+        <NotificationProvider>
+          <PlatformProvider>
+            <Settings userId={mockUserId} onClose={mockOnClose} />
+          </PlatformProvider>
+        </NotificationProvider>
       );
 
       expect(screen.getByText("Loading settings...")).toBeInTheDocument();
@@ -385,13 +390,133 @@ describe("Settings", () => {
   });
 
   describe("General Settings", () => {
-    it("should show notifications toggle (disabled/coming soon)", async () => {
+    it("should show notifications toggle as enabled and toggleable", async () => {
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByText("Notifications")).toBeInTheDocument();
       expect(
         screen.getByText(/show desktop notifications/i),
       ).toBeInTheDocument();
+
+      await waitFor(() => {
+        const toggle = screen.getByRole("switch", {
+          name: /desktop notifications/i,
+        });
+        expect(toggle).not.toBeDisabled();
+      });
+    });
+
+    it("should default notifications to ON", async () => {
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      await waitFor(() => {
+        const toggle = screen.getByRole("switch", {
+          name: /desktop notifications/i,
+        });
+        expect(toggle).toHaveAttribute("aria-checked", "true");
+      });
+    });
+
+    it("should load saved notification preference (OFF)", async () => {
+      window.api.preferences.get.mockResolvedValue({
+        success: true,
+        preferences: {
+          export: { defaultFormat: "pdf" },
+          notifications: { enabled: false },
+        },
+      });
+
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      await waitFor(() => {
+        const toggle = screen.getByRole("switch", {
+          name: /desktop notifications/i,
+        });
+        expect(toggle).toHaveAttribute("aria-checked", "false");
+      });
+    });
+
+    it("should load saved notification preference (ON)", async () => {
+      window.api.preferences.get.mockResolvedValue({
+        success: true,
+        preferences: {
+          export: { defaultFormat: "pdf" },
+          notifications: { enabled: true },
+        },
+      });
+
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      await waitFor(() => {
+        const toggle = screen.getByRole("switch", {
+          name: /desktop notifications/i,
+        });
+        expect(toggle).toHaveAttribute("aria-checked", "true");
+      });
+    });
+
+    it("should toggle notifications and save preference", async () => {
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("switch", { name: /desktop notifications/i }),
+        ).toBeInTheDocument();
+      });
+
+      const toggle = screen.getByRole("switch", {
+        name: /desktop notifications/i,
+      });
+      await userEvent.click(toggle);
+
+      expect(window.api.preferences.update).toHaveBeenCalledWith(mockUserId, {
+        notifications: { enabled: false },
+      });
+    });
+
+    it("should render Test Notification button", async () => {
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      await waitFor(() => {
+        expect(screen.getByText("Test Notification")).toBeInTheDocument();
+      });
+    });
+
+    it("should call notification.send when Test Notification is clicked", async () => {
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      await waitFor(() => {
+        expect(screen.getByText("Test Notification")).toBeInTheDocument();
+      });
+
+      const testButton = screen.getByRole("button", {
+        name: /test notification/i,
+      });
+      await userEvent.click(testButton);
+
+      expect(window.api.notification.send).toHaveBeenCalledWith(
+        "Test Notification",
+        "Desktop notifications are working correctly."
+      );
+    });
+
+    it("should disable Test Notification button when notifications are OFF", async () => {
+      window.api.preferences.get.mockResolvedValue({
+        success: true,
+        preferences: {
+          export: { defaultFormat: "pdf" },
+          notifications: { enabled: false },
+        },
+      });
+
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      await waitFor(() => {
+        const testButton = screen.getByRole("button", {
+          name: /test notification/i,
+        });
+        expect(testButton).toBeDisabled();
+      });
     });
 
   });
@@ -464,9 +589,11 @@ describe("Settings", () => {
       );
 
       render(
-        <PlatformProvider>
-          <Settings userId={mockUserId} onClose={mockOnClose} />
-        </PlatformProvider>
+        <NotificationProvider>
+          <PlatformProvider>
+            <Settings userId={mockUserId} onClose={mockOnClose} />
+          </PlatformProvider>
+        </NotificationProvider>
       );
 
       expect(screen.getByText("Loading settings...")).toBeInTheDocument();
