@@ -105,9 +105,24 @@ import {
 // Configure logging for auto-updater
 log.transports.file.level = "info";
 
+// ==========================================
+// SENTRY ERROR TRACKING (TASK-1967)
+// ==========================================
+// Initialize Sentry as early as possible for error monitoring
+import * as Sentry from "@sentry/electron/main";
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  environment: app.isPackaged ? "production" : "development",
+  release: app.getVersion(),
+  // Don't send events in development unless DSN is explicitly set
+  enabled: app.isPackaged || !!process.env.SENTRY_DSN,
+});
+
 // Global error handlers - must be registered early, before any async operations
 // These catch uncaught exceptions and unhandled promise rejections to prevent silent crashes
 process.on("uncaughtException", (error: Error) => {
+  Sentry.captureException(error);
   console.error("[FATAL] Uncaught Exception:", error);
   log.error("[FATAL] Uncaught Exception:", error);
   // Do NOT call process.exit() - let Electron handle graceful shutdown
@@ -115,6 +130,7 @@ process.on("uncaughtException", (error: Error) => {
 });
 
 process.on("unhandledRejection", (reason: unknown) => {
+  Sentry.captureException(reason);
   console.error("[ERROR] Unhandled Rejection:", reason);
   log.error("[ERROR] Unhandled Rejection:", reason);
   // Log but do not crash - unhandled rejections are often recoverable
