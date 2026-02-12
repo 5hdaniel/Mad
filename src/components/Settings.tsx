@@ -497,6 +497,13 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
 
         {/* Settings Content - Scrollable area */}
         <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
+          {loadingPreferences ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-3" />
+              <p className="text-sm text-gray-500">Loading settings...</p>
+            </div>
+          ) : (
+          <>
             {/* General Settings */}
             <div className="mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
@@ -1247,6 +1254,8 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                 </p>
               </div>
             </div>
+          </>
+          )}
           </div>
 
         {/* Footer */}

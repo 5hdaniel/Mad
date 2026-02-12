@@ -556,3 +556,6 @@ BACKLOG-670,Renderer crash recovery dialog,feature,High,Pending,SPRINT-080C,~15K
 BACKLOG-671,Pre-migration database backup,feature,Medium,Pending,SPRINT-080C,~15K,-,-,2026-02-11,,
 BACKLOG-672,Periodic 4-hour update checks,feature,Medium,Pending,SPRINT-080C,~10K,-,-,2026-02-11,,
 BACKLOG-673,Supabase system-health monitoring Edge Function,feature,Medium,Pending,SPRINT-080C,~25K,-,-,2026-02-11,,
+BACKLOG-674,Settings message import routes through SyncOrchestrator,enhancement,Medium,Completed,SPRINT-081,~5K,-,-,2026-02-11,2026-02-11,Added debug logging for orchestrator requestSync result; extended SyncStatusIndicator auto-dismiss from 5s to 15s to handle timing when Settings modal covers dashboard
+BACKLOG-675,Settings loading state spinner prevents flash of defaults,ui,Low,Completed,SPRINT-081,~3K,-,-,2026-02-11,2026-02-11,Passed user testing with no additional changes needed
+BACKLOG-676,TransactionMessagesTab sync button shows toast guidance,ui,Low,Completed,SPRINT-081,~5K,-,-,2026-02-11,2026-02-11,Scope expanded: created separate handleSyncMessages handler calling resyncAutoLink instead of email fetch; added syncingMessages state; contextual toasts for linked/no-contacts/no-messages
