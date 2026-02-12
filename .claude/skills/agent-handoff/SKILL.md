@@ -18,7 +18,7 @@ This skill defines how agents hand off work during sprint task execution. Read t
 | 2-4 | Setup (worktree, branch, status) | - |
 | 5 | Task ready for planning | Engineer (plan mode) |
 | 8 | Plan reviewed | Engineer (implement) or User (if rejected) |
-| 11 | Implementation reviewed | SR Engineer (PR) or User (manual test) |
+| 11 | Implementation reviewed | SR Engineer (create PR) |
 | 14 | Record effort metrics (sum agent sessions) | - |
 | 15 | All tasks complete | Close sprint |
 
@@ -34,7 +34,9 @@ This skill defines how agents hand off work during sprint task execution. Read t
 |------|--------|-------------|
 | 7 | Review plan | Engineer (changes) or PM (approved/rejected) |
 | 10 | Review implementation | Engineer (changes) or PM (approved/rejected) |
-| 12 | Create PR, wait CI, merge | Step 13 |
+| 12 | Create PR, review, wait CI (DO NOT MERGE) | User (testing gate) |
+| 12a | **User tests and approves** | SR Engineer (merge) |
+| 12b | Merge PR (only after user approval) | Step 13 |
 | 13 | Delete worktree | PM (record metrics) |
 
 ---
@@ -113,23 +115,35 @@ PHASE C: IMPLEMENTATION
         - Document rejection reason
 
 11. PM: Update status
-    ├─ No manual testing → SR ENGINEER: Create PR (Step 12)
-    │   - Update status to "pr_pending"
-    │   - Handoff to SR Engineer
-    └─ Manual testing required → Notify user, wait
-        - Update status to "testing"
-        - Wait for user confirmation
-        └─ Testing complete → SR ENGINEER: Step 12
+    - Update status to "pr_pending"
+    - → SR ENGINEER: Create PR (Step 12)
 
-PHASE D: MERGE & CLEANUP
-------------------------
-12. SR ENGINEER: Create PR + Merge
+PHASE D: PR, TEST & MERGE
+--------------------------
+12. SR ENGINEER: Create PR + Review (DO NOT MERGE)
     - gh pr create --base develop
+    - Review code quality, security, architecture
     - Wait for CI
-    ├─ CI passes → Step 13
+    ├─ CI passes → Step 12a
     ├─ CI fails → ENGINEER: Fix issues → Step 9
         - Identify failing tests/checks
         - Handoff to Engineer with details
+
+    *** MANDATORY: NEVER merge without explicit user approval ***
+
+12a. USER TESTING GATE (MANDATORY)
+    - Notify user: PR is ready for testing
+    - Provide: PR URL, branch name, what to test
+    - User tests on the branch (git checkout <branch> && npm run dev)
+    - WAIT for user confirmation before proceeding
+    ├─ User approves → Step 12b
+    ├─ User finds issues → ENGINEER: Fix issues → Step 9
+    └─ User requests changes → ENGINEER: Make changes → Step 9
+
+12b. SR ENGINEER: Merge PR (only after user approval)
+    - gh pr merge <PR> --merge
+    - Verify merge succeeded
+    - → Step 13
 
 13. SR ENGINEER: Delete worktree
     - git worktree remove ../Mad-TASK-XXXX
@@ -198,16 +212,32 @@ Does implementation match the approved plan?
     → Handoff to PM (Step 11, rejected)
 ```
 
-### At Step 12 (CI Status)
+### At Step 12 (PR + CI)
 ```
 Did CI pass?
 ├─ Yes, all checks green
-│   → Merge PR
-│   → Proceed to Step 13
+│   → Notify user: PR ready for testing
+│   → DO NOT MERGE — wait for user approval (Step 12a)
 └─ No, checks failed
     → Identify failing checks
     → Handoff to Engineer (Step 9)
     → Include failure details
+```
+
+### At Step 12a (User Testing Gate)
+```
+*** MANDATORY — NEVER skip this step ***
+
+Has the user explicitly approved the merge?
+├─ Yes, user says "merge it" / "looks good" / "approved"
+│   → SR Engineer merges PR (Step 12b)
+│   → Proceed to Step 13
+├─ User found issues
+│   → Handoff to Engineer (Step 9)
+│   → Include user's feedback
+└─ User hasn't responded yet
+    → WAIT — do not proceed
+    → Never auto-merge on timeout
 ```
 
 ---

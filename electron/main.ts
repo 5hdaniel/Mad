@@ -803,6 +803,11 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  // TASK-1956: Shutdown persistent contact worker pool
+  try {
+    const { shutdownPool } = require("./workers/contactWorkerPool");
+    shutdownPool();
+  } catch { /* pool may not have been imported */ }
   // Clean up device detection polling
   cleanupDeviceHandlers();
   // Clean up sync handlers

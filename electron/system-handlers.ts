@@ -17,6 +17,8 @@ import databaseService from "./services/databaseService";
 import supabaseService from "./services/supabaseService";
 import { initializeDatabase } from "./auth-handlers";
 import { getAndClearPendingDeepLinkUser } from "./main";
+import { initializePool } from "./workers/contactWorkerPool";
+import { getDbPath, getEncryptionKey } from "./services/db/core/dbConnection";
 import os from "os";
 
 // Import validation utilities
@@ -345,6 +347,15 @@ export function registerSystemHandlers(): void {
           "SystemHandlers",
         );
 
+        // TASK-1956: Initialize persistent worker pool for contact queries
+        const poolDbPath = getDbPath();
+        const poolEncKey = getEncryptionKey();
+        if (poolDbPath && poolEncKey) {
+          initializePool(poolDbPath, poolEncKey).catch((err) => {
+            logService.warn("Failed to initialize contact worker pool: " + (err instanceof Error ? err.message : String(err)), "SystemHandlers");
+          });
+        }
+
         // Sessions persist across app restarts for better UX
         // Security is maintained via 24hr expiry on session tokens
         // NOTE: Previously cleared sessions on startup causing issues (file session
@@ -579,6 +590,16 @@ export function registerSystemHandlers(): void {
         await initializeDatabase();
         initializationComplete = true;
         logService.debug("Database initialized successfully", "SystemHandlers");
+
+        // TASK-1956: Initialize persistent worker pool for contact queries
+        const poolDbPath2 = getDbPath();
+        const poolEncKey2 = getEncryptionKey();
+        if (poolDbPath2 && poolEncKey2) {
+          initializePool(poolDbPath2, poolEncKey2).catch((err) => {
+            logService.warn("Failed to initialize contact worker pool: " + (err instanceof Error ? err.message : String(err)), "SystemHandlers");
+          });
+        }
+
         return { success: true };
       } catch (error) {
         const errorMessage =

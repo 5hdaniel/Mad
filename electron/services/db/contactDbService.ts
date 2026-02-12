@@ -10,6 +10,7 @@ import { dbGet, dbAll, dbRun, dbTransaction } from "./core/dbConnection";
 import logService from "../logService";
 import { validateFields } from "../../utils/sqlFieldWhitelist";
 import { getContactNames } from "../contactsService";
+import { queryContacts, isPoolReady } from "../../workers/contactWorkerPool";
 
 // Contact with activity metadata
 interface ContactWithActivity extends Contact {
@@ -494,6 +495,48 @@ export async function getImportedContactsByUserId(
 }
 
 /**
+ * TASK-1956: Async version of getImportedContactsByUserId that runs the SQL
+ * in a worker thread via the persistent worker pool. This prevents blocking
+ * the Electron main process — no new Worker() spawn per query.
+ *
+ * Falls back to sync version if pool is not ready.
+ */
+export async function getImportedContactsByUserIdAsync(
+  userId: string,
+  timeoutMs: number = 30_000,
+): Promise<Contact[]> {
+  if (!isPoolReady()) {
+    // Fallback to sync version if pool not initialized
+    return getImportedContactsByUserId(userId);
+  }
+
+  // Run imported contacts SQL in persistent worker thread
+  const rawRows = await queryContacts('imported', userId, timeoutMs) as Array<Contact & { all_emails_json?: string; all_phones_json?: string }>;
+
+  // Post-process: parse JSON arrays (fast, no DB access)
+  const contactsWithArrays = rawRows.map(contact => {
+    const allEmails: string[] = contact.all_emails_json
+      ? JSON.parse(contact.all_emails_json).filter((e: string | null) => e !== null)
+      : [];
+    const allPhones: string[] = contact.all_phones_json
+      ? JSON.parse(contact.all_phones_json).filter((p: string | null) => p !== null)
+      : [];
+    const { all_emails_json, all_phones_json, ...rest } = contact;
+    return {
+      ...rest,
+      allEmails,
+      allPhones,
+    } as Contact;
+  });
+
+  return contactsWithArrays.sort((a, b) => {
+    const nameA = (a.display_name || a.name || '').toLowerCase();
+    const nameB = (b.display_name || b.name || '').toLowerCase();
+    return nameA.localeCompare(nameB);
+  });
+}
+
+/**
  * Get unimported contacts for a user (available to import)
  * These are contacts synced from iPhone that haven't been imported yet
  */
@@ -711,79 +754,18 @@ export async function getContactsSortedByActivity(
   userId: string,
   _propertyAddress?: string,
 ): Promise<ContactWithActivity[]> {
-  // === DIAGNOSTIC LOGGING ===
-  // Run diagnostics to understand the data state
-  const diagnostics = {
-    // How many messages exist?
-    messages: dbGet<{ total: number; sms: number; imessage: number }>(`
-      SELECT COUNT(*) as total,
-        SUM(CASE WHEN channel = 'sms' THEN 1 ELSE 0 END) as sms,
-        SUM(CASE WHEN channel = 'imessage' THEN 1 ELSE 0 END) as imessage
-      FROM messages WHERE user_id = ?
-    `, [userId]),
-
-    // How many contacts have phones?
-    contactPhones: dbGet<{ total: number; withPhones: number }>(`
-      SELECT
-        (SELECT COUNT(*) FROM contacts WHERE user_id = ? AND is_imported = 1) as total,
-        (SELECT COUNT(DISTINCT cp.contact_id) FROM contact_phones cp
-         JOIN contacts c ON cp.contact_id = c.id WHERE c.user_id = ? AND c.is_imported = 1) as withPhones
-    `, [userId, userId]),
-
-    // How many contacts have last_inbound_at?
-    withDates: dbGet<{ count: number }>(`
-      SELECT COUNT(*) as count FROM contacts
-      WHERE user_id = ? AND is_imported = 1 AND last_inbound_at IS NOT NULL
-    `, [userId]),
-
-    // Sample participants_flat format
-    sampleMessages: dbAll<{ participants_flat: string; channel: string }>(`
-      SELECT participants_flat, channel FROM messages
-      WHERE user_id = ? AND (channel = 'sms' OR channel = 'imessage')
-      ORDER BY sent_at DESC LIMIT 3
-    `, [userId]),
-
-    // Sample phone_e164 format
-    samplePhones: dbAll<{ name: string; phone: string; normalized: string }>(`
-      SELECT c.display_name as name, cp.phone_e164 as phone,
-        SUBSTR(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(cp.phone_e164, '+', ''), '-', ''), ' ', ''), '(', ''), ')', ''), -10) as normalized
-      FROM contact_phones cp
-      JOIN contacts c ON cp.contact_id = c.id
-      WHERE c.user_id = ? AND c.is_imported = 1
-      LIMIT 5
-    `, [userId]),
-
-    // ALL imported contacts (to see which ones are missing phones)
-    allImportedContacts: dbAll<{ name: string; hasPhone: number }>(`
-      SELECT c.display_name as name,
-        (SELECT COUNT(*) FROM contact_phones cp WHERE cp.contact_id = c.id) as hasPhone
-      FROM contacts c
-      WHERE c.user_id = ? AND c.is_imported = 1
-      ORDER BY c.display_name
-    `, [userId]),
-  };
-
-  logService.info("=== CONTACT SORTING DIAGNOSTICS ===", "ContactDbService", {
-    messages: diagnostics.messages,
-    contactPhones: diagnostics.contactPhones,
-    contactsWithDates: diagnostics.withDates?.count,
-    sampleParticipantsFlat: diagnostics.sampleMessages?.map(m => m.participants_flat),
-    samplePhoneFormats: diagnostics.samplePhones,
-    allImportedContacts: diagnostics.allImportedContacts?.map(c => `${c.name} (${c.hasPhone} phones)`),
-  });
-
-  // Check if backfill has ever run (any contacts have last_inbound_at set)
-  const hasBackfilled = diagnostics.withDates;
+  // Check if backfill has ever run (single lightweight query)
+  const hasBackfilled = dbGet<{ count: number }>(`
+    SELECT COUNT(*) as count FROM contacts
+    WHERE user_id = ? AND is_imported = 1 AND last_inbound_at IS NOT NULL
+  `, [userId]);
 
   // Only run backfill once - if no contacts have dates yet
   if (!hasBackfilled || hasBackfilled.count === 0) {
-    logService.info("Running contact communication date backfill (first time)", "ContactDbService", {
-      userId,
-    });
     await backfillContactCommunicationDates(userId);
   }
 
-  // Simple query: get contacts sorted by last_inbound_at (denormalized field)
+  // Get contacts sorted by last_inbound_at (denormalized field)
   const contactsSql = `
     SELECT
       c.*,

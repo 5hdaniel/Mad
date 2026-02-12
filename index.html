@@ -4,6 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Audit Magic</title>
+    <style>
+      /* Electron window drag regions - must bypass PostCSS/autoprefixer */
+      .drag-region { -webkit-app-region: drag; app-region: drag; }
+      .no-drag-region { -webkit-app-region: no-drag; app-region: no-drag; }
+    </style>
   </head>
   <body>
     <div id="root"></div>

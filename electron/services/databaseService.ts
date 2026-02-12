@@ -1428,6 +1428,11 @@ class DatabaseService implements IDatabaseService {
     return contactDb.getImportedContactsByUserId(userId);
   }
 
+  /** TASK-1956: Non-blocking version using worker thread */
+  async getImportedContactsByUserIdAsync(userId: string): Promise<Contact[]> {
+    return contactDb.getImportedContactsByUserIdAsync(userId);
+  }
+
   async getUnimportedContactsByUserId(userId: string): Promise<Contact[]> {
     return contactDb.getUnimportedContactsByUserId(userId);
   }
