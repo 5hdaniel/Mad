@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import * as Sentry from "@sentry/electron/renderer";
 import App from "./App";
 import { AuthProvider, NetworkProvider, PlatformProvider, useAuth, LicenseProvider } from "./contexts";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -8,6 +9,10 @@ import {
   LoadingOrchestrator,
 } from "./appCore/state/machine";
 import "./index.css";
+
+// Initialize Sentry in the renderer process (TASK-1967)
+// Renderer inherits DSN and configuration from the main process via IPC
+Sentry.init({});
 
 /**
  * Wrapper component that provides LicenseProvider with userId from AuthContext.
