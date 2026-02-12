@@ -57,6 +57,7 @@ import {
   WINDOW_CONFIG,
   DEV_SERVER_URL,
   UPDATE_CHECK_DELAY,
+  UPDATE_CHECK_INTERVAL,
 } from "./constants";
 
 // Import handler registration functions
@@ -912,6 +913,23 @@ app.whenReady().then(async () => {
       log.info("[DeepLink] Manual trigger from DevTools:", redactDeepLinkUrl(url));
       await handleDeepLinkCallback(url);
       return { success: true };
+    });
+  }
+
+  // ==========================================
+  // PERIODIC UPDATE CHECKS (TASK-1970)
+  // ==========================================
+  // Check for updates every 4 hours (production only)
+  if (app.isPackaged) {
+    const updateInterval = setInterval(() => {
+      autoUpdater.checkForUpdates().catch((err: Error) => {
+        console.warn("[Update] Periodic check failed:", err.message);
+      });
+    }, UPDATE_CHECK_INTERVAL);
+
+    // Clean up interval on quit (prevent memory leak)
+    app.on("before-quit", () => {
+      clearInterval(updateInterval);
     });
   }
 });
