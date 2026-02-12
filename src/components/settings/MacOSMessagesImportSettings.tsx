@@ -64,6 +64,9 @@ export function MacOSMessagesImportSettings({
   const showCapPrompt = capPromptForce !== null;
   const capExceeded = availableCount !== null && maxMessages !== null && availableCount > maxMessages;
 
+  // Force re-import warning confirmation
+  const [showForceWarning, setShowForceWarning] = useState(false);
+
   // Load import status and filter preferences on mount
   useEffect(() => {
     if (!isMacOS || !userId) return;
@@ -463,13 +466,7 @@ export function MacOSMessagesImportSettings({
           {isImporting ? "Importing..." : "Import Messages"}
         </button>
         <button
-          onClick={() => {
-            if (capExceeded) {
-              setCapPromptForce(true);
-            } else {
-              handleImport(true);
-            }
-          }}
+          onClick={() => setShowForceWarning(true)}
           disabled={isImporting}
           className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           title="Delete all existing messages and re-import from scratch"
@@ -477,6 +474,46 @@ export function MacOSMessagesImportSettings({
           Force Re-import
         </button>
       </div>
+
+      {/* Force re-import warning confirmation */}
+      {showForceWarning && (
+        <div className="mt-3 p-3 bg-amber-50 border border-amber-300 rounded-lg">
+          <div className="flex items-start gap-2">
+            <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-amber-800">
+                Force re-import will delete all existing messages
+              </p>
+              <p className="text-xs text-amber-700 mt-1">
+                This will remove all imported messages and re-import them from scratch. Any manual changes or edits to messages will be lost. This action cannot be reversed.
+              </p>
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={() => {
+                    setShowForceWarning(false);
+                    if (capExceeded) {
+                      setCapPromptForce(true);
+                    } else {
+                      handleImport(true);
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium rounded transition-all"
+                >
+                  Continue with Re-import
+                </button>
+                <button
+                  onClick={() => setShowForceWarning(false)}
+                  className="px-3 py-1.5 bg-white hover:bg-gray-100 text-gray-700 text-xs font-medium rounded border border-gray-300 transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Inline progress bar during import (TASK-1752) */}
       {isImporting && (
