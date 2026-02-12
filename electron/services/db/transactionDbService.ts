@@ -75,8 +75,8 @@ export async function createTransaction(
     INSERT INTO transactions (
       id, user_id, property_address, property_street, property_city,
       property_state, property_zip, property_coordinates,
-      transaction_type, status, closing_deadline
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      transaction_type, status, closing_deadline, started_at, closed_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   // Validate status - reject invalid values, use 'active' as default for null/undefined
@@ -97,6 +97,8 @@ export async function createTransaction(
     transactionData.transaction_type || null,
     validatedStatus,
     transactionData.closing_deadline || null,
+    transactionData.started_at || null,
+    transactionData.closed_at || null,
   ];
 
   dbRun(sql, params);
