@@ -50,10 +50,13 @@ export function AppShell({ app, children }: AppShellProps) {
   // and will be initialized during the secure-storage/keychain step in onboarding
   if (isAuthenticated && !isDatabaseInitialized && !isOnboardingStep(currentStep)) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Initializing secure storage...</p>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col">
+        <div className="flex-shrink-0 h-8" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties} />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600">Initializing secure storage...</p>
+          </div>
         </div>
       </div>
     );
@@ -61,9 +64,14 @@ export function AppShell({ app, children }: AppShellProps) {
 
   return (
     <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
+      {/* Drag region for login screen (no title bar shown) */}
+      {currentStep === "login" && (
+        <div className="flex-shrink-0 h-8" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties} />
+      )}
+
       {/* Title Bar - Hide on login screen */}
       {currentStep !== "login" && (
-        <div className="flex-shrink-0 bg-gradient-to-b from-gray-100 to-gray-50 border-b border-gray-200 px-4 py-3 flex items-center justify-between select-none">
+        <div className="flex-shrink-0 bg-gradient-to-b from-gray-100 to-gray-50 border-b border-gray-200 px-4 py-3 flex items-center justify-between select-none" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
           <div className="w-8" /> {/* Spacer for centering */}
           <h1 className="text-sm font-semibold text-gray-700">
             {getPageTitle()}
@@ -73,6 +81,7 @@ export function AppShell({ app, children }: AppShellProps) {
             <button
               onClick={openProfile}
               className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600 flex items-center justify-center text-white text-sm font-bold shadow-md transition-all hover:shadow-lg"
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
               title={`${currentUser.display_name || currentUser.email} - Click for account settings`}
               data-tour="profile-button"
             >

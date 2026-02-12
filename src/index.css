@@ -65,3 +65,14 @@ code {
 .animate-indeterminate {
   animation: indeterminate 1.5s ease-in-out infinite;
 }
+
+/* Electron window drag regions (titleBarStyle: "hiddenInset") */
+.drag-region {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.no-drag-region {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}

@@ -154,12 +154,16 @@ function matchesSearch(
  * - manual: Green "Manual" pill (user-created contacts)
  * - imported: Blue "Imported" pill (imported from Contacts App, non-message-derived)
  * - external: Violet "Contacts App" pill (message-derived contacts, not yet imported)
+ * - outlook: Indigo "Outlook" pill (from Outlook contacts via Graph API)
+ * - email: Sky "Email" pill (inferred from email interactions)
  * - messages: Amber "Message" pill (SMS source)
  */
 interface CategoryFilter {
   manual: boolean;
   imported: boolean;
   external: boolean;
+  outlook: boolean;
+  email: boolean;
   messages: boolean;
 }
 
@@ -167,6 +171,8 @@ const DEFAULT_CATEGORY_FILTER: CategoryFilter = {
   manual: true,
   imported: true,
   external: true,
+  outlook: true,
+  email: true,
   messages: false,
 };
 
@@ -175,12 +181,21 @@ const DEFAULT_CATEGORY_FILTER: CategoryFilter = {
  * This is the single source of truth for contact categorization.
  *
  * Categories map to pill display:
+ * - "outlook" → "Outlook" pill (indigo) - from Outlook contacts via Graph API
+ * - "email" → "Email" pill (sky) - inferred from email interactions
  * - "messages" → "Message" pill (amber) - from SMS/iMessage sync
  * - "external" → "Contacts App" pill (violet) - from Contacts App, not imported
  * - "manual" → "Manual" pill (green) - user-created via Add Manually
  * - "imported" → "Imported" pill (blue) - imported from Contacts App
  */
 function getContactCategory(contact: ExtendedContact, isExternalContact: boolean = false): keyof CategoryFilter {
+  // Source-specific categories take priority over isExternalContact flag
+  if (contact.source === "outlook") {
+    return "outlook";
+  }
+  if (contact.source === "email") {
+    return "email";
+  }
   // SMS/messages source shows as "Message" pill
   if (contact.source === "sms" || contact.source === "messages") {
     return "messages";
@@ -193,7 +208,7 @@ function getContactCategory(contact: ExtendedContact, isExternalContact: boolean
   if (contact.source === "manual") {
     return "manual";
   }
-  // Everything else shows as "Imported" pill (contacts_app, email, inferred, etc.)
+  // Everything else shows as "Imported" pill (contacts_app, inferred, etc.)
   return "imported";
 }
 
@@ -218,8 +233,10 @@ export function ContactSearchList({
   const [importingIds, setImportingIds] = useState<Set<string>>(new Set());
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>(DEFAULT_CATEGORY_FILTER);
+  const [renderLimit, setRenderLimit] = useState(50);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   // Build sets of emails/phones from imported contacts for deduplication and isAdded check
@@ -300,10 +317,31 @@ export function ContactSearchList({
     return categoryFiltered.filter(({ contact }) => matchesSearch(contact, searchQuery));
   }, [contacts, externalContacts, isContactImported, searchQuery, categoryFilter, showCategoryFilter, sortOrder]);
 
-  // Reset focused index when list changes
+  // Reset focused index and render limit when list changes
   useEffect(() => {
     setFocusedIndex(-1);
+    setRenderLimit(50);
   }, [combinedContacts.length]);
+
+  // Infinite scroll: load more contacts when sentinel becomes visible
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setRenderLimit((prev) => prev + 50);
+        }
+      },
+      { threshold: 0 }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [combinedContacts.length]);
+
+  // Slice the list for progressive rendering
+  const visibleContacts = combinedContacts.slice(0, renderLimit);
+  const hasMore = combinedContacts.length > renderLimit;
 
   // Handle regular contact selection (toggle)
   const handleSelect = useCallback(
@@ -539,6 +577,38 @@ export function ContactSearchList({
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
+              setCategoryFilter(prev => ({ ...prev, outlook: !prev.outlook }));
+            }}
+            className={`px-2.5 py-1 text-xs font-medium rounded-full transition-colors ${
+              categoryFilter.outlook
+                ? "bg-indigo-100 text-indigo-700"
+                : "bg-gray-100 text-gray-400"
+            }`}
+            data-testid="filter-outlook"
+          >
+            Outlook
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setCategoryFilter(prev => ({ ...prev, email: !prev.email }));
+            }}
+            className={`px-2.5 py-1 text-xs font-medium rounded-full transition-colors ${
+              categoryFilter.email
+                ? "bg-sky-100 text-sky-700"
+                : "bg-gray-100 text-gray-400"
+            }`}
+            data-testid="filter-email"
+          >
+            From Emails
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
               setCategoryFilter(prev => ({ ...prev, messages: !prev.messages }));
             }}
             className={`px-2.5 py-1 text-xs font-medium rounded-full transition-colors ${
@@ -624,10 +694,10 @@ export function ContactSearchList({
           </div>
         )}
 
-        {/* Contact List Items */}
+        {/* Contact List Items (progressive rendering) */}
         {!isLoading &&
           !error &&
-          combinedContacts.map((combined, index) => {
+          visibleContacts.map((combined, index) => {
             const isSelected = selectedIds.includes(combined.contact.id);
             const isImporting = importingIds.has(combined.contact.id);
             const isAdded = addedContactIds.has(combined.contact.id);
@@ -648,6 +718,13 @@ export function ContactSearchList({
               />
             );
           })}
+
+        {/* Sentinel for infinite scroll */}
+        {!isLoading && !error && hasMore && (
+          <div ref={sentinelRef} className="p-2 text-center text-xs text-gray-400">
+            Loading more contacts...
+          </div>
+        )}
       </div>
 
     </div>

@@ -862,7 +862,7 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         }
 
         // Extract source from input data (falls back to "manual" if not provided)
-        const validSources: ContactSource[] = ["manual", "email", "sms", "messages", "contacts_app", "inferred"];
+        const validSources: ContactSource[] = ["manual", "email", "sms", "messages", "contacts_app", "inferred", "outlook"];
         const inputSource = (contactData as { source?: string })?.source;
         const source: ContactSource = validSources.includes(inputSource as ContactSource)
           ? (inputSource as ContactSource)

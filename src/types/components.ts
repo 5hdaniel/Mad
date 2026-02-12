@@ -82,6 +82,7 @@ export function getSourceBadge(source: ContactSource): SourceBadge {
     sms: { text: "From SMS", color: "bg-orange-100 text-orange-700" },
     messages: { text: "From Messages", color: "bg-orange-100 text-orange-700" },
     inferred: { text: "Inferred", color: "bg-gray-100 text-gray-700" },
+    outlook: { text: "Outlook", color: "bg-indigo-100 text-indigo-700" },
   };
   return badges[source] || badges.manual;
 }

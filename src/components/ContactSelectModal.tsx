@@ -374,7 +374,7 @@ function ContactSelectModal({
             { value: "all", label: "All Sources" },
             { value: "contacts_app", label: "Contacts App" },
             { value: "outlook", label: "Outlook" },
-            { value: "email", label: "Email" },
+            { value: "email", label: "From Emails" },
             { value: "sms", label: "Message" },
             { value: "manual", label: "Manual" },
           ].map((opt) => (
