@@ -134,6 +134,7 @@
     "sqlite3": "^5.1.7"
   },
   "build": {
+    "asar": true,
     "appId": "com.realestate.archiveapp",
     "productName": "MagicAudit",
     "protocols": [
