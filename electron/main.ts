@@ -631,6 +631,44 @@ function setupContentSecurityPolicy(): void {
   });
 }
 
+/**
+ * Set up permission handlers to deny all web permissions by default,
+ * whitelisting only the permissions the app actually needs.
+ *
+ * This prevents the Electron app from granting permissions that could
+ * be exploited (camera, microphone, geolocation, etc.) while allowing
+ * clipboard and notification access needed for normal operation.
+ */
+function setupPermissionHandlers(): void {
+  const allowedPermissions = new Set([
+    "clipboard-read",
+    "clipboard-sanitized-write",
+    "notifications",
+  ]);
+
+  session.defaultSession.setPermissionRequestHandler(
+    (_webContents, permission, callback) => {
+      const allowed = allowedPermissions.has(permission);
+      if (!allowed) {
+        log.debug(
+          `[Permissions] Denied permission request: ${permission}`
+        );
+      }
+      callback(allowed);
+    }
+  );
+
+  session.defaultSession.setPermissionCheckHandler(
+    (_webContents, permission) => {
+      return allowedPermissions.has(permission);
+    }
+  );
+
+  log.info(
+    "[Permissions] Permission handlers configured (deny-by-default, allowed: clipboard-read, clipboard-sanitized-write, notifications)"
+  );
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: WINDOW_CONFIG.DEFAULT_WIDTH,
@@ -727,6 +765,9 @@ app.whenReady().then(async () => {
 
   // Set up Content Security Policy
   setupContentSecurityPolicy();
+
+  // Set up permission handlers (deny-by-default)
+  setupPermissionHandlers();
 
   // Database initialization is now ALWAYS deferred to the renderer process
   // This allows us to show an explanation screen (KeychainExplanation) before the keychain prompt
