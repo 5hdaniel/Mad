@@ -288,6 +288,9 @@ class FolderExportService {
       c.communication_type === "text"  // Legacy fallback
     );
 
+    // Calculate message type breakdown (TASK-1802)
+    const messageTypeCounts = this.getMessageTypeCounts(texts);
+
     // Sort emails for the list
     const sortedEmails = [...emails].sort((a, b) => {
       const dateA = new Date(a.sent_at as string).getTime();
@@ -441,6 +444,30 @@ class FolderExportService {
     </div>
   </div>
 
+  ${(messageTypeCounts.voiceMessages > 0 || messageTypeCounts.locationMessages > 0 || messageTypeCounts.attachmentOnlyMessages > 0) ? `
+  <div class="section">
+    <h3>Message Type Breakdown</h3>
+    <div class="details-grid" style="grid-template-columns: repeat(4, 1fr);">
+      <div class="detail-card">
+        <div class="label">Text Messages</div>
+        <div class="value">${messageTypeCounts.textMessages}</div>
+      </div>
+      <div class="detail-card">
+        <div class="label">Voice Messages</div>
+        <div class="value">${messageTypeCounts.voiceMessages}</div>
+      </div>
+      <div class="detail-card">
+        <div class="label">Location Shares</div>
+        <div class="value">${messageTypeCounts.locationMessages}</div>
+      </div>
+      <div class="detail-card">
+        <div class="label">Media Only</div>
+        <div class="value">${messageTypeCounts.attachmentOnlyMessages}</div>
+      </div>
+    </div>
+  </div>
+  ` : ""}
+
   ${emails.length > 0 ? `
   <div class="section">
     <h3>Email Threads Index (${emails.length})</h3>
@@ -495,6 +522,25 @@ class FolderExportService {
       threads.add(this.getThreadKey(msg));
     }
     return threads.size;
+  }
+
+  /**
+   * Get message type counts for summary statistics (TASK-1802)
+   */
+  private getMessageTypeCounts(texts: Communication[]): {
+    textMessages: number;
+    voiceMessages: number;
+    locationMessages: number;
+    attachmentOnlyMessages: number;
+    systemMessages: number;
+  } {
+    return {
+      textMessages: texts.filter(m => m.message_type === "text" || !m.message_type).length,
+      voiceMessages: texts.filter(m => m.message_type === "voice_message").length,
+      locationMessages: texts.filter(m => m.message_type === "location").length,
+      attachmentOnlyMessages: texts.filter(m => m.message_type === "attachment_only").length,
+      systemMessages: texts.filter(m => m.message_type === "system").length,
+    };
   }
 
   /**
@@ -563,7 +609,9 @@ class FolderExportService {
     index: number,
     outputPath: string
   ): Promise<void> {
-    const html = this.generateEmailHTML(email);
+    // TASK-1780: Get attachments for this email to list in PDF
+    const attachments = email.id ? this.getAttachmentsForEmail(email.id) : [];
+    const html = this.generateEmailHTML(email, attachments);
     const pdfBuffer = await this.htmlToPdf(html);
 
     const date = new Date(email.sent_at as string);
@@ -577,8 +625,12 @@ class FolderExportService {
 
   /**
    * Generate HTML for a single email
+   * TASK-1780: Updated to list attachment filenames instead of generic message
    */
-  private generateEmailHTML(email: Communication): string {
+  private generateEmailHTML(
+    email: Communication,
+    attachments: { filename: string; file_size_bytes: number | null }[] = []
+  ): string {
     const formatDateTime = (dateString: string | Date): string => {
       if (!dateString) return "N/A";
       const date = typeof dateString === "string" ? new Date(dateString) : dateString;
@@ -590,6 +642,14 @@ class FolderExportService {
         hour: "2-digit",
         minute: "2-digit",
       });
+    };
+
+    // TASK-1780: Format file size for display
+    const formatFileSize = (bytes: number | null): string => {
+      if (bytes === null || bytes === 0) return "";
+      if (bytes < 1024) return ` (${bytes} B)`;
+      if (bytes < 1024 * 1024) return ` (${(bytes / 1024).toFixed(1)} KB)`;
+      return ` (${(bytes / (1024 * 1024)).toFixed(1)} MB)`;
     };
 
     // Use HTML body if available, otherwise use plain text
@@ -647,9 +707,28 @@ class FolderExportService {
       color: #718096;
       margin-bottom: 8px;
     }
+    .attachments ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .attachments li {
+      font-size: 13px;
+      color: #4a5568;
+      padding: 4px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .attachments li:last-child {
+      border-bottom: none;
+    }
+    .attachments .file-size {
+      color: #a0aec0;
+      font-size: 12px;
+    }
     .attachments .note {
       font-size: 12px;
       color: #a0aec0;
+      margin-top: 8px;
     }
     @media print { body { padding: 20px; } }
   </style>
@@ -670,11 +749,16 @@ class FolderExportService {
   </div>
 
   ${
-    email.has_attachments
+    email.has_attachments || attachments.length > 0
       ? `
   <div class="attachments">
-    <h4>Attachments (${email.attachment_count || 0})</h4>
-    <div class="note">Attachments are available in the /attachments folder</div>
+    <h4>Attachments (${attachments.length || email.attachment_count || 0})</h4>
+    ${
+      attachments.length > 0
+        ? `<ul>${attachments.map(att => `<li>${this.escapeHtml(att.filename)}<span class="file-size">${formatFileSize(att.file_size_bytes)}</span></li>`).join("")}</ul>
+    <div class="note">Files available in the /attachments folder</div>`
+        : `<div class="note">Attachments are available in the /attachments folder</div>`
+    }
   </div>
   `
       : ""
@@ -1257,6 +1341,53 @@ class FolderExportService {
       font-size: 12px;
       color: #4a5568;
     }
+    .special-indicator {
+      font-size: 11px;
+      font-style: italic;
+      color: #718096;
+      margin-bottom: 4px;
+      padding: 4px 8px;
+      background: #f0f4f8;
+      border-radius: 4px;
+      display: inline-block;
+    }
+    .special-indicator.voice-message {
+      background: #e6f3ff;
+      color: #2563eb;
+    }
+    .special-indicator.location-message {
+      background: #e6fff0;
+      color: #059669;
+    }
+    .special-indicator.attachment-only {
+      background: #fff7e6;
+      color: #d97706;
+    }
+    .audio-file-ref {
+      font-size: 10px;
+      color: #718096;
+      font-style: italic;
+      margin-top: 2px;
+    }
+    .message.system-message {
+      max-width: 100%;
+      background: transparent;
+      text-align: center;
+      margin: 12px 0;
+      padding: 8px;
+    }
+    .system-content {
+      font-size: 12px;
+      color: #718096;
+      font-style: italic;
+    }
+    .message.outbound .special-indicator {
+      background: rgba(255,255,255,0.2);
+      color: rgba(255,255,255,0.95);
+    }
+    .message.outbound .audio-file-ref {
+      color: rgba(255,255,255,0.8);
+    }
     .badge {
       display: inline-block;
       padding: 2px 8px;
@@ -1318,7 +1449,7 @@ class FolderExportService {
 
   /**
    * Generate HTML for a single text message within a thread
-   * Includes inline images for attachments
+   * Includes inline images for attachments and handles special message types (TASK-1802)
    */
   private generateTextMessageHTML(
     msg: Communication,
@@ -1373,47 +1504,133 @@ class FolderExportService {
       );
     }
 
-    // Generate attachment HTML
-    let attachmentHtml = "";
-    for (const att of attachments) {
-      if (att.mime_type?.startsWith("image/") && att.storage_path) {
-        // Use file:// URL to reference image directly (more efficient than base64)
-        try {
-          if (fsSync.existsSync(att.storage_path)) {
-            // Use file:// URL - works because we load HTML from temp file
-            const fileUrl = `file://${att.storage_path}`;
-            attachmentHtml += `<div class="attachment-image"><img src="${fileUrl}" alt="${this.escapeHtml(att.filename)}" /></div>`;
-          } else {
-            // Image file not found - show placeholder
-            attachmentHtml += `<div class="attachment-ref">[Image: ${this.escapeHtml(att.filename)} - file not found]</div>`;
-          }
-        } catch (error) {
-          // Failed to read image - show placeholder
-          logService.warn("[Folder Export] Failed to embed image in PDF", "FolderExport", {
-            filename: att.filename,
-            error,
-          });
-          attachmentHtml += `<div class="attachment-ref">[Image: ${this.escapeHtml(att.filename)}]</div>`;
+    // Handle special message types (TASK-1802)
+    const messageType = msg.message_type || "text";
+    let specialIndicatorHtml = "";
+    let bodyContent = "";
+
+    switch (messageType) {
+      case "voice_message": {
+        // Voice message: show indicator and transcript
+        const transcript = msg.body_text || msg.body_plain || "";
+        specialIndicatorHtml = `<div class="special-indicator voice-message">[Voice Message${transcript ? " - Transcript:" : ""}]</div>`;
+        if (transcript) {
+          bodyContent = this.escapeHtml(transcript);
+        } else {
+          bodyContent = "<em>[No transcript available]</em>";
         }
-      } else {
-        // Non-image attachment - show reference with specific type
-        const attachmentType = this.getAttachmentTypeLabel(att.mime_type, att.filename);
-        attachmentHtml += `<div class="attachment-ref">[${attachmentType}: ${this.escapeHtml(att.filename)}]</div>`;
+        // Reference audio file if available
+        const audioAttachment = attachments.find(att =>
+          att.mime_type?.startsWith("audio/") ||
+          att.filename.toLowerCase().endsWith(".caf") ||
+          att.filename.toLowerCase().endsWith(".m4a")
+        );
+        if (audioAttachment) {
+          specialIndicatorHtml += `<div class="audio-file-ref">[Audio file: ${this.escapeHtml(audioAttachment.filename)}]</div>`;
+        }
+        break;
+      }
+
+      case "location": {
+        // Location message: show indicator and location text
+        const locationText = msg.body_text || msg.body_plain || "";
+        specialIndicatorHtml = `<div class="special-indicator location-message">[Location Shared]</div>`;
+        bodyContent = locationText ? this.escapeHtml(locationText) : "<em>Location information</em>";
+        break;
+      }
+
+      case "attachment_only": {
+        // Attachment-only: show indicator, attachments will be rendered below
+        const attachmentDesc = attachments.length > 0
+          ? attachments.map(a => a.filename).join(", ")
+          : "attachment";
+        specialIndicatorHtml = `<div class="special-indicator attachment-only">[Media Attachment: ${this.escapeHtml(attachmentDesc)}]</div>`;
+        // No body content for attachment-only messages
+        break;
+      }
+
+      case "system": {
+        // System message: distinctive styling
+        const systemText = msg.body_text || msg.body_plain || "System message";
+        return `
+    <div class="message system-message">
+      <div class="system-content">-- ${this.escapeHtml(systemText)} --</div>
+      <span class="time">${time}</span>
+    </div>
+    `;
+      }
+
+      case "text":
+      default: {
+        // Regular text message
+        const bodyText = msg.body_text || msg.body_plain || "";
+        const hasBody = bodyText.trim().length > 0;
+        bodyContent = hasBody
+          ? this.escapeHtml(bodyText)
+          : (attachments.length > 0 ? "" : ""); // Empty if no text and no attachments
+        break;
       }
     }
 
-    // Determine body content - show attachment indicator for attachment-only messages
-    const bodyText = msg.body_text || msg.body_plain || "";
-    const hasBody = bodyText.trim().length > 0;
-    const bodyContent = hasBody
-      ? this.escapeHtml(bodyText)
-      : (attachments.length > 0 ? "" : ""); // Empty if no text and no attachments
+    // Generate attachment HTML (skip for attachment_only as it's already indicated)
+    let attachmentHtml = "";
+    if (messageType !== "attachment_only") {
+      for (const att of attachments) {
+        // Skip audio attachments for voice messages (already referenced above)
+        if (messageType === "voice_message" &&
+            (att.mime_type?.startsWith("audio/") ||
+             att.filename.toLowerCase().endsWith(".caf") ||
+             att.filename.toLowerCase().endsWith(".m4a"))) {
+          continue;
+        }
+
+        if (att.mime_type?.startsWith("image/") && att.storage_path) {
+          // Use file:// URL to reference image directly (more efficient than base64)
+          try {
+            if (fsSync.existsSync(att.storage_path)) {
+              // Use file:// URL - works because we load HTML from temp file
+              const fileUrl = `file://${att.storage_path}`;
+              attachmentHtml += `<div class="attachment-image"><img src="${fileUrl}" alt="${this.escapeHtml(att.filename)}" /></div>`;
+            } else {
+              // Image file not found - show placeholder
+              attachmentHtml += `<div class="attachment-ref">[Image: ${this.escapeHtml(att.filename)} - file not found]</div>`;
+            }
+          } catch (error) {
+            // Failed to read image - show placeholder
+            logService.warn("[Folder Export] Failed to embed image in PDF", "FolderExport", {
+              filename: att.filename,
+              error,
+            });
+            attachmentHtml += `<div class="attachment-ref">[Image: ${this.escapeHtml(att.filename)}]</div>`;
+          }
+        } else {
+          // Non-image attachment - show reference with specific type
+          const attachmentType = this.getAttachmentTypeLabel(att.mime_type, att.filename);
+          attachmentHtml += `<div class="attachment-ref">[${attachmentType}: ${this.escapeHtml(att.filename)}]</div>`;
+        }
+      }
+    } else {
+      // For attachment_only, still show inline images
+      for (const att of attachments) {
+        if (att.mime_type?.startsWith("image/") && att.storage_path) {
+          try {
+            if (fsSync.existsSync(att.storage_path)) {
+              const fileUrl = `file://${att.storage_path}`;
+              attachmentHtml += `<div class="attachment-image"><img src="${fileUrl}" alt="${this.escapeHtml(att.filename)}" /></div>`;
+            }
+          } catch {
+            // Ignore errors for inline images
+          }
+        }
+      }
+    }
 
     return `
     <div class="message${isOutbound ? " outbound" : ""}">
       <span class="sender">${this.escapeHtml(senderName)}</span>
       <span class="time">${time}</span>
       ${senderPhone && isGroupChat ? `<span class="phone">${this.escapeHtml(senderPhone)}</span>` : ""}
+      ${specialIndicatorHtml}
       ${bodyContent ? `<div class="body">${bodyContent}</div>` : ""}
       ${attachmentHtml}
     </div>
@@ -1422,7 +1639,8 @@ class FolderExportService {
 
   /**
    * Export attachments and create manifest
-   * Queries the attachments table by message_id and copies actual files to output folder
+   * Queries the attachments table by message_id/email_id and copies actual files to output folder
+   * TASK-1777: Updated to include email attachments (queried by email_id)
    */
   private async exportAttachments(
     transaction: Transaction,
@@ -1436,14 +1654,29 @@ class FolderExportService {
       attachments: [],
     };
 
-    // Get message IDs and external IDs for the linked communications
-    // For emails, use message_id; for texts, also check the communication id
-    const messageIds = communications
+    // TASK-1777: Separate email and text message communications
+    const emailComms = communications.filter(
+      (comm) => comm.communication_type === "email"
+    );
+    const textComms = communications.filter(
+      (comm) =>
+        comm.communication_type === "sms" ||
+        comm.communication_type === "imessage" ||
+        comm.communication_type === "text"
+    );
+
+    // Get message IDs for text messages
+    const messageIds = textComms
       .filter((comm) => comm.message_id || comm.id)
       .map((comm) => comm.message_id || comm.id) as string[];
 
-    // Also collect external_ids for fallback lookup
-    const externalIds = communications
+    // TASK-1777: Get email IDs for email attachments
+    const emailIds = emailComms
+      .filter((comm) => comm.id)
+      .map((comm) => comm.id) as string[];
+
+    // Also collect external_ids for fallback lookup (text messages only)
+    const externalIds = textComms
       .filter((comm) => (comm as any).external_id)
       .map((comm) => (comm as any).external_id) as string[];
 
@@ -1456,12 +1689,13 @@ class FolderExportService {
         totalCommunications: communications.length,
         withHasAttachments: commsWithAttachments.length,
         messageIds: messageIds.length,
+        emailIds: emailIds.length,
         externalIds: externalIds.length,
       }
     );
 
-    if (messageIds.length === 0) {
-      // No linked messages, write empty manifest
+    if (messageIds.length === 0 && emailIds.length === 0) {
+      // No linked messages or emails, write empty manifest
       await fs.writeFile(
         path.join(outputPath, "manifest.json"),
         JSON.stringify(manifest, null, 2),
@@ -1470,55 +1704,76 @@ class FolderExportService {
       return;
     }
 
-    // Query attachments table for all linked messages
+    // Query attachments table for all linked messages and emails
     const db = databaseService.getRawDatabase();
-    const placeholders = messageIds.map(() => "?").join(", ");
-    let attachmentRows = db
-      .prepare(
-        `
-        SELECT id, message_id, filename, mime_type, file_size_bytes, storage_path
-        FROM attachments
-        WHERE message_id IN (${placeholders})
-      `
-      )
-      .all(...messageIds) as {
+    let attachmentRows: {
       id: string;
-      message_id: string;
+      message_id: string | null;
+      email_id: string | null;
       filename: string;
       mime_type: string | null;
       file_size_bytes: number | null;
       storage_path: string | null;
-    }[];
+    }[] = [];
 
-    // Fallback: Also query by external_message_id for attachments with stale message_id
-    if (externalIds.length > 0) {
-      const externalPlaceholders = externalIds.map(() => "?").join(", ");
-      const fallbackRows = db
+    // Query text message attachments by message_id
+    if (messageIds.length > 0) {
+      const placeholders = messageIds.map(() => "?").join(", ");
+      const textAttachmentRows = db
         .prepare(
           `
-          SELECT id, message_id, external_message_id, filename, mime_type, file_size_bytes, storage_path
+          SELECT id, message_id, NULL as email_id, filename, mime_type, file_size_bytes, storage_path
           FROM attachments
-          WHERE external_message_id IN (${externalPlaceholders})
-            AND id NOT IN (SELECT id FROM attachments WHERE message_id IN (${placeholders}))
+          WHERE message_id IN (${placeholders})
         `
         )
-        .all(...externalIds, ...messageIds) as {
-        id: string;
-        message_id: string;
-        external_message_id: string;
-        filename: string;
-        mime_type: string | null;
-        file_size_bytes: number | null;
-        storage_path: string | null;
-      }[];
+        .all(...messageIds) as typeof attachmentRows;
 
-      if (fallbackRows.length > 0) {
+      attachmentRows = [...attachmentRows, ...textAttachmentRows];
+
+      // Fallback: Also query by external_message_id for attachments with stale message_id
+      if (externalIds.length > 0) {
+        const externalPlaceholders = externalIds.map(() => "?").join(", ");
+        const fallbackRows = db
+          .prepare(
+            `
+            SELECT id, message_id, NULL as email_id, filename, mime_type, file_size_bytes, storage_path
+            FROM attachments
+            WHERE external_message_id IN (${externalPlaceholders})
+              AND id NOT IN (SELECT id FROM attachments WHERE message_id IN (${placeholders}))
+          `
+          )
+          .all(...externalIds, ...messageIds) as typeof attachmentRows;
+
+        if (fallbackRows.length > 0) {
+          logService.info(
+            `[Folder Export] Found ${fallbackRows.length} additional attachments via external_message_id fallback`,
+            "FolderExport"
+          );
+          attachmentRows = [...attachmentRows, ...fallbackRows];
+        }
+      }
+    }
+
+    // TASK-1777: Query email attachments by email_id
+    if (emailIds.length > 0) {
+      const emailPlaceholders = emailIds.map(() => "?").join(", ");
+      const emailAttachmentRows = db
+        .prepare(
+          `
+          SELECT id, NULL as message_id, email_id, filename, mime_type, file_size_bytes, storage_path
+          FROM attachments
+          WHERE email_id IN (${emailPlaceholders})
+        `
+        )
+        .all(...emailIds) as typeof attachmentRows;
+
+      if (emailAttachmentRows.length > 0) {
         logService.info(
-          `[Folder Export] Found ${fallbackRows.length} additional attachments via external_message_id fallback`,
+          `[Folder Export] Found ${emailAttachmentRows.length} email attachments`,
           "FolderExport"
         );
-        // Merge fallback results
-        attachmentRows = [...attachmentRows, ...fallbackRows];
+        attachmentRows = [...attachmentRows, ...emailAttachmentRows];
       }
     }
 
@@ -1579,9 +1834,21 @@ class FolderExportService {
     const usedFilenames = new Set<string>();
 
     for (const att of attachmentRows) {
-      // Try message_id lookup first, fall back to external_message_id
-      let comm = messageIdToComm.get(att.message_id);
-      let commIndex = messageIdToCommIndex.get(att.message_id);
+      // TASK-1777: Try message_id, email_id, or external_message_id lookup
+      let comm: Communication | undefined;
+      let commIndex: number | undefined;
+
+      // Try message_id lookup (text messages)
+      if (att.message_id) {
+        comm = messageIdToComm.get(att.message_id);
+        commIndex = messageIdToCommIndex.get(att.message_id);
+      }
+
+      // Try email_id lookup (email attachments)
+      if (!comm && att.email_id) {
+        comm = messageIdToComm.get(att.email_id);
+        commIndex = messageIdToCommIndex.get(att.email_id);
+      }
 
       // Fallback: try external_message_id if regular lookup failed
       if (!comm && (att as any).external_message_id) {
@@ -1828,6 +2095,40 @@ class FolderExportService {
     } catch (error) {
       logService.warn("[Folder Export] Failed to get attachments for message", "FolderExport", {
         messageId,
+        error,
+      });
+      return [];
+    }
+  }
+
+  /**
+   * TASK-1780: Get attachments for an email by email_id
+   * @param emailId - Email UUID
+   */
+  private getAttachmentsForEmail(emailId: string): {
+    id: string;
+    filename: string;
+    mime_type: string | null;
+    storage_path: string | null;
+    file_size_bytes: number | null;
+  }[] {
+    try {
+      const db = databaseService.getRawDatabase();
+      const sql = `
+        SELECT id, filename, mime_type, storage_path, file_size_bytes
+        FROM attachments
+        WHERE email_id = ?
+      `;
+      return db.prepare(sql).all(emailId) as {
+        id: string;
+        filename: string;
+        mime_type: string | null;
+        storage_path: string | null;
+        file_size_bytes: number | null;
+      }[];
+    } catch (error) {
+      logService.warn("[Folder Export] Failed to get attachments for email", "FolderExport", {
+        emailId,
         error,
       });
       return [];

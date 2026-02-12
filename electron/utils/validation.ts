@@ -289,8 +289,11 @@ export function validateSessionToken(sessionToken: unknown): string {
 /**
  * Validate OAuth provider
  * @param provider - Provider to validate
- * @returns Validated provider
+ * @returns Validated and normalized provider ("google" or "microsoft")
  * @throws ValidationError if validation fails
+ *
+ * Note: "azure" is normalized to "microsoft" because Azure AD
+ * uses the Microsoft Graph API for connection checks.
  */
 export function validateProvider(provider: unknown): string {
   if (!provider || typeof provider !== "string") {
@@ -300,17 +303,20 @@ export function validateProvider(provider: unknown): string {
     );
   }
 
-  const validProviders = ["google", "microsoft"];
   const lowercase = provider.toLowerCase();
 
-  if (!validProviders.includes(lowercase)) {
+  // Azure AD uses Microsoft Graph API, normalize to "microsoft"
+  const normalized = lowercase === "azure" ? "microsoft" : lowercase;
+
+  const validProviders = ["google", "microsoft"];
+  if (!validProviders.includes(normalized)) {
     throw new ValidationError(
       `Provider must be one of: ${validProviders.join(", ")}`,
       "provider",
     );
   }
 
-  return lowercase;
+  return normalized;
 }
 
 /**

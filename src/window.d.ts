@@ -233,12 +233,16 @@ interface ElectronAPI {
  * Exposed via contextBridge in preload.js
  */
 /**
- * Progress event from macOS message import
+ * Progress event from macOS message import (TASK-1710)
+ * Enhanced with querying phase and elapsed time for ETA calculation
  */
 interface MacOSImportProgress {
+  phase: "querying" | "deleting" | "importing" | "attachments";
   current: number;
   total: number;
   percent: number;
+  /** Milliseconds elapsed since import started */
+  elapsedMs: number;
 }
 
 /**
@@ -278,13 +282,22 @@ interface MainAPI {
     /** Import messages from macOS Messages app into the app database (macOS only) */
     importMacOSMessages: (userId: string, forceReimport?: boolean) => Promise<MacOSImportResult>;
     /** Get count of messages available for import from macOS Messages */
-    getImportCount: () => Promise<{ success: boolean; count?: number; error?: string }>;
+    getImportCount: (filters?: { lookbackMonths?: number | null; maxMessages?: number | null }) => Promise<{ success: boolean; count?: number; filteredCount?: number; error?: string }>;
     /** Listen for import progress updates */
     onImportProgress: (callback: (progress: MacOSImportProgress) => void) => () => void;
     /** Get attachments for a message with base64 data (TASK-1012) */
     getMessageAttachments: (messageId: string) => Promise<MessageAttachmentInfo[]>;
     /** Get attachments for multiple messages at once (TASK-1012) */
     getMessageAttachmentsBatch: (messageIds: string[]) => Promise<Record<string, MessageAttachmentInfo[]>>;
+    /** Cancel the current import operation (TASK-1710) */
+    cancelImport: () => void;
+    /** Get macOS messages import status (count and last import time) */
+    getImportStatus: (userId: string) => Promise<{
+      success: boolean;
+      messageCount?: number;
+      lastImportAt?: string | null;
+      error?: string;
+    }>;
   };
 
   // Outlook integration (migrated from window.electron)
@@ -335,6 +348,14 @@ interface MainAPI {
     openExternal: (url: string) => Promise<{ success: boolean }>;
     openPopup: (url: string, title?: string) => Promise<{ success: boolean }>;
     openFolder: (folderPath: string) => Promise<{ success: boolean }>;
+  };
+
+  // OS Notifications
+  notification: {
+    /** Check if notifications are supported on this platform */
+    isSupported: () => Promise<{ success: boolean; supported: boolean }>;
+    /** Send an OS notification */
+    send: (title: string, body: string) => Promise<{ success: boolean; error?: string }>;
   };
 
   // Apple Driver Management (Windows only)
@@ -566,6 +587,26 @@ interface MainAPI {
       success: boolean;
       indexesRebuilt?: number;
       durationMs?: number;
+      error?: string;
+    }>;
+    /**
+     * Check if a user exists in the local database
+     * BACKLOG-611: Used to determine if secure-storage step should be shown
+     * even on machines with previous installs (different user)
+     */
+    checkUserInLocalDb: (userId: string) => Promise<{
+      success: boolean;
+      exists: boolean;
+      error?: string;
+    }>;
+    /**
+     * Verify user exists in local database, creating if needed.
+     * Called by AccountVerificationStep after DB init and before email connection.
+     * @returns User verification result with userId on success
+     */
+    verifyUserInLocalDb: () => Promise<{
+      success: boolean;
+      userId?: string;
       error?: string;
     }>;
   };
@@ -973,6 +1014,42 @@ interface MainAPI {
     onImportProgress: (
       callback: (progress: { current: number; total: number; percent: number }) => void
     ) => () => void;
+    /**
+     * Sync external contacts from macOS Contacts app (TASK-1773)
+     * @param userId - User ID to sync contacts for
+     * @returns Sync result with inserted/deleted/total counts
+     */
+    syncExternal: (userId: string) => Promise<{
+      success: boolean;
+      inserted?: number;
+      deleted?: number;
+      total?: number;
+      error?: string;
+    }>;
+    /**
+     * Get external contacts sync status (TASK-1773)
+     * @param userId - User ID to check status for
+     * @returns Sync status (lastSyncAt, isStale, contactCount)
+     */
+    getExternalSyncStatus: (userId: string) => Promise<{
+      success: boolean;
+      lastSyncAt?: string | null;
+      isStale?: boolean;
+      contactCount?: number;
+      error?: string;
+    }>;
+    /**
+     * Sync Outlook contacts to external_contacts table (TASK-1921)
+     * Fetches contacts from Microsoft Graph API and syncs to local SQLite
+     * @param userId - User ID to sync contacts for
+     * @returns Sync result (count of contacts synced, reconnectRequired flag)
+     */
+    syncOutlookContacts: (userId: string) => Promise<{
+      success: boolean;
+      count?: number;
+      reconnectRequired?: boolean;
+      error?: string;
+    }>;
   };
 
   // Transactions API
@@ -1283,6 +1360,84 @@ interface MainAPI {
       title: string;
       message: string;
     }) => void) => () => void;
+
+    // ============================================
+    // EMAIL ATTACHMENT METHODS (TASK-1776)
+    // ============================================
+
+    /**
+     * Get attachments for a specific email
+     * @param emailId - Email ID to get attachments for
+     * @returns Array of attachment records
+     */
+    getEmailAttachments: (emailId: string) => Promise<{
+      success: boolean;
+      data?: Array<{
+        id: string;
+        filename: string;
+        mime_type: string | null;
+        file_size_bytes: number | null;
+        storage_path: string | null;
+      }>;
+      error?: string;
+    }>;
+
+    /**
+     * Open attachment with system viewer
+     * @param storagePath - Path to attachment file
+     * @returns Success/error result
+     */
+    openAttachment: (storagePath: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+
+    /**
+     * Get attachment counts from actual attachments table (TASK-1781)
+     * Returns counts matching what submission service will upload
+     * @param transactionId - Transaction ID
+     * @param auditStart - Optional audit start date (ISO string)
+     * @param auditEnd - Optional audit end date (ISO string)
+     * @returns Counts for text and email attachments
+     */
+    getAttachmentCounts: (
+      transactionId: string,
+      auditStart?: string,
+      auditEnd?: string
+    ) => Promise<{
+      success: boolean;
+      data?: {
+        textAttachments: number;
+        emailAttachments: number;
+        total: number;
+      };
+      error?: string;
+    }>;
+
+    /**
+     * Get attachment data as base64 data URL for preview
+     * TASK-1778: Returns data: URL for images/PDFs
+     * @param storagePath - Path to attachment file
+     * @param mimeType - MIME type for the data URL
+     * @returns Success/error result with data URL in data field
+     */
+    getAttachmentData: (storagePath: string, mimeType: string) => Promise<{
+      success: boolean;
+      data?: string;
+      error?: string;
+    }>;
+
+    /**
+     * Get attachment buffer as raw base64 (for DOCX conversion)
+     * TASK-1783: Returns raw base64 without data: URL prefix for mammoth.js
+     * @param storagePath - Path to attachment file
+     * @returns Success/error result with base64 data in data field
+     */
+    getAttachmentBuffer: (storagePath: string) => Promise<{
+      success: boolean;
+      data?: string;
+      error?: string;
+    }>;
   };
 
   // Transaction scan progress event
@@ -1429,6 +1584,75 @@ interface MainAPI {
       userId: string,
       phoneType: "iphone" | "android"
     ) => Promise<{ success: boolean; error?: string }>;
+
+    /**
+     * Syncs user's phone type from Supabase cloud to local database
+     * Used by DataSyncStep to ensure local DB has phone_type before FDA step
+     * @param userId - User ID to sync phone type for
+     * @returns Sync result
+     */
+    syncPhoneTypeFromCloud: (
+      userId: string
+    ) => Promise<{ success: boolean; error?: string }>;
+  };
+
+  // Error Logging API (TASK-1800)
+  errorLogging: {
+    /**
+     * Submit an error report to Supabase
+     * @param payload - Error details and optional user feedback
+     * @returns Result with success status and error ID
+     */
+    submit: (payload: {
+      errorType: string;
+      errorCode?: string;
+      errorMessage: string;
+      stackTrace?: string;
+      currentScreen?: string;
+      userFeedback?: string;
+      breadcrumbs?: Record<string, unknown>[];
+      appState?: Record<string, unknown>;
+    }) => Promise<{
+      success: boolean;
+      errorId?: string;
+      error?: string;
+    }>;
+    /**
+     * Process queued errors (call when connection restored)
+     * @returns Number of errors successfully processed
+     */
+    processQueue: () => Promise<{
+      success: boolean;
+      processedCount?: number;
+      error?: string;
+    }>;
+    /**
+     * Get current queue size (for diagnostics)
+     * @returns Queue size
+     */
+    getQueueSize: () => Promise<{
+      success: boolean;
+      queueSize?: number;
+      error?: string;
+    }>;
+  };
+
+  // App Reset API (TASK-1802)
+  app: {
+    /**
+     * Perform a complete app data reset
+     * WARNING: This is a destructive operation that will:
+     * - Delete all local data (database, preferences, cached data)
+     * - Restart the app fresh
+     *
+     * Cloud data (Supabase) is NOT affected.
+     *
+     * @returns Result with success status
+     */
+    reset: () => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
   };
 
   // License API

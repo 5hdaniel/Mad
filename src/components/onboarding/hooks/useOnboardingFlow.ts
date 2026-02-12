@@ -11,6 +11,7 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { usePlatform } from "../../../contexts/PlatformContext";
 import { getFlowSteps } from "../flows";
+import { logNavigation, logStepVisibility, logStateChange } from "../../../appCore/state/machine/debug";
 import type {
   OnboardingStep,
   OnboardingContext,
@@ -29,14 +30,14 @@ import type {
 export interface OnboardingAppState {
   /** User's selected phone type */
   phoneType: "iphone" | "android" | null;
-  /** Whether email is connected */
-  emailConnected: boolean;
+  /** Whether email is connected (undefined = unknown/loading) */
+  emailConnected: boolean | undefined;
   /** Connected email address */
   connectedEmail: string | null;
   /** Email provider */
   emailProvider: "google" | "microsoft" | null;
-  /** Whether permissions are granted */
-  hasPermissions: boolean;
+  /** Whether permissions are granted (undefined = unknown/loading) */
+  hasPermissions: boolean | undefined;
   /** Whether secure storage is set up (macOS) */
   hasSecureStorage: boolean;
   /** Whether driver is set up */
@@ -51,6 +52,8 @@ export interface OnboardingAppState {
   isDatabaseInitialized: boolean;
   /** Current user ID */
   userId: string | null;
+  /** Whether user has been verified in local database */
+  isUserVerifiedInLocalDb: boolean;
 }
 
 /**
@@ -170,18 +173,70 @@ export function useOnboardingFlow(
       isNewUser: appState.isNewUser,
       isDatabaseInitialized: appState.isDatabaseInitialized,
       userId: appState.userId,
+      isUserVerifiedInLocalDb: appState.isUserVerifiedInLocalDb,
     }),
     [platform, appState]
   );
 
   // Filter steps based on shouldShow
   const steps = useMemo(() => {
-    return allSteps.filter((step) => {
+    logStateChange('useOnboardingFlow', 'FILTERING_STEPS', {
+      emailConnected: context.emailConnected,
+      permissionsGranted: context.permissionsGranted,
+      phoneType: context.phoneType,
+      platform: context.platform,
+      isDatabaseInitialized: context.isDatabaseInitialized,
+      isNewUser: context.isNewUser,
+    });
+
+    const filtered = allSteps.filter((step) => {
       if (step.meta.shouldShow) {
-        return step.meta.shouldShow(context);
+        const shouldShow = step.meta.shouldShow(context);
+
+        // Detailed visibility logging for each step
+        const relevantContext: Record<string, unknown> = {};
+        switch (step.meta.id) {
+          case 'phone-type':
+            relevantContext.phoneType = context.phoneType;
+            break;
+          case 'secure-storage':
+            relevantContext.isDatabaseInitialized = context.isDatabaseInitialized;
+            break;
+          case 'account-verification':
+            relevantContext.isDatabaseInitialized = context.isDatabaseInitialized;
+            relevantContext.isUserVerifiedInLocalDb = context.isUserVerifiedInLocalDb;
+            break;
+          case 'email-connect':
+            relevantContext.emailConnected = context.emailConnected;
+            relevantContext['emailConnected !== true'] = context.emailConnected !== true;
+            break;
+          case 'permissions':
+            relevantContext.permissionsGranted = context.permissionsGranted;
+            relevantContext['permissionsGranted !== true'] = context.permissionsGranted !== true;
+            break;
+          case 'apple-driver':
+            relevantContext.phoneType = context.phoneType;
+            relevantContext.driverSetupComplete = context.driverSetupComplete;
+            break;
+        }
+
+        logStepVisibility(
+          step.meta.id,
+          shouldShow,
+          `shouldShow(context) returned ${shouldShow}`,
+          relevantContext
+        );
+        return shouldShow;
       }
+      logStepVisibility(step.meta.id, true, 'no shouldShow predicate', {});
       return true;
     });
+
+    console.log(
+      `%c[STEPS] Visible: ${filtered.map(s => s.meta.id).join(' → ')}`,
+      'background: #2E8B57; color: white; font-weight: bold; padding: 2px 8px;'
+    );
+    return filtered;
   }, [allSteps, context]);
 
   // Current step state - track by ID to handle dynamic filtering
@@ -254,9 +309,21 @@ export function useOnboardingFlow(
 
   // Navigation: Go to next step
   const goToNext = useCallback(() => {
+    const fromStep = steps[currentIndex]?.meta.id || 'unknown';
     if (currentIndex < steps.length - 1) {
-      setCurrentStepId(steps[currentIndex + 1].meta.id);
+      const toStep = steps[currentIndex + 1].meta.id;
+      logNavigation(fromStep, toStep, 'goToNext()');
+      logStateChange('useOnboardingFlow', 'GO_TO_NEXT', {
+        fromStep,
+        toStep,
+        currentIndex,
+        nextIndex: currentIndex + 1,
+        visibleSteps: steps.map(s => s.meta.id),
+        totalSteps: steps.length,
+      });
+      setCurrentStepId(toStep);
     } else {
+      logNavigation(fromStep, 'COMPLETE', 'goToNext() - last step');
       // Flow complete
       onComplete?.();
     }
@@ -352,6 +419,12 @@ export function useOnboardingFlow(
 
         case "CONNECT_EMAIL_START":
           // Don't navigate - OAuth flow will handle this
+          break;
+
+        case "USER_VERIFIED_IN_LOCAL_DB":
+          // User verified - the step's shouldShow will now return false,
+          // triggering automatic advancement via step filtering effect
+          // No explicit navigation needed here
           break;
 
         default:

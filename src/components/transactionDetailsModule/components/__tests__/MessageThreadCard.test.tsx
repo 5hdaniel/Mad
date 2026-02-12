@@ -621,7 +621,7 @@ describe("groupMessagesByThread", () => {
     expect(threads.has("msg-msg-solo-2")).toBe(true);
   });
 
-  it("should sort messages within thread chronologically", () => {
+  it("should sort messages within thread chronologically (newest first)", () => {
     const messages = [
       createMockMessage({
         id: "msg-2",
@@ -643,12 +643,13 @@ describe("groupMessagesByThread", () => {
     const threads = groupMessagesByThread(messages);
     const threadMessages = threads.get("thread-A");
 
-    expect(threadMessages?.[0].id).toBe("msg-1");
+    // TASK-1794: Newest messages first
+    expect(threadMessages?.[0].id).toBe("msg-3");
     expect(threadMessages?.[1].id).toBe("msg-2");
-    expect(threadMessages?.[2].id).toBe("msg-3");
+    expect(threadMessages?.[2].id).toBe("msg-1");
   });
 
-  it("should handle messages with received_at only", () => {
+  it("should handle messages with received_at only (newest first)", () => {
     const messages = [
       createMockMessage({
         id: "msg-2",
@@ -665,8 +666,9 @@ describe("groupMessagesByThread", () => {
     const threads = groupMessagesByThread(messages);
     const threadMessages = threads.get("thread-A");
 
-    expect(threadMessages?.[0].id).toBe("msg-1");
-    expect(threadMessages?.[1].id).toBe("msg-2");
+    // TASK-1794: Newest messages first
+    expect(threadMessages?.[0].id).toBe("msg-2");
+    expect(threadMessages?.[1].id).toBe("msg-1");
   });
 
   it("should return empty map for empty input", () => {

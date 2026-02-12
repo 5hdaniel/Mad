@@ -7,10 +7,13 @@ import { ipcMain, BrowserWindow } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import logService from "../services/logService";
 import databaseService from "../services/databaseService";
+import supabaseService from "../services/supabaseService";
 import macOSMessagesImportService from "../services/macOSMessagesImportService";
+import * as externalContactDb from "../services/db/externalContactDbService";
 import type {
   MacOSImportResult,
   ImportProgressCallback,
+  MessageImportFilters,
 } from "../services/macOSMessagesImportService";
 
 /**
@@ -27,6 +30,9 @@ interface MessageAttachmentInfo {
 
 // Track registration to prevent duplicate handlers
 let handlersRegistered = false;
+
+// TASK-1710: Track import start time for elapsed time calculation
+let importStartTime: number | null = null;
 
 /**
  * Register message import IPC handlers
@@ -86,16 +92,48 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
         }
       }
 
+      // TASK-1952: Load message import filter preferences
+      // Defaults: 6 months lookback, 250K max messages (matches UI defaults)
+      const DEFAULT_LOOKBACK_MONTHS = 6;
+      const DEFAULT_MAX_MESSAGES = 250000;
+      let importFilters: MessageImportFilters = {
+        lookbackMonths: DEFAULT_LOOKBACK_MONTHS,
+        maxMessages: DEFAULT_MAX_MESSAGES,
+      };
+      try {
+        const preferences = await supabaseService.getPreferences(validUserId);
+        const messageImportPrefs = preferences?.messageImport;
+        if (messageImportPrefs?.filters) {
+          importFilters = {
+            lookbackMonths: messageImportPrefs.filters.lookbackMonths ?? DEFAULT_LOOKBACK_MONTHS,
+            maxMessages: messageImportPrefs.filters.maxMessages ?? DEFAULT_MAX_MESSAGES,
+          };
+        }
+      } catch {
+        // Use defaults if preferences unavailable
+        logService.warn(
+          "Failed to load import filter preferences, using defaults",
+          "MessageImportHandlers"
+        );
+      }
+
       logService.info(
         `Starting macOS Messages import for user`,
         "MessageImportHandlers",
-        { userId: validUserId, forceReimport }
+        { userId: validUserId, forceReimport, filters: importFilters }
       );
 
-      // Create progress callback that sends updates to renderer
+      // TASK-1710: Track import start time for elapsed time calculation
+      importStartTime = Date.now();
+
+      // Create progress callback that sends updates to renderer with elapsed time
       const onProgress: ImportProgressCallback = (progress) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send("messages:import-progress", progress);
+          const elapsedMs = importStartTime ? Date.now() - importStartTime : 0;
+          mainWindow.webContents.send("messages:import-progress", {
+            ...progress,
+            elapsedMs,
+          });
         }
       };
 
@@ -103,7 +141,8 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
         const result = await macOSMessagesImportService.importMessages(
           validUserId,
           onProgress,
-          forceReimport
+          forceReimport,
+          importFilters
         );
 
         if (result.success) {
@@ -116,6 +155,52 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
               duration: result.duration,
             }
           );
+
+          // Update contact communication dates from imported messages
+          // This enables sorting contacts by recent communication
+          try {
+            const backfillCount = await databaseService.backfillContactCommunicationDates(validUserId);
+            logService.info(
+              `Contact communication dates updated`,
+              "MessageImportHandlers",
+              { updatedContacts: backfillCount }
+            );
+          } catch (backfillError) {
+            logService.warn(
+              `Failed to update contact communication dates: ${backfillError}`,
+              "MessageImportHandlers"
+            );
+          }
+
+          // Update phone_last_message lookup table for fast external contact sorting (BACKLOG-567)
+          try {
+            const phoneCount = await databaseService.backfillPhoneLastMessageTable(validUserId);
+            logService.info(
+              `Phone last message lookup table updated`,
+              "MessageImportHandlers",
+              { phonesUpdated: phoneCount }
+            );
+          } catch (phoneBackfillError) {
+            logService.warn(
+              `Failed to update phone last message table: ${phoneBackfillError}`,
+              "MessageImportHandlers"
+            );
+          }
+
+          // TASK-1773: Update external_contacts last_message_at from phone_last_message lookup
+          try {
+            const externalUpdatedCount = externalContactDb.updateLastMessageAtFromLookupTable(validUserId);
+            logService.info(
+              `External contacts last_message_at updated`,
+              "MessageImportHandlers",
+              { updatedContacts: externalUpdatedCount }
+            );
+          } catch (externalUpdateError) {
+            logService.warn(
+              `Failed to update external contacts dates: ${externalUpdateError}`,
+              "MessageImportHandlers"
+            );
+          }
         } else {
           logService.error(
             `macOS Messages import failed: ${result.error}`,
@@ -148,20 +233,26 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
 
   /**
    * Get count of messages available for import from macOS Messages
+   * TASK-1952: Supports optional filters parameter for filtered count
    * IPC: messages:get-import-count
    *
-   * @returns Count of available messages
+   * @param filters - Optional import filters (lookbackMonths, maxMessages)
+   * @returns Count of available messages (total and optionally filtered)
    */
   ipcMain.handle(
     "messages:get-import-count",
-    async (): Promise<{ success: boolean; count?: number; error?: string }> => {
+    async (
+      _event: IpcMainInvokeEvent,
+      filters?: MessageImportFilters
+    ): Promise<{ success: boolean; count?: number; filteredCount?: number; error?: string }> => {
       logService.info(
         `Getting macOS Messages count`,
-        "MessageImportHandlers"
+        "MessageImportHandlers",
+        { filters }
       );
 
       try {
-        return await macOSMessagesImportService.getAvailableMessageCount();
+        return await macOSMessagesImportService.getAvailableMessageCount(filters);
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : "Unknown error";
@@ -279,6 +370,83 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
     logService.info("Resetting import lock via IPC", "MessageImportHandlers");
     macOSMessagesImportService.resetImportLock();
   });
+
+  /**
+   * Cancel the current import operation (TASK-1710)
+   * IPC: messages:import-cancel
+   * Uses ipcMain.on (not handle) since this is a one-way event
+   */
+  ipcMain.on("messages:import-cancel", () => {
+    logService.info("Import cancel requested via IPC", "MessageImportHandlers");
+    macOSMessagesImportService.requestCancellation();
+  });
+
+  /**
+   * Get macOS messages import status (count and last import time)
+   * IPC: messages:getImportStatus
+   */
+  ipcMain.handle(
+    "messages:getImportStatus",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string
+    ): Promise<{
+      success: boolean;
+      messageCount?: number;
+      lastImportAt?: string | null;
+      error?: string;
+    }> => {
+      try {
+        // BACKLOG-615: Check if database is initialized before querying
+        if (!databaseService.isInitialized()) {
+          logService.info("[MessageImport] DB not initialized, returning empty import status (deferred DB init)", "MessageImportHandlers");
+          return {
+            success: true,
+            messageCount: 0,
+            lastImportAt: null,
+          };
+        }
+
+        // BACKLOG-615: Verify user exists in database before querying
+        const userExists = await databaseService.getUserById(userId);
+        if (!userExists) {
+          logService.info("[MessageImport] No local user yet, returning empty import status (deferred DB init)", "MessageImportHandlers");
+          return {
+            success: true,
+            messageCount: 0,
+            lastImportAt: null,
+          };
+        }
+
+        const db = databaseService.getRawDatabase();
+
+        // Get count and most recent created_at for iMessage/SMS
+        const result = db.prepare(`
+          SELECT
+            COUNT(*) as count,
+            MAX(created_at) as last_import_at
+          FROM messages
+          WHERE user_id = ?
+            AND channel IN ('sms', 'imessage')
+        `).get(userId) as { count: number; last_import_at: string | null } | undefined;
+
+        return {
+          success: true,
+          messageCount: result?.count ?? 0,
+          lastImportAt: result?.last_import_at ?? null,
+        };
+      } catch (error) {
+        logService.error(
+          `Failed to get import status: ${error instanceof Error ? error.message : "Unknown"}`,
+          "MessageImportHandlers"
+        );
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Failed to get import status",
+        };
+      }
+    }
+  );
 
   logService.info(
     "Message import handlers registered",

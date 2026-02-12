@@ -1,0 +1,98 @@
+/**
+ * useSyncOrchestrator Hook
+ *
+ * React hook for consuming SyncOrchestrator state.
+ * Provides reactive updates when sync state changes.
+ *
+ * Usage:
+ * ```tsx
+ * const { state, isRunning, requestSync } = useSyncOrchestrator();
+ *
+ * // Request a sync
+ * requestSync(['contacts', 'emails', 'messages'], userId);
+ *
+ * // Check state
+ * if (isRunning) {
+ *   // Show progress UI
+ * }
+ * ```
+ *
+ * @module hooks/useSyncOrchestrator
+ */
+
+import { useState, useEffect, useCallback } from 'react';
+import {
+  syncOrchestrator,
+  SyncOrchestratorState,
+  SyncType,
+} from '../services/SyncOrchestratorService';
+
+export interface UseSyncOrchestratorReturn {
+  // State
+  state: SyncOrchestratorState;
+  isRunning: boolean;
+  queue: SyncOrchestratorState['queue'];
+  currentSync: SyncType | null;
+  overallProgress: number;
+  pendingRequest: SyncOrchestratorState['pendingRequest'];
+
+  // Actions
+  requestSync: (types: SyncType[], userId: string) => { started: boolean; needsConfirmation: boolean };
+  forceSync: (types: SyncType[], userId: string) => void;
+  acceptPending: () => void;
+  rejectPending: () => void;
+  cancel: () => void;
+}
+
+/**
+ * Hook for consuming SyncOrchestrator state in React components.
+ * Automatically subscribes to state changes and provides convenience methods.
+ */
+export function useSyncOrchestrator(): UseSyncOrchestratorReturn {
+  const [state, setState] = useState<SyncOrchestratorState>(syncOrchestrator.getState());
+
+  // Subscribe to state changes
+  useEffect(() => {
+    return syncOrchestrator.subscribe(setState);
+  }, []);
+
+  // Convenience methods
+  const requestSync = useCallback((types: SyncType[], userId: string) => {
+    return syncOrchestrator.requestSync({ types, userId });
+  }, []);
+
+  const forceSync = useCallback((types: SyncType[], userId: string) => {
+    syncOrchestrator.forceSync({ types, userId });
+  }, []);
+
+  const acceptPending = useCallback(() => {
+    syncOrchestrator.acceptPendingRequest();
+  }, []);
+
+  const rejectPending = useCallback(() => {
+    syncOrchestrator.rejectPendingRequest();
+  }, []);
+
+  const cancel = useCallback(() => {
+    syncOrchestrator.cancel();
+  }, []);
+
+  return {
+    // State
+    state,
+    isRunning: state.isRunning,
+    queue: state.queue,
+    currentSync: state.currentSync,
+    overallProgress: state.overallProgress,
+    pendingRequest: state.pendingRequest,
+
+    // Actions
+    requestSync,
+    forceSync,
+    acceptPending,
+    rejectPending,
+    cancel,
+  };
+}
+
+export default useSyncOrchestrator;

@@ -13,9 +13,9 @@ import Contacts from "../components/Contacts";
 import WelcomeTerms from "../components/WelcomeTerms";
 import AuditTransactionModal from "../components/AuditTransactionModal";
 import MoveAppPrompt from "../components/MoveAppPrompt";
-import IPhoneSyncFlow from "../components/iphone/IPhoneSyncFlow";
+import { IPhoneSyncModal } from "./modals/IPhoneSyncModal";
 import type { AppStateMachine } from "./state/types";
-import { useEmailOnboardingApi } from "./state/flows";
+import { useEmailSettingsCallbacks } from "./hooks/useEmailSettingsCallbacks";
 
 interface AppModalsProps {
   app: AppStateMachine;
@@ -23,25 +23,15 @@ interface AppModalsProps {
 
 export function AppModals({ app }: AppModalsProps) {
   const {
-    // Modal state
     modalState,
-
-    // User state
     currentUser,
     authProvider,
     subscription,
-
-    // Database state (for modal guards)
     isDatabaseInitialized,
-
-    // Pending data for terms modal
     pendingOAuthData,
     needsTermsAcceptance,
-
-    // Move app state
     appPath,
-
-    // Semantic modal transitions
+    // Modal transitions
     closeProfile,
     closeSettings,
     closeTransactions,
@@ -49,19 +39,12 @@ export function AppModals({ app }: AppModalsProps) {
     closeAuditTransaction,
     openSettings,
     openTransactions,
-
-    // Auth handlers
+    // Handlers
     handleLogout,
-
-    // Terms handlers
     handleAcceptTerms,
     handleDeclineTerms,
-
-    // Move app handlers
     handleDismissMovePrompt,
     handleNotNowMovePrompt,
-
-    // iPhone sync
     closeIPhoneSync,
   } = app;
 
@@ -71,16 +54,10 @@ export function AppModals({ app }: AppModalsProps) {
     openTransactions();
   }, [closeAuditTransaction, openTransactions]);
 
-  // Get email onboarding API to dispatch EMAIL_CONNECTED when connecting from Settings
-  const { setHasEmailConnected } = useEmailOnboardingApi({ userId: currentUser?.id });
+  // Email connect/disconnect callbacks for Settings modal
+  const { handleEmailConnectedFromSettings, handleEmailDisconnectedFromSettings } =
+    useEmailSettingsCallbacks({ userId: currentUser?.id });
 
-  // Callback for when email is connected from Settings
-  const handleEmailConnectedFromSettings = useCallback(
-    (email: string, provider: "google" | "microsoft") => {
-      setHasEmailConnected(true, email, provider);
-    },
-    [setHasEmailConnected]
-  );
   return (
     <>
       {/* Move App Prompt */}
@@ -111,6 +88,7 @@ export function AppModals({ app }: AppModalsProps) {
           userId={currentUser.id}
           onClose={closeSettings}
           onEmailConnected={handleEmailConnectedFromSettings}
+          onEmailDisconnected={handleEmailDisconnectedFromSettings}
         />
       )}
 
@@ -162,24 +140,7 @@ export function AppModals({ app }: AppModalsProps) {
       )}
 
       {/* iPhone Sync Flow Modal */}
-      {modalState.showIPhoneSync && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
-            {/* Close button */}
-            <div className="flex justify-end p-4 pb-0">
-              <button
-                onClick={closeIPhoneSync}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <IPhoneSyncFlow onClose={closeIPhoneSync} />
-          </div>
-        </div>
-      )}
+      {modalState.showIPhoneSync && <IPhoneSyncModal onClose={closeIPhoneSync} />}
     </>
   );
 }

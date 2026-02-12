@@ -15,7 +15,8 @@ import type {
   OnboardingStep,
   OnboardingStepContentProps,
 } from "../types";
-import { markOnboardingImportComplete } from "../../../hooks/useAutoRefresh";
+import { setMessagesImportTriggered } from "../../../utils/syncFlags";
+import { useSyncOrchestrator } from "../../../hooks/useSyncOrchestrator";
 
 /**
  * Shield icon with lock - represents security/permissions
@@ -182,48 +183,14 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
   const [isChecking, setIsChecking] = useState(false);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
 
-  // Messages import state
-  const [isImportingMessages, setIsImportingMessages] = useState(false);
-  const [messagesProgress, setMessagesProgress] = useState<{
-    current: number;
-    total: number;
-    percent: number;
-  } | null>(null);
-  const [messagesResult, setMessagesResult] = useState<{
-    success: boolean;
-    messagesImported: number;
-    error?: string;
-  } | null>(null);
+  // Track if we're waiting for DB to be ready before importing
+  const [waitingForDb, setWaitingForDb] = useState(false);
 
-  // Contacts import state
-  const [isImportingContacts, setIsImportingContacts] = useState(false);
-  const [contactsProgress, setContactsProgress] = useState<{
-    current: number;
-    total: number;
-    percent: number;
-  } | null>(null);
-  const [contactsResult, setContactsResult] = useState<{
-    success: boolean;
-    contactsImported: number;
-    error?: string;
-  } | null>(null);
-
+  // Track if import has started to prevent duplicate triggers
   const hasStartedImportRef = useRef(false);
 
-  // Subscribe to import progress updates for both messages and contacts
-  useEffect(() => {
-    const cleanupMessages = window.api.messages.onImportProgress((progress) => {
-      setMessagesProgress(progress);
-    });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const cleanupContacts = (window.api.contacts as any).onImportProgress?.((progress: { current: number; total: number; percent: number }) => {
-      setContactsProgress(progress);
-    });
-    return () => {
-      cleanupMessages();
-      cleanupContacts?.();
-    };
-  }, []);
+  // Get orchestrator actions - progress tracked centrally by SyncOrchestratorService
+  const { requestSync, isRunning } = useSyncOrchestrator();
 
   // Trigger import after permissions are granted
   const triggerImport = useCallback(async () => {
@@ -233,6 +200,14 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
 
     // Get user ID from context - if not available, skip import and continue
     const userId = context.userId;
+    const isDatabaseInitialized = context.isDatabaseInitialized;
+
+    if (!isDatabaseInitialized) {
+      // Database not ready yet - wait for it instead of skipping
+      setWaitingForDb(true);
+      return;
+    }
+
     if (!userId) {
       // No user yet, just continue to next step
       onAction({ type: "PERMISSION_GRANTED" });
@@ -247,57 +222,15 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
     }
 
     hasStartedImportRef.current = true;
+    setWaitingForDb(false);
 
     // Mark that we're doing the onboarding import - prevents duplicate imports on dashboard
-    markOnboardingImportComplete();
+    // This sets the module-level flag in syncFlags that useAutoRefresh checks
+    setMessagesImportTriggered();
 
-    // Start both imports in parallel
-    setIsImportingMessages(true);
-    setIsImportingContacts(true);
-    setMessagesProgress(null);
-    setContactsProgress(null);
-    setMessagesResult(null);
-    setContactsResult(null);
-
-    // Import messages
-    const messagesPromise = window.api.messages.importMacOSMessages(userId)
-      .then((result) => {
-        setMessagesResult({
-          success: result.success,
-          messagesImported: result.messagesImported,
-          error: result.error,
-        });
-      })
-      .catch((error) => {
-        console.error("Error importing messages:", error);
-        setMessagesResult({ success: false, messagesImported: 0, error: String(error) });
-      })
-      .finally(() => setIsImportingMessages(false));
-
-    // Import contacts (get available, then import all)
-    const contactsPromise = (async () => {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const availableResult = await (window.api.contacts as any).getAvailable(userId);
-        if (!availableResult.success || !availableResult.contacts?.length) {
-          setContactsResult({ success: availableResult.success !== false, contactsImported: 0, error: availableResult.error });
-          return;
-        }
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const importResult = await (window.api.contacts as any).import(userId, availableResult.contacts);
-        setContactsResult({
-          success: importResult.success,
-          contactsImported: importResult.contacts?.length || 0,
-          error: importResult.error,
-        });
-      } catch (error) {
-        console.error("[PermissionsStep] Error importing contacts:", error);
-        setContactsResult({ success: false, contactsImported: 0, error: String(error) });
-      } finally {
-        setIsImportingContacts(false);
-      }
-    })();
+    // Request sync from orchestrator - runs contacts then messages sequentially
+    // Progress is tracked centrally by SyncOrchestratorService
+    requestSync(['contacts', 'messages'], userId);
 
     // Don't wait for imports - let them continue in background
     // User will see progress on the dashboard via SyncStatusIndicator
@@ -306,19 +239,23 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
     setTimeout(() => {
       onAction({ type: "PERMISSION_GRANTED" });
     }, 500);
-  }, [onAction]);
+  }, [context.isDatabaseInitialized, context.userId, onAction, requestSync]);
 
   // Auto-check permissions on mount and periodically after user starts the flow
   const checkPermissions = useCallback(async () => {
+    console.log('[PermissionsStep] checkPermissions called');
     try {
+      console.log('[PermissionsStep] Calling window.api.system.checkPermissions...');
       const result = await window.api.system.checkPermissions();
+      console.log('[PermissionsStep] checkPermissions result:', result);
       if (result.hasPermission) {
         // Permissions granted - trigger import first, then continue
+        console.log('[PermissionsStep] Permissions granted, calling triggerImport');
         triggerImport();
       }
       return result.hasPermission;
     } catch (error) {
-      console.error("Error checking permissions:", error);
+      console.error("[PermissionsStep] Error checking permissions:", error);
       return false;
     }
   }, [triggerImport]);
@@ -340,6 +277,13 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
     }
   }, [completedSteps, checkPermissions]);
 
+  // When waiting for DB and it becomes ready, trigger the import
+  useEffect(() => {
+    if (waitingForDb && context.isDatabaseInitialized && context.userId) {
+      triggerImport();
+    }
+  }, [waitingForDb, context.isDatabaseInitialized, context.userId, triggerImport]);
+
   const handleOpenSystemSettings = async () => {
     try {
       await window.api.system.openSystemSettings();
@@ -350,8 +294,15 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
   };
 
   const handleManualCheck = async () => {
+    console.log('[PermissionsStep] Check Permissions button clicked');
     setIsChecking(true);
-    await checkPermissions();
+    try {
+      console.log('[PermissionsStep] Calling checkPermissions...');
+      await checkPermissions();
+      console.log('[PermissionsStep] checkPermissions completed');
+    } catch (error) {
+      console.error('[PermissionsStep] checkPermissions error:', error);
+    }
     setIsChecking(false);
   };
 
@@ -455,9 +406,8 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
 
   // Check if we're importing - show simple "Setting up" view
   // Progress will be shown on the dashboard via SyncStatusIndicator
-  const isImporting = isImportingMessages || isImportingContacts;
-
-  if (isImporting) {
+  // Use orchestrator's isRunning state (triggered by requestSync call above)
+  if (isRunning) {
     return (
       <div className="max-w-2xl mx-auto">
         <div className="text-center mb-5">
@@ -632,8 +582,8 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
         tip="If you can't find Real Estate Archive in the Applications folder, you may need to copy it from the DMG file first."
       />
 
-      {/* Final: All steps complete */}
-      {completedSteps.has(5) && !isImportingMessages && !isImportingContacts && !messagesResult && !contactsResult && (
+      {/* Final: All steps complete - show "Almost Done" while waiting for permission check */}
+      {completedSteps.has(5) && !isRunning && (
         <div className="bg-green-50 border-2 border-green-300 rounded-lg p-4 text-center">
           <div className="inline-flex items-center justify-center w-12 h-12 bg-green-500 rounded-full mb-3">
             <CheckIcon className="w-6 h-6 text-white" />
@@ -681,8 +631,9 @@ const permissionsStep: OnboardingStep = {
     canProceed: () => false,
     // Step is never "complete" via button - it auto-proceeds via PERMISSION_GRANTED action
     isStepComplete: () => false,
-    // Only show if permissions not yet granted (returning users with FDA skip this)
-    shouldShow: (context) => !context.permissionsGranted,
+    // Only show if permissions not yet granted (or unknown during loading)
+    // Using !== true means: show if false OR undefined (unknown state)
+    shouldShow: (context) => context.permissionsGranted !== true,
   },
   Content: PermissionsStepContent,
 };

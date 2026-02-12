@@ -174,9 +174,9 @@ function calculateLicenseStatus(
   const atTransactionLimit =
     license.transaction_count >= license.transaction_limit;
 
-  // Determine device limit based on license type
-  const deviceLimit =
-    licenseType === "trial" ? 1 : licenseType === "individual" ? 2 : 10;
+  // Read device limit from license record (with fallback for legacy data)
+  const deviceLimit = license.max_devices ??
+    (licenseType === "trial" ? 1 : licenseType === "individual" ? 2 : 10);
 
   // Determine validity and block reason
   let isValid = true;

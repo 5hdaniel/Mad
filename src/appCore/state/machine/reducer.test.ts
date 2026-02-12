@@ -1133,6 +1133,78 @@ describe("appStateReducer - Ready State Transitions", () => {
       expect(result).toBe(state);
     });
   });
+
+  // TASK-1730: Tests for EMAIL_DISCONNECTED action
+  describe("EMAIL_DISCONNECTED", () => {
+    it("updates userData.hasEmailConnected to false when in ready state", () => {
+      // User with email connected (banner hidden)
+      const userDataWithEmail = { ...mockCompleteUserData, hasEmailConnected: true };
+      const state: ReadyState = {
+        status: "ready",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        userData: userDataWithEmail,
+      };
+      const action: AppAction = { type: "EMAIL_DISCONNECTED", provider: "google" };
+
+      const result = appStateReducer(state, action);
+
+      // Should update hasEmailConnected so banner reappears
+      expect(result.status).toBe("ready");
+      if (result.status === "ready") {
+        expect(result.userData.hasEmailConnected).toBe(false);
+        // Other userData should be preserved
+        expect(result.userData.phoneType).toBe(userDataWithEmail.phoneType);
+        expect(result.userData.hasPermissions).toBe(userDataWithEmail.hasPermissions);
+      }
+    });
+
+    it("preserves other state properties when updating hasEmailConnected to false", () => {
+      const userDataWithEmail = { ...mockCompleteUserData, hasEmailConnected: true };
+      const state: ReadyState = {
+        status: "ready",
+        user: mockUser,
+        platform: mockWindowsPlatform,
+        userData: userDataWithEmail,
+      };
+      const action: AppAction = { type: "EMAIL_DISCONNECTED", provider: "microsoft" };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("ready");
+      if (result.status === "ready") {
+        expect(result.user).toEqual(mockUser);
+        expect(result.platform).toEqual(mockWindowsPlatform);
+        expect(result.userData.hasEmailConnected).toBe(false);
+      }
+    });
+
+    it("returns current state for onboarding state (disconnect unexpected)", () => {
+      const state: OnboardingState = {
+        status: "onboarding",
+        step: "email-connect",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        completedSteps: ["phone-type", "secure-storage"],
+        hasEmailConnected: true,
+      };
+      const action: AppAction = { type: "EMAIL_DISCONNECTED", provider: "google" };
+
+      const result = appStateReducer(state, action);
+
+      // Disconnect during onboarding should be ignored
+      expect(result).toBe(state);
+    });
+
+    it("returns current state for unauthenticated state", () => {
+      const state: AppState = { status: "unauthenticated" };
+      const action: AppAction = { type: "EMAIL_DISCONNECTED", provider: "google" };
+
+      const result = appStateReducer(state, action);
+
+      expect(result).toBe(state);
+    });
+  });
 });
 
 // ============================================

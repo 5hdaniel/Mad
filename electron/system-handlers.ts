@@ -3,7 +3,7 @@
 // Permission checks, connection status, system health
 // ============================================
 
-import { ipcMain, shell, app, BrowserWindow } from "electron";
+import { ipcMain, shell, app, BrowserWindow, Notification } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 
 // Import services (TypeScript with default exports)
@@ -17,6 +17,8 @@ import databaseService from "./services/databaseService";
 import supabaseService from "./services/supabaseService";
 import { initializeDatabase } from "./auth-handlers";
 import { getAndClearPendingDeepLinkUser } from "./main";
+import { initializePool } from "./workers/contactWorkerPool";
+import { getDbPath, getEncryptionKey } from "./services/db/core/dbConnection";
 import os from "os";
 
 // Import validation utilities
@@ -121,10 +123,121 @@ If you're seeing this error:
   }
 }
 
+// Import User type for cloud user data
+import type { User, OAuthProvider } from "./types/models";
+
 // Guard to prevent multiple concurrent initializations
 let isInitializing = false;
 let initializationComplete = false;
 let handlersRegistered = false;
+
+/**
+ * Creates a local user from cloud user data (Supabase users table).
+ * Uses the existing User type which has all required fields.
+ *
+ * This helper consolidates user creation logic to ensure consistent defaults
+ * across all code paths (ensureUserInLocalDb, initializeSecureStorage fallback).
+ *
+ * IMPORTANT: Normalizes "azure" to "microsoft" because:
+ * - Supabase Auth uses "azure" for Microsoft OAuth
+ * - Local SQLite CHECK constraint only allows 'google' or 'microsoft'
+ */
+async function createLocalUserFromCloud(cloudUser: User): Promise<void> {
+  // Normalize provider: "azure" → "microsoft" for local DB compatibility
+  // Local SQLite has CHECK (oauth_provider IN ('google', 'microsoft'))
+  let provider: OAuthProvider = cloudUser.oauth_provider || "microsoft";
+  if (provider === "azure") {
+    provider = "microsoft";
+    logService.debug(
+      "createLocalUserFromCloud: Normalized 'azure' to 'microsoft'",
+      "SystemHandlers",
+      { userId: cloudUser.id.substring(0, 8) + "..." }
+    );
+  }
+
+  if (!cloudUser.oauth_provider) {
+    logService.warn(
+      "createLocalUserFromCloud: oauth_provider missing from cloud user, using default",
+      "SystemHandlers",
+      { defaultProvider: provider, userId: cloudUser.id.substring(0, 8) + "..." }
+    );
+  }
+
+  await databaseService.createUser({
+    id: cloudUser.id,
+    email: cloudUser.email,
+    display_name: cloudUser.display_name || cloudUser.email.split("@")[0],
+    avatar_url: cloudUser.avatar_url,
+    oauth_provider: provider,
+    oauth_id: cloudUser.id,
+    subscription_tier: cloudUser.subscription_tier || "free",
+    subscription_status: cloudUser.subscription_status || "trial",
+    trial_ends_at: cloudUser.trial_ends_at,
+    is_active: true,
+  });
+}
+
+/**
+ * Verifies user exists in local DB, creates if missing.
+ * Fetches user data from Supabase cloud if needed.
+ */
+async function ensureUserInLocalDb(): Promise<{ success: boolean; userId?: string; error?: string }> {
+  const authSession = await supabaseService.getAuthSession();
+
+  if (!authSession?.userId) {
+    logService.warn("ensureUserInLocalDb: No auth session", "SystemHandlers");
+    return { success: false, error: "No auth session found" };
+  }
+
+  const userId = authSession.userId;
+  let localUser = await databaseService.getUserById(userId);
+
+  if (localUser) {
+    logService.debug("ensureUserInLocalDb: User already exists", "SystemHandlers", { userId: userId.substring(0, 8) + "..." });
+    return { success: true, userId };
+  }
+
+  // User doesn't exist - fetch from Supabase cloud and create locally
+  logService.info("ensureUserInLocalDb: User not in local DB, fetching from Supabase", "SystemHandlers", {
+    userId: userId.substring(0, 8) + "...",
+  });
+
+  const cloudUser = await supabaseService.getUserById(userId);
+  logService.debug("ensureUserInLocalDb: Cloud user result", "SystemHandlers", {
+    found: !!cloudUser,
+    provider: cloudUser?.oauth_provider,
+  });
+
+  if (!cloudUser) {
+    logService.error("ensureUserInLocalDb: User not found in Supabase cloud", "SystemHandlers");
+    return { success: false, error: "User not found in cloud database" };
+  }
+
+  // Create user in local DB using consolidated helper
+  try {
+    logService.debug("ensureUserInLocalDb: Creating local user", "SystemHandlers", {
+      provider: cloudUser.oauth_provider,
+    });
+    await createLocalUserFromCloud(cloudUser);
+    logService.debug("ensureUserInLocalDb: User created successfully", "SystemHandlers");
+  } catch (createError) {
+    logService.error("ensureUserInLocalDb: Failed to create user", "SystemHandlers", {
+      error: createError instanceof Error ? createError.message : String(createError)
+    });
+    return { success: false, error: `Failed to create user: ${createError instanceof Error ? createError.message : String(createError)}` };
+  }
+
+  // Verify creation succeeded
+  localUser = await databaseService.getUserById(userId);
+
+  if (!localUser) {
+    logService.error("ensureUserInLocalDb: User creation verification failed", "SystemHandlers");
+    return { success: false, error: "User creation verification failed" };
+  }
+
+  logService.info("ensureUserInLocalDb: User created successfully", "SystemHandlers", { userId: userId.substring(0, 8) + "..." });
+  return { success: true, userId };
+}
 
 /**
  * Register all system and permission-related IPC handlers
@@ -188,6 +301,10 @@ export function registerSystemHandlers(): void {
   ipcMain.handle(
     "system:initialize-secure-storage",
     async (): Promise<SecureStorageResponse> => {
+      logService.debug("DB_INIT handler called", "SystemHandlers", {
+        initializationComplete,
+        isInitializing,
+      });
       // If already initialized, return immediately
       if (initializationComplete) {
         logService.debug(
@@ -229,6 +346,15 @@ export function registerSystemHandlers(): void {
           "Database initialized with encryption",
           "SystemHandlers",
         );
+
+        // TASK-1956: Initialize persistent worker pool for contact queries
+        const poolDbPath = getDbPath();
+        const poolEncKey = getEncryptionKey();
+        if (poolDbPath && poolEncKey) {
+          initializePool(poolDbPath, poolEncKey).catch((err) => {
+            logService.warn("Failed to initialize contact worker pool: " + (err instanceof Error ? err.message : String(err)), "SystemHandlers");
+          });
+        }
 
         // Sessions persist across app restarts for better UX
         // Security is maintained via 24hr expiry on session tokens
@@ -294,6 +420,71 @@ export function registerSystemHandlers(): void {
           }
         }
 
+        // ALWAYS verify user exists in local DB before returning success
+        // This catches cases where pendingDeepLinkUser was null (non-deep-link auth flows)
+        logService.debug("Running fallback user verification/creation", "SystemHandlers");
+        try {
+          const authSession = await supabaseService.getAuthSession();
+          if (authSession?.userId) {
+            const userId = authSession.userId;
+
+            // Check if user exists in local DB
+            let localUser = await databaseService.getUserById(userId);
+
+            // If not, create them by fetching from Supabase cloud
+            if (!localUser) {
+              logService.info(
+                "User not in local DB, fetching from Supabase",
+                "SystemHandlers",
+                { userId: userId.substring(0, 8) + "..." },
+              );
+
+              // Get user data from Supabase cloud (users table)
+              const cloudUser = await supabaseService.getUserById(userId);
+
+              if (cloudUser) {
+                // Use consolidated helper for consistent defaults
+                await createLocalUserFromCloud(cloudUser);
+
+                // VERIFY: Re-fetch to confirm user was created
+                localUser = await databaseService.getUserById(userId);
+                if (!localUser) {
+                  logService.error(
+                    "Failed to verify user creation",
+                    "SystemHandlers",
+                    { userId: userId.substring(0, 8) + "..." },
+                  );
+                  throw new Error("User creation verification failed");
+                }
+                logService.info(
+                  "User created and verified in local DB",
+                  "SystemHandlers",
+                  { userId: userId.substring(0, 8) + "..." },
+                );
+              } else {
+                logService.warn(
+                  "User not found in Supabase cloud, skipping local DB creation",
+                  "SystemHandlers",
+                  { userId: userId.substring(0, 8) + "..." },
+                );
+              }
+            } else {
+              logService.debug(
+                "User already exists in local DB",
+                "SystemHandlers",
+                { userId: userId.substring(0, 8) + "..." },
+              );
+            }
+          }
+        } catch (userError) {
+          // Log but don't fail DB init - user creation is best-effort
+          logService.error(
+            "Failed to ensure user in local DB",
+            "SystemHandlers",
+            { error: userError instanceof Error ? userError.message : String(userError) },
+          );
+        }
+
         initializationComplete = true;
         return {
           success: true,
@@ -319,6 +510,24 @@ export function registerSystemHandlers(): void {
       } finally {
         isInitializing = false;
       }
+    },
+  );
+
+  /**
+   * IPC Handler: Verify user exists in local database
+   * Called by AccountVerificationStep to ensure user is created before email connection.
+   */
+  ipcMain.handle(
+    "system:verify-user-in-local-db",
+    async (): Promise<{ success: boolean; userId?: string; error?: string }> => {
+      logService.info("verify-user-in-local-db handler called", "SystemHandlers");
+
+      if (!initializationComplete) {
+        logService.warn("verify-user-in-local-db: DB not initialized", "SystemHandlers");
+        return { success: false, error: "Database not initialized" };
+      }
+
+      return ensureUserInLocalDb();
     },
   );
 
@@ -381,6 +590,16 @@ export function registerSystemHandlers(): void {
         await initializeDatabase();
         initializationComplete = true;
         logService.debug("Database initialized successfully", "SystemHandlers");
+
+        // TASK-1956: Initialize persistent worker pool for contact queries
+        const poolDbPath2 = getDbPath();
+        const poolEncKey2 = getEncryptionKey();
+        if (poolDbPath2 && poolEncKey2) {
+          initializePool(poolDbPath2, poolEncKey2).catch((err) => {
+            logService.warn("Failed to initialize contact worker pool: " + (err instanceof Error ? err.message : String(err)), "SystemHandlers");
+          });
+        }
+
         return { success: true };
       } catch (error) {
         const errorMessage =
@@ -1347,6 +1566,85 @@ export function registerSystemHandlers(): void {
   );
 
   /**
+   * Sync user's phone type from Supabase cloud to local database
+   * Used by DataSyncStep to ensure local DB has phone_type before FDA step
+   * @param userId - User ID to sync phone type for
+   */
+  ipcMain.handle(
+    "user:sync-phone-type-from-cloud",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const validatedUserId = validateUserId(userId);
+        if (!validatedUserId) {
+          return { success: false, error: "Invalid user ID" };
+        }
+
+        // 1. Get phone_type from Supabase
+        const preferences = await supabaseService.getPreferences(validatedUserId);
+        const cloudPhoneType = preferences?.phone_type as "iphone" | "android" | undefined;
+
+        if (!cloudPhoneType) {
+          logService.info(
+            "[user:sync-phone-type] No phone type in cloud, nothing to sync",
+            "SystemHandlers",
+            { userId: validatedUserId.substring(0, 8) + "..." },
+          );
+          return { success: true };
+        }
+
+        // 2. Check if local DB already has it
+        const user = await databaseService.getUserById(validatedUserId);
+        if (user?.mobile_phone_type === cloudPhoneType) {
+          logService.info(
+            "[user:sync-phone-type] Local DB already in sync",
+            "SystemHandlers",
+            { userId: validatedUserId.substring(0, 8) + "...", phoneType: cloudPhoneType },
+          );
+          return { success: true };
+        }
+
+        // 3. Update local DB
+        if (user) {
+          await databaseService.updateUser(validatedUserId, {
+            mobile_phone_type: cloudPhoneType,
+          });
+          logService.info(
+            `[user:sync-phone-type] Synced phone type to local DB: ${cloudPhoneType}`,
+            "SystemHandlers",
+            { userId: validatedUserId.substring(0, 8) + "..." },
+          );
+        } else {
+          logService.warn(
+            "[user:sync-phone-type] User not found in local DB, cannot sync",
+            "SystemHandlers",
+            { userId: validatedUserId.substring(0, 8) + "..." },
+          );
+        }
+
+        return { success: true };
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error(
+          "[user:sync-phone-type] Sync failed",
+          "SystemHandlers",
+          { error: errorMessage },
+        );
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${errorMessage}`,
+          };
+        }
+        return { success: false, error: errorMessage };
+      }
+    },
+  );
+
+  /**
    * Get diagnostic information for support requests
    */
   ipcMain.handle(
@@ -1605,6 +1903,111 @@ export function registerSystemHandlers(): void {
           error: errorMessage,
         });
         return { success: false, error: errorMessage };
+      }
+    },
+  );
+
+  // ============================================
+  // NOTIFICATION HANDLERS
+  // ============================================
+
+  /**
+   * Check if notifications are supported on this platform
+   */
+  ipcMain.handle(
+    "notification:is-supported",
+    async (): Promise<{ success: boolean; supported: boolean }> => {
+      return {
+        success: true,
+        supported: Notification.isSupported(),
+      };
+    },
+  );
+
+  /**
+   * Send an OS notification
+   * @param title - Notification title
+   * @param body - Notification body text
+   */
+  ipcMain.handle(
+    "notification:send",
+    async (
+      _event: IpcMainInvokeEvent,
+      title: string,
+      body: string,
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        if (!Notification.isSupported()) {
+          return {
+            success: false,
+            error: "Notifications are not supported on this platform",
+          };
+        }
+
+        const notification = new Notification({
+          title,
+          body,
+          silent: false,
+        });
+
+        notification.show();
+        logService.debug("Notification sent", "SystemHandlers", { title });
+
+        return { success: true };
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error("Failed to send notification", "SystemHandlers", {
+          error: errorMessage,
+        });
+        return { success: false, error: errorMessage };
+      }
+    },
+  );
+
+  /**
+   * Check if a user exists in the local database
+   * BACKLOG-611: Used to determine if secure-storage step should be shown
+   * even on machines with previous installs (different user)
+   * @param userId - User ID to check
+   * @returns Whether the user exists in the local DB
+   */
+  ipcMain.handle(
+    "system:check-user-in-local-db",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<{ success: boolean; exists: boolean; error?: string }> => {
+      try {
+        // If database is not initialized, user can't exist
+        if (!databaseService.isInitialized()) {
+          return { success: true, exists: false };
+        }
+
+        const validatedUserId = validateUserId(userId, false); // Don't throw if null
+        if (!validatedUserId) {
+          return { success: true, exists: false };
+        }
+
+        const user = await databaseService.getUserById(validatedUserId);
+        const exists = user !== null;
+
+        logService.debug(
+          `[system:check-user-in-local-db] User ${validatedUserId.substring(0, 8)}... exists: ${exists}`,
+          "SystemHandlers",
+        );
+
+        return { success: true, exists };
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error(
+          "[system:check-user-in-local-db] Failed to check user",
+          "SystemHandlers",
+          { error: errorMessage },
+        );
+        // On error, assume user doesn't exist to trigger onboarding
+        return { success: true, exists: false };
       }
     },
   );

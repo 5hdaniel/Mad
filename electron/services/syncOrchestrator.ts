@@ -70,6 +70,10 @@ export interface SyncResult {
   skipped?: boolean;
   /** Reason for skipping (TASK-908) */
   skipReason?: "unchanged" | "force-resync";
+  /** Path to backup for attachment extraction (SPRINT-068) */
+  backupPath?: string;
+  /** Whether backup was encrypted (cleanup needed after persistence) */
+  needsCleanup?: boolean;
 }
 
 /**
@@ -510,22 +514,21 @@ export class SyncOrchestrator extends EventEmitter {
         contacts,
       );
 
-      // Step 6: Cleanup
+      // Step 6: Close parsers (but don't cleanup backup yet - needed for attachments)
       this.setPhase("cleanup");
       this.emitProgress({
         phase: "cleanup",
         phaseProgress: 0,
         overallProgress: this.calculateOverallProgress("cleanup", 0),
-        message: "Cleaning up...",
+        message: "Finalizing...",
       });
 
       this.messagesParser.close();
       this.contactsParser.close();
 
-      // Cleanup decrypted files if we decrypted
-      if (backupResult.isEncrypted && backupPath !== backupResult.backupPath) {
-        await this.decryptionService.cleanup(backupPath);
-      }
+      // SPRINT-068: Don't cleanup decrypted files here - needed for attachment extraction
+      // Cleanup will be triggered by sync-handlers after persistence is complete
+      const needsCleanup = backupResult.isEncrypted && backupPath !== backupResult.backupPath;
 
       // Calculate all messages from conversations
       const allMessages = resolvedConversations.flatMap((c) => c.messages);
@@ -539,6 +542,8 @@ export class SyncOrchestrator extends EventEmitter {
         messages: allMessages.length,
         contacts: contacts.length,
         duration,
+        backupPath,
+        needsCleanup,
       });
 
       const result: SyncResult = {
@@ -548,6 +553,8 @@ export class SyncOrchestrator extends EventEmitter {
         conversations: resolvedConversations,
         error: null,
         duration,
+        backupPath,  // SPRINT-068: Pass for attachment extraction
+        needsCleanup, // SPRINT-068: Caller should cleanup after persistence
       };
 
       this.emit("complete", result);
@@ -596,6 +603,24 @@ export class SyncOrchestrator extends EventEmitter {
       isRunning: this.isRunning,
       phase: this.currentPhase,
     };
+  }
+
+  /**
+   * Cleanup decrypted backup files after persistence is complete (SPRINT-068)
+   * @param backupPath Path to the decrypted backup directory
+   */
+  async cleanupBackup(backupPath: string): Promise<void> {
+    if (!backupPath) return;
+
+    try {
+      log.info("[SyncOrchestrator] Cleaning up decrypted backup", { backupPath });
+      await this.decryptionService.cleanup(backupPath);
+      log.info("[SyncOrchestrator] Backup cleanup complete");
+    } catch (error) {
+      log.warn("[SyncOrchestrator] Backup cleanup failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   /**

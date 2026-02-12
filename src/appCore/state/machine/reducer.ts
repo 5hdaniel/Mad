@@ -113,15 +113,17 @@ export function getNextOnboardingStep(
  * Email onboarding is optional for returning users - they can skip it
  * and connect email later from the dashboard.
  */
-function isOnboardingComplete(userData: UserData, platform: PlatformInfo, isNewUser: boolean = false): boolean {
+function isOnboardingComplete(userData: UserData, platform: PlatformInfo, _isNewUser: boolean = false): boolean {
   // Must have phone type selected
   if (!userData.phoneType) {
     return false;
   }
 
-  // For NEW users, email onboarding is required during initial setup
-  // For RETURNING users, email is optional (can be done later)
-  if (isNewUser && !userData.hasCompletedEmailOnboarding) {
+  // Email onboarding is required for ALL users (new and returning)
+  // This ensures the email-connect step is shown if not completed
+  // BUG FIX: Previously only checked for new users, causing returning users
+  // to skip the email step entirely
+  if (!userData.hasCompletedEmailOnboarding) {
     return false;
   }
 
@@ -426,6 +428,11 @@ export function appStateReducer(
         // Preserve hasPermissions from loaded data so selector can access it
         // Fixes bug where users with FDA granted were stuck on permissions step
         hasPermissions: data.hasPermissions,
+        // Preserve hasEmailConnected so returning users with email already
+        // connected don't get shown the email-connect step unnecessarily.
+        // Without this, OnboardingState.hasEmailConnected defaults to undefined,
+        // causing selectHasEmailConnectedNullable to return false.
+        hasEmailConnected: data.hasEmailConnected,
         // Preserve deferredDbInit for first-time macOS installs (even for returning users)
         deferredDbInit,
       };
@@ -454,7 +461,8 @@ export function appStateReducer(
           : state.selectedPhoneType;
 
       // If completing permissions on macOS, mark all preceding steps as complete
-      // (you can't get to permissions without going through phone-type, secure-storage, email-connect)
+      // macOS flow order: phone-type → secure-storage → email-connect → permissions
+      // So preceding steps are phone-type, secure-storage, and email-connect
       if (action.step === "permissions") {
         const precedingSteps: OnboardingStep[] = ["phone-type", "email-connect"];
         if (state.platform.isMacOS) {
@@ -551,6 +559,25 @@ export function appStateReducer(
       }
 
       // Invalid state for email connection
+      return state;
+    }
+
+    // TASK-1730: Handle email disconnection to update hasEmailConnected state
+    case "EMAIL_DISCONNECTED": {
+      if (state.status === "ready") {
+        // User disconnected email from Settings
+        // Update userData.hasEmailConnected so setup banner reappears
+        return {
+          ...state,
+          userData: {
+            ...state.userData,
+            hasEmailConnected: false,
+          },
+        };
+      }
+
+      // In other states (onboarding, loading), disconnection is not expected
+      // but if it happens, ignore it
       return state;
     }
 

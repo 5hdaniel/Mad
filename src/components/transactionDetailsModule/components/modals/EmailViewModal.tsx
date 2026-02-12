@@ -1,10 +1,89 @@
 /**
  * EmailViewModal Component
  * Full email view modal for communications with HTML rendering support
+ * TASK-1776: Added email attachment display with collapsible section
+ * TASK-1778: Added attachment preview modal
  */
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import DOMPurify from "dompurify";
 import type { Communication } from "../../types";
+import { AttachmentPreviewModal } from "./AttachmentPreviewModal";
+
+/**
+ * Email attachment structure from IPC
+ */
+interface EmailAttachment {
+  id: string;
+  filename: string;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  storage_path: string | null;
+}
+
+/**
+ * Format file size in human-readable format
+ */
+function formatFileSize(bytes: number | null): string {
+  if (bytes === null || bytes === 0) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * Get icon for file type based on MIME type
+ */
+function getFileTypeIcon(mimeType: string | null): React.ReactElement {
+  const iconClass = "w-4 h-4 flex-shrink-0";
+
+  if (!mimeType) {
+    // Default file icon
+    return (
+      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+      </svg>
+    );
+  }
+
+  if (mimeType.startsWith("image/")) {
+    return (
+      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
+    );
+  }
+
+  if (mimeType === "application/pdf") {
+    return (
+      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+    );
+  }
+
+  if (mimeType.includes("spreadsheet") || mimeType.includes("excel") || mimeType === "text/csv") {
+    return (
+      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+      </svg>
+    );
+  }
+
+  if (mimeType.includes("document") || mimeType.includes("word")) {
+    return (
+      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+    );
+  }
+
+  // Default file icon
+  return (
+    <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+    </svg>
+  );
+}
 
 type ViewMode = "html" | "plain";
 
@@ -86,6 +165,54 @@ export function EmailViewModal({
 
   // Default to HTML view if available, otherwise plain
   const [viewMode, setViewMode] = useState<ViewMode>(hasHtml ? "html" : "plain");
+
+  // TASK-1776: Attachment state
+  const [attachments, setAttachments] = useState<EmailAttachment[]>([]);
+  const [loadingAttachments, setLoadingAttachments] = useState(false);
+  const [attachmentsExpanded, setAttachmentsExpanded] = useState(false);
+  // TASK-1778: Preview modal state
+  const [previewAttachment, setPreviewAttachment] = useState<EmailAttachment | null>(null);
+
+  // TASK-1776: Fetch attachments when email loads
+  useEffect(() => {
+    if (email?.id && email.has_attachments) {
+      setLoadingAttachments(true);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const transactionsApi = window.api.transactions as any;
+      transactionsApi
+        .getEmailAttachments(email.id)
+        .then((result: { success: boolean; data?: EmailAttachment[]; error?: string }) => {
+          if (result.success && result.data) {
+            setAttachments(result.data);
+          }
+        })
+        .catch((err: Error) => {
+          console.error("Failed to fetch email attachments:", err);
+        })
+        .finally(() => {
+          setLoadingAttachments(false);
+        });
+    }
+  }, [email?.id, email?.has_attachments]);
+
+  // TASK-1776: Handle opening an attachment
+  const handleOpenAttachment = useCallback(async (attachment: EmailAttachment) => {
+    if (!attachment.storage_path) {
+      console.warn("Attachment has no storage path:", attachment.filename);
+      return;
+    }
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const transactionsApi = window.api.transactions as any;
+      const result = await transactionsApi.openAttachment(attachment.storage_path);
+      if (!result.success) {
+        console.error("Failed to open attachment:", result.error);
+      }
+    } catch (err) {
+      console.error("Error opening attachment:", err);
+    }
+  }, []);
 
   // Sanitize HTML content when in HTML mode
   const sanitizedHtml = useMemo(() => {
@@ -215,6 +342,56 @@ export function EmailViewModal({
           </div>
         </div>
 
+        {/* TASK-1776: Collapsible Attachments Section */}
+        {(email.has_attachments || attachments.length > 0) && (
+          <div className="flex-shrink-0 px-6 py-3 border-b border-gray-200 bg-white">
+            <button
+              onClick={() => setAttachmentsExpanded(!attachmentsExpanded)}
+              className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+              disabled={loadingAttachments}
+            >
+              <svg
+                className={`w-4 h-4 transition-transform ${attachmentsExpanded ? "rotate-90" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+              </svg>
+              <span className="font-medium">
+                {loadingAttachments
+                  ? "Loading attachments..."
+                  : `${attachments.length} attachment${attachments.length !== 1 ? "s" : ""}`}
+              </span>
+            </button>
+
+            {attachmentsExpanded && attachments.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {attachments.map((attachment) => (
+                  <button
+                    key={attachment.id}
+                    onClick={() => setPreviewAttachment(attachment)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors bg-gray-100 hover:bg-gray-200 text-gray-700"
+                    title={`Preview ${attachment.filename}`}
+                    data-testid={`attachment-${attachment.id}`}
+                  >
+                    {getFileTypeIcon(attachment.mime_type)}
+                    <span className="truncate max-w-[150px]">{attachment.filename}</span>
+                    {attachment.file_size_bytes && (
+                      <span className="text-gray-500 text-xs flex-shrink-0">
+                        {formatFileSize(attachment.file_size_bytes)}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Email Body */}
         <div className="flex-1 overflow-y-auto p-6">
           {hasContent ? (
@@ -269,6 +446,17 @@ export function EmailViewModal({
           </div>
         </div>
       </div>
+
+      {/* TASK-1778: Attachment Preview Modal */}
+      {previewAttachment && (
+        <AttachmentPreviewModal
+          attachment={previewAttachment}
+          onClose={() => setPreviewAttachment(null)}
+          onOpenWithSystem={(storagePath) => {
+            handleOpenAttachment({ storage_path: storagePath } as EmailAttachment);
+          }}
+        />
+      )}
     </div>
   );
 }

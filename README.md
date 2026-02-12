@@ -153,6 +153,13 @@ This ensures all native modules are compiled correctly for your system.
 - Cross-platform support (Windows, Linux via Android Messages)
 - Authentication and subscription features
 
-## License
+Copyright (c) 2024-2026 Blue Spaces LLC. All rights reserved.
 
-MIT
+This software and associated documentation files are the proprietary 
+property of Blue Spaces LLC. 
+
+No part of this software may be used, copied, modified, merged, published, 
+distributed, sublicensed, or sold without the express written permission 
+of Blue Spaces LLC.
+
+

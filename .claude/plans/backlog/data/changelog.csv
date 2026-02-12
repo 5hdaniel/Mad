@@ -203,3 +203,34 @@ date,action,details,items_affected
 2026-01-25,BACKLOG-081,deferred,Pending,Deferred from SPRINT-053 - AI consent in T&C
 2026-01-25,SPRINT-053,completed,Planning,Completed,"License Enhancement & AI Gating - 3 tasks merged (PRs #569, #570, #592)"
 2026-01-27,create,Created BACKLOG-544 - Background import process with progress indicator,BACKLOG-544
+2026-02-02,complete,"**SPRINT-068 COMPLETE** - Windows + iOS Contact Architecture Refactor:",
+2026-02-02,update,"Schema: Migration 27 (external_contacts refactor), 27b (iPhone contacts migration), 27c (participants_flat backfill for 634K messages)",
+2026-02-02,complete,"BACKLOG-590 (Auto-Link Fix) - Fixed via participants_flat population + migration 27c",BACKLOG-590
+2026-02-02,complete,"BACKLOG-589 (Group Chat Sender Names) - No extra work needed, existing logic works with contact fix",BACKLOG-589
+2026-02-02,complete,"BACKLOG-591 (participants_flat group members) - Covered by main fix",BACKLOG-591
+2026-02-02,complete,"BACKLOG-588 (Windows Attachments) - Implemented attachment extraction from iPhone backup",BACKLOG-588
+2026-02-02,complete,"BACKLOG-585 (Texts auto-attach) - Fixed via BACKLOG-590",BACKLOG-585
+2026-02-02,complete,"BACKLOG-587 (Contact names showing) - Fixed via platform-aware contact lookup",BACKLOG-587
+2026-02-02,deferred,"BACKLOG-586 (UI parity) - Deferred to future sprint, core functionality works",BACKLOG-586
+2026-02-02,deferred,"BACKLOG-592 (User account hardcoded) - Low priority cosmetic issue deferred",BACKLOG-592
+2026-02-02,update,"Files modified: databaseService.ts, externalContactDbService.ts, iPhoneSyncStorageService.ts, transactionService.ts, iosMessagesParser.ts, syncOrchestrator.ts, sync-handlers.ts"
+2026-02-02,create,"Added BACKLOG-600 (Message Sort Order Bug), BACKLOG-601 (Audit Period Filter Bug), BACKLOG-602 (Attachment Skip Logging - Deferred), BACKLOG-603 (iCloud UX Message)",BACKLOG-600;BACKLOG-601;BACKLOG-602;BACKLOG-603
+2026-02-02,create,"Created TASK-1794 (Message Sort Order Fix), TASK-1795 (Audit Period Filter Fix), TASK-1796 (iCloud UX Message) for SPRINT-068 testing phase",TASK-1794;TASK-1795;TASK-1796
+2026-02-02,assign,"Added TASK-1794, TASK-1795, TASK-1796 to SPRINT-068 Testing Phase",SPRINT-068
+2026-02-02,create,"Created BACKLOG-604 (iOS attributedBody parsing) - Location sharing messages show wrong text",BACKLOG-604
+2026-02-02,create,"Created TASK-1797 for BACKLOG-604 implementation",TASK-1797
+2026-02-02,assign,"Added TASK-1797 to SPRINT-068 Testing Phase",SPRINT-068
+2026-02-10,create,"Created BACKLOG-649 (Onboarding data-sync step stuck for returning users with email connected) - HIGH priority bug introduced by SPRINT-070 PR #744",BACKLOG-649
+2026-02-10,complete,"BACKLOG-649 (Remove auto export stub) - PR #792 merged",BACKLOG-649
+2026-02-10,complete,"BACKLOG-650 (Remove dark mode stub) - PR #792 merged",BACKLOG-650
+2026-02-10,complete,"BACKLOG-651 (Responsive toolbar layout) - PR #794 merged",BACKLOG-651
+2026-02-10,complete,"BACKLOG-652 (Health check provider fix) - PR #793 merged",BACKLOG-652
+2026-02-10,create,"Created BACKLOG-653 (Auto-download updates toggle), BACKLOG-654 (Toolbar height consistency), BACKLOG-655 (Remove VersionPopup), BACKLOG-656 (Move Check for Updates to settings)",BACKLOG-653;BACKLOG-654;BACKLOG-655;BACKLOG-656
+2026-02-10,complete,"BACKLOG-653 (Auto-download updates toggle) - PR #795 merged",BACKLOG-653
+2026-02-10,complete,"BACKLOG-654, 655, 656 (Toolbar polish, version popup removal, settings cleanup) - PR #796",BACKLOG-654;BACKLOG-655;BACKLOG-656
+2026-02-10,update,"SPRINT-077 completed: 4 planned tasks + 4 unplanned items. PRs #792-796.",SPRINT-077
+2026-02-10,complete,"SPRINT-078 completed: 4 tasks (TASK-1949-1952). Contact source prefs UI (PR #797), message import filter (PR #798), wire direct imports (PR #799), wire inferred contacts (PR #800). All merged to develop.",SPRINT-078
+2026-02-10,complete,"BACKLOG-634 (Message Import Date Filter) - Implemented by TASK-1952 (PR #798) in SPRINT-078",BACKLOG-634
+2026-02-10,create,"Created BACKLOG-657 (Message Import Cap Warning & Default Filters) - Follow-up to SPRINT-078. Sets default 6-month/250K filters, adds cap warning UI. PR #801 on branch fix/message-import-default-filters.",BACKLOG-657
+2026-02-10,sprint_created,"SPRINT-079 created with 3 contact bug fixes: BACKLOG-658 (Outlook auto-sync), BACKLOG-659 (source filter), BACKLOG-660 (import refresh)","BACKLOG-658,BACKLOG-659,BACKLOG-660"
+2026-02-10,sprint_completed,"SPRINT-079 completed: 3 contact bug fixes merged (PRs #804-806). BACKLOG-658/659/660 all Completed.","BACKLOG-658,BACKLOG-659,BACKLOG-660"

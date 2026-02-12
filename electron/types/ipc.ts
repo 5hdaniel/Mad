@@ -811,6 +811,17 @@ export interface WindowApi {
       durationMs?: number;
       error?: string;
     }>;
+    // User verification methods
+    checkUserInLocalDb: (userId: string) => Promise<{
+      success: boolean;
+      exists: boolean;
+      error?: string;
+    }>;
+    verifyUserInLocalDb: () => Promise<{
+      success: boolean;
+      userId?: string;
+      error?: string;
+    }>;
   };
 
   // Preferences methods
@@ -973,6 +984,30 @@ export interface WindowApi {
     onImportProgress: (
       callback: (progress: { current: number; total: number; percent: number }) => void
     ) => () => void;
+    /**
+     * Sync external contacts from macOS Contacts app
+     * @param userId - User ID to sync contacts for
+     * @returns Sync result with inserted/deleted/total counts
+     */
+    syncExternal: (userId: string) => Promise<{
+      success: boolean;
+      inserted?: number;
+      deleted?: number;
+      total?: number;
+      error?: string;
+    }>;
+    /**
+     * Get external contacts sync status
+     * @param userId - User ID to check status for
+     * @returns Sync status (lastSyncAt, isStale, contactCount)
+     */
+    getExternalSyncStatus: (userId: string) => Promise<{
+      success: boolean;
+      lastSyncAt?: string | null;
+      isStale?: boolean;
+      contactCount?: number;
+      error?: string;
+    }>;
   };
 
   // Transaction methods
@@ -1200,6 +1235,14 @@ export interface WindowApi {
     openFolder: (folderPath: string) => Promise<{ success: boolean }>;
   };
 
+  // OS Notifications
+  notification: {
+    /** Check if notifications are supported on this platform */
+    isSupported: () => Promise<{ success: boolean; supported: boolean }>;
+    /** Send an OS notification */
+    send: (title: string, body: string) => Promise<{ success: boolean; error?: string }>;
+  };
+
   // Messages API (iMessage/SMS - migrated from window.electron)
   messages: {
     getConversations: () => Promise<{
@@ -1225,9 +1268,11 @@ export interface WindowApi {
       attachmentsSkipped: number;
       duration: number;
       error?: string;
+      totalAvailable?: number;
+      wasCapped?: boolean;
     }>;
     /** Get count of messages available for import from macOS Messages */
-    getImportCount: () => Promise<{ success: boolean; count?: number; error?: string }>;
+    getImportCount: (filters?: { lookbackMonths?: number | null; maxMessages?: number | null }) => Promise<{ success: boolean; count?: number; filteredCount?: number; error?: string }>;
     /** Listen for import progress updates */
     onImportProgress: (callback: (progress: { phase: "deleting" | "importing" | "attachments"; current: number; total: number; percent: number }) => void) => () => void;
     /** Get attachments for a message with base64 data (TASK-1012) */
@@ -1240,6 +1285,13 @@ export interface WindowApi {
       repaired: number;
       orphaned: number;
       alreadyCorrect: number;
+    }>;
+    /** Get macOS messages import status (count and last import time) */
+    getImportStatus: (userId: string) => Promise<{
+      success: boolean;
+      messageCount?: number;
+      lastImportAt?: string | null;
+      error?: string;
     }>;
   };
 
@@ -1588,6 +1640,65 @@ export interface WindowApi {
   onExportFolderProgress: (
     callback: (progress: { stage: string; current: number; total: number; message: string }) => void,
   ) => () => void;
+
+  // Error Logging API (TASK-1800)
+  errorLogging: {
+    /**
+     * Submit an error report to Supabase
+     * @param payload - Error details and optional user feedback
+     * @returns Result with success status and error ID
+     */
+    submit: (payload: {
+      errorType: string;
+      errorCode?: string;
+      errorMessage: string;
+      stackTrace?: string;
+      currentScreen?: string;
+      userFeedback?: string;
+      breadcrumbs?: Record<string, unknown>[];
+      appState?: Record<string, unknown>;
+    }) => Promise<{
+      success: boolean;
+      errorId?: string;
+      error?: string;
+    }>;
+    /**
+     * Process queued errors (call when connection restored)
+     * @returns Number of errors successfully processed
+     */
+    processQueue: () => Promise<{
+      success: boolean;
+      processedCount?: number;
+      error?: string;
+    }>;
+    /**
+     * Get current queue size (for diagnostics)
+     * @returns Queue size
+     */
+    getQueueSize: () => Promise<{
+      success: boolean;
+      queueSize?: number;
+      error?: string;
+    }>;
+  };
+
+  // App Reset API (TASK-1802)
+  app: {
+    /**
+     * Perform a complete app data reset
+     * WARNING: This is a destructive operation that will:
+     * - Delete all local data (database, preferences, cached data)
+     * - Restart the app fresh
+     *
+     * Cloud data (Supabase) is NOT affected.
+     *
+     * @returns Result with success status
+     */
+    reset: () => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+  };
 
   // License API (BACKLOG-426, SPRINT-062)
   license: {

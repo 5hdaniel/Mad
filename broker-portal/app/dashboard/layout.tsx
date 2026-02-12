@@ -51,18 +51,38 @@ export default async function DashboardLayout({
                 </span>
               </Link>
               <div className="hidden sm:ml-10 sm:flex sm:space-x-8">
-                <Link
-                  href="/dashboard"
-                  className="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
-                >
-                  Dashboard
-                </Link>
-                <Link
-                  href="/dashboard/submissions"
-                  className="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
-                >
-                  Submissions
-                </Link>
+                {user.role !== 'it_admin' && (
+                  <>
+                    <Link
+                      href="/dashboard"
+                      className="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                    >
+                      Dashboard
+                    </Link>
+                    <Link
+                      href="/dashboard/submissions"
+                      className="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                    >
+                      Submissions
+                    </Link>
+                  </>
+                )}
+                {(user.role === 'admin' || user.role === 'it_admin') && (
+                  <>
+                    <Link
+                      href="/dashboard/users"
+                      className="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                    >
+                      Users
+                    </Link>
+                    <Link
+                      href="/dashboard/settings"
+                      className="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                    >
+                      Settings
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
 

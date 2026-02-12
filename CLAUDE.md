@@ -8,52 +8,92 @@ This guide is for all Claude agents working on Magic Audit. Follow these standar
 
 **CRITICAL: READ THIS BEFORE ANY SPRINT/TASK WORK**
 
-When working on tasks from `.claude/plans/tasks/`, you MUST use the proper agent workflow. Direct implementation is PROHIBITED.
+When working on tasks from `.claude/plans/tasks/`, you MUST follow the **15-step agent-handoff workflow**. Direct implementation is PROHIBITED.
 
-### Required Workflow
+### Authoritative Reference
 
-```
-1. PM assigns task → 2. Engineer agent implements → 3. SR Engineer agent reviews → 4. Merge
-```
+**READ THIS FIRST:** `.claude/skills/agent-handoff/SKILL.md`
 
-### Step-by-Step
+This skill defines:
+- The complete 15-step lifecycle (4 phases)
+- Which agent owns which steps
+- Handoff message templates
+- Decision trees for approvals/rejections
 
-1. **DO NOT implement tasks directly.** When you see a TASK-XXX file:
-   - Invoke the `engineer` agent with `subagent_type="engineer"`
-   - Pass the task file path and context
-   - Let the engineer agent handle implementation
-
-2. **DO NOT merge PRs without review.** Before any PR merge:
-   - Invoke the `senior-engineer-pr-lead` agent with `subagent_type="senior-engineer-pr-lead"`
-   - Let the SR Engineer validate architecture, tests, and quality gates
-   - Only merge after SR Engineer approval
-
-### Example: Correct Workflow
+### Quick Summary
 
 ```
-User: "Implement TASK-510"
+PHASE A: PM Setup (Steps 1-5)
+   → Verify task, create branch, update status, handoff to Engineer
 
-WRONG (what you've been doing):
-- Read the task file
-- Write the code yourself
-- Create PR and merge
+PHASE B: Planning (Steps 6-8)
+   → Engineer plans, SR reviews plan, PM updates status
 
-RIGHT (what you must do):
-- Invoke Task tool with subagent_type="engineer"
-- Prompt: "Implement TASK-510 from .claude/plans/tasks/TASK-510-xxx.md"
-- Wait for engineer to complete and hand off to SR Engineer
-- Invoke Task tool with subagent_type="senior-engineer-pr-lead" for PR review
-- Only merge after SR Engineer approval
+PHASE C: Implementation (Steps 9-11)
+   → Engineer implements, SR reviews, PM updates status
+
+PHASE D: Merge & Cleanup (Steps 12-15)
+   → SR merges PR, deletes worktree, PM records metrics, closes sprint
 ```
+
+### Critical Rules
+
+1. **DO NOT implement tasks directly.** Follow all 15 steps.
+2. **DO NOT skip PM setup steps.** Branch and status updates happen BEFORE invoking Engineer.
+3. **DO NOT merge without SR Engineer review.** Every PR goes through `senior-engineer-pr-lead` agent.
+4. **DO NOT handoff without the template.** Use `.claude/skills/agent-handoff/templates/handoff-message.template.md`
 
 ### Why This Matters
 
-- **Metrics tracking**: Engineer agent tracks turns/tokens/time
+- **Metrics tracking**: Effort captured at each handoff
 - **Quality gates**: SR Engineer validates architecture and tests
 - **Audit trail**: Proper handoffs create accountability
 - **Consistency**: Same workflow every sprint
 
 **FAILURE TO FOLLOW THIS WORKFLOW IS A PROCESS VIOLATION.**
+
+---
+
+## MANDATORY: Issue Documentation
+
+**Full reference:** `.claude/skills/issue-log/SKILL.md`
+
+Before ANY handoff or task completion, you MUST document issues encountered.
+
+### When to Document
+
+- Something doesn't work as expected
+- You try an approach and abandon it
+- You spend significant time debugging (>10 min)
+- You discover a workaround
+- Before ANY handoff to another agent
+- Before marking a task complete
+
+### Format
+
+```markdown
+### Issue #1: [Brief title]
+- **When:** Step X / Phase Y
+- **What happened:** [Description]
+- **Root cause:** [If known]
+- **Resolution:** [How fixed / workaround]
+- **Time spent:** [Estimate]
+```
+
+### No Issues?
+
+If nothing went wrong, explicitly state: `**Issues/Blockers:** None`
+
+This confirms issues were considered, not forgotten.
+
+### Why This Matters
+
+Undocumented issues lead to:
+- Repeated debugging of the same problems
+- Lost knowledge when context resets
+- Inaccurate time estimates for similar tasks
+
+**FAILURE TO DOCUMENT ISSUES IS A PROCESS VIOLATION.**
 
 ---
 

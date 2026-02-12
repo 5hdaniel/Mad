@@ -20,6 +20,12 @@ import { jest } from "@jest/globals";
 const mockSupabaseClient = {
   from: jest.fn(),
   rpc: jest.fn(),
+  auth: {
+    getSession: jest.fn().mockResolvedValue({
+      data: { session: { user: { id: "auth-user-123" } } },
+      error: null,
+    }),
+  },
   functions: {
     invoke: jest.fn(),
   },
@@ -136,22 +142,28 @@ describe("SupabaseService", () => {
         };
 
         const newUser = {
-          id: "user-uuid-123",
+          id: "auth-user-123",
           ...userData,
           subscription_tier: "free",
           subscription_status: "trial",
         };
 
-        // First query: check if user exists (not found)
-        const notFoundQuery = createQueryMock(null, {
+        // First query: lookup by auth.uid() -> not found
+        const notFoundByIdQuery = createQueryMock(null, {
           code: "PGRST116",
           message: "Not found",
         });
-        // Second query: insert new user
+        // Second query: lookup by oauth_provider/oauth_id -> not found
+        const notFoundByOAuthQuery = createQueryMock(null, {
+          code: "PGRST116",
+          message: "Not found",
+        });
+        // Third query: insert new user
         const insertQuery = createQueryMock(newUser);
 
         mockSupabaseClient.from
-          .mockReturnValueOnce(notFoundQuery)
+          .mockReturnValueOnce(notFoundByIdQuery)
+          .mockReturnValueOnce(notFoundByOAuthQuery)
           .mockReturnValueOnce(insertQuery);
 
         const result = await supabaseService.syncUser(userData);

@@ -36,6 +36,8 @@ export interface ExtendedContact extends Contact {
   is_message_derived?: number | boolean;
   /** Total communication count with this contact */
   communication_count?: number;
+  /** Whether this contact exists in the database (false for external contacts from macOS Contacts) */
+  isFromDatabase?: boolean;
 }
 
 /**
@@ -78,6 +80,7 @@ export function getSourceBadge(source: ContactSource): SourceBadge {
       color: "bg-purple-100 text-purple-700",
     },
     sms: { text: "From SMS", color: "bg-orange-100 text-orange-700" },
+    messages: { text: "From Messages", color: "bg-orange-100 text-orange-700" },
     inferred: { text: "Inferred", color: "bg-gray-100 text-gray-700" },
   };
   return badges[source] || badges.manual;

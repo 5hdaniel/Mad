@@ -29,6 +29,7 @@ import {
   preferencesBridge,
   userBridge,
   shellBridge,
+  notificationBridge,
   llmBridge,
   systemBridge,
   deviceBridge,
@@ -40,6 +41,8 @@ import {
   updateBridge,
   messageBridge,
   licenseBridge,
+  errorLoggingBridge,
+  resetBridge,
 } from "./preload/index";
 
 // Expose protected methods that allow the renderer process to use
@@ -81,6 +84,9 @@ contextBridge.exposeInMainWorld("api", {
   // Shell operations
   shell: shellBridge,
 
+  // OS notifications
+  notification: notificationBridge,
+
   // Device detection
   device: deviceBridge,
 
@@ -101,4 +107,10 @@ contextBridge.exposeInMainWorld("api", {
 
   // License management
   license: licenseBridge,
+
+  // Error logging (production monitoring)
+  errorLogging: errorLoggingBridge,
+
+  // App reset (TASK-1802: self-healing feature)
+  app: resetBridge,
 });

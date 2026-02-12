@@ -21,7 +21,7 @@ export type Theme = "light" | "dark" | "auto";
 export type LicenseType = "individual" | "team" | "enterprise";
 
 // Contacts
-export type ContactSource = "manual" | "email" | "sms" | "contacts_app" | "inferred";
+export type ContactSource = "manual" | "email" | "sms" | "messages" | "contacts_app" | "inferred";
 export type ContactInfoSource = "import" | "manual" | "inferred";
 
 // Messages
@@ -29,6 +29,24 @@ export type MessageChannel = "email" | "sms" | "imessage";
 export type MessageDirection = "inbound" | "outbound";
 export type ClassificationMethod = "pattern" | "llm" | "user";
 export type FalsePositiveReason = "signature" | "promotional" | "unrelated" | "other";
+
+/**
+ * Type of message content for UI differentiation (TASK-1799)
+ *
+ * - text: Regular text message
+ * - voice_message: Audio message with optional transcript
+ * - location: Location sharing message
+ * - attachment_only: Has attachment but no text content
+ * - system: System/service message (delivery receipts, etc.)
+ * - unknown: Unable to determine type
+ */
+export type MessageType =
+  | "text"
+  | "voice_message"
+  | "location"
+  | "attachment_only"
+  | "system"
+  | "unknown";
 
 // Transactions
 export type TransactionType = "purchase" | "sale" | "other";
@@ -252,6 +270,12 @@ export interface Contact {
   /** Last communication date (for message-derived contacts and activity tracking) */
   last_communication_at?: Date | string | null;
 
+  // ========== Array Fields (for display) ==========
+  /** All emails for this contact (from contact_emails table) */
+  allEmails?: string[];
+  /** All phones for this contact (from contact_phones table) */
+  allPhones?: string[];
+
   // ========== Legacy Fields (backwards compatibility) ==========
   /** @deprecated Read-only. Use display_name for all writes. */
   name?: string;
@@ -336,6 +360,10 @@ export interface Message {
 
   // Attachments
   has_attachments: boolean;
+
+  // Message Type (TASK-1799)
+  /** Type of message content for UI differentiation */
+  message_type?: MessageType;
 
   // Classification Results
   is_transaction_related?: boolean; // null = not classified

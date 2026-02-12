@@ -15,6 +15,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   auth_failed: 'Authentication failed. Please try again.',
   not_authorized:
     'Your account is not authorized to access the broker portal. Contact your administrator.',
+  org_not_setup: 'org_not_setup', // Special case: rendered with links below
+  jit_disabled: 'jit_disabled', // Special case: rendered with links below
 };
 
 function LoginForm() {
@@ -53,6 +55,7 @@ function LoginForm() {
         queryParams: {
           prompt: 'select_account', // Always show account picker
         },
+        scopes: provider === 'azure' ? 'email profile openid' : undefined,
       },
     });
 
@@ -91,7 +94,20 @@ function LoginForm() {
                 </svg>
               </div>
               <div className="ml-3">
-                <p className="text-sm text-red-700">{displayError}</p>
+                {displayError === 'org_not_setup' ? (
+                  <p className="text-sm text-red-700">
+                    Your organization hasn&apos;t been set up yet. Ask your IT administrator to visit the{' '}
+                    <a href="/setup" className="font-medium underline hover:text-red-600">setup page</a>
+                    , or{' '}
+                    <a href="/download" className="font-medium underline hover:text-red-600">sign up for an individual account</a>.
+                  </p>
+                ) : displayError === 'jit_disabled' ? (
+                  <p className="text-sm text-red-700">
+                    Your organization requires an invitation or SCIM provisioning to join. Contact your IT administrator to be added.
+                  </p>
+                ) : (
+                  <p className="text-sm text-red-700">{displayError}</p>
+                )}
               </div>
             </div>
           </div>
@@ -149,9 +165,17 @@ function LoginForm() {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-sm text-gray-500">
-          Only authorized brokers can access this portal.
-        </p>
+        <div className="text-center space-y-2">
+          <p className="text-sm text-gray-500">
+            Only authorized brokers can access this portal.
+          </p>
+          <p className="text-sm text-gray-400">
+            Need to set up a new organization?{' '}
+            <a href="/setup" className="text-blue-600 hover:text-blue-500">
+              Get started here
+            </a>
+          </p>
+        </div>
       </div>
     </div>
   );

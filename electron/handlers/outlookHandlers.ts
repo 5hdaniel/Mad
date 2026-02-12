@@ -21,6 +21,7 @@ import logService from "../services/logService";
 import { macTimestampToDate } from "../utils/dateUtils";
 import { sanitizeFilename } from "../utils/fileUtils";
 import { getMessageText } from "../utils/messageParser";
+import { getValidUserId } from "../utils/userIdHelper";
 
 // Import handler types
 import type {
@@ -40,36 +41,7 @@ let handlersRegistered = false;
 // Outlook service instance - shared across handlers
 let outlookService: OutlookService | null = null;
 
-/**
- * BACKLOG-551: Helper to get a valid user ID from the database
- * Handles cases where the renderer passes an invalid/stale userId
- * or no userId at all (legacy bridge compatibility)
- */
-async function getValidUserId(providedUserId?: string): Promise<string | null> {
-  // If provided, verify it exists
-  if (providedUserId) {
-    const user = await databaseService.getUserById(providedUserId);
-    if (user) {
-      return providedUserId;
-    }
-    logService.warn("[OutlookHandlers] Provided userId not found, looking up correct ID", "OutlookHandlers", {
-      providedId: providedUserId.substring(0, 8) + "...",
-    });
-  }
-
-  // Look up any user in the database (single-user app)
-  const db = databaseService.getRawDatabase();
-  const anyUser = db.prepare("SELECT id FROM users_local LIMIT 1").get() as { id: string } | undefined;
-  if (anyUser) {
-    logService.info("[OutlookHandlers] Using user ID from database", "OutlookHandlers", {
-      userId: anyUser.id.substring(0, 8) + "...",
-    });
-    return anyUser.id;
-  }
-
-  logService.error("[OutlookHandlers] No user found in database", "OutlookHandlers");
-  return null;
-}
+// Note: getValidUserId imported from ../utils/userIdHelper (BACKLOG-615: removed duplicate)
 
 /**
  * Register Outlook integration IPC handlers

@@ -1,7 +1,9 @@
 import {
   app,
   BrowserWindow,
+  dialog,
   session,
+  ipcMain,
 } from "electron";
 import path from "path";
 import log from "electron-log";
@@ -40,8 +42,9 @@ import dotenv from "dotenv";
 
 // Load environment files based on whether app is packaged or in development
 if (app.isPackaged) {
-  // Packaged build: load .env.production from resources
-  const envPath = path.join(process.resourcesPath, "app.asar", ".env.production");
+  // Packaged build: load .env.production from extraResources
+  // extraResources files are copied to process.resourcesPath (NOT inside app.asar)
+  const envPath = path.join(process.resourcesPath, ".env.production");
   dotenv.config({ path: envPath });
 } else {
   // Development: load .env.development first (OAuth credentials), then .env.local for overrides
@@ -81,6 +84,7 @@ import { registerDevice } from "./services/deviceService";
 import supabaseService from "./services/supabaseService";
 import databaseService from "./services/databaseService";
 import sessionService from "./services/sessionService";
+import submissionService from "./services/submissionService";
 import {
   CURRENT_TERMS_VERSION,
   CURRENT_PRIVACY_POLICY_VERSION,
@@ -94,6 +98,8 @@ import {
   registerMessageImportHandlers,
   registerOutlookHandlers,
   registerUpdaterHandlers,
+  registerErrorLoggingHandlers,
+  registerResetHandlers,
 } from "./handlers";
 
 // Configure logging for auto-updater
@@ -193,14 +199,47 @@ async function syncDeepLinkUserToLocalDb(userData: PendingDeepLinkUser): Promise
         is_active: true,
       });
       log.info("[DeepLink] Created local SQLite user for:", userData.supabaseId);
+    } else if (localUser.id !== userData.supabaseId) {
+      // BACKLOG-600: Local user exists with different ID than Supabase auth.uid()
+      // This happens for users created before TASK-1507G (user ID unification)
+      // Migrate the local user to use the Supabase ID for FK constraint compatibility
+      log.info("[DeepLink] Migrating local user ID to match Supabase", {
+        oldId: localUser.id.substring(0, 8) + "...",
+        newId: userData.supabaseId.substring(0, 8) + "...",
+        email: userData.email,
+      });
+      try {
+        await databaseService.migrateUserIdForUnification(localUser.id, userData.supabaseId);
+        log.info("[DeepLink] Local user ID migrated successfully to:", userData.supabaseId);
+      } catch (migrationError) {
+        log.error("[DeepLink] Failed to migrate local user ID:", migrationError);
+        // Don't throw - auth should continue, but Supabase operations may fail
+      }
     } else {
-      log.info("[DeepLink] Local user already exists for:", userData.email);
+      log.info("[DeepLink] Local user already exists with correct ID for:", userData.email);
     }
   } catch (error) {
     log.error("[DeepLink] Failed to create local user:", error);
     // Don't rethrow - auth should still succeed even if local user creation fails
     // The user will be created on next database operation that requires it
   }
+}
+
+// ==========================================
+// DEEP LINK URL REDACTION (TASK-1939)
+// ==========================================
+/**
+ * Redact sensitive OAuth tokens/codes from deep link URLs before logging.
+ * Prevents credential leakage in log files.
+ */
+function redactDeepLinkUrl(url: string): string {
+  return url.replace(
+    /(?:code|token|access_token|refresh_token)=[^&#]+/gi,
+    (match) => {
+      const key = match.split("=")[0];
+      return `${key}=[REDACTED]`;
+    },
+  );
 }
 
 // ==========================================
@@ -242,7 +281,7 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
 
       if (!accessToken || !refreshToken) {
         // Missing tokens - send error to renderer
-        log.error("[DeepLink] Callback URL missing tokens:", url);
+        log.error("[DeepLink] Callback URL missing tokens:", redactDeepLinkUrl(url));
         sendToRenderer("auth:deep-link-error", {
           error: "Missing tokens in callback URL",
           code: "MISSING_TOKENS",
@@ -314,7 +353,8 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
 
       // TASK-1507D: Step 5.5 - Create local SQLite user
       // This is required for FK constraints (mailbox connection, audit logs, contacts)
-      const provider = (user.app_metadata?.provider as OAuthProvider) || "google";
+      const rawProvider = (user.app_metadata?.provider as string) || "google";
+      const provider = (rawProvider === "azure" ? "microsoft" : rawProvider) as OAuthProvider;
 
       // Map license type to subscription tier
       // licenseType: 'trial' | 'individual' | 'team' -> subscriptionTier: 'free' | 'pro' | 'enterprise'
@@ -388,8 +428,14 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
               subscription,
               expiresAt: Date.now() + sessionService.getSessionExpirationMs(),
               createdAt: Date.now(),
+              // Store Supabase tokens for SDK session restoration (Dorian's T&C fix)
+              // Required for RLS-protected operations on app restart
+              supabaseTokens: {
+                access_token: accessToken,
+                refresh_token: refreshToken,
+              },
             });
-            log.info("[DeepLink] Session saved successfully");
+            log.info("[DeepLink] Session saved successfully with Supabase tokens");
           } catch (sessionError) {
             log.error("[DeepLink] Failed to save session:", sessionError);
           }
@@ -407,23 +453,26 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
 
       // BACKLOG-546: Check if user needs to accept terms
       // Fetch from Supabase to get terms acceptance status
-      let needsTermsAcceptance = true; // Default to showing T&C
+      // BACKLOG-614: Default to false - don't show T&C unless we confirm they haven't accepted
+      // This prevents returning users from seeing T&C again due to fetch failures
+      let needsTermsAcceptance = false;
       try {
         const cloudUser = await supabaseService.getUserById(user.id);
-        if (cloudUser?.terms_accepted_at) {
-          // No version tracking (legacy) - they're good
-          if (!cloudUser.terms_version_accepted && !cloudUser.privacy_policy_version_accepted) {
-            needsTermsAcceptance = false;
-          } else {
-            // Check if versions match current (imported from constants)
-            const termsOutdated = cloudUser.terms_version_accepted !== CURRENT_TERMS_VERSION;
-            const privacyOutdated = cloudUser.privacy_policy_version_accepted !== CURRENT_PRIVACY_POLICY_VERSION;
-            needsTermsAcceptance = termsOutdated || privacyOutdated;
-          }
+        if (!cloudUser?.terms_accepted_at) {
+          // No terms acceptance record - they need to accept
+          needsTermsAcceptance = true;
+        } else if (cloudUser.terms_version_accepted || cloudUser.privacy_policy_version_accepted) {
+          // Has versioned acceptance - check if current versions match
+          const termsOutdated = cloudUser.terms_version_accepted !== CURRENT_TERMS_VERSION;
+          const privacyOutdated = cloudUser.privacy_policy_version_accepted !== CURRENT_PRIVACY_POLICY_VERSION;
+          needsTermsAcceptance = termsOutdated || privacyOutdated;
         }
+        // else: has terms_accepted_at but no version = legacy acceptance, they're good
         log.info("[DeepLink] Terms acceptance check:", { needsTermsAcceptance, termsAcceptedAt: cloudUser?.terms_accepted_at });
       } catch (termsCheckError) {
-        log.warn("[DeepLink] Failed to check terms acceptance, defaulting to show T&C:", termsCheckError);
+        // BACKLOG-614: If fetch fails, DON'T show T&C - better UX for returning users
+        // They'll see T&C on next successful check if actually needed
+        log.warn("[DeepLink] Failed to check terms acceptance, skipping T&C screen:", termsCheckError);
       }
 
       // TASK-1507: Step 6 - Success! Send all data to renderer
@@ -485,7 +534,7 @@ function focusMainWindow(): void {
 // This fires when the app is already running and a deep link is clicked
 app.on("open-url", (event, url) => {
   event.preventDefault();
-  log.info("[DeepLink] Received URL (macOS):", url);
+  log.info("[DeepLink] Received URL (macOS):", redactDeepLinkUrl(url));
   handleDeepLinkCallback(url);
 });
 
@@ -499,7 +548,7 @@ app.on("second-instance", (_event, commandLine) => {
   // Find the deep link URL in command line args
   const url = commandLine.find((arg) => arg.startsWith("magicaudit://"));
   if (url) {
-    log.info("[DeepLink] Received URL (Windows):", url);
+    log.info("[DeepLink] Received URL (Windows):", redactDeepLinkUrl(url));
     handleDeepLinkCallback(url);
   }
 
@@ -599,6 +648,30 @@ function createWindow(): void {
     backgroundColor: WINDOW_CONFIG.BACKGROUND_COLOR,
   });
 
+  // Prevent closing while a submission is uploading
+  mainWindow.on("close", (e) => {
+    if (submissionService.isSubmitting) {
+      e.preventDefault();
+      dialog
+        .showMessageBox(mainWindow!, {
+          type: "warning",
+          buttons: ["Keep Uploading", "Quit Anyway"],
+          defaultId: 0,
+          cancelId: 0,
+          title: "Submission In Progress",
+          message: "A transaction is being submitted to your broker.",
+          detail:
+            "Closing now will result in an incomplete submission. Are you sure you want to quit?",
+        })
+        .then(({ response }) => {
+          if (response === 1) {
+            // User chose "Quit Anyway" — force close
+            mainWindow?.destroy();
+          }
+        });
+    }
+  });
+
   // Load the app
   if (process.env.NODE_ENV === "development" || !app.isPackaged) {
     mainWindow.loadURL(DEV_SERVER_URL);
@@ -673,7 +746,7 @@ app.whenReady().then(async () => {
   if (process.platform === "win32") {
     const deepLinkUrl = process.argv.find((arg) => arg.startsWith("magicaudit://"));
     if (deepLinkUrl) {
-      log.info("[DeepLink] Cold start with URL (Windows):", deepLinkUrl);
+      log.info("[DeepLink] Cold start with URL (Windows):", redactDeepLinkUrl(deepLinkUrl));
       // Wait for window to be ready before processing
       mainWindow?.webContents.once("did-finish-load", () => {
         // Small delay to ensure renderer is fully initialized
@@ -709,6 +782,18 @@ app.whenReady().then(async () => {
   registerMessageImportHandlers(mainWindow!);
   registerOutlookHandlers(mainWindow!);
   registerUpdaterHandlers(mainWindow!);
+  registerErrorLoggingHandlers();
+  registerResetHandlers();
+
+  // DEV-ONLY: Manual deep link handler for testing when protocol handler fails
+  // Usage from DevTools console: window.api.system.manualDeepLink("magicaudit://callback?access_token=...&refresh_token=...")
+  if (process.defaultApp) {
+    ipcMain.handle("system:manual-deep-link", async (_event, url: string) => {
+      log.info("[DeepLink] Manual trigger from DevTools:", redactDeepLinkUrl(url));
+      await handleDeepLinkCallback(url);
+      return { success: true };
+    });
+  }
 });
 
 app.on("window-all-closed", () => {
@@ -718,6 +803,11 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  // TASK-1956: Shutdown persistent contact worker pool
+  try {
+    const { shutdownPool } = require("./workers/contactWorkerPool");
+    shutdownPool();
+  } catch { /* pool may not have been imported */ }
   // Clean up device detection polling
   cleanupDeviceHandlers();
   // Clean up sync handlers

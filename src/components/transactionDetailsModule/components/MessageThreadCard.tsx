@@ -459,7 +459,7 @@ export function groupMessagesByThread(
       msgs.sort((a, b) => {
         const dateA = new Date(a.sent_at || a.received_at || 0).getTime();
         const dateB = new Date(b.sent_at || b.received_at || 0).getTime();
-        return dateA - dateB;
+        return dateB - dateA; // TASK-1794: Newest first
       })
     );
   });

@@ -108,6 +108,45 @@ export const contactBridge = {
   }> => ipcRenderer.invoke("contacts:search", userId, query),
 
   /**
+   * TASK-1773: Trigger manual sync of external contacts from macOS
+   * @param userId - User ID to sync contacts for
+   * @returns Sync results (inserted, deleted, total)
+   */
+  syncExternal: (userId: string): Promise<{
+    success: boolean;
+    inserted?: number;
+    deleted?: number;
+    total?: number;
+    error?: string;
+  }> => ipcRenderer.invoke("contacts:syncExternal", userId),
+
+  /**
+   * TASK-1773: Get external contacts sync status
+   * @param userId - User ID to check status for
+   * @returns Sync status (lastSyncAt, isStale, contactCount)
+   */
+  getExternalSyncStatus: (userId: string): Promise<{
+    success: boolean;
+    lastSyncAt?: string | null;
+    isStale?: boolean;
+    contactCount?: number;
+    error?: string;
+  }> => ipcRenderer.invoke("contacts:getExternalSyncStatus", userId),
+
+  /**
+   * TASK-1921: Sync Outlook contacts to external_contacts table
+   * Fetches contacts from Microsoft Graph API and syncs to local SQLite
+   * @param userId - User ID to sync contacts for
+   * @returns Sync result (count of contacts synced, reconnectRequired flag)
+   */
+  syncOutlookContacts: (userId: string): Promise<{
+    success: boolean;
+    count?: number;
+    reconnectRequired?: boolean;
+    error?: string;
+  }> => ipcRenderer.invoke("contacts:syncOutlookContacts", userId),
+
+  /**
    * Listen for import progress updates
    * @param callback - Called with progress updates during contact import
    * @returns Cleanup function to remove listener
@@ -124,6 +163,21 @@ export const contactBridge = {
     ipcRenderer.on("contacts:import-progress", handler);
     return () => {
       ipcRenderer.removeListener("contacts:import-progress", handler);
+    };
+  },
+
+  /**
+   * TASK-1773: Listen for external contacts sync completion
+   * @param callback - Called when background sync completes
+   * @returns Cleanup function to remove listener
+   */
+  onExternalSyncComplete: (callback: () => void): (() => void) => {
+    const handler = () => {
+      callback();
+    };
+    ipcRenderer.on("contacts:external-sync-complete", handler);
+    return () => {
+      ipcRenderer.removeListener("contacts:external-sync-complete", handler);
     };
   },
 };

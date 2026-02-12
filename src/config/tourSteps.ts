@@ -14,6 +14,13 @@ export const getDashboardTourSteps = (): Step[] => [
     disableBeacon: true,
   },
   {
+    target: '[data-tour="sync-status"]',
+    content:
+      "During data syncs, the audit tools will be temporarily disabled to ensure compliance accuracy. The interface will activate automatically when the sync completes. Enable notifications in Settings to be alerted when syncing finishes.",
+    placement: "bottom",
+    disableBeacon: true,
+  },
+  {
     target: '[data-tour="new-audit-card"]',
     content:
       "Start a new transaction audit to track client communications and ensure compliance.",
@@ -24,7 +31,7 @@ export const getDashboardTourSteps = (): Step[] => [
   {
     target: '[data-tour="transactions-card"]',
     content:
-      "Browse all your transaction audits here. Magic Audit can automatically detect real estate transactions in your emails - just click 'Auto Detect' to find them!",
+      "Browse all your transaction audits here. Track communications, documents, and milestones for each property transaction.",
     placement: "bottom",
     spotlightClicks: true,
     disableBeacon: true,

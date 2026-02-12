@@ -11,10 +11,13 @@
  * - Removed setPendingEmailTokens and pending API calls
  *
  * TASK-1612: Migrated to use authService instead of direct window.api calls.
+ *
+ * TASK-1730: Added event emission for cross-component state propagation.
  */
 
 import { useCallback, useMemo } from "react";
 import { authService } from "@/services";
+import { emitEmailConnectionChanged } from "@/utils/emailConnectionEvents";
 import type { AppStep, PendingOnboardingData } from "../types";
 import type { PendingOAuthData } from "../../../components/Login";
 import { USE_NEW_ONBOARDING } from "../../routing/routeConfig";
@@ -180,6 +183,12 @@ export function useEmailHandlers({
               ...prev,
               emailProvider: "google",
             }));
+            // TASK-1730: Emit event for cross-component state propagation
+            emitEmailConnectionChanged({
+              connected: true,
+              email: connectionResult.email,
+              provider: "google",
+            });
           }
           cleanup();
         },
@@ -228,6 +237,12 @@ export function useEmailHandlers({
                 ...prev,
                 emailProvider: "microsoft",
               }));
+              // TASK-1730: Emit event for cross-component state propagation
+              emitEmailConnectionChanged({
+                connected: true,
+                email: connectionResult.email,
+                provider: "microsoft",
+              });
             }
             cleanup();
           },

@@ -383,8 +383,69 @@ class DatabaseService implements IDatabaseService {
 
     // TASK-1110: Add external_message_id to attachments for stable message linking
     // This allows attachments to be linked to messages even when message_id changes on re-import
+    // TASK-1775: Add email_id for email attachments (must be added before schema.sql creates index)
+    // TASK-1775: Make message_id nullable (was NOT NULL originally) to allow email attachments
+    const attachmentsExists = db.prepare(
+      `SELECT name FROM sqlite_master WHERE type='table' AND name='attachments'`
+    ).get();
+
+    if (attachmentsExists) {
+      // Check if message_id has NOT NULL constraint
+      const colInfo = db.prepare(`PRAGMA table_info(attachments)`).all() as { name: string; notnull: number }[];
+      const messageIdCol = colInfo.find(c => c.name === 'message_id');
+
+      if (messageIdCol && messageIdCol.notnull === 1) {
+        await logService.info("TASK-1775: Migrating attachments table to make message_id nullable", "DatabaseService");
+
+        // SQLite requires table recreation to change NOT NULL constraint
+        // Get existing columns to preserve data
+        const existingCols = colInfo.map(c => c.name);
+        const hasEmailId = existingCols.includes('email_id');
+        const hasExternalMessageId = existingCols.includes('external_message_id');
+
+        // Create new table with nullable message_id
+        db.exec(`
+          CREATE TABLE attachments_new (
+            id TEXT PRIMARY KEY,
+            message_id TEXT,
+            ${hasEmailId ? 'email_id TEXT,' : ''}
+            ${hasExternalMessageId ? 'external_message_id TEXT,' : ''}
+            filename TEXT NOT NULL,
+            mime_type TEXT,
+            file_size_bytes INTEGER,
+            storage_path TEXT,
+            text_content TEXT,
+            document_type TEXT,
+            document_type_confidence REAL,
+            document_type_source TEXT CHECK (document_type_source IN ('pattern', 'llm', 'user')),
+            analysis_metadata TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+            ${hasEmailId ? ', FOREIGN KEY (email_id) REFERENCES emails(id) ON DELETE CASCADE' : ''}
+          )
+        `);
+
+        // Copy data - build column list dynamically
+        const copyColumns = ['id', 'message_id', 'filename', 'mime_type', 'file_size_bytes', 'storage_path',
+          'text_content', 'document_type', 'document_type_confidence', 'document_type_source',
+          'analysis_metadata', 'created_at'];
+        if (hasEmailId) copyColumns.splice(2, 0, 'email_id');
+        if (hasExternalMessageId) copyColumns.splice(hasEmailId ? 3 : 2, 0, 'external_message_id');
+
+        const colList = copyColumns.filter(c => existingCols.includes(c)).join(', ');
+        db.exec(`INSERT INTO attachments_new (${colList}) SELECT ${colList} FROM attachments`);
+
+        // Swap tables
+        db.exec(`DROP TABLE attachments`);
+        db.exec(`ALTER TABLE attachments_new RENAME TO attachments`);
+
+        await logService.info("TASK-1775: Attachments table migrated successfully", "DatabaseService");
+      }
+    }
+
     await addMissingColumns('attachments', [
       { name: 'external_message_id', sql: `ALTER TABLE attachments ADD COLUMN external_message_id TEXT` },
+      { name: 'email_id', sql: `ALTER TABLE attachments ADD COLUMN email_id TEXT REFERENCES emails(id) ON DELETE CASCADE` },
     ]);
 
     // Populate display_name from name column if it exists
@@ -500,8 +561,8 @@ class DatabaseService implements IDatabaseService {
           success INTEGER NOT NULL DEFAULT 1,
           error_message TEXT,
           synced_at DATETIME,
-          CHECK (action IN ('LOGIN', 'LOGOUT', 'LOGIN_FAILED', 'DATA_ACCESS', 'DATA_EXPORT', 'DATA_DELETE', 'TRANSACTION_CREATE', 'TRANSACTION_UPDATE', 'TRANSACTION_DELETE', 'CONTACT_CREATE', 'CONTACT_UPDATE', 'CONTACT_DELETE', 'SETTINGS_CHANGE', 'MAILBOX_CONNECT', 'MAILBOX_DISCONNECT')),
-          CHECK (resource_type IN ('USER', 'SESSION', 'TRANSACTION', 'CONTACT', 'COMMUNICATION', 'EXPORT', 'MAILBOX', 'SETTINGS'))
+          CHECK (action IN ('LOGIN', 'LOGOUT', 'LOGIN_FAILED', 'SESSION_REFRESH', 'DATA_ACCESS', 'DATA_EXPORT', 'DATA_DELETE', 'TRANSACTION_CREATE', 'TRANSACTION_UPDATE', 'TRANSACTION_DELETE', 'TRANSACTION_SUBMIT', 'CONTACT_CREATE', 'CONTACT_UPDATE', 'CONTACT_DELETE', 'EXPORT_START', 'EXPORT_COMPLETE', 'EXPORT_FAIL', 'SETTINGS_CHANGE', 'SETTINGS_UPDATE', 'TERMS_ACCEPT', 'MAILBOX_CONNECT', 'MAILBOX_DISCONNECT')),
+          CHECK (resource_type IN ('USER', 'SESSION', 'TRANSACTION', 'CONTACT', 'COMMUNICATION', 'EXPORT', 'MAILBOX', 'SETTINGS', 'SUBMISSION'))
         )
       `);
       runSafe(`CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id)`);
@@ -826,7 +887,7 @@ class DatabaseService implements IDatabaseService {
       SELECT COUNT(*) as count FROM pragma_table_info('communications') WHERE name='email_id'
     `).get() as { count: number };
 
-    if (commEmailIdExists.count === 0) {
+    if (!commEmailIdExists || commEmailIdExists.count === 0) {
       await logService.info("Migration 22: Adding email_id column to communications", "DatabaseService");
       db.exec(`ALTER TABLE communications ADD COLUMN email_id TEXT REFERENCES emails(id) ON DELETE CASCADE`);
       db.exec(`CREATE INDEX IF NOT EXISTS idx_communications_email_id ON communications(email_id)`);
@@ -913,6 +974,249 @@ class DatabaseService implements IDatabaseService {
       await logService.info("Migration 23 complete: communications is now pure junction table (10 columns)", "DatabaseService");
     }
 
+    // Migration 24: Create phone_last_message lookup table for fast contact sorting (BACKLOG-567)
+    // This enables O(1) lookup of last message date by phone number instead of O(n) LIKE scans
+    const phoneLastMsgExists = db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='phone_last_message'"
+    ).get();
+
+    if (!phoneLastMsgExists) {
+      await logService.info("Running migration 24: Create phone_last_message lookup table", "DatabaseService");
+
+      db.exec(`
+        CREATE TABLE phone_last_message (
+          phone_normalized TEXT NOT NULL,
+          user_id TEXT NOT NULL,
+          last_message_at DATETIME NOT NULL,
+          PRIMARY KEY (phone_normalized, user_id),
+          FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
+        )
+      `);
+      db.exec(`CREATE INDEX idx_phone_last_msg_user ON phone_last_message(user_id)`);
+
+      await logService.info("Migration 24 complete: phone_last_message table created", "DatabaseService");
+    }
+
+    // Migration 25: Create external_contacts shadow table (BACKLOG-569, TASK-1773)
+    // This caches macOS Contacts with pre-computed last_message_at for instant sorted loading
+    const externalContactsExists = db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='external_contacts'"
+    ).get();
+
+    if (!externalContactsExists) {
+      await logService.info("Running migration 25: Create external_contacts shadow table", "DatabaseService");
+
+      db.exec(`
+        CREATE TABLE external_contacts (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          name TEXT,
+          phones_json TEXT,
+          emails_json TEXT,
+          company TEXT,
+          last_message_at DATETIME,
+          macos_record_id TEXT,
+          synced_at DATETIME,
+          FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
+          UNIQUE(user_id, macos_record_id)
+        )
+      `);
+      db.exec(`CREATE INDEX idx_external_contacts_user ON external_contacts(user_id)`);
+      db.exec(`CREATE INDEX idx_external_contacts_last_msg ON external_contacts(user_id, last_message_at DESC)`);
+
+      await logService.info("Migration 25 complete: external_contacts shadow table created", "DatabaseService");
+    }
+
+    // Migration 26: Add email_id to attachments table for email attachment support (TASK-1775)
+    // This enables storing attachments from Gmail/Outlook emails alongside iMessage attachments
+    const attachmentsColumns = getColumns('attachments');
+    if (!attachmentsColumns.includes('email_id')) {
+      await logService.info("Running migration 26: Add email_id to attachments table", "DatabaseService");
+
+      // Add email_id column (nullable - existing attachments have message_id, new email attachments have email_id)
+      runSafe(`ALTER TABLE attachments ADD COLUMN email_id TEXT REFERENCES emails(id) ON DELETE CASCADE`);
+
+      // Create index for email_id lookups
+      runSafe(`CREATE INDEX IF NOT EXISTS idx_attachments_email_id ON attachments(email_id)`);
+
+      // Note: CHECK constraint (message_id IS NOT NULL OR email_id IS NOT NULL) is enforced
+      // by the service layer (emailAttachmentService and macOSMessagesImportService)
+      // because SQLite ALTER TABLE cannot add CHECK constraints without table recreation.
+
+      await logService.info("Migration 26 complete: email_id column added to attachments", "DatabaseService");
+    }
+
+    // Migration 27: Update external_contacts schema for multi-source support (SPRINT-068, BACKLOG-585)
+    // Renames macos_record_id to external_record_id and adds source column
+    // This enables Windows + iPhone sync to use the same table architecture as macOS
+    const extContactsCols = getColumns('external_contacts');
+    if (extContactsCols.includes('macos_record_id') && !extContactsCols.includes('external_record_id')) {
+      await logService.info("Running migration 27: Update external_contacts for multi-source support", "DatabaseService");
+
+      // Use table recreation pattern (safer than RENAME COLUMN for SQLite compatibility)
+      // Step 1: Create new table with correct schema
+      db.exec(`
+        CREATE TABLE external_contacts_new (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          name TEXT,
+          phones_json TEXT,
+          emails_json TEXT,
+          company TEXT,
+          last_message_at DATETIME,
+          external_record_id TEXT,
+          source TEXT DEFAULT 'macos',
+          synced_at DATETIME,
+          FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
+          UNIQUE(user_id, source, external_record_id)
+        )
+      `);
+
+      // Step 2: Copy data from old table (existing records are macOS contacts)
+      db.exec(`
+        INSERT INTO external_contacts_new
+          (id, user_id, name, phones_json, emails_json, company, last_message_at,
+           external_record_id, source, synced_at)
+        SELECT
+          id, user_id, name, phones_json, emails_json, company, last_message_at,
+          macos_record_id, 'macos', synced_at
+        FROM external_contacts
+      `);
+
+      // Step 3: Drop old table
+      db.exec(`DROP TABLE external_contacts`);
+
+      // Step 4: Rename new table
+      db.exec(`ALTER TABLE external_contacts_new RENAME TO external_contacts`);
+
+      // Step 5: Recreate indexes
+      db.exec(`CREATE INDEX idx_external_contacts_user ON external_contacts(user_id)`);
+      db.exec(`CREATE INDEX idx_external_contacts_last_msg ON external_contacts(user_id, last_message_at DESC)`);
+      db.exec(`CREATE INDEX idx_external_contacts_source ON external_contacts(user_id, source)`);
+
+      await logService.info("Migration 27 complete: external_contacts updated for multi-source support", "DatabaseService");
+    }
+
+    // Migration 27b: Migrate existing iPhone contacts from contacts table to external_contacts (SPRINT-068)
+    // This is a data migration for Windows users who already synced iPhone contacts
+    // TASK-1792: Added idempotency check - skip if already migrated
+    const iPhoneContactsInExternalTable = db.prepare(`
+      SELECT COUNT(*) as count FROM external_contacts WHERE source = 'iphone'
+    `).get() as { count: number } | undefined;
+
+    const iPhoneContactsInContactsTable = db.prepare(`
+      SELECT COUNT(*) as count FROM contacts
+      WHERE source = 'contacts_app' AND is_imported = 0
+    `).get() as { count: number } | undefined;
+
+    // Only run migration if there are iPhone contacts to migrate AND they haven't been migrated yet
+    const needsMigration = iPhoneContactsInContactsTable && iPhoneContactsInContactsTable.count > 0 &&
+      (!iPhoneContactsInExternalTable || iPhoneContactsInExternalTable.count === 0);
+
+    if (needsMigration) {
+      await logService.info(`Migration 27b: Migrating ${iPhoneContactsInContactsTable.count} iPhone contacts to external_contacts`, "DatabaseService");
+
+      // Insert iPhone contacts into external_contacts if not already present
+      db.exec(`
+        INSERT OR IGNORE INTO external_contacts
+          (id, user_id, name, phones_json, emails_json, company, external_record_id, source, synced_at)
+        SELECT
+          c.id,
+          c.user_id,
+          c.display_name,
+          (SELECT json_group_array(cp.phone_e164) FROM contact_phones cp WHERE cp.contact_id = c.id),
+          (SELECT json_group_array(ce.email) FROM contact_emails ce WHERE ce.contact_id = c.id),
+          c.company,
+          c.id,
+          'iphone',
+          c.updated_at
+        FROM contacts c
+        WHERE c.source = 'contacts_app' AND c.is_imported = 0
+      `);
+
+      await logService.info("Migration 27b complete: iPhone contacts migrated to external_contacts", "DatabaseService");
+    }
+
+    // Migration 27c: Backfill participants_flat for iPhone-synced messages (SPRINT-068)
+    // This column was missing from iPhoneSyncStorageService, causing auto-link to fail on Windows
+    const messagesNeedingBackfill = db.prepare(`
+      SELECT COUNT(*) as count FROM messages
+      WHERE channel IN ('sms', 'imessage')
+        AND participants_flat IS NULL
+        AND participants IS NOT NULL
+    `).get() as { count: number } | undefined;
+
+    if (messagesNeedingBackfill && messagesNeedingBackfill.count > 0) {
+      await logService.info(`Migration 27c: Backfilling participants_flat for ${messagesNeedingBackfill.count} messages`, "DatabaseService");
+
+      // Extract phone digits from participants JSON and populate participants_flat
+      // Uses json_extract to get the 'from' or 'to[0]' phone number, then extracts digits
+      db.exec(`
+        UPDATE messages
+        SET participants_flat = (
+          CASE
+            WHEN json_extract(participants, '$.from') != 'me'
+            THEN REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+              json_extract(participants, '$.from'),
+              '+', ''), '-', ''), '(', ''), ')', ''), ' ', '')
+            ELSE REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+              json_extract(participants, '$.to[0]'),
+              '+', ''), '-', ''), '(', ''), ')', ''), ' ', '')
+          END
+        )
+        WHERE channel IN ('sms', 'imessage')
+          AND participants_flat IS NULL
+          AND participants IS NOT NULL
+      `);
+
+      await logService.info("Migration 27c complete: participants_flat backfilled for existing messages", "DatabaseService");
+    }
+
+    // Migration 28: Add message_type column to messages table (TASK-1799)
+    // This enables UI differentiation between text, voice messages, location shares, etc.
+    const messagesColumnsM28 = getColumns('messages');
+    if (!messagesColumnsM28.includes('message_type')) {
+      await logService.info("Running migration 28: Add message_type column to messages", "DatabaseService");
+
+      // Add the column with CHECK constraint for valid values
+      db.exec(`
+        ALTER TABLE messages ADD COLUMN message_type TEXT
+        CHECK (message_type IS NULL OR message_type IN ('text', 'voice_message', 'location', 'attachment_only', 'system', 'unknown'))
+      `);
+
+      await logService.info("Migration 28: message_type column added to messages", "DatabaseService");
+
+      // Backfill existing messages with audio attachments as voice_message
+      const audioMessagesCount = db.prepare(`
+        SELECT COUNT(DISTINCT m.id) as count
+        FROM messages m
+        JOIN attachments a ON a.message_id = m.id
+        WHERE a.mime_type LIKE 'audio/%'
+          AND m.message_type IS NULL
+      `).get() as { count: number } | undefined;
+
+      if (audioMessagesCount && audioMessagesCount.count > 0) {
+        await logService.info(`Migration 28: Backfilling ${audioMessagesCount.count} voice messages`, "DatabaseService");
+
+        db.exec(`
+          UPDATE messages SET message_type = 'voice_message'
+          WHERE id IN (
+            SELECT DISTINCT m.id FROM messages m
+            JOIN attachments a ON a.message_id = m.id
+            WHERE a.mime_type LIKE 'audio/%'
+          ) AND message_type IS NULL
+        `);
+
+        await logService.info("Migration 28: Voice messages backfilled", "DatabaseService");
+      }
+
+      await logService.info("Migration 28 complete: message_type column and backfill done", "DatabaseService");
+    }
+
+    // Note: Migration 29 (TRANSACTION_SUBMIT in audit_logs) is handled by the
+    // updated CHECK constraint in Migration 7's CREATE TABLE statement.
+    // No separate migration needed for fresh databases.
+
     // Finalize schema version (create table if missing for backwards compatibility)
     const schemaVersionExists = db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
@@ -982,6 +1286,89 @@ class DatabaseService implements IDatabaseService {
     return userDb.hasCompletedEmailOnboarding(userId);
   }
 
+  /**
+   * Migrate a local user's ID to match Supabase auth.uid()
+   * BACKLOG-600: This handles users created before TASK-1507G (user ID unification)
+   *
+   * Updates all FK references across tables:
+   * - users_local (primary)
+   * - messages, contacts, transactions, emails, etc.
+   * - sessions, oauth_tokens, email_accounts
+   *
+   * @param oldUserId - The current local user ID
+   * @param newUserId - The Supabase auth.uid() to migrate to
+   */
+  async migrateUserIdForUnification(oldUserId: string, newUserId: string): Promise<void> {
+    const db = this.getRawDatabase();
+
+    try {
+      // CRITICAL: Disable FK checks during migration to avoid circular dependency issues
+      // The old ID is referenced by child tables, and we need to update both parent and children
+      db.exec("PRAGMA foreign_keys = OFF");
+
+      // Use a transaction to ensure atomicity
+      db.exec("BEGIN TRANSACTION");
+
+      try {
+        // Update the users_local table FIRST (the primary record)
+        // With FK checks off, this won't cause issues
+        db.prepare("UPDATE users_local SET id = ? WHERE id = ?").run(newUserId, oldUserId);
+        logService.info("[DB Migration] Updated users_local primary record", "DatabaseService");
+
+        // Tables with user_id FK that need to be updated
+        const tablesToUpdate = [
+          "messages",
+          "contacts",
+          "contact_phones",
+          "contact_emails",
+          "transactions",
+          "emails",
+          "communications",
+          "sessions",
+          "oauth_tokens",
+          "email_accounts",
+          "user_preferences",
+          "external_contacts",
+          "attachments",
+          "audit_logs_local",
+        ];
+
+        for (const table of tablesToUpdate) {
+          try {
+            // Check if table exists and has user_id column
+            const tableInfo = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+            const hasUserId = tableInfo.some((col) => col.name === "user_id");
+
+            if (hasUserId) {
+              const result = db.prepare(`UPDATE ${table} SET user_id = ? WHERE user_id = ?`).run(newUserId, oldUserId);
+              if (result.changes > 0) {
+                logService.info(`[DB Migration] Updated ${result.changes} rows in ${table}`, "DatabaseService");
+              }
+            }
+          } catch (tableError) {
+            // Table might not exist, skip it
+            logService.debug(`[DB Migration] Skipping table ${table}: ${tableError}`, "DatabaseService");
+          }
+        }
+
+        db.exec("COMMIT");
+        logService.info("[DB Migration] User ID migration completed successfully", "DatabaseService", {
+          oldId: oldUserId.substring(0, 8) + "...",
+          newId: newUserId.substring(0, 8) + "...",
+        });
+      } catch (error) {
+        db.exec("ROLLBACK");
+        logService.error("[DB Migration] User ID migration failed, rolled back", "DatabaseService", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
+    } finally {
+      // CRITICAL: Re-enable FK checks
+      db.exec("PRAGMA foreign_keys = ON");
+    }
+  }
+
   // ============================================
   // SESSION OPERATIONS (Delegate to sessionDbService)
   // ============================================
@@ -1029,6 +1416,10 @@ class DatabaseService implements IDatabaseService {
     return contactDb.getContactById(contactId);
   }
 
+  async findContactByName(userId: string, name: string): Promise<Contact | null> {
+    return contactDb.findContactByName(userId, name);
+  }
+
   async getContacts(filters?: ContactFilters): Promise<Contact[]> {
     return contactDb.getContacts(filters);
   }
@@ -1037,12 +1428,17 @@ class DatabaseService implements IDatabaseService {
     return contactDb.getImportedContactsByUserId(userId);
   }
 
+  /** TASK-1956: Non-blocking version using worker thread */
+  async getImportedContactsByUserIdAsync(userId: string): Promise<Contact[]> {
+    return contactDb.getImportedContactsByUserIdAsync(userId);
+  }
+
   async getUnimportedContactsByUserId(userId: string): Promise<Contact[]> {
     return contactDb.getUnimportedContactsByUserId(userId);
   }
 
-  async markContactAsImported(contactId: string): Promise<void> {
-    return contactDb.markContactAsImported(contactId);
+  async markContactAsImported(contactId: string, source?: string): Promise<void> {
+    return contactDb.markContactAsImported(contactId, source);
   }
 
   async backfillContactEmails(contactId: string, emails: string[]): Promise<number> {
@@ -1055,6 +1451,10 @@ class DatabaseService implements IDatabaseService {
 
   async getContactsSortedByActivity(userId: string, propertyAddress?: string): Promise<contactDb.ContactWithActivity[]> {
     return contactDb.getContactsSortedByActivity(userId, propertyAddress);
+  }
+
+  async backfillContactCommunicationDates(userId: string): Promise<number> {
+    return contactDb.backfillContactCommunicationDates(userId);
   }
 
   async searchContacts(query: string, userId: string): Promise<Contact[]> {
@@ -1079,6 +1479,116 @@ class DatabaseService implements IDatabaseService {
 
   async getContactByPhone(phone: string): Promise<{ id: string; display_name: string; phone: string } | null> {
     return contactDb.getContactByPhone(phone);
+  }
+
+  /**
+   * Get the most recent message date for a phone number using lookup table
+   * Falls back to direct query if lookup table is empty (BACKLOG-567)
+   */
+  getLastMessageDateForPhone(userId: string, normalizedPhone: string): string | null {
+    const db = this.getRawDatabase();
+
+    // Fast indexed lookup from phone_last_message table
+    const result = db.prepare(`
+      SELECT last_message_at as last_date
+      FROM phone_last_message
+      WHERE user_id = ?
+        AND phone_normalized = ?
+    `).get(userId, normalizedPhone) as { last_date: string | null } | undefined;
+
+    return result?.last_date || null;
+  }
+
+  /**
+   * Batch lookup for multiple phones (much more efficient than N queries)
+   * Returns a Map of normalized phone -> last_message_at (BACKLOG-567)
+   */
+  getLastMessageDatesForPhones(userId: string, phones: string[]): Map<string, string> {
+    const db = this.getRawDatabase();
+    const result = new Map<string, string>();
+
+    if (phones.length === 0) return result;
+
+    // Use parameterized query for safety
+    const placeholders = phones.map(() => '?').join(',');
+    const rows = db.prepare(`
+      SELECT phone_normalized, last_message_at
+      FROM phone_last_message
+      WHERE user_id = ?
+        AND phone_normalized IN (${placeholders})
+    `).all(userId, ...phones) as { phone_normalized: string; last_message_at: string }[];
+
+    for (const row of rows) {
+      result.set(row.phone_normalized, row.last_message_at);
+    }
+
+    return result;
+  }
+
+  /**
+   * Populate phone_last_message lookup table from messages (BACKLOG-567)
+   * This aggregates all SMS/iMessage into a phone->lastDate lookup for O(1) queries
+   */
+  async backfillPhoneLastMessageTable(userId: string): Promise<number> {
+    const db = this.getRawDatabase();
+
+    await logService.info("Backfilling phone_last_message table", "DatabaseService", { userId });
+
+    // Get all distinct phone numbers from participants_flat and their max sent_at
+    // participants_flat format: ",16508685180,16508685180" (comma-separated digits)
+    const messages = db.prepare(`
+      SELECT participants_flat, MAX(sent_at) as last_date
+      FROM messages
+      WHERE user_id = ?
+        AND (channel = 'sms' OR channel = 'imessage')
+        AND participants_flat IS NOT NULL
+        AND participants_flat != ''
+      GROUP BY participants_flat
+    `).all(userId) as { participants_flat: string; last_date: string }[];
+
+    // Parse and aggregate phones
+    const phoneLastDates = new Map<string, string>();
+
+    for (const msg of messages) {
+      // Split comma-separated phones and normalize each
+      const phones = msg.participants_flat.split(',').filter(p => p.trim().length >= 7);
+
+      for (const phone of phones) {
+        const normalized = phone.trim().slice(-10); // Last 10 digits
+        if (normalized.length < 7) continue;
+
+        const existing = phoneLastDates.get(normalized);
+        if (!existing || msg.last_date > existing) {
+          phoneLastDates.set(normalized, msg.last_date);
+        }
+      }
+    }
+
+    // Insert/update all phones in a transaction
+    const insertStmt = db.prepare(`
+      INSERT OR REPLACE INTO phone_last_message (phone_normalized, user_id, last_message_at)
+      VALUES (?, ?, ?)
+    `);
+
+    db.exec('BEGIN TRANSACTION');
+    try {
+      let count = 0;
+      for (const [phone, lastDate] of phoneLastDates) {
+        insertStmt.run(phone, userId, lastDate);
+        count++;
+      }
+      db.exec('COMMIT');
+
+      await logService.info("Phone last message backfill complete", "DatabaseService", {
+        userId,
+        phonesUpdated: count,
+      });
+
+      return count;
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   async getContactNamesByPhones(phones: string[]): Promise<Map<string, string>> {

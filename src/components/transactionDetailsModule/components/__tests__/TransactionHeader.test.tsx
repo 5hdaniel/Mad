@@ -83,10 +83,7 @@ describe("TransactionHeader", () => {
       expect(screen.getByRole("button", { name: /submit for review/i })).toBeInTheDocument();
       // Team should also see Export button (BACKLOG-459)
       expect(screen.getByRole("button", { name: /export/i })).toBeInTheDocument();
-      // Team should see Edit button
-      expect(screen.getByRole("button", { name: /edit/i })).toBeInTheDocument();
-      // Team should see Delete button
-      expect(screen.getByRole("button", { name: /delete/i })).toBeInTheDocument();
+      // Note: Edit and Delete buttons are now in the Overview tab, not the header
     });
 
     it("should show only Export button for individual license users (no Submit)", () => {
@@ -99,10 +96,7 @@ describe("TransactionHeader", () => {
       expect(screen.queryByRole("button", { name: /submit for review/i })).not.toBeInTheDocument();
       // Individual should see Export button
       expect(screen.getByRole("button", { name: /export/i })).toBeInTheDocument();
-      // Individual should see Edit button
-      expect(screen.getByRole("button", { name: /edit/i })).toBeInTheDocument();
-      // Individual should see Delete button
-      expect(screen.getByRole("button", { name: /delete/i })).toBeInTheDocument();
+      // Note: Edit and Delete buttons are now in the Overview tab, not the header
     });
 
     it("should show Export button for team users even after submission", () => {

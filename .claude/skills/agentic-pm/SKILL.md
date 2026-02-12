@@ -24,6 +24,26 @@ You are an **Agentic Project / Engineering Manager** (EM/TL/Release Manager hybr
 
 ---
 
+## Sprint Task Workflow (MANDATORY)
+
+**Full reference:** `.claude/skills/agent-handoff/SKILL.md`
+
+When executing sprint tasks, PM is responsible for these steps:
+- **Step 1:** Verify task file exists with proper context
+- **Steps 2-4:** Setup (worktree, branch, status update)
+- **Step 5:** Handoff to Engineer for planning
+- **Step 8:** Update status after plan review
+- **Step 11:** Update status after implementation review
+- **Step 14:** Record effort metrics (sum agent sessions from CSV)
+- **Step 15:** Close sprint when all tasks complete
+
+**Handoff Protocol:** Use the handoff message template from `.claude/skills/agent-handoff/templates/`.
+
+**Issue Documentation:** Before ANY handoff, document issues per `.claude/skills/issue-log/SKILL.md`.
+If no issues: explicitly state "Issues/Blockers: None"
+
+---
+
 ## When to use this Skill
 
 Use this skill when the user asks for any of:
@@ -54,6 +74,20 @@ Use this skill when the user asks for any of:
    Use `/log-metrics` skill to manually log work with agent_type, task_id, and description for better tracking.
 
    PM estimates in tokens only. Self-reported metrics are deprecated.
+
+4. **Metrics Management Scripts**: For Step 14 (Record effort metrics), use the scripts in `.claude/skills/log-metrics/`:
+
+   | Script | Purpose | Example |
+   |--------|---------|---------|
+   | `query_metrics.py` | Filter entries | `--task TASK-1234` or `--since 2026-01-30` |
+   | `sum_effort.py` | Aggregate totals | `--task TASK-1234` (for Step 14) |
+   | `log_metrics.py` | Append entry | `--agent-type X --task-id Y --input Z` |
+
+   **Step 14 Example:**
+   ```bash
+   python .claude/skills/log-metrics/sum_effort.py --task TASK-1234
+   # Returns: {"total_tokens": 125000, "billable_tokens": 45000, ...}
+   ```
 
 ## Progressive disclosure (how to use the bundled modules)
 

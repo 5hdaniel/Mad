@@ -20,7 +20,9 @@ export const WINDOWS_PLATFORM: Platform = "windows";
  * Flow order:
  * 1. phone-type - Select iPhone or Android
  * 2. apple-driver - Install Apple Mobile Device USB Driver (for iPhone users, triggers DB init)
- * 3. email-connect - Connect email account (Google or Microsoft, DB is ready)
+ * 3. account-verification - Verify user exists in local DB (creates if missing, auto-retries on failure)
+ * 4. email-connect - Connect email account (Google or Microsoft, DB and user are ready)
+ * 5. data-sync - Sync checkpoint: pulls phone_type from Supabase to local DB (consistency with macOS)
  *
  * Note: apple-driver is placed before email-connect to ensure database initialization
  * happens before email OAuth. For Android users, the apple-driver step is skipped
@@ -29,7 +31,9 @@ export const WINDOWS_PLATFORM: Platform = "windows";
 export const WINDOWS_FLOW_STEPS: readonly OnboardingStepId[] = [
   "phone-type",
   "apple-driver",
+  "account-verification",
   "email-connect",
+  "data-sync",
 ] as const;
 
 /**

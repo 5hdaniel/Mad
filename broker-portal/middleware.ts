@@ -64,26 +64,46 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Refresh session (important for token refresh)
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   const pathname = request.nextUrl.pathname;
   const isProtectedRoute = pathname.startsWith('/dashboard');
-  const isAuthRoute = pathname === '/login';
+  const isAuthRoute = pathname === '/login' || pathname === '/setup';
 
-  // Redirect unauthenticated users from protected routes
-  if (isProtectedRoute && !user) {
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('redirectTo', pathname);
-    return NextResponse.redirect(loginUrl);
-  }
+  try {
+    // Refresh session (important for token refresh)
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  // Redirect authenticated users from login page
-  if (isAuthRoute && user) {
-    const redirectTo = request.nextUrl.searchParams.get('redirectTo') ?? '/dashboard';
-    return NextResponse.redirect(new URL(redirectTo, request.url));
+    // Redirect unauthenticated users from protected routes
+    if (isProtectedRoute && !user) {
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('redirectTo', pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+
+    // Redirect agent-role users away from dashboard to download page
+    if (isProtectedRoute && user) {
+      const { data: membership } = await supabase
+        .from('organization_members')
+        .select('role')
+        .eq('user_id', user.id)
+        .limit(1)
+        .single();
+
+      if (membership && !['admin', 'it_admin', 'broker'].includes(membership.role)) {
+        return NextResponse.redirect(new URL('/download', request.url));
+      }
+    }
+
+    // Redirect authenticated users from login page
+    if (isAuthRoute && user) {
+      const redirectTo = request.nextUrl.searchParams.get('redirectTo') ?? '/dashboard';
+      return NextResponse.redirect(new URL(redirectTo, request.url));
+    }
+  } catch {
+    // If Supabase calls fail (timeout, network), let the request through
+    // rather than showing a 500 error. The page-level auth checks will
+    // handle protection as a fallback.
   }
 
   return response;

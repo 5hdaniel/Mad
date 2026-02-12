@@ -24,6 +24,7 @@ import React, {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
 } from "react";
 import type { LicenseType } from "../../electron/types/models";
 import type { LicenseValidationResult } from "../../shared/types/license";
@@ -46,6 +47,8 @@ interface LicenseContextValue {
 
   // Loading state
   isLoading: boolean;
+  /** True after first successful license load - used to prevent loading UI on refresh */
+  hasInitialized: boolean;
 
   // Actions
   refresh: () => Promise<void>;
@@ -73,6 +76,8 @@ interface LicenseState {
   hasAIAddon: boolean;
   organizationId: string | null;
   isLoading: boolean;
+  /** True after first successful load - prevents loading screen on refresh */
+  hasInitialized: boolean;
   // SPRINT-062: Validation status
   validationStatus: LicenseValidationResult | null;
 }
@@ -83,6 +88,7 @@ const defaultLicenseState: LicenseState = {
   hasAIAddon: false,
   organizationId: null,
   isLoading: true,
+  hasInitialized: false,
   validationStatus: null,
 };
 
@@ -111,8 +117,14 @@ export function LicenseProvider({
 }: LicenseProviderProps): React.ReactElement {
   const [state, setState] = useState<LicenseState>(defaultLicenseState);
 
+  // Track last license check to throttle focus refresh (60 second minimum between checks)
+  const lastCheckRef = useRef<number>(0);
+  const FOCUS_THROTTLE_MS = 60000; // 60 seconds
+
   /**
    * Fetch license from main process (original method for backward compatibility)
+   * Note: This is a silent fetch that doesn't set isLoading to true,
+   * so it won't trigger the loading screen on background refreshes.
    */
   const fetchLicense = useCallback(async () => {
     try {
@@ -125,20 +137,24 @@ export function LicenseProvider({
           hasAIAddon: license.ai_detection_enabled || false,
           organizationId: license.organization_id || null,
           isLoading: false,
+          hasInitialized: true,
         }));
       } else {
         // No license found - use defaults
-        setState((prev) => ({ ...prev, isLoading: false }));
+        setState((prev) => ({ ...prev, isLoading: false, hasInitialized: true }));
       }
     } catch {
       // License fetch failed silently - use defaults
-      setState((prev) => ({ ...prev, isLoading: false }));
+      setState((prev) => ({ ...prev, isLoading: false, hasInitialized: true }));
     }
   }, []);
 
   /**
    * SPRINT-062: Validate license for a specific user
    * Handles trial status, transaction limits, and auto-creates license if needed
+   *
+   * SPRINT-066: Added hasInitialized tracking to prevent showing "Checking license..."
+   * screen on background refreshes. Only shows loading UI before first successful load.
    */
   const validateLicense = useCallback(async () => {
     if (!userId) {
@@ -147,7 +163,12 @@ export function LicenseProvider({
     }
 
     try {
-      setState((prev) => ({ ...prev, isLoading: true }));
+      // Only set isLoading: true if we haven't initialized yet
+      // This prevents showing "Checking license..." on background refreshes
+      setState((prev) => ({
+        ...prev,
+        isLoading: prev.hasInitialized ? prev.isLoading : true,
+      }));
 
       // Validate license through service (returns ApiResult<LicenseValidationResult>)
       const validationResponse = await licenseService.validate(userId);
@@ -170,10 +191,11 @@ export function LicenseProvider({
           licenseType: validationResult.licenseType as LicenseType,
           hasAIAddon: validationResult.aiEnabled,
           isLoading: false,
+          hasInitialized: true, // Mark as initialized after first successful load
         }));
       } else {
         // Fallback if both validate and create failed
-        setState((prev) => ({ ...prev, isLoading: false }));
+        setState((prev) => ({ ...prev, isLoading: false, hasInitialized: true }));
       }
     } catch (error) {
       console.error("Failed to validate license:", error);
@@ -193,6 +215,7 @@ export function LicenseProvider({
         ...prev,
         validationStatus: fallbackStatus,
         isLoading: false,
+        hasInitialized: true, // Mark as initialized even on error to prevent loading loop
       }));
     }
   }, [userId]);
@@ -213,19 +236,27 @@ export function LicenseProvider({
   }, [userId, validateLicense]);
 
   // Refresh on app focus (to catch license changes from other sources)
+  // Throttled to prevent constant "checking license" on every focus
   useEffect(() => {
     const handleFocus = () => {
-      fetchLicense();
-      if (userId) {
-        validateLicense();
+      const now = Date.now();
+      // Skip if checked recently (within 60 seconds)
+      if (now - lastCheckRef.current < FOCUS_THROTTLE_MS) {
+        return;
       }
+      lastCheckRef.current = now;
+
+      // Do a silent background check - don't set isLoading to avoid UI disruption
+      fetchLicense();
+      // Skip validateLicense on focus - it sets isLoading which closes modals
+      // License validation happens on mount and userId change anyway
     };
 
     window.addEventListener("focus", handleFocus);
     return () => {
       window.removeEventListener("focus", handleFocus);
     };
-  }, [fetchLicense, validateLicense, userId]);
+  }, [fetchLicense]);
 
   /**
    * Refresh license data
@@ -263,6 +294,7 @@ export function LicenseProvider({
       canSubmit,
       canAutoDetect,
       isLoading: state.isLoading,
+      hasInitialized: state.hasInitialized,
       refresh,
       // SPRINT-062: Validation status fields
       validationStatus,

@@ -21,6 +21,8 @@ interface Message {
   has_attachments: boolean;
   attachment_count: number;
   thread_id: string | null;
+  /** Message type: text, voice_message, location, attachment_only, system, unknown */
+  message_type: string | null;
   participants: {
     from?: string;
     to?: string | string[];
@@ -112,6 +114,84 @@ async function getAttachments(submissionId: string): Promise<Attachment[]> {
   return data || [];
 }
 
+type HistoryEntry = {
+  status: string;
+  changed_at: string;
+  changed_by?: string;
+  notes?: string;
+  parentSubmissionId?: string; // links to older submission version
+};
+
+/**
+ * Walk the parent_submission_id chain to collect the full status history
+ * across all versions, then resolve UUIDs to display names.
+ * Tags "resubmitted" entries with the parent submission ID for linking.
+ */
+async function getFullStatusHistory(
+  submission: { id: string; parent_submission_id?: string | null; status_history?: HistoryEntry[]; created_at: string }
+): Promise<{ history: HistoryEntry[]; rootCreatedAt: string }> {
+  const allEntries: HistoryEntry[] = [];
+  const supabase = await createClient();
+  let rootCreatedAt = submission.created_at;
+
+  // Walk parent chain to collect history from all versions
+  const parents: Array<{ id: string; status_history: HistoryEntry[]; created_at: string }> = [];
+  let parentId = submission.parent_submission_id;
+  const maxDepth = 10;
+  let depth = 0;
+  while (parentId && depth < maxDepth) {
+    const { data: parent } = await supabase
+      .from('transaction_submissions')
+      .select('id, status_history, parent_submission_id, created_at')
+      .eq('id', parentId)
+      .single();
+
+    if (!parent) break;
+    parents.push(parent);
+    parentId = parent.parent_submission_id;
+    depth++;
+  }
+
+  // Add parent history oldest-first
+  for (const p of parents.reverse()) {
+    allEntries.push(...(p.status_history || []));
+    rootCreatedAt = p.created_at;
+  }
+
+  // Append current submission's history, tagging "resubmitted" with parent link
+  for (const entry of (submission.status_history || [])) {
+    if (entry.status === 'resubmitted' && submission.parent_submission_id) {
+      allEntries.push({ ...entry, parentSubmissionId: submission.parent_submission_id });
+    } else {
+      allEntries.push(entry);
+    }
+  }
+
+  // Resolve UUIDs to display names
+  const userIds = Array.from(new Set(allEntries.map((e) => e.changed_by).filter(Boolean))) as string[];
+  if (userIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, display_name')
+      .in('id', userIds);
+
+    const nameMap = new Map<string, string>();
+    for (const p of profiles || []) {
+      if (p.display_name) nameMap.set(p.id, p.display_name);
+    }
+
+    return {
+      history: allEntries.map((entry) => ({
+        ...entry,
+        changed_by: entry.changed_by ? nameMap.get(entry.changed_by) || undefined : undefined,
+      })),
+      rootCreatedAt,
+    };
+  }
+
+  return { history: allEntries, rootCreatedAt };
+}
+
 export default async function SubmissionDetailPage({ params }: PageProps) {
   const { id } = await params;
   const [submission, messages, attachments] = await Promise.all([
@@ -123,6 +203,9 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
   if (!submission) {
     notFound();
   }
+
+  // Build full status history by walking the parent submission chain
+  const { history: fullHistory, rootCreatedAt } = await getFullStatusHistory(submission);
 
   // Mark as under_review when broker first opens (don't await - fire and forget)
   // This prevents agent from resubmitting while broker is reviewing
@@ -173,13 +256,6 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
           <DetailItem label="Submitted" value={formatDate(submission.created_at)} />
         </div>
 
-        {/* Review Notes */}
-        {submission.review_notes && (
-          <div className="px-6 py-5 border-t border-gray-200 bg-gray-50">
-            <h3 className="text-sm font-medium text-gray-900 mb-2">Review Notes</h3>
-            <p className="text-sm text-gray-700 whitespace-pre-wrap">{submission.review_notes}</p>
-          </div>
-        )}
       </div>
 
       {/* Review Actions */}
@@ -193,12 +269,10 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
       />
 
       {/* Status History Timeline */}
-      {/* Note: status_history column doesn't exist in schema yet, passing empty array */}
-      {/* The StatusHistory component gracefully handles this by showing initial submission entry */}
       <StatusHistory
-        history={[]}
+        history={fullHistory}
         currentStatus={submission.status}
-        submittedAt={submission.created_at}
+        submittedAt={rootCreatedAt}
       />
 
       {/* Messages with filter tabs */}

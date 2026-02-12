@@ -53,6 +53,8 @@ function DesktopLoginForm() {
         queryParams: {
           prompt: 'select_account', // Always show account picker
         },
+        // Request email and profile scopes for Azure to get user name/email
+        scopes: provider === 'azure' ? 'email profile openid' : undefined,
       },
     });
 

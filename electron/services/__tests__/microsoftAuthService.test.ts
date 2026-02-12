@@ -416,7 +416,7 @@ describe("MicrosoftAuthService - authenticateForMailbox", () => {
     const result = await microsoftAuthService.authenticateForMailbox();
 
     expect(result.scopes).toContain("Mail.Read");
-    expect(result.scopes).toContain("Mail.ReadWrite");
+    expect(result.scopes).not.toContain("Mail.ReadWrite");
 
     // Clean up
     microsoftAuthService.resolveCodeDirectly("cleanup");

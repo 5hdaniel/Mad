@@ -130,11 +130,11 @@ describe("Settings", () => {
       expect(screen.getByText("About")).toBeInTheDocument();
     });
 
-    it("should show version information", async () => {
+    it("should show app name and copyright", async () => {
       renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByText("MagicAudit")).toBeInTheDocument();
-      expect(screen.getByText("Version 1.0.7")).toBeInTheDocument();
+      expect(screen.getByText(/© 2026 Blue Spaces LLC/)).toBeInTheDocument();
     });
   });
 
@@ -386,20 +386,81 @@ describe("Settings", () => {
       ).toBeInTheDocument();
     });
 
-    it("should show auto export toggle (disabled/coming soon)", async () => {
+  });
+
+  describe("Auto-Download Updates Toggle", () => {
+    it("should show auto-download updates toggle", async () => {
       renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
-      expect(screen.getByText("Auto Export")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText("Auto-download Updates")).toBeInTheDocument();
+      });
+
       expect(
-        screen.getByText(/automatically export new transactions/i),
+        screen.getByText(/automatically download new software updates/i),
       ).toBeInTheDocument();
     });
 
-    it("should show dark mode toggle (coming soon)", async () => {
+    it("should default to off (disabled)", async () => {
       renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
-      expect(screen.getByText("Dark Mode")).toBeInTheDocument();
-      expect(screen.getByText(/coming soon/i)).toBeInTheDocument();
+      await waitFor(() => {
+        const toggle = screen.getByRole("switch", {
+          name: /auto-download updates/i,
+        });
+        expect(toggle).toHaveAttribute("aria-checked", "false");
+      });
+    });
+
+    it("should load saved auto-download preference", async () => {
+      window.api.preferences.get.mockResolvedValue({
+        success: true,
+        preferences: {
+          export: { defaultFormat: "pdf" },
+          updates: { autoDownload: true },
+        },
+      });
+
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      await waitFor(() => {
+        const toggle = screen.getByRole("switch", {
+          name: /auto-download updates/i,
+        });
+        expect(toggle).toHaveAttribute("aria-checked", "true");
+      });
+    });
+
+    it("should toggle auto-download and save preference", async () => {
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("switch", { name: /auto-download updates/i }),
+        ).toBeInTheDocument();
+      });
+
+      const toggle = screen.getByRole("switch", {
+        name: /auto-download updates/i,
+      });
+      await userEvent.click(toggle);
+
+      expect(window.api.preferences.update).toHaveBeenCalledWith(mockUserId, {
+        updates: { autoDownload: true },
+      });
+    });
+
+    it("should disable toggle while loading preferences", () => {
+      window.api.preferences.get.mockImplementation(
+        () => new Promise((resolve) => setTimeout(resolve, 1000)),
+      );
+
+      renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      const toggle = screen.getByRole("switch", {
+        name: /auto-download updates/i,
+      });
+      expect(toggle).toBeDisabled();
     });
   });
 
@@ -506,17 +567,15 @@ describe("Settings", () => {
   });
 
   describe("About Section", () => {
-    it("should show app name and version", async () => {
+    it("should show app name", async () => {
       renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByText("MagicAudit")).toBeInTheDocument();
-      expect(screen.getByText("Version 1.0.7")).toBeInTheDocument();
     });
 
     it("should show disabled action buttons", async () => {
       renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
-      expect(screen.getByText("Check for Updates")).toBeInTheDocument();
       expect(screen.getByText("View Release Notes")).toBeInTheDocument();
       expect(screen.getByText("Privacy Policy")).toBeInTheDocument();
       expect(screen.getByText("Terms of Service")).toBeInTheDocument();

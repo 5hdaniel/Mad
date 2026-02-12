@@ -3,12 +3,17 @@
  *
  * Handles the OAuth redirect from Supabase Auth:
  * 1. Exchanges authorization code for session
- * 2. Verifies user has broker/admin role
- * 3. Redirects to dashboard or login with error
+ * 2. Verifies user has broker/admin/it_admin role
+ * 3. JIT-joins Azure users to their tenant's existing org
+ * 4. Redirects to dashboard or login with error
  */
 
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { extractEmail } from '@/lib/auth/helpers';
+
+// Allowed roles for broker portal access
+const ALLOWED_ROLES = ['broker', 'admin', 'it_admin'];
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -24,29 +29,130 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${origin}/login?error=auth_failed`);
     }
 
-    // Verify user has broker or admin role
+    // Get authenticated user
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
     if (user) {
+      // Check for existing membership with allowed role
       const { data: membership } = await supabase
         .from('organization_members')
         .select('role, organization_id')
         .eq('user_id', user.id)
-        .in('role', ['broker', 'admin'])
+        .in('role', ALLOWED_ROLES)
         .limit(1)
         .single();
 
-      if (!membership) {
-        // User exists but is not a broker/admin - sign them out
-        console.warn(`User ${user.id} attempted portal access without broker role`);
-        await supabase.auth.signOut();
-        return NextResponse.redirect(`${origin}/login?error=not_authorized`);
+      if (membership) {
+        // If IT admin, check if org needs admin consent for desktop app permissions
+        if (membership.role === 'it_admin' || membership.role === 'admin') {
+          const { data: org } = await supabase
+            .from('organizations')
+            .select('graph_admin_consent_granted, microsoft_tenant_id')
+            .eq('id', membership.organization_id)
+            .single();
+
+          if (org && !org.graph_admin_consent_granted && org.microsoft_tenant_id) {
+            return NextResponse.redirect(
+              `${origin}/setup/consent?tenant=${encodeURIComponent(org.microsoft_tenant_id)}&org=${encodeURIComponent(membership.organization_id)}`
+            );
+          }
+        }
+
+        // User has valid role - redirect to dashboard
+        return NextResponse.redirect(`${origin}${next}`);
       }
 
-      // Success - user has valid role
-      return NextResponse.redirect(`${origin}${next}`);
+      // No membership by user_id - check if there's a pending invite for this email
+      const userEmail = extractEmail(user);
+      if (userEmail) {
+        const { data: pendingInvite } = await supabase
+          .from('organization_members')
+          .select('id, role, organization_id')
+          .eq('invited_email', userEmail)
+          .is('user_id', null)
+          .limit(1)
+          .single();
+
+        if (pendingInvite) {
+          // Found pending invite - link user to the membership
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`Linking user to pending invite for ${userEmail}`);
+          }
+
+          // First ensure user exists in users table
+          const provider = user.app_metadata?.provider || 'email';
+          const oauthId = user.user_metadata?.provider_id || user.id;
+
+          const { error: upsertError } = await supabase
+            .from('users')
+            .upsert({
+              id: user.id,
+              email: userEmail,
+              oauth_provider: provider,
+              oauth_id: oauthId,
+              display_name: user.user_metadata?.full_name || user.user_metadata?.name || null,
+              first_name: user.user_metadata?.given_name || null,
+              last_name: user.user_metadata?.family_name || null,
+            }, { onConflict: 'id' });
+
+          if (upsertError) {
+            console.error('Error creating user record:', upsertError);
+          }
+
+          // Update the membership to link user_id and mark as joined
+          const { error: updateError } = await supabase
+            .from('organization_members')
+            .update({
+              user_id: user.id,
+              license_status: 'active',
+              joined_at: new Date().toISOString(),
+              invitation_token: null, // Clear the token
+            })
+            .eq('id', pendingInvite.id);
+
+          if (updateError) {
+            console.error('Error linking invite:', updateError);
+          } else {
+            if (process.env.NODE_ENV === 'development') {
+              console.log('Successfully linked invite to user');
+            }
+            return NextResponse.redirect(`${origin}${next}`);
+          }
+        }
+      }
+
+      // No membership and no pending invite - check if Azure user can JIT-join an existing org
+      const provider = user.app_metadata?.provider;
+
+      if (provider === 'azure') {
+        const customClaims = user.user_metadata?.custom_claims as { tid?: string } | undefined;
+        const tenantId = customClaims?.tid;
+        if (tenantId) {
+          const { data: jitResult, error: jitError } = await supabase.rpc('jit_join_organization', {
+            p_tenant_id: tenantId,
+          });
+          if (jitResult?.success) {
+            if (process.env.NODE_ENV === 'development') {
+              console.log(`JIT joined org ${jitResult.organization_id} with role ${jitResult.role}`);
+            }
+            return NextResponse.redirect(`${origin}${next}`);
+          }
+          if (jitError) {
+            console.error('JIT join RPC failed:', jitError);
+          }
+          // Determine appropriate error for user
+          const jitErrorCode = jitResult?.error === 'jit_disabled' ? 'jit_disabled' : 'org_not_setup';
+          await supabase.auth.signOut();
+          return NextResponse.redirect(`${origin}/login?error=${jitErrorCode}`);
+        }
+      }
+
+      // User not authorized - sign them out
+      console.warn('User attempted portal access without valid role');
+      await supabase.auth.signOut();
+      return NextResponse.redirect(`${origin}/login?error=not_authorized`);
     }
   }
 

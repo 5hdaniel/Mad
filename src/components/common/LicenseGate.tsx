@@ -62,10 +62,12 @@ export function LicenseGate({
   fallback = null,
   children,
 }: LicenseGateProps): React.ReactElement | null {
-  const { licenseType, hasAIAddon, isLoading } = useLicense();
+  const { licenseType, hasAIAddon, isLoading, hasInitialized } = useLicense();
 
-  // Don't render anything while loading to prevent UI flicker
-  if (isLoading) {
+  // Don't render anything until we've loaded license data at least once
+  // This prevents showing gated content before we know the actual license type
+  // After initialization, we trust the cached licenseType even during refreshes
+  if (isLoading && !hasInitialized) {
     return null;
   }
 

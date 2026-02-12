@@ -13,6 +13,7 @@ import { LoadingOrchestrator } from "./LoadingOrchestrator";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { AppStateProvider } from "./AppStateContext";
 import { useAppState } from "./useAppState";
+import { AuthProvider } from "../../../contexts/AuthContext";
 import type { AppState } from "./types";
 
 // ============================================
@@ -76,6 +77,7 @@ function StateDisplay() {
 
 /**
  * Wrapper for testing with provider.
+ * SPRINT-066: Added AuthProvider wrapper since LoadingOrchestrator uses useAuth
  */
 function TestWrapper({
   children,
@@ -85,9 +87,11 @@ function TestWrapper({
   initialState?: AppState;
 }) {
   return (
-    <AppStateProvider initialState={initialState}>
-      <LoadingOrchestrator>{children}</LoadingOrchestrator>
-    </AppStateProvider>
+    <AuthProvider>
+      <AppStateProvider initialState={initialState}>
+        <LoadingOrchestrator>{children}</LoadingOrchestrator>
+      </AppStateProvider>
+    </AuthProvider>
   );
 }
 
@@ -451,5 +455,39 @@ describe("LoadingOrchestrator phase transitions", () => {
       },
       { timeout: 2000 }
     );
+  });
+
+  it("skips DB init for first-time macOS users (deferredDbInit)", async () => {
+    // First-time macOS user: no keystore exists
+    mockApi.system.hasEncryptionKeyStore.mockResolvedValue({
+      success: true,
+      hasKeyStore: false, // No keystore = first time macOS user
+    });
+    // initializeSecureStorage should NOT be called - that's what we're testing
+    mockApi.system.initializeSecureStorage.mockImplementation(() => {
+      throw new Error("initializeSecureStorage should not be called when deferredDbInit is true");
+    });
+    // Auth should proceed normally
+    mockApi.auth.getCurrentUser.mockResolvedValue({
+      success: false, // No session - goes to unauthenticated
+    });
+
+    render(
+      <TestWrapper>
+        <div data-testid="children">Login Screen</div>
+      </TestWrapper>
+    );
+
+    // Should skip DB init and go directly to loading-auth, then unauthenticated
+    // If initializeSecureStorage was called, the test would fail with an error
+    await waitFor(
+      () => {
+        expect(screen.getByTestId("children")).toBeInTheDocument();
+      },
+      { timeout: 2000 }
+    );
+
+    // Verify initializeSecureStorage was never called
+    expect(mockApi.system.initializeSecureStorage).not.toHaveBeenCalled();
   });
 });

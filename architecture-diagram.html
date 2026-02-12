@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Magic Audit - Architecture Diagram</title>
+  <style>
+    :root {
+      --bg-dark: #0d1117;
+      --bg-card: #161b22;
+      --bg-hover: #21262d;
+      --border: #30363d;
+      --text-primary: #e6edf3;
+      --text-secondary: #8b949e;
+      --blue: #58a6ff;
+      --green: #3fb950;
+      --purple: #a371f7;
+      --orange: #d29922;
+      --red: #f85149;
+      --cyan: #39c5cf;
+      --pink: #db61a2;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: var(--bg-dark);
+      color: var(--text-primary);
+      padding: 40px;
+      min-height: 100vh;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 10px;
+      font-size: 2.5rem;
+      background: linear-gradient(135deg, var(--blue), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: var(--text-secondary);
+      margin-bottom: 40px;
+      font-size: 1.1rem;
+    }
+
+    .architecture {
+      display: flex;
+      gap: 30px;
+      max-width: 1800px;
+      margin: 0 auto;
+    }
+
+    .column {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .column.local {
+      flex: 2;
+    }
+
+    .section {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      position: relative;
+    }
+
+    .section-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-secondary);
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-title::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .section.electron .section-title::before { background: var(--blue); }
+    .section.database .section-title::before { background: var(--green); }
+    .section.cloud .section-title::before { background: var(--purple); }
+    .section.external .section-title::before { background: var(--orange); }
+
+    .box {
+      background: var(--bg-hover);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 10px;
+      transition: all 0.2s ease;
+    }
+
+    .box:hover {
+      border-color: var(--blue);
+      transform: translateX(4px);
+    }
+
+    .box:last-child {
+      margin-bottom: 0;
+    }
+
+    .box-title {
+      font-weight: 600;
+      font-size: 0.95rem;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .box-desc {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+
+    .tag {
+      font-size: 0.65rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+
+    .tag.main { background: rgba(88, 166, 255, 0.2); color: var(--blue); }
+    .tag.preload { background: rgba(163, 113, 247, 0.2); color: var(--purple); }
+    .tag.renderer { background: rgba(63, 185, 80, 0.2); color: var(--green); }
+    .tag.ipc { background: rgba(210, 153, 34, 0.2); color: var(--orange); }
+    .tag.encrypted { background: rgba(248, 81, 73, 0.2); color: var(--red); }
+    .tag.sync { background: rgba(57, 197, 207, 0.2); color: var(--cyan); }
+    .tag.api { background: rgba(219, 97, 162, 0.2); color: var(--pink); }
+
+    .services-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .service-item {
+      background: var(--bg-hover);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 0.8rem;
+      transition: all 0.2s ease;
+    }
+
+    .service-item:hover {
+      border-color: var(--blue);
+      background: var(--bg-card);
+    }
+
+    .service-item .name {
+      font-weight: 500;
+      margin-bottom: 2px;
+    }
+
+    .service-item .desc {
+      color: var(--text-secondary);
+      font-size: 0.7rem;
+    }
+
+    .flow-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 0;
+      color: var(--text-secondary);
+      font-size: 1.2rem;
+    }
+
+    .flow-arrow.bidirectional::after {
+      content: ' IPC';
+      font-size: 0.7rem;
+      margin-left: 6px;
+      color: var(--orange);
+    }
+
+    .tables-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .table-chip {
+      background: var(--bg-hover);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 10px;
+      font-size: 0.75rem;
+      font-family: 'SF Mono', Monaco, monospace;
+    }
+
+    .connection-line {
+      position: absolute;
+      width: 2px;
+      background: linear-gradient(to bottom, var(--border), transparent);
+    }
+
+    .legend {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin-top: 30px;
+      flex-wrap: wrap;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .electron-layers {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .electron-layer {
+      padding: 15px;
+      border: 1px solid var(--border);
+      background: var(--bg-hover);
+      position: relative;
+    }
+
+    .electron-layer:first-child {
+      border-radius: 8px 8px 0 0;
+    }
+
+    .electron-layer:last-child {
+      border-radius: 0 0 8px 8px;
+    }
+
+    .electron-layer:not(:last-child) {
+      border-bottom: none;
+    }
+
+    .electron-layer .layer-name {
+      font-weight: 600;
+      font-size: 0.9rem;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .electron-layer .layer-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .layer-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 0.7rem;
+      font-family: 'SF Mono', Monaco, monospace;
+    }
+
+    .arrow-down {
+      text-align: center;
+      padding: 4px 0;
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      background: var(--bg-hover);
+      border-left: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+    }
+
+    .external-box {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: var(--bg-hover);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+
+    .external-box:last-child {
+      margin-bottom: 0;
+    }
+
+    .external-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      flex-shrink: 0;
+    }
+
+    .external-icon.google { background: rgba(234, 67, 53, 0.2); }
+    .external-icon.microsoft { background: rgba(0, 120, 212, 0.2); }
+    .external-icon.apple { background: rgba(255, 255, 255, 0.1); }
+    .external-icon.ai { background: rgba(163, 113, 247, 0.2); }
+    .external-icon.supabase { background: rgba(63, 185, 80, 0.2); }
+
+    .external-content {
+      flex: 1;
+    }
+
+    .external-name {
+      font-weight: 600;
+      font-size: 0.9rem;
+      margin-bottom: 2px;
+    }
+
+    .external-desc {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    .data-flow {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 30px;
+      max-width: 1800px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .data-flow h3 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-secondary);
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .data-flow h3::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--cyan);
+    }
+
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .flow-step {
+      background: var(--bg-hover);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      text-align: center;
+      flex: 1;
+      min-width: 120px;
+    }
+
+    .flow-step .step-num {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--blue);
+      color: var(--bg-dark);
+      font-size: 0.75rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 8px;
+    }
+
+    .flow-step .step-name {
+      font-weight: 600;
+      font-size: 0.85rem;
+      margin-bottom: 4px;
+    }
+
+    .flow-step .step-desc {
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+    }
+
+    .flow-connector {
+      color: var(--text-secondary);
+      font-size: 1.2rem;
+    }
+
+    @media (max-width: 1200px) {
+      .architecture {
+        flex-direction: column;
+      }
+
+      .column.local {
+        flex: 1;
+      }
+    }
+
+    @media (max-width: 768px) {
+      body {
+        padding: 20px;
+      }
+
+      .services-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .flow-diagram {
+        flex-direction: column;
+      }
+
+      .flow-connector {
+        transform: rotate(90deg);
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Magic Audit Architecture</h1>
+  <p class="subtitle">Electron Desktop Application for Real Estate Transaction Auditing</p>
+
+  <div class="architecture">
+    <!-- LOCAL APPLICATION COLUMN -->
+    <div class="column local">
+      <div class="section electron">
+        <div class="section-title">Electron Application (Local)</div>
+
+        <div class="electron-layers">
+          <!-- Renderer Process -->
+          <div class="electron-layer">
+            <div class="layer-name">
+              <span class="tag renderer">Renderer Process</span>
+              React 18 + TypeScript
+            </div>
+            <div class="layer-items">
+              <span class="layer-item">App.tsx</span>
+              <span class="layer-item">useAppStateMachine</span>
+              <span class="layer-item">AuthContext</span>
+              <span class="layer-item">NetworkContext</span>
+              <span class="layer-item">Dashboard.tsx</span>
+              <span class="layer-item">ConversationList</span>
+              <span class="layer-item">AuditModal</span>
+              <span class="layer-item">Contacts.tsx</span>
+            </div>
+          </div>
+
+          <div class="arrow-down">window.api.*</div>
+
+          <!-- Preload Script -->
+          <div class="electron-layer">
+            <div class="layer-name">
+              <span class="tag preload">Preload Script</span>
+              Secure Context Bridge
+            </div>
+            <div class="layer-items">
+              <span class="layer-item">authBridge</span>
+              <span class="layer-item">transactionBridge</span>
+              <span class="layer-item">contactBridge</span>
+              <span class="layer-item">syncBridge</span>
+              <span class="layer-item">messageBridge</span>
+              <span class="layer-item">outlookBridge</span>
+              <span class="layer-item">llmBridge</span>
+              <span class="layer-item">deviceBridge</span>
+            </div>
+          </div>
+
+          <div class="arrow-down">IPC Handlers</div>
+
+          <!-- Main Process -->
+          <div class="electron-layer">
+            <div class="layer-name">
+              <span class="tag main">Main Process</span>
+              Node.js + Electron APIs
+            </div>
+            <div class="layer-items">
+              <span class="layer-item">main.ts</span>
+              <span class="layer-item">auth-handlers</span>
+              <span class="layer-item">transaction-handlers</span>
+              <span class="layer-item">sync-handlers</span>
+              <span class="layer-item">device-handlers</span>
+              <span class="layer-item">llm-handlers</span>
+              <span class="layer-item">license-handlers</span>
+              <span class="layer-item">updater-handlers</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Services Layer -->
+      <div class="section electron">
+        <div class="section-title">Main Process Services (50+)</div>
+        <div class="services-grid">
+          <div class="service-item">
+            <div class="name">Authentication</div>
+            <div class="desc">googleAuthService, microsoftAuthService, tokenEncryptionService</div>
+          </div>
+          <div class="service-item">
+            <div class="name">Email Integration</div>
+            <div class="desc">gmailFetchService, outlookFetchService, emailDeduplicationService</div>
+          </div>
+          <div class="service-item">
+            <div class="name">iPhone Sync</div>
+            <div class="desc">deviceDetectionService, backupService, iOSMessagesParser</div>
+          </div>
+          <div class="service-item">
+            <div class="name">macOS Integration</div>
+            <div class="desc">macOSMessagesImportService, contactsService</div>
+          </div>
+          <div class="service-item">
+            <div class="name">Data Processing</div>
+            <div class="desc">transactionService, transactionExtractorService, contactsService</div>
+          </div>
+          <div class="service-item">
+            <div class="name">AI/LLM</div>
+            <div class="desc">anthropicService, openAIService, batchLLMService</div>
+          </div>
+          <div class="service-item">
+            <div class="name">Export</div>
+            <div class="desc">folderExportService, pdfExportService, enhancedExportService</div>
+          </div>
+          <div class="service-item">
+            <div class="name">Security</div>
+            <div class="desc">licenseService, auditService, permissionService</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Database Layer -->
+      <div class="section database">
+        <div class="section-title">Local Database</div>
+        <div class="box">
+          <div class="box-title">
+            SQLite + SQLCipher
+            <span class="tag encrypted">AES-256 Encrypted</span>
+          </div>
+          <div class="box-desc">Encrypted local database with OS keychain key storage</div>
+        </div>
+        <div style="margin-top: 12px;">
+          <div class="tables-list">
+            <span class="table-chip">users_local</span>
+            <span class="table-chip">oauth_tokens</span>
+            <span class="table-chip">sessions</span>
+            <span class="table-chip">transactions</span>
+            <span class="table-chip">contacts</span>
+            <span class="table-chip">contact_emails</span>
+            <span class="table-chip">contact_phones</span>
+            <span class="table-chip">communications</span>
+            <span class="table-chip">messages</span>
+            <span class="table-chip">feedback</span>
+            <span class="table-chip">llm_settings</span>
+            <span class="table-chip">audit_logs</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CLOUD & EXTERNAL COLUMN -->
+    <div class="column">
+      <!-- Cloud Sync -->
+      <div class="section cloud">
+        <div class="section-title">Cloud Services</div>
+        <div class="external-box">
+          <div class="external-icon supabase">
+            <svg width="20" height="20" viewBox="0 0 109 113" fill="none">
+              <path d="M63.7076 110.284C60.8481 113.885 55.0502 111.912 54.9813 107.314L53.9738 40.0627L99.1935 40.0627C107.384 40.0627 111.952 49.5228 106.859 55.9374L63.7076 110.284Z" fill="url(#paint0_linear)"/>
+              <path d="M63.7076 110.284C60.8481 113.885 55.0502 111.912 54.9813 107.314L53.9738 40.0627L99.1935 40.0627C107.384 40.0627 111.952 49.5228 106.859 55.9374L63.7076 110.284Z" fill="url(#paint1_linear)" fill-opacity="0.2"/>
+              <path d="M45.317 2.07103C48.1765 -1.53037 53.9745 0.442937 54.0434 5.041L54.4849 72.2922H9.83113C1.64038 72.2922 -2.92775 62.8321 2.1655 56.4175L45.317 2.07103Z" fill="#3ECF8E"/>
+              <defs>
+                <linearGradient id="paint0_linear" x1="53.9738" y1="54.974" x2="94.1635" y2="71.8295" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#249361"/>
+                  <stop offset="1" stop-color="#3ECF8E"/>
+                </linearGradient>
+                <linearGradient id="paint1_linear" x1="36.1558" y1="30.578" x2="54.4844" y2="65.0806" gradientUnits="userSpaceOnUse">
+                  <stop/>
+                  <stop offset="1" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <div class="external-content">
+            <div class="external-name">Supabase <span class="tag sync">Cloud Sync</span></div>
+            <div class="external-desc">User profiles, device registry, API quotas, audit logs (RLS enforced)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- External APIs -->
+      <div class="section external">
+        <div class="section-title">External API Integrations</div>
+
+        <div class="external-box">
+          <div class="external-icon google">
+            <svg width="20" height="20" viewBox="0 0 24 24">
+              <path fill="#EA4335" d="M5.26620003,9.76452941 C6.19878754,6.93863203 8.85444915,4.90909091 12,4.90909091 C13.6909091,4.90909091 15.2181818,5.50909091 16.4181818,6.49090909 L19.9090909,3 C17.7818182,1.14545455 15.0545455,0 12,0 C7.27006974,0 3.1977497,2.69829785 1.23999023,6.65002441 L5.26620003,9.76452941 Z"/>
+              <path fill="#34A853" d="M16.0407269,18.0125889 C14.9509167,18.7163016 13.5660892,19.0909091 12,19.0909091 C8.86648613,19.0909091 6.21911939,17.076871 5.27698177,14.2678769 L1.23746264,17.3349879 C3.19279051,21.2936293 7.26500293,24 12,24 C14.9328362,24 17.7353462,22.9573905 19.834192,20.9995801 L16.0407269,18.0125889 Z"/>
+              <path fill="#4A90E2" d="M19.834192,20.9995801 C22.0291676,18.9520994 23.4545455,15.903663 23.4545455,12 C23.4545455,11.2909091 23.3454545,10.5272727 23.1818182,9.81818182 L12,9.81818182 L12,14.4545455 L18.4363636,14.4545455 C18.1187732,16.013626 17.2662994,17.2212117 16.0407269,18.0125889 L19.834192,20.9995801 Z"/>
+              <path fill="#FBBC05" d="M5.27698177,14.2678769 C5.03832634,13.556323 4.90909091,12.7937589 4.90909091,12 C4.90909091,11.2182781 5.03443647,10.4668121 5.26620003,9.76452941 L1.23999023,6.65002441 C0.43658717,8.26043162 0,10.0753848 0,12 C0,13.9195484 0.444780743,15.7## L1.23746264,17.3349879 L5.27698177,14.2678769 Z"/>
+            </svg>
+          </div>
+          <div class="external-content">
+            <div class="external-name">Google APIs <span class="tag api">OAuth 2.0</span></div>
+            <div class="external-desc">Gmail API (mail.readonly), Google Contacts API</div>
+          </div>
+        </div>
+
+        <div class="external-box">
+          <div class="external-icon microsoft">
+            <svg width="20" height="20" viewBox="0 0 23 23">
+              <rect fill="#f25022" width="11" height="11"/>
+              <rect fill="#00a4ef" y="12" width="11" height="11"/>
+              <rect fill="#7fba00" x="12" width="11" height="11"/>
+              <rect fill="#ffb900" x="12" y="12" width="11" height="11"/>
+            </svg>
+          </div>
+          <div class="external-content">
+            <div class="external-name">Microsoft Graph <span class="tag api">OAuth 2.0</span></div>
+            <div class="external-desc">Outlook Mail.Read, Contacts.Read, offline_access</div>
+          </div>
+        </div>
+
+        <div class="external-box">
+          <div class="external-icon apple">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff">
+              <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+            </svg>
+          </div>
+          <div class="external-content">
+            <div class="external-name">Apple Device APIs <span class="tag api">Native</span></div>
+            <div class="external-desc">libimobiledevice (iPhone detection), idevicebackup2 (backups)</div>
+          </div>
+        </div>
+
+        <div class="external-box">
+          <div class="external-icon ai">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a371f7" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+          </div>
+          <div class="external-content">
+            <div class="external-name">LLM Providers <span class="tag api">API</span></div>
+            <div class="external-desc">Anthropic Claude, OpenAI GPT (batch processing, rate limited)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Security -->
+      <div class="section database">
+        <div class="section-title">Security Architecture</div>
+        <div class="box">
+          <div class="box-title">Data at Rest</div>
+          <div class="box-desc">SQLCipher AES-256 encryption, OS keychain for keys</div>
+        </div>
+        <div class="box">
+          <div class="box-title">OAuth Tokens</div>
+          <div class="box-desc">Electron safeStorage (macOS Keychain / Windows Credential Manager)</div>
+        </div>
+        <div class="box">
+          <div class="box-title">Authorization</div>
+          <div class="box-desc">Supabase RLS policies, license tier enforcement, API quotas</div>
+        </div>
+        <div class="box">
+          <div class="box-title">Audit Trail</div>
+          <div class="box-desc">All actions logged locally and synced to cloud for compliance</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Data Flow Section -->
+  <div class="data-flow">
+    <h3>Email Import Data Flow</h3>
+    <div class="flow-diagram">
+      <div class="flow-step">
+        <div class="step-num">1</div>
+        <div class="step-name">User Auth</div>
+        <div class="step-desc">OAuth 2.0 login via Google/Microsoft</div>
+      </div>
+      <span class="flow-connector">→</span>
+      <div class="flow-step">
+        <div class="step-num">2</div>
+        <div class="step-name">Token Store</div>
+        <div class="step-desc">Encrypted in local DB + safeStorage</div>
+      </div>
+      <span class="flow-connector">→</span>
+      <div class="flow-step">
+        <div class="step-num">3</div>
+        <div class="step-name">Fetch Emails</div>
+        <div class="step-desc">Gmail/Outlook API with rate limiting</div>
+      </div>
+      <span class="flow-connector">→</span>
+      <div class="flow-step">
+        <div class="step-num">4</div>
+        <div class="step-name">Extract Data</div>
+        <div class="step-desc">Parse emails, extract transactions</div>
+      </div>
+      <span class="flow-connector">→</span>
+      <div class="flow-step">
+        <div class="step-num">5</div>
+        <div class="step-name">LLM Analysis</div>
+        <div class="step-desc">AI categorization and threading</div>
+      </div>
+      <span class="flow-connector">→</span>
+      <div class="flow-step">
+        <div class="step-num">6</div>
+        <div class="step-name">Store Local</div>
+        <div class="step-desc">Encrypted SQLite database</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="data-flow" style="margin-top: 20px;">
+    <h3>iPhone Sync Data Flow</h3>
+    <div class="flow-diagram">
+      <div class="flow-step">
+        <div class="step-num">1</div>
+        <div class="step-name">Detect Device</div>
+        <div class="step-desc">libimobiledevice finds iPhone</div>
+      </div>
+      <span class="flow-connector">→</span>
+      <div class="flow-step">
+        <div class="step-num">2</div>
+        <div class="step-name">Create Backup</div>
+        <div class="step-desc">idevicebackup2 encrypted backup</div>
+      </div>
+      <span class="flow-connector">→</span>
+      <div class="flow-step">
+        <div class="step-num">3</div>
+        <div class="step-name">Decrypt</div>
+        <div class="step-desc">BackupDecryptionService</div>
+      </div>
+      <span class="flow-connector">→</span>
+      <div class="flow-step">
+        <div class="step-num">4</div>
+        <div class="step-name">Parse Messages</div>
+        <div class="step-desc">iOSMessagesParser extracts SMS/iMessage</div>
+      </div>
+      <span class="flow-connector">→</span>
+      <div class="flow-step">
+        <div class="step-num">5</div>
+        <div class="step-name">Match Contacts</div>
+        <div class="step-desc">Link to existing transactions</div>
+      </div>
+      <span class="flow-connector">→</span>
+      <div class="flow-step">
+        <div class="step-num">6</div>
+        <div class="step-name">Store Local</div>
+        <div class="step-desc">Encrypted SQLite database</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <div class="legend-item">
+      <div class="legend-dot" style="background: var(--blue);"></div>
+      <span>Electron Process</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background: var(--green);"></div>
+      <span>Database/Storage</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background: var(--purple);"></div>
+      <span>Cloud Services</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background: var(--orange);"></div>
+      <span>External APIs</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background: var(--cyan);"></div>
+      <span>Data Flow</span>
+    </div>
+  </div>
+</body>
+</html>

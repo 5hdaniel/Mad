@@ -791,17 +791,45 @@ export async function handleGoogleConnectMailbox(
           tokens.access_token
         );
 
-        // Save mailbox token
-        await databaseService.saveOAuthToken(validatedUserId, "google", "mailbox", {
-          access_token: accessToken,
-          refresh_token: refreshToken ?? undefined,
-          token_expires_at: tokens.expires_at ?? undefined,
-          scopes_granted: Array.isArray(tokens.scopes)
-            ? tokens.scopes.join(" ")
-            : tokens.scopes,
-          connected_email_address: userInfo.email,
-          mailbox_connected: true,
-        });
+        // Save mailbox token - handle errors explicitly to prevent white screen
+        try {
+          await databaseService.saveOAuthToken(validatedUserId, "google", "mailbox", {
+            access_token: accessToken,
+            refresh_token: refreshToken ?? undefined,
+            token_expires_at: tokens.expires_at ?? undefined,
+            scopes_granted: Array.isArray(tokens.scopes)
+              ? tokens.scopes.join(" ")
+              : tokens.scopes,
+            connected_email_address: userInfo.email,
+            mailbox_connected: true,
+          });
+        } catch (saveError) {
+          await logService.error(
+            "Failed to save Google mailbox OAuth token",
+            "AuthHandlers",
+            {
+              userId: validatedUserId,
+              error: saveError instanceof Error ? saveError.message : "Unknown error",
+            }
+          );
+
+          await auditService.log({
+            userId: validatedUserId,
+            action: "MAILBOX_CONNECT",
+            resourceType: "MAILBOX",
+            metadata: { provider: "google", error: "token_save_failed" },
+            success: false,
+            errorMessage: saveError instanceof Error ? saveError.message : "Failed to save credentials",
+          });
+
+          if (mainWindow) {
+            mainWindow.webContents.send("google:mailbox-connected", {
+              success: false,
+              error: "Failed to save credentials. Please try logging in again.",
+            });
+          }
+          return;
+        }
 
         await logService.info(
           "Google mailbox connection completed",

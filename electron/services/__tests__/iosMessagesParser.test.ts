@@ -71,6 +71,8 @@ describe("iOSMessagesParser", () => {
         ROWID INTEGER PRIMARY KEY,
         guid TEXT,
         text TEXT,
+        attributedBody BLOB,
+        audio_transcript TEXT,
         handle_id INTEGER,
         is_from_me INTEGER,
         date INTEGER,
@@ -137,14 +139,18 @@ describe("iOSMessagesParser", () => {
     const baseTimestamp = 708696000000000000; // nanoseconds
 
     // Insert test messages
+    // Message 7: voice message with audio_transcript
+    // Message 8: message with null text but attributedBody (will be tested async)
     db.exec(`
-      INSERT INTO message (ROWID, guid, text, handle_id, is_from_me, date, date_read, date_delivered, service) VALUES
-        (1, 'msg-guid-1', 'Hello there!', 1, 0, ${baseTimestamp}, ${baseTimestamp + 1000000000}, NULL, 'iMessage'),
-        (2, 'msg-guid-2', 'Hi! How are you?', NULL, 1, ${baseTimestamp + 60000000000}, NULL, ${baseTimestamp + 60000000000}, 'iMessage'),
-        (3, 'msg-guid-3', 'Group message 1', 2, 0, ${baseTimestamp + 120000000000}, NULL, NULL, 'SMS'),
-        (4, 'msg-guid-4', 'Group message 2', 1, 0, ${baseTimestamp + 180000000000}, NULL, NULL, 'iMessage'),
-        (5, 'msg-guid-5', 'Email chat message', 3, 0, ${baseTimestamp + 240000000000}, NULL, NULL, 'iMessage'),
-        (6, 'msg-guid-6', NULL, 1, 0, ${baseTimestamp + 300000000000}, NULL, NULL, 'iMessage');
+      INSERT INTO message (ROWID, guid, text, attributedBody, audio_transcript, handle_id, is_from_me, date, date_read, date_delivered, service) VALUES
+        (1, 'msg-guid-1', 'Hello there!', NULL, NULL, 1, 0, ${baseTimestamp}, ${baseTimestamp + 1000000000}, NULL, 'iMessage'),
+        (2, 'msg-guid-2', 'Hi! How are you?', NULL, NULL, NULL, 1, ${baseTimestamp + 60000000000}, NULL, ${baseTimestamp + 60000000000}, 'iMessage'),
+        (3, 'msg-guid-3', 'Group message 1', NULL, NULL, 2, 0, ${baseTimestamp + 120000000000}, NULL, NULL, 'SMS'),
+        (4, 'msg-guid-4', 'Group message 2', NULL, NULL, 1, 0, ${baseTimestamp + 180000000000}, NULL, NULL, 'iMessage'),
+        (5, 'msg-guid-5', 'Email chat message', NULL, NULL, 3, 0, ${baseTimestamp + 240000000000}, NULL, NULL, 'iMessage'),
+        (6, 'msg-guid-6', NULL, NULL, NULL, 1, 0, ${baseTimestamp + 300000000000}, NULL, NULL, 'iMessage'),
+        (7, 'msg-guid-7', NULL, NULL, 'This is a voice message transcript', 1, 0, ${baseTimestamp + 360000000000}, NULL, NULL, 'iMessage'),
+        (8, 'msg-guid-8', 'Regular message', NULL, 'Transcript should be ignored when text exists', 1, 0, ${baseTimestamp + 420000000000}, NULL, NULL, 'iMessage');
     `);
 
     // Link messages to chats
@@ -155,7 +161,9 @@ describe("iOSMessagesParser", () => {
         (2, 3),
         (2, 4),
         (3, 5),
-        (1, 6);
+        (1, 6),
+        (1, 7),
+        (1, 8);
     `);
 
     // Insert test attachments
@@ -322,7 +330,7 @@ describe("iOSMessagesParser", () => {
     it("should return messages for a chat", () => {
       const messages = parser.getMessages(1); // Individual chat with person 1
 
-      expect(messages.length).toBe(3); // 3 messages in chat 1
+      expect(messages.length).toBe(5); // 5 messages in chat 1
     });
 
     it("should return messages in chronological order", () => {
@@ -473,7 +481,7 @@ describe("iOSMessagesParser", () => {
 
     it("should return correct message count for chat", () => {
       const count = parser.getMessageCount(1);
-      expect(count).toBe(3);
+      expect(count).toBe(5);
     });
 
     it("should return 0 for non-existent chat", () => {
@@ -497,7 +505,7 @@ describe("iOSMessagesParser", () => {
 
       expect(conversation).not.toBeNull();
       expect(conversation!.chatId).toBe(1);
-      expect(conversation!.messages.length).toBe(3);
+      expect(conversation!.messages.length).toBe(5);
     });
 
     it("should support pagination", () => {
@@ -553,6 +561,74 @@ describe("iOSMessagesParser", () => {
     });
   });
 
+  describe("audio_transcript handling", () => {
+    beforeEach(() => {
+      parser.open(testDir);
+    });
+
+    it("should include audioTranscript when present", () => {
+      const messages = parser.getMessages(1);
+      const voiceMessage = messages.find((m) => m.guid === "msg-guid-7");
+
+      expect(voiceMessage).toBeDefined();
+      expect(voiceMessage!.audioTranscript).toBe("This is a voice message transcript");
+      expect(voiceMessage!.text).toBeNull(); // Text is null for voice messages
+    });
+
+    it("should return audioTranscript alongside text when both present", () => {
+      const messages = parser.getMessages(1);
+      const messageWithBoth = messages.find((m) => m.guid === "msg-guid-8");
+
+      expect(messageWithBoth).toBeDefined();
+      expect(messageWithBoth!.text).toBe("Regular message");
+      expect(messageWithBoth!.audioTranscript).toBe("Transcript should be ignored when text exists");
+    });
+
+    it("should return null audioTranscript when not present", () => {
+      const messages = parser.getMessages(1);
+      const regularMessage = messages.find((m) => m.guid === "msg-guid-1");
+
+      expect(regularMessage).toBeDefined();
+      expect(regularMessage!.audioTranscript).toBeNull();
+    });
+  });
+
+  describe("getMessagesAsync", () => {
+    beforeEach(() => {
+      parser.open(testDir);
+    });
+
+    it("should return messages asynchronously", async () => {
+      const messages = await parser.getMessagesAsync(1);
+
+      expect(messages.length).toBe(5);
+    });
+
+    it("should include audioTranscript in async results", async () => {
+      const messages = await parser.getMessagesAsync(1);
+      const voiceMessage = messages.find((m) => m.guid === "msg-guid-7");
+
+      expect(voiceMessage).toBeDefined();
+      expect(voiceMessage!.audioTranscript).toBe("This is a voice message transcript");
+    });
+
+    it("should support pagination", async () => {
+      const messages = await parser.getMessagesAsync(1, 2, 1);
+
+      expect(messages.length).toBe(2);
+    });
+
+    it("should return empty array for non-existent chat", async () => {
+      const messages = await parser.getMessagesAsync(999);
+      expect(messages).toEqual([]);
+    });
+
+    it("should throw error when database not open", async () => {
+      parser.close();
+      await expect(parser.getMessagesAsync(1)).rejects.toThrow("Database not open");
+    });
+  });
+
   describe("empty database handling", () => {
     let emptyDbDir: string;
 
@@ -564,12 +640,12 @@ describe("iOSMessagesParser", () => {
       fs.mkdirSync(subDir, { recursive: true });
       const emptyDbPath = path.join(subDir, iOSMessagesParser.SMS_DB_HASH);
 
-      // Create empty database with schema only
+      // Create empty database with schema only (without audio_transcript column - older iOS)
       const db = new Database(emptyDbPath);
       db.exec(`
         CREATE TABLE handle (ROWID INTEGER PRIMARY KEY, id TEXT, service TEXT);
         CREATE TABLE chat (ROWID INTEGER PRIMARY KEY, guid TEXT, chat_identifier TEXT, display_name TEXT);
-        CREATE TABLE message (ROWID INTEGER PRIMARY KEY, guid TEXT, text TEXT, handle_id INTEGER, is_from_me INTEGER, date INTEGER, date_read INTEGER, date_delivered INTEGER, service TEXT);
+        CREATE TABLE message (ROWID INTEGER PRIMARY KEY, guid TEXT, text TEXT, attributedBody BLOB, handle_id INTEGER, is_from_me INTEGER, date INTEGER, date_read INTEGER, date_delivered INTEGER, service TEXT);
         CREATE TABLE attachment (ROWID INTEGER PRIMARY KEY, guid TEXT, filename TEXT, mime_type TEXT, transfer_name TEXT);
         CREATE TABLE chat_handle_join (chat_id INTEGER, handle_id INTEGER);
         CREATE TABLE chat_message_join (chat_id INTEGER, message_id INTEGER);
@@ -591,6 +667,18 @@ describe("iOSMessagesParser", () => {
       expect(emptyParser.getConversations()).toEqual([]);
       expect(emptyParser.getMessages(1)).toEqual([]);
       expect(emptyParser.searchMessages("test")).toEqual([]);
+
+      emptyParser.close();
+    });
+
+    it("should handle database without audio_transcript column", () => {
+      // The empty database was created WITHOUT audio_transcript column
+      // Parser should still work gracefully
+      const emptyParser = new iOSMessagesParser();
+      emptyParser.open(emptyDbDir);
+
+      // Should not throw - gracefully handles missing column
+      expect(() => emptyParser.getMessages(1)).not.toThrow();
 
       emptyParser.close();
     });

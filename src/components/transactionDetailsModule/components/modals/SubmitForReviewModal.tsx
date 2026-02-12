@@ -5,7 +5,7 @@
  * Shows summary of what will be submitted and progress during submission.
  * Part of BACKLOG-391: Submit for Review UI.
  */
-import React from "react";
+import React, { useState } from "react";
 import type { Transaction } from "@/types";
 
 export interface SubmitProgress {
@@ -17,8 +17,18 @@ export interface SubmitProgress {
 
 interface SubmitForReviewModalProps {
   transaction: Transaction;
-  messageCount: number;
+  /** @deprecated Use emailThreadCount and textThreadCount instead */
+  messageCount?: number;
+  /** Number of email threads */
+  emailThreadCount: number;
+  /** Number of text message threads */
+  textThreadCount: number;
+  /** Total attachment count (text + email) */
   attachmentCount: number;
+  /** Email attachment count specifically */
+  emailAttachmentCount: number;
+  /** Total size of all attachments in bytes */
+  totalSizeBytes: number;
   isSubmitting: boolean;
   progress: SubmitProgress | null;
   error: string | null;
@@ -36,10 +46,24 @@ const STAGE_LABELS: Record<string, string> = {
   failed: "Submission failed",
 };
 
+/**
+ * Format bytes to human-readable size (KB, MB, GB)
+ */
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+}
+
 export function SubmitForReviewModal({
   transaction,
-  messageCount,
+  emailThreadCount,
+  textThreadCount,
   attachmentCount,
+  emailAttachmentCount,
+  totalSizeBytes,
   isSubmitting,
   progress,
   error,
@@ -48,6 +72,17 @@ export function SubmitForReviewModal({
   onExportFirst,
 }: SubmitForReviewModalProps): React.ReactElement {
   const isResubmit = transaction.submission_status === "needs_changes";
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+
+  const isActivelySubmitting = isSubmitting && progress?.stage !== "complete" && progress?.stage !== "failed";
+
+  const handleCancelClick = () => {
+    if (isActivelySubmitting) {
+      setShowCancelConfirm(true);
+    } else {
+      onCancel();
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
@@ -110,7 +145,7 @@ export function SubmitForReviewModal({
                   </span>
                 </div>
 
-                {/* Messages */}
+                {/* Email Threads */}
                 <div className="flex items-center gap-2 text-sm">
                   <svg
                     className="w-4 h-4 text-gray-500 flex-shrink-0"
@@ -122,16 +157,42 @@ export function SubmitForReviewModal({
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+                      d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
                     />
                   </svg>
-                  <span className="text-gray-600">Messages:</span>
+                  <span className="text-gray-600">Email threads:</span>
                   <span className="font-medium text-gray-900">
-                    {messageCount} {messageCount === 1 ? "message" : "messages"}
+                    {emailThreadCount}
+                    {emailAttachmentCount > 0 && (
+                      <span className="text-gray-500 font-normal">
+                        {" "}({emailAttachmentCount} {emailAttachmentCount === 1 ? "attachment" : "attachments"})
+                      </span>
+                    )}
                   </span>
                 </div>
 
-                {/* Attachments */}
+                {/* Text Threads */}
+                <div className="flex items-center gap-2 text-sm">
+                  <svg
+                    className="w-4 h-4 text-gray-500 flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                    />
+                  </svg>
+                  <span className="text-gray-600">Text threads:</span>
+                  <span className="font-medium text-gray-900">
+                    {textThreadCount}
+                  </span>
+                </div>
+
+                {/* Total Attachments with Size */}
                 <div className="flex items-center gap-2 text-sm">
                   <svg
                     className="w-4 h-4 text-gray-500 flex-shrink-0"
@@ -146,9 +207,14 @@ export function SubmitForReviewModal({
                       d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
                     />
                   </svg>
-                  <span className="text-gray-600">Attachments:</span>
+                  <span className="text-gray-600">Total attachments:</span>
                   <span className="font-medium text-gray-900">
                     {attachmentCount} {attachmentCount === 1 ? "file" : "files"}
+                    {totalSizeBytes > 0 && (
+                      <span className="text-gray-500 font-normal">
+                        {" "}({formatBytes(totalSizeBytes)})
+                      </span>
+                    )}
                   </span>
                 </div>
               </div>
@@ -283,15 +349,59 @@ export function SubmitForReviewModal({
           </div>
         )}
 
+        {/* Cancel confirmation */}
+        {showCancelConfirm && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+            <div className="flex items-start gap-2">
+              <svg
+                className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
+                />
+              </svg>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-amber-800">
+                  Submission in progress
+                </p>
+                <p className="text-sm text-amber-700 mt-1">
+                  Cancelling now will result in an incomplete submission. Are you sure?
+                </p>
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={() => setShowCancelConfirm(false)}
+                    className="px-3 py-1.5 bg-amber-100 text-amber-800 hover:bg-amber-200 rounded-lg text-sm font-medium transition-all"
+                  >
+                    Keep Uploading
+                  </button>
+                  <button
+                    onClick={onCancel}
+                    className="px-3 py-1.5 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm font-medium transition-all"
+                  >
+                    Cancel Anyway
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Actions */}
         <div className="flex items-center gap-3 justify-end">
-          <button
-            onClick={onCancel}
-            disabled={isSubmitting && progress?.stage !== "complete" && progress?.stage !== "failed"}
-            className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {progress?.stage === "complete" || error ? "Close" : "Cancel"}
-          </button>
+          {!showCancelConfirm && (
+            <button
+              onClick={handleCancelClick}
+              className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium transition-all"
+            >
+              {progress?.stage === "complete" || error ? "Close" : "Cancel"}
+            </button>
+          )}
           {!progress?.stage || progress.stage === "failed" ? (
             <button
               onClick={onSubmit}

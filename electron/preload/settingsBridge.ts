@@ -80,6 +80,42 @@ export const userBridge = {
     phoneType: "iphone" | "android"
   ): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke("user:set-phone-type-cloud", userId, phoneType),
+
+  /**
+   * Syncs user's phone type from Supabase cloud to local database
+   * Used by DataSyncStep to ensure local DB has phone_type before FDA step
+   * @param userId - User ID to sync phone type for
+   * @returns Sync result
+   */
+  syncPhoneTypeFromCloud: (
+    userId: string
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke("user:sync-phone-type-from-cloud", userId),
+};
+
+/**
+ * Notification Bridge
+ * Send OS-level notifications
+ */
+export const notificationBridge = {
+  /**
+   * Check if notifications are supported
+   * @returns Whether notifications are supported on this platform
+   */
+  isSupported: (): Promise<{ success: boolean; supported: boolean }> =>
+    ipcRenderer.invoke("notification:is-supported"),
+
+  /**
+   * Send an OS notification
+   * @param title - Notification title
+   * @param body - Notification body text
+   * @returns Send result
+   */
+  send: (
+    title: string,
+    body: string
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke("notification:send", title, body),
 };
 
 /**

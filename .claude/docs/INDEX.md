@@ -53,6 +53,7 @@ These are the **canonical sources** for content that was previously duplicated a
 | **Effect Safety Patterns** | `.claude/docs/shared/effect-safety-patterns.md` | React effect patterns to prevent bugs |
 | **Git Branching** | `.claude/docs/shared/git-branching.md` | Branching strategy, merge policy |
 | **Native Module Fixes** | `.claude/docs/shared/native-module-fixes.md` | SQLite rebuild troubleshooting |
+| **IPC Handler Patterns** | `.claude/docs/shared/ipc-handler-patterns.md` | Electron IPC listener ownership, cleanup |
 
 ---
 
@@ -113,3 +114,4 @@ When updating documentation:
 | 2024-12-24 | Created shared docs structure, consolidated duplicates | Claude |
 | 2026-01-04 | Added state machine architecture documentation (BACKLOG-142 complete) | Claude |
 | 2026-01-24 | Added PR lifecycle documentation, orphan PR prevention rules (SPRINT-051/052 incident) | Claude |
+| 2026-02-02 | Added IPC handler patterns documentation (SPRINT-068, SR recommendation) | Claude |

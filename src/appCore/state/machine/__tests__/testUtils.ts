@@ -13,6 +13,7 @@ import { renderHook, type RenderHookResult } from "@testing-library/react";
 import { AppStateProvider } from "../AppStateContext";
 import { LoadingOrchestrator } from "../LoadingOrchestrator";
 import { useAppState } from "../useAppState";
+import { AuthProvider } from "../../../../contexts";
 import type {
   AppState,
   AppStateContextValue,
@@ -369,27 +370,35 @@ interface TestWrapperProps {
 }
 
 /**
- * Test wrapper component that provides AppStateProvider and LoadingOrchestrator.
+ * Test wrapper component that provides AuthProvider, AppStateProvider and LoadingOrchestrator.
  */
 export function TestWrapper({
   children,
   initialState,
 }: TestWrapperProps): React.ReactElement {
   return React.createElement(
-    AppStateProvider,
-    { initialState, children: React.createElement(LoadingOrchestrator, { children }) }
+    AuthProvider,
+    null,
+    React.createElement(
+      AppStateProvider,
+      { initialState, children: React.createElement(LoadingOrchestrator, { children }) }
+    )
   );
 }
 
 /**
  * Creates a wrapper function for renderHook.
- * Includes both AppStateProvider and LoadingOrchestrator.
+ * Includes AuthProvider, AppStateProvider and LoadingOrchestrator.
  */
 export function createHookWrapper(initialState?: AppState) {
   return function Wrapper({ children }: { children: React.ReactNode }) {
     return React.createElement(
-      AppStateProvider,
-      { initialState, children: React.createElement(LoadingOrchestrator, { children }) }
+      AuthProvider,
+      null,
+      React.createElement(
+        AppStateProvider,
+        { initialState, children: React.createElement(LoadingOrchestrator, { children }) }
+      )
     );
   };
 }

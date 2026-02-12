@@ -30,14 +30,6 @@ import type { AppState } from "../types";
  * ```
  */
 export function selectIsDatabaseInitialized(state: AppState): boolean {
-  // DEBUG: Log selector input
-  const deferredDbInit = 'deferredDbInit' in state ? (state as any).deferredDbInit : undefined;
-  console.log('[selectIsDatabaseInitialized] Input:', {
-    status: state.status,
-    deferredDbInit,
-    phase: state.status === 'loading' ? (state as any).phase : undefined,
-  });
-
   let result: boolean;
   switch (state.status) {
     case "loading":
@@ -75,7 +67,6 @@ export function selectIsDatabaseInitialized(state: AppState): boolean {
       result = false;
   }
 
-  console.log('[selectIsDatabaseInitialized] Result:', result);
   return result;
 }
 

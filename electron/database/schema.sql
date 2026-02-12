@@ -264,12 +264,14 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 
 -- ============================================
--- ATTACHMENTS TABLE (Files attached to messages)
+-- ATTACHMENTS TABLE (Files attached to messages and emails)
 -- ============================================
 -- Separate table enables document classification and OCR
+-- TASK-1775: Added email_id for Gmail/Outlook email attachments
 CREATE TABLE IF NOT EXISTS attachments (
   id TEXT PRIMARY KEY,
-  message_id TEXT NOT NULL,
+  message_id TEXT,                       -- FK to messages (iMessage attachments) - nullable for email attachments
+  email_id TEXT,                         -- TASK-1775: FK to emails (Gmail/Outlook attachments)
   external_message_id TEXT,              -- TASK-1110: macOS message GUID for stable linking
 
   -- File Info
@@ -292,7 +294,11 @@ CREATE TABLE IF NOT EXISTS attachments (
 
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
-  FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+  FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+  FOREIGN KEY (email_id) REFERENCES emails(id) ON DELETE CASCADE,
+  -- Note: CHECK (message_id IS NOT NULL OR email_id IS NOT NULL) enforced by service layer
+  -- because SQLite CREATE TABLE IF NOT EXISTS won't update existing tables
+  CHECK (message_id IS NOT NULL OR email_id IS NOT NULL)
 );
 
 -- ============================================
@@ -508,6 +514,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     'LOGIN', 'LOGOUT', 'SESSION_REFRESH',
     'TRANSACTION_CREATE', 'TRANSACTION_UPDATE', 'TRANSACTION_DELETE',
     'CONTACT_CREATE', 'CONTACT_UPDATE', 'CONTACT_DELETE',
+    'TRANSACTION_SUBMIT',
     'EXPORT_START', 'EXPORT_COMPLETE', 'EXPORT_FAIL',
     'MAILBOX_CONNECT', 'MAILBOX_DISCONNECT',
     'SETTINGS_UPDATE', 'TERMS_ACCEPT'
@@ -727,6 +734,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_duplicate_of ON messages(duplicate_of);
 
 -- Attachments
 CREATE INDEX IF NOT EXISTS idx_attachments_message_id ON attachments(message_id);
+CREATE INDEX IF NOT EXISTS idx_attachments_email_id ON attachments(email_id);  -- TASK-1775
 CREATE INDEX IF NOT EXISTS idx_attachments_external_message_id ON attachments(external_message_id);
 CREATE INDEX IF NOT EXISTS idx_attachments_document_type ON attachments(document_type);
 

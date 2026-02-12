@@ -421,7 +421,7 @@ BACKLOG-428,License Context Provider,service,Critical,Completed,SPRINT-051,~25K,
 BACKLOG-429,Team Workflow E2E Testing,test,Critical,Completed,SPRINT-051,~25K,-,-,2026-01-22,2026-01-23,[BACKLOG-429.md](items/BACKLOG-429.md)
 BACKLOG-452,Admin User Management UI,ui,Medium,Pending,-,~30K,-,-,2026-01-23,,[BACKLOG-452.md](items/BACKLOG-452.md)
 BACKLOG-453,Multi-org broker auth fix,fix,Critical,Completed,SPRINT-051,~10K,-,-,2026-01-23,2026-01-23,[BACKLOG-453.md](items/BACKLOG-453.md)
-BACKLOG-454,Azure AD OAuth email config,auth,Critical,Pending,-,~20K,-,-,2026-01-23,,[BACKLOG-454.md](items/BACKLOG-454.md)
+BACKLOG-454,Azure AD OAuth email config,auth,Critical,Completed,-,~20K,-,-,2026-01-23,2026-02-06,[BACKLOG-454.md](items/BACKLOG-454.md)
 BACKLOG-455,RLS enablement on tables,security,Critical,Completed,SPRINT-051,~5K,-,-,2026-01-23,2026-01-23,[BACKLOG-455.md](items/BACKLOG-455.md)
 BACKLOG-456,Unify Loading Animation UI,ui,Low,Pending,-,~10K,-,-,2026-01-23,,[BACKLOG-456.md](items/BACKLOG-456.md)
 BACKLOG-457,Sync Emails must fetch from provider,feature,Critical,Completed,SPRINT-052,~50K,-,-,2026-01-23,,[BACKLOG-457.md](items/BACKLOG-457.md)
@@ -434,14 +434,14 @@ BACKLOG-463,Single-Screen Contact Management Flow,ux,High,Pending,SPRINT-055b,~4
 BACKLOG-464,OAuth Reconnect Popup Not Opening,bug,Critical,Completed,SPRINT-052,~20K,-,-,2026-01-24,,[BACKLOG-464.md](items/BACKLOG-464.md)
 BACKLOG-475,Verify Auto-Updater End-to-End,infrastructure,High,Pending,SPRINT-056,~15K,-,-,2026-01-24,,[BACKLOG-475.md](items/BACKLOG-475.md)
 BACKLOG-476,Complete Signed Release Cycle Test,infrastructure,Medium,Pending,SPRINT-056,~5K,-,-,2026-01-24,,[BACKLOG-476.md](items/BACKLOG-476.md)
-BACKLOG-477,User License Schema in Supabase,schema,Critical,Pending,SPRINT-057,~25K,-,-,2026-01-24,,[BACKLOG-477.md](items/BACKLOG-477.md)
-BACKLOG-478,License Validation Service,service,Critical,Pending,SPRINT-057,~30K,-,-,2026-01-24,,[BACKLOG-478.md](items/BACKLOG-478.md)
-BACKLOG-479,Device Registration Service,service,High,Pending,SPRINT-057,~20K,-,-,2026-01-24,,[BACKLOG-479.md](items/BACKLOG-479.md)
-BACKLOG-480,License Check at App Start,service,Critical,Pending,SPRINT-057,~15K,-,-,2026-01-24,,[BACKLOG-480.md](items/BACKLOG-480.md)
-BACKLOG-481,Trial Limit Enforcement UI,ui,High,Pending,SPRINT-057,~10K,-,-,2026-01-24,,[BACKLOG-481.md](items/BACKLOG-481.md)
-BACKLOG-482,Desktop Deep Link Handler,infrastructure,Critical,Pending,SPRINT-058,~25K,-,-,2026-01-24,,[BACKLOG-482.md](items/BACKLOG-482.md)
-BACKLOG-483,Browser Auth Landing Page,ui,Critical,Pending,SPRINT-058,~30K,-,-,2026-01-24,,[BACKLOG-483.md](items/BACKLOG-483.md)
-BACKLOG-484,License Validation at Auth,service,Critical,Pending,SPRINT-058,~15K,-,-,2026-01-24,,[BACKLOG-484.md](items/BACKLOG-484.md)
+BACKLOG-477,User License Schema in Supabase,schema,Critical,Testing,SPRINT-062,~25K,~28K,+12%,2026-01-24,2026-01-27,[BACKLOG-477.md](items/BACKLOG-477.md)
+BACKLOG-478,License Validation Service,service,Critical,Completed,SPRINT-062,~30K,~45K,+50%,2026-01-24,2026-01-27,[BACKLOG-478.md](items/BACKLOG-478.md)
+BACKLOG-479,Device Registration Service,service,High,Testing,SPRINT-062,~20K,-,Implemented as part of TASK-1504 (PR #632),2026-01-24,2026-01-27,[BACKLOG-479.md](items/BACKLOG-479.md)
+BACKLOG-480,License Check at App Start,service,Critical,Testing,SPRINT-062,~15K,-,TASK-1506 (PR #633),2026-01-24,2026-01-27,[BACKLOG-480.md](items/BACKLOG-480.md)
+BACKLOG-481,Trial Limit Enforcement UI,ui,High,Testing,SPRINT-062,~10K,-,Components created in TASK-1506 (TrialStatusBanner/UpgradeScreen/DeviceLimitScreen/LicenseGate),2026-01-24,2026-01-27,[BACKLOG-481.md](items/BACKLOG-481.md)
+BACKLOG-482,Desktop Deep Link Handler,infrastructure,Critical,Testing,SPRINT-062,~25K,~53K,+112%,2026-01-24,2026-01-26,[BACKLOG-482.md](items/BACKLOG-482.md)
+BACKLOG-483,Browser Auth Landing Page,ui,Critical,Testing,SPRINT-062,~30K,~37K,+23%,2026-01-24,2026-01-26,[BACKLOG-483.md](items/BACKLOG-483.md)
+BACKLOG-484,License Validation at Auth,service,Critical,Testing,SPRINT-062,~15K,~22K,+47%,2026-01-24,2026-01-27,[BACKLOG-484.md](items/BACKLOG-484.md)
 BACKLOG-485,Deprecate OAuth Popup Flow,refactor,Medium,Pending,SPRINT-058,~10K,-,-,2026-01-24,,[BACKLOG-485.md](items/BACKLOG-485.md)
 BACKLOG-486,PostHog SDK Integration,infrastructure,Critical,Pending,SPRINT-059,~15K,-,-,2026-01-24,,[BACKLOG-486.md](items/BACKLOG-486.md)
 BACKLOG-487,Core Lifecycle Events,service,Critical,Pending,SPRINT-059,~10K,-,-,2026-01-24,,[BACKLOG-487.md](items/BACKLOG-487.md)
@@ -468,5 +468,91 @@ BACKLOG-542,Merge SMS and iMessage threads from same contact,bug,medium,pending,
 BACKLOG-543,Audit period not displayed after transaction creation until edit/save,bug,low,pending,-,~15K,-,-,2026-01-27,,[BACKLOG-543.md](items/BACKLOG-543.md)
 BACKLOG-545,Attachments not exported in package,bug,High,Pending,-,~40K,-,-,2026-01-27,,[BACKLOG-545.md](items/BACKLOG-545.md)
 BACKLOG-546,Returning users incorrectly see T&C acceptance screen,bug,High,completed,SPRINT-062,~15K,~15K,0,2026-01-27,2026-01-27,[BACKLOG-546.md](items/BACKLOG-546.md)
-BACKLOG-547,Email attachments not included in export package,bug,High,Pending,-,~25K,-,-,2026-01-27,,[BACKLOG-547.md](items/BACKLOG-547.md)
+BACKLOG-547,Email attachments not included in export package,bug,High,completed,SPRINT-067,~25K,-,-,2026-01-27,2026-02-01,[BACKLOG-547.md](items/BACKLOG-547.md)
 BACKLOG-548,Browser auth landing page with provider selection,feature,High,completed,SPRINT-062,~5K,~5K,0,2026-01-27,2026-01-27,[BACKLOG-548.md](items/BACKLOG-548.md)
+BACKLOG-549,Investigate and consolidate TransactionToolbar vs TransactionsToolbar,refactoring,medium,pending,,"There are two nearly identical toolbar components: TransactionToolbar.tsx (used by TransactionList.tsx) and TransactionsToolbar.tsx (used by Transactions.tsx). Investigate whether both pages are needed and consolidate to a single toolbar component.",,2026-01-29
+BACKLOG-566,Multi-Category Contact Filtering in EditContactsModal,enhancement,Medium,Testing,SPRINT-066,~15K,-,-,2026-01-29,TASK-1769,[BACKLOG-566-multi-category-contact-filtering.md](items/BACKLOG-566-multi-category-contact-filtering.md)
+BACKLOG-567,Sort Contacts by Most Recent Communication,enhancement,Medium,Testing,SPRINT-066,~8K,-,-,2026-01-29,TASK-1770,[BACKLOG-567-contact-selection-sort-by-recent.md](items/BACKLOG-567-contact-selection-sort-by-recent.md)
+BACKLOG-568,Unify New Audit Modal Navigation (Remove Nested Buttons),ux-bug,High,Pending,SPRINT-066,~20K,-,-,2026-01-29,TASK-1771,[BACKLOG-568-audit-modal-unified-navigation.md](items/BACKLOG-568-audit-modal-unified-navigation.md)
+BACKLOG-569,Update joyride onboarding tour,ux,medium,pending,,"Review and update the joyride onboarding tour to reflect recent UI changes",2026-01-31,
+BACKLOG-570,Silent refresh pattern for contact imports,bugfix,medium,completed,SPRINT-066,Prevent loading flicker after importing contacts by using silent refresh that doesn't show loading state,2026-01-31,
+BACKLOG-571,Fix contact source categorization for imports,bugfix,medium,completed,SPRINT-066,Use source=contacts_app instead of manual when importing from Contacts App so they appear in Imported filter,2026-01-31,
+BACKLOG-572,Transaction header responsive improvements,ux,medium,completed,SPRINT-066,Always row layout with flex-nowrap - address on two lines - prevents Export button wrapping,2026-01-31,
+BACKLOG-573,Transaction details button reorganization,ux,medium,completed,SPRINT-066,Move Edit Summary button next to Summary heading - move Delete button to bottom center of Overview tab,2026-01-31,
+BACKLOG-574,Emails and Messages empty state styling,ux,low,completed,SPRINT-066,Update empty states to match contacts style with gray box - centered icon - and action button,2026-01-31,
+BACKLOG-575,ContactRoleRow responsive layout,ux,medium,completed,SPRINT-066,Add flex-wrap so dropdown wraps to next line on narrow screens - prevent name truncation,2026-01-31,
+BACKLOG-576,Responsive icon-only buttons for Overview tab,ux,medium,completed,SPRINT-066,Edit Summary - Sync - Edit Contacts buttons show icon-only on small screens with text on larger screens,2026-01-31,
+BACKLOG-577,Consistent Edit button colors,ux,low,completed,SPRINT-066,Change Edit Summary button from indigo to blue to match Edit Contacts button color,2026-01-31,
+BACKLOG-578,Fix Supabase RLS infinite recursion in organization_members,bugfix,high,pending,,Fix Row Level Security policy on organization_members table that causes infinite recursion - need to use security definer function or different table reference,2026-01-31,
+BACKLOG-579,List Attachment Filenames in Export PDF,enhancement,high,completed,SPRINT-067,~15K,-,-,2026-02-01,2026-02-01,[BACKLOG-579.md](items/BACKLOG-579.md)
+BACKLOG-580,Attachments Tab Show Downloaded Files,feature,medium,deferred,-,~30K,-,SPRINT-067 feedback - deferred,2026-02-01,-,[BACKLOG-580.md](items/BACKLOG-580-attachments-tab-downloaded-files.md)
+BACKLOG-581,State machine not auto-transitioning after onboarding,bugfix,medium,completed,,After completing onboarding (phone type + email connection) the app shows white screen until manual refresh - state machine stuck in transition,2026-02-02,
+BACKLOG-582,Joyride onboarding tour not triggering after completing flow,bug,high,pending,,-,-,-,2026-02-01,,
+BACKLOG-583,Dashboard button icons inconsistent sizes and missing gradient on iPhone,ux,medium,pending,,Icon sizes vary (w-14 vs w-12) and iPhone button needs gradient background like others,2026-02-01,,
+BACKLOG-584,System health check fails with invalid provider error,bug,low,pending,,Health check throws "Provider must be one of: google microsoft" error every 2 minutes - passing invalid provider value,2026-02-01,,
+BACKLOG-585,Texts don't auto-attach to transactions on Windows + iOS,bug,high,Testing,SPRINT-068,Covered by BACKLOG-590 fix,-,-,2026-02-02,2026-02-02,
+BACKLOG-586,Windows text attachment UI differs from Mac experience,bug,high,Deferred,,UI parity deferred to future sprint - core functionality works,2026-02-02,,
+BACKLOG-587,Contact names not showing when attaching texts on Windows,bug,high,Testing,SPRINT-068,Fixed via platform-aware contact lookup in transactionService,-,-,2026-02-02,2026-02-02,
+BACKLOG-588,Windows Attachments Not Imported,bug,High,Testing,SPRINT-068,~40K,-,TASK-1788 implemented attachment extraction,2026-02-02,2026-02-02,[BACKLOG-588-windows-attachments-not-imported.md](items/BACKLOG-588-windows-attachments-not-imported.md)
+BACKLOG-589,Windows Group Chat Sender Names Missing,bug,High,Testing,SPRINT-068,~20K,-,TASK-1786 - no extra work needed (existing logic works),2026-02-02,2026-02-02,[BACKLOG-589-windows-group-chat-sender-names.md](items/BACKLOG-589-windows-group-chat-sender-names.md)
+BACKLOG-590,Windows Auto-Link Text Messages Not Working,bug,High,Testing,SPRINT-068,~25K,-,TASK-1785 - fixed via participants_flat population + migration 27c,2026-02-02,2026-02-02,[BACKLOG-590-windows-auto-link-not-working.md](items/BACKLOG-590-windows-auto-link-not-working.md)
+BACKLOG-591,Windows participants_flat Missing Group Members,bug,Medium,Testing,SPRINT-068,~15K,-,TASK-1787 - covered by main participants_flat fix,2026-02-02,2026-02-02,[BACKLOG-591-windows-participants-flat-group-members.md](items/BACKLOG-591-windows-participants-flat-group-members.md)
+BACKLOG-592,Windows User Account Login Hardcoded as me,bug,Low,Deferred,,TASK-1789 deferred to future sprint - cosmetic issue,2026-02-02,,[BACKLOG-592-windows-user-account-hardcoded.md](items/BACKLOG-592-windows-user-account-hardcoded.md)
+BACKLOG-593,Optimize Attachment File Hashing with Streaming,optimization,Medium,Completed,SPRINT-068,~5K,-,Implemented streaming hash in iPhoneSyncStorageService.ts,2026-02-02,2026-02-02,[BACKLOG-593.md](items/BACKLOG-593.md)
+BACKLOG-594,Fix Backup Cleanup on Attachment Persistence Failure,bugfix,Medium,Completed,SPRINT-068,~8K,-,Already implemented in sync-handlers.ts catch block,2026-02-02,2026-02-02,[BACKLOG-594.md](items/BACKLOG-594.md)
+BACKLOG-595,Add Idempotency Check to iPhone Contact Migration,optimization,Low,Completed,SPRINT-068,~3K,-,Added check for existing iPhone contacts in external_contacts,2026-02-02,2026-02-02,[BACKLOG-595.md](items/BACKLOG-595.md)
+BACKLOG-596,Add Test Coverage for Attachment Extraction,testing,Low,Pending,SPRINT-068,~15K,-,-,2026-02-02,,[BACKLOG-596.md](items/BACKLOG-596.md)
+BACKLOG-597,iPhone Sync Progress - Attach to Running Sync,enhancement,High,Pending,,~20K,-,When sync already in progress show progress UI instead of blocking warning. Depends on progress bar service from dynamic import batch work,2026-02-02,,
+BACKLOG-598,Add Visible Sync Cancel/Reset Button,ui,Medium,Pending,,~10K,-,Add cancel button during sync and reset option when sync appears stuck. Currently requires DevTools console or app restart,2026-02-02,,
+BACKLOG-599,SubmissionSyncService starts before database ready,bug,High,Pending,,~8K,-,Race condition - sync service attempts initial sync before database initialization completes,2026-02-02,,
+BACKLOG-600,Message Sort Order Bug - Oldest First Instead of Newest,bug,High,Testing,SPRINT-068,~5K,-,TASK-1794 (PR #717) - Fixed message sort to newest-first,2026-02-02,2026-02-03,[BACKLOG-600-message-sort-order.md](items/BACKLOG-600-message-sort-order.md)
+BACKLOG-601,Audit Period Filter Checkbox Not Working - Invalid Date,bug,High,Testing,SPRINT-068,~10K,-,TASK-1795 (PR #717) - Fixed Windows timezone handling for YYYY-MM-DD dates,2026-02-02,2026-02-03,[BACKLOG-601-audit-period-filter.md](items/BACKLOG-601-audit-period-filter.md)
+BACKLOG-602,Attachment Skip Diagnostic Logging for iCloud,enhancement,Low,Deferred,-,~5K,-,Add diagnostic logging to confirm iCloud attachment skip reasons - platform limitation not a bug,2026-02-02,,[BACKLOG-602-attachment-skip-logging.md](items/BACKLOG-602-attachment-skip-logging.md)
+BACKLOG-603,iCloud Attachment Limitation UX Message,enhancement,Medium,Testing,SPRINT-068,~8K,-,TASK-1796 (PR #717) - Added iCloud info box on sync completion,2026-02-02,2026-02-03,[BACKLOG-603-icloud-ux-message.md](items/BACKLOG-603-icloud-ux-message.md)
+BACKLOG-604,iOS messages missing text when stored in attributedBody field,bug,Medium,Testing,SPRINT-068,~15K,-,TASK-1798 (PR #719) - Parse attributedBody and audio_transcript from sms.db,2026-02-02,2026-02-03,[BACKLOG-604-ios-attributed-body.md](items/BACKLOG-604-ios-attributed-body.md)
+BACKLOG-605,"Group chat with multiple participants shows as 1:1 chat",bug,medium,pending,,,,,2025-02-01,,
+BACKLOG-606,Add attachments progress phase to sync status indicator,enhancement,medium,pending,,Sync progress bar resets from 100% to 0% when moving from messages to attachments phase - add separate pill or phase indicator for better UX,2026-02-02,,
+BACKLOG-607,Settings Messages Import needs SyncOrchestrator queue awareness,enhancement,low,pending,,MacOSMessagesImportSettings should detect when messages is queued (pending) in the orchestrator queue and show appropriate UI feedback. Currently only shows state when messages is actively running or user-initiated.,2026-02-02,,
+BACKLOG-608,OS notifications for sync completion,ux,medium,pending,,"Show native OS notifications when background syncs complete (contacts, emails, messages, iPhone wired sync). Helps users know when data is ready, especially for long-running syncs like iPhone backup import on Windows. Should cover: auto-login sync, manual refresh, wired iPhone sync on PC.",2026-02-02,,
+BACKLOG-609,"Add manual Check for Updates button",enhancement,low,pending,,5000,,,2026-02-02,,items/BACKLOG-609.md
+BACKLOG-612,Error Logging Service + Supabase Dashboard,infrastructure,Critical,Pending,,~30K,-,"CRITICAL: Add error logging to Supabase for production monitoring. Components: 1) error_logs table (DONE) 2) errorLoggingService that captures errors globally + breadcrumb tracking 3) User feedback prompt submitted with logs 4) Broker Portal dashboard. Captures: device info OS/memory/disk auth state db state sync status navigation history.",2026-02-03,,
+BACKLOG-613,Enhanced ErrorScreen with Reset and User Feedback,ui,Critical,In Progress,SPRINT-069,~40K,-,"CRITICAL: Extend ErrorScreen. Add: 1) Retry button 2) User feedback textarea 3) Submit logs to Supabase 4) RESET APP DATA button - clears local storage + keychain then restarts fresh 5) Confirmation dialog 6) Self-healing for corrupted state. Split into TASK-1800 (logging) and TASK-1802 (reset). Depends on BACKLOG-612.",2026-02-03,,
+BACKLOG-614,Fix onboarding race condition - needsTermsAcceptance default,bug,Critical,Completed,,~5K,-,"Fix: Change needsTermsAcceptance default from true to false in electron/main.ts. Returning users with terms already accepted in Supabase shouldnt see terms screen again.",2026-02-03,2026-02-03,
+BACKLOG-615,Graceful skip for syncs when no local user exists,bug,Critical,Completed,,~8K,-,"Fix: SyncOrchestrator and handlers should gracefully skip (return empty) when getValidUserId returns null instead of erroring. Prevents No valid user found crashes during deferred DB init. PR #737 merged.",2026-02-03,2026-02-03,
+BACKLOG-621,Domain Claim & User Capture,feature,High,Pending,-,~120K,-,"IT admin claims email domain via DNS TXT verification then captures existing users with matching domain emails into org during 14-day window. Includes capture report and SSO migration.",2026-02-06,,[BACKLOG-621.md](items/BACKLOG-621.md)
+BACKLOG-623,Bulk Edit Role Feature for User Management,feature,Medium,In Progress,,~15K,-,"Add bulk role editing: BulkEditRoleModal component, UserTableRow with selection, bulkUpdateRole server action, UserActionsDropdown Edit Role option.",2026-02-06,,items/BACKLOG-623.md
+BACKLOG-634,Message Import Date Filter (Default 6 Months),performance,High,Completed,SPRINT-078,~8K,-,"Implemented in TASK-1952 (PR #798). Date range and count cap filters added to macOS message import. Extended by BACKLOG-657 with default values and cap warnings.",2026-02-09,2026-02-10,items/BACKLOG-634.md
+BACKLOG-635,Auto-Link Search Cloud Email Providers,feature,High,Pending,,~15K,-,"Extend autoLinkService to search Outlook Graph API and Gmail API when a contact is added to a transaction. Currently auto-link only finds emails already saved locally. New flow: search local first then hit cloud APIs using contact email addresses and save new matches to local emails table before linking. Building blocks exist in OutlookFetchService.searchEmails() and GmailFetchService.",2026-02-09,,items/BACKLOG-635.md
+BACKLOG-636,Sync Status Indicator Stuck After Completion,bug,Medium,Pending,,~5K,-,"Sync status bar shows Contacts and Messages as complete (green checkmarks and full progress bar) but never auto-dismisses. Observed with agent@izzyrescue.org. Sync completes successfully (358 messages imported) but indicator stays visible. May be related to auth state transition: status goes ready -> unauthenticated -> ready during deep-link auth flow which may prevent the dismiss timer from firing.",2026-02-09,,items/BACKLOG-636.md
+BACKLOG-642,Fix AppleDriverSetup render-time callback,bug,Critical,Completed,SPRINT-076,~15K,~2.4K,-84%,2026-02-10,2026-02-10,
+BACKLOG-643,Quick wins (useMemo dup notification DOM OAuth logs),cleanup,High,Completed,SPRINT-076,~30K,~6.3K,-79%,2026-02-10,2026-02-10,
+BACKLOG-644,Extract AppModals.tsx below 150-line trigger,refactor,High,Completed,SPRINT-076,~20K,~3.4K,-83%,2026-02-10,2026-02-10,
+BACKLOG-645,Decompose transaction-handlers.ts (3302 lines),refactor,High,Deferred,,-,-,-,2026-02-10,,"Too risky for overnight autonomous execution — defer to supervised session"
+BACKLOG-646,Remove any types from transactionService.ts,type-safety,High,Completed,SPRINT-076,~25K,~13.5K,-46%,2026-02-10,2026-02-10,
+BACKLOG-647,Add tests for AppRouter.tsx and AppModals.tsx,test,Medium,Completed,SPRINT-076,~35K,~7K,-80%,2026-02-10,2026-02-10,
+BACKLOG-648,DMG vs Dev Mode Keychain Conflict Breaks Database Init,bug,High,Completed,,~5K,-,-,2026-02-10,2026-02-10,items/BACKLOG-648.md
+BACKLOG-649,Remove auto export stub from Settings,cleanup,Medium,Completed,SPRINT-077,~5K,-,-,2026-02-10,2026-02-10,
+BACKLOG-650,Remove dark mode coming soon from Settings,cleanup,Medium,Completed,SPRINT-077,~5K,-,-,2026-02-10,2026-02-10,
+BACKLOG-651,Responsive toolbar layout redesign,ui,High,Completed,SPRINT-077,~25K,-,-,2026-02-10,2026-02-10,
+BACKLOG-652,Fix system health check provider validation error,bug,Critical,Completed,SPRINT-077,~10K,-,-,2026-02-10,2026-02-10,
+BACKLOG-653,Add auto-download updates toggle to Settings,feature,Medium,Completed,SPRINT-077,~10K,-,-,2026-02-10,2026-02-10,
+BACKLOG-654,Toolbar button height consistency (h-10),ui,Low,Completed,SPRINT-077,~3K,-,-,2026-02-10,2026-02-10,
+BACKLOG-655,Remove stale version number and VersionPopup from AppShell,cleanup,Low,Completed,SPRINT-077,~3K,-,-,2026-02-10,2026-02-10,
+BACKLOG-656,Move Check for Updates to auto-download settings section,ui,Low,Completed,SPRINT-077,~2K,-,-,2026-02-10,2026-02-10,
+BACKLOG-657,Message Import Cap Warning & Default Filters,feature,High,In Progress,-,~15K,-,-,2026-02-10,,
+BACKLOG-658,Outlook contacts not synced during auto-refresh,bug,High,Completed,SPRINT-079,~25K,-,-,2026-02-10,2026-02-10,
+BACKLOG-659,Source filter missing on contact selection screens,bug,Medium,Completed,SPRINT-079,~30K,-,-,2026-02-10,2026-02-10,
+BACKLOG-660,ImportContactsModal does not refresh after manual sync,bug,Medium,Completed,SPRINT-079,~15K,-,-,2026-02-10,2026-02-10,
+BACKLOG-661,Move external contacts query to worker thread (main process freeze fix),enhancement,High,In Progress,SPRINT-080,~25K,-,-,2026-02-11,,BACKLOG-661.md
+BACKLOG-662,Configure Electron Fuses for production hardening,security,Critical,Pending,SPRINT-080A,~30K,-,-,2026-02-11,,
+BACKLOG-663,Enable explicit ASAR integrity,security,Critical,Pending,SPRINT-080A,~10K,-,-,2026-02-11,,
+BACKLOG-664,Add deny-by-default permission request handler,security,Critical,Pending,SPRINT-080A,~15K,-,-,2026-02-11,,
+BACKLOG-665,Windows code signing setup,security,Critical,Pending,SPRINT-080A,~20K,-,-,2026-02-11,,
+BACKLOG-666,Broker portal submission list pagination,feature,High,Pending,SPRINT-080B,~60K,-,-,2026-02-11,,
+BACKLOG-667,Enable SQLite WAL mode,feature,High,Pending,SPRINT-080B,~15K,-,-,2026-02-11,,
+BACKLOG-668,Email sync depth filter UI,feature,Medium,Pending,SPRINT-080B,~35K,-,-,2026-02-11,,
+BACKLOG-669,Sentry integration for error tracking,feature,High,Pending,SPRINT-080C,~50K,-,-,2026-02-11,,
+BACKLOG-670,Renderer crash recovery dialog,feature,High,Pending,SPRINT-080C,~15K,-,-,2026-02-11,,
+BACKLOG-671,Pre-migration database backup,feature,Medium,Pending,SPRINT-080C,~15K,-,-,2026-02-11,,
+BACKLOG-672,Periodic 4-hour update checks,feature,Medium,Pending,SPRINT-080C,~10K,-,-,2026-02-11,,
+BACKLOG-673,Supabase system-health monitoring Edge Function,feature,Medium,Pending,SPRINT-080C,~25K,-,-,2026-02-11,,

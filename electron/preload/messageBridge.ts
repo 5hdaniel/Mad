@@ -6,13 +6,16 @@
 import { ipcRenderer } from "electron";
 
 /**
- * Progress event from macOS message import
+ * Progress event from macOS message import (TASK-1710)
+ * Enhanced with querying phase, elapsed time tracking for ETA calculation
  */
 export interface ImportProgress {
-  phase: "deleting" | "importing" | "attachments";
+  phase: "querying" | "deleting" | "importing" | "attachments";
   current: number;
   total: number;
   percent: number;
+  /** Milliseconds elapsed since import started */
+  elapsedMs: number;
 }
 
 /**
@@ -77,8 +80,8 @@ export const messageBridge = {
    * Get count of messages available for import from macOS Messages
    * @returns Count of available messages
    */
-  getImportCount: (): Promise<{ success: boolean; count?: number; error?: string }> =>
-    ipcRenderer.invoke("messages:get-import-count"),
+  getImportCount: (filters?: { lookbackMonths?: number | null; maxMessages?: number | null }): Promise<{ success: boolean; count?: number; filteredCount?: number; error?: string }> =>
+    ipcRenderer.invoke("messages:get-import-count", filters),
 
   /**
    * Listen for import progress updates
@@ -121,4 +124,26 @@ export const messageBridge = {
     orphaned: number;
     alreadyCorrect: number;
   }> => ipcRenderer.invoke("messages:repair-attachments"),
+
+  /**
+   * Cancel the current import operation (TASK-1710)
+   * Gracefully stops the import, preserving partial data
+   */
+  cancelImport: (): void => {
+    ipcRenderer.send("messages:import-cancel");
+  },
+
+  /**
+   * Get macOS messages import status (count and last import time)
+   * @param userId - User ID to get status for
+   * @returns Import status (messageCount, lastImportAt)
+   */
+  getImportStatus: (
+    userId: string
+  ): Promise<{
+    success: boolean;
+    messageCount?: number;
+    lastImportAt?: string | null;
+    error?: string;
+  }> => ipcRenderer.invoke("messages:getImportStatus", userId),
 };

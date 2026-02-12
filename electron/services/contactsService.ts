@@ -32,6 +32,8 @@ interface ContactInfo {
   name: string;
   phones: string[];
   emails: string[];
+  company?: string;   // TASK-1773: Organization from macOS Contacts
+  recordId?: string;  // TASK-1773: Unique identifier for shadow table sync
 }
 
 interface PhoneToContactInfo {
@@ -76,6 +78,8 @@ interface PersonInfo {
   name: string;
   phones: string[];
   emails: string[];
+  company?: string;   // TASK-1773: Organization/company
+  recordId: string;   // TASK-1773: Unique record ID (person_id as string)
 }
 
 interface PersonMap {
@@ -129,7 +133,7 @@ async function getContactNames(): Promise<ContactNamesResult> {
 
           // If this database has sufficient records, use it
           if (recordCount[0].count > MIN_CONTACT_RECORD_COUNT) {
-            logService.info(
+            logService.debug(
               `[ContactsService] Successfully loaded contacts from ${dbPath}`,
               "ContactsService",
             );
@@ -274,7 +278,7 @@ async function loadContactsFromDatabase(
 
     await dbClose();
 
-    logService.info(
+    logService.debug(
       `[ContactsService] Loaded ${contactsResult.length} contact records, ${phonesResult.length} phones, ${emailsResult.length} emails`,
       "ContactsService",
     );
@@ -323,6 +327,8 @@ function buildPersonMap(
         name: displayName,
         phones: [],
         emails: [],
+        company: person.organization || undefined,  // TASK-1773
+        recordId: String(person.person_id),          // TASK-1773: Use person_id as recordId
       };
     }
   });
@@ -387,10 +393,13 @@ function buildContactMaps(
       contactMap[phone] = person.name;
 
       // Map to full contact info (all phones and emails)
+      // TASK-1773: Include company and recordId for shadow table sync
       const fullInfo: ContactInfo = {
         name: person.name,
         phones: person.phones,
         emails: person.emails,
+        company: person.company,
+        recordId: person.recordId,
       };
       phoneToContactInfo[normalized] = fullInfo;
       phoneToContactInfo[phone] = fullInfo;

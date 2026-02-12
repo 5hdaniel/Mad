@@ -50,12 +50,21 @@ jest.mock("../db/communicationDbService", () => ({
   isThreadLinkedToTransaction: (...args: unknown[]) => mockIsThreadLinkedToTransaction(...args),
 }));
 
+// TASK-1951: Mock the preference helper
+// Default: messages inference enabled for existing test compatibility
+const mockIsContactSourceEnabled = jest.fn();
+jest.mock("../../utils/preferenceHelper", () => ({
+  isContactSourceEnabled: (...args: unknown[]) => mockIsContactSourceEnabled(...args),
+}));
+
 describe("autoLinkService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // BACKLOG-502: Default behavior for thread linking mocks
     mockCreateThreadCommunicationReference.mockResolvedValue("comm-ref-id");
     mockIsThreadLinkedToTransaction.mockResolvedValue(false);
+    // TASK-1951: Default to messages inference enabled for existing test compatibility
+    mockIsContactSourceEnabled.mockResolvedValue(true);
   });
 
   describe("autoLinkCommunicationsForContact", () => {
@@ -417,6 +426,82 @@ describe("autoLinkService", () => {
         expect(params).toContain("%contact@example.com%");
         expect(params).not.toContain("%user@example.com%");
       }
+    });
+
+    // TASK-1951: Inferred contact source preference tests
+    describe("inferred contact source preferences", () => {
+      it("should skip message auto-link when messages inference is disabled", async () => {
+        // Messages inference is OFF
+        mockIsContactSourceEnabled.mockResolvedValue(false);
+
+        setupMocks({
+          contactExists: true,
+          emails: [],
+          phones: ["+14155551234"],
+          transactionExists: true,
+          foundEmailIds: [],
+          foundMessageIds: ["msg-1", "msg-2"],
+        });
+
+        const result = await autoLinkCommunicationsForContact({
+          contactId: mockContactId,
+          transactionId: mockTransactionId,
+        });
+
+        // Messages should NOT be linked (messages inference disabled)
+        expect(result.messagesLinked).toBe(0);
+        // No thread communication references created
+        expect(mockCreateThreadCommunicationReference).not.toHaveBeenCalled();
+      });
+
+      it("should link messages when messages inference is enabled", async () => {
+        // Messages inference is ON
+        mockIsContactSourceEnabled.mockResolvedValue(true);
+
+        setupMocks({
+          contactExists: true,
+          emails: [],
+          phones: ["+14155551234"],
+          transactionExists: true,
+          foundEmailIds: [],
+          foundMessageIds: ["msg-1", "msg-2"],
+        });
+
+        const result = await autoLinkCommunicationsForContact({
+          contactId: mockContactId,
+          transactionId: mockTransactionId,
+        });
+
+        // Messages should be linked when inference is enabled
+        expect(result.messagesLinked).toBe(2);
+        expect(mockCreateThreadCommunicationReference).toHaveBeenCalledTimes(2);
+      });
+
+      it("should check messages preference with correct arguments", async () => {
+        mockIsContactSourceEnabled.mockResolvedValue(false);
+
+        setupMocks({
+          contactExists: true,
+          emails: ["john@example.com"],
+          phones: [],
+          transactionExists: true,
+          foundEmailIds: [],
+          foundMessageIds: [],
+        });
+
+        await autoLinkCommunicationsForContact({
+          contactId: mockContactId,
+          transactionId: mockTransactionId,
+        });
+
+        // Verify isContactSourceEnabled was called with correct args
+        expect(mockIsContactSourceEnabled).toHaveBeenCalledWith(
+          mockUserId,
+          "inferred",
+          "messages",
+          false, // default OFF
+        );
+      });
     });
   });
 });

@@ -66,8 +66,10 @@ export function useRealtimeSubmissions({
         });
       }
     }
-    // Also log to console for debugging
-    console.log(`[Realtime] ${title}: ${description}`);
+    // Also log to console for debugging (dev only)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[Realtime] ${title}: ${description}`);
+    }
   }, []);
 
   useEffect(() => {
@@ -94,7 +96,12 @@ export function useRealtimeSubmissions({
         },
         (payload: RealtimePayload) => {
           const submission = payload.new;
-          console.log('[Realtime] New submission:', submission);
+          // Ignore 'uploading' status — two-phase commit, not yet finalized
+          if (submission.status === 'uploading') return;
+
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[Realtime] New submission:', submission.id);
+          }
 
           showToast(
             'New Submission',
@@ -119,11 +126,13 @@ export function useRealtimeSubmissions({
 
           // Only notify if status actually changed
           if (oldStatus && oldStatus !== submission.status) {
-            console.log('[Realtime] Status change:', {
-              id: submission.id,
-              oldStatus,
-              newStatus: submission.status,
-            });
+            if (process.env.NODE_ENV === 'development') {
+              console.log('[Realtime] Status change:', {
+                id: submission.id,
+                oldStatus,
+                newStatus: submission.status,
+              });
+            }
 
             showToast(
               'Status Updated',
@@ -136,7 +145,9 @@ export function useRealtimeSubmissions({
         }
       )
       .subscribe((status) => {
-        console.log(`[Realtime] Subscription status: ${status}`);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[Realtime] Subscription status: ${status}`);
+        }
       });
 
     channelRef.current = channel;

@@ -236,11 +236,40 @@ class SupabaseService {
   }
 
   /**
-   * Get current Supabase Auth session
+   * Get current auth session.
+   * Returns local cache if available, otherwise queries Supabase SDK.
+   * This ensures deep link auth sessions are discovered even if local cache wasn't set.
+   *
    * @returns The auth session or null if not authenticated
    */
-  getAuthSession(): SupabaseAuthSession | null {
-    return this.authSession;
+  async getAuthSession(): Promise<SupabaseAuthSession | null> {
+    // Fast path: return local cache if available
+    if (this.authSession) {
+      return this.authSession;
+    }
+
+    // Fallback: query Supabase SDK (handles deep link auth case)
+    try {
+      const { data } = await this._ensureClient().auth.getSession();
+      if (data?.session?.user) {
+        // Cache for future calls
+        this.authSession = {
+          userId: data.session.user.id,
+          accessToken: data.session.access_token,
+          refreshToken: data.session.refresh_token,
+          expiresAt: data.session.expires_at
+            ? new Date(data.session.expires_at * 1000)
+            : undefined,
+        };
+        return this.authSession;
+      }
+    } catch (error) {
+      logService.warn("[Supabase] Failed to get session from SDK", "Supabase", {
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+
+    return null;
   }
 
   /**
@@ -270,11 +299,14 @@ class SupabaseService {
   ): Promise<{ organization_id: string; organization_name?: string } | null> {
     try {
       const client = this._ensureClient();
+      // Use limit(1) instead of maybeSingle() to handle users with multiple org memberships
+      // Filter by active license_status to only consider valid memberships
       const { data, error } = await client
         .from("organization_members")
         .select("organization_id, organizations(name)")
         .eq("user_id", userId)
-        .maybeSingle();
+        .eq("license_status", "active")
+        .limit(1);
 
       if (error) {
         logService.warn(
@@ -284,13 +316,15 @@ class SupabaseService {
         return null;
       }
 
-      if (!data) {
+      // data is now an array, get first element
+      const membership = data?.[0];
+      if (!membership) {
         return null;
       }
 
       return {
-        organization_id: data.organization_id,
-        organization_name: (data.organizations as { name?: string } | null)?.name,
+        organization_id: membership.organization_id,
+        organization_name: (membership.organizations as { name?: string } | null)?.name,
       };
     } catch (err) {
       logService.error("[Supabase] Error checking org membership", "SupabaseService", { err });

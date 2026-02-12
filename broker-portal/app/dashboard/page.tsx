@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { formatRelativeTime, getStatusColor, formatStatus } from '@/lib/utils';
 
@@ -14,10 +15,11 @@ interface SubmissionStats {
 async function getStats(): Promise<SubmissionStats> {
   const supabase = await createClient();
 
-  // Get all submissions for the user's organization
+  // Get all submissions for the user's organization (exclude incomplete uploads)
   const { data, error } = await supabase
     .from('transaction_submissions')
-    .select('status');
+    .select('status')
+    .neq('status', 'uploading');
 
   if (error || !data) {
     console.error('Error fetching stats:', error);
@@ -47,6 +49,7 @@ async function getRecentSubmissions() {
   const { data, error } = await supabase
     .from('transaction_submissions')
     .select('*')
+    .neq('status', 'uploading')
     .order('created_at', { ascending: false })
     .limit(5);
 
@@ -59,6 +62,20 @@ async function getRecentSubmissions() {
 }
 
 export default async function DashboardPage() {
+  // IT admins only manage users — redirect to Users page
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    const { data: membership } = await supabase
+      .from('organization_members')
+      .select('role')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (membership?.role === 'it_admin') {
+      redirect('/dashboard/users');
+    }
+  }
+
   const [stats, recentSubmissions] = await Promise.all([
     getStats(),
     getRecentSubmissions(),

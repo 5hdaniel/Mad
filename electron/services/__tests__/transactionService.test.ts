@@ -18,6 +18,14 @@ jest.mock("../gmailFetchService");
 jest.mock("../outlookFetchService");
 jest.mock("../transactionExtractorService");
 jest.mock("../logService");
+jest.mock("../emailAttachmentService");
+jest.mock("../supabaseService");
+
+// TASK-1951: Mock preferenceHelper
+const mockIsContactSourceEnabled = jest.fn();
+jest.mock("../../utils/preferenceHelper", () => ({
+  isContactSourceEnabled: (...args: unknown[]) => mockIsContactSourceEnabled(...args),
+}));
 
 describe("TransactionService - Database Method Fixes", () => {
   const mockUserId = "test-user-id";
@@ -291,5 +299,63 @@ describe("TransactionService - Database Method Fixes", () => {
         );
       });
     });
+  });
+});
+
+/**
+ * TASK-1951: Tests for inferred contact preference gating
+ * These test the scanAndExtractTransactions contact inference behavior
+ */
+describe("TransactionService - Inferred Contact Preferences (TASK-1951)", () => {
+  const mockUserId = "test-user-id";
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Default: all inferred sources OFF (the safe default)
+    mockIsContactSourceEnabled.mockResolvedValue(false);
+  });
+
+  it("should call isContactSourceEnabled for all three inferred sources during scan", async () => {
+    // Mock the necessary services for scanAndExtractTransactions
+    const supabaseService = require("../supabaseService").default;
+    supabaseService.getPreferences = jest.fn().mockResolvedValue({ scan: { lookbackMonths: 3 } });
+
+    (databaseService.getOAuthToken as jest.Mock).mockResolvedValue({ access_token: "token" });
+    (databaseService.getOAuthTokenSyncTime as jest.Mock).mockResolvedValue(null);
+
+    // Mock gmail fetch
+    const gmailFetchService = require("../gmailFetchService").default;
+    gmailFetchService.initialize = jest.fn().mockResolvedValue(undefined);
+    gmailFetchService.searchEmails = jest.fn().mockResolvedValue([]);
+
+    // Mock strategy service
+    const { ExtractionStrategyService } = require("../extraction/extractionStrategyService");
+    ExtractionStrategyService.prototype.selectStrategy = jest.fn().mockResolvedValue({
+      method: "pattern",
+      reason: "test",
+    });
+
+    // Mock extractor
+    const transactionExtractorService = require("../transactionExtractorService").default;
+    transactionExtractorService.batchAnalyze = jest.fn().mockReturnValue([]);
+
+    (databaseService.updateOAuthTokenSyncTime as jest.Mock).mockResolvedValue(undefined);
+
+    try {
+      await transactionService.scanAndExtractTransactions(mockUserId);
+    } catch {
+      // May fail due to incomplete mocking -- we only care about the preference calls
+    }
+
+    // Verify that isContactSourceEnabled was called for all three inferred sources
+    expect(mockIsContactSourceEnabled).toHaveBeenCalledWith(
+      mockUserId, "inferred", "outlookEmails", false
+    );
+    expect(mockIsContactSourceEnabled).toHaveBeenCalledWith(
+      mockUserId, "inferred", "gmailEmails", false
+    );
+    expect(mockIsContactSourceEnabled).toHaveBeenCalledWith(
+      mockUserId, "inferred", "messages", false
+    );
   });
 });

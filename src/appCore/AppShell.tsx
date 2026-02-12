@@ -10,7 +10,7 @@
 
 import React from "react";
 import type { AppStateMachine } from "./state/types";
-import { OfflineBanner, VersionPopup } from "./shell";
+import { OfflineBanner } from "./shell";
 import SystemHealthMonitor from "../components/SystemHealthMonitor";
 import { isOnboardingStep } from "./routing";
 
@@ -39,8 +39,6 @@ export function AppShell({ app, children }: AppShellProps) {
     modalState,
     openProfile,
     openSettings,
-    toggleVersion,
-    closeVersion,
     handleRetryConnection,
     getPageTitle,
   } = app;
@@ -53,6 +51,8 @@ export function AppShell({ app, children }: AppShellProps) {
   if (isAuthenticated && !isDatabaseInitialized && !isOnboardingStep(currentStep)) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
+        {/* Invisible drag region at top for window dragging during init */}
+        <div className="fixed top-0 left-0 right-0 h-12 drag-region" />
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-600">Initializing secure storage...</p>
@@ -65,7 +65,7 @@ export function AppShell({ app, children }: AppShellProps) {
     <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
       {/* Title Bar - Hide on login screen */}
       {currentStep !== "login" && (
-        <div className="flex-shrink-0 bg-gradient-to-b from-gray-100 to-gray-50 border-b border-gray-200 px-4 py-3 flex items-center justify-between select-none">
+        <div className="flex-shrink-0 bg-gradient-to-b from-gray-100 to-gray-50 border-b border-gray-200 px-4 py-3 flex items-center justify-between select-none drag-region">
           <div className="w-8" /> {/* Spacer for centering */}
           <h1 className="text-sm font-semibold text-gray-700">
             {getPageTitle()}
@@ -74,7 +74,7 @@ export function AppShell({ app, children }: AppShellProps) {
           {isAuthenticated && currentUser && (
             <button
               onClick={openProfile}
-              className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600 flex items-center justify-center text-white text-sm font-bold shadow-md transition-all hover:shadow-lg"
+              className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600 flex items-center justify-center text-white text-sm font-bold shadow-md transition-all hover:shadow-lg no-drag-region"
               title={`${currentUser.display_name || currentUser.email} - Click for account settings`}
               data-tour="profile-button"
             >
@@ -122,33 +122,6 @@ export function AppShell({ app, children }: AppShellProps) {
       {/* Scrollable Content Area */}
       <div className="flex-1 min-h-0 overflow-y-auto relative">
         {children}
-
-        {/* Version Info Button - Bottom Left */}
-        <button
-          onClick={toggleVersion}
-          className="fixed bottom-4 left-4 w-8 h-8 bg-gray-200 hover:bg-gray-300 rounded-full flex items-center justify-center text-gray-600 hover:text-gray-800 transition-all shadow-md z-50"
-          title="Version Info"
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-        </button>
-
-        {/* Version Info Popup */}
-        <VersionPopup
-          isVisible={modalState.showVersion}
-          onClose={closeVersion}
-        />
       </div>
     </div>
   );

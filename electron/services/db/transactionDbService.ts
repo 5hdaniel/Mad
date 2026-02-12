@@ -381,11 +381,10 @@ export async function updateTransaction(
   const sql = `UPDATE transactions SET ${fields.join(", ")} WHERE id = ?`;
   const result = dbRun(sql, values);
 
-  logService.info("Transaction update result", "TransactionDbService", {
+  logService.debug("Transaction update result", "TransactionDbService", {
     transactionId,
     fields,
     rowsChanged: result.changes,
-    sql,
   });
 
   if (result.changes === 0) {

@@ -462,4 +462,54 @@ export const transactionBridge = {
       ipcRenderer.removeListener("submission-status-changed", handler);
     };
   },
+
+  // ============================================
+  // EMAIL ATTACHMENT METHODS (TASK-1776)
+  // ============================================
+
+  /**
+   * Get attachments for a specific email
+   * @param emailId - Email ID to get attachments for
+   * @returns Array of attachment records
+   */
+  getEmailAttachments: (emailId: string) =>
+    ipcRenderer.invoke("emails:get-attachments", emailId),
+
+  /**
+   * Open attachment with system viewer
+   * @param storagePath - Path to attachment file
+   * @returns Success/error result
+   */
+  openAttachment: (storagePath: string) =>
+    ipcRenderer.invoke("attachments:open", storagePath),
+
+  /**
+   * Get attachment data as base64 data URL for CSP-safe image preview
+   * TASK-1778 fix: CSP blocks file:// URLs, so we read the file and return as data: URL
+   * @param storagePath - Path to attachment file
+   * @param mimeType - MIME type for the data URL
+   * @returns Success/error result with data URL in data field
+   */
+  getAttachmentData: (storagePath: string, mimeType: string) =>
+    ipcRenderer.invoke("attachments:get-data", storagePath, mimeType),
+
+  /**
+   * Get attachment counts for a transaction from the actual attachments table
+   * TASK-1781: Returns accurate counts matching what submission service uploads
+   * @param transactionId - Transaction ID
+   * @param auditStart - Optional audit start date (ISO string)
+   * @param auditEnd - Optional audit end date (ISO string)
+   * @returns Counts for text and email attachments
+   */
+  getAttachmentCounts: (transactionId: string, auditStart?: string, auditEnd?: string) =>
+    ipcRenderer.invoke("transactions:get-attachment-counts", transactionId, auditStart, auditEnd),
+
+  /**
+   * Get attachment buffer as raw base64 (for DOCX conversion)
+   * TASK-1783: Returns raw base64 without data: URL prefix for mammoth.js
+   * @param storagePath - Path to attachment file
+   * @returns Success/error result with base64 data in data field
+   */
+  getAttachmentBuffer: (storagePath: string) =>
+    ipcRenderer.invoke("attachments:get-buffer", storagePath),
 };

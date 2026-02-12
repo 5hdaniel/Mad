@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { ExtendedContact } from "../types";
 
 interface ImportContactsModalProps {
@@ -28,11 +28,7 @@ function ImportContactsModal({
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
 
-  useEffect(() => {
-    loadAvailableContacts();
-  }, []);
-
-  const loadAvailableContacts = async () => {
+  const loadAvailableContacts = useCallback(async () => {
     try {
       setLoading(true);
       const result = await window.api.contacts.getAvailable(userId);
@@ -51,7 +47,27 @@ function ImportContactsModal({
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
+
+  // Load contacts on mount
+  useEffect(() => {
+    loadAvailableContacts();
+  }, [loadAvailableContacts]);
+
+  // TASK-1955: Listen for external sync completion to refresh contacts list
+  // When user triggers a manual sync from Settings, this refreshes the modal
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const contactsApi = window.api.contacts as any;
+
+    if (!contactsApi?.onExternalSyncComplete) return;
+
+    const cleanup = contactsApi.onExternalSyncComplete(() => {
+      loadAvailableContacts();
+    });
+
+    return cleanup;
+  }, [loadAvailableContacts]);
 
   const handleToggleContact = (contactId: string) => {
     const newSelected = new Set(selectedContacts);
