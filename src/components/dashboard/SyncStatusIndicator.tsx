@@ -72,7 +72,6 @@ export function SyncStatusIndicator({
   const [showCompletion, setShowCompletion] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const wasSyncingRef = useRef(false);
-  const autoDismissTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Get license status for AI-specific features (pending count, Review Now button)
   const { hasAIAddon } = useLicense();
@@ -98,26 +97,14 @@ export function SyncStatusIndicator({
       // Just finished syncing - show completion message
       setShowCompletion(true);
       wasSyncingRef.current = false;
-
-      // Auto-dismiss after 5 seconds
-      autoDismissTimeoutRef.current = setTimeout(() => {
-        setShowCompletion(false);
-        setDismissed(true);
-      }, 5000);
+      // No auto-dismiss — user must click the X to dismiss.
+      // This ensures the completion message is visible even if sync
+      // finishes while a modal (e.g. Settings) covers the dashboard.
     }
-
-    return () => {
-      if (autoDismissTimeoutRef.current) {
-        clearTimeout(autoDismissTimeoutRef.current);
-      }
-    };
   }, [isAnySyncing]);
 
   // Handle manual dismiss
   const handleDismiss = useCallback(() => {
-    if (autoDismissTimeoutRef.current) {
-      clearTimeout(autoDismissTimeoutRef.current);
-    }
     setShowCompletion(false);
     setDismissed(true);
   }, []);
