@@ -754,6 +754,69 @@ app.whenReady().then(async () => {
   createWindow();
 
   // ==========================================
+  // RENDERER CRASH RECOVERY (TASK-1968)
+  // ==========================================
+  // Handle renderer process crashes and unresponsive states
+  // Uses native dialog (not renderer-based) since the renderer may be dead
+  if (mainWindow) {
+    mainWindow.webContents.on("render-process-gone", async (_event, details) => {
+      console.error("[Main] Renderer process gone:", details.reason, details.exitCode);
+      log.error("[Main] Renderer process gone:", details.reason, details.exitCode);
+
+      // Skip dialog in development for 'killed' reason (DevTools reload causes this)
+      if (!app.isPackaged && details.reason === "killed") {
+        return;
+      }
+
+      // Capture crash in Sentry (TASK-1967)
+      Sentry.captureMessage(`Renderer process gone: ${details.reason}`, {
+        level: "fatal",
+        extra: { reason: details.reason, exitCode: details.exitCode },
+      });
+
+      const { response } = await dialog.showMessageBox({
+        type: "error",
+        title: "Application Error",
+        message: "The application encountered an error.",
+        detail: `Reason: ${details.reason}`,
+        buttons: ["Reload", "Quit"],
+        defaultId: 0,
+        cancelId: 1,
+      });
+
+      if (response === 0) {
+        mainWindow?.webContents.reload();
+      } else {
+        app.quit();
+      }
+    });
+
+    mainWindow.on("unresponsive", async () => {
+      console.warn("[Main] Window became unresponsive");
+      log.warn("[Main] Window became unresponsive");
+
+      Sentry.captureMessage("Window became unresponsive", { level: "warning" });
+
+      const { response } = await dialog.showMessageBox({
+        type: "warning",
+        title: "Application Not Responding",
+        message: "The application is not responding.",
+        detail: "Would you like to wait or reload?",
+        buttons: ["Wait", "Reload", "Quit"],
+        defaultId: 0,
+        cancelId: 0,
+      });
+
+      if (response === 1) {
+        mainWindow?.webContents.reload();
+      } else if (response === 2) {
+        app.quit();
+      }
+      // response === 0: Wait (do nothing)
+    });
+  }
+
+  // ==========================================
   // COLD START DEEP LINK HANDLING (TASK-1500)
   // ==========================================
   // Handle deep link when app is cold started via URL
