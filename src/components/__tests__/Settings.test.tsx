@@ -9,6 +9,7 @@ import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
 import Settings from "../Settings";
 import { PlatformProvider } from "../../contexts/PlatformContext";
+import { NotificationProvider } from "../../contexts/NotificationContext";
 
 // Mock the useLicense hook for LicenseGate (BACKLOG-462)
 jest.mock("@/contexts/LicenseContext", () => ({
@@ -27,9 +28,11 @@ jest.mock("@/contexts/LicenseContext", () => ({
 // Wrap Settings in PlatformProvider for tests
 const renderSettings = async (props: { onClose: () => void; userId: string }) => {
   const result = render(
-    <PlatformProvider>
-      <Settings {...props} />
-    </PlatformProvider>
+    <NotificationProvider>
+      <PlatformProvider>
+        <Settings {...props} />
+      </PlatformProvider>
+    </NotificationProvider>
   );
   // Wait for preferences to load (spinner to disappear) before returning
   await waitFor(() => {
@@ -375,9 +378,11 @@ describe("Settings", () => {
       );
 
       render(
-        <PlatformProvider>
-          <Settings userId={mockUserId} onClose={mockOnClose} />
-        </PlatformProvider>
+        <NotificationProvider>
+          <PlatformProvider>
+            <Settings userId={mockUserId} onClose={mockOnClose} />
+          </PlatformProvider>
+        </NotificationProvider>
       );
 
       expect(screen.getByText("Loading settings...")).toBeInTheDocument();
@@ -584,9 +589,11 @@ describe("Settings", () => {
       );
 
       render(
-        <PlatformProvider>
-          <Settings userId={mockUserId} onClose={mockOnClose} />
-        </PlatformProvider>
+        <NotificationProvider>
+          <PlatformProvider>
+            <Settings userId={mockUserId} onClose={mockOnClose} />
+          </PlatformProvider>
+        </NotificationProvider>
       );
 
       expect(screen.getByText("Loading settings...")).toBeInTheDocument();
