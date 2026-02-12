@@ -140,6 +140,10 @@ function getDefaultStartDate(): string {
   return date.toISOString().split("T")[0]; // YYYY-MM-DD format
 }
 
+function getTodayDate(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
 const initialAddressData: AddressData = {
   property_address: "",
   property_street: "",
@@ -150,7 +154,7 @@ const initialAddressData: AddressData = {
   transaction_type: "purchase",
   started_at: getDefaultStartDate(),
   closing_deadline: undefined,
-  closed_at: undefined,
+  closed_at: getTodayDate(),
 };
 
 export function useAuditTransaction({

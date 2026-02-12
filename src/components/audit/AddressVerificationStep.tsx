@@ -169,7 +169,7 @@ function AddressVerificationStep({
 
         {/* Auto mode: formatted audit period display */}
         {isAutoMode && (
-          <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3">
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 mb-4">
             {isAutoDetecting ? (
               <div className="flex items-center gap-2">
                 <svg
@@ -232,72 +232,74 @@ function AddressVerificationStep({
           </div>
         )}
 
-        {/* Manual mode: standard date inputs */}
+        {/* Manual mode: start date input */}
         {!isAutoMode && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Representation Start Date *
-                <span
-                  className="ml-1 text-gray-400 cursor-help"
-                  title="The date you officially started representing this client in this transaction"
-                >
-                  (?)
-                </span>
-              </label>
-              <input
-                type="date"
-                value={addressData.started_at}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  onStartDateChange(e.target.value)
-                }
-                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
-                  !addressData.started_at
-                    ? "border-red-300 bg-red-50"
-                    : "border-gray-300"
-                }`}
-                required
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Required — The date you began representing this client
-              </p>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Closing Date
-              </label>
-              <input
-                type="date"
-                value={addressData.closing_deadline || ""}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  onClosingDateChange(e.target.value || undefined)
-                }
-                min={addressData.started_at}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Scheduled closing date
-              </p>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                End Date
-              </label>
-              <input
-                type="date"
-                value={addressData.closed_at || ""}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  onEndDateChange(e.target.value || undefined)
-                }
-                min={addressData.started_at}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                When transaction ended
-              </p>
-            </div>
+          <div className="mb-4">
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Representation Start Date *
+              <span
+                className="ml-1 text-gray-400 cursor-help"
+                title="The date you officially started representing this client in this transaction"
+              >
+                (?)
+              </span>
+            </label>
+            <input
+              type="date"
+              value={addressData.started_at}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                onStartDateChange(e.target.value)
+              }
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+                !addressData.started_at
+                  ? "border-red-300 bg-red-50"
+                  : "border-gray-300"
+              }`}
+              required
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Required — The date you began representing this client
+            </p>
           </div>
         )}
+
+        {/* Closing date and end date — always visible */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Closing Date
+            </label>
+            <input
+              type="date"
+              value={addressData.closing_deadline || ""}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                onClosingDateChange(e.target.value || undefined)
+              }
+              min={addressData.started_at}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Scheduled closing date
+            </p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              End Date
+            </label>
+            <input
+              type="date"
+              value={addressData.closed_at || ""}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                onEndDateChange(e.target.value || undefined)
+              }
+              min={addressData.started_at}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              When transaction ended
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
