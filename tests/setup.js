@@ -61,6 +61,7 @@ if (typeof window !== 'undefined') {
       bulkUpdateStatus: jest.fn(),
       batchUpdateContacts: jest.fn(),
       onSubmissionStatusChanged: jest.fn().mockReturnValue(() => {}),
+      getEarliestCommunicationDate: jest.fn().mockResolvedValue({ success: true, date: null }),
     },
     contacts: {
       getAll: jest.fn(),

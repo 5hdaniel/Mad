@@ -6,6 +6,7 @@
 import { ipcMain, BrowserWindow, shell } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import transactionService from "./services/transactionService";
+import { getEarliestCommunicationDate } from "./services/transactionService";
 import auditService from "./services/auditService";
 import logService from "./services/logService";
 import { autoLinkAllToTransaction } from "./services/messageMatchingService";
@@ -3318,6 +3319,59 @@ export const registerTransactionHandlers = (
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // ============================================
+  // AUTO-DETECT START DATE (TASK-1974)
+  // ============================================
+
+  /**
+   * Get the earliest communication date for a set of contacts.
+   * Used by the audit wizard to auto-detect the transaction start date.
+   */
+  ipcMain.handle(
+    "transactions:get-earliest-communication-date",
+    async (
+      _event: IpcMainInvokeEvent,
+      contactIds: string[],
+      userId: string,
+    ): Promise<{ success: boolean; date?: string | null; error?: string }> => {
+      try {
+        validateUserId(userId);
+
+        if (!Array.isArray(contactIds) || contactIds.length === 0) {
+          return { success: true, date: null };
+        }
+
+        // Validate each contact ID
+        for (const id of contactIds) {
+          validateContactId(id);
+        }
+
+        const date = getEarliestCommunicationDate(contactIds, userId);
+
+        return { success: true, date: date || null };
+      } catch (error) {
+        logService.error(
+          "Failed to get earliest communication date",
+          "Transactions",
+          {
+            contactIds,
+            userId,
+            error: error instanceof Error ? error.message : "Unknown error",
+          },
+        );
+
+        if (error instanceof ValidationError) {
+          return { success: false, error: error.message };
+        }
+
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Failed to get earliest communication date",
         };
       }
     },

@@ -52,6 +52,11 @@ function AuditTransactionModal({
     // External contacts (from macOS Contacts app, etc.)
     externalContacts,
     externalContactsLoading,
+    // Auto-detect start date (TASK-1974)
+    startDateMode,
+    autoDetectedDate,
+    isAutoDetecting,
+    setStartDateMode,
     setAddressData,
     setSelectedContactIds,
     handleAddressChange,
@@ -185,6 +190,10 @@ function AuditTransactionModal({
               showAutocomplete={showAddressAutocomplete}
               suggestions={addressSuggestions}
               onSelectSuggestion={selectAddress}
+              startDateMode={startDateMode}
+              onStartDateModeChange={isEditing ? undefined : setStartDateMode}
+              autoDetectedDate={autoDetectedDate}
+              isAutoDetecting={isAutoDetecting}
             />
           )}
 
