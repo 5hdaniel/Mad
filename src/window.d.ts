@@ -1061,6 +1061,23 @@ interface MainAPI {
       transactions?: Transaction[];
       error?: string;
     }>;
+
+    /**
+     * Get earliest communication date for a set of contacts (TASK-1974)
+     * Used by audit wizard to auto-detect transaction start date
+     * @param contactIds - Array of contact IDs to search
+     * @param userId - User ID who owns the communications
+     * @returns Earliest communication date (ISO string) or null
+     */
+    getEarliestCommunicationDate: (
+      contactIds: string[],
+      userId: string,
+    ) => Promise<{
+      success: boolean;
+      date?: string | null;
+      error?: string;
+    }>;
+
     scan: (
       userId: string,
       options?: Record<string, unknown>,

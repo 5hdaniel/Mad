@@ -99,6 +99,11 @@ export interface UseAuditTransactionReturn {
   showAddressAutocomplete: boolean;
   addressSuggestions: AddressSuggestion[];
 
+  // Auto-detect start date state (TASK-1974)
+  startDateMode: "auto" | "manual";
+  autoDetectedDate: string | null;
+  isAutoDetecting: boolean;
+
   // Contact loading state (lazy-loaded when reaching step 2)
   contacts: Contact[];
   contactsLoading: boolean;
@@ -114,6 +119,7 @@ export interface UseAuditTransactionReturn {
   setAddressData: React.Dispatch<React.SetStateAction<AddressData>>;
   setSelectedContactIds: React.Dispatch<React.SetStateAction<string[]>>;
   setError: React.Dispatch<React.SetStateAction<string | null>>;
+  setStartDateMode: (mode: "auto" | "manual") => void;
 
   // Handlers
   handleAddressChange: (value: string) => Promise<void>;
@@ -191,6 +197,13 @@ export function useAuditTransaction({
   const externalContactsLoadedRef = useRef(false);
   // Track if component is mounted to prevent state updates after unmount
   const isMountedRef = useRef(true);
+
+  // Auto-detect start date state (TASK-1974)
+  const [startDateMode, setStartDateModeState] = useState<"auto" | "manual">(
+    isEditing ? "manual" : "auto",
+  );
+  const [autoDetectedDate, setAutoDetectedDate] = useState<string | null>(null);
+  const [isAutoDetecting, setIsAutoDetecting] = useState(false);
 
   /**
    * Load contacts - called lazily when reaching step 2, or when explicitly refreshed
@@ -308,6 +321,75 @@ export function useAuditTransaction({
   const silentRefreshContacts = useCallback((): Promise<void> => {
     return loadContacts(true, false); // forceRefresh=true, showLoading=false
   }, [loadContacts]);
+
+  /**
+   * Handle start date mode change (TASK-1974)
+   * When switching to "auto", re-trigger detection if contacts are selected.
+   * When switching to "manual", preserve the current date value.
+   */
+  const setStartDateMode = useCallback((mode: "auto" | "manual") => {
+    setStartDateModeState(mode);
+    if (mode === "auto" && autoDetectedDate) {
+      // Re-apply the auto-detected date
+      setAddressData(prev => ({ ...prev, started_at: autoDetectedDate }));
+    }
+  }, [autoDetectedDate]);
+
+  /**
+   * Auto-detect the earliest communication date for selected contacts (TASK-1974)
+   */
+  const detectStartDate = useCallback(async (contactIds: string[]) => {
+    if (contactIds.length === 0 || !userId) return;
+    if (!isMountedRef.current) return;
+
+    setIsAutoDetecting(true);
+    try {
+      // Type assertion for new API method (TASK-1974)
+      // Required because TypeScript has a resolution issue with large interface types
+      // in window.d.ts - same pattern used in useSubmissionSync.ts
+      const transactions = window.api.transactions as typeof window.api.transactions & {
+        getEarliestCommunicationDate: (
+          contactIds: string[],
+          userId: string,
+        ) => Promise<{ success: boolean; date?: string | null; error?: string }>;
+      };
+      const result = await transactions.getEarliestCommunicationDate(
+        contactIds,
+        userId,
+      );
+
+      if (!isMountedRef.current) return;
+
+      if (result.success && result.date) {
+        const dateStr = result.date.split("T")[0]; // YYYY-MM-DD
+        setAutoDetectedDate(dateStr);
+        // Only update address data if still in auto mode
+        setStartDateModeState(currentMode => {
+          if (currentMode === "auto") {
+            setAddressData(prev => ({ ...prev, started_at: dateStr }));
+          }
+          return currentMode;
+        });
+      } else {
+        setAutoDetectedDate(null);
+        // Keep default (1 year ago) if no communications found
+      }
+    } catch {
+      if (!isMountedRef.current) return;
+      setAutoDetectedDate(null);
+    } finally {
+      if (isMountedRef.current) {
+        setIsAutoDetecting(false);
+      }
+    }
+  }, [userId]);
+
+  // Trigger auto-detect when selected contacts change and mode is "auto" (TASK-1974)
+  useEffect(() => {
+    if (startDateMode === "auto" && selectedContactIds.length > 0 && !isEditing) {
+      detectStartDate(selectedContactIds);
+    }
+  }, [selectedContactIds, startDateMode, isEditing, detectStartDate]);
 
   /**
    * Initialize Google Places API (if available)
@@ -863,6 +945,11 @@ export function useAuditTransaction({
     showAddressAutocomplete,
     addressSuggestions,
 
+    // Auto-detect start date state (TASK-1974)
+    startDateMode,
+    autoDetectedDate,
+    isAutoDetecting,
+
     // Contact loading state (lazy-loaded when reaching step 2)
     contacts,
     contactsLoading,
@@ -878,6 +965,7 @@ export function useAuditTransaction({
     setAddressData,
     setSelectedContactIds,
     setError,
+    setStartDateMode,
 
     // Handlers
     handleAddressChange,

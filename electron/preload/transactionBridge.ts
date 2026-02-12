@@ -512,4 +512,22 @@ export const transactionBridge = {
    */
   getAttachmentBuffer: (storagePath: string) =>
     ipcRenderer.invoke("attachments:get-buffer", storagePath),
+
+  // ============================================
+  // AUTO-DETECT START DATE (TASK-1974)
+  // ============================================
+
+  /**
+   * Get the earliest communication date for a set of contacts.
+   * Used by the audit wizard to auto-detect the transaction start date.
+   * @param contactIds - Array of contact IDs to search
+   * @param userId - User ID who owns the communications
+   * @returns Earliest communication date (ISO string) or null
+   */
+  getEarliestCommunicationDate: (contactIds: string[], userId: string) =>
+    ipcRenderer.invoke(
+      "transactions:get-earliest-communication-date",
+      contactIds,
+      userId,
+    ),
 };
