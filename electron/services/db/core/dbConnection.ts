@@ -98,10 +98,23 @@ export function openDatabase(): DatabaseType {
   // 5 seconds is sufficient for most operations while still detecting true deadlocks
   database.pragma("busy_timeout = 5000");
 
-  // TASK-1956: Enable WAL mode for concurrent reader/writer access.
+  // TASK-1956/1965: Enable WAL mode for concurrent reader/writer access.
   // This allows worker threads to read while the main process writes,
   // preventing SQLITE_BUSY errors during contact query offloading.
-  database.pragma("journal_mode = WAL");
+  const journalMode = database.pragma("journal_mode = WAL") as Array<{
+    journal_mode: string;
+  }>;
+  if (journalMode?.[0]?.journal_mode !== "wal") {
+    console.warn(
+      "[DB] WAL mode not enabled, journal_mode returned:",
+      journalMode,
+    );
+  }
+
+  // TASK-1965: NORMAL synchronous is safe with WAL mode — data is still
+  // durable after a crash, but fsync is deferred to checkpoint rather than
+  // every transaction commit, improving write throughput.
+  database.pragma("synchronous = NORMAL");
 
   // Verify database is accessible (will throw if key is wrong)
   try {
