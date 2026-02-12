@@ -12,7 +12,9 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { dbAll, dbRun, dbGet, dbTransaction, ensureDb } from './core/dbConnection';
+import { Worker } from 'worker_threads';
+import path from 'path';
+import { dbAll, dbRun, dbGet, dbTransaction, ensureDb, getDbPath, getEncryptionKey } from './core/dbConnection';
 import logService from '../logService';
 
 /**
@@ -123,6 +125,80 @@ export function getAllForUser(userId: string): ExternalContact[] {
     source: row.source as 'macos' | 'iphone' | 'outlook',
     synced_at: row.synced_at,
   }));
+}
+
+/**
+ * TASK-1956: Async version of getAllForUser that runs the query in a worker thread.
+ * This prevents blocking the Electron main process event loop during large contact loads.
+ *
+ * The worker opens its own encrypted SQLite connection (WAL mode allows concurrent reads)
+ * and posts the raw rows back. JSON parsing of phones/emails is done here in the parent.
+ *
+ * @param userId - The user ID to query contacts for
+ * @param timeoutMs - Maximum time to wait for the worker (default: 30000ms)
+ * @returns Promise resolving to the same ExternalContact[] as getAllForUser
+ */
+export function getAllForUserAsync(
+  userId: string,
+  timeoutMs: number = 30_000,
+): Promise<ExternalContact[]> {
+  return new Promise((resolve, reject) => {
+    const currentDbPath = getDbPath();
+    const currentEncryptionKey = getEncryptionKey();
+
+    if (!currentDbPath || !currentEncryptionKey) {
+      reject(new Error('Database not initialized: missing path or encryption key'));
+      return;
+    }
+
+    const workerPath = path.join(__dirname, '..', 'workers', 'contactQueryWorker.js');
+
+    const worker = new Worker(workerPath, {
+      workerData: {
+        dbPath: currentDbPath,
+        encryptionKey: currentEncryptionKey,
+        userId,
+      },
+    });
+
+    const timeout = setTimeout(() => {
+      worker.terminate();
+      reject(new Error(`Contact query worker timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    worker.on('message', (msg: { success: boolean; data?: ExternalContactRow[]; error?: string }) => {
+      clearTimeout(timeout);
+      if (msg.success && msg.data) {
+        const contacts: ExternalContact[] = msg.data.map((row) => ({
+          id: row.id,
+          user_id: row.user_id,
+          name: row.name,
+          phones: JSON.parse(row.phones_json || '[]'),
+          emails: JSON.parse(row.emails_json || '[]'),
+          company: row.company,
+          last_message_at: row.last_message_at,
+          external_record_id: row.external_record_id,
+          source: row.source as 'macos' | 'iphone' | 'outlook',
+          synced_at: row.synced_at,
+        }));
+        resolve(contacts);
+      } else {
+        reject(new Error(msg.error || 'Unknown worker error'));
+      }
+    });
+
+    worker.on('error', (err) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
+
+    worker.on('exit', (code) => {
+      clearTimeout(timeout);
+      if (code !== 0) {
+        reject(new Error(`Contact query worker exited with code ${code}`));
+      }
+    });
+  });
 }
 
 /**
