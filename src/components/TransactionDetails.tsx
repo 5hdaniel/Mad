@@ -638,8 +638,8 @@ function TransactionDetails({
       {showSubmitModal && (
         <SubmitForReviewModal
           transaction={transaction}
-          emailThreadCount={transaction.email_count || 0}
-          textThreadCount={transaction.text_thread_count || 0}
+          emailThreadCount={emailCommunications.length}
+          textThreadCount={textMessages.length}
           attachmentCount={dbAttachmentCounts.total}
           emailAttachmentCount={dbAttachmentCounts.emailAttachments}
           totalSizeBytes={dbAttachmentCounts.totalSizeBytes}
