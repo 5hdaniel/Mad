@@ -111,7 +111,7 @@ describe("AddressVerificationStep - Start Date Auto/Manual Toggle", () => {
       />,
     );
 
-    expect(screen.getByText(/detecting from communications/i)).toBeInTheDocument();
+    expect(screen.getByText(/detecting start representation date/i)).toBeInTheDocument();
   });
 
   it("should show formatted audit period with auto-detected date", () => {

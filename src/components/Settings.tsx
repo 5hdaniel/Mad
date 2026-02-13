@@ -65,6 +65,9 @@ interface PreferencesResult {
     emailSync?: {
       lookbackMonths?: number;
     };
+    audit?: {
+      startDateDefault?: "auto" | "manual";
+    };
   };
 }
 
@@ -113,6 +116,8 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
   const [gmailEmailsInferred, setGmailEmailsInferred] = useState<boolean>(false);
   const [messagesInferred, setMessagesInferred] = useState<boolean>(false);
   const [loadingPreferences, setLoadingPreferences] = useState<boolean>(true);
+  // TASK-1980: Start date default mode preference
+  const [startDateDefault, setStartDateDefault] = useState<"auto" | "manual">("manual");
 
   // Database maintenance state
   const [reindexing, setReindexing] = useState<boolean>(false);
@@ -220,6 +225,11 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         if (typeof result.preferences.notifications?.enabled === "boolean") {
           setNotificationsEnabled(result.preferences.notifications.enabled);
         }
+        // TASK-1980: Load start date default mode preference
+        const loadedStartDateDefault = result.preferences.audit?.startDateDefault;
+        if (loadedStartDateDefault === "auto" || loadedStartDateDefault === "manual") {
+          setStartDateDefault(loadedStartDateDefault);
+        }
         // Load contact source preferences
         if (result.preferences.contactSources) {
           const cs = result.preferences.contactSources;
@@ -290,6 +300,23 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
       }
     } catch (error) {
       console.error("[Settings] Error saving email sync lookback:", error);
+    }
+  };
+
+  // TASK-1980: Handle start date default mode change
+  const handleStartDateDefaultChange = async (mode: "auto" | "manual"): Promise<void> => {
+    setStartDateDefault(mode);
+    try {
+      const result = await window.api.preferences.update(userId, {
+        audit: {
+          startDateDefault: mode,
+        },
+      });
+      if (!result.success) {
+        console.error("[Settings] Failed to save start date default:", result);
+      }
+    } catch (error) {
+      console.error("[Settings] Error saving start date default:", error);
     }
   };
 
@@ -603,6 +630,42 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                     <option value={18}>18 months</option>
                     <option value={24}>24 months</option>
                   </select>
+                </div>
+
+                {/* TASK-1980: Start Date Mode Default */}
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex-1">
+                    <h4 className="text-sm font-medium text-gray-900">
+                      Start Date Mode
+                    </h4>
+                    <p className="text-xs text-gray-600 mt-1">
+                      Default mode for representation start date when creating new audits
+                    </p>
+                  </div>
+                  <div className="ml-4 flex items-center gap-1">
+                    <button
+                      onClick={() => handleStartDateDefaultChange("auto")}
+                      disabled={loadingPreferences}
+                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                        startDateDefault === "auto"
+                          ? "bg-blue-500 text-white"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      }`}
+                    >
+                      Auto
+                    </button>
+                    <button
+                      onClick={() => handleStartDateDefaultChange("manual")}
+                      disabled={loadingPreferences}
+                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                        startDateDefault === "manual"
+                          ? "bg-blue-500 text-white"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      }`}
+                    >
+                      Manual
+                    </button>
+                  </div>
                 </div>
 
                 {/* Auto-Sync on Login */}
