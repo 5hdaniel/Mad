@@ -29,8 +29,8 @@ interface StartNewAuditModalProps {
  *
  * Visual hierarchy:
  * 1. Pending transactions list (primary focus)
- * 2. View Active Transactions button
- * 3. Add Manually button (secondary)
+ * 2. Add Manually button
+ * 3. View Active Transactions button
  */
 function StartNewAuditModal({
   onSelectPendingTransaction,
@@ -301,37 +301,6 @@ function StartNewAuditModal({
 
           {/* Secondary Actions */}
           <div className="grid grid-cols-2 gap-4">
-            {/* View Active Transactions */}
-            <button
-              onClick={onViewActiveTransactions}
-              className="flex items-center gap-3 p-4 bg-white border-2 border-gray-200 rounded-lg hover:border-green-400 hover:bg-green-50 transition-all group"
-              data-testid="view-active-transactions-button"
-            >
-              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center group-hover:bg-green-200 transition-colors">
-                <svg
-                  className="w-5 h-5 text-green-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
-              </div>
-              <div className="text-left">
-                <h4 className="font-semibold text-gray-900 text-sm">
-                  View Active Transactions
-                </h4>
-                <p className="text-xs text-gray-500">
-                  Browse existing audits
-                </p>
-              </div>
-            </button>
-
             {/* Add Manually */}
             <button
               onClick={canCreateTransaction ? onCreateManually : undefined}
@@ -370,6 +339,37 @@ function StartNewAuditModal({
                   {canCreateTransaction
                     ? "Transaction not here?"
                     : `Limit reached (${transactionCount}/${transactionLimit})`}
+                </p>
+              </div>
+            </button>
+
+            {/* View Active Transactions */}
+            <button
+              onClick={onViewActiveTransactions}
+              className="flex items-center gap-3 p-4 bg-white border-2 border-gray-200 rounded-lg hover:border-green-400 hover:bg-green-50 transition-all group"
+              data-testid="view-active-transactions-button"
+            >
+              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                <svg
+                  className="w-5 h-5 text-green-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+              </div>
+              <div className="text-left">
+                <h4 className="font-semibold text-gray-900 text-sm">
+                  View Active Transactions
+                </h4>
+                <p className="text-xs text-gray-500">
+                  Browse existing audits
                 </p>
               </div>
             </button>
