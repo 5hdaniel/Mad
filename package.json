@@ -1,6 +1,6 @@
 {
   "name": "magic-audit",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "description": "Magic Audit - Export and archive iMessage conversations and emails",
   "main": "electron/main.js",
   "engines": {
