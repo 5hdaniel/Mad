@@ -15,6 +15,7 @@
  */
 
 import { isMacOS } from '../utils/platform';
+import type { ImportSource, UserPreferences } from './settingsService';
 
 export type SyncType = 'contacts' | 'emails' | 'messages';
 
@@ -76,6 +77,24 @@ class SyncOrchestratorServiceClass {
   }
 
   /**
+   * Read the import source preference fresh from DB.
+   * Returns 'macos-native' (default) or 'iphone-sync'.
+   * TASK-1979: Read at sync time to avoid stale cached values.
+   */
+  private async getImportSource(userId: string): Promise<ImportSource> {
+    try {
+      const result = await window.api.preferences.get(userId);
+      const prefs = result.preferences as UserPreferences | undefined;
+      if (result.success && prefs?.messages?.source) {
+        return prefs.messages.source;
+      }
+    } catch (err) {
+      console.warn('[SyncOrchestrator] Failed to read import source preference, defaulting to macos-native:', err);
+    }
+    return 'macos-native';
+  }
+
+  /**
    * Initialize canonical sync functions.
    * Each sync function owns its IPC listeners internally.
    * Platform-specific functions are only registered on supported platforms.
@@ -95,8 +114,12 @@ class SyncOrchestratorServiceClass {
       console.log('[SyncOrchestrator] Starting contacts sync');
       onProgress(0);
 
-      // Phase 1: macOS Contacts sync (macOS only)
-      if (macOS) {
+      // TASK-1979: Read import source preference to decide which contacts to sync
+      const importSource = await this.getImportSource(userId);
+      console.log('[SyncOrchestrator] Import source preference:', importSource);
+
+      // Phase 1: macOS Contacts sync (macOS only, skip if iphone-sync selected)
+      if (macOS && importSource !== 'iphone-sync') {
         // IPC listener OWNED here - not in consumers
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const contactsApi = window.api.contacts as any;
@@ -115,6 +138,8 @@ class SyncOrchestratorServiceClass {
         } finally {
           cleanup();
         }
+      } else if (macOS && importSource === 'iphone-sync') {
+        console.log('[SyncOrchestrator] Skipping macOS Contacts (import source: iphone-sync)');
       }
 
       onProgress(50);
@@ -157,6 +182,14 @@ class SyncOrchestratorServiceClass {
     if (macOS) {
       this.registerSyncFunction('messages', async (userId, onProgress) => {
         console.log('[SyncOrchestrator] Starting messages sync');
+
+        // TASK-1979: Skip macOS Messages import when iphone-sync is selected
+        const importSource = await this.getImportSource(userId);
+        if (importSource === 'iphone-sync') {
+          console.log('[SyncOrchestrator] Skipping macOS Messages (import source: iphone-sync)');
+          onProgress(100);
+          return;
+        }
 
         // Phase order and weighted progress calculation
         // Dynamically detect if 'deleting' phase is present (forceReimport mode)
