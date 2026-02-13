@@ -86,7 +86,6 @@ jobs:
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
           MICROSOFT_CLIENT_ID: ${{ secrets.MICROSOFT_CLIENT_ID }}
           MICROSOFT_TENANT_ID: ${{ secrets.MICROSOFT_TENANT_ID }}
-          MICROSOFT_CLIENT_SECRET: ${{ secrets.MICROSOFT_CLIENT_SECRET }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: |
           echo "Creating .env.production file..."
@@ -98,7 +97,6 @@ jobs:
             echo "GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}"
             echo "MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID}"
             echo "MICROSOFT_TENANT_ID=${MICROSOFT_TENANT_ID}"
-            echo "MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET}"
             echo "BROKER_PORTAL_URL=https://broker-portal-two.vercel.app"
             echo "SENTRY_DSN=${SENTRY_DSN}"
           } > .env.production
@@ -213,7 +211,6 @@ jobs:
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
           MICROSOFT_CLIENT_ID: ${{ secrets.MICROSOFT_CLIENT_ID }}
           MICROSOFT_TENANT_ID: ${{ secrets.MICROSOFT_TENANT_ID }}
-          MICROSOFT_CLIENT_SECRET: ${{ secrets.MICROSOFT_CLIENT_SECRET }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: |
           $content = @(
@@ -224,7 +221,6 @@ jobs:
             "GOOGLE_MAPS_API_KEY=$env:GOOGLE_MAPS_API_KEY",
             "MICROSOFT_CLIENT_ID=$env:MICROSOFT_CLIENT_ID",
             "MICROSOFT_TENANT_ID=$env:MICROSOFT_TENANT_ID",
-            "MICROSOFT_CLIENT_SECRET=$env:MICROSOFT_CLIENT_SECRET",
             "BROKER_PORTAL_URL=https://broker-portal-two.vercel.app",
             "SENTRY_DSN=$env:SENTRY_DSN"
           ) -join "`n"
