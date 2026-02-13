@@ -1,9 +1,9 @@
 # SPRINT-082: UI Stabilization & Polish
 
-**Status:** Planning
+**Status:** In Progress
 **Created:** 2026-02-13
-**Branch:** TBD (per SR Engineer technical review)
-**Target:** develop (via PR)
+**Branch:** `sprint/082-ui-stabilization`
+**Target:** develop (via PR from sprint branch)
 
 ---
 
@@ -301,15 +301,15 @@ The sprint is well-scoped with 10 cleanly defined UI/UX tasks. Task descriptions
 
 ## Progress Tracking
 
-| Task | Status | PR | Notes |
-|------|--------|-----|-------|
-| TASK-1978 | Pending | - | - |
-| TASK-1979 | Pending | - | - |
-| TASK-1980 | Pending | - | - |
-| TASK-1981 | Pending | - | - |
-| TASK-1982 | Pending | - | - |
-| TASK-1983 | Pending | - | - |
-| TASK-1984 | Pending | - | - |
-| TASK-1985 | Pending | - | - |
-| TASK-1986 | Pending | - | - |
-| TASK-1987 | Pending | - | - |
+| Task | Status | Batch | Branch | PR | Notes |
+|------|--------|-------|--------|-----|-------|
+| TASK-1978 | In Progress | 1 | `fix/task-1978-onboarding-step-circles` | - | Worktree: `../Mad-task-1978` |
+| TASK-1979 | In Progress | 1 | `fix/task-1979-macos-contacts-toggle` | - | Worktree: `../Mad-task-1979` |
+| TASK-1980 | In Progress | 1 | `fix/task-1980-start-date-wording` | - | Worktree: `../Mad-task-1980` |
+| TASK-1981 | In Progress | 1 | `fix/task-1981-contact-search-spacebar` | - | Worktree: `../Mad-task-1981` |
+| TASK-1982 | In Progress | 1 | `fix/task-1982-submit-email-count` | - | Worktree: `../Mad-task-1982` |
+| TASK-1983 | In Progress | 2 | `feature/task-1983-welcome-back-message` | - | Worktree: `../Mad-task-1983` |
+| TASK-1984 | Pending | 3 | - | - | BLOCKED by TASK-1987 (shared ContactRoleRow.tsx) |
+| TASK-1985 | In Progress | 1 | `fix/task-1985-swap-buttons` | - | Worktree: `../Mad-task-1985` |
+| TASK-1986 | Pending | 3 | - | - | BLOCKED by TASK-1983 (shared Dashboard.tsx) |
+| TASK-1987 | In Progress | 2 | `fix/task-1987-remove-contact-step3` | - | Worktree: `../Mad-task-1987` |

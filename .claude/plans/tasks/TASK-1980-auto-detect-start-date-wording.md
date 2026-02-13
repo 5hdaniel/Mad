@@ -106,7 +106,8 @@ Current wording issues:
 
 - **Title:** `fix(audit): improve auto-detect start date wording and add settings default`
 - **Branch:** `fix/task-1980-start-date-wording`
-- **Target:** `develop`
+- **Branch From:** `sprint/082-ui-stabilization`
+- **Target:** `sprint/082-ui-stabilization`
 
 ---
 
@@ -165,10 +166,10 @@ Completion:
 
 **Review Date:** 2026-02-13 | **Status:** APPROVED
 
-### Branch Information (SR Engineer decides)
-- **Branch From:** develop
-- **Branch Into:** develop
-- **Suggested Branch Name:** fix/task-1980-start-date-wording
+### Branch Information (PM Updated for Sprint Branch)
+- **Branch From:** `sprint/082-ui-stabilization`
+- **Branch Into:** `sprint/082-ui-stabilization`
+- **Branch Name:** `fix/task-1980-start-date-wording`
 
 ### Execution Classification
 - **Parallel Safe:** Yes

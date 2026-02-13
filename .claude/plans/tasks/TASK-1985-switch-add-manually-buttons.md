@@ -77,7 +77,8 @@ The user wants these swapped so "Add Manually" appears first (left) and "View Ac
 
 - **Title:** `fix(ui): swap Add Manually and View Active Transactions button positions`
 - **Branch:** `fix/task-1985-swap-buttons`
-- **Target:** `develop`
+- **Branch From:** `sprint/082-ui-stabilization`
+- **Target:** `sprint/082-ui-stabilization`
 
 ---
 
@@ -136,10 +137,10 @@ Completion:
 
 **Review Date:** 2026-02-13 | **Status:** APPROVED
 
-### Branch Information (SR Engineer decides)
-- **Branch From:** develop
-- **Branch Into:** develop
-- **Suggested Branch Name:** fix/task-1985-swap-buttons
+### Branch Information (PM Updated for Sprint Branch)
+- **Branch From:** `sprint/082-ui-stabilization`
+- **Branch Into:** `sprint/082-ui-stabilization`
+- **Branch Name:** `fix/task-1985-swap-buttons`
 
 ### Execution Classification
 - **Parallel Safe:** Yes

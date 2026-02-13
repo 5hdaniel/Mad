@@ -86,7 +86,8 @@ The bug: even after selecting "macOS Messages + Contacts" (i.e., `macos-native`)
 
 - **Title:** `fix(sync): respect macOS import source toggle during sync operations`
 - **Branch:** `fix/task-1979-macos-contacts-toggle`
-- **Target:** `develop`
+- **Branch From:** `sprint/082-ui-stabilization`
+- **Target:** `sprint/082-ui-stabilization`
 
 ---
 
@@ -145,10 +146,10 @@ Completion:
 
 **Review Date:** 2026-02-13 | **Status:** APPROVED
 
-### Branch Information (SR Engineer decides)
-- **Branch From:** develop
-- **Branch Into:** develop
-- **Suggested Branch Name:** fix/task-1979-macos-contacts-toggle
+### Branch Information (PM Updated for Sprint Branch)
+- **Branch From:** `sprint/082-ui-stabilization`
+- **Branch Into:** `sprint/082-ui-stabilization`
+- **Branch Name:** `fix/task-1979-macos-contacts-toggle`
 
 ### Execution Classification
 - **Parallel Safe:** Yes

@@ -93,7 +93,8 @@ When a user logs in for the 2nd time (or any subsequent login), the Dashboard gr
 
 - **Title:** `feat(dashboard): show personalized welcome back message`
 - **Branch:** `feature/task-1983-welcome-back-message`
-- **Target:** `develop`
+- **Branch From:** `sprint/082-ui-stabilization`
+- **Target:** `sprint/082-ui-stabilization`
 
 ---
 
@@ -152,10 +153,10 @@ Completion:
 
 **Review Date:** 2026-02-13 | **Status:** APPROVED
 
-### Branch Information (SR Engineer decides)
-- **Branch From:** develop
-- **Branch Into:** develop
-- **Suggested Branch Name:** feature/task-1983-welcome-back-message
+### Branch Information (PM Updated for Sprint Branch)
+- **Branch From:** `sprint/082-ui-stabilization`
+- **Branch Into:** `sprint/082-ui-stabilization`
+- **Branch Name:** `feature/task-1983-welcome-back-message`
 
 ### Execution Classification
 - **Parallel Safe:** Yes (except with TASK-1986)

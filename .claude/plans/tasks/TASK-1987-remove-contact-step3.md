@@ -93,7 +93,8 @@ The fix: add an optional `onRemove` prop to `ContactRoleRow` that renders a remo
 
 - **Title:** `fix(audit): add remove contact button on Step 3 role assignment`
 - **Branch:** `fix/task-1987-remove-contact-step3`
-- **Target:** `develop`
+- **Branch From:** `sprint/082-ui-stabilization`
+- **Target:** `sprint/082-ui-stabilization`
 
 ---
 
@@ -152,10 +153,10 @@ Completion:
 
 **Review Date:** 2026-02-13 | **Status:** APPROVED
 
-### Branch Information (SR Engineer decides)
-- **Branch From:** develop
-- **Branch Into:** develop
-- **Suggested Branch Name:** fix/task-1987-remove-contact-step3
+### Branch Information (PM Updated for Sprint Branch)
+- **Branch From:** `sprint/082-ui-stabilization`
+- **Branch Into:** `sprint/082-ui-stabilization`
+- **Branch Name:** `fix/task-1987-remove-contact-step3`
 
 ### Execution Classification
 - **Parallel Safe:** Yes (except with TASK-1984)

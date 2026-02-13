@@ -102,7 +102,8 @@ The `text_thread_count` is a stored column (updated on link/unlink) while `email
 
 - **Title:** `fix(submit): show correct email count on submission summary`
 - **Branch:** `fix/task-1982-submit-email-count`
-- **Target:** `develop`
+- **Branch From:** `sprint/082-ui-stabilization`
+- **Target:** `sprint/082-ui-stabilization`
 
 ---
 
@@ -161,10 +162,10 @@ Completion:
 
 **Review Date:** 2026-02-13 | **Status:** APPROVED
 
-### Branch Information (SR Engineer decides)
-- **Branch From:** develop
-- **Branch Into:** develop
-- **Suggested Branch Name:** fix/task-1982-submit-email-count
+### Branch Information (PM Updated for Sprint Branch)
+- **Branch From:** `sprint/082-ui-stabilization`
+- **Branch Into:** `sprint/082-ui-stabilization`
+- **Branch Name:** `fix/task-1982-submit-email-count`
 
 ### Execution Classification
 - **Parallel Safe:** Yes
