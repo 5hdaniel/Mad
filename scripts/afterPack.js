@@ -21,7 +21,7 @@ module.exports = async function afterPack(context) {
   console.log(`[afterPack] Flipping Electron fuses on: ${electronBinaryPath}`);
   console.log('[afterPack] Fuse configuration:');
   console.log('  RunAsNode: false');
-  console.log('  EnableCookieEncryption: true');
+  console.log('  EnableCookieEncryption: false (tokens/DB encrypted separately)');
   console.log('  EnableNodeOptionsEnvironmentVariable: false');
   console.log('  EnableNodeCliInspectArguments: false');
   console.log('  EnableEmbeddedAsarIntegrityValidation: true');
@@ -31,7 +31,10 @@ module.exports = async function afterPack(context) {
   await flipFuses(electronBinaryPath, {
     version: FuseVersion.V1,
     [FuseV1Options.RunAsNode]: false,
-    [FuseV1Options.EnableCookieEncryption]: true,
+    // Disabled: causes keychain prompts on every launch. Not needed because
+    // OAuth tokens and DB key are already encrypted via dedicated services
+    // (tokenEncryptionService.ts / databaseEncryptionService.ts).
+    [FuseV1Options.EnableCookieEncryption]: false,
     [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
     [FuseV1Options.EnableNodeCliInspectArguments]: false,
     [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
