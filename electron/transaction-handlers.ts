@@ -2696,7 +2696,7 @@ export const registerTransactionHandlers = (
                 query: gmailQuery,
                 after: startDate,
                 before: endDate,
-                maxResults: 100,
+                maxResults: 500,
               });
               emailsFetched = fetchedEmails.length;
 
@@ -2768,34 +2768,18 @@ export const registerTransactionHandlers = (
             const isReady = await outlookFetchService.initialize(userId);
             if (isReady) {
               providerUsed = "outlook";
-              // Outlook uses OData filter, so we need to format the query differently
-              // Build a query that searches for contact emails in subject or body
-              // The searchEmails method handles the filtering
+              // Filter by contact emails server-side via Graph API $filter
               const fetchedEmails = await outlookFetchService.searchEmails({
-                // Outlook's search is less flexible, so just use date range
-                // and filter by contact emails client-side
+                contactEmails,
                 after: startDate,
                 before: endDate,
-                maxResults: 200, // Fetch more since we'll filter client-side
+                maxResults: 500,
               });
 
-              // Filter to only emails involving our contacts
-              const relevantEmails = fetchedEmails.filter((email: { from?: string | null; to?: string | null; cc?: string | null }) => {
-                const fromEmail = email.from?.toLowerCase() || "";
-                const toEmails = email.to?.toLowerCase() || "";
-                const ccEmails = email.cc?.toLowerCase() || "";
-                return contactEmails.some(
-                  (contactEmail) =>
-                    fromEmail.includes(contactEmail) ||
-                    toEmails.includes(contactEmail) ||
-                    ccEmails.includes(contactEmail)
-                );
-              });
-
-              emailsFetched = relevantEmails.length;
+              emailsFetched = fetchedEmails.length;
 
               // Check for duplicates
-              const enrichedEmails = await outlookFetchService.checkDuplicates(userId, relevantEmails);
+              const enrichedEmails = await outlookFetchService.checkDuplicates(userId, fetchedEmails);
 
               // Store new emails
               // BACKLOG-506: Deduplication is handled by getEmailByExternalId below
