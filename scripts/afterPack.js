@@ -21,22 +21,28 @@ module.exports = async function afterPack(context) {
   console.log(`[afterPack] Flipping Electron fuses on: ${electronBinaryPath}`);
   console.log('[afterPack] Fuse configuration:');
   console.log('  RunAsNode: false');
-  console.log('  EnableCookieEncryption: true');
+  console.log('  EnableCookieEncryption: false (tokens/DB encrypted separately)');
   console.log('  EnableNodeOptionsEnvironmentVariable: false');
   console.log('  EnableNodeCliInspectArguments: false');
   console.log('  EnableEmbeddedAsarIntegrityValidation: true');
   console.log('  OnlyLoadAppFromAsar: true');
-  console.log('  GrantFileProtocolExtraPrivileges: false');
+  console.log('  GrantFileProtocolExtraPrivileges: true (required for loadFile)');
 
   await flipFuses(electronBinaryPath, {
     version: FuseVersion.V1,
     [FuseV1Options.RunAsNode]: false,
-    [FuseV1Options.EnableCookieEncryption]: true,
+    // Disabled: causes keychain prompts on every launch. Not needed because
+    // OAuth tokens and DB key are already encrypted via dedicated services
+    // (tokenEncryptionService.ts / databaseEncryptionService.ts).
+    [FuseV1Options.EnableCookieEncryption]: false,
     [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
     [FuseV1Options.EnableNodeCliInspectArguments]: false,
     [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
     [FuseV1Options.OnlyLoadAppFromAsar]: true,
-    [FuseV1Options.GrantFileProtocolExtraPrivileges]: false,
+    // IMPORTANT: Must be true while app uses mainWindow.loadFile() with file:// protocol.
+    // Setting to false breaks the packaged app. See PR #838 / v2.2.2.
+    // TODO: Migrate to custom protocol (app://) to safely disable this fuse.
+    [FuseV1Options.GrantFileProtocolExtraPrivileges]: true,
   });
 
   console.log('[afterPack] Electron fuses configured successfully.');
