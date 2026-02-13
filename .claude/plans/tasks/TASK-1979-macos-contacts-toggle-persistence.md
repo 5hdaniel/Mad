@@ -141,6 +141,33 @@ Completion:
 
 ---
 
+## SR Engineer Review Notes
+
+**Review Date:** 2026-02-13 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** develop
+- **Branch Into:** develop
+- **Suggested Branch Name:** fix/task-1979-macos-contacts-toggle
+
+### Execution Classification
+- **Parallel Safe:** Yes
+- **Depends On:** None
+- **Blocks:** None
+
+### Shared File Analysis
+- Files modified: `SyncOrchestratorService.ts`, `electron/services/*` (exact files TBD during investigation)
+- Conflicts with: None -- sync layer is exclusive to this task
+- Note: Reads `settingsService.ts` for preference type but does NOT modify it
+
+### Technical Considerations
+- Investigation-first approach is correct; exact files unknown until engineer traces sync flow
+- Engineer should check whether the sync orchestrator runs in renderer or main process -- affects where the preference check goes
+- If the fix requires reading preferences from the main process, may need to use existing IPC channels
+- macOS-only behavior -- no Windows impact
+
+---
+
 ## Guardrails
 
 **STOP and ask PM if:**

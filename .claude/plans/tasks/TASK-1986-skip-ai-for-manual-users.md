@@ -139,6 +139,31 @@ Completion:
 
 ---
 
+## SR Engineer Review Notes
+
+**Review Date:** 2026-02-13 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** develop (AFTER TASK-1983 is merged)
+- **Branch Into:** develop
+- **Suggested Branch Name:** feature/task-1986-skip-ai-manual
+
+### Execution Classification
+- **Parallel Safe:** No
+- **Depends On:** TASK-1983 (shared `Dashboard.tsx`)
+- **Blocks:** None
+
+### Shared File Analysis
+- Files modified: `Dashboard.tsx`, possibly `AppShell.tsx`
+- Conflicts with: **TASK-1983** on `Dashboard.tsx`. TASK-1983 adds user greeting logic; this task adds conditional modal bypass logic. TASK-1983 must merge first.
+
+### Technical Considerations
+- Engineer should check ALL entry points for "New Audit" beyond Dashboard (keyboard shortcuts, menu bar, etc.) to ensure the bypass is comprehensive
+- The `canCreateTransaction` limit check must still fire before bypassing -- do not skip the transaction limit gate
+- If `AppShell.tsx` needs changes, be careful with entry file line budgets (target 150, trigger 200)
+
+---
+
 ## Guardrails
 
 **STOP and ask PM if:**

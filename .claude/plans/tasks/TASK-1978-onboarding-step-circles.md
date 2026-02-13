@@ -141,6 +141,31 @@ Completion:
 
 ---
 
+## SR Engineer Review Notes
+
+**Review Date:** 2026-02-13 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** develop
+- **Branch Into:** develop
+- **Suggested Branch Name:** fix/task-1978-onboarding-step-circles
+
+### Execution Classification
+- **Parallel Safe:** Yes
+- **Depends On:** None
+- **Blocks:** None
+
+### Shared File Analysis
+- Files modified: `ProgressIndicator.tsx`, `SetupProgressIndicator.tsx`, `WelcomeTerms.tsx`
+- Conflicts with: None -- all 3 files are exclusive to this task
+
+### Technical Considerations
+- Very low risk, purely cosmetic changes
+- No architecture concerns
+- Verify tests do not assert step numbers in rendered output
+
+---
+
 ## Guardrails
 
 **STOP and ask PM if:**

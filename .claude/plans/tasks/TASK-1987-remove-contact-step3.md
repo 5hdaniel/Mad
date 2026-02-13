@@ -148,6 +148,31 @@ Completion:
 
 ---
 
+## SR Engineer Review Notes
+
+**Review Date:** 2026-02-13 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** develop
+- **Branch Into:** develop
+- **Suggested Branch Name:** fix/task-1987-remove-contact-step3
+
+### Execution Classification
+- **Parallel Safe:** Yes (except with TASK-1984)
+- **Depends On:** None
+- **Blocks:** TASK-1984 (shared `ContactRoleRow.tsx` -- must merge before 1984 starts)
+
+### Shared File Analysis
+- Files modified: `ContactRoleRow.tsx`, `ContactAssignmentStep.tsx`
+- Conflicts with: **TASK-1984** on `ContactRoleRow.tsx`. This task adds `onRemove` prop; TASK-1984 adds `onClick` prop. Must merge first so TASK-1984 integrates with the updated interface.
+
+### Technical Considerations
+- Clean optional prop pattern -- `onRemove` should be `undefined` by default so existing usages are unaffected
+- The remove button should be visually consistent with `EditContactsModal` (use same icon/style)
+- Verify that removing a contact on Step 3 properly propagates back to Step 2 (deselects checkbox)
+
+---
+
 ## Guardrails
 
 **STOP and ask PM if:**

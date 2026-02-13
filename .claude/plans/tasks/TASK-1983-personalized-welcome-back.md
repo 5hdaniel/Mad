@@ -148,6 +148,31 @@ Completion:
 
 ---
 
+## SR Engineer Review Notes
+
+**Review Date:** 2026-02-13 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** develop
+- **Branch Into:** develop
+- **Suggested Branch Name:** feature/task-1983-welcome-back-message
+
+### Execution Classification
+- **Parallel Safe:** Yes (except with TASK-1986)
+- **Depends On:** None
+- **Blocks:** TASK-1986 (shared `Dashboard.tsx` -- must merge before 1986 starts)
+
+### Shared File Analysis
+- Files modified: `Dashboard.tsx`
+- Conflicts with: **TASK-1986** -- both modify `Dashboard.tsx`. This task adds user greeting logic; TASK-1986 adds conditional modal launch logic. MUST be sequential.
+
+### Technical Considerations
+- Since user reaches Dashboard only after WelcomeTerms acceptance, every Dashboard visit is a "return visit" -- the "first visit" case may be unnecessary
+- Use the same `displayName` extraction pattern from `WelcomeTerms.tsx` for consistency
+- Keep the change minimal: add user prop/context read + conditional h1 text
+
+---
+
 ## Guardrails
 
 **STOP and ask PM if:**

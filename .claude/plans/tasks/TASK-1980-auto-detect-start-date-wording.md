@@ -161,6 +161,31 @@ Completion:
 
 ---
 
+## SR Engineer Review Notes
+
+**Review Date:** 2026-02-13 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** develop
+- **Branch Into:** develop
+- **Suggested Branch Name:** fix/task-1980-start-date-wording
+
+### Execution Classification
+- **Parallel Safe:** Yes
+- **Depends On:** None
+- **Blocks:** None
+
+### Shared File Analysis
+- Files modified: `AddressVerificationStep.tsx`, `useAuditTransaction.ts`, `Settings.tsx`, `settingsService.ts`
+- Conflicts with: None -- all 4 files are exclusive to this task
+
+### Technical Considerations
+- Verify `UserPreferences` is a JSON blob (not a DB column) before adding `audit.startDateDefault`
+- If `Settings.tsx` is already large, the new toggle should be minimal (2-3 lines in the existing settings layout, not a new section)
+- The `useAuditTransaction.ts` change to read preference should use the existing preference-reading pattern already in the hook
+
+---
+
 ## Guardrails
 
 **STOP and ask PM if:**

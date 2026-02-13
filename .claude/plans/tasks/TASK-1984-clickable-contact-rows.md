@@ -156,6 +156,33 @@ Completion:
 
 ---
 
+## SR Engineer Review Notes
+
+**Review Date:** 2026-02-13 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** develop (AFTER TASK-1987 is merged)
+- **Branch Into:** develop
+- **Suggested Branch Name:** feature/task-1984-clickable-contact-rows
+
+### Execution Classification
+- **Parallel Safe:** No
+- **Depends On:** TASK-1987 (shared `ContactRoleRow.tsx`)
+- **Blocks:** None
+
+### Shared File Analysis
+- Files modified: `Contacts.tsx`, `TransactionContactsTab.tsx`, `EditContactsModal.tsx`, `ContactRoleRow.tsx`, `ContactSelectModal.tsx`
+- Conflicts with: **TASK-1987** on `ContactRoleRow.tsx`. TASK-1987 adds `onRemove` prop; this task adds `onClick` prop. TASK-1987 must merge first so this task can integrate with the updated component interface.
+
+### Technical Considerations
+- Largest task in the sprint (5+ files, ~20K tokens)
+- Should be scheduled LAST to naturally integrate all prior contact-related changes
+- Engineer must decide between `ContactPreview` and `ContactDetailsModal` as the standardized detail view -- pick one, use everywhere
+- Click handler must coexist with existing checkboxes/selection without stealing click events (use event delegation or separate click targets)
+- Run this task after TASK-1981 (spacebar fix) is merged too, even though they do not share files, so the engineer sees the latest `ContactSearchList.tsx` patterns
+
+---
+
 ## Guardrails
 
 **STOP and ask PM if:**

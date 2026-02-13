@@ -132,6 +132,30 @@ Completion:
 
 ---
 
+## SR Engineer Review Notes
+
+**Review Date:** 2026-02-13 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** develop
+- **Branch Into:** develop
+- **Suggested Branch Name:** fix/task-1985-swap-buttons
+
+### Execution Classification
+- **Parallel Safe:** Yes
+- **Depends On:** None
+- **Blocks:** None
+
+### Shared File Analysis
+- Files modified: `StartNewAuditModal.tsx`
+- Conflicts with: None -- TASK-1986 reads this file but does not modify it (it bypasses the modal entirely)
+
+### Technical Considerations
+- Pure code block swap, extremely low risk
+- Verify that any test assertions about button order are updated
+
+---
+
 ## Guardrails
 
 **STOP and ask PM if:**

@@ -157,6 +157,32 @@ Completion:
 
 ---
 
+## SR Engineer Review Notes
+
+**Review Date:** 2026-02-13 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** develop
+- **Branch Into:** develop
+- **Suggested Branch Name:** fix/task-1982-submit-email-count
+
+### Execution Classification
+- **Parallel Safe:** Yes
+- **Depends On:** None
+- **Blocks:** None
+
+### Shared File Analysis
+- Files modified: `TransactionDetails.tsx`, possibly `useTransactionCommunications.ts`
+- Conflicts with: None -- submit flow files are exclusive to this task
+
+### Technical Considerations
+- Investigation-first: root cause may be stale state, missing refresh, or query without subquery
+- 15K estimate should be treated as a floor; could expand if state management is involved
+- If `email_count` is always 0 (not just in modal), escalate -- this would indicate a DB-level issue
+- The difference between computed `email_count` (subquery at query time) and stored `text_thread_count` (updated on link/unlink) is a key architectural distinction to investigate
+
+---
+
 ## Guardrails
 
 **STOP and ask PM if:**
