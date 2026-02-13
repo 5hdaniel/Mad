@@ -132,6 +132,7 @@ interface EmailSearchOptions {
   after?: Date | null;
   before?: Date | null;
   maxResults?: number;
+  contactEmails?: string[];
   onProgress?: (progress: FetchProgress) => void;
 }
 
@@ -253,6 +254,7 @@ class OutlookFetchService {
     method: string = "GET",
     data: any = null,
     isRetry: boolean = false,
+    extraHeaders?: Record<string, string>,
   ): Promise<T> {
     // Throttle requests to avoid rate limiting (BACKLOG-497)
     await apiThrottlers.microsoftGraph.throttle();
@@ -272,6 +274,7 @@ class OutlookFetchService {
           headers: {
             Authorization: `Bearer ${this.accessToken}`,
             "Content-Type": "application/json",
+            ...extraHeaders,
           },
         };
 
@@ -346,6 +349,7 @@ class OutlookFetchService {
     after = null,
     before = null,
     maxResults = 100,
+    contactEmails,
     onProgress,
   }: EmailSearchOptions = {}): Promise<ParsedEmail[]> {
     try {
@@ -367,6 +371,19 @@ class OutlookFetchService {
         );
       }
 
+      // Filter by contact email addresses (from or to/cc)
+      if (contactEmails && contactEmails.length > 0) {
+        const emailClauses = contactEmails.map((email) => {
+          const escaped = email.replace(/'/g, "''");
+          return [
+            `from/emailAddress/address eq '${escaped}'`,
+            `toRecipients/any(r:r/emailAddress/address eq '${escaped}')`,
+            `ccRecipients/any(r:r/emailAddress/address eq '${escaped}')`,
+          ].join(" or ");
+        });
+        filters.push(`(${emailClauses.join(" or ")})`);
+      }
+
       if (after) {
         filters.push(`receivedDateTime ge ${after.toISOString()}`);
       }
@@ -380,7 +397,16 @@ class OutlookFetchService {
       const selectFields =
         "$select=id,subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,sentDateTime,hasAttachments,body,bodyPreview,conversationId,inferenceClassification,parentFolderId,internetMessageId,internetMessageHeaders";
 
-      logService.info("Searching emails", "OutlookFetch");
+      // Lambda expressions (any()) require ConsistencyLevel: eventual
+      const needsEventualConsistency = contactEmails && contactEmails.length > 0;
+      const graphHeaders = needsEventualConsistency
+        ? { ConsistencyLevel: "eventual" }
+        : undefined;
+
+      logService.info("Searching emails", "OutlookFetch", {
+        hasContactFilter: needsEventualConsistency,
+        contactCount: contactEmails?.length || 0,
+      });
 
       // First, get the total count of matching emails
       let estimatedTotal = 0;
@@ -390,7 +416,7 @@ class OutlookFetchService {
           .join("&");
         const countData = await this._graphRequest<
           GraphApiResponse<GraphMessage>
-        >(`/me/messages?${countParams}`);
+        >(`/me/messages?${countParams}`, "GET", null, false, graphHeaders);
         estimatedTotal = countData["@odata.count"] || 0;
         logService.info(
           `Estimated total emails: ${estimatedTotal}`,
@@ -430,6 +456,10 @@ class OutlookFetchService {
 
         const data = await this._graphRequest<GraphApiResponse<GraphMessage>>(
           `/me/messages?${queryParams}`,
+          "GET",
+          null,
+          false,
+          graphHeaders,
         );
         const messages = data.value || [];
 
