@@ -230,8 +230,7 @@ jobs:
           ) -join "`n"
           $content | Out-File -FilePath .env.production -Encoding utf8 -NoNewline
           Add-Content -Path .env.production -Value ""
-          echo ".env.production created"
-          Get-Content .env.production
+          echo ".env.production created with $($content.Split("`n").Count) lines"
         shell: pwsh
 
       - name: Package and Sign Windows App
