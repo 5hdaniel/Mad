@@ -69,13 +69,11 @@ function CheckmarkIcon() {
  * The colored circle indicator.
  * - Completed: green with checkmark
  * - Current: blue with ring
- * - Pending: gray with number
+ * - Pending: gray empty circle
  */
 function StepCircle({
-  stepNumber,
   status,
 }: {
-  stepNumber: number;
   status: StepStatus;
 }) {
   const baseClasses =
@@ -93,7 +91,7 @@ function StepCircle({
       style={{ width: CIRCLE_SIZE, height: CIRCLE_SIZE }}
       aria-current={status === "current" ? "step" : undefined}
     >
-      {status === "completed" ? <CheckmarkIcon /> : stepNumber}
+      {status === "completed" ? <CheckmarkIcon /> : null}
     </div>
   );
 }
@@ -133,17 +131,15 @@ function StepLabel({
  * The circle and label are always centered relative to each other.
  */
 function Step({
-  stepNumber,
   status,
   label,
 }: {
-  stepNumber: number;
   status: StepStatus;
   label: string;
 }) {
   return (
     <div className="flex flex-col items-center gap-2">
-      <StepCircle stepNumber={stepNumber} status={status} />
+      <StepCircle status={status} />
       <StepLabel text={label} status={status} />
     </div>
   );
@@ -180,7 +176,7 @@ function ConnectingLine({ completed }: { completed: boolean }) {
  *
  * Architecture (leaf to root):
  * 1. CheckmarkIcon - SVG icon
- * 2. StepCircle - colored circle with number/checkmark
+ * 2. StepCircle - colored circle with checkmark (completed) or empty
  * 3. StepLabel - text below circle
  * 4. Step - circle + label combined
  * 5. ConnectingLine - line between steps
@@ -211,7 +207,6 @@ export function ProgressIndicator({
         {steps.map((step, index) => (
           <React.Fragment key={step.meta.id}>
             <Step
-              stepNumber={index + 1}
               status={getStepStatus(index, currentIndex, activeIndex)}
               label={step.meta.progressLabel}
             />
