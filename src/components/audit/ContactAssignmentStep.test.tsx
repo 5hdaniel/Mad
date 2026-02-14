@@ -196,6 +196,54 @@ describe("ContactAssignmentStep", () => {
 
       expect(screen.getByText(/no contacts selected/i)).toBeInTheDocument();
     });
+
+    it("shows remove button on each contact row in Step 3", () => {
+      render(<ContactAssignmentStep {...step3Props} />);
+
+      expect(screen.getByTestId("remove-contact-contact-1")).toBeInTheDocument();
+      expect(screen.getByTestId("remove-contact-contact-2")).toBeInTheDocument();
+    });
+
+    it("calls onSelectedContactIdsChange when remove button is clicked", async () => {
+      const onSelectedContactIdsChange = jest.fn();
+      const user = userEvent.setup();
+
+      render(
+        <ContactAssignmentStep
+          {...step3Props}
+          onSelectedContactIdsChange={onSelectedContactIdsChange}
+        />
+      );
+
+      // Click remove on contact-1
+      const removeBtn = screen.getByTestId("remove-contact-contact-1");
+      await user.click(removeBtn);
+
+      // Should remove contact-1 from selectedContactIds
+      expect(onSelectedContactIdsChange).toHaveBeenCalledWith(["contact-2"]);
+    });
+
+    it("calls onRemoveContact to clear role assignment when removing a contact with a role", async () => {
+      const onRemoveContact = jest.fn();
+      const user = userEvent.setup();
+
+      render(
+        <ContactAssignmentStep
+          {...step3Props}
+          contactAssignments={{
+            buyer: [{ contactId: "contact-1", isPrimary: false, notes: "" }],
+          }}
+          onRemoveContact={onRemoveContact}
+        />
+      );
+
+      // Click remove on contact-1 (which has the buyer role)
+      const removeBtn = screen.getByTestId("remove-contact-contact-1");
+      await user.click(removeBtn);
+
+      // Should call onRemoveContact to clear the buyer role assignment
+      expect(onRemoveContact).toHaveBeenCalledWith("buyer", "contact-1");
+    });
   });
 
   describe("Search functionality", () => {

@@ -195,6 +195,25 @@ function ContactAssignmentStep({
     return selectedContacts.filter((c) => getContactRole(c.id) !== "").length;
   }, [selectedContacts, getContactRole]);
 
+  // Handle removing a contact from Step 3 (deselects and removes role assignment)
+  const handleRemoveFromStep3 = useCallback(
+    (contactId: string) => {
+      // Remove from selectedContactIds (propagates back to Step 2 checkbox state)
+      onSelectedContactIdsChange(
+        selectedContactIds.filter((id) => id !== contactId)
+      );
+
+      // Remove any role assignment for this contact
+      for (const [role, assignments] of Object.entries(contactAssignments)) {
+        if (assignments.some((a) => a.contactId === contactId)) {
+          onRemoveContact(role, contactId);
+          break;
+        }
+      }
+    },
+    [selectedContactIds, onSelectedContactIdsChange, contactAssignments, onRemoveContact]
+  );
+
   // Handle role change for a contact
   const handleRoleChange = useCallback(
     (contactId: string, newRole: string) => {
@@ -328,6 +347,7 @@ function ContactAssignmentStep({
                     currentRole={getContactRole(contact.id)}
                     roleOptions={roleOptions}
                     onRoleChange={(role) => handleRoleChange(contact.id, role)}
+                    onRemove={() => handleRemoveFromStep3(contact.id)}
                   />
                 ))}
               </div>
