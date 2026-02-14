@@ -397,7 +397,6 @@ export function ContactSearchList({
           e.preventDefault();
           setFocusedIndex((i) => (i > 0 ? i - 1 : 0));
           break;
-        case " ":
         case "Enter":
           e.preventDefault();
           if (focusedIndex >= 0 && focusedIndex < combinedContacts.length) {
