@@ -203,6 +203,13 @@ function ContactAssignmentStep({
         selectedContactIds.filter((id) => id !== contactId)
       );
 
+      // Remove from addedContactIds so Step 2 no longer shows "added" badge
+      setAddedContactIds((prev) => {
+        const next = new Set(prev);
+        next.delete(contactId);
+        return next;
+      });
+
       // Remove any role assignment for this contact
       for (const [role, assignments] of Object.entries(contactAssignments)) {
         if (assignments.some((a) => a.contactId === contactId)) {
