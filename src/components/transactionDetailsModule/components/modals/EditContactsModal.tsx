@@ -425,6 +425,14 @@ function Screen1Content({
 }: Screen1ContentProps): React.ReactElement {
   const { contacts, loading: contactsLoading, error: contactsError } = useContacts();
 
+  // Contact preview state for viewing details when clicking a contact row
+  const [previewContact, setPreviewContact] = useState<ExtendedContact | null>(null);
+
+  // Helper to check if a contact is external
+  const isExternal = useCallback((contact: ExtendedContact): boolean => {
+    return contact.is_message_derived === 1 || contact.is_message_derived === true;
+  }, []);
+
   // Get assigned contacts from the contacts list
   const assignedContacts = useMemo(() => {
     return contacts.filter((c) => assignedContactIds.includes(c.id));
@@ -589,10 +597,22 @@ function Screen1Content({
             roleOptions={roleOptions}
             onRoleChange={(role) => handleRoleChange(contact.id, role)}
             onRemove={() => onRemoveContact(contact.id)}
+            onClick={() => setPreviewContact(contact)}
             hasError={contactsWithoutRoles.has(contact.id)}
           />
         ))}
       </div>
+
+      {/* Contact Preview Modal */}
+      {previewContact && (
+        <ContactPreview
+          contact={previewContact}
+          isExternal={isExternal(previewContact)}
+          transactions={[]}
+          onEdit={() => setPreviewContact(null)}
+          onClose={() => setPreviewContact(null)}
+        />
+      )}
     </div>
   );
 }

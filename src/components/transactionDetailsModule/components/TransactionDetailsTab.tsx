@@ -3,10 +3,12 @@
  * Overview tab content showing audit period dates, AI suggestions, and key contacts summary.
  * Email threads moved to TransactionEmailsTab as part of TASK-1152.
  */
-import React from "react";
+import React, { useState } from "react";
 import type { Transaction } from "@/types";
 import type { ContactAssignment, ResolvedSuggestedContact } from "../types";
 import { getRoleDisplayName, type TransactionType } from "@/utils/transactionRoleUtils";
+import { ContactPreview } from "../../shared/ContactPreview";
+import type { ExtendedContact } from "../../../types/components";
 
 interface TransactionDetailsTabProps {
   transaction: Transaction;
@@ -73,6 +75,29 @@ export function TransactionDetailsTab({
   onSyncCommunications,
   syncingCommunications = false,
 }: TransactionDetailsTabProps): React.ReactElement {
+  // Contact preview state for viewing details when clicking a contact card
+  const [previewContact, setPreviewContact] = useState<ExtendedContact | null>(null);
+
+  /**
+   * Build a minimal ExtendedContact from a ContactAssignment for preview display.
+   * ContactAssignment has contact_id, contact_name, contact_email, etc.
+   */
+  const handleContactCardClick = (assignment: ContactAssignment) => {
+    const contact: ExtendedContact = {
+      id: assignment.contact_id,
+      name: assignment.contact_name || "Unknown Contact",
+      display_name: assignment.contact_name || "Unknown Contact",
+      email: assignment.contact_email || "",
+      phone: assignment.contact_phone || "",
+      company: assignment.contact_company || "",
+      source: "manual",
+      user_id: transaction.user_id,
+      created_at: "",
+      updated_at: "",
+    };
+    setPreviewContact(contact);
+  };
+
   // Format audit period
   const startDate = formatAuditDate(transaction.started_at);
   const endDate = formatAuditDate(transaction.closed_at);
@@ -380,6 +405,7 @@ export function TransactionDetailsTab({
                 key={assignment.id}
                 assignment={assignment}
                 transactionType={(transaction.transaction_type as TransactionType) || "other"}
+                onClick={() => handleContactCardClick(assignment)}
               />
             ))}
           </div>
@@ -410,6 +436,17 @@ export function TransactionDetailsTab({
           </button>
         </div>
       )}
+
+      {/* Contact Preview Modal */}
+      {previewContact && (
+        <ContactPreview
+          contact={previewContact}
+          isExternal={false}
+          transactions={[]}
+          onEdit={() => setPreviewContact(null)}
+          onClose={() => setPreviewContact(null)}
+        />
+      )}
     </>
   );
 }
@@ -418,9 +455,11 @@ export function TransactionDetailsTab({
 function ContactSummaryCard({
   assignment,
   transactionType,
+  onClick,
 }: {
   assignment: ContactAssignment;
   transactionType: TransactionType;
+  onClick?: () => void;
 }) {
   const role = assignment.specific_role || assignment.role || "Unknown Role";
   const name = assignment.contact_name || "Unknown Contact";
@@ -430,7 +469,14 @@ function ContactSummaryCard({
   const isPrimary = assignment.is_primary === 1;
 
   return (
-    <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 flex items-center justify-between">
+    <div
+      className={`bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 flex items-center justify-between${onClick ? " cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors" : ""}`}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
+      data-testid={`contact-summary-card-${assignment.contact_id}`}
+    >
       <div className="flex items-center gap-3">
         {/* Avatar */}
         <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
@@ -439,7 +485,7 @@ function ContactSummaryCard({
         {/* Info */}
         <div>
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-gray-900">{name}</span>
+            <span className={`font-semibold text-gray-900${onClick ? " hover:text-purple-700" : ""}`}>{name}</span>
             {isPrimary && (
               <span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
                 Primary

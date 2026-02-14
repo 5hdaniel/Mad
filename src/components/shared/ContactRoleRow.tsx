@@ -22,6 +22,8 @@ export interface ContactRoleRowProps {
   onRoleChange: (role: string) => void;
   /** Callback when remove button is clicked (optional - hides button if not provided) */
   onRemove?: () => void;
+  /** Callback when contact info area is clicked (for viewing details) */
+  onClick?: () => void;
   /** Whether this row has a validation error (missing role) */
   hasError?: boolean;
   /** Additional CSS classes */
@@ -117,6 +119,7 @@ export function ContactRoleRow({
   roleOptions,
   onRoleChange,
   onRemove,
+  onClick,
   hasError = false,
   className = "",
 }: ContactRoleRowProps): React.ReactElement {
@@ -134,36 +137,46 @@ export function ContactRoleRow({
       className={`flex flex-wrap items-center gap-3 p-3 rounded-lg border ${borderClass} ${className}`.trim()}
       data-testid={`contact-role-row-${contact.id}`}
     >
-      {/* Avatar */}
+      {/* Avatar + Contact Info - clickable area for viewing details */}
       <div
-        className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center flex-shrink-0"
-        data-testid="contact-role-row-avatar"
+        className={`flex items-center gap-3 flex-1 min-w-0${onClick ? " cursor-pointer hover:bg-gray-50 rounded-lg -m-1 p-1 transition-colors" : ""}`}
+        onClick={onClick}
+        role={onClick ? "button" : undefined}
+        tabIndex={onClick ? 0 : undefined}
+        onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
+        data-testid="contact-role-row-info"
       >
-        <span className="text-white text-sm font-bold">{initial}</span>
-      </div>
-
-      {/* Contact Info with Source Pill */}
-      <div className="flex-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <p
-            className="font-medium text-gray-900 text-sm"
-            data-testid="contact-role-row-name"
-          >
-            {displayName}
-          </p>
-          <SourcePill
-            source={mapToSourcePillSource(contact.source, isExternal)}
-            size="sm"
-          />
+        {/* Avatar */}
+        <div
+          className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center flex-shrink-0"
+          data-testid="contact-role-row-avatar"
+        >
+          <span className="text-white text-sm font-bold">{initial}</span>
         </div>
-        {email && (
-          <p
-            className="text-xs text-gray-500 truncate"
-            data-testid="contact-role-row-email"
-          >
-            {email}
-          </p>
-        )}
+
+        {/* Contact Info with Source Pill */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p
+              className={`font-medium text-gray-900 text-sm${onClick ? " hover:text-purple-700" : ""}`}
+              data-testid="contact-role-row-name"
+            >
+              {displayName}
+            </p>
+            <SourcePill
+              source={mapToSourcePillSource(contact.source, isExternal)}
+              size="sm"
+            />
+          </div>
+          {email && (
+            <p
+              className="text-xs text-gray-500 truncate"
+              data-testid="contact-role-row-email"
+            >
+              {email}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Role Dropdown and Remove Button - wrap together on small screens */}
