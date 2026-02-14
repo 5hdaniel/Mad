@@ -217,6 +217,7 @@ export function AppRouter({ app }: AppRouterProps) {
         onDismissSetupPrompt={handleDismissSetupPrompt}
         onTriggerRefresh={app.triggerRefresh}
         onOpenSettings={openSettings}
+        user={currentUser ?? undefined}
       />
     );
   }

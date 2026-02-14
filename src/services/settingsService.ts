@@ -27,10 +27,18 @@ export interface MessagesPreferences {
 }
 
 /**
+ * Audit-related preferences (TASK-1980)
+ */
+export interface AuditPreferences {
+  startDateDefault?: "auto" | "manual";
+}
+
+/**
  * User preferences object
  */
 export interface UserPreferences {
   messages?: MessagesPreferences;
+  audit?: AuditPreferences;
   [key: string]: unknown;
 }
 

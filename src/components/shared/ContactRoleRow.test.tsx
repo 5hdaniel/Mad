@@ -302,6 +302,43 @@ describe("ContactRoleRow", () => {
     });
   });
 
+  describe("Remove Button", () => {
+    it("does not show remove button when onRemove is not provided", () => {
+      renderContactRoleRow();
+      expect(
+        screen.queryByTestId("remove-contact-test-contact-1")
+      ).not.toBeInTheDocument();
+    });
+
+    it("shows remove button when onRemove is provided", () => {
+      renderContactRoleRow({ onRemove: jest.fn() });
+      expect(
+        screen.getByTestId("remove-contact-test-contact-1")
+      ).toBeInTheDocument();
+    });
+
+    it("calls onRemove when remove button is clicked", async () => {
+      const onRemove = jest.fn();
+      renderContactRoleRow({ onRemove });
+
+      const removeBtn = screen.getByTestId("remove-contact-test-contact-1");
+      await userEvent.click(removeBtn);
+      expect(onRemove).toHaveBeenCalledTimes(1);
+    });
+
+    it("has correct aria-label on remove button", () => {
+      renderContactRoleRow({
+        onRemove: jest.fn(),
+        contact: createTestContact({ display_name: "Jane Smith" }),
+      });
+      const removeBtn = screen.getByTestId("remove-contact-test-contact-1");
+      expect(removeBtn).toHaveAttribute(
+        "aria-label",
+        "Remove Jane Smith from transaction"
+      );
+    });
+  });
+
   describe("Custom className", () => {
     it("applies custom className to row", () => {
       renderContactRoleRow({ className: "custom-class" });

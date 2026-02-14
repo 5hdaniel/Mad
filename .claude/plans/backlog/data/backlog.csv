@@ -562,3 +562,13 @@ BACKLOG-676,TransactionMessagesTab sync button shows toast guidance,ui,Low,Compl
 BACKLOG-677,Text message auto-linking inference gate removal and phone matching fix,fix,Medium,Completed,SPRINT-081,~3K,-,-,2026-02-12,2026-02-12,Removed inference gate in autoLinkService.ts that blocked matching; fixed phone number matching logic
 BACKLOG-678,Summary sync button runs auto-link for phone-only contacts,fix,Medium,Completed,SPRINT-081,~3K,-,-,2026-02-12,2026-02-12,transaction-handlers.ts updated so summary sync triggers auto-link for contacts with phone numbers only
 BACKLOG-679,SyncStatusIndicator auto-dismiss removed — manual dismiss only,enhancement,Low,Completed,SPRINT-081,~2K,-,-,2026-02-12,2026-02-12,Removed auto-dismiss timer from SyncStatusIndicator; users now dismiss manually to avoid missing status info
+BACKLOG-686,Remove numbers from onboarding step trackers,ui,Low,In Progress,SPRINT-082,~8K,-,-,2026-02-13,,TASK-1978 — Replace step numbers with plain circles; checkmarks on completed
+BACKLOG-687,macOS iPhone contacts toggle persistence during sync,fix,Medium,In Progress,SPRINT-082,~20K,-,-,2026-02-13,,TASK-1979 — Sync respects import source preference (macos-native vs iphone-sync)
+BACKLOG-688,Auto-detection start date wording and default + settings toggle,ui,Medium,In Progress,SPRINT-082,~15K,-,-,2026-02-13,,TASK-1980 — Clarify auto-detect wording; default to manual; add Settings toggle
+BACKLOG-689,Space bar in contact search input blocked by keyboard handler,fix,High,In Progress,SPRINT-082,~5K,-,-,2026-02-13,,TASK-1981 — Remove space key case from handleKeyDown in ContactSearchList
+BACKLOG-690,Email count showing 0 on submission summary,fix,High,In Progress,SPRINT-082,~15K,-,-,2026-02-13,,TASK-1982 — Stale transaction.email_count passed to SubmitForReviewModal
+BACKLOG-691,Personalized welcome back message on Dashboard,feature,Low,In Progress,SPRINT-082,~10K,-,-,2026-02-13,,TASK-1983 — Show Welcome back {name} for return users
+BACKLOG-692,Clickable contact rows everywhere for detail view,feature,Medium,Pending,SPRINT-082,~20K,-,-,2026-02-13,,TASK-1984 — All contact row locations open ContactPreview on click
+BACKLOG-693,Switch Add Manually and View Active Transactions button positions,ui,Low,In Progress,SPRINT-082,~5K,-,-,2026-02-13,,TASK-1985 — Swap button order in StartNewAuditModal grid
+BACKLOG-694,Skip AI tools for manual-only users on new audit,feature,Medium,Pending,SPRINT-082,~10K,-,-,2026-02-13,,TASK-1986 — Non-AI users go directly to Step 1 manual creation
+BACKLOG-695,Remove contact on Step 3 of new audit transaction,fix,Medium,In Progress,SPRINT-082,~10K,-,-,2026-02-13,,TASK-1987 — Add remove button to ContactRoleRow on Step 3
