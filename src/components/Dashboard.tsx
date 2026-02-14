@@ -72,8 +72,8 @@ function Dashboard({
   const { pendingCount, isLoading: isPendingLoading } =
     usePendingTransactionCount();
 
-  // License status for transaction limit check
-  const { canCreateTransaction, transactionCount, transactionLimit } = useLicense();
+  // License status for transaction limit check and AI addon
+  const { canCreateTransaction, transactionCount, transactionLimit, hasAIAddon } = useLicense();
 
   // Derive display name for personalized greeting
   // Users only reach Dashboard after WelcomeTerms, so this is always a return visit
@@ -87,10 +87,21 @@ function Dashboard({
     onViewTransactions();
   }, [onViewTransactions]);
 
-  // Handle "Start New Audit" click - show the redesigned modal
+  // Handle "Start New Audit" click
+  // For non-AI users: skip the StartNewAuditModal and go directly to manual creation
+  // For AI users: show the modal with AI-detected transactions
   const handleStartNewAuditClick = useCallback(() => {
+    if (!hasAIAddon) {
+      // Non-AI users bypass the modal entirely
+      // Transaction limit is enforced: only proceed if allowed
+      if (canCreateTransaction) {
+        onAuditNew();
+      }
+      // If limit reached, do nothing -- the limit banner is already visible on Dashboard
+      return;
+    }
     setShowStartNewAuditModal(true);
-  }, []);
+  }, [hasAIAddon, canCreateTransaction, onAuditNew]);
 
   // Handle selecting a pending transaction from the modal
   const handleSelectPendingTransaction = useCallback(
