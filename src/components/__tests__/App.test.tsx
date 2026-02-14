@@ -380,7 +380,9 @@ describe("App", () => {
 
       await waitFor(() => {
         // Component should show the WelcomeTerms modal for new users
-        expect(screen.getByText(/Test User/i)).toBeInTheDocument();
+        // Use heading role with level 2 to target the WelcomeTerms <h2> specifically,
+        // avoiding ambiguity with the Dashboard <h1> "Welcome back, Test User!"
+        expect(screen.getByRole('heading', { level: 2, name: /Welcome, Test User/i })).toBeInTheDocument();
       });
     });
 
