@@ -355,6 +355,7 @@ function ContactAssignmentStep({
                     roleOptions={roleOptions}
                     onRoleChange={(role) => handleRoleChange(contact.id, role)}
                     onRemove={() => handleRemoveFromStep3(contact.id)}
+                    onClick={() => handleContactClick(contact)}
                   />
                 ))}
               </div>
