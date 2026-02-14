@@ -96,24 +96,24 @@ The bug: even after selecting "macOS Messages + Contacts" (i.e., `macos-native`)
 **REQUIRED: Complete this section before creating PR.**
 **See: `.claude/docs/ENGINEER-WORKFLOW.md` for full workflow**
 
-*Completed: <DATE>*
+*Completed: 2026-02-13*
 
 ### Engineer Checklist
 
 ```
 Pre-Work:
-- [ ] Created branch from develop
-- [ ] Noted start time: ___
-- [ ] Read task file completely
+- [x] Created branch from sprint/082-ui-stabilization
+- [x] Noted start time: session start
+- [x] Read task file completely
 
 Implementation:
-- [ ] Code complete
-- [ ] Tests pass locally (npm test)
-- [ ] Type check passes (npm run type-check)
-- [ ] Lint passes (npm run lint)
+- [x] Code complete
+- [x] Tests pass locally (npm test) -- 113 relevant tests pass, 18 pre-existing failures in contact-handlers.test.ts unrelated
+- [x] Type check passes (npm run type-check)
+- [x] Lint passes (npm run lint)
 
 PR Submission:
-- [ ] This summary section completed
+- [x] This summary section completed
 - [ ] PR created with Engineer Metrics (see template)
 - [ ] CI passes (gh pr checks --watch)
 - [ ] SR Engineer review requested
@@ -125,20 +125,30 @@ Completion:
 
 ### Results
 
-- **Before**: [state before]
-- **After**: [state after]
-- **Actual Turns**: X (Est: Y)
-- **Actual Tokens**: ~XK (Est: 20K)
-- **Actual Time**: X min
-- **PR**: [URL after PR created]
+- **Before**: SyncOrchestratorService always ran macOS Contacts and macOS Messages import regardless of import source toggle. The `messages.source` preference was saved to DB but never read during sync operations.
+- **After**: SyncOrchestratorService reads `messages.source` preference fresh from DB at sync time. When set to `iphone-sync`, macOS Contacts (Phase 1) and macOS Messages import are skipped. Outlook contacts (Phase 2, API-based) always run regardless of toggle.
+- **Actual Tokens**: ~15K (Est: 20K)
+- **PR**: pending
+
+### Changes Made
+
+**File modified:** `src/services/SyncOrchestratorService.ts`
+1. Added `import type { ImportSource, UserPreferences } from './settingsService'`
+2. Added `getImportSource(userId)` private helper that reads preference fresh from DB at sync time
+3. Contacts sync function: gated macOS Contacts Phase 1 on `importSource !== 'iphone-sync'`
+4. Messages sync function: early return when `importSource === 'iphone-sync'`
 
 ### Notes
 
-**Deviations from plan:**
-[If you deviated, explain what and why]
+**Deviations from plan:** None. Single-file fix as expected.
 
 **Issues encountered:**
-[Document any challenges]
+### Issue #1: TypeScript type narrowing on preferences API
+- **When:** Implementation
+- **What happened:** `window.api.preferences.get()` returns untyped result via `ipcRenderer.invoke`. Direct property access on `result.preferences.messages.source` failed type check.
+- **Root cause:** The preferences bridge uses raw `ipcRenderer.invoke` without typed returns.
+- **Resolution:** Cast `result.preferences as UserPreferences | undefined` following the same pattern used in `ImportSourceSettings.tsx` and `useAutoRefresh.ts`.
+- **Time spent:** ~2 min
 
 ---
 
