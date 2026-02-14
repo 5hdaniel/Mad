@@ -100,7 +100,7 @@ export interface UseAuditTransactionReturn {
   addressSuggestions: AddressSuggestion[];
 
   // Auto-detect start date state (TASK-1974)
-  startDateMode: "auto" | "manual";
+  startDateMode?: "auto" | "manual";
   autoDetectedDate: string | null | undefined;
   isAutoDetecting: boolean;
 
@@ -203,14 +203,18 @@ export function useAuditTransaction({
   const isMountedRef = useRef(true);
 
   // Auto-detect start date state (TASK-1974, TASK-1980: default to "manual")
-  const [startDateMode, setStartDateModeState] = useState<"auto" | "manual">("manual");
+  const [startDateMode, setStartDateModeState] = useState<"auto" | "manual" | null>(null);
   const [autoDetectedDate, setAutoDetectedDate] = useState<string | null | undefined>(undefined);
   const [isAutoDetecting, setIsAutoDetecting] = useState(false);
 
   // TASK-1980: Read user preference for start date default mode on mount
   // Only applies when creating a new audit (not editing)
   useEffect(() => {
-    if (isEditing || !userId) return;
+    if (isEditing) {
+      setStartDateModeState("manual");
+      return;
+    }
+    if (!userId) return;
     const loadStartDatePreference = async () => {
       try {
         const result = await window.api.preferences.get(userId) as {
@@ -223,10 +227,12 @@ export function useAuditTransaction({
           const preferred = result.preferences.audit.startDateDefault;
           if (preferred === "auto" || preferred === "manual") {
             setStartDateModeState(preferred);
+            return;
           }
         }
+        setStartDateModeState("manual");
       } catch {
-        // Silently ignore - default "manual" will be used
+        setStartDateModeState("manual");
       }
     };
     loadStartDatePreference();
@@ -973,7 +979,7 @@ export function useAuditTransaction({
     addressSuggestions,
 
     // Auto-detect start date state (TASK-1974)
-    startDateMode,
+    startDateMode: startDateMode ?? undefined,
     autoDetectedDate,
     isAutoDetecting,
 

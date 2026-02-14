@@ -132,14 +132,17 @@ function AddressVerificationStep({
         </div>
       </div>
 
-      {/* Transaction Dates */}
+      {/* Transaction Dates - hidden until start date preference loads */}
+      {startDateMode === undefined ? (
+        <div className="h-24" />
+      ) : (
       <div>
         <div className="flex items-center justify-between mb-3">
           <label className="block text-sm font-medium text-gray-700">
             {isAutoMode ? "Audit Period" : "Transaction Dates"}
           </label>
-          {/* Auto/Manual toggle (TASK-1974, TASK-1980) */}
-          {onStartDateModeChange && (
+          {/* Auto/Manual toggle (TASK-1974, TASK-1980) - hidden until preference loads */}
+          {onStartDateModeChange && startDateMode && (
             <div className="flex items-center gap-1" title="Auto: detect from earliest communication. Manual: enter date yourself.">
               <button
                 type="button"
@@ -303,6 +306,7 @@ function AddressVerificationStep({
           </div>
         </div>
       </div>
+      )}
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start gap-2">
