@@ -472,6 +472,7 @@ function TransactionDetails({
               transaction={transaction}
               contactAssignments={contactAssignments}
               loading={loading}
+              userId={userId}
               onEdit={() => setShowEditModal(true)}
               onEditContacts={() => setShowEditContactsModal(true)}
               onDelete={() => setShowDeleteConfirm(true)}

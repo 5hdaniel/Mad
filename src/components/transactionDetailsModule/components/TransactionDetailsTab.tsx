@@ -8,12 +8,14 @@ import type { Transaction } from "@/types";
 import type { ContactAssignment, ResolvedSuggestedContact } from "../types";
 import { getRoleDisplayName, type TransactionType } from "@/utils/transactionRoleUtils";
 import { ContactPreview } from "../../shared/ContactPreview";
+import { ContactFormModal } from "../../contact";
 import type { ExtendedContact } from "../../../types/components";
 
 interface TransactionDetailsTabProps {
   transaction: Transaction;
   contactAssignments: ContactAssignment[];
   loading: boolean;
+  userId?: string;
   onEdit?: () => void;
   onEditContacts?: () => void;
   onDelete?: () => void;
@@ -63,6 +65,7 @@ export function TransactionDetailsTab({
   transaction,
   contactAssignments,
   loading,
+  userId,
   onEdit,
   onEditContacts,
   onDelete,
@@ -77,6 +80,8 @@ export function TransactionDetailsTab({
 }: TransactionDetailsTabProps): React.ReactElement {
   // Contact preview state for viewing details when clicking a contact card
   const [previewContact, setPreviewContact] = useState<ExtendedContact | null>(null);
+  // Contact edit form state
+  const [editContact, setEditContact] = useState<ExtendedContact | null>(null);
 
   /**
    * Build a minimal ExtendedContact from a ContactAssignment for preview display.
@@ -443,8 +448,22 @@ export function TransactionDetailsTab({
           contact={previewContact}
           isExternal={false}
           transactions={[]}
-          onEdit={() => setPreviewContact(null)}
+          onEdit={() => {
+            const contact = previewContact;
+            setPreviewContact(null);
+            setEditContact(contact);
+          }}
           onClose={() => setPreviewContact(null)}
+        />
+      )}
+
+      {/* Contact Edit Form Modal */}
+      {editContact && userId && (
+        <ContactFormModal
+          userId={userId}
+          contact={editContact}
+          onClose={() => setEditContact(null)}
+          onSuccess={() => setEditContact(null)}
         />
       )}
     </>

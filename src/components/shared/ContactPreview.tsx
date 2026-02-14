@@ -23,6 +23,8 @@ export interface ContactPreviewProps {
   isLoadingTransactions?: boolean;
   /** Callback to edit the contact (imported only) */
   onEdit?: () => void;
+  /** Callback to remove the contact */
+  onRemove?: () => void;
   /** Callback to import the contact (external only) */
   onImport?: () => void;
   /** Callback to close the preview */
@@ -108,6 +110,7 @@ export function ContactPreview({
   transactions = [],
   isLoadingTransactions = false,
   onEdit,
+  onRemove,
   onImport,
   onClose,
 }: ContactPreviewProps): React.ReactElement {
@@ -213,6 +216,7 @@ export function ContactPreview({
         </div>
 
         {/* Transactions Section (imported only) or External Message */}
+        {(isExternal || isLoadingTransactions || transactions.length > 0) && (
         <div className="flex-1 overflow-y-auto border-t border-gray-200 px-6 py-4">
           {isExternal ? (
             <div
@@ -232,13 +236,6 @@ export function ContactPreview({
               data-testid="contact-preview-loading"
             >
               <div className="w-6 h-6 border-2 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto" />
-            </div>
-          ) : transactions.length === 0 ? (
-            <div
-              className="text-center text-gray-500 py-4"
-              data-testid="contact-preview-no-transactions"
-            >
-              <p>No transactions yet</p>
             </div>
           ) : (
             <>
@@ -267,9 +264,10 @@ export function ContactPreview({
             </>
           )}
         </div>
+        )}
 
-        {/* Footer with Action Button */}
-        <div className="border-t border-gray-200 p-4 flex justify-end">
+        {/* Footer with Action Buttons */}
+        <div className="border-t border-gray-200 p-4 flex justify-between">
           {isExternal ? (
             <button
               onClick={onImport}
@@ -279,13 +277,26 @@ export function ContactPreview({
               Import to Software
             </button>
           ) : (
-            <button
-              onClick={onEdit}
-              className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-600 text-white font-semibold rounded-lg hover:from-purple-600 hover:to-pink-700 transition-all shadow-md"
-              data-testid="contact-preview-edit"
-            >
-              Edit Contact
-            </button>
+            <>
+              {onRemove && (
+                <button
+                  onClick={onRemove}
+                  className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg font-medium transition-all"
+                  data-testid="contact-preview-remove"
+                >
+                  Remove
+                </button>
+              )}
+              {onEdit && (
+                <button
+                  onClick={onEdit}
+                  className="ml-auto px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-600 text-white font-semibold rounded-lg hover:from-purple-600 hover:to-pink-700 transition-all shadow-md"
+                  data-testid="contact-preview-edit"
+                >
+                  Edit Contact
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
