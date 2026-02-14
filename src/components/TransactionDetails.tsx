@@ -436,7 +436,17 @@ function TransactionDetails({
           onRestore={handleRestore}
           onShowExportModal={() => setShowExportModal(true)}
           onShowDeleteConfirm={() => setShowDeleteConfirm(true)}
-          onShowSubmitModal={() => setShowSubmitModal(true)}
+          onShowSubmitModal={async () => {
+            try {
+              const refreshed = await window.api.transactions.getDetails(transaction.id);
+              if (refreshed.success && refreshed.transaction) {
+                setTransaction(refreshed.transaction as Transaction);
+              }
+            } catch (err) {
+              console.error("Failed to refresh transaction before submit:", err);
+            }
+            setShowSubmitModal(true);
+          }}
         />
 
         {/* Tabs */}
@@ -638,8 +648,8 @@ function TransactionDetails({
       {showSubmitModal && (
         <SubmitForReviewModal
           transaction={transaction}
-          emailThreadCount={emailCommunications.length}
-          textThreadCount={textMessages.length}
+          emailThreadCount={transaction.email_count || 0}
+          textThreadCount={transaction.text_thread_count || 0}
           attachmentCount={dbAttachmentCounts.total}
           emailAttachmentCount={dbAttachmentCounts.emailAttachments}
           totalSizeBytes={dbAttachmentCounts.totalSizeBytes}
