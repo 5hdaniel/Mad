@@ -202,12 +202,35 @@ export function useAuditTransaction({
   // Track if component is mounted to prevent state updates after unmount
   const isMountedRef = useRef(true);
 
-  // Auto-detect start date state (TASK-1974)
-  const [startDateMode, setStartDateModeState] = useState<"auto" | "manual">(
-    isEditing ? "manual" : "auto",
-  );
+  // Auto-detect start date state (TASK-1974, TASK-1980: default to "manual")
+  const [startDateMode, setStartDateModeState] = useState<"auto" | "manual">("manual");
   const [autoDetectedDate, setAutoDetectedDate] = useState<string | null | undefined>(undefined);
   const [isAutoDetecting, setIsAutoDetecting] = useState(false);
+
+  // TASK-1980: Read user preference for start date default mode on mount
+  // Only applies when creating a new audit (not editing)
+  useEffect(() => {
+    if (isEditing || !userId) return;
+    const loadStartDatePreference = async () => {
+      try {
+        const result = await window.api.preferences.get(userId) as {
+          success: boolean;
+          preferences?: {
+            audit?: { startDateDefault?: "auto" | "manual" };
+          };
+        };
+        if (result.success && result.preferences?.audit?.startDateDefault) {
+          const preferred = result.preferences.audit.startDateDefault;
+          if (preferred === "auto" || preferred === "manual") {
+            setStartDateModeState(preferred);
+          }
+        }
+      } catch {
+        // Silently ignore - default "manual" will be used
+      }
+    };
+    loadStartDatePreference();
+  }, [isEditing, userId]);
 
   /**
    * Load contacts - called lazily when reaching step 2, or when explicitly refreshed
