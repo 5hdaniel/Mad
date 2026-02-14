@@ -49,7 +49,6 @@ function WelcomeTerms({ user, onAccept }: WelcomeTermsProps) {
           {/* Step indicator - matches OnboardingShell progress style */}
           <div className="flex items-center justify-center gap-2 mb-4">
             <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center text-sm font-semibold">
-              1
             </div>
             <span className="text-sm text-gray-600">Terms & Conditions</span>
           </div>

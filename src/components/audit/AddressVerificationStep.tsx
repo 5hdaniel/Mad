@@ -132,18 +132,22 @@ function AddressVerificationStep({
         </div>
       </div>
 
-      {/* Transaction Dates */}
+      {/* Transaction Dates - hidden until start date preference loads */}
+      {startDateMode === undefined ? (
+        <div className="h-24" />
+      ) : (
       <div>
         <div className="flex items-center justify-between mb-3">
           <label className="block text-sm font-medium text-gray-700">
             {isAutoMode ? "Audit Period" : "Transaction Dates"}
           </label>
-          {/* Auto/Manual toggle (TASK-1974) */}
-          {onStartDateModeChange && (
-            <div className="flex items-center gap-1">
+          {/* Auto/Manual toggle (TASK-1974, TASK-1980) - hidden until preference loads */}
+          {onStartDateModeChange && startDateMode && (
+            <div className="flex items-center gap-1" title="Auto: detect from earliest communication. Manual: enter date yourself.">
               <button
                 type="button"
                 onClick={() => onStartDateModeChange("auto")}
+                title="Auto: detect start date from earliest communication"
                 className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
                   isAutoMode
                     ? "bg-indigo-500 text-white"
@@ -155,6 +159,7 @@ function AddressVerificationStep({
               <button
                 type="button"
                 onClick={() => onStartDateModeChange("manual")}
+                title="Manual: enter the representation start date yourself"
                 className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
                   !isAutoMode
                     ? "bg-indigo-500 text-white"
@@ -193,7 +198,7 @@ function AddressVerificationStep({
                   />
                 </svg>
                 <span className="text-sm text-indigo-700">
-                  Detecting from communications...
+                  Detecting start representation date...
                 </span>
               </div>
             ) : awaitingContacts ? (
@@ -204,7 +209,7 @@ function AddressVerificationStep({
                   {todayFormatted}
                 </p>
                 <p className="text-xs text-indigo-600 mt-1">
-                  Start date will be set after selecting contacts in Step 2
+                  Representation start date will be set after selecting contacts in Step 2
                 </p>
               </div>
             ) : (
@@ -219,12 +224,12 @@ function AddressVerificationStep({
                 </p>
                 {hasAutoDate && (
                   <p className="text-xs text-indigo-600 mt-1">
-                    Based on earliest client communication
+                    Start representation date based on earliest client communication
                   </p>
                 )}
                 {showNoCommsHint && (
                   <p className="text-xs text-amber-600 mt-1">
-                    No communications found — using default (60 days ago)
+                    No communications found for representation start date — using default (60 days ago)
                   </p>
                 )}
               </div>
@@ -301,6 +306,7 @@ function AddressVerificationStep({
           </div>
         </div>
       </div>
+      )}
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start gap-2">

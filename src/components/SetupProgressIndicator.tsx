@@ -71,9 +71,7 @@ export function SetupProgressIndicator({
                     d="M5 13l4 4L19 7"
                   />
                 </svg>
-              ) : (
-                step.id
-              )}
+              ) : null}
             </div>
             {index < steps.length - 1 && (
               <div

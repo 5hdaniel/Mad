@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from "react";
 import {
-  ContactDetailsModal,
   ContactFormModal,
   RemoveConfirmationModal,
   BlockingTransactionsModal,
@@ -282,8 +281,10 @@ function Contacts({ userId, onClose }: ContactsProps) {
 
       {/* Contact Details Modal (for imported contacts) */}
       {showDetails && selectedContact && (
-        <ContactDetailsModal
+        <ContactPreview
           contact={selectedContact}
+          isExternal={false}
+          transactions={[]}
           onClose={() => {
             setShowDetails(false);
             setSelectedContact(undefined);

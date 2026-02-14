@@ -30,6 +30,11 @@ interface DashboardActionProps {
   onSelectPendingTransaction?: (transaction: Transaction) => void;
   /** Callback to open Settings modal */
   onOpenSettings?: () => void;
+  /** Current user info for personalized greeting */
+  user?: {
+    display_name?: string;
+    email?: string;
+  };
 }
 
 /**
@@ -49,6 +54,7 @@ function Dashboard({
   onTriggerRefresh,
   onSelectPendingTransaction,
   onOpenSettings,
+  user,
 }: DashboardActionProps) {
   // State for the Start New Audit modal
   const [showStartNewAuditModal, setShowStartNewAuditModal] = useState(false);
@@ -66,18 +72,36 @@ function Dashboard({
   const { pendingCount, isLoading: isPendingLoading } =
     usePendingTransactionCount();
 
-  // License status for transaction limit check
-  const { canCreateTransaction, transactionCount, transactionLimit } = useLicense();
+  // License status for transaction limit check and AI addon
+  const { canCreateTransaction, transactionCount, transactionLimit, hasAIAddon } = useLicense();
+
+  // Derive display name for personalized greeting
+  // Users only reach Dashboard after WelcomeTerms, so this is always a return visit
+  const displayName = user?.display_name || user?.email?.split("@")[0] || "";
+  const greeting = displayName
+    ? `Welcome back, ${displayName}!`
+    : "Welcome back!";
 
   // Handle viewing pending transactions - navigates to transactions view
   const handleViewPending = useCallback(() => {
     onViewTransactions();
   }, [onViewTransactions]);
 
-  // Handle "Start New Audit" click - show the redesigned modal
+  // Handle "Start New Audit" click
+  // For non-AI users: skip the StartNewAuditModal and go directly to manual creation
+  // For AI users: show the modal with AI-detected transactions
   const handleStartNewAuditClick = useCallback(() => {
+    if (!hasAIAddon) {
+      // Non-AI users bypass the modal entirely
+      // Transaction limit is enforced: only proceed if allowed
+      if (canCreateTransaction) {
+        onAuditNew();
+      }
+      // If limit reached, do nothing -- the limit banner is already visible on Dashboard
+      return;
+    }
     setShowStartNewAuditModal(true);
-  }, []);
+  }, [hasAIAddon, canCreateTransaction, onAuditNew]);
 
   // Handle selecting a pending transaction from the modal
   const handleSelectPendingTransaction = useCallback(
@@ -176,7 +200,7 @@ function Dashboard({
         {/* Header */}
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-gray-900 mb-3">
-            Welcome to Magic Audit
+            {greeting}
           </h1>
           <p className="text-lg text-gray-600">
             Transaction compliance made simple

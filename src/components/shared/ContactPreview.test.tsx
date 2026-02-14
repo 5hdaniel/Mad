@@ -216,14 +216,14 @@ describe("ContactPreview", () => {
       expect(txn1).toHaveTextContent("Buyer");
     });
 
-    it("shows 'No transactions' when list is empty", () => {
+    it("hides transactions section when list is empty", () => {
       renderContactPreview({ transactions: [] });
       expect(
-        screen.getByTestId("contact-preview-no-transactions")
-      ).toBeInTheDocument();
+        screen.queryByTestId("contact-preview-transactions")
+      ).not.toBeInTheDocument();
       expect(
-        screen.getByTestId("contact-preview-no-transactions")
-      ).toHaveTextContent("No transactions yet");
+        screen.queryByText("No transactions yet")
+      ).not.toBeInTheDocument();
     });
 
     it("shows loading spinner when loading transactions", () => {

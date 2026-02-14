@@ -462,7 +462,7 @@ describe("Contacts - Deletion Prevention", () => {
 
       // Wait for details modal to appear
       await waitFor(() => {
-        expect(screen.getByText("Contact Details")).toBeInTheDocument();
+        expect(screen.getByTestId("contact-preview-modal")).toBeInTheDocument();
       });
 
       // Click the Remove button in details modal
@@ -509,7 +509,7 @@ describe("Contacts - Deletion Prevention", () => {
       await userEvent.click(screen.getByText("Bob Wilson"));
 
       await waitFor(() => {
-        expect(screen.getByText("Contact Details")).toBeInTheDocument();
+        expect(screen.getByTestId("contact-preview-modal")).toBeInTheDocument();
       });
 
       // Click Remove to open confirmation modal
@@ -555,7 +555,7 @@ describe("Contacts - Deletion Prevention", () => {
       await userEvent.click(screen.getByText("Bob Wilson"));
 
       await waitFor(() => {
-        expect(screen.getByText("Contact Details")).toBeInTheDocument();
+        expect(screen.getByTestId("contact-preview-modal")).toBeInTheDocument();
       });
 
       // Click Remove to open confirmation modal
@@ -602,7 +602,7 @@ describe("Contacts - Deletion Prevention", () => {
       await userEvent.click(screen.getByText("Bob Wilson"));
 
       await waitFor(() => {
-        expect(screen.getByText("Contact Details")).toBeInTheDocument();
+        expect(screen.getByTestId("contact-preview-modal")).toBeInTheDocument();
       });
 
       // Click Remove
@@ -651,7 +651,7 @@ describe("Contacts - Deletion Prevention", () => {
       await userEvent.click(screen.getByText("Bob Wilson"));
 
       await waitFor(() => {
-        expect(screen.getByText("Contact Details")).toBeInTheDocument();
+        expect(screen.getByTestId("contact-preview-modal")).toBeInTheDocument();
       });
 
       // Click Remove to open confirmation modal
