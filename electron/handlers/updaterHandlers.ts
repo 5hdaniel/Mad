@@ -34,7 +34,7 @@ export function registerUpdaterHandlers(mainWindow: BrowserWindow): void {
       }
       const result = await autoUpdater.checkForUpdatesAndNotify();
       return {
-        updateAvailable: !!result?.updateInfo,
+        updateAvailable: result?.isUpdateAvailable ?? false,
         version: result?.updateInfo?.version,
         currentVersion: app.getVersion(),
       };
