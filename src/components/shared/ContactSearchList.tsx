@@ -155,12 +155,14 @@ function matchesSearch(
  * - imported: Blue "Imported" pill (imported from Contacts App, non-message-derived)
  * - external: Violet "Contacts App" pill (message-derived contacts, not yet imported)
  * - messages: Amber "Message" pill (SMS source)
+ * - outlook: Indigo "Outlook" pill (from Outlook Graph API import)
  */
 interface CategoryFilter {
   manual: boolean;
   imported: boolean;
   external: boolean;
   messages: boolean;
+  outlook: boolean;
 }
 
 const DEFAULT_CATEGORY_FILTER: CategoryFilter = {
@@ -168,6 +170,7 @@ const DEFAULT_CATEGORY_FILTER: CategoryFilter = {
   imported: true,
   external: true,
   messages: false,
+  outlook: true,
 };
 
 /**
@@ -175,12 +178,17 @@ const DEFAULT_CATEGORY_FILTER: CategoryFilter = {
  * This is the single source of truth for contact categorization.
  *
  * Categories map to pill display:
+ * - "outlook" → "Outlook" pill (indigo) - from Outlook Graph API import
  * - "messages" → "Message" pill (amber) - from SMS/iMessage sync
  * - "external" → "Contacts App" pill (violet) - from Contacts App, not imported
  * - "manual" → "Manual" pill (green) - user-created via Add Manually
  * - "imported" → "Imported" pill (blue) - imported from Contacts App
  */
 function getContactCategory(contact: ExtendedContact, isExternalContact: boolean = false): keyof CategoryFilter {
+  // Outlook contacts (from Outlook Graph API import)
+  if (contact.source === "outlook") {
+    return "outlook";
+  }
   // SMS/messages source shows as "Message" pill
   if (contact.source === "sms" || contact.source === "messages") {
     return "messages";
@@ -548,6 +556,22 @@ export function ContactSearchList({
             data-testid="filter-messages"
           >
             Messages
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setCategoryFilter(prev => ({ ...prev, outlook: !prev.outlook }));
+            }}
+            className={`px-2.5 py-1 text-xs font-medium rounded-full transition-colors ${
+              categoryFilter.outlook
+                ? "bg-indigo-100 text-indigo-700"
+                : "bg-gray-100 text-gray-400"
+            }`}
+            data-testid="filter-outlook"
+          >
+            Outlook
           </button>
         </div>
       )}
