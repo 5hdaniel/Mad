@@ -348,7 +348,7 @@ class OutlookFetchService {
     query = "",
     after = null,
     before = null,
-    maxResults = 100,
+    maxResults = 500,
     contactEmails,
     onProgress,
   }: EmailSearchOptions = {}): Promise<ParsedEmail[]> {
@@ -379,6 +379,7 @@ class OutlookFetchService {
             `from/emailAddress/address eq '${escaped}'`,
             `toRecipients/any(r:r/emailAddress/address eq '${escaped}')`,
             `ccRecipients/any(r:r/emailAddress/address eq '${escaped}')`,
+            `bccRecipients/any(r:r/emailAddress/address eq '${escaped}')`,
           ].join(" or ");
         });
         filters.push(`(${emailClauses.join(" or ")})`);
