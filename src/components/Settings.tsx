@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { LLMSettings } from "./settings/LLMSettings";
 import { MacOSMessagesImportSettings } from "./settings/MacOSMessagesImportSettings";
-import { MacOSContactsImportSettings } from "./settings/MacOSContactsImportSettings";
+import { ContactsImportSettings } from "./settings/MacOSContactsImportSettings";
 import { ImportSourceSettings } from "./settings/ImportSourceSettings";
 import { LicenseGate } from "./common/LicenseGate";
 import { useNotification } from "@/hooks/useNotification";
@@ -1057,7 +1057,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
               </div>
             </div>
 
-            {/* macOS Contacts Import - Only shows on macOS */}
+            {/* Contacts Import - macOS Contacts + Outlook (TASK-1989) */}
             <div className="mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 Contacts
@@ -1229,7 +1229,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                   </div>
                 </div>
 
-                <MacOSContactsImportSettings userId={userId} />
+                <ContactsImportSettings userId={userId} isMicrosoftConnected={connections.microsoft?.connected ?? false} />
               </div>
             </div>
 
