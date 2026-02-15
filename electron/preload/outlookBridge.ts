@@ -109,4 +109,15 @@ export const updateBridge = {
    * Installs downloaded update and restarts app
    */
   install: () => ipcRenderer.send("install-update"),
+
+  /**
+   * Manually check for updates
+   * @returns Update check result
+   */
+  checkForUpdates: (): Promise<{
+    updateAvailable: boolean;
+    version?: string;
+    currentVersion: string;
+    error?: string;
+  }> => ipcRenderer.invoke("app:check-for-updates"),
 };
