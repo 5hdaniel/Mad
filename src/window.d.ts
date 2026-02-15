@@ -1051,6 +1051,17 @@ interface MainAPI {
       error?: string;
     }>;
     /**
+     * Get contact source stats - per-source counts (TASK-1991)
+     * Returns counts grouped by source: { macos, iphone, outlook }
+     * @param userId - User ID to get stats for
+     * @returns Per-source contact counts
+     */
+    getSourceStats: (userId: string) => Promise<{
+      success: boolean;
+      stats?: Record<string, number>;
+      error?: string;
+    }>;
+    /**
      * Sync Outlook contacts to external_contacts table (TASK-1921)
      * Fetches contacts from Microsoft Graph API and syncs to local SQLite
      * @param userId - User ID to sync contacts for
