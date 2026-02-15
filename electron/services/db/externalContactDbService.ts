@@ -197,6 +197,22 @@ export function isStale(userId: string, maxAgeHours: number = 24): boolean {
   return hoursSinceSync > maxAgeHours;
 }
 
+/**
+ * Get contact counts grouped by source for a user (TASK-1991)
+ * Returns how many external contacts exist per source (macos, iphone, outlook)
+ */
+export function getContactSourceStats(userId: string): Record<string, number> {
+  const rows = dbAll<{ source: string; count: number }>(
+    `SELECT source, COUNT(*) as count FROM external_contacts WHERE user_id = ? GROUP BY source`,
+    [userId]
+  );
+  const stats: Record<string, number> = { macos: 0, iphone: 0, outlook: 0 };
+  for (const row of rows) {
+    stats[row.source] = row.count;
+  }
+  return stats;
+}
+
 // ============================================
 // WRITE OPERATIONS
 // ============================================

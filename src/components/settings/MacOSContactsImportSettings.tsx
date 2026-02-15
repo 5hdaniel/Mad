@@ -53,6 +53,9 @@ export function ContactsImportSettings({
     contactCount?: number;
   } | null>(null);
 
+  // Source stats (TASK-1991)
+  const [sourceStats, setSourceStats] = useState<Record<string, number> | null>(null);
+
   // Outlook-specific state
   const [outlookSyncing, setOutlookSyncing] = useState(false);
   const [outlookReconnectRequired, setOutlookReconnectRequired] = useState(false);
@@ -62,9 +65,11 @@ export function ContactsImportSettings({
     error?: string;
   } | null>(null);
 
-  // Load sync status on mount (for macOS contacts)
+  // Load sync status and source stats on mount
   useEffect(() => {
-    if (!isMacOS || !userId) return;
+    if (!userId) return;
+    loadSourceStats();
+    if (!isMacOS) return;
     loadSyncStatus();
   }, [isMacOS, userId]);
 
@@ -73,6 +78,7 @@ export function ContactsImportSettings({
     if (contactsItem?.status === 'complete') {
       setLastResult({ success: true });
       loadSyncStatus();
+      loadSourceStats();
     } else if (contactsItem?.status === 'error') {
       setLastResult({ success: false, error: contactsItem.error });
     }
@@ -89,6 +95,17 @@ export function ContactsImportSettings({
       }
     } catch (error) {
       console.error("Failed to load sync status:", error);
+    }
+  };
+
+  const loadSourceStats = async () => {
+    try {
+      const result = await window.api.contacts.getSourceStats(userId);
+      if (result.success && result.stats) {
+        setSourceStats(result.stats);
+      }
+    } catch {
+      // Non-critical — stats will show as loading
     }
   };
 
@@ -118,6 +135,7 @@ export function ContactsImportSettings({
 
       if (result.success) {
         setOutlookLastResult({ success: true, count: result.count });
+        loadSourceStats();
       } else if (result.reconnectRequired) {
         setOutlookReconnectRequired(true);
         setOutlookLastResult(null);
@@ -292,6 +310,33 @@ export function ContactsImportSettings({
               Syncing contacts from macOS...
             </div>
           )}
+        </div>
+      )}
+
+      {/* Source Stats Breakdown (TASK-1991) */}
+      {sourceStats && (
+        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <h4 className="text-sm font-medium text-gray-900 mb-3">Contact Sources</h4>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            {isMacOS && (
+              <div className="p-2 bg-violet-50 rounded border border-violet-200">
+                <div className="text-lg font-semibold text-violet-700">{sourceStats.macos.toLocaleString()}</div>
+                <div className="text-xs text-violet-600">macOS</div>
+              </div>
+            )}
+            {(sourceStats.iphone > 0) && (
+              <div className="p-2 bg-blue-50 rounded border border-blue-200">
+                <div className="text-lg font-semibold text-blue-700">{sourceStats.iphone.toLocaleString()}</div>
+                <div className="text-xs text-blue-600">iPhone</div>
+              </div>
+            )}
+            {isMicrosoftConnected && (
+              <div className="p-2 bg-indigo-50 rounded border border-indigo-200">
+                <div className="text-lg font-semibold text-indigo-700">{sourceStats.outlook.toLocaleString()}</div>
+                <div className="text-xs text-indigo-600">Outlook</div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

@@ -1448,6 +1448,37 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
     },
   );
 
+  // TASK-1991: Get contact source stats (per-source counts)
+  ipcMain.handle(
+    "contacts:getSourceStats",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<{
+      success: boolean;
+      stats?: Record<string, number>;
+      error?: string;
+    }> => {
+      try {
+        const validatedUserId = await getValidUserId(userId, "Contacts");
+        if (!validatedUserId) {
+          return { success: false, error: "No valid user found in database" };
+        }
+
+        const stats = externalContactDb.getContactSourceStats(validatedUserId);
+        return { success: true, stats };
+      } catch (error) {
+        logService.error("[Main] Get contact source stats failed", "Contacts", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
   // TASK-1921: Sync Outlook contacts to external_contacts table
   ipcMain.handle(
     "contacts:syncOutlookContacts",

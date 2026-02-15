@@ -1008,6 +1008,16 @@ export interface WindowApi {
       contactCount?: number;
       error?: string;
     }>;
+    /**
+     * Get contact source stats - per-source counts (TASK-1991)
+     * @param userId - User ID to get stats for
+     * @returns Per-source contact counts
+     */
+    getSourceStats: (userId: string) => Promise<{
+      success: boolean;
+      stats?: Record<string, number>;
+      error?: string;
+    }>;
   };
 
   // Transaction methods
