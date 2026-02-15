@@ -120,6 +120,8 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
   const [startDateDefault, setStartDateDefault] = useState<"auto" | "manual">("manual");
 
   // Database maintenance state
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'up-to-date' | 'available' | 'error'>('idle');
+  const [updateVersion, setUpdateVersion] = useState<string>('');
   const [reindexing, setReindexing] = useState<boolean>(false);
   const [reindexResult, setReindexResult] = useState<{
     success: boolean;
@@ -351,6 +353,23 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
       // Silently handle - preference will still be applied locally for this session
     }
   };
+
+  const handleCheckForUpdates = useCallback(async (): Promise<void> => {
+    setUpdateStatus('checking');
+    try {
+      const result = await window.api.update.checkForUpdates();
+      if (result?.updateAvailable) {
+        setUpdateStatus('available');
+        setUpdateVersion(result.version || '');
+      } else {
+        setUpdateStatus('up-to-date');
+      }
+    } catch {
+      setUpdateStatus('error');
+    }
+    // Auto-reset after 5 seconds
+    setTimeout(() => setUpdateStatus('idle'), 5000);
+  }, []);
 
   const handleNotificationsToggle = async (): Promise<void> => {
     const newValue = !notificationsEnabled;
@@ -725,10 +744,15 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                     </button>
                   </div>
                   <button
-                    disabled
+                    onClick={handleCheckForUpdates}
+                    disabled={updateStatus === 'checking'}
                     className="mt-3 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Check for Updates
+                    {updateStatus === 'checking' ? 'Checking...' :
+                     updateStatus === 'up-to-date' ? 'Up to date' :
+                     updateStatus === 'available' ? `Update available (v${updateVersion})` :
+                     updateStatus === 'error' ? 'Check failed' :
+                     'Check for Updates'}
                   </button>
                 </div>
 

@@ -1336,6 +1336,12 @@ export interface WindowApi {
     onProgress: (callback: (progress: unknown) => void) => () => void;
     onDownloaded: (callback: (info: unknown) => void) => () => void;
     install: () => void;
+    checkForUpdates: () => Promise<{
+      updateAvailable: boolean;
+      version?: string;
+      currentVersion: string;
+      error?: string;
+    }>;
   };
 
   // Device detection methods (Windows)

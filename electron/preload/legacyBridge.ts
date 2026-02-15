@@ -104,6 +104,8 @@ export const legacyElectronBridge = {
 
   installUpdate: () => updateBridge.install(),
 
+  checkForUpdates: () => updateBridge.checkForUpdates(),
+
   // Outlook integration methods
   outlookInitialize: () => outlookBridge.initialize(),
   outlookAuthenticate: () => outlookBridge.authenticate(),

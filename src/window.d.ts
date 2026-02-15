@@ -133,6 +133,12 @@ interface ElectronAPI {
   onUpdateProgress: (callback: (progress: unknown) => void) => () => void;
   onUpdateDownloaded: (callback: (info: unknown) => void) => () => void;
   installUpdate: () => void;
+  checkForUpdates: () => Promise<{
+    updateAvailable: boolean;
+    version?: string;
+    currentVersion: string;
+    error?: string;
+  }>;
 
   // Outlook Integration
   outlookInitialize: () => Promise<{ success: boolean; error?: string }>;
@@ -341,6 +347,12 @@ interface MainAPI {
     onProgress: (callback: (progress: unknown) => void) => () => void;
     onDownloaded: (callback: (info: unknown) => void) => () => void;
     install: () => void;
+    checkForUpdates: () => Promise<{
+      updateAvailable: boolean;
+      version?: string;
+      currentVersion: string;
+      error?: string;
+    }>;
   };
 
   // Shell operations
