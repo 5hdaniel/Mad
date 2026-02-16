@@ -31,6 +31,7 @@ export interface ContactAssignment {
   contact_email?: string;
   contact_phone?: string;
   contact_company?: string;
+  contact_source?: string;
   role?: string;
   specific_role?: string;
   is_primary?: number;
