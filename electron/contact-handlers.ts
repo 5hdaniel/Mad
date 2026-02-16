@@ -145,7 +145,7 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         const importedContacts =
           await databaseService.getImportedContactsByUserIdAsync(validatedUserId);
 
-        logService.info(
+        logService.debug(
           `[PERF] contacts.getAll: ${Date.now() - t0}ms, ${importedContacts.length} contacts`,
           "Contacts",
         );

@@ -467,8 +467,7 @@ export const registerTransactionHandlers = (
 
         const commCount = details.communications?.length || 0;
         const contactCount = details.contact_assignments?.length || 0;
-        const dataSize = JSON.stringify(details).length;
-        logService.info(`[PERF] getDetails: ${t1 - t0}ms, ${commCount} comms, ${contactCount} contacts, ${Math.round(dataSize / 1024)}KB payload`, "Transactions");
+        logService.debug(`[PERF] getDetails: ${t1 - t0}ms, ${commCount} comms, ${contactCount} contacts`, "Transactions");
 
         return {
           success: true,
@@ -506,6 +505,13 @@ export const registerTransactionHandlers = (
         if (!validatedTransactionId) {
           throw new ValidationError("Transaction ID validation failed", "transactionId");
         }
+        // Validate channelFilter to prevent injection
+        if (channelFilter !== "email" && channelFilter !== "text") {
+          throw new ValidationError(
+            "channelFilter must be 'email' or 'text'",
+            "channelFilter",
+          );
+        }
         const t0 = Date.now();
         const details = await transactionService.getTransactionDetails(
           validatedTransactionId,
@@ -515,7 +521,7 @@ export const registerTransactionHandlers = (
           return { success: false, error: "Transaction not found" };
         }
         const commCount = details.communications?.length || 0;
-        logService.info(
+        logService.debug(
           `[PERF] getCommunications(${channelFilter}): ${Date.now() - t0}ms, ${commCount} comms`,
           "Transactions",
         );
@@ -553,7 +559,7 @@ export const registerTransactionHandlers = (
           return { success: false, error: "Transaction not found" };
         }
         const contactCount = details.contact_assignments?.length || 0;
-        logService.info(`[PERF] getOverview: ${Date.now() - t0}ms, ${contactCount} contacts`, "Transactions");
+        logService.debug(`[PERF] getOverview: ${Date.now() - t0}ms, ${contactCount} contacts`, "Transactions");
 
         return { success: true, transaction: details };
       } catch (error) {
@@ -1832,10 +1838,6 @@ export const registerTransactionHandlers = (
           throw new ValidationError("Transaction not found", "transactionId");
         }
 
-        // Import the function we need
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { createCommunication } = require("./services/db/communicationDbService");
-
         // Group emails by provider
         const gmailIds: string[] = [];
         const outlookIds: string[] = [];
@@ -1913,6 +1915,8 @@ export const registerTransactionHandlers = (
                     communication_type: "email",
                     link_source: "manual",
                     link_confidence: 1.0,
+                    has_attachments: emailRecord.has_attachments || false,
+                    is_false_positive: false,
                   });
                   linkedCount++;
                 } catch (emailError) {
@@ -1992,6 +1996,8 @@ export const registerTransactionHandlers = (
                     communication_type: "email",
                     link_source: "manual",
                     link_confidence: 1.0,
+                    has_attachments: emailRecord.has_attachments || false,
+                    is_false_positive: false,
                   });
                   linkedCount++;
                 } catch (emailError) {
@@ -3588,7 +3594,7 @@ export const registerTransactionHandlers = (
         const emailAttachments = emailResult?.count || 0;
         const totalSizeBytes = (textSizeResult?.total_size || 0) + (emailSizeResult?.total_size || 0);
 
-        logService.info(
+        logService.debug(
           `[PERF] getAttachmentCounts: ${Date.now() - t0}ms, ${textAttachments} text + ${emailAttachments} email`,
           "Transactions",
         );

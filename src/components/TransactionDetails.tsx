@@ -111,6 +111,10 @@ function TransactionDetails({
   // Overview only needs contacts (loaded by loadOverview on mount).
   // Emails tab loads only email comms; Messages tab loads only text comms.
   const loadedChannelsRef = React.useRef<Set<string>>(new Set());
+  // Reset loaded channels when transaction changes
+  useEffect(() => {
+    loadedChannelsRef.current.clear();
+  }, [transaction.id]);
   useEffect(() => {
     if (activeTab === "emails" && !loadedChannelsRef.current.has("email")) {
       loadedChannelsRef.current.add("email");

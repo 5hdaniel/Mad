@@ -343,7 +343,7 @@ export function registerSystemHandlers(): void {
       try {
         // Initialize database - this triggers keychain prompt for db encryption key
         await initializeDatabase();
-        logService.info(
+        logService.debug(
           `[PERF] initializeDatabase: ${Date.now() - t0}ms`,
           "SystemHandlers",
         );
