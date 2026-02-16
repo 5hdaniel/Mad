@@ -143,18 +143,20 @@ describe("OutlookFetchService", () => {
       );
     });
 
-    it("should include bccRecipients in contactEmails filter", async () => {
+    it("should filter by from address when contactEmails provided", async () => {
       mockAxios.mockResolvedValue({ data: { value: [] } });
 
       await outlookFetchService.searchEmails({
         contactEmails: ["user@example.com"],
       });
 
-      // Verify any call includes the bccRecipients filter
+      // Verify the from/emailAddress/address filter is applied (server-side)
+      // Note: any() lambdas on toRecipients/ccRecipients/bccRecipients return 400
+      // from Graph API, so only from direction is filtered server-side
       expect(mockAxios).toHaveBeenCalledWith(
         expect.objectContaining({
           url: expect.stringContaining(
-            "bccRecipients/any(r:r/emailAddress/address eq 'user@example.com')",
+            "from/emailAddress/address eq 'user@example.com'",
           ),
         }),
       );

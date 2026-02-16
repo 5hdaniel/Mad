@@ -99,6 +99,20 @@ export const transactionBridge = {
     ipcRenderer.invoke("transactions:get-details", transactionId),
 
   /**
+   * PERF: Lightweight overview — contacts only, no communications.
+   * Use this for initial load; fetch full details only when needed.
+   */
+  getOverview: (transactionId: string) =>
+    ipcRenderer.invoke("transactions:get-overview", transactionId),
+
+  /**
+   * PERF: Filtered communications — only emails or only texts.
+   * Much faster than getDetails when transaction has many communications.
+   */
+  getCommunications: (transactionId: string, channelFilter: "email" | "text") =>
+    ipcRenderer.invoke("transactions:get-communications", transactionId, channelFilter),
+
+  /**
    * Gets transaction with all associated contacts
    * @param transactionId - Transaction ID to retrieve
    * @returns Transaction with contacts
@@ -274,11 +288,23 @@ export const transactionBridge = {
 
   /**
    * Gets unlinked emails (not attached to any transaction)
+   * Supports server-side search with query, date range, and pagination (TASK-1993)
    * @param userId - User ID to get emails for
+   * @param options - Optional search/filter/pagination parameters
    * @returns List of unlinked emails
    */
-  getUnlinkedEmails: (userId: string) =>
-    ipcRenderer.invoke("transactions:get-unlinked-emails", userId),
+  getUnlinkedEmails: (
+    userId: string,
+    options?: {
+      query?: string;
+      after?: string;
+      before?: string;
+      maxResults?: number;
+      skip?: number;
+      transactionId?: string;
+    },
+  ) =>
+    ipcRenderer.invoke("transactions:get-unlinked-emails", userId, options),
 
   /**
    * Gets distinct contacts with unlinked message counts
@@ -474,6 +500,13 @@ export const transactionBridge = {
    */
   getEmailAttachments: (emailId: string) =>
     ipcRenderer.invoke("emails:get-attachments", emailId),
+
+  /**
+   * Backfill missing email attachments (runs in background after login)
+   * Downloads attachments for emails that have has_attachments=true but no DB records
+   */
+  backfillAttachments: (userId: string) =>
+    ipcRenderer.invoke("emails:backfill-attachments", userId),
 
   /**
    * Open attachment with system viewer

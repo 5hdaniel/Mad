@@ -37,6 +37,8 @@ export interface EmailThreadCardProps {
   onUnlink?: (thread: EmailThread) => void;
   /** Whether the unlink action is in progress */
   isUnlinking?: boolean;
+  /** User's email address — filtered from participant display */
+  userEmail?: string;
 }
 
 /**
@@ -64,6 +66,20 @@ function getAvatarInitial(sender?: string): string {
 }
 
 /**
+ * Filter out the logged-in user's email from a participant list.
+ */
+function filterSelfFromParticipants(participants: string[], userEmail?: string): string[] {
+  if (!userEmail) return participants;
+  const normalizedUser = userEmail.toLowerCase().trim();
+  return participants.filter(p => {
+    // Extract email from "Name <email>" or bare "email"
+    const match = p.match(/<([^>]+)>/);
+    const email = match ? match[1].toLowerCase() : p.toLowerCase().trim();
+    return email !== normalizedUser;
+  });
+}
+
+/**
  * Format participant list for display (show first few, then "+X more")
  */
 function formatParticipants(participants: string[], maxShow: number = 2): string {
@@ -71,14 +87,19 @@ function formatParticipants(participants: string[], maxShow: number = 2): string
 
   // Extract names from email addresses where possible
   const names = participants.map(p => {
+    // Try "Name <email>" format first
     const nameMatch = p.match(/^([^<]+)/);
     if (nameMatch) {
       const name = nameMatch[1].trim();
       if (name && name !== p) return name;
     }
-    // Return email part before @
+    // Extract email prefix and capitalize (e.g. "madison.delvigo" → "Madison Delvigo")
     const atIndex = p.indexOf("@");
-    return atIndex > 0 ? p.substring(0, atIndex) : p;
+    const prefix = atIndex > 0 ? p.substring(0, atIndex) : p;
+    return prefix
+      .split(/[._-]/)
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
   });
 
   // Deduplicate
@@ -112,12 +133,27 @@ export function EmailThreadCard({
   onViewEmail,
   onUnlink,
   isUnlinking = false,
+  userEmail,
 }: EmailThreadCardProps): React.ReactElement {
   const [showModal, setShowModal] = useState(false);
 
   const firstEmail = thread.emails[0];
-  const avatarInitial = getAvatarInitial(firstEmail?.sender);
+  const lastEmail = thread.emails[thread.emails.length - 1];
   const isMultipleEmails = thread.emailCount > 1;
+  const threadHasAttachments = thread.emails.some(e => e.has_attachments);
+
+  // Filter out the user's own email from participants
+  const otherParticipants = filterSelfFromParticipants(thread.participants, userEmail);
+
+  // Avatar: use first non-user participant if sender is the user, otherwise use sender
+  const avatarInitial = otherParticipants.length > 0
+    ? getAvatarInitial(otherParticipants[0])
+    : getAvatarInitial(firstEmail?.sender);
+
+  // Body preview from most recent email, fall back to first
+  const bodyPreview = lastEmail?.body_text?.substring(0, 200)
+    || firstEmail?.body_text?.substring(0, 200)
+    || null;
 
   return (
     <>
@@ -141,19 +177,29 @@ export function EmailThreadCard({
                   {thread.subject || "(No Subject)"}
                 </span>
                 <span className="font-normal text-gray-500 text-sm block truncate">
-                  {formatParticipants(thread.participants)}
+                  {formatParticipants(otherParticipants)}
                   {isMultipleEmails && (
                     <span className="ml-2 text-gray-400">
                       ({thread.emailCount} emails)
                     </span>
                   )}
                 </span>
+                {bodyPreview && (
+                  <span className="text-xs text-gray-400 block truncate mt-0.5">
+                    {bodyPreview.length > 120 ? bodyPreview.substring(0, 120) + "..." : bodyPreview}
+                  </span>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Date range and action buttons */}
+          {/* Attachment icon, date range, and action buttons */}
           <div className="flex items-center gap-4 flex-shrink-0">
+            {threadHasAttachments && (
+              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+              </svg>
+            )}
             <span className="text-sm text-gray-500 hidden sm:inline">
               {formatDateRange(thread.startDate, thread.endDate)}
             </span>
@@ -225,6 +271,7 @@ export function EmailThreadCard({
           thread={thread}
           onClose={() => setShowModal(false)}
           onViewEmail={onViewEmail}
+          userEmail={userEmail}
         />
       )}
     </>

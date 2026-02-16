@@ -1282,6 +1282,8 @@ class TransactionService {
    */
   async getTransactionDetails(
     transactionId: string,
+    channelFilter?: "email" | "text",
+    limit?: number,
   ): Promise<TransactionWithDetails | null> {
     const transaction = await databaseService.getTransactionById(transactionId);
 
@@ -1290,7 +1292,7 @@ class TransactionService {
     }
 
     const communications =
-      await databaseService.getCommunicationsByTransaction(transactionId);
+      await databaseService.getCommunicationsByTransaction(transactionId, channelFilter, limit);
     // Use getTransactionContactsWithRoles to include contact_name, contact_phone, specific_role, etc.
     const contact_assignments =
       await databaseService.getTransactionContactsWithRoles(transactionId);
@@ -1298,6 +1300,30 @@ class TransactionService {
     return {
       ...transaction,
       communications,
+      contact_assignments,
+    };
+  }
+
+  /**
+   * PERF: Lightweight version of getTransactionDetails for overview tab.
+   * Only fetches contact assignments — no communications (emails/messages).
+   * Communications are loaded on-demand when the user navigates to a tab that needs them.
+   */
+  async getTransactionOverview(
+    transactionId: string,
+  ): Promise<TransactionWithDetails | null> {
+    const transaction = await databaseService.getTransactionById(transactionId);
+
+    if (!transaction) {
+      return null;
+    }
+
+    const contact_assignments =
+      await databaseService.getTransactionContactsWithRoles(transactionId);
+
+    return {
+      ...transaction,
+      communications: [],
       contact_assignments,
     };
   }
