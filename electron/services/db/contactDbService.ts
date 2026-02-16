@@ -1441,5 +1441,33 @@ export function searchContactsForSelection(
   }
 }
 
+/**
+ * Get email entries (with row IDs) for a contact — used by edit form
+ */
+export function getContactEmailEntries(contactId: string): { id: string; email: string; is_primary: boolean }[] {
+  const sql = `
+    SELECT id, email, is_primary
+    FROM contact_emails
+    WHERE contact_id = ?
+    ORDER BY is_primary DESC, created_at ASC
+  `;
+  const rows = dbAll<{ id: string; email: string; is_primary: number }>(sql, [contactId]);
+  return rows.map(r => ({ id: r.id, email: r.email, is_primary: r.is_primary === 1 }));
+}
+
+/**
+ * Get phone entries (with row IDs) for a contact — used by edit form
+ */
+export function getContactPhoneEntries(contactId: string): { id: string; phone: string; is_primary: boolean }[] {
+  const sql = `
+    SELECT id, phone_e164 as phone, is_primary
+    FROM contact_phones
+    WHERE contact_id = ?
+    ORDER BY is_primary DESC, created_at ASC
+  `;
+  const rows = dbAll<{ id: string; phone: string; is_primary: number }>(sql, [contactId]);
+  return rows.map(r => ({ id: r.id, phone: r.phone, is_primary: r.is_primary === 1 }));
+}
+
 // Export types for consumers
 export type { ContactWithActivity, TransactionWithRoles };

@@ -8,6 +8,8 @@ export type {
   ExtendedContact,
   TransactionWithRoles,
   ContactFormData,
+  ContactEmailEntry,
+  ContactPhoneEntry,
   SourceBadge,
 } from "../../types/components";
 
