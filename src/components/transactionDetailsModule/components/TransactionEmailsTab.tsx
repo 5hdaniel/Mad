@@ -35,6 +35,10 @@ interface TransactionEmailsTabProps {
   onEmailsChanged?: () => void;
   /** Toast handler for success messages */
   onShowSuccess?: (message: string) => void;
+  /** Audit period start date (ISO string) for email date filtering */
+  auditStartDate?: string;
+  /** Audit period end date (ISO string) for email date filtering */
+  auditEndDate?: string;
 }
 
 export function TransactionEmailsTab({
@@ -51,6 +55,8 @@ export function TransactionEmailsTab({
   propertyAddress,
   onEmailsChanged,
   onShowSuccess,
+  auditStartDate,
+  auditEndDate,
 }: TransactionEmailsTabProps): React.ReactElement {
   const [showAttachModal, setShowAttachModal] = useState(false);
 
@@ -183,6 +189,8 @@ export function TransactionEmailsTab({
             userId={userId}
             transactionId={transactionId}
             propertyAddress={propertyAddress}
+            auditStartDate={auditStartDate}
+            auditEndDate={auditEndDate}
             onClose={() => setShowAttachModal(false)}
             onAttached={handleAttached}
           />

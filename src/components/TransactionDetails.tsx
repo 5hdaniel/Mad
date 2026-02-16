@@ -502,6 +502,8 @@ function TransactionDetails({
               propertyAddress={transaction.property_address}
               onEmailsChanged={loadDetails}
               onShowSuccess={showSuccess}
+              auditStartDate={transaction.started_at ? String(transaction.started_at) : undefined}
+              auditEndDate={transaction.closed_at ? String(transaction.closed_at) : undefined}
             />
           )}
 

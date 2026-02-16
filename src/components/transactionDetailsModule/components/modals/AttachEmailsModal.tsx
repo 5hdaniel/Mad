@@ -2,8 +2,9 @@
  * AttachEmailsModal Component
  * Modal for browsing and attaching unlinked emails to a transaction.
  * BACKLOG-504: Now displays emails grouped by thread for consistency with the Emails tab.
+ * TASK-1993: Server-side search with debounce, date filter, and provider-level load more.
  */
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   processEmailThreads,
 } from "../EmailThreadCard";
@@ -16,6 +17,10 @@ interface AttachEmailsModalProps {
   transactionId: string;
   /** Optional property address for display */
   propertyAddress?: string;
+  /** Audit period start date (ISO string) for date filtering */
+  auditStartDate?: string;
+  /** Audit period end date (ISO string) for date filtering */
+  auditEndDate?: string;
   /** Callback when modal is closed */
   onClose: () => void;
   /** Callback when emails are successfully attached */
@@ -112,60 +117,122 @@ function emailInfoToCommunication(email: EmailInfo): Communication {
 // Pagination constants to prevent UI freeze from rendering too many items
 const THREADS_PER_PAGE = 25;
 const MAX_THREADS = 200;
+const DEFAULT_MAX_RESULTS = 100;
+const LOAD_MORE_INCREMENT = 100;
 
 export function AttachEmailsModal({
   userId,
   transactionId,
   propertyAddress,
+  auditStartDate,
+  auditEndDate,
   onClose,
   onAttached,
 }: AttachEmailsModalProps): React.ReactElement {
   // Emails list state (raw from API)
   const [emails, setEmails] = useState<EmailInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Selection state - tracks selected THREAD IDs
   const [selectedThreadIds, setSelectedThreadIds] = useState<Set<string>>(new Set());
 
-  // UI state
+  // Search state
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [attaching, setAttaching] = useState(false);
 
-  // Pagination state - only show THREADS_PER_PAGE at a time to prevent UI freeze
-  const [displayCount, setDisplayCount] = useState(THREADS_PER_PAGE);
+  // Date filter state - pre-populate from audit period if available
+  const [afterDate, setAfterDate] = useState(
+    auditStartDate ? auditStartDate.split("T")[0] : ""
+  );
+  const [beforeDate, setBeforeDate] = useState(
+    auditEndDate ? auditEndDate.split("T")[0] : ""
+  );
 
-  // Load unlinked emails on mount
+  // Pagination state
+  const [displayCount, setDisplayCount] = useState(THREADS_PER_PAGE);
+  // TODO: cursor-based pagination for efficiency -- currently re-fetches all with higher maxResults
+  const [fetchedMaxResults, setFetchedMaxResults] = useState(DEFAULT_MAX_RESULTS);
+  const [hasMoreFromProvider, setHasMoreFromProvider] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // Track whether this is the initial load (for showing full-screen spinner vs inline)
+  const isInitialLoad = useRef(true);
+
+  // Debounce search query (500ms)
   useEffect(() => {
-    setLoading(true);
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Fetch emails from provider (server-side search)
+  const fetchEmails = useCallback(async (
+    query: string,
+    after: string,
+    before: string,
+    maxResults: number,
+    isLoadMore: boolean = false,
+  ) => {
+    if (isLoadMore) {
+      setLoadingMore(true);
+    } else if (isInitialLoad.current) {
+      setLoading(true);
+    } else {
+      setSearching(true);
+    }
     setError(null);
 
-    const timeoutId = setTimeout(() => {
-      async function loadEmails() {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const result = await (window.api.transactions as any).getUnlinkedEmails(userId) as {
-            success: boolean;
-            emails?: EmailInfo[];
-            error?: string;
-          };
+    try {
+      const options: {
+        query?: string;
+        after?: string;
+        before?: string;
+        maxResults?: number;
+      } = { maxResults };
 
-          if (result.success && result.emails) {
-            setEmails(result.emails);
-          } else {
-            setError(result.error || "Failed to load emails");
-          }
-        } catch (err) {
-          setError(err instanceof Error ? err.message : "Failed to load emails");
-        } finally {
-          setLoading(false);
-        }
+      if (query) options.query = query;
+      if (after) options.after = new Date(after).toISOString();
+      if (before) options.before = new Date(before).toISOString();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (window.api.transactions as any).getUnlinkedEmails(
+        userId,
+        options,
+      ) as {
+        success: boolean;
+        emails?: EmailInfo[];
+        error?: string;
+      };
+
+      if (result.success && result.emails) {
+        setEmails(result.emails);
+        // If fewer results returned than requested, provider has no more
+        setHasMoreFromProvider(result.emails.length >= maxResults);
+      } else {
+        setError(result.error || "Failed to load emails");
       }
-      loadEmails();
-    }, 0);
-
-    return () => clearTimeout(timeoutId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load emails");
+    } finally {
+      setLoading(false);
+      setSearching(false);
+      setLoadingMore(false);
+      isInitialLoad.current = false;
+    }
   }, [userId]);
+
+  // Fetch on mount and when search/filter params change
+  useEffect(() => {
+    // Reset to default maxResults and pagination when search params change
+    setFetchedMaxResults(DEFAULT_MAX_RESULTS);
+    setDisplayCount(THREADS_PER_PAGE);
+    setHasMoreFromProvider(true);
+    fetchEmails(debouncedQuery, afterDate, beforeDate, DEFAULT_MAX_RESULTS);
+  }, [debouncedQuery, afterDate, beforeDate, fetchEmails]);
 
   // Convert emails to threads using the same logic as TransactionEmailsTab
   const emailThreads = useMemo(() => {
@@ -173,54 +240,48 @@ export function AttachEmailsModal({
     return processEmailThreads(communications);
   }, [emails]);
 
-  // Filter threads by search (subject or participant)
-  const filteredThreads = useMemo(() => {
-    if (!searchQuery.trim()) return emailThreads;
-    const query = searchQuery.toLowerCase();
-    return emailThreads.filter((thread) =>
-      thread.subject.toLowerCase().includes(query) ||
-      thread.participants.some(p => p.toLowerCase().includes(query))
-    );
-  }, [emailThreads, searchQuery]);
-
   // Paginated threads - only render displayCount items to prevent UI freeze
   const displayedThreads = useMemo(() => {
-    return filteredThreads.slice(0, displayCount);
-  }, [filteredThreads, displayCount]);
+    return emailThreads.slice(0, displayCount);
+  }, [emailThreads, displayCount]);
 
-  // Check if there are more threads to load
-  const hasMoreThreads = displayCount < filteredThreads.length;
+  // Check if there are more threads to display locally or from provider
+  const hasMoreLocal = displayCount < emailThreads.length;
+  const hasMoreThreads = hasMoreLocal || hasMoreFromProvider;
 
   // Calculate total selected email count
   const selectedEmailCount = useMemo(() => {
     let count = 0;
-    filteredThreads.forEach(thread => {
+    emailThreads.forEach(thread => {
       if (selectedThreadIds.has(thread.id)) {
         count += thread.emails.length;
       }
     });
     return count;
-  }, [filteredThreads, selectedThreadIds]);
+  }, [emailThreads, selectedThreadIds]);
 
   // Get all selected email IDs (for the API call)
   const selectedEmailIds = useMemo(() => {
     const ids: string[] = [];
-    filteredThreads.forEach(thread => {
+    emailThreads.forEach(thread => {
       if (selectedThreadIds.has(thread.id)) {
         thread.emails.forEach(email => ids.push(email.id));
       }
     });
     return ids;
-  }, [filteredThreads, selectedThreadIds]);
+  }, [emailThreads, selectedThreadIds]);
 
-  // Reset display count when search changes (to show first page of results)
-  useEffect(() => {
-    setDisplayCount(THREADS_PER_PAGE);
-  }, [searchQuery]);
-
-  const handleLoadMore = () => {
-    setDisplayCount((prev) => Math.min(prev + THREADS_PER_PAGE, MAX_THREADS));
-  };
+  const handleLoadMore = useCallback(() => {
+    if (hasMoreLocal) {
+      // Show more of the already-fetched results
+      setDisplayCount((prev) => Math.min(prev + THREADS_PER_PAGE, MAX_THREADS));
+    } else if (hasMoreFromProvider) {
+      // All local results are displayed, fetch more from provider
+      const newMaxResults = fetchedMaxResults + LOAD_MORE_INCREMENT;
+      setFetchedMaxResults(newMaxResults);
+      fetchEmails(debouncedQuery, afterDate, beforeDate, newMaxResults, true);
+    }
+  }, [hasMoreLocal, hasMoreFromProvider, fetchedMaxResults, debouncedQuery, afterDate, beforeDate, fetchEmails]);
 
   const handleToggleThread = (threadId: string) => {
     setSelectedThreadIds((prev) => {
@@ -235,10 +296,10 @@ export function AttachEmailsModal({
   };
 
   const handleSelectAll = () => {
-    if (selectedThreadIds.size === filteredThreads.length) {
+    if (selectedThreadIds.size === emailThreads.length) {
       setSelectedThreadIds(new Set());
     } else {
-      setSelectedThreadIds(new Set(filteredThreads.map((t) => t.id)));
+      setSelectedThreadIds(new Set(emailThreads.map((t) => t.id)));
     }
   };
 
@@ -267,6 +328,8 @@ export function AttachEmailsModal({
     }
   };
 
+  const isSearchActive = debouncedQuery || afterDate || beforeDate;
+
   return (
     <div
       className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4"
@@ -294,31 +357,72 @@ export function AttachEmailsModal({
           </button>
         </div>
 
-        {/* Search Bar */}
+        {/* Search Bar + Date Filter */}
         <div className="flex-shrink-0 p-4 border-b border-gray-200">
           <div className="relative">
             <input
               type="text"
-              placeholder="Search by subject or sender..."
+              placeholder="Search emails..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               data-testid="search-input"
             />
-            <svg
-              className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+            {/* Search icon or loading spinner */}
+            {searching ? (
+              <div
+                className="w-5 h-5 absolute left-3 top-2.5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"
+                data-testid="search-spinner"
+              />
+            ) : (
+              <svg
+                className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            )}
           </div>
-          {!loading && filteredThreads.length > 0 && (
+
+          {/* Date Filter */}
+          <div className="flex items-center gap-3 mt-3" data-testid="date-filter">
+            <label className="text-sm text-gray-600 whitespace-nowrap">Date range:</label>
+            <input
+              type="date"
+              value={afterDate}
+              onChange={(e) => setAfterDate(e.target.value)}
+              className="px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+              data-testid="after-date-input"
+            />
+            <span className="text-gray-400">to</span>
+            <input
+              type="date"
+              value={beforeDate}
+              onChange={(e) => setBeforeDate(e.target.value)}
+              className="px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+              data-testid="before-date-input"
+            />
+            {(auditStartDate || auditEndDate) && (
+              <button
+                onClick={() => {
+                  setAfterDate(auditStartDate ? auditStartDate.split("T")[0] : "");
+                  setBeforeDate(auditEndDate ? auditEndDate.split("T")[0] : "");
+                }}
+                className="px-2 py-1 text-xs bg-blue-50 text-blue-600 rounded hover:bg-blue-100"
+                data-testid="audit-period-button"
+              >
+                Audit Period
+              </button>
+            )}
+          </div>
+
+          {!loading && emailThreads.length > 0 && (
             <div className="flex items-center justify-between mt-2">
               <p className="text-sm text-gray-600">
-                {filteredThreads.length} conversation{filteredThreads.length !== 1 ? "s" : ""}
-                {emails.length !== filteredThreads.length && (
+                {emailThreads.length} conversation{emailThreads.length !== 1 ? "s" : ""}
+                {emails.length !== emailThreads.length && (
                   <span className="ml-1">({emails.length} emails total)</span>
                 )}
               </p>
@@ -327,7 +431,7 @@ export function AttachEmailsModal({
                 className="text-sm text-blue-600 hover:text-blue-700 font-medium"
                 data-testid="select-all-button"
               >
-                {selectedThreadIds.size === filteredThreads.length ? "Deselect All" : "Select All"}
+                {selectedThreadIds.size === emailThreads.length ? "Deselect All" : "Select All"}
               </button>
             </div>
           )}
@@ -335,7 +439,7 @@ export function AttachEmailsModal({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4">
-          {/* Loading */}
+          {/* Initial Loading */}
           {loading && (
             <div className="text-center py-12">
               <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
@@ -354,24 +458,24 @@ export function AttachEmailsModal({
           )}
 
           {/* Empty state */}
-          {!loading && !error && filteredThreads.length === 0 && (
+          {!loading && !error && emailThreads.length === 0 && (
             <div className="text-center py-12">
               <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
               <p className="text-gray-600 mb-2">
-                {searchQuery ? "No matching conversations found" : "No unlinked emails available"}
+                {isSearchActive ? "No emails matching your search" : "No unlinked emails available"}
               </p>
               <p className="text-sm text-gray-500">
-                {searchQuery
-                  ? "Try a different search term"
+                {isSearchActive
+                  ? "Try different search terms or adjust the date range"
                   : "All emails are already linked to transactions"}
               </p>
             </div>
           )}
 
           {/* Thread list - using displayedThreads (paginated) to prevent UI freeze */}
-          {!loading && !error && filteredThreads.length > 0 && (
+          {!loading && !error && emailThreads.length > 0 && (
             <div className="space-y-3">
               {displayedThreads.map((thread) => {
                 const isSelected = selectedThreadIds.has(thread.id);
@@ -451,10 +555,20 @@ export function AttachEmailsModal({
                 <div className="text-center pt-4">
                   <button
                     onClick={handleLoadMore}
-                    className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg font-medium transition-all"
+                    disabled={loadingMore}
+                    className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg font-medium transition-all disabled:opacity-50"
                     data-testid="load-more-button"
                   >
-                    Load More ({filteredThreads.length - displayCount} remaining)
+                    {loadingMore ? (
+                      <span className="flex items-center gap-2 justify-center">
+                        <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                        Loading more...
+                      </span>
+                    ) : hasMoreLocal ? (
+                      `Load More (${emailThreads.length - displayCount} remaining)`
+                    ) : (
+                      "Load More from Provider"
+                    )}
                   </button>
                 </div>
               )}

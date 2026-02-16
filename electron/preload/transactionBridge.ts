@@ -274,11 +274,21 @@ export const transactionBridge = {
 
   /**
    * Gets unlinked emails (not attached to any transaction)
+   * Supports server-side search with query, date range, and pagination (TASK-1993)
    * @param userId - User ID to get emails for
+   * @param options - Optional search/filter/pagination parameters
    * @returns List of unlinked emails
    */
-  getUnlinkedEmails: (userId: string) =>
-    ipcRenderer.invoke("transactions:get-unlinked-emails", userId),
+  getUnlinkedEmails: (
+    userId: string,
+    options?: {
+      query?: string;
+      after?: string;
+      before?: string;
+      maxResults?: number;
+    },
+  ) =>
+    ipcRenderer.invoke("transactions:get-unlinked-emails", userId, options),
 
   /**
    * Gets distinct contacts with unlinked message counts

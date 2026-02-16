@@ -1388,19 +1388,41 @@ export const registerTransactionHandlers = (
   );
 
   // Get unlinked emails - fetches directly from email provider (Gmail/Outlook)
+  // Supports server-side search with query, date range, and pagination (TASK-1993)
   ipcMain.handle(
     "transactions:get-unlinked-emails",
     async (
       event: IpcMainInvokeEvent,
       userId: string,
+      options?: {
+        query?: string;
+        after?: string;   // ISO date string
+        before?: string;  // ISO date string
+        maxResults?: number;
+      },
     ): Promise<TransactionResponse> => {
       try {
-        logService.info("Fetching emails from provider", "Transactions", { userId });
+        const effectiveMaxResults = Math.min(options?.maxResults || 100, 500);
+        logService.info("Fetching emails from provider", "Transactions", {
+          userId,
+          query: options?.query || "",
+          after: options?.after || null,
+          before: options?.before || null,
+          maxResults: effectiveMaxResults,
+        });
 
         const validatedUserId = validateUserId(userId);
         if (!validatedUserId) {
           throw new ValidationError("User ID validation failed", "userId");
         }
+
+        // Build search params from options
+        const searchParams = {
+          query: options?.query || "",
+          after: options?.after ? new Date(options.after) : null,
+          before: options?.before ? new Date(options.before) : null,
+          maxResults: effectiveMaxResults,
+        };
 
         // Check which provider the user is authenticated with
         const googleToken = await databaseService.getOAuthToken(validatedUserId, "google", "mailbox");
@@ -1412,6 +1434,7 @@ export const registerTransactionHandlers = (
           sender: string | null;
           sent_at: string | null;
           body_preview?: string | null;
+          email_thread_id?: string | null;
           provider: "gmail" | "outlook";
         }> = [];
 
@@ -1420,16 +1443,14 @@ export const registerTransactionHandlers = (
           try {
             const isReady = await gmailFetchService.initialize(validatedUserId);
             if (isReady) {
-              // Fetch recent emails (last 100)
-              const gmailEmails = await gmailFetchService.searchEmails({
-                maxResults: 100,
-              });
-              emails = gmailEmails.map((email: { id: string; subject: string | null; from: string | null; date: string | null; plainBody: string | null }) => ({
+              const gmailEmails = await gmailFetchService.searchEmails(searchParams);
+              emails = gmailEmails.map((email: { id: string; subject: string | null; from: string | null; date: Date; bodyPlain: string; threadId: string }) => ({
                 id: `gmail:${email.id}`,
                 subject: email.subject,
                 sender: email.from,
                 sent_at: email.date ? new Date(email.date).toISOString() : null,
-                body_preview: email.plainBody?.substring(0, 200) || null,
+                body_preview: email.bodyPlain?.substring(0, 200) || null,
+                email_thread_id: email.threadId || null,
                 provider: "gmail" as const,
               }));
               logService.info(`Fetched ${emails.length} emails from Gmail`, "Transactions");
@@ -1446,16 +1467,14 @@ export const registerTransactionHandlers = (
           try {
             const isReady = await outlookFetchService.initialize(validatedUserId);
             if (isReady) {
-              // Fetch recent emails (last 100)
-              const outlookEmails = await outlookFetchService.searchEmails({
-                maxResults: 100,
-              });
-              emails = outlookEmails.map((email: { id: string; subject: string | null; from: string | null; date: string | null; plainBody: string | null }) => ({
+              const outlookEmails = await outlookFetchService.searchEmails(searchParams);
+              emails = outlookEmails.map((email: { id: string; subject: string | null; from: string | null; date: Date; bodyPlain: string; threadId: string }) => ({
                 id: `outlook:${email.id}`,
                 subject: email.subject,
                 sender: email.from,
                 sent_at: email.date ? new Date(email.date).toISOString() : null,
-                body_preview: email.plainBody?.substring(0, 200) || null,
+                body_preview: email.bodyPlain?.substring(0, 200) || null,
+                email_thread_id: email.threadId || null,
                 provider: "outlook" as const,
               }));
               logService.info(`Fetched ${emails.length} emails from Outlook`, "Transactions");
