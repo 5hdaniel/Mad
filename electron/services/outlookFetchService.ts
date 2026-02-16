@@ -123,6 +123,8 @@ interface ParsedEmail {
   contentHash: string;
   /** ID of the original message if this is a duplicate (TASK-919) */
   duplicateOf?: string;
+  /** Attachment metadata for download */
+  attachments?: { filename: string; mimeType: string; size: number; attachmentId: string }[];
 }
 
 /**
@@ -589,10 +591,26 @@ class OutlookFetchService {
    */
   async getEmailById(messageId: string): Promise<ParsedEmail> {
     try {
-      const data = await this._graphRequest<GraphMessage>(
-        `/me/messages/${messageId}`,
+      // Expand attachments so we get attachment metadata in one call
+      const data = await this._graphRequest<GraphMessage & { attachments?: GraphAttachment[] }>(
+        `/me/messages/${messageId}?$expand=attachments`,
       );
-      return this._parseMessage(data);
+      const parsed = this._parseMessage(data);
+
+      // Map Graph attachments to our format
+      if (data.attachments && data.attachments.length > 0) {
+        parsed.attachments = data.attachments
+          .filter(att => att.name && att.id) // Skip malformed entries
+          .map(att => ({
+            filename: att.name,
+            mimeType: att.contentType || "application/octet-stream",
+            size: att.size || 0,
+            attachmentId: att.id,
+          }));
+        parsed.attachmentCount = parsed.attachments.length;
+      }
+
+      return parsed;
     } catch (error) {
       logService.error(`Failed to get message ${messageId}`, "OutlookFetch", {
         error,

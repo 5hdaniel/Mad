@@ -488,6 +488,13 @@ export const transactionBridge = {
     ipcRenderer.invoke("emails:get-attachments", emailId),
 
   /**
+   * Backfill missing email attachments (runs in background after login)
+   * Downloads attachments for emails that have has_attachments=true but no DB records
+   */
+  backfillAttachments: (userId: string) =>
+    ipcRenderer.invoke("emails:backfill-attachments", userId),
+
+  /**
    * Open attachment with system viewer
    * @param storagePath - Path to attachment file
    * @returns Success/error result

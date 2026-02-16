@@ -12,7 +12,7 @@ import logService from "./services/logService";
 import { autoLinkAllToTransaction } from "./services/messageMatchingService";
 import { autoLinkCommunicationsForContact } from "./services/autoLinkService";
 import { dbAll, dbGet } from "./services/db/core/dbConnection";
-import { createEmail, getEmailByExternalId } from "./services/db/emailDbService";
+import { createEmail, getEmailByExternalId, getEmailById } from "./services/db/emailDbService";
 import { createCommunication } from "./services/db/communicationDbService";
 import submissionService from "./services/submissionService";
 import submissionSyncService from "./services/submissionSyncService";
@@ -81,6 +81,116 @@ export const cleanupTransactionHandlers = (): void => {
   // Stop all submission sync (polling + realtime)
   submissionSyncService.stopAllSync();
 };
+
+/**
+ * Backfill missing email attachments for a user.
+ * Finds emails with has_attachments=true but no records in attachments table,
+ * then downloads them from the provider.
+ */
+async function backfillMissingAttachments(userId: string): Promise<{ processed: number; downloaded: number; errors: number }> {
+  const result = { processed: 0, downloaded: 0, errors: 0 };
+
+  try {
+    const db = databaseService.getRawDatabase();
+    const emailsMissingAttachments = db.prepare(`
+      SELECT e.id, e.external_id, e.source, e.user_id
+      FROM emails e
+      WHERE e.user_id = ?
+        AND e.has_attachments = 1
+        AND e.external_id IS NOT NULL
+        AND e.source IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM attachments a WHERE a.email_id = e.id)
+    `).all(userId) as { id: string; external_id: string; source: string; user_id: string }[];
+
+    if (emailsMissingAttachments.length === 0) return result;
+
+    logService.info(`Backfilling attachments for ${emailsMissingAttachments.length} emails`, "Transactions", { userId });
+
+    // Group by source for efficient provider initialization
+    const outlookEmails = emailsMissingAttachments.filter(e => e.source === "outlook");
+    const gmailEmails = emailsMissingAttachments.filter(e => e.source === "gmail");
+
+    // Backfill Outlook attachments
+    if (outlookEmails.length > 0) {
+      try {
+        const isReady = await outlookFetchService.initialize(userId);
+        if (isReady) {
+          for (const email of outlookEmails) {
+            result.processed++;
+            try {
+              const graphAttachments = await outlookFetchService.getAttachments(email.external_id);
+              if (graphAttachments.length > 0) {
+                await emailAttachmentService.downloadEmailAttachments(
+                  userId, email.id, email.external_id, "outlook",
+                  graphAttachments.map((att: { id: string; name: string; contentType: string; size: number }) => ({
+                    filename: att.name || "attachment",
+                    mimeType: att.contentType || "application/octet-stream",
+                    size: att.size || 0,
+                    attachmentId: att.id,
+                  })),
+                );
+                result.downloaded++;
+              }
+            } catch (err) {
+              result.errors++;
+              logService.warn("Backfill: failed to download Outlook attachment", "Transactions", {
+                emailId: email.id, error: err instanceof Error ? err.message : "Unknown",
+              });
+            }
+          }
+        }
+      } catch (err) {
+        logService.warn("Backfill: Outlook init failed", "Transactions", {
+          error: err instanceof Error ? err.message : "Unknown",
+        });
+      }
+    }
+
+    // Backfill Gmail attachments
+    if (gmailEmails.length > 0) {
+      try {
+        const isReady = await gmailFetchService.initialize(userId);
+        if (isReady) {
+          for (const email of gmailEmails) {
+            result.processed++;
+            try {
+              const fullEmail = await gmailFetchService.getEmailById(email.external_id);
+              if (fullEmail.attachments && fullEmail.attachments.length > 0) {
+                await emailAttachmentService.downloadEmailAttachments(
+                  userId, email.id, email.external_id, "gmail",
+                  fullEmail.attachments.map((att: { filename?: string; name?: string; mimeType?: string; contentType?: string; size?: number; attachmentId?: string; id?: string }) => ({
+                    filename: att.filename || att.name || "attachment",
+                    mimeType: att.mimeType || att.contentType || "application/octet-stream",
+                    size: att.size || 0,
+                    attachmentId: att.attachmentId || att.id || "",
+                  })),
+                );
+                result.downloaded++;
+              }
+            } catch (err) {
+              result.errors++;
+              logService.warn("Backfill: failed to download Gmail attachment", "Transactions", {
+                emailId: email.id, error: err instanceof Error ? err.message : "Unknown",
+              });
+            }
+          }
+        }
+      } catch (err) {
+        logService.warn("Backfill: Gmail init failed", "Transactions", {
+          error: err instanceof Error ? err.message : "Unknown",
+        });
+      }
+    }
+
+    logService.info(`Attachment backfill complete`, "Transactions", result);
+  } catch (err) {
+    logService.error("Attachment backfill failed", "Transactions", {
+      error: err instanceof Error ? err.message : "Unknown",
+    });
+  }
+
+  return result;
+}
 
 /**
  * Register all transaction-related IPC handlers
@@ -2814,9 +2924,9 @@ export const registerTransactionHandlers = (
 
             for (const email of dedupedEmails) {
               try {
-                const existingEmail = await getEmailByExternalId(userId, email.id);
-                if (!existingEmail) {
-                  await createEmail({
+                let emailRecord = await getEmailByExternalId(userId, email.id);
+                if (!emailRecord) {
+                  emailRecord = await createEmail({
                     user_id: userId,
                     external_id: email.id,
                     source: "outlook",
@@ -2832,6 +2942,32 @@ export const registerTransactionHandlers = (
                     attachment_count: email.attachmentCount || 0,
                   });
                   emailsStored++;
+
+                  // Download attachments if present (fetch metadata from Graph API)
+                  if (email.hasAttachments && emailRecord) {
+                    try {
+                      const graphAttachments = await outlookFetchService.getAttachments(email.id);
+                      if (graphAttachments.length > 0) {
+                        await emailAttachmentService.downloadEmailAttachments(
+                          userId,
+                          emailRecord.id,
+                          email.id,
+                          "outlook",
+                          graphAttachments.map((att: { id: string; name: string; contentType: string; size: number }) => ({
+                            filename: att.name || "attachment",
+                            mimeType: att.contentType || "application/octet-stream",
+                            size: att.size || 0,
+                            attachmentId: att.id,
+                          })),
+                        );
+                      }
+                    } catch (attError) {
+                      logService.warn("Failed to download Outlook attachments during sync", "Transactions", {
+                        emailId: emailRecord.id,
+                        error: attError instanceof Error ? attError.message : "Unknown",
+                      });
+                    }
+                  }
                 }
               } catch (emailError) {
                 logService.warn("Failed to store Outlook email", "Transactions", {
@@ -2864,9 +3000,9 @@ export const registerTransactionHandlers = (
 
             for (const email of gmailEmails) {
               try {
-                const existingEmail = await getEmailByExternalId(userId, email.id);
-                if (!existingEmail) {
-                  await createEmail({
+                let emailRecord = await getEmailByExternalId(userId, email.id);
+                if (!emailRecord) {
+                  emailRecord = await createEmail({
                     user_id: userId,
                     external_id: email.id,
                     source: "gmail",
@@ -2882,6 +3018,29 @@ export const registerTransactionHandlers = (
                     attachment_count: email.attachmentCount || 0,
                   });
                   emailsStored++;
+
+                  // Download attachments if present (Gmail searchEmails includes attachment metadata)
+                  if (email.hasAttachments && email.attachments && email.attachments.length > 0 && emailRecord) {
+                    try {
+                      await emailAttachmentService.downloadEmailAttachments(
+                        userId,
+                        emailRecord.id,
+                        email.id,
+                        "gmail",
+                        email.attachments.map((att: { filename?: string; name?: string; mimeType?: string; contentType?: string; size?: number; attachmentId?: string; id?: string }) => ({
+                          filename: att.filename || att.name || "attachment",
+                          mimeType: att.mimeType || att.contentType || "application/octet-stream",
+                          size: att.size || 0,
+                          attachmentId: att.attachmentId || att.id || "",
+                        })),
+                      );
+                    } catch (attError) {
+                      logService.warn("Failed to download Gmail attachments during sync", "Transactions", {
+                        emailId: emailRecord.id,
+                        error: attError instanceof Error ? attError.message : "Unknown",
+                      });
+                    }
+                  }
                 }
               } catch (emailError) {
                 logService.warn("Failed to store Gmail email", "Transactions", {
@@ -2927,6 +3086,9 @@ export const registerTransactionHandlers = (
           }
         }
 
+        // Step 3: Backfill any missing attachments for previously-synced emails
+        const backfillResult = await backfillMissingAttachments(userId);
+
         logService.info("Sync and fetch emails complete", "Transactions", {
           transactionId: validatedTransactionId,
           contactEmails,
@@ -2934,6 +3096,7 @@ export const registerTransactionHandlers = (
           totalMessagesLinked,
           totalAlreadyLinked,
           totalErrors,
+          attachmentsBackfilled: backfillResult.downloaded,
         });
 
         return {
@@ -3054,7 +3217,7 @@ export const registerTransactionHandlers = (
     },
   );
 
-  // TASK-1776: Get attachments for a specific email
+  // TASK-1776: Get attachments for a specific email (with on-demand download)
   ipcMain.handle(
     "emails:get-attachments",
     async (
@@ -3066,7 +3229,62 @@ export const registerTransactionHandlers = (
           throw new ValidationError("Email ID is required", "emailId");
         }
 
-        const attachments = await emailAttachmentService.getAttachmentsForEmail(emailId);
+        let attachments = await emailAttachmentService.getAttachmentsForEmail(emailId);
+
+        // On-demand download: if DB has no records but email says it has attachments,
+        // fetch them now from the provider (handles emails synced before attachment fix)
+        if (attachments.length === 0) {
+          const email = await getEmailById(emailId);
+          if (email && email.has_attachments && email.external_id && email.source) {
+            logService.info("On-demand attachment download triggered", "Transactions", {
+              emailId, source: email.source, externalId: email.external_id,
+            });
+
+            try {
+              if (email.source === "outlook") {
+                const isReady = await outlookFetchService.initialize(email.user_id);
+                if (isReady) {
+                  const graphAttachments = await outlookFetchService.getAttachments(email.external_id);
+                  if (graphAttachments.length > 0) {
+                    await emailAttachmentService.downloadEmailAttachments(
+                      email.user_id, emailId, email.external_id, "outlook",
+                      graphAttachments.map((att: { id: string; name: string; contentType: string; size: number }) => ({
+                        filename: att.name || "attachment",
+                        mimeType: att.contentType || "application/octet-stream",
+                        size: att.size || 0,
+                        attachmentId: att.id,
+                      })),
+                    );
+                  }
+                }
+              } else if (email.source === "gmail") {
+                const isReady = await gmailFetchService.initialize(email.user_id);
+                if (isReady) {
+                  const fullEmail = await gmailFetchService.getEmailById(email.external_id);
+                  if (fullEmail.attachments && fullEmail.attachments.length > 0) {
+                    await emailAttachmentService.downloadEmailAttachments(
+                      email.user_id, emailId, email.external_id, "gmail",
+                      fullEmail.attachments.map((att: { filename?: string; name?: string; mimeType?: string; contentType?: string; size?: number; attachmentId?: string; id?: string }) => ({
+                        filename: att.filename || att.name || "attachment",
+                        mimeType: att.mimeType || att.contentType || "application/octet-stream",
+                        size: att.size || 0,
+                        attachmentId: att.attachmentId || att.id || "",
+                      })),
+                    );
+                  }
+                }
+              }
+
+              // Re-fetch from DB after download
+              attachments = await emailAttachmentService.getAttachmentsForEmail(emailId);
+            } catch (downloadError) {
+              logService.warn("On-demand attachment download failed", "Transactions", {
+                emailId,
+                error: downloadError instanceof Error ? downloadError.message : "Unknown",
+              });
+            }
+          }
+        }
 
         return {
           success: true,
@@ -3405,6 +3623,36 @@ export const registerTransactionHandlers = (
           success: false,
           error: error instanceof Error ? error.message : "Failed to get earliest communication date",
         };
+      }
+    },
+  );
+
+  // Backfill missing email attachments (runs in background after login)
+  ipcMain.handle(
+    "emails:backfill-attachments",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        if (!userId || typeof userId !== "string") {
+          return { success: true }; // Silently skip if no user
+        }
+        const validatedUserId = validateUserId(userId);
+        if (!validatedUserId) {
+          return { success: true };
+        }
+
+        const result = await backfillMissingAttachments(validatedUserId);
+        return {
+          success: true,
+          ...result,
+        };
+      } catch (error) {
+        logService.warn("Attachment backfill handler failed", "Transactions", {
+          error: error instanceof Error ? error.message : "Unknown",
+        });
+        return { success: true }; // Don't fail the app
       }
     },
   );
