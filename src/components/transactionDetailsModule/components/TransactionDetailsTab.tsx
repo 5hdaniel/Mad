@@ -96,7 +96,7 @@ export function TransactionDetailsTab({
       email: assignment.contact_email || "",
       phone: assignment.contact_phone || "",
       company: assignment.contact_company || "",
-      source: "manual",
+      source: (assignment.contact_source as ExtendedContact["source"]) || "manual",
       user_id: transaction.user_id,
       created_at: "",
       updated_at: "",
