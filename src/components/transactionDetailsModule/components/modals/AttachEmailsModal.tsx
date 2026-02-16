@@ -8,7 +8,10 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import {
   processEmailThreads,
 } from "../EmailThreadCard";
+import type { EmailThread } from "../EmailThreadCard";
+import { EmailThreadViewModal } from "./EmailThreadViewModal";
 import type { Communication } from "../../types";
+import { useAuth } from "../../../../contexts";
 
 interface AttachEmailsModalProps {
   /** User ID to fetch unlinked emails for */
@@ -34,6 +37,7 @@ interface EmailInfo {
   sent_at: string | null;
   body_preview?: string | null;
   email_thread_id?: string | null;
+  has_attachments?: boolean;
 }
 
 /**
@@ -50,6 +54,19 @@ function formatDateRange(startDate: Date, endDate: Date): string {
 }
 
 /**
+ * Filter out the logged-in user's email from a participant list.
+ */
+function filterSelfFromParticipants(participants: string[], userEmail?: string): string[] {
+  if (!userEmail) return participants;
+  const normalizedUser = userEmail.toLowerCase().trim();
+  return participants.filter(p => {
+    const match = p.match(/<([^>]+)>/);
+    const email = match ? match[1].toLowerCase() : p.toLowerCase().trim();
+    return email !== normalizedUser;
+  });
+}
+
+/**
  * Format participant list for display (show first few, then "+X more")
  */
 function formatParticipants(participants: string[], maxShow: number = 2): string {
@@ -57,14 +74,19 @@ function formatParticipants(participants: string[], maxShow: number = 2): string
 
   // Extract names from email addresses where possible
   const names = participants.map(p => {
+    // Try "Name <email>" format first
     const nameMatch = p.match(/^([^<]+)/);
     if (nameMatch) {
       const name = nameMatch[1].trim();
       if (name && name !== p) return name;
     }
-    // Return email part before @
+    // Extract email prefix and capitalize (e.g. "madison.delvigo" → "Madison Delvigo")
     const atIndex = p.indexOf("@");
-    return atIndex > 0 ? p.substring(0, atIndex) : p;
+    const prefix = atIndex > 0 ? p.substring(0, atIndex) : p;
+    return prefix
+      .split(/[._-]/)
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
   });
 
   // Deduplicate
@@ -113,6 +135,9 @@ function emailInfoToCommunication(email: EmailInfo): Communication & { body_prev
     communication_type: "email",
     email_thread_id: email.email_thread_id || undefined,
     body_preview: email.body_preview,
+    // Map body_preview to body_text so EmailThreadViewModal can display content
+    body_text: email.body_preview || undefined,
+    has_attachments: email.has_attachments || false,
   } as Communication & { body_preview?: string | null };
 }
 
@@ -131,6 +156,8 @@ export function AttachEmailsModal({
   onClose,
   onAttached,
 }: AttachEmailsModalProps): React.ReactElement {
+  const { currentUser } = useAuth();
+
   // Emails list state (raw from API)
   const [emails, setEmails] = useState<EmailInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -139,6 +166,9 @@ export function AttachEmailsModal({
 
   // Selection state - tracks selected THREAD IDs
   const [selectedThreadIds, setSelectedThreadIds] = useState<Set<string>>(new Set());
+
+  // View thread state
+  const [viewingThread, setViewingThread] = useState<EmailThread | null>(null);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -155,13 +185,14 @@ export function AttachEmailsModal({
 
   // Pagination state
   const [displayCount, setDisplayCount] = useState(THREADS_PER_PAGE);
-  // TODO: cursor-based pagination for efficiency -- currently re-fetches all with higher maxResults
-  const [fetchedMaxResults, setFetchedMaxResults] = useState(DEFAULT_MAX_RESULTS);
   const [hasMoreFromProvider, setHasMoreFromProvider] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
   // Track whether this is the initial load (for showing full-screen spinner vs inline)
   const isInitialLoad = useRef(true);
+
+  // Infinite scroll sentinel ref
+  const scrollSentinelRef = useRef<HTMLDivElement>(null);
 
   // Debounce search query (500ms)
   useEffect(() => {
@@ -178,6 +209,7 @@ export function AttachEmailsModal({
     before: string,
     maxResults: number,
     isLoadMore: boolean = false,
+    skip: number = 0,
   ) => {
     if (isLoadMore) {
       setLoadingMore(true);
@@ -194,11 +226,15 @@ export function AttachEmailsModal({
         after?: string;
         before?: string;
         maxResults?: number;
+        skip?: number;
+        transactionId?: string;
       } = { maxResults };
 
       if (query) options.query = query;
       if (after) options.after = new Date(after).toISOString();
       if (before) options.before = new Date(before).toISOString();
+      if (skip > 0) options.skip = skip;
+      options.transactionId = transactionId;
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (window.api.transactions as any).getUnlinkedEmails(
@@ -211,7 +247,14 @@ export function AttachEmailsModal({
       };
 
       if (result.success && result.emails) {
-        setEmails(result.emails);
+        if (isLoadMore) {
+          // BACKLOG-711: Append new emails to existing list
+          setEmails(prev => [...prev, ...result.emails!]);
+          // Show more threads to make newly appended emails visible
+          setDisplayCount(prev => prev + THREADS_PER_PAGE);
+        } else {
+          setEmails(result.emails);
+        }
         // If fewer results returned than requested, provider has no more
         setHasMoreFromProvider(result.emails.length >= maxResults);
       } else {
@@ -230,7 +273,6 @@ export function AttachEmailsModal({
   // Fetch on mount and when search/filter params change
   useEffect(() => {
     // Reset to default maxResults and pagination when search params change
-    setFetchedMaxResults(DEFAULT_MAX_RESULTS);
     setDisplayCount(THREADS_PER_PAGE);
     setHasMoreFromProvider(true);
     fetchEmails(debouncedQuery, afterDate, beforeDate, DEFAULT_MAX_RESULTS);
@@ -278,12 +320,28 @@ export function AttachEmailsModal({
       // Show more of the already-fetched results
       setDisplayCount((prev) => Math.min(prev + THREADS_PER_PAGE, MAX_THREADS));
     } else if (hasMoreFromProvider) {
-      // All local results are displayed, fetch more from provider
-      const newMaxResults = fetchedMaxResults + LOAD_MORE_INCREMENT;
-      setFetchedMaxResults(newMaxResults);
-      fetchEmails(debouncedQuery, afterDate, beforeDate, newMaxResults, true);
+      // BACKLOG-711: Use skip-based pagination — only fetch the NEXT batch, not everything again
+      fetchEmails(debouncedQuery, afterDate, beforeDate, LOAD_MORE_INCREMENT, true, emails.length);
     }
-  }, [hasMoreLocal, hasMoreFromProvider, fetchedMaxResults, debouncedQuery, afterDate, beforeDate, fetchEmails]);
+  }, [hasMoreLocal, hasMoreFromProvider, emails.length, debouncedQuery, afterDate, beforeDate, fetchEmails]);
+
+  // Infinite scroll: trigger handleLoadMore when sentinel enters viewport
+  useEffect(() => {
+    const sentinel = scrollSentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !loadingMore && !loading) {
+          handleLoadMore();
+        }
+      },
+      { threshold: 0.1 },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [handleLoadMore, loadingMore, loading]);
 
   const handleToggleThread = (threadId: string) => {
     setSelectedThreadIds((prev) => {
@@ -333,6 +391,7 @@ export function AttachEmailsModal({
   const isSearchActive = debouncedQuery || afterDate || beforeDate;
 
   return (
+    <>
     <div
       className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4"
       data-testid="attach-emails-modal"
@@ -364,7 +423,7 @@ export function AttachEmailsModal({
           <div className="relative">
             <input
               type="text"
-              placeholder="Search emails..."
+              placeholder="Search by name, email, subject, or content..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -482,10 +541,17 @@ export function AttachEmailsModal({
               {displayedThreads.map((thread) => {
                 const isSelected = selectedThreadIds.has(thread.id);
                 const firstEmail = thread.emails[0];
-                const avatarInitial = getAvatarInitial(firstEmail?.sender);
                 const isMultipleEmails = thread.emailCount > 1;
+                const threadHasAttachments = thread.emails.some(e => e.has_attachments);
+                // Filter out the user's own email from participants
+                const otherParticipants = filterSelfFromParticipants(thread.participants, currentUser?.email);
+                // Avatar: use first non-user participant, otherwise fallback to sender
+                const avatarInitial = otherParticipants.length > 0
+                  ? getAvatarInitial(otherParticipants[0])
+                  : getAvatarInitial(firstEmail?.sender);
                 // Get body preview from the most recent email in the thread
                 const lastEmail = thread.emails[thread.emails.length - 1];
+                // TASK-1998: body preview from most recent email, fall back to first, then subject
                 const bodyPreview = (lastEmail as Communication & { body_preview?: string | null })?.body_preview
                   || (firstEmail as Communication & { body_preview?: string | null })?.body_preview
                   || null;
@@ -536,7 +602,7 @@ export function AttachEmailsModal({
                             {thread.subject || "(No Subject)"}
                           </span>
                           <span className="font-normal text-gray-500 text-sm block truncate">
-                            {formatParticipants(thread.participants)}
+                            {formatParticipants(otherParticipants)}
                             {isMultipleEmails && (
                               <span className="ml-2 text-gray-400">
                                 ({thread.emailCount} emails)
@@ -551,37 +617,45 @@ export function AttachEmailsModal({
                         </div>
                       </div>
 
-                      {/* Date range */}
+                      {/* Attachment icon, date range, and View button */}
                       <div className="flex items-center gap-4 flex-shrink-0 mt-0.5">
+                        {threadHasAttachments && (
+                          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                          </svg>
+                        )}
                         <span className="text-sm text-gray-500 hidden sm:inline">
                           {formatDateRange(thread.startDate, thread.endDate)}
                         </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setViewingThread(thread);
+                          }}
+                          className="text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors whitespace-nowrap"
+                          data-testid="view-thread-button"
+                        >
+                          {isMultipleEmails ? "View Thread \u2192" : "View"}
+                        </button>
                       </div>
                     </div>
                   </div>
                 );
               })}
 
-              {/* Load More button */}
+              {/* Infinite scroll sentinel */}
               {hasMoreThreads && (
-                <div className="text-center pt-4">
-                  <button
-                    onClick={handleLoadMore}
-                    disabled={loadingMore}
-                    className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg font-medium transition-all disabled:opacity-50"
-                    data-testid="load-more-button"
-                  >
-                    {loadingMore ? (
-                      <span className="flex items-center gap-2 justify-center">
-                        <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                        Loading more...
-                      </span>
-                    ) : hasMoreLocal ? (
-                      `Load More (${emailThreads.length - displayCount} remaining)`
-                    ) : (
-                      "Load More from Provider"
-                    )}
-                  </button>
+                <div
+                  ref={scrollSentinelRef}
+                  className="text-center py-4"
+                  data-testid="scroll-sentinel"
+                >
+                  {loadingMore && (
+                    <span className="flex items-center gap-2 justify-center text-sm text-gray-500">
+                      <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                      Loading more...
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -630,5 +704,15 @@ export function AttachEmailsModal({
         </div>
       </div>
     </div>
+
+    {/* Thread view modal */}
+    {viewingThread && (
+      <EmailThreadViewModal
+        thread={viewingThread}
+        onClose={() => setViewingThread(null)}
+        userEmail={currentUser?.email}
+      />
+    )}
+    </>
   );
 }

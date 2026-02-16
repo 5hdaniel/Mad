@@ -11,7 +11,7 @@ import auditService from "./services/auditService";
 import logService from "./services/logService";
 import { autoLinkAllToTransaction } from "./services/messageMatchingService";
 import { autoLinkCommunicationsForContact } from "./services/autoLinkService";
-import { dbAll } from "./services/db/core/dbConnection";
+import { dbAll, dbGet } from "./services/db/core/dbConnection";
 import { createEmail, getEmailByExternalId } from "./services/db/emailDbService";
 import { createCommunication } from "./services/db/communicationDbService";
 import submissionService from "./services/submissionService";
@@ -1388,7 +1388,8 @@ export const registerTransactionHandlers = (
   );
 
   // Get unlinked emails - fetches directly from email provider (Gmail/Outlook)
-  // Supports server-side search with query, date range, and pagination (TASK-1993)
+  // Supports server-side search with query, date range, pagination, and contact filtering
+  // TASK-1993: Server-side search   TASK-1998: body preview fix   BACKLOG-712: contact email filter
   ipcMain.handle(
     "transactions:get-unlinked-emails",
     async (
@@ -1399,6 +1400,8 @@ export const registerTransactionHandlers = (
         after?: string;   // ISO date string
         before?: string;  // ISO date string
         maxResults?: number;
+        skip?: number;    // BACKLOG-711: offset for pagination (skip already-fetched results)
+        transactionId?: string; // BACKLOG-712: filter by transaction contact emails
       },
     ): Promise<TransactionResponse> => {
       try {
@@ -1409,6 +1412,7 @@ export const registerTransactionHandlers = (
           after: options?.after || null,
           before: options?.before || null,
           maxResults: effectiveMaxResults,
+          transactionId: options?.transactionId || null,
         });
 
         const validatedUserId = validateUserId(userId);
@@ -1416,13 +1420,74 @@ export const registerTransactionHandlers = (
           throw new ValidationError("User ID validation failed", "userId");
         }
 
+        // BACKLOG-712: Look up contact emails for the transaction
+        let contactEmails: string[] = [];
+        if (options?.transactionId) {
+          const validatedTxnId = validateTransactionId(options.transactionId);
+          if (validatedTxnId) {
+            try {
+              const contactEmailRows = dbAll<{ email: string }>(
+                `SELECT DISTINCT LOWER(ce.email) as email
+                 FROM transaction_contacts tc
+                 JOIN contact_emails ce ON tc.contact_id = ce.contact_id
+                 WHERE tc.transaction_id = ?`,
+                [validatedTxnId],
+              );
+              contactEmails = contactEmailRows.map(r => r.email);
+              logService.info(`Found ${contactEmails.length} contact emails for transaction`, "Transactions", {
+                transactionId: validatedTxnId,
+              });
+            } catch (contactErr) {
+              logService.warn("Failed to look up contact emails, proceeding without filter", "Transactions", {
+                error: contactErr instanceof Error ? contactErr.message : "Unknown",
+              });
+            }
+          }
+        }
+
         // Build search params from options
-        const searchParams = {
+        const searchParams: {
+          query: string;
+          after: Date | null;
+          before: Date | null;
+          maxResults: number;
+          skip?: number;
+          contactEmails?: string[];
+        } = {
           query: options?.query || "",
           after: options?.after ? new Date(options.after) : null,
           before: options?.before ? new Date(options.before) : null,
           maxResults: effectiveMaxResults,
+          skip: options?.skip || 0,
         };
+
+        // When user is actively searching, resolve query against contacts DB
+        // to enable searching by contact name, email, company, or title.
+        // Note: we use a separate list (not the transaction contactEmails) so that
+        // searching "agustin" only returns Agustin's emails, not all transaction contacts.
+        if (options?.query?.trim()) {
+          const queryLower = options.query.toLowerCase().trim();
+          const resolvedEmails = dbAll<{ email: string }>(
+            `SELECT DISTINCT LOWER(ce.email) as email
+             FROM contacts c
+             JOIN contact_emails ce ON c.id = ce.contact_id
+             WHERE c.user_id = ?
+               AND (LOWER(c.display_name) LIKE ? OR LOWER(ce.email) LIKE ?
+                    OR LOWER(c.company) LIKE ? OR LOWER(c.title) LIKE ?)`,
+            [validatedUserId, `%${queryLower}%`, `%${queryLower}%`, `%${queryLower}%`, `%${queryLower}%`],
+          );
+
+          if (resolvedEmails.length > 0) {
+            // Use ONLY the resolved emails as filter (not the transaction contact list)
+            searchParams.contactEmails = resolvedEmails.map(r => r.email);
+            // Clear the text query to avoid AND-ing contact filter with text search
+            searchParams.query = "";
+            logService.info(`Resolved query "${options.query}" to ${resolvedEmails.length} contact emails`, "Transactions", {
+              resolvedEmails: resolvedEmails.map(r => r.email),
+            });
+          }
+          // If no contacts matched, the text query passes through as-is for subject/body search
+        }
 
         // Check which provider the user is authenticated with
         const googleToken = await databaseService.getOAuthToken(validatedUserId, "google", "mailbox");
@@ -1435,6 +1500,7 @@ export const registerTransactionHandlers = (
           sent_at: string | null;
           body_preview?: string | null;
           email_thread_id?: string | null;
+          has_attachments?: boolean;
           provider: "gmail" | "outlook";
         }> = [];
 
@@ -1444,13 +1510,15 @@ export const registerTransactionHandlers = (
             const isReady = await gmailFetchService.initialize(validatedUserId);
             if (isReady) {
               const gmailEmails = await gmailFetchService.searchEmails(searchParams);
-              emails = gmailEmails.map((email: { id: string; subject: string | null; from: string | null; date: Date; bodyPlain: string; threadId: string }) => ({
+              emails = gmailEmails.map((email: { id: string; subject: string | null; from: string | null; date: Date; bodyPlain: string; snippet: string; threadId: string; hasAttachments: boolean }) => ({
                 id: `gmail:${email.id}`,
                 subject: email.subject,
                 sender: email.from,
                 sent_at: email.date ? new Date(email.date).toISOString() : null,
-                body_preview: email.bodyPlain?.substring(0, 200) || null,
+                // TASK-1998: prefer snippet (always populated by Gmail API), fall back to bodyPlain
+                body_preview: (email.snippet || email.bodyPlain?.substring(0, 200)) || null,
                 email_thread_id: email.threadId || null,
+                has_attachments: email.hasAttachments || false,
                 provider: "gmail" as const,
               }));
               logService.info(`Fetched ${emails.length} emails from Gmail`, "Transactions");
@@ -1468,16 +1536,40 @@ export const registerTransactionHandlers = (
             const isReady = await outlookFetchService.initialize(validatedUserId);
             if (isReady) {
               const outlookEmails = await outlookFetchService.searchEmails(searchParams);
-              emails = outlookEmails.map((email: { id: string; subject: string | null; from: string | null; date: Date; bodyPlain: string; threadId: string }) => ({
+
+              // Also search sent items for emails TO contacts (bidirectional)
+              // Use searchParams.contactEmails (resolved from query) not the full transaction contactEmails
+              let sentEmails: typeof outlookEmails = [];
+              const sentSearchEmails = searchParams.contactEmails || [];
+              if (sentSearchEmails.length > 0) {
+                try {
+                  sentEmails = await outlookFetchService.searchSentEmailsToContacts(
+                    sentSearchEmails, Math.min(50, effectiveMaxResults),
+                  );
+                } catch { /* logged inside the method */ }
+              }
+
+              // Merge and dedup
+              const allOutlook = [...outlookEmails, ...sentEmails];
+              const seenIds = new Set<string>();
+              const dedupedOutlook = allOutlook.filter(e => {
+                if (seenIds.has(e.id)) return false;
+                seenIds.add(e.id);
+                return true;
+              });
+
+              emails = dedupedOutlook.map((email: { id: string; subject: string | null; from: string | null; date: Date; bodyPlain: string; snippet: string; threadId: string; hasAttachments: boolean }) => ({
                 id: `outlook:${email.id}`,
                 subject: email.subject,
                 sender: email.from,
                 sent_at: email.date ? new Date(email.date).toISOString() : null,
-                body_preview: email.bodyPlain?.substring(0, 200) || null,
+                // TASK-1998: prefer snippet (bodyPreview from Graph API), fall back to bodyPlain
+                body_preview: (email.snippet || email.bodyPlain?.substring(0, 200)) || null,
                 email_thread_id: email.threadId || null,
+                has_attachments: email.hasAttachments || false,
                 provider: "outlook" as const,
               }));
-              logService.info(`Fetched ${emails.length} emails from Outlook`, "Transactions");
+              logService.info(`Fetched ${outlookEmails.length} inbox + ${sentEmails.length} sent = ${emails.length} unique from Outlook`, "Transactions");
             }
           } catch (outlookError) {
             logService.warn("Failed to fetch from Outlook", "Transactions", {
@@ -2630,12 +2722,19 @@ export const registerTransactionHandlers = (
             "SELECT email FROM contact_emails WHERE contact_id = ?",
             [assignment.contact_id]
           );
+          logService.info(`Contact ${assignment.contact_id}: found ${emails.length} emails in contact_emails`, "Transactions", {
+            emails: emails.map(e => e.email),
+          });
           for (const e of emails) {
             if (e.email && !contactEmails.includes(e.email.toLowerCase())) {
               contactEmails.push(e.email.toLowerCase());
             }
           }
         }
+
+        logService.info(`Total contact emails for sync: ${contactEmails.length}`, "Transactions", {
+          contactEmails,
+        });
 
         if (contactEmails.length === 0) {
           // No contact emails — still run auto-link for phone-based message matching
@@ -2672,199 +2771,134 @@ export const registerTransactionHandlers = (
           };
         }
 
-        // Determine date range from transaction (or default to 6 months)
-        const startDate = transactionDetails.started_at
-          ? new Date(transactionDetails.started_at)
-          : new Date(Date.now() - 6 * 30 * 24 * 60 * 60 * 1000); // 6 months ago
-        const endDate = transactionDetails.closed_at
-          ? new Date(transactionDetails.closed_at)
-          : new Date();
-        // Add buffer days after closing
-        endDate.setDate(endDate.getDate() + 30);
-
-        // Build search query for contact emails
-        // Gmail: "from:email1 OR from:email2 OR to:email1 OR to:email2"
-        // Outlook: Similar but uses $filter
-        const gmailQuery = contactEmails
-          .map((email) => `from:${email} OR to:${email}`)
-          .join(" OR ");
-
-        logService.info("Fetching emails from provider", "Transactions", {
-          contactEmailCount: contactEmails.length,
-          gmailQuery: gmailQuery.substring(0, 100) + "...",
-          dateRange: { start: startDate.toISOString(), end: endDate.toISOString() },
+        // Diagnostic: how many emails are in the local DB for this user?
+        const emailCount = dbGet<{ count: number }>(
+          "SELECT COUNT(*) as count FROM emails WHERE user_id = ?",
+          [userId]
+        );
+        logService.info(`Local emails table has ${emailCount?.count ?? 0} emails for user`, "Transactions", {
+          userId,
         });
 
+        // Step 1: Fetch emails from provider and store locally
+        // The auto-link searches the local emails table, so we need to ensure
+        // relevant emails are downloaded first.
         let emailsFetched = 0;
         let emailsStored = 0;
-        let providerUsed: "gmail" | "outlook" | null = null;
 
-        // createCommunication and getCommunications are imported at the top
+        // Try Outlook
+        try {
+          const outlookReady = await outlookFetchService.initialize(userId);
+          if (outlookReady) {
+            const outlookEmails = await outlookFetchService.searchEmails({
+              contactEmails,
+              maxResults: 200,
+            });
+            // Also search sent items for emails TO the contact
+            const sentEmails = await outlookFetchService.searchSentEmailsToContacts(
+              contactEmails,
+              50,
+            );
+            const allOutlookEmails = [...outlookEmails, ...sentEmails];
 
-        // Check which provider the user is authenticated with
-        const googleToken = await databaseService.getOAuthToken(userId, "google", "mailbox");
-        const microsoftToken = await databaseService.getOAuthToken(userId, "microsoft", "mailbox");
+            // Dedup by ID
+            const seenIds = new Set<string>();
+            const dedupedEmails = allOutlookEmails.filter((e) => {
+              if (seenIds.has(e.id)) return false;
+              seenIds.add(e.id);
+              return true;
+            });
 
-        // Try Gmail first
-        if (googleToken) {
-          try {
-            const isReady = await gmailFetchService.initialize(userId);
-            if (isReady) {
-              providerUsed = "gmail";
-              const fetchedEmails = await gmailFetchService.searchEmails({
-                query: gmailQuery,
-                after: startDate,
-                before: endDate,
-                maxResults: 500,
-              });
-              emailsFetched = fetchedEmails.length;
+            emailsFetched += dedupedEmails.length;
+            logService.info(`Fetched ${outlookEmails.length} inbox + ${sentEmails.length} sent = ${dedupedEmails.length} unique from Outlook`, "Transactions");
 
-              // Check for duplicates using the deduplication service
-              const enrichedEmails = await gmailFetchService.checkDuplicates(userId, fetchedEmails);
-
-              // Store new emails
-              // BACKLOG-506: Deduplication is handled by getEmailByExternalId below
-              for (const email of enrichedEmails) {
-                // Skip if already flagged as duplicate by deduplication service
-                if (email.duplicateOf) {
-                  logService.debug(`Skipping duplicate email: ${email.subject}`, "Transactions");
-                  continue;
-                }
-
-                try {
-                  // BACKLOG-506: Check if email exists (deduplication by provider ID)
-                  let emailRecord = await getEmailByExternalId(userId, email.id);
-
-                  if (!emailRecord) {
-                    // Create email in emails table (content store)
-                    emailRecord = await createEmail({
-                      user_id: userId,
-                      external_id: email.id,  // Gmail API message ID
-                      source: "gmail",
-                      thread_id: email.threadId,
-                      sender: email.from,
-                      recipients: email.to,
-                      cc: email.cc,
-                      subject: email.subject,
-                      body_html: email.body,
-                      body_plain: email.bodyPlain,
-                      sent_at: email.date ? new Date(email.date).toISOString() : undefined,
-                      has_attachments: email.hasAttachments || false,
-                      attachment_count: email.attachmentCount || 0,
-                    });
-                  }
-
-                  // Create junction link in communications (no content, just IDs)
-                  await createCommunication({
+            for (const email of dedupedEmails) {
+              try {
+                const existingEmail = await getEmailByExternalId(userId, email.id);
+                if (!existingEmail) {
+                  await createEmail({
                     user_id: userId,
-                    transaction_id: validatedTransactionId,  // HOTFIX: Link to transaction!
-                    email_id: emailRecord.id,
-                    communication_type: "email",
-                    link_source: "scan",
-                    link_confidence: 0.9,
+                    external_id: email.id,
+                    source: "outlook",
+                    thread_id: email.threadId,
+                    sender: email.from,
+                    recipients: email.to,
+                    cc: email.cc,
+                    subject: email.subject,
+                    body_html: email.body,
+                    body_plain: email.bodyPlain,
+                    sent_at: email.date ? new Date(email.date).toISOString() : undefined,
                     has_attachments: email.hasAttachments || false,
-                    is_false_positive: false,
+                    attachment_count: email.attachmentCount || 0,
                   });
                   emailsStored++;
-                } catch (storeError) {
-                  logService.warn(`Failed to store email: ${email.subject}`, "Transactions", {
-                    error: storeError instanceof Error ? storeError.message : "Unknown",
-                  });
                 }
+              } catch (emailError) {
+                logService.warn("Failed to store Outlook email", "Transactions", {
+                  error: emailError instanceof Error ? emailError.message : "Unknown",
+                });
               }
-              logService.info(`Gmail: Fetched ${emailsFetched}, stored ${emailsStored}`, "Transactions");
             }
-          } catch (gmailError) {
-            logService.warn("Failed to fetch from Gmail", "Transactions", {
-              error: gmailError instanceof Error ? gmailError.message : "Unknown",
-            });
           }
+        } catch (outlookError) {
+          logService.warn("Outlook fetch failed, falling back to local search", "Transactions", {
+            error: outlookError instanceof Error ? outlookError.message : "Unknown",
+          });
         }
 
-        // Try Outlook if Gmail didn't work
-        if (!providerUsed && microsoftToken) {
-          try {
-            const isReady = await outlookFetchService.initialize(userId);
-            if (isReady) {
-              providerUsed = "outlook";
-              // Filter by contact emails server-side via Graph API $filter
-              const fetchedEmails = await outlookFetchService.searchEmails({
-                contactEmails,
-                after: startDate,
-                before: endDate,
-                maxResults: 1000,
-              });
+        // Try Gmail (bidirectional: from + to contacts)
+        try {
+          const gmailReady = await gmailFetchService.initialize(userId);
+          if (gmailReady) {
+            // Build explicit bidirectional query (from + to) instead of from-only contactEmails
+            const gmailSearchOptions: { query?: string; maxResults: number; contactEmails?: string[] } = {
+              maxResults: 200,
+            };
+            if (contactEmails.length > 0) {
+              // Use contactEmails param — gmailFetchService.searchEmails now builds bidirectional filter
+              gmailSearchOptions.contactEmails = contactEmails;
+            }
+            const gmailEmails = await gmailFetchService.searchEmails(gmailSearchOptions);
+            emailsFetched += gmailEmails.length;
+            logService.info(`Fetched ${gmailEmails.length} emails from Gmail (bidirectional)`, "Transactions");
 
-              emailsFetched = fetchedEmails.length;
-
-              // Check for duplicates
-              const enrichedEmails = await outlookFetchService.checkDuplicates(userId, fetchedEmails);
-
-              // Store new emails
-              // BACKLOG-506: Deduplication is handled by getEmailByExternalId below
-              for (const email of enrichedEmails) {
-                if (email.duplicateOf) {
-                  continue;
-                }
-
-                try {
-                  // BACKLOG-506: Check if email exists (deduplication by provider ID)
-                  let emailRecord = await getEmailByExternalId(userId, email.id);
-
-                  if (!emailRecord) {
-                    // Create email in emails table (content store)
-                    emailRecord = await createEmail({
-                      user_id: userId,
-                      external_id: email.id,  // Outlook API message ID
-                      source: "outlook",
-                      thread_id: email.threadId,
-                      sender: email.from,
-                      recipients: email.to,
-                      cc: email.cc,
-                      subject: email.subject,
-                      body_html: email.body,
-                      body_plain: email.bodyPlain,
-                      sent_at: email.date ? new Date(email.date).toISOString() : undefined,
-                      has_attachments: email.hasAttachments || false,
-                      attachment_count: email.attachmentCount || 0,
-                    });
-                  }
-
-                  // Create junction link in communications (no content, just IDs)
-                  await createCommunication({
+            for (const email of gmailEmails) {
+              try {
+                const existingEmail = await getEmailByExternalId(userId, email.id);
+                if (!existingEmail) {
+                  await createEmail({
                     user_id: userId,
-                    transaction_id: validatedTransactionId,  // HOTFIX: Link to transaction!
-                    email_id: emailRecord.id,
-                    communication_type: "email",
-                    link_source: "scan",
-                    link_confidence: 0.9,
+                    external_id: email.id,
+                    source: "gmail",
+                    thread_id: email.threadId,
+                    sender: email.from,
+                    recipients: email.to,
+                    cc: email.cc,
+                    subject: email.subject,
+                    body_html: email.body,
+                    body_plain: email.bodyPlain,
+                    sent_at: email.date ? new Date(email.date).toISOString() : undefined,
                     has_attachments: email.hasAttachments || false,
-                    is_false_positive: false,
+                    attachment_count: email.attachmentCount || 0,
                   });
                   emailsStored++;
-                } catch (storeError) {
-                  logService.warn(`Failed to store email: ${email.subject}`, "Transactions", {
-                    error: storeError instanceof Error ? storeError.message : "Unknown",
-                  });
                 }
+              } catch (emailError) {
+                logService.warn("Failed to store Gmail email", "Transactions", {
+                  error: emailError instanceof Error ? emailError.message : "Unknown",
+                });
               }
-              logService.info(`Outlook: Fetched ${emailsFetched}, stored ${emailsStored}`, "Transactions");
             }
-          } catch (outlookError) {
-            logService.warn("Failed to fetch from Outlook", "Transactions", {
-              error: outlookError instanceof Error ? outlookError.message : "Unknown",
-            });
           }
+        } catch (gmailError) {
+          logService.warn("Gmail fetch failed, falling back to local search", "Transactions", {
+            error: gmailError instanceof Error ? gmailError.message : "Unknown",
+          });
         }
 
-        if (!providerUsed) {
-          return {
-            success: false,
-            error: "No email account connected. Please connect Gmail or Outlook in Settings.",
-          };
-        }
+        logService.info(`Email fetch complete: ${emailsFetched} fetched, ${emailsStored} new stored`, "Transactions");
 
-        // Now run auto-link to link the newly fetched emails to this transaction
+        // Step 2: Auto-link from local DB
         let totalEmailsLinked = 0;
         let totalMessagesLinked = 0;
         let totalAlreadyLinked = 0;
@@ -2895,9 +2929,7 @@ export const registerTransactionHandlers = (
 
         logService.info("Sync and fetch emails complete", "Transactions", {
           transactionId: validatedTransactionId,
-          provider: providerUsed,
-          emailsFetched,
-          emailsStored,
+          contactEmails,
           totalEmailsLinked,
           totalMessagesLinked,
           totalAlreadyLinked,
@@ -2906,9 +2938,6 @@ export const registerTransactionHandlers = (
 
         return {
           success: true,
-          provider: providerUsed,
-          emailsFetched,
-          emailsStored,
           totalEmailsLinked,
           totalMessagesLinked,
           totalAlreadyLinked,

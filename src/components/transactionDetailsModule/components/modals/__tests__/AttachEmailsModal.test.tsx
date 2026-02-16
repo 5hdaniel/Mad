@@ -6,6 +6,22 @@ import React from "react";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { AttachEmailsModal } from "../AttachEmailsModal";
 
+// Mock useAuth
+jest.mock("../../../../../contexts", () => ({
+  useAuth: () => ({ currentUser: { id: "user-123", email: "test@example.com" } }),
+}));
+
+// Mock IntersectionObserver (not available in jsdom)
+const mockObserve = jest.fn();
+const mockDisconnect = jest.fn();
+beforeAll(() => {
+  (global as Record<string, unknown>).IntersectionObserver = jest.fn(() => ({
+    observe: mockObserve,
+    disconnect: mockDisconnect,
+    unobserve: jest.fn(),
+  }));
+});
+
 // Mock the window.api
 const mockGetUnlinkedEmails = jest.fn();
 const mockLinkEmails = jest.fn();
@@ -81,7 +97,7 @@ describe("AttachEmailsModal", () => {
 
     // Wait for the fetch to complete
     await waitFor(() => {
-      expect(mockGetUnlinkedEmails).toHaveBeenCalledWith("user-123", { maxResults: 100 });
+      expect(mockGetUnlinkedEmails).toHaveBeenCalledWith("user-123", { maxResults: 100, transactionId: "txn-456" });
     });
 
     // Should show conversations after loading
@@ -94,7 +110,7 @@ describe("AttachEmailsModal", () => {
     render(<AttachEmailsModal {...defaultProps} />);
 
     await waitFor(() => {
-      expect(mockGetUnlinkedEmails).toHaveBeenCalledWith("user-123", { maxResults: 100 });
+      expect(mockGetUnlinkedEmails).toHaveBeenCalledWith("user-123", { maxResults: 100, transactionId: "txn-456" });
     });
 
     // Verify the call does NOT include query, after, or before
@@ -136,6 +152,7 @@ describe("AttachEmailsModal", () => {
       expect(mockGetUnlinkedEmails).toHaveBeenCalledWith("user-123", {
         query: "closing",
         maxResults: 100,
+        transactionId: "txn-456",
       });
     });
   });
@@ -167,11 +184,11 @@ describe("AttachEmailsModal", () => {
     });
   });
 
-  it("shows search placeholder as 'Search emails...'", async () => {
+  it("shows search placeholder with contact search hint", async () => {
     render(<AttachEmailsModal {...defaultProps} />);
 
     const searchInput = screen.getByTestId("search-input");
-    expect(searchInput).toHaveAttribute("placeholder", "Search emails...");
+    expect(searchInput).toHaveAttribute("placeholder", "Search by name, email, subject, or content...");
   });
 
   it("shows empty state for search when no results", async () => {
