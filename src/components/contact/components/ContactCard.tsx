@@ -1,7 +1,6 @@
 import React from "react";
-import { SourcePill, ContactSource as SourcePillSource } from "../../shared/SourcePill";
+import { SourcePill, mapToSourcePillSource } from "../../shared/SourcePill";
 import type { ExtendedContact } from "../../../types/components";
-import type { ContactSource as ModelContactSource } from "../../../../electron/types/models";
 
 export interface ContactCardProps {
   /** Contact data to display */
@@ -33,35 +32,6 @@ function getInitial(name: string): string {
 function isExternalContact(contact: ExtendedContact): boolean {
   // is_message_derived can be number (1) or boolean (true)
   return contact.is_message_derived === 1 || contact.is_message_derived === true;
-}
-
-/**
- * Maps model ContactSource to SourcePill's ContactSource
- * Model: "manual" | "email" | "sms" | "contacts_app" | "inferred"
- * SourcePill: "imported" | "external" | "manual" | "contacts_app" | "sms"
- */
-function mapToSourcePillSource(
-  source: ModelContactSource | string | undefined,
-  isMessageDerived: boolean
-): SourcePillSource {
-  // If message-derived, show as external regardless of source
-  if (isMessageDerived) {
-    return "external";
-  }
-
-  // Map model sources to SourcePill sources
-  switch (source) {
-    case "manual":
-      return "manual";
-    case "contacts_app":
-      return "contacts_app";
-    case "sms":
-      return "sms";
-    case "email":
-    case "inferred":
-    default:
-      return "imported";
-  }
 }
 
 /**

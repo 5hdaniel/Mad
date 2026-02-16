@@ -21,7 +21,7 @@ export type Theme = "light" | "dark" | "auto";
 export type LicenseType = "individual" | "team" | "enterprise";
 
 // Contacts
-export type ContactSource = "manual" | "email" | "sms" | "messages" | "contacts_app" | "inferred";
+export type ContactSource = "manual" | "email" | "sms" | "messages" | "contacts_app" | "inferred" | "outlook";
 export type ContactInfoSource = "import" | "manual" | "inferred";
 
 // Messages

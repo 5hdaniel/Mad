@@ -513,6 +513,8 @@ export async function createCommunicationReference(
  */
 export async function getCommunicationsWithMessages(
   transactionId: string,
+  channelFilter?: "email" | "text",
+  limit?: number,
 ): Promise<Communication[]> {
   // BACKLOG-506: Three-way join - messages for texts, emails for emails
   // Query handles:
@@ -590,7 +592,10 @@ export async function getCommunicationsWithMessages(
       c.email_id IS NOT NULL AND c.email_id = e.id
     )
     WHERE c.transaction_id = ?
+    ${channelFilter === "email" ? "AND c.email_id IS NOT NULL" : ""}
+    ${channelFilter === "text" ? "AND c.email_id IS NULL" : ""}
     ORDER BY COALESCE(m.sent_at, e.sent_at) DESC
+    ${limit ? `LIMIT ${Number(limit)}` : ""}
   `;
 
   const results = dbAll<Communication>(sql, [transactionId]);

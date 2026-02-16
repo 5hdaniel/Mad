@@ -70,6 +70,8 @@ interface EmailSearchOptions {
   after?: Date | null;
   before?: Date | null;
   maxResults?: number;
+  skip?: number;
+  contactEmails?: string[];
   onProgress?: (progress: FetchProgress) => void;
 }
 
@@ -197,6 +199,7 @@ class GmailFetchService {
     after = null,
     before = null,
     maxResults = 100,
+    contactEmails,
     onProgress,
   }: EmailSearchOptions = {}): Promise<ParsedEmail[]> {
     try {
@@ -206,6 +209,13 @@ class GmailFetchService {
 
       // Build query string
       let searchQuery = query;
+
+      // BACKLOG-712: Filter by contact email addresses (bidirectional: from + to)
+      if (contactEmails && contactEmails.length > 0) {
+        const emailClauses = contactEmails.map(e => `from:${e} OR to:${e}`).join(" OR ");
+        const contactFilter = `{${emailClauses}}`;
+        searchQuery = searchQuery ? `${contactFilter} ${searchQuery}` : contactFilter;
+      }
 
       if (after) {
         const afterDate = Math.floor(after.getTime() / 1000);

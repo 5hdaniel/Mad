@@ -70,6 +70,7 @@ interface GraphMessage {
 interface GraphApiResponse<T> {
   value: T[];
   "@odata.count"?: number;
+  "@odata.nextLink"?: string;
 }
 
 /**
@@ -122,6 +123,8 @@ interface ParsedEmail {
   contentHash: string;
   /** ID of the original message if this is a duplicate (TASK-919) */
   duplicateOf?: string;
+  /** Attachment metadata for download */
+  attachments?: { filename: string; mimeType: string; size: number; attachmentId: string }[];
 }
 
 /**
@@ -132,6 +135,7 @@ interface EmailSearchOptions {
   after?: Date | null;
   before?: Date | null;
   maxResults?: number;
+  skip?: number;
   contactEmails?: string[];
   onProgress?: (progress: FetchProgress) => void;
 }
@@ -348,7 +352,8 @@ class OutlookFetchService {
     query = "",
     after = null,
     before = null,
-    maxResults = 100,
+    maxResults,
+    skip: initialSkip = 0,
     contactEmails,
     onProgress,
   }: EmailSearchOptions = {}): Promise<ParsedEmail[]> {
@@ -359,93 +364,95 @@ class OutlookFetchService {
         );
       }
 
-      // Build filter string
+      // Build Graph API query params
+      // Key constraint: $search cannot be combined with $filter or $orderby
+      // Modes:
+      //   1. Text search: $search only, date filter client-side
+      //   2. Contact filter: $filter for from + dates, no $orderby
+      //   3. No query: $filter for dates + $orderby
       const filters: string[] = [];
+      const hasContactFilter = contactEmails && contactEmails.length > 0;
+      const hasTextQuery = !!query;
+      let searchParam = "";
 
-      if (query) {
-        // Escape single quotes in OData filters to prevent injection
-        const escapedQuery = query.replace(/'/g, "''");
-        // Search in subject and body
-        filters.push(
-          `(contains(subject,'${escapedQuery}') or contains(body/content,'${escapedQuery}'))`,
-        );
-      }
+      // Store date params for client-side filtering when $search is used
+      const clientDateFilter = { after, before };
 
-      // Filter by contact email addresses (from or to/cc)
-      if (contactEmails && contactEmails.length > 0) {
-        const emailClauses = contactEmails.map((email) => {
+      if (hasTextQuery) {
+        // Use $search for text — cannot combine with $filter at all
+        const sanitized = query.replace(/"/g, "");
+        searchParam = `$search="${sanitized}"`;
+        // No $filter allowed — dates will be filtered client-side
+      } else if (hasContactFilter) {
+        // Contact filter via $filter (no text query)
+        const fromClauses = contactEmails!.map((email) => {
           const escaped = email.replace(/'/g, "''");
-          return [
-            `from/emailAddress/address eq '${escaped}'`,
-            `toRecipients/any(r:r/emailAddress/address eq '${escaped}')`,
-            `ccRecipients/any(r:r/emailAddress/address eq '${escaped}')`,
-          ].join(" or ");
+          return `from/emailAddress/address eq '${escaped}'`;
         });
-        filters.push(`(${emailClauses.join(" or ")})`);
-      }
-
-      if (after) {
-        filters.push(`receivedDateTime ge ${after.toISOString()}`);
-      }
-
-      if (before) {
-        filters.push(`receivedDateTime le ${before.toISOString()}`);
+        filters.push(`(${fromClauses.join(" or ")})`);
+        if (after) filters.push(`receivedDateTime ge ${after.toISOString()}`);
+        if (before) filters.push(`receivedDateTime le ${before.toISOString()}`);
+      } else {
+        // No search, no contacts — just date filter
+        if (after) filters.push(`receivedDateTime ge ${after.toISOString()}`);
+        if (before) filters.push(`receivedDateTime le ${before.toISOString()}`);
       }
 
       const filterString =
         filters.length > 0 ? `$filter=${filters.join(" and ")}` : "";
+      const needsClientSort = hasTextQuery || hasContactFilter;
+      const orderBy = needsClientSort ? "" : "$orderby=receivedDateTime desc";
       const selectFields =
         "$select=id,subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,sentDateTime,hasAttachments,body,bodyPreview,conversationId,inferenceClassification,parentFolderId,internetMessageId,internetMessageHeaders";
 
-      // Lambda expressions (any()) require ConsistencyLevel: eventual
-      const needsEventualConsistency = contactEmails && contactEmails.length > 0;
-      const graphHeaders = needsEventualConsistency
-        ? { ConsistencyLevel: "eventual" }
-        : undefined;
-
       logService.info("Searching emails", "OutlookFetch", {
-        hasContactFilter: needsEventualConsistency,
         contactCount: contactEmails?.length || 0,
+        hasQuery: !!query,
+        hasDateFilter: filters.length > 0,
       });
 
       // First, get the total count of matching emails
+      // $count is not supported with $search, so skip when using text search
       let estimatedTotal = 0;
-      try {
-        const countParams = ["$count=true", "$top=1", filterString]
-          .filter(Boolean)
-          .join("&");
-        const countData = await this._graphRequest<
-          GraphApiResponse<GraphMessage>
-        >(`/me/messages?${countParams}`, "GET", null, false, graphHeaders);
-        estimatedTotal = countData["@odata.count"] || 0;
-        logService.info(
-          `Estimated total emails: ${estimatedTotal}`,
-          "OutlookFetch",
-        );
-      } catch {
-        logService.debug(
-          "Could not get email count, progress will be estimated",
-          "OutlookFetch",
-        );
+      if (!searchParam) {
+        try {
+          const countParams = ["$count=true", "$top=1", filterString]
+            .filter(Boolean)
+            .join("&");
+          const countData = await this._graphRequest<
+            GraphApiResponse<GraphMessage>
+          >(`/me/messages?${countParams}`);
+          estimatedTotal = countData["@odata.count"] || 0;
+          logService.info(
+            `Estimated total emails: ${estimatedTotal}`,
+            "OutlookFetch",
+          );
+        } catch {
+          logService.debug(
+            "Could not get email count, progress will be estimated",
+            "OutlookFetch",
+          );
+        }
       }
 
       const hasEstimate = estimatedTotal > 0;
       const targetTotal = hasEstimate
-        ? Math.min(estimatedTotal, maxResults)
-        : maxResults;
+        ? (maxResults ? Math.min(estimatedTotal, maxResults) : estimatedTotal)
+        : (maxResults || 0);
 
       const allMessages: GraphMessage[] = [];
-      let skip = 0;
+      let skip = initialSkip;
       let pageCount = 0;
       const pageSize = 100; // Fetch 100 per page
 
-      // Paginate through all results
+      // Paginate through all results (bounded by date filters, not count)
       do {
         pageCount++;
         const top = `$top=${pageSize}`;
-        const skipParam = skip > 0 ? `$skip=${skip}` : "";
+        // $skip is not supported with $search
+        const skipParam = (!searchParam && skip > 0) ? `$skip=${skip}` : "";
 
-        const queryParams = [selectFields, top, skipParam, filterString]
+        const queryParams = [selectFields, orderBy, top, skipParam, filterString, searchParam]
           .filter(Boolean)
           .join("&");
 
@@ -456,10 +463,6 @@ class OutlookFetchService {
 
         const data = await this._graphRequest<GraphApiResponse<GraphMessage>>(
           `/me/messages?${queryParams}`,
-          "GET",
-          null,
-          false,
-          graphHeaders,
         );
         const messages = data.value || [];
 
@@ -487,25 +490,98 @@ class OutlookFetchService {
           });
         }
 
-        // Stop if we got fewer results than a full page or reached maxResults
-        if (messages.length < pageSize || allMessages.length >= maxResults) {
+        // Stop if we got fewer results than a full page or reached maxResults (if set)
+        if (messages.length < pageSize) {
           break;
         }
-      } while (allMessages.length < maxResults);
+        if (maxResults && allMessages.length >= maxResults) {
+          break;
+        }
+      } while (true);
 
       logService.info(
         `Total messages found: ${allMessages.length}`,
         "OutlookFetch",
       );
 
-      // Parse messages
-      return allMessages
-        .slice(0, maxResults)
-        .map((msg) => this._parseMessage(msg));
+      // Parse messages (apply maxResults cap only if explicitly set)
+      const messagesToParse = maxResults ? allMessages.slice(0, maxResults) : allMessages;
+      let parsed = messagesToParse.map((msg) => this._parseMessage(msg));
+
+      // When $search is used, dates couldn't be in $filter — filter client-side
+      if (searchParam && (clientDateFilter.after || clientDateFilter.before)) {
+        parsed = parsed.filter((email) => {
+          if (clientDateFilter.after && email.date < clientDateFilter.after) return false;
+          if (clientDateFilter.before && email.date > clientDateFilter.before) return false;
+          return true;
+        });
+      }
+
+      // When $orderby isn't available ($search or contact filter), sort client-side
+      if (needsClientSort) {
+        parsed.sort((a, b) => b.date.getTime() - a.date.getTime());
+      }
+
+      return parsed;
     } catch (error) {
       logService.error("Search emails failed", "OutlookFetch", { error });
       throw error;
     }
+  }
+
+  /**
+   * Search sent items for emails TO specific contact email addresses.
+   * Uses $search with "to:" KQL which works on sentItems folder.
+   * Limited to maxResults per contact email to avoid over-fetching.
+   */
+  async searchSentEmailsToContacts(
+    contactEmails: string[],
+    maxResults: number = 50,
+  ): Promise<ParsedEmail[]> {
+    if (!this.accessToken) {
+      throw new Error("Outlook API not initialized. Call initialize() first.");
+    }
+
+    const allParsed: ParsedEmail[] = [];
+    const seenIds = new Set<string>();
+    const selectFields =
+      "$select=id,subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,sentDateTime,hasAttachments,body,bodyPreview,conversationId,inferenceClassification,parentFolderId,internetMessageId,internetMessageHeaders";
+
+    for (const email of contactEmails) {
+      try {
+        // KQL search: "to:" finds emails where the address is in recipients
+        const searchQuery = `$search="to:${email}"`;
+        const top = `$top=${maxResults}`;
+        const queryParams = [selectFields, top, searchQuery]
+          .filter(Boolean)
+          .join("&");
+
+        const data = await this._graphRequest<GraphApiResponse<GraphMessage>>(
+          `/me/mailFolders/sentItems/messages?${queryParams}`,
+        );
+        const messages = data.value || [];
+
+        logService.info(
+          `Sent items search for "${email}": found ${messages.length}`,
+          "OutlookFetch",
+        );
+
+        for (const msg of messages) {
+          if (!seenIds.has(msg.id)) {
+            seenIds.add(msg.id);
+            allParsed.push(this._parseMessage(msg));
+          }
+        }
+      } catch (searchError) {
+        logService.warn(
+          `Sent items search failed for "${email}"`,
+          "OutlookFetch",
+          { error: searchError instanceof Error ? searchError.message : "Unknown" },
+        );
+      }
+    }
+
+    return allParsed;
   }
 
   /**
@@ -515,10 +591,26 @@ class OutlookFetchService {
    */
   async getEmailById(messageId: string): Promise<ParsedEmail> {
     try {
-      const data = await this._graphRequest<GraphMessage>(
-        `/me/messages/${messageId}`,
+      // Expand attachments so we get attachment metadata in one call
+      const data = await this._graphRequest<GraphMessage & { attachments?: GraphAttachment[] }>(
+        `/me/messages/${messageId}?$expand=attachments`,
       );
-      return this._parseMessage(data);
+      const parsed = this._parseMessage(data);
+
+      // Map Graph attachments to our format
+      if (data.attachments && data.attachments.length > 0) {
+        parsed.attachments = data.attachments
+          .filter(att => att.name && att.id) // Skip malformed entries
+          .map(att => ({
+            filename: att.name,
+            mimeType: att.contentType || "application/octet-stream",
+            size: att.size || 0,
+            attachmentId: att.id,
+          }));
+        parsed.attachmentCount = parsed.attachments.length;
+      }
+
+      return parsed;
     } catch (error) {
       logService.error(`Failed to get message ${messageId}`, "OutlookFetch", {
         error,
@@ -540,7 +632,12 @@ class OutlookFetchService {
       return recipient.emailAddress ? recipient.emailAddress.address : null;
     };
 
-    const from = message.from ? getEmailAddress(message.from) : null;
+    // Format from as "Name <email>" when display name is available
+    const from = message.from?.emailAddress
+      ? (message.from.emailAddress.name
+        ? `${message.from.emailAddress.name} <${message.from.emailAddress.address}>`
+        : message.from.emailAddress.address)
+      : null;
     const to = message.toRecipients
       ? message.toRecipients.map(getEmailAddress).join(", ")
       : null;

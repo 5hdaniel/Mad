@@ -1,4 +1,5 @@
 import React from "react";
+import type { ContactSource as ModelContactSource } from "../../../electron/types/models";
 
 /**
  * Contact source types supported by the SourcePill component.
@@ -23,20 +24,15 @@ export interface SourcePillProps {
   className?: string;
 }
 
-type Variant = "imported" | "external" | "message" | "manual" | "email" | "outlook";
+type Variant = "contacts_app" | "message" | "manual" | "email" | "outlook";
 
 const VARIANT_STYLES: Record<Variant, { bg: string; text: string; label: string }> = {
-  imported: {
-    bg: "bg-blue-100",
-    text: "text-blue-700",
-    label: "Imported",
-  },
   manual: {
     bg: "bg-green-100",
     text: "text-green-700",
     label: "Manual",
   },
-  external: {
+  contacts_app: {
     bg: "bg-violet-100",
     text: "text-violet-700",
     label: "Contacts App",
@@ -64,10 +60,10 @@ const SIZE_STYLES: Record<"sm" | "md", string> = {
 };
 
 /**
- * Maps a contact source to its display variant.
+ * Maps a contact source to its display variant (origin).
+ * Import status is shown separately by ImportStatusPill.
  * - manual -> 'manual' (green)
- * - imported, contacts_app -> 'imported' (blue)
- * - external -> 'external' (violet)
+ * - imported, contacts_app, external -> 'contacts_app' (violet)
  * - outlook -> 'outlook' (indigo)
  * - sms, messages -> 'message' (amber)
  * - email -> 'email' (sky)
@@ -78,9 +74,8 @@ function getVariant(source: ContactSource): Variant {
       return "manual";
     case "imported":
     case "contacts_app":
-      return "imported";
     case "external":
-      return "external";
+      return "contacts_app";
     case "outlook":
       return "outlook";
     case "sms":
@@ -89,7 +84,7 @@ function getVariant(source: ContactSource): Variant {
     case "email":
       return "email";
     default:
-      return "imported";
+      return "email";
   }
 }
 
@@ -128,6 +123,57 @@ export function SourcePill({
       {styles.label}
     </span>
   );
+}
+
+/**
+ * ImportStatusPill Component
+ *
+ * Small pill indicating whether a contact has been imported into Magic Audit.
+ */
+export function ImportStatusPill({
+  isImported,
+  size = "sm",
+  className = "",
+}: {
+  isImported: boolean;
+  size?: "sm" | "md";
+  className?: string;
+}): React.ReactElement {
+  const sizeStyles = SIZE_STYLES[size];
+  const styles = isImported
+    ? { bg: "bg-green-100", text: "text-green-700", label: "Imported" }
+    : { bg: "bg-gray-100", text: "text-gray-500", label: "Not Imported" };
+
+  return (
+    <span
+      className={`inline-flex items-center font-medium rounded-full ${styles.bg} ${styles.text} ${sizeStyles} ${className}`.trim()}
+      data-testid={`status-pill-${isImported ? "imported" : "not-imported"}`}
+    >
+      {styles.label}
+    </span>
+  );
+}
+
+/**
+ * Maps model ContactSource to SourcePill's ContactSource.
+ * Shared utility used by ContactRow, ContactPreview, ContactRoleRow, and ContactCard.
+ */
+export function mapToSourcePillSource(
+  source: ModelContactSource | string | undefined,
+  isExternal: boolean
+): ContactSource {
+  if (source === "sms" || source === "messages") return source;
+  if (source === "outlook") return "outlook";
+  if (isExternal || source === "contacts_app") return "contacts_app";
+  switch (source) {
+    case "manual":
+      return "manual";
+    case "email":
+    case "inferred":
+      return "email";
+    default:
+      return "email";
+  }
 }
 
 export default SourcePill;

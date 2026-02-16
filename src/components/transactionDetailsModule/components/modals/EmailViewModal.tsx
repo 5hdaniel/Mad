@@ -97,7 +97,10 @@ interface EmailViewModalProps {
  * Sanitize HTML content to prevent XSS attacks
  */
 function sanitizeHtml(html: string): string {
-  return DOMPurify.sanitize(html, {
+  // Strip cid: image references — browser can't resolve them (inline MIME parts)
+  const cleaned = html.replace(/<img[^>]*\ssrc=["']cid:[^"']*["'][^>]*\/?>/gi, "");
+
+  return DOMPurify.sanitize(cleaned, {
     ALLOWED_TAGS: [
       "p",
       "br",

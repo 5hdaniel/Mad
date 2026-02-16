@@ -155,12 +155,14 @@ function matchesSearch(
  * - imported: Blue "Imported" pill (imported from Contacts App, non-message-derived)
  * - external: Violet "Contacts App" pill (message-derived contacts, not yet imported)
  * - messages: Amber "Message" pill (SMS source)
+ * - outlook: Indigo "Outlook" pill (from Outlook Graph API import)
  */
 interface CategoryFilter {
   manual: boolean;
   imported: boolean;
   external: boolean;
   messages: boolean;
+  outlook: boolean;
 }
 
 const DEFAULT_CATEGORY_FILTER: CategoryFilter = {
@@ -168,6 +170,7 @@ const DEFAULT_CATEGORY_FILTER: CategoryFilter = {
   imported: true,
   external: true,
   messages: false,
+  outlook: true,
 };
 
 /**
@@ -175,12 +178,17 @@ const DEFAULT_CATEGORY_FILTER: CategoryFilter = {
  * This is the single source of truth for contact categorization.
  *
  * Categories map to pill display:
+ * - "outlook" → "Outlook" pill (indigo) - from Outlook Graph API import
  * - "messages" → "Message" pill (amber) - from SMS/iMessage sync
  * - "external" → "Contacts App" pill (violet) - from Contacts App, not imported
  * - "manual" → "Manual" pill (green) - user-created via Add Manually
  * - "imported" → "Imported" pill (blue) - imported from Contacts App
  */
 function getContactCategory(contact: ExtendedContact, isExternalContact: boolean = false): keyof CategoryFilter {
+  // Outlook contacts (from Outlook Graph API import)
+  if (contact.source === "outlook") {
+    return "outlook";
+  }
   // SMS/messages source shows as "Message" pill
   if (contact.source === "sms" || contact.source === "messages") {
     return "messages";
@@ -222,6 +230,9 @@ export function ContactSearchList({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // Normalize phone to last 10 digits for consistent matching (mirrors backend normalizeToE164 logic)
+  const normPhone = (p: string) => p.replace(/\D/g, "").slice(-10);
+
   // Build sets of emails/phones from imported contacts for deduplication and isAdded check
   const { importedEmails, importedPhones } = useMemo(() => {
     const emails = new Set<string>();
@@ -229,8 +240,8 @@ export function ContactSearchList({
     contacts.forEach((c) => {
       if (c.email) emails.add(c.email.toLowerCase());
       c.allEmails?.forEach((e) => emails.add(e.toLowerCase()));
-      if (c.phone) phones.add(c.phone.replace(/\D/g, ""));
-      c.allPhones?.forEach((p) => phones.add(p.replace(/\D/g, "")));
+      if (c.phone) phones.add(normPhone(c.phone));
+      c.allPhones?.forEach((p) => phones.add(normPhone(p)));
     });
     return { importedEmails: emails, importedPhones: phones };
   }, [contacts]);
@@ -242,7 +253,7 @@ export function ContactSearchList({
     if (emailMatch) return true;
 
     const phones = [contact.phone, ...(contact.allPhones || [])].filter(Boolean);
-    const phoneMatch = phones.some((p) => importedPhones.has(p!.replace(/\D/g, "")));
+    const phoneMatch = phones.some((p) => importedPhones.has(normPhone(p!)));
     return phoneMatch;
   }, [importedEmails, importedPhones]);
 
@@ -548,6 +559,22 @@ export function ContactSearchList({
             data-testid="filter-messages"
           >
             Messages
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setCategoryFilter(prev => ({ ...prev, outlook: !prev.outlook }));
+            }}
+            className={`px-2.5 py-1 text-xs font-medium rounded-full transition-colors ${
+              categoryFilter.outlook
+                ? "bg-indigo-100 text-indigo-700"
+                : "bg-gray-100 text-gray-400"
+            }`}
+            data-testid="filter-outlook"
+          >
+            Outlook
           </button>
         </div>
       )}

@@ -32,7 +32,6 @@ function Contacts({ userId, onClose }: ContactsProps) {
 
   // Modal states
   const [showAddEdit, setShowAddEdit] = useState(false);
-  const [showDetails, setShowDetails] = useState(false);
   const [selectedContact, setSelectedContact] = useState<
     ExtendedContact | undefined
   >(undefined);
@@ -97,19 +96,44 @@ function Contacts({ userId, onClose }: ContactsProps) {
     );
   }
 
-  // Handle clicking on a contact to view details
-  const handleContactClick = useCallback((contact: ExtendedContact) => {
-    if (isExternal(contact)) {
-      // External contact - show preview with import option
-      setPreviewContact(contact);
+  // Load transactions for a contact using checkCanDelete (returns transactions list)
+  const loadContactTransactions = useCallback(async (contactId: string) => {
+    setLoadingPreviewTransactions(true);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result: any = await window.api.contacts.checkCanDelete(contactId);
+      if (result.success && result.transactions) {
+        setPreviewTransactions(
+          result.transactions.map((t: { id: string; property_address: string; roles?: string[] }) => ({
+            id: t.id,
+            property_address: t.property_address,
+            role: t.roles?.join(", ") || "Contact",
+          }))
+        );
+      } else {
+        setPreviewTransactions([]);
+      }
+    } catch {
       setPreviewTransactions([]);
+    } finally {
       setLoadingPreviewTransactions(false);
-    } else {
-      // Imported contact - show full details modal
-      setSelectedContact(contact);
-      setShowDetails(true);
     }
   }, []);
+
+  // Handle clicking on a contact to view details
+  const handleContactClick = useCallback((contact: ExtendedContact) => {
+    // Always open the preview modal
+    setPreviewContact(contact);
+    setPreviewTransactions([]);
+
+    if (isExternal(contact)) {
+      // External contact - no transactions to load
+      setLoadingPreviewTransactions(false);
+    } else {
+      // Imported contact - load associated transactions
+      loadContactTransactions(contact.id);
+    }
+  }, [loadContactTransactions]);
 
   // Handle importing an external contact (from ContactSearchList's + Add Contact button)
   const handleImportContact = useCallback(
@@ -123,7 +147,7 @@ function Contacts({ userId, onClose }: ContactsProps) {
           phone: contact.phone || contact.allPhones?.[0] || "",
           company: contact.company || "",
           title: contact.title || "",
-          source: "contacts_app",
+          source: contact.source || "contacts_app",
         });
 
         if (result.success && result.contact) {
@@ -179,13 +203,6 @@ function Contacts({ userId, onClose }: ContactsProps) {
   // Handle adding a new contact manually
   const handleAddManually = () => {
     setSelectedContact(undefined);
-    setShowAddEdit(true);
-  };
-
-  // Handle editing a contact from details modal
-  const handleEditContact = (contact: ExtendedContact) => {
-    setShowDetails(false);
-    setSelectedContact(contact);
     setShowAddEdit(true);
   };
 
@@ -249,7 +266,7 @@ function Contacts({ userId, onClose }: ContactsProps) {
         />
       </div>
 
-      {/* Contact Preview Modal (for external contacts) */}
+      {/* Contact Preview Modal (all contacts) */}
       {previewContact && (
         <ContactPreview
           contact={previewContact}
@@ -257,7 +274,11 @@ function Contacts({ userId, onClose }: ContactsProps) {
           transactions={previewTransactions}
           isLoadingTransactions={loadingPreviewTransactions}
           onEdit={handlePreviewEdit}
-          onImport={handlePreviewImport}
+          onImport={isExternal(previewContact) ? handlePreviewImport : undefined}
+          onRemove={!isExternal(previewContact) ? () => {
+            setPreviewContact(null);
+            handleRemoveContact(previewContact.id);
+          } : undefined}
           onClose={() => setPreviewContact(null)}
         />
       )}
@@ -279,23 +300,6 @@ function Contacts({ userId, onClose }: ContactsProps) {
         />
       )}
 
-      {/* Contact Details Modal (for imported contacts) */}
-      {showDetails && selectedContact && (
-        <ContactPreview
-          contact={selectedContact}
-          isExternal={false}
-          transactions={[]}
-          onClose={() => {
-            setShowDetails(false);
-            setSelectedContact(undefined);
-          }}
-          onEdit={() => handleEditContact(selectedContact)}
-          onRemove={() => {
-            setShowDetails(false);
-            handleRemoveContact(selectedContact.id);
-          }}
-        />
-      )}
 
       {/* Blocking Modal - Cannot Delete Contact with Transactions */}
       {showBlockingModal && (

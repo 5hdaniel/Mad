@@ -84,10 +84,11 @@ export function TransactionDetailsTab({
   const [editContact, setEditContact] = useState<ExtendedContact | null>(null);
 
   /**
-   * Build a minimal ExtendedContact from a ContactAssignment for preview display.
-   * ContactAssignment has contact_id, contact_name, contact_email, etc.
+   * Fetch full contact data from backend for preview display.
+   * ContactAssignment only has primary email/phone — we need allEmails/allPhones.
    */
-  const handleContactCardClick = (assignment: ContactAssignment) => {
+  const handleContactCardClick = async (assignment: ContactAssignment) => {
+    // Build a minimal contact immediately for fast display
     const contact: ExtendedContact = {
       id: assignment.contact_id,
       name: assignment.contact_name || "Unknown Contact",
@@ -101,6 +102,22 @@ export function TransactionDetailsTab({
       updated_at: "",
     };
     setPreviewContact(contact);
+
+    // Fetch full email/phone entries to populate allEmails/allPhones
+    try {
+      const editData = await window.api.contacts.getEditData(assignment.contact_id);
+      if (editData.success) {
+        const allEmails = (editData.emails || []).map((e: { email: string }) => e.email);
+        const allPhones = (editData.phones || []).map((p: { phone: string }) => p.phone);
+        setPreviewContact((prev) =>
+          prev && prev.id === assignment.contact_id
+            ? { ...prev, allEmails, allPhones }
+            : prev,
+        );
+      }
+    } catch {
+      // Preview still works with single email/phone from assignment
+    }
   };
 
   // Format audit period

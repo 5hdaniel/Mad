@@ -63,6 +63,18 @@ export const contactBridge = {
     ipcRenderer.invoke("contacts:update", contactId, updates),
 
   /**
+   * TASK-1995: Get contact email/phone entries with row IDs for multi-entry editing
+   * @param contactId - Contact ID to get edit data for
+   * @returns Email and phone entries with IDs and is_primary flags
+   */
+  getEditData: (contactId: string): Promise<{
+    success: boolean;
+    emails?: { id: string; email: string; is_primary: boolean }[];
+    phones?: { id: string; phone: string; is_primary: boolean }[];
+    error?: string;
+  }> => ipcRenderer.invoke("contacts:get-edit-data", contactId),
+
+  /**
    * Checks if a contact can be deleted (not assigned to transactions)
    * @param contactId - Contact ID to check
    * @returns Deletion eligibility
@@ -132,6 +144,30 @@ export const contactBridge = {
     contactCount?: number;
     error?: string;
   }> => ipcRenderer.invoke("contacts:getExternalSyncStatus", userId),
+
+  /**
+   * TASK-1991: Get contact source stats (per-source counts)
+   * Returns counts grouped by source: { macos, iphone, outlook }
+   * @param userId - User ID to get stats for
+   * @returns Per-source contact counts
+   */
+  getSourceStats: (userId: string): Promise<{
+    success: boolean;
+    stats?: Record<string, number>;
+    error?: string;
+  }> => ipcRenderer.invoke("contacts:getSourceStats", userId),
+
+  /**
+   * Force re-import: wipes ALL external contacts (every source),
+   * then the caller triggers normal import to re-fetch from enabled sources.
+   * @param userId - User ID to force re-import for
+   * @returns Wipe result (cleared count)
+   */
+  forceReimport: (userId: string): Promise<{
+    success: boolean;
+    cleared: number;
+    error?: string;
+  }> => ipcRenderer.invoke("contacts:forceReimport", userId),
 
   /**
    * TASK-1921: Sync Outlook contacts to external_contacts table

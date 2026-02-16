@@ -131,12 +131,12 @@ export interface UseAuditTransactionReturn {
 }
 
 /**
- * Get default start date (60 days ago from today)
+ * Get default start date (3 months ago from today)
  * Typical recent transaction timeframe for real estate audits
  */
 function getDefaultStartDate(): string {
   const date = new Date();
-  date.setDate(date.getDate() - 60);
+  date.setMonth(date.getMonth() - 3);
   return date.toISOString().split("T")[0]; // YYYY-MM-DD format
 }
 

@@ -141,6 +141,7 @@ jest.mock("../services/db/externalContactDbService", () => ({
   getLastSyncTime: jest.fn().mockReturnValue(null),
   updateLastMessageAtFromLookupTable: jest.fn().mockReturnValue(0),
   syncOutlookContacts: jest.fn().mockReturnValue({ inserted: 0, deleted: 0, total: 0 }),
+  getContactSourceStats: jest.fn().mockReturnValue({ macos: 0, iphone: 0, outlook: 0 }),
 }));
 
 // Import after mocks are set up
@@ -1198,6 +1199,47 @@ describe("Contact Handlers", () => {
       const contactNames = result.contacts.map((c: any) => c.name);
       expect(contactNames).toContain("iPhone Contact");
       expect(contactNames).toContain("Outlook Contact");
+    });
+  });
+
+  // TASK-1991: Contact source stats tests
+  describe("contacts:getSourceStats", () => {
+    it("should return per-source contact counts", async () => {
+      const externalContactDb = require("../services/db/externalContactDbService");
+      (externalContactDb.getContactSourceStats as jest.Mock).mockReturnValue({
+        macos: 42,
+        iphone: 15,
+        outlook: 8,
+      });
+
+      const handler = registeredHandlers.get("contacts:getSourceStats");
+      const result = await handler(mockEvent, TEST_USER_ID);
+
+      expect(result.success).toBe(true);
+      expect(result.stats).toEqual({ macos: 42, iphone: 15, outlook: 8 });
+    });
+
+    it("should return zeros when no contacts exist", async () => {
+      const externalContactDb = require("../services/db/externalContactDbService");
+      (externalContactDb.getContactSourceStats as jest.Mock).mockReturnValue({
+        macos: 0,
+        iphone: 0,
+        outlook: 0,
+      });
+
+      const handler = registeredHandlers.get("contacts:getSourceStats");
+      const result = await handler(mockEvent, TEST_USER_ID);
+
+      expect(result.success).toBe(true);
+      expect(result.stats).toEqual({ macos: 0, iphone: 0, outlook: 0 });
+    });
+
+    it("should return error for invalid user", async () => {
+      const handler = registeredHandlers.get("contacts:getSourceStats");
+      const result = await handler(mockEvent, "invalid-user-id");
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBeDefined();
     });
   });
 });

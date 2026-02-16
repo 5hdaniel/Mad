@@ -11,8 +11,8 @@ import auditService from "./services/auditService";
 import logService from "./services/logService";
 import { autoLinkAllToTransaction } from "./services/messageMatchingService";
 import { autoLinkCommunicationsForContact } from "./services/autoLinkService";
-import { dbAll } from "./services/db/core/dbConnection";
-import { createEmail, getEmailByExternalId } from "./services/db/emailDbService";
+import { dbAll, dbGet } from "./services/db/core/dbConnection";
+import { createEmail, getEmailByExternalId, getEmailById } from "./services/db/emailDbService";
 import { createCommunication } from "./services/db/communicationDbService";
 import submissionService from "./services/submissionService";
 import submissionSyncService from "./services/submissionSyncService";
@@ -81,6 +81,116 @@ export const cleanupTransactionHandlers = (): void => {
   // Stop all submission sync (polling + realtime)
   submissionSyncService.stopAllSync();
 };
+
+/**
+ * Backfill missing email attachments for a user.
+ * Finds emails with has_attachments=true but no records in attachments table,
+ * then downloads them from the provider.
+ */
+async function backfillMissingAttachments(userId: string): Promise<{ processed: number; downloaded: number; errors: number }> {
+  const result = { processed: 0, downloaded: 0, errors: 0 };
+
+  try {
+    const db = databaseService.getRawDatabase();
+    const emailsMissingAttachments = db.prepare(`
+      SELECT e.id, e.external_id, e.source, e.user_id
+      FROM emails e
+      WHERE e.user_id = ?
+        AND e.has_attachments = 1
+        AND e.external_id IS NOT NULL
+        AND e.source IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM attachments a WHERE a.email_id = e.id)
+    `).all(userId) as { id: string; external_id: string; source: string; user_id: string }[];
+
+    if (emailsMissingAttachments.length === 0) return result;
+
+    logService.info(`Backfilling attachments for ${emailsMissingAttachments.length} emails`, "Transactions", { userId });
+
+    // Group by source for efficient provider initialization
+    const outlookEmails = emailsMissingAttachments.filter(e => e.source === "outlook");
+    const gmailEmails = emailsMissingAttachments.filter(e => e.source === "gmail");
+
+    // Backfill Outlook attachments
+    if (outlookEmails.length > 0) {
+      try {
+        const isReady = await outlookFetchService.initialize(userId);
+        if (isReady) {
+          for (const email of outlookEmails) {
+            result.processed++;
+            try {
+              const graphAttachments = await outlookFetchService.getAttachments(email.external_id);
+              if (graphAttachments.length > 0) {
+                await emailAttachmentService.downloadEmailAttachments(
+                  userId, email.id, email.external_id, "outlook",
+                  graphAttachments.map((att: { id: string; name: string; contentType: string; size: number }) => ({
+                    filename: att.name || "attachment",
+                    mimeType: att.contentType || "application/octet-stream",
+                    size: att.size || 0,
+                    attachmentId: att.id,
+                  })),
+                );
+                result.downloaded++;
+              }
+            } catch (err) {
+              result.errors++;
+              logService.warn("Backfill: failed to download Outlook attachment", "Transactions", {
+                emailId: email.id, error: err instanceof Error ? err.message : "Unknown",
+              });
+            }
+          }
+        }
+      } catch (err) {
+        logService.warn("Backfill: Outlook init failed", "Transactions", {
+          error: err instanceof Error ? err.message : "Unknown",
+        });
+      }
+    }
+
+    // Backfill Gmail attachments
+    if (gmailEmails.length > 0) {
+      try {
+        const isReady = await gmailFetchService.initialize(userId);
+        if (isReady) {
+          for (const email of gmailEmails) {
+            result.processed++;
+            try {
+              const fullEmail = await gmailFetchService.getEmailById(email.external_id);
+              if (fullEmail.attachments && fullEmail.attachments.length > 0) {
+                await emailAttachmentService.downloadEmailAttachments(
+                  userId, email.id, email.external_id, "gmail",
+                  fullEmail.attachments.map((att: { filename?: string; name?: string; mimeType?: string; contentType?: string; size?: number; attachmentId?: string; id?: string }) => ({
+                    filename: att.filename || att.name || "attachment",
+                    mimeType: att.mimeType || att.contentType || "application/octet-stream",
+                    size: att.size || 0,
+                    attachmentId: att.attachmentId || att.id || "",
+                  })),
+                );
+                result.downloaded++;
+              }
+            } catch (err) {
+              result.errors++;
+              logService.warn("Backfill: failed to download Gmail attachment", "Transactions", {
+                emailId: email.id, error: err instanceof Error ? err.message : "Unknown",
+              });
+            }
+          }
+        }
+      } catch (err) {
+        logService.warn("Backfill: Gmail init failed", "Transactions", {
+          error: err instanceof Error ? err.message : "Unknown",
+        });
+      }
+    }
+
+    logService.info(`Attachment backfill complete`, "Transactions", result);
+  } catch (err) {
+    logService.error("Attachment backfill failed", "Transactions", {
+      error: err instanceof Error ? err.message : "Unknown",
+    });
+  }
+
+  return result;
+}
 
 /**
  * Register all transaction-related IPC handlers
@@ -342,9 +452,11 @@ export const registerTransactionHandlers = (
           );
         }
 
+        const t0 = Date.now();
         const details = await transactionService.getTransactionDetails(
           validatedTransactionId,
         );
+        const t1 = Date.now();
 
         if (!details) {
           return {
@@ -352,6 +464,10 @@ export const registerTransactionHandlers = (
             error: "Transaction not found",
           };
         }
+
+        const commCount = details.communications?.length || 0;
+        const contactCount = details.contact_assignments?.length || 0;
+        logService.debug(`[PERF] getDetails: ${t1 - t0}ms, ${commCount} comms, ${contactCount} contacts`, "Transactions");
 
         return {
           success: true,
@@ -368,6 +484,89 @@ export const registerTransactionHandlers = (
             error: `Validation error: ${error.message}`,
           };
         }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // PERF: Filtered communications — only emails or only texts
+  ipcMain.handle(
+    "transactions:get-communications",
+    async (
+      _event: IpcMainInvokeEvent,
+      transactionId: string,
+      channelFilter: "email" | "text",
+    ): Promise<TransactionResponse> => {
+      try {
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError("Transaction ID validation failed", "transactionId");
+        }
+        // Validate channelFilter to prevent injection
+        if (channelFilter !== "email" && channelFilter !== "text") {
+          throw new ValidationError(
+            "channelFilter must be 'email' or 'text'",
+            "channelFilter",
+          );
+        }
+        const t0 = Date.now();
+        const details = await transactionService.getTransactionDetails(
+          validatedTransactionId,
+          channelFilter,
+        );
+        if (!details) {
+          return { success: false, error: "Transaction not found" };
+        }
+        const commCount = details.communications?.length || 0;
+        logService.debug(
+          `[PERF] getCommunications(${channelFilter}): ${Date.now() - t0}ms, ${commCount} comms`,
+          "Transactions",
+        );
+        return { success: true, transaction: details };
+      } catch (error) {
+        logService.error("Get filtered communications failed", "Transactions", {
+          transactionId,
+          channelFilter,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // PERF: Lightweight overview — contacts only, no communications
+  ipcMain.handle(
+    "transactions:get-overview",
+    async (
+      _event: IpcMainInvokeEvent,
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError("Transaction ID validation failed", "transactionId");
+        }
+
+        const t0 = Date.now();
+        const details = await transactionService.getTransactionOverview(validatedTransactionId);
+        if (!details) {
+          return { success: false, error: "Transaction not found" };
+        }
+        const contactCount = details.contact_assignments?.length || 0;
+        logService.debug(`[PERF] getOverview: ${Date.now() - t0}ms, ${contactCount} contacts`, "Transactions");
+
+        return { success: true, transaction: details };
+      } catch (error) {
+        logService.error("Get transaction overview failed", "Transactions", {
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",
@@ -1388,18 +1587,105 @@ export const registerTransactionHandlers = (
   );
 
   // Get unlinked emails - fetches directly from email provider (Gmail/Outlook)
+  // Supports server-side search with query, date range, pagination, and contact filtering
+  // TASK-1993: Server-side search   TASK-1998: body preview fix   BACKLOG-712: contact email filter
   ipcMain.handle(
     "transactions:get-unlinked-emails",
     async (
       event: IpcMainInvokeEvent,
       userId: string,
+      options?: {
+        query?: string;
+        after?: string;   // ISO date string
+        before?: string;  // ISO date string
+        maxResults?: number;
+        skip?: number;    // BACKLOG-711: offset for pagination (skip already-fetched results)
+        transactionId?: string; // BACKLOG-712: filter by transaction contact emails
+      },
     ): Promise<TransactionResponse> => {
       try {
-        logService.info("Fetching emails from provider", "Transactions", { userId });
+        const effectiveMaxResults = Math.min(options?.maxResults || 100, 500);
+        logService.info("Fetching emails from provider", "Transactions", {
+          userId,
+          query: options?.query || "",
+          after: options?.after || null,
+          before: options?.before || null,
+          maxResults: effectiveMaxResults,
+          transactionId: options?.transactionId || null,
+        });
 
         const validatedUserId = validateUserId(userId);
         if (!validatedUserId) {
           throw new ValidationError("User ID validation failed", "userId");
+        }
+
+        // BACKLOG-712: Look up contact emails for the transaction
+        let contactEmails: string[] = [];
+        if (options?.transactionId) {
+          const validatedTxnId = validateTransactionId(options.transactionId);
+          if (validatedTxnId) {
+            try {
+              const contactEmailRows = dbAll<{ email: string }>(
+                `SELECT DISTINCT LOWER(ce.email) as email
+                 FROM transaction_contacts tc
+                 JOIN contact_emails ce ON tc.contact_id = ce.contact_id
+                 WHERE tc.transaction_id = ?`,
+                [validatedTxnId],
+              );
+              contactEmails = contactEmailRows.map(r => r.email);
+              logService.info(`Found ${contactEmails.length} contact emails for transaction`, "Transactions", {
+                transactionId: validatedTxnId,
+              });
+            } catch (contactErr) {
+              logService.warn("Failed to look up contact emails, proceeding without filter", "Transactions", {
+                error: contactErr instanceof Error ? contactErr.message : "Unknown",
+              });
+            }
+          }
+        }
+
+        // Build search params from options
+        const searchParams: {
+          query: string;
+          after: Date | null;
+          before: Date | null;
+          maxResults: number;
+          skip?: number;
+          contactEmails?: string[];
+        } = {
+          query: options?.query || "",
+          after: options?.after ? new Date(options.after) : null,
+          before: options?.before ? new Date(options.before) : null,
+          maxResults: effectiveMaxResults,
+          skip: options?.skip || 0,
+        };
+
+        // When user is actively searching, resolve query against contacts DB
+        // to enable searching by contact name, email, company, or title.
+        // Note: we use a separate list (not the transaction contactEmails) so that
+        // searching "agustin" only returns Agustin's emails, not all transaction contacts.
+        if (options?.query?.trim()) {
+          const queryLower = options.query.toLowerCase().trim();
+          const resolvedEmails = dbAll<{ email: string }>(
+            `SELECT DISTINCT LOWER(ce.email) as email
+             FROM contacts c
+             JOIN contact_emails ce ON c.id = ce.contact_id
+             WHERE c.user_id = ?
+               AND (LOWER(c.display_name) LIKE ? OR LOWER(ce.email) LIKE ?
+                    OR LOWER(c.company) LIKE ? OR LOWER(c.title) LIKE ?)`,
+            [validatedUserId, `%${queryLower}%`, `%${queryLower}%`, `%${queryLower}%`, `%${queryLower}%`],
+          );
+
+          if (resolvedEmails.length > 0) {
+            // Use ONLY the resolved emails as filter (not the transaction contact list)
+            searchParams.contactEmails = resolvedEmails.map(r => r.email);
+            // Clear the text query to avoid AND-ing contact filter with text search
+            searchParams.query = "";
+            logService.info(`Resolved query "${options.query}" to ${resolvedEmails.length} contact emails`, "Transactions", {
+              resolvedEmails: resolvedEmails.map(r => r.email),
+            });
+          }
+          // If no contacts matched, the text query passes through as-is for subject/body search
         }
 
         // Check which provider the user is authenticated with
@@ -1412,6 +1698,8 @@ export const registerTransactionHandlers = (
           sender: string | null;
           sent_at: string | null;
           body_preview?: string | null;
+          email_thread_id?: string | null;
+          has_attachments?: boolean;
           provider: "gmail" | "outlook";
         }> = [];
 
@@ -1420,16 +1708,16 @@ export const registerTransactionHandlers = (
           try {
             const isReady = await gmailFetchService.initialize(validatedUserId);
             if (isReady) {
-              // Fetch recent emails (last 100)
-              const gmailEmails = await gmailFetchService.searchEmails({
-                maxResults: 100,
-              });
-              emails = gmailEmails.map((email: { id: string; subject: string | null; from: string | null; date: string | null; plainBody: string | null }) => ({
+              const gmailEmails = await gmailFetchService.searchEmails(searchParams);
+              emails = gmailEmails.map((email: { id: string; subject: string | null; from: string | null; date: Date; bodyPlain: string; snippet: string; threadId: string; hasAttachments: boolean }) => ({
                 id: `gmail:${email.id}`,
                 subject: email.subject,
                 sender: email.from,
                 sent_at: email.date ? new Date(email.date).toISOString() : null,
-                body_preview: email.plainBody?.substring(0, 200) || null,
+                // TASK-1998: prefer snippet (always populated by Gmail API), fall back to bodyPlain
+                body_preview: (email.snippet || email.bodyPlain?.substring(0, 200)) || null,
+                email_thread_id: email.threadId || null,
+                has_attachments: email.hasAttachments || false,
                 provider: "gmail" as const,
               }));
               logService.info(`Fetched ${emails.length} emails from Gmail`, "Transactions");
@@ -1446,19 +1734,41 @@ export const registerTransactionHandlers = (
           try {
             const isReady = await outlookFetchService.initialize(validatedUserId);
             if (isReady) {
-              // Fetch recent emails (last 100)
-              const outlookEmails = await outlookFetchService.searchEmails({
-                maxResults: 100,
+              const outlookEmails = await outlookFetchService.searchEmails(searchParams);
+
+              // Also search sent items for emails TO contacts (bidirectional)
+              // Use searchParams.contactEmails (resolved from query) not the full transaction contactEmails
+              let sentEmails: typeof outlookEmails = [];
+              const sentSearchEmails = searchParams.contactEmails || [];
+              if (sentSearchEmails.length > 0) {
+                try {
+                  sentEmails = await outlookFetchService.searchSentEmailsToContacts(
+                    sentSearchEmails, Math.min(50, effectiveMaxResults),
+                  );
+                } catch { /* logged inside the method */ }
+              }
+
+              // Merge and dedup
+              const allOutlook = [...outlookEmails, ...sentEmails];
+              const seenIds = new Set<string>();
+              const dedupedOutlook = allOutlook.filter(e => {
+                if (seenIds.has(e.id)) return false;
+                seenIds.add(e.id);
+                return true;
               });
-              emails = outlookEmails.map((email: { id: string; subject: string | null; from: string | null; date: string | null; plainBody: string | null }) => ({
+
+              emails = dedupedOutlook.map((email: { id: string; subject: string | null; from: string | null; date: Date; bodyPlain: string; snippet: string; threadId: string; hasAttachments: boolean }) => ({
                 id: `outlook:${email.id}`,
                 subject: email.subject,
                 sender: email.from,
                 sent_at: email.date ? new Date(email.date).toISOString() : null,
-                body_preview: email.plainBody?.substring(0, 200) || null,
+                // TASK-1998: prefer snippet (bodyPreview from Graph API), fall back to bodyPlain
+                body_preview: (email.snippet || email.bodyPlain?.substring(0, 200)) || null,
+                email_thread_id: email.threadId || null,
+                has_attachments: email.hasAttachments || false,
                 provider: "outlook" as const,
               }));
-              logService.info(`Fetched ${emails.length} emails from Outlook`, "Transactions");
+              logService.info(`Fetched ${outlookEmails.length} inbox + ${sentEmails.length} sent = ${emails.length} unique from Outlook`, "Transactions");
             }
           } catch (outlookError) {
             logService.warn("Failed to fetch from Outlook", "Transactions", {
@@ -1527,10 +1837,6 @@ export const registerTransactionHandlers = (
         if (!transaction) {
           throw new ValidationError("Transaction not found", "transactionId");
         }
-
-        // Import the function we need
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { createCommunication } = require("./services/db/communicationDbService");
 
         // Group emails by provider
         const gmailIds: string[] = [];
@@ -1609,6 +1915,8 @@ export const registerTransactionHandlers = (
                     communication_type: "email",
                     link_source: "manual",
                     link_confidence: 1.0,
+                    has_attachments: emailRecord.has_attachments || false,
+                    is_false_positive: false,
                   });
                   linkedCount++;
                 } catch (emailError) {
@@ -1688,6 +1996,8 @@ export const registerTransactionHandlers = (
                     communication_type: "email",
                     link_source: "manual",
                     link_confidence: 1.0,
+                    has_attachments: emailRecord.has_attachments || false,
+                    is_false_positive: false,
                   });
                   linkedCount++;
                 } catch (emailError) {
@@ -2611,12 +2921,19 @@ export const registerTransactionHandlers = (
             "SELECT email FROM contact_emails WHERE contact_id = ?",
             [assignment.contact_id]
           );
+          logService.info(`Contact ${assignment.contact_id}: found ${emails.length} emails in contact_emails`, "Transactions", {
+            emails: emails.map(e => e.email),
+          });
           for (const e of emails) {
             if (e.email && !contactEmails.includes(e.email.toLowerCase())) {
               contactEmails.push(e.email.toLowerCase());
             }
           }
         }
+
+        logService.info(`Total contact emails for sync: ${contactEmails.length}`, "Transactions", {
+          contactEmails,
+        });
 
         if (contactEmails.length === 0) {
           // No contact emails — still run auto-link for phone-based message matching
@@ -2653,199 +2970,183 @@ export const registerTransactionHandlers = (
           };
         }
 
-        // Determine date range from transaction (or default to 6 months)
-        const startDate = transactionDetails.started_at
-          ? new Date(transactionDetails.started_at)
-          : new Date(Date.now() - 6 * 30 * 24 * 60 * 60 * 1000); // 6 months ago
-        const endDate = transactionDetails.closed_at
-          ? new Date(transactionDetails.closed_at)
-          : new Date();
-        // Add buffer days after closing
-        endDate.setDate(endDate.getDate() + 30);
-
-        // Build search query for contact emails
-        // Gmail: "from:email1 OR from:email2 OR to:email1 OR to:email2"
-        // Outlook: Similar but uses $filter
-        const gmailQuery = contactEmails
-          .map((email) => `from:${email} OR to:${email}`)
-          .join(" OR ");
-
-        logService.info("Fetching emails from provider", "Transactions", {
-          contactEmailCount: contactEmails.length,
-          gmailQuery: gmailQuery.substring(0, 100) + "...",
-          dateRange: { start: startDate.toISOString(), end: endDate.toISOString() },
+        // Diagnostic: how many emails are in the local DB for this user?
+        const emailCount = dbGet<{ count: number }>(
+          "SELECT COUNT(*) as count FROM emails WHERE user_id = ?",
+          [userId]
+        );
+        logService.info(`Local emails table has ${emailCount?.count ?? 0} emails for user`, "Transactions", {
+          userId,
         });
 
+        // Step 1: Fetch emails from provider and store locally
+        // The auto-link searches the local emails table, so we need to ensure
+        // relevant emails are downloaded first.
         let emailsFetched = 0;
         let emailsStored = 0;
-        let providerUsed: "gmail" | "outlook" | null = null;
 
-        // createCommunication and getCommunications are imported at the top
+        // Try Outlook
+        try {
+          const outlookReady = await outlookFetchService.initialize(userId);
+          if (outlookReady) {
+            const outlookEmails = await outlookFetchService.searchEmails({
+              contactEmails,
+              maxResults: 200,
+            });
+            // Also search sent items for emails TO the contact
+            const sentEmails = await outlookFetchService.searchSentEmailsToContacts(
+              contactEmails,
+              50,
+            );
+            const allOutlookEmails = [...outlookEmails, ...sentEmails];
 
-        // Check which provider the user is authenticated with
-        const googleToken = await databaseService.getOAuthToken(userId, "google", "mailbox");
-        const microsoftToken = await databaseService.getOAuthToken(userId, "microsoft", "mailbox");
+            // Dedup by ID
+            const seenIds = new Set<string>();
+            const dedupedEmails = allOutlookEmails.filter((e) => {
+              if (seenIds.has(e.id)) return false;
+              seenIds.add(e.id);
+              return true;
+            });
 
-        // Try Gmail first
-        if (googleToken) {
-          try {
-            const isReady = await gmailFetchService.initialize(userId);
-            if (isReady) {
-              providerUsed = "gmail";
-              const fetchedEmails = await gmailFetchService.searchEmails({
-                query: gmailQuery,
-                after: startDate,
-                before: endDate,
-                maxResults: 500,
-              });
-              emailsFetched = fetchedEmails.length;
+            emailsFetched += dedupedEmails.length;
+            logService.info(`Fetched ${outlookEmails.length} inbox + ${sentEmails.length} sent = ${dedupedEmails.length} unique from Outlook`, "Transactions");
 
-              // Check for duplicates using the deduplication service
-              const enrichedEmails = await gmailFetchService.checkDuplicates(userId, fetchedEmails);
-
-              // Store new emails
-              // BACKLOG-506: Deduplication is handled by getEmailByExternalId below
-              for (const email of enrichedEmails) {
-                // Skip if already flagged as duplicate by deduplication service
-                if (email.duplicateOf) {
-                  logService.debug(`Skipping duplicate email: ${email.subject}`, "Transactions");
-                  continue;
-                }
-
-                try {
-                  // BACKLOG-506: Check if email exists (deduplication by provider ID)
-                  let emailRecord = await getEmailByExternalId(userId, email.id);
-
-                  if (!emailRecord) {
-                    // Create email in emails table (content store)
-                    emailRecord = await createEmail({
-                      user_id: userId,
-                      external_id: email.id,  // Gmail API message ID
-                      source: "gmail",
-                      thread_id: email.threadId,
-                      sender: email.from,
-                      recipients: email.to,
-                      cc: email.cc,
-                      subject: email.subject,
-                      body_html: email.body,
-                      body_plain: email.bodyPlain,
-                      sent_at: email.date ? new Date(email.date).toISOString() : undefined,
-                      has_attachments: email.hasAttachments || false,
-                      attachment_count: email.attachmentCount || 0,
-                    });
-                  }
-
-                  // Create junction link in communications (no content, just IDs)
-                  await createCommunication({
+            for (const email of dedupedEmails) {
+              try {
+                let emailRecord = await getEmailByExternalId(userId, email.id);
+                if (!emailRecord) {
+                  emailRecord = await createEmail({
                     user_id: userId,
-                    transaction_id: validatedTransactionId,  // HOTFIX: Link to transaction!
-                    email_id: emailRecord.id,
-                    communication_type: "email",
-                    link_source: "scan",
-                    link_confidence: 0.9,
+                    external_id: email.id,
+                    source: "outlook",
+                    thread_id: email.threadId,
+                    sender: email.from,
+                    recipients: email.to,
+                    cc: email.cc,
+                    subject: email.subject,
+                    body_html: email.body,
+                    body_plain: email.bodyPlain,
+                    sent_at: email.date ? new Date(email.date).toISOString() : undefined,
                     has_attachments: email.hasAttachments || false,
-                    is_false_positive: false,
+                    attachment_count: email.attachmentCount || 0,
                   });
                   emailsStored++;
-                } catch (storeError) {
-                  logService.warn(`Failed to store email: ${email.subject}`, "Transactions", {
-                    error: storeError instanceof Error ? storeError.message : "Unknown",
-                  });
+
+                  // Download attachments if present (fetch metadata from Graph API)
+                  if (email.hasAttachments && emailRecord) {
+                    try {
+                      const graphAttachments = await outlookFetchService.getAttachments(email.id);
+                      if (graphAttachments.length > 0) {
+                        await emailAttachmentService.downloadEmailAttachments(
+                          userId,
+                          emailRecord.id,
+                          email.id,
+                          "outlook",
+                          graphAttachments.map((att: { id: string; name: string; contentType: string; size: number }) => ({
+                            filename: att.name || "attachment",
+                            mimeType: att.contentType || "application/octet-stream",
+                            size: att.size || 0,
+                            attachmentId: att.id,
+                          })),
+                        );
+                      }
+                    } catch (attError) {
+                      logService.warn("Failed to download Outlook attachments during sync", "Transactions", {
+                        emailId: emailRecord.id,
+                        error: attError instanceof Error ? attError.message : "Unknown",
+                      });
+                    }
+                  }
                 }
+              } catch (emailError) {
+                logService.warn("Failed to store Outlook email", "Transactions", {
+                  error: emailError instanceof Error ? emailError.message : "Unknown",
+                });
               }
-              logService.info(`Gmail: Fetched ${emailsFetched}, stored ${emailsStored}`, "Transactions");
             }
-          } catch (gmailError) {
-            logService.warn("Failed to fetch from Gmail", "Transactions", {
-              error: gmailError instanceof Error ? gmailError.message : "Unknown",
-            });
           }
+        } catch (outlookError) {
+          logService.warn("Outlook fetch failed, falling back to local search", "Transactions", {
+            error: outlookError instanceof Error ? outlookError.message : "Unknown",
+          });
         }
 
-        // Try Outlook if Gmail didn't work
-        if (!providerUsed && microsoftToken) {
-          try {
-            const isReady = await outlookFetchService.initialize(userId);
-            if (isReady) {
-              providerUsed = "outlook";
-              // Filter by contact emails server-side via Graph API $filter
-              const fetchedEmails = await outlookFetchService.searchEmails({
-                contactEmails,
-                after: startDate,
-                before: endDate,
-                maxResults: 500,
-              });
+        // Try Gmail (bidirectional: from + to contacts)
+        try {
+          const gmailReady = await gmailFetchService.initialize(userId);
+          if (gmailReady) {
+            // Build explicit bidirectional query (from + to) instead of from-only contactEmails
+            const gmailSearchOptions: { query?: string; maxResults: number; contactEmails?: string[] } = {
+              maxResults: 200,
+            };
+            if (contactEmails.length > 0) {
+              // Use contactEmails param — gmailFetchService.searchEmails now builds bidirectional filter
+              gmailSearchOptions.contactEmails = contactEmails;
+            }
+            const gmailEmails = await gmailFetchService.searchEmails(gmailSearchOptions);
+            emailsFetched += gmailEmails.length;
+            logService.info(`Fetched ${gmailEmails.length} emails from Gmail (bidirectional)`, "Transactions");
 
-              emailsFetched = fetchedEmails.length;
-
-              // Check for duplicates
-              const enrichedEmails = await outlookFetchService.checkDuplicates(userId, fetchedEmails);
-
-              // Store new emails
-              // BACKLOG-506: Deduplication is handled by getEmailByExternalId below
-              for (const email of enrichedEmails) {
-                if (email.duplicateOf) {
-                  continue;
-                }
-
-                try {
-                  // BACKLOG-506: Check if email exists (deduplication by provider ID)
-                  let emailRecord = await getEmailByExternalId(userId, email.id);
-
-                  if (!emailRecord) {
-                    // Create email in emails table (content store)
-                    emailRecord = await createEmail({
-                      user_id: userId,
-                      external_id: email.id,  // Outlook API message ID
-                      source: "outlook",
-                      thread_id: email.threadId,
-                      sender: email.from,
-                      recipients: email.to,
-                      cc: email.cc,
-                      subject: email.subject,
-                      body_html: email.body,
-                      body_plain: email.bodyPlain,
-                      sent_at: email.date ? new Date(email.date).toISOString() : undefined,
-                      has_attachments: email.hasAttachments || false,
-                      attachment_count: email.attachmentCount || 0,
-                    });
-                  }
-
-                  // Create junction link in communications (no content, just IDs)
-                  await createCommunication({
+            for (const email of gmailEmails) {
+              try {
+                let emailRecord = await getEmailByExternalId(userId, email.id);
+                if (!emailRecord) {
+                  emailRecord = await createEmail({
                     user_id: userId,
-                    transaction_id: validatedTransactionId,  // HOTFIX: Link to transaction!
-                    email_id: emailRecord.id,
-                    communication_type: "email",
-                    link_source: "scan",
-                    link_confidence: 0.9,
+                    external_id: email.id,
+                    source: "gmail",
+                    thread_id: email.threadId,
+                    sender: email.from,
+                    recipients: email.to,
+                    cc: email.cc,
+                    subject: email.subject,
+                    body_html: email.body,
+                    body_plain: email.bodyPlain,
+                    sent_at: email.date ? new Date(email.date).toISOString() : undefined,
                     has_attachments: email.hasAttachments || false,
-                    is_false_positive: false,
+                    attachment_count: email.attachmentCount || 0,
                   });
                   emailsStored++;
-                } catch (storeError) {
-                  logService.warn(`Failed to store email: ${email.subject}`, "Transactions", {
-                    error: storeError instanceof Error ? storeError.message : "Unknown",
-                  });
+
+                  // Download attachments if present (Gmail searchEmails includes attachment metadata)
+                  if (email.hasAttachments && email.attachments && email.attachments.length > 0 && emailRecord) {
+                    try {
+                      await emailAttachmentService.downloadEmailAttachments(
+                        userId,
+                        emailRecord.id,
+                        email.id,
+                        "gmail",
+                        email.attachments.map((att: { filename?: string; name?: string; mimeType?: string; contentType?: string; size?: number; attachmentId?: string; id?: string }) => ({
+                          filename: att.filename || att.name || "attachment",
+                          mimeType: att.mimeType || att.contentType || "application/octet-stream",
+                          size: att.size || 0,
+                          attachmentId: att.attachmentId || att.id || "",
+                        })),
+                      );
+                    } catch (attError) {
+                      logService.warn("Failed to download Gmail attachments during sync", "Transactions", {
+                        emailId: emailRecord.id,
+                        error: attError instanceof Error ? attError.message : "Unknown",
+                      });
+                    }
+                  }
                 }
+              } catch (emailError) {
+                logService.warn("Failed to store Gmail email", "Transactions", {
+                  error: emailError instanceof Error ? emailError.message : "Unknown",
+                });
               }
-              logService.info(`Outlook: Fetched ${emailsFetched}, stored ${emailsStored}`, "Transactions");
             }
-          } catch (outlookError) {
-            logService.warn("Failed to fetch from Outlook", "Transactions", {
-              error: outlookError instanceof Error ? outlookError.message : "Unknown",
-            });
           }
+        } catch (gmailError) {
+          logService.warn("Gmail fetch failed, falling back to local search", "Transactions", {
+            error: gmailError instanceof Error ? gmailError.message : "Unknown",
+          });
         }
 
-        if (!providerUsed) {
-          return {
-            success: false,
-            error: "No email account connected. Please connect Gmail or Outlook in Settings.",
-          };
-        }
+        logService.info(`Email fetch complete: ${emailsFetched} fetched, ${emailsStored} new stored`, "Transactions");
 
-        // Now run auto-link to link the newly fetched emails to this transaction
+        // Step 2: Auto-link from local DB
         let totalEmailsLinked = 0;
         let totalMessagesLinked = 0;
         let totalAlreadyLinked = 0;
@@ -2874,22 +3175,21 @@ export const registerTransactionHandlers = (
           }
         }
 
+        // Step 3: Backfill any missing attachments for previously-synced emails
+        const backfillResult = await backfillMissingAttachments(userId);
+
         logService.info("Sync and fetch emails complete", "Transactions", {
           transactionId: validatedTransactionId,
-          provider: providerUsed,
-          emailsFetched,
-          emailsStored,
+          contactEmails,
           totalEmailsLinked,
           totalMessagesLinked,
           totalAlreadyLinked,
           totalErrors,
+          attachmentsBackfilled: backfillResult.downloaded,
         });
 
         return {
           success: true,
-          provider: providerUsed,
-          emailsFetched,
-          emailsStored,
           totalEmailsLinked,
           totalMessagesLinked,
           totalAlreadyLinked,
@@ -3006,7 +3306,7 @@ export const registerTransactionHandlers = (
     },
   );
 
-  // TASK-1776: Get attachments for a specific email
+  // TASK-1776: Get attachments for a specific email (with on-demand download)
   ipcMain.handle(
     "emails:get-attachments",
     async (
@@ -3018,7 +3318,62 @@ export const registerTransactionHandlers = (
           throw new ValidationError("Email ID is required", "emailId");
         }
 
-        const attachments = await emailAttachmentService.getAttachmentsForEmail(emailId);
+        let attachments = await emailAttachmentService.getAttachmentsForEmail(emailId);
+
+        // On-demand download: if DB has no records but email says it has attachments,
+        // fetch them now from the provider (handles emails synced before attachment fix)
+        if (attachments.length === 0) {
+          const email = await getEmailById(emailId);
+          if (email && email.has_attachments && email.external_id && email.source) {
+            logService.info("On-demand attachment download triggered", "Transactions", {
+              emailId, source: email.source, externalId: email.external_id,
+            });
+
+            try {
+              if (email.source === "outlook") {
+                const isReady = await outlookFetchService.initialize(email.user_id);
+                if (isReady) {
+                  const graphAttachments = await outlookFetchService.getAttachments(email.external_id);
+                  if (graphAttachments.length > 0) {
+                    await emailAttachmentService.downloadEmailAttachments(
+                      email.user_id, emailId, email.external_id, "outlook",
+                      graphAttachments.map((att: { id: string; name: string; contentType: string; size: number }) => ({
+                        filename: att.name || "attachment",
+                        mimeType: att.contentType || "application/octet-stream",
+                        size: att.size || 0,
+                        attachmentId: att.id,
+                      })),
+                    );
+                  }
+                }
+              } else if (email.source === "gmail") {
+                const isReady = await gmailFetchService.initialize(email.user_id);
+                if (isReady) {
+                  const fullEmail = await gmailFetchService.getEmailById(email.external_id);
+                  if (fullEmail.attachments && fullEmail.attachments.length > 0) {
+                    await emailAttachmentService.downloadEmailAttachments(
+                      email.user_id, emailId, email.external_id, "gmail",
+                      fullEmail.attachments.map((att: { filename?: string; name?: string; mimeType?: string; contentType?: string; size?: number; attachmentId?: string; id?: string }) => ({
+                        filename: att.filename || att.name || "attachment",
+                        mimeType: att.mimeType || att.contentType || "application/octet-stream",
+                        size: att.size || 0,
+                        attachmentId: att.attachmentId || att.id || "",
+                      })),
+                    );
+                  }
+                }
+              }
+
+              // Re-fetch from DB after download
+              attachments = await emailAttachmentService.getAttachmentsForEmail(emailId);
+            } catch (downloadError) {
+              logService.warn("On-demand attachment download failed", "Transactions", {
+                emailId,
+                error: downloadError instanceof Error ? downloadError.message : "Unknown",
+              });
+            }
+          }
+        }
 
         return {
           success: true,
@@ -3144,6 +3499,7 @@ export const registerTransactionHandlers = (
           );
         }
 
+        const t0 = Date.now();
         const db = databaseService.getRawDatabase();
 
         // Build date filter params
@@ -3237,6 +3593,11 @@ export const registerTransactionHandlers = (
         const textAttachments = textResult?.count || 0;
         const emailAttachments = emailResult?.count || 0;
         const totalSizeBytes = (textSizeResult?.total_size || 0) + (emailSizeResult?.total_size || 0);
+
+        logService.debug(
+          `[PERF] getAttachmentCounts: ${Date.now() - t0}ms, ${textAttachments} text + ${emailAttachments} email`,
+          "Transactions",
+        );
 
         return {
           success: true,
@@ -3357,6 +3718,36 @@ export const registerTransactionHandlers = (
           success: false,
           error: error instanceof Error ? error.message : "Failed to get earliest communication date",
         };
+      }
+    },
+  );
+
+  // Backfill missing email attachments (runs in background after login)
+  ipcMain.handle(
+    "emails:backfill-attachments",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        if (!userId || typeof userId !== "string") {
+          return { success: true }; // Silently skip if no user
+        }
+        const validatedUserId = validateUserId(userId);
+        if (!validatedUserId) {
+          return { success: true };
+        }
+
+        const result = await backfillMissingAttachments(validatedUserId);
+        return {
+          success: true,
+          ...result,
+        };
+      } catch (error) {
+        logService.warn("Attachment backfill handler failed", "Transactions", {
+          error: error instanceof Error ? error.message : "Unknown",
+        });
+        return { success: true }; // Don't fail the app
       }
     },
   );

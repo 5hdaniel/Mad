@@ -270,6 +270,14 @@ export interface IpcChannels {
     request: { userId: string; contactsToImport: NewContact[] };
     response: { success: boolean; contacts?: Contact[]; error?: string };
   };
+  "contacts:forceReimport": {
+    request: { userId: string };
+    response: { success: boolean; cleared: number; error?: string };
+  };
+  "contacts:syncOutlookContacts": {
+    request: { userId: string };
+    response: { success: boolean; count?: number; reconnectRequired?: boolean; error?: string };
+  };
 
   // ============================================
   // COMMUNICATION CHANNELS
@@ -970,6 +978,13 @@ export interface WindowApi {
       contactId: string,
       updates: Record<string, unknown>,
     ) => Promise<{ success: boolean; error?: string }>;
+    /** TASK-1995: Get email/phone entries with row IDs for multi-entry editing */
+    getEditData: (contactId: string) => Promise<{
+      success: boolean;
+      emails?: { id: string; email: string; is_primary: boolean }[];
+      phones?: { id: string; phone: string; is_primary: boolean }[];
+      error?: string;
+    }>;
     delete: (
       contactId: string,
     ) => Promise<{ success: boolean; error?: string }>;
@@ -1006,6 +1021,29 @@ export interface WindowApi {
       lastSyncAt?: string | null;
       isStale?: boolean;
       contactCount?: number;
+      error?: string;
+    }>;
+    /**
+     * Get contact source stats - per-source counts (TASK-1991)
+     * @param userId - User ID to get stats for
+     * @returns Per-source contact counts
+     */
+    getSourceStats: (userId: string) => Promise<{
+      success: boolean;
+      stats?: Record<string, number>;
+      error?: string;
+    }>;
+    /** Sync Outlook contacts to external_contacts table */
+    syncOutlookContacts: (userId: string) => Promise<{
+      success: boolean;
+      count?: number;
+      reconnectRequired?: boolean;
+      error?: string;
+    }>;
+    /** Force re-import: wipe ALL external contacts then return */
+    forceReimport: (userId: string) => Promise<{
+      success: boolean;
+      cleared: number;
       error?: string;
     }>;
   };
@@ -1336,6 +1374,12 @@ export interface WindowApi {
     onProgress: (callback: (progress: unknown) => void) => () => void;
     onDownloaded: (callback: (info: unknown) => void) => () => void;
     install: () => void;
+    checkForUpdates: () => Promise<{
+      updateAvailable: boolean;
+      version?: string;
+      currentVersion: string;
+      error?: string;
+    }>;
   };
 
   // Device detection methods (Windows)
