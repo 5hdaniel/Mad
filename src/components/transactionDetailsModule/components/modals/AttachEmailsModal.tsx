@@ -101,9 +101,10 @@ function getAvatarInitial(sender?: string | null): string {
 }
 
 /**
- * Convert EmailInfo to Communication format for thread processing
+ * Convert EmailInfo to Communication format for thread processing.
+ * Preserves body_preview for display in thread cards.
  */
-function emailInfoToCommunication(email: EmailInfo): Communication {
+function emailInfoToCommunication(email: EmailInfo): Communication & { body_preview?: string | null } {
   return {
     id: email.id,
     subject: email.subject || undefined,
@@ -111,7 +112,8 @@ function emailInfoToCommunication(email: EmailInfo): Communication {
     sent_at: email.sent_at || undefined,
     communication_type: "email",
     email_thread_id: email.email_thread_id || undefined,
-  } as Communication;
+    body_preview: email.body_preview,
+  } as Communication & { body_preview?: string | null };
 }
 
 // Pagination constants to prevent UI freeze from rendering too many items
@@ -482,6 +484,11 @@ export function AttachEmailsModal({
                 const firstEmail = thread.emails[0];
                 const avatarInitial = getAvatarInitial(firstEmail?.sender);
                 const isMultipleEmails = thread.emailCount > 1;
+                // Get body preview from the most recent email in the thread
+                const lastEmail = thread.emails[thread.emails.length - 1];
+                const bodyPreview = (lastEmail as Communication & { body_preview?: string | null })?.body_preview
+                  || (firstEmail as Communication & { body_preview?: string | null })?.body_preview
+                  || null;
 
                 return (
                   <div
@@ -503,11 +510,11 @@ export function AttachEmailsModal({
                     data-testid={`thread-${thread.id}`}
                   >
                     {/* Thread card layout matching EmailThreadCard style */}
-                    <div className="bg-gray-50 px-4 py-3 flex items-center justify-between">
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="px-4 py-3 flex items-start justify-between">
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
                         {/* Checkbox */}
                         <div
-                          className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${
+                          className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
                             isSelected ? "bg-blue-500 border-blue-500" : "border-gray-300 bg-white"
                           }`}
                         >
@@ -523,7 +530,7 @@ export function AttachEmailsModal({
                           {avatarInitial}
                         </div>
 
-                        {/* Thread info: Subject and participants */}
+                        {/* Thread info: Subject, participants, and preview */}
                         <div className="min-w-0 flex-1">
                           <span className="font-semibold text-gray-900 block truncate">
                             {thread.subject || "(No Subject)"}
@@ -536,11 +543,16 @@ export function AttachEmailsModal({
                               </span>
                             )}
                           </span>
+                          {bodyPreview && (
+                            <span className="text-xs text-gray-400 block truncate mt-0.5">
+                              {bodyPreview.length > 120 ? bodyPreview.substring(0, 120) + "..." : bodyPreview}
+                            </span>
+                          )}
                         </div>
                       </div>
 
                       {/* Date range */}
-                      <div className="flex items-center gap-4 flex-shrink-0">
+                      <div className="flex items-center gap-4 flex-shrink-0 mt-0.5">
                         <span className="text-sm text-gray-500 hidden sm:inline">
                           {formatDateRange(thread.startDate, thread.endDate)}
                         </span>

@@ -309,6 +309,8 @@ export function TransactionEmailsTab({
           userId={userId}
           transactionId={transactionId}
           propertyAddress={propertyAddress}
+          auditStartDate={auditStartDate}
+          auditEndDate={auditEndDate}
           onClose={() => setShowAttachModal(false)}
           onAttached={handleAttached}
         />
