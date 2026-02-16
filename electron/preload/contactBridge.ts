@@ -134,6 +134,30 @@ export const contactBridge = {
   }> => ipcRenderer.invoke("contacts:getExternalSyncStatus", userId),
 
   /**
+   * TASK-1991: Get contact source stats (per-source counts)
+   * Returns counts grouped by source: { macos, iphone, outlook }
+   * @param userId - User ID to get stats for
+   * @returns Per-source contact counts
+   */
+  getSourceStats: (userId: string): Promise<{
+    success: boolean;
+    stats?: Record<string, number>;
+    error?: string;
+  }> => ipcRenderer.invoke("contacts:getSourceStats", userId),
+
+  /**
+   * Force re-import: wipes ALL external contacts (every source),
+   * then the caller triggers normal import to re-fetch from enabled sources.
+   * @param userId - User ID to force re-import for
+   * @returns Wipe result (cleared count)
+   */
+  forceReimport: (userId: string): Promise<{
+    success: boolean;
+    cleared: number;
+    error?: string;
+  }> => ipcRenderer.invoke("contacts:forceReimport", userId),
+
+  /**
    * TASK-1921: Sync Outlook contacts to external_contacts table
    * Fetches contacts from Microsoft Graph API and syncs to local SQLite
    * @param userId - User ID to sync contacts for

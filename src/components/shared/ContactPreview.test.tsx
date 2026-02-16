@@ -154,17 +154,22 @@ describe("ContactPreview", () => {
       ).not.toBeInTheDocument();
     });
 
-    it("displays source pill with imported variant", () => {
+    it("displays source pill showing origin", () => {
       renderContactPreview();
-      expect(screen.getByTestId("source-pill-imported")).toBeInTheDocument();
+      expect(screen.getByTestId("source-pill-contacts_app")).toBeInTheDocument();
     });
 
-    it("displays source pill with external variant for external contacts", () => {
+    it("displays import status pill", () => {
+      renderContactPreview();
+      expect(screen.getByTestId("status-pill-imported")).toBeInTheDocument();
+    });
+
+    it("displays not-imported status pill for external contacts", () => {
       renderContactPreview({
         contact: mockExternalContact,
         isExternal: true,
       });
-      expect(screen.getByTestId("source-pill-external")).toBeInTheDocument();
+      expect(screen.getByTestId("status-pill-not-imported")).toBeInTheDocument();
     });
 
     it("falls back to name when display_name is not present", () => {
@@ -261,23 +266,13 @@ describe("ContactPreview", () => {
       onImport: jest.fn(),
     };
 
-    it("shows 'Not yet imported' message", () => {
-      renderContactPreview(externalProps);
-      expect(
-        screen.getByTestId("contact-preview-external-message")
-      ).toBeInTheDocument();
-      expect(
-        screen.getByTestId("contact-preview-external-message")
-      ).toHaveTextContent("Not yet imported to Magic Audit");
-      expect(
-        screen.getByTestId("contact-preview-external-message")
-      ).toHaveTextContent("Import this contact to assign them to transactions");
-    });
-
-    it("does not show transaction list", () => {
+    it("does not show transaction list for external contacts", () => {
       renderContactPreview(externalProps);
       expect(
         screen.queryByTestId("contact-preview-transactions")
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("contact-preview-external-message")
       ).not.toBeInTheDocument();
     });
 

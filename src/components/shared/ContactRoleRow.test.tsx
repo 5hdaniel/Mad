@@ -270,21 +270,21 @@ describe("ContactRoleRow", () => {
       renderContactRoleRow({
         contact: createTestContact({ source: "contacts_app", is_message_derived: false }),
       });
-      expect(screen.getByTestId("source-pill-imported")).toBeInTheDocument();
+      expect(screen.getByTestId("source-pill-contacts_app")).toBeInTheDocument();
     });
 
     it("shows external variant for message-derived contacts", () => {
       renderContactRoleRow({
         contact: createTestContact({ is_message_derived: true }),
       });
-      expect(screen.getByTestId("source-pill-external")).toBeInTheDocument();
+      expect(screen.getByTestId("source-pill-contacts_app")).toBeInTheDocument();
     });
 
     it("shows external variant for message-derived contacts with is_message_derived=1", () => {
       renderContactRoleRow({
         contact: createTestContact({ is_message_derived: 1 }),
       });
-      expect(screen.getByTestId("source-pill-external")).toBeInTheDocument();
+      expect(screen.getByTestId("source-pill-contacts_app")).toBeInTheDocument();
     });
 
     it("shows message variant for sms source when not message-derived", () => {
@@ -294,11 +294,11 @@ describe("ContactRoleRow", () => {
       expect(screen.getByTestId("source-pill-message")).toBeInTheDocument();
     });
 
-    it("shows imported variant for email source", () => {
+    it("shows email variant for email source", () => {
       renderContactRoleRow({
         contact: createTestContact({ source: "email", is_message_derived: false }),
       });
-      expect(screen.getByTestId("source-pill-imported")).toBeInTheDocument();
+      expect(screen.getByTestId("source-pill-email")).toBeInTheDocument();
     });
   });
 

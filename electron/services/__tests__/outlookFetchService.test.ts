@@ -143,6 +143,23 @@ describe("OutlookFetchService", () => {
       );
     });
 
+    it("should include bccRecipients in contactEmails filter", async () => {
+      mockAxios.mockResolvedValue({ data: { value: [] } });
+
+      await outlookFetchService.searchEmails({
+        contactEmails: ["user@example.com"],
+      });
+
+      // Verify any call includes the bccRecipients filter
+      expect(mockAxios).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: expect.stringContaining(
+            "bccRecipients/any(r:r/emailAddress/address eq 'user@example.com')",
+          ),
+        }),
+      );
+    });
+
     it("should respect maxResults parameter", async () => {
       // Create mock messages
       const mockMessages = Array.from({ length: 100 }, (_, i) => ({

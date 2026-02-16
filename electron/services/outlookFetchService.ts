@@ -348,7 +348,7 @@ class OutlookFetchService {
     query = "",
     after = null,
     before = null,
-    maxResults = 100,
+    maxResults,
     contactEmails,
     onProgress,
   }: EmailSearchOptions = {}): Promise<ParsedEmail[]> {
@@ -379,6 +379,7 @@ class OutlookFetchService {
             `from/emailAddress/address eq '${escaped}'`,
             `toRecipients/any(r:r/emailAddress/address eq '${escaped}')`,
             `ccRecipients/any(r:r/emailAddress/address eq '${escaped}')`,
+            `bccRecipients/any(r:r/emailAddress/address eq '${escaped}')`,
           ].join(" or ");
         });
         filters.push(`(${emailClauses.join(" or ")})`);
@@ -431,15 +432,15 @@ class OutlookFetchService {
 
       const hasEstimate = estimatedTotal > 0;
       const targetTotal = hasEstimate
-        ? Math.min(estimatedTotal, maxResults)
-        : maxResults;
+        ? (maxResults ? Math.min(estimatedTotal, maxResults) : estimatedTotal)
+        : (maxResults || 0);
 
       const allMessages: GraphMessage[] = [];
       let skip = 0;
       let pageCount = 0;
       const pageSize = 100; // Fetch 100 per page
 
-      // Paginate through all results
+      // Paginate through all results (bounded by date filters, not count)
       do {
         pageCount++;
         const top = `$top=${pageSize}`;
@@ -487,21 +488,23 @@ class OutlookFetchService {
           });
         }
 
-        // Stop if we got fewer results than a full page or reached maxResults
-        if (messages.length < pageSize || allMessages.length >= maxResults) {
+        // Stop if we got fewer results than a full page or reached maxResults (if set)
+        if (messages.length < pageSize) {
           break;
         }
-      } while (allMessages.length < maxResults);
+        if (maxResults && allMessages.length >= maxResults) {
+          break;
+        }
+      } while (true);
 
       logService.info(
         `Total messages found: ${allMessages.length}`,
         "OutlookFetch",
       );
 
-      // Parse messages
-      return allMessages
-        .slice(0, maxResults)
-        .map((msg) => this._parseMessage(msg));
+      // Parse messages (apply maxResults cap only if explicitly set)
+      const messagesToParse = maxResults ? allMessages.slice(0, maxResults) : allMessages;
+      return messagesToParse.map((msg) => this._parseMessage(msg));
     } catch (error) {
       logService.error("Search emails failed", "OutlookFetch", { error });
       throw error;

@@ -735,6 +735,127 @@ describe("ContactSearchList", () => {
     });
   });
 
+  describe("category filter - outlook", () => {
+    it("shows Outlook contacts by default (outlook filter is on)", () => {
+      const contacts = [
+        createImportedContact({
+          id: "outlook-1",
+          name: "Outlook Contact",
+          display_name: "Outlook Contact",
+          source: "outlook",
+        }),
+        createImportedContact({
+          id: "manual-1",
+          name: "Manual Contact",
+          display_name: "Manual Contact",
+          source: "manual",
+        }),
+      ];
+
+      render(<ContactSearchList {...createDefaultProps({ contacts })} />);
+
+      expect(screen.getByTestId("contact-row-outlook-1")).toBeInTheDocument();
+      expect(screen.getByTestId("contact-row-manual-1")).toBeInTheDocument();
+    });
+
+    it("hides Outlook contacts when outlook filter is toggled off", async () => {
+      const user = userEvent.setup();
+      const contacts = [
+        createImportedContact({
+          id: "outlook-1",
+          name: "Outlook Contact",
+          display_name: "Outlook Contact",
+          source: "outlook",
+        }),
+        createImportedContact({
+          id: "manual-1",
+          name: "Manual Contact",
+          display_name: "Manual Contact",
+          source: "manual",
+        }),
+      ];
+
+      render(<ContactSearchList {...createDefaultProps({ contacts })} />);
+
+      // Outlook contact should be visible initially
+      expect(screen.getByTestId("contact-row-outlook-1")).toBeInTheDocument();
+
+      // Toggle off the Outlook filter
+      await user.click(screen.getByTestId("filter-outlook"));
+
+      // Outlook contact should be hidden
+      expect(screen.queryByTestId("contact-row-outlook-1")).not.toBeInTheDocument();
+      // Manual contact should still be visible
+      expect(screen.getByTestId("contact-row-manual-1")).toBeInTheDocument();
+    });
+
+    it("shows Outlook contacts again when filter is toggled back on", async () => {
+      const user = userEvent.setup();
+      const contacts = [
+        createImportedContact({
+          id: "outlook-1",
+          name: "Outlook Contact",
+          display_name: "Outlook Contact",
+          source: "outlook",
+        }),
+      ];
+
+      render(<ContactSearchList {...createDefaultProps({ contacts })} />);
+
+      // Toggle off
+      await user.click(screen.getByTestId("filter-outlook"));
+      expect(screen.queryByTestId("contact-row-outlook-1")).not.toBeInTheDocument();
+
+      // Toggle back on
+      await user.click(screen.getByTestId("filter-outlook"));
+      expect(screen.getByTestId("contact-row-outlook-1")).toBeInTheDocument();
+    });
+
+    it("renders Outlook filter button with indigo styling when active", () => {
+      render(<ContactSearchList {...createDefaultProps()} />);
+
+      const outlookButton = screen.getByTestId("filter-outlook");
+      expect(outlookButton).toBeInTheDocument();
+      expect(outlookButton).toHaveTextContent("Outlook");
+      expect(outlookButton.className).toContain("bg-indigo-100");
+      expect(outlookButton.className).toContain("text-indigo-700");
+    });
+
+    it("renders Outlook filter button with gray styling when inactive", async () => {
+      const user = userEvent.setup();
+      render(<ContactSearchList {...createDefaultProps()} />);
+
+      const outlookButton = screen.getByTestId("filter-outlook");
+      await user.click(outlookButton);
+
+      expect(outlookButton.className).toContain("bg-gray-100");
+      expect(outlookButton.className).toContain("text-gray-400");
+    });
+
+    it("categorizes outlook-sourced contacts separately from other imported contacts", () => {
+      const contacts = [
+        createImportedContact({
+          id: "outlook-1",
+          name: "Outlook Contact",
+          display_name: "Outlook Contact",
+          source: "outlook",
+        }),
+        createImportedContact({
+          id: "imported-1",
+          name: "Imported Contact",
+          display_name: "Imported Contact",
+          source: "contacts_app",
+        }),
+      ];
+
+      render(<ContactSearchList {...createDefaultProps({ contacts })} />);
+
+      // Both should be visible with default filters
+      expect(screen.getByTestId("contact-row-outlook-1")).toBeInTheDocument();
+      expect(screen.getByTestId("contact-row-imported-1")).toBeInTheDocument();
+    });
+  });
+
   describe("accessibility", () => {
     it("has aria-label on search input", () => {
       render(<ContactSearchList {...createDefaultProps()} />);

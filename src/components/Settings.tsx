@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { LLMSettings } from "./settings/LLMSettings";
 import { MacOSMessagesImportSettings } from "./settings/MacOSMessagesImportSettings";
-import { MacOSContactsImportSettings } from "./settings/MacOSContactsImportSettings";
+import { ContactsImportSettings } from "./settings/MacOSContactsImportSettings";
 import { ImportSourceSettings } from "./settings/ImportSourceSettings";
 import { LicenseGate } from "./common/LicenseGate";
 import { useNotification } from "@/hooks/useNotification";
@@ -120,6 +120,8 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
   const [startDateDefault, setStartDateDefault] = useState<"auto" | "manual">("manual");
 
   // Database maintenance state
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'up-to-date' | 'available' | 'error'>('idle');
+  const [updateVersion, setUpdateVersion] = useState<string>('');
   const [reindexing, setReindexing] = useState<boolean>(false);
   const [reindexResult, setReindexResult] = useState<{
     success: boolean;
@@ -351,6 +353,23 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
       // Silently handle - preference will still be applied locally for this session
     }
   };
+
+  const handleCheckForUpdates = useCallback(async (): Promise<void> => {
+    setUpdateStatus('checking');
+    try {
+      const result = await window.api.update.checkForUpdates();
+      if (result?.updateAvailable) {
+        setUpdateStatus('available');
+        setUpdateVersion(result.version || '');
+      } else {
+        setUpdateStatus('up-to-date');
+      }
+    } catch {
+      setUpdateStatus('error');
+    }
+    // Auto-reset after 5 seconds
+    setTimeout(() => setUpdateStatus('idle'), 5000);
+  }, []);
 
   const handleNotificationsToggle = async (): Promise<void> => {
     const newValue = !notificationsEnabled;
@@ -725,10 +744,15 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                     </button>
                   </div>
                   <button
-                    disabled
+                    onClick={handleCheckForUpdates}
+                    disabled={updateStatus === 'checking'}
                     className="mt-3 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Check for Updates
+                    {updateStatus === 'checking' ? 'Checking...' :
+                     updateStatus === 'up-to-date' ? 'Up to date' :
+                     updateStatus === 'available' ? `Update available (v${updateVersion})` :
+                     updateStatus === 'error' ? 'Check failed' :
+                     'Check for Updates'}
                   </button>
                 </div>
 
@@ -1033,179 +1057,35 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
               </div>
             </div>
 
-            {/* macOS Contacts Import - Only shows on macOS */}
+            {/* Contacts Import - macOS Contacts + Outlook (TASK-1989) */}
             <div className="mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 Contacts
               </h3>
               <div className="space-y-4">
-                {/* Contact Sources (TASK-1949) */}
-                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <h4 className="text-sm font-medium text-gray-900 mb-3">Contact Sources</h4>
-
-                  {/* Import From (direct) */}
-                  <div className="mb-4">
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                      Import From
-                    </p>
-                    <div className="space-y-2">
-                      {/* Outlook Contacts toggle */}
-                      <div className="flex items-center justify-between py-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-gray-700">Outlook Contacts</span>
-                          {!connections.microsoft?.connected && (
-                            <span className="text-xs text-gray-400">(not connected)</span>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => handleContactSourceToggle("direct", "outlookContacts", outlookContactsEnabled, setOutlookContactsEnabled)}
-                          disabled={loadingPreferences || !connections.microsoft?.connected}
-                          className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                            outlookContactsEnabled ? "bg-blue-500" : "bg-gray-300"
-                          }`}
-                          role="switch"
-                          aria-checked={outlookContactsEnabled}
-                          aria-label="Outlook Contacts import"
-                        >
-                          <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                              outlookContactsEnabled ? "translate-x-6" : "translate-x-1"
-                            }`}
-                          />
-                        </button>
-                      </div>
-
-                      {/* Gmail Contacts toggle - Coming soon */}
-                      <div className="flex items-center justify-between py-1 opacity-50">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-gray-700">Gmail Contacts</span>
-                          <span className="text-xs text-gray-400">Coming soon</span>
-                        </div>
-                        <button
-                          disabled
-                          className="ml-4 relative inline-flex h-6 w-11 items-center rounded-full bg-gray-300 cursor-not-allowed"
-                          role="switch"
-                          aria-checked={gmailContactsEnabled}
-                          aria-label="Gmail Contacts import"
-                        >
-                          <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                              gmailContactsEnabled ? "translate-x-6" : "translate-x-1"
-                            }`}
-                          />
-                        </button>
-                      </div>
-
-                      {/* macOS/iPhone Contacts toggle */}
-                      <div className="flex items-center justify-between py-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-gray-700">macOS / iPhone Contacts</span>
-                        </div>
-                        <button
-                          onClick={() => handleContactSourceToggle("direct", "macosContacts", macosContactsEnabled, setMacosContactsEnabled)}
-                          disabled={loadingPreferences}
-                          className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                            macosContactsEnabled ? "bg-blue-500" : "bg-gray-300"
-                          }`}
-                          role="switch"
-                          aria-checked={macosContactsEnabled}
-                          aria-label="macOS iPhone Contacts import"
-                        >
-                          <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                              macosContactsEnabled ? "translate-x-6" : "translate-x-1"
-                            }`}
-                          />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Auto-discover from conversations (inferred) */}
-                  <div>
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                      Auto-discover from conversations
-                    </p>
-                    <div className="space-y-2">
-                      {/* Outlook emails toggle */}
-                      <div className="flex items-center justify-between py-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-gray-700">Outlook emails</span>
-                          {!connections.microsoft?.connected && (
-                            <span className="text-xs text-gray-400">(not connected)</span>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => handleContactSourceToggle("inferred", "outlookEmails", outlookEmailsInferred, setOutlookEmailsInferred)}
-                          disabled={loadingPreferences || !connections.microsoft?.connected}
-                          className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                            outlookEmailsInferred ? "bg-blue-500" : "bg-gray-300"
-                          }`}
-                          role="switch"
-                          aria-checked={outlookEmailsInferred}
-                          aria-label="Outlook emails auto-discover"
-                        >
-                          <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                              outlookEmailsInferred ? "translate-x-6" : "translate-x-1"
-                            }`}
-                          />
-                        </button>
-                      </div>
-
-                      {/* Gmail emails toggle */}
-                      <div className="flex items-center justify-between py-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-gray-700">Gmail emails</span>
-                          {!connections.google?.connected && (
-                            <span className="text-xs text-gray-400">(not connected)</span>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => handleContactSourceToggle("inferred", "gmailEmails", gmailEmailsInferred, setGmailEmailsInferred)}
-                          disabled={loadingPreferences || !connections.google?.connected}
-                          className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                            gmailEmailsInferred ? "bg-blue-500" : "bg-gray-300"
-                          }`}
-                          role="switch"
-                          aria-checked={gmailEmailsInferred}
-                          aria-label="Gmail emails auto-discover"
-                        >
-                          <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                              gmailEmailsInferred ? "translate-x-6" : "translate-x-1"
-                            }`}
-                          />
-                        </button>
-                      </div>
-
-                      {/* Messages/SMS toggle */}
-                      <div className="flex items-center justify-between py-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-gray-700">Messages / SMS</span>
-                        </div>
-                        <button
-                          onClick={() => handleContactSourceToggle("inferred", "messages", messagesInferred, setMessagesInferred)}
-                          disabled={loadingPreferences}
-                          className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                            messagesInferred ? "bg-blue-500" : "bg-gray-300"
-                          }`}
-                          role="switch"
-                          aria-checked={messagesInferred}
-                          aria-label="Messages SMS auto-discover"
-                        >
-                          <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                              messagesInferred ? "translate-x-6" : "translate-x-1"
-                            }`}
-                          />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <MacOSContactsImportSettings userId={userId} />
+                <ContactsImportSettings
+                  userId={userId}
+                  isMicrosoftConnected={connections.microsoft?.connected ?? false}
+                  isGoogleConnected={connections.google?.connected ?? false}
+                  outlookContactsEnabled={outlookContactsEnabled}
+                  macosContactsEnabled={macosContactsEnabled}
+                  gmailContactsEnabled={gmailContactsEnabled}
+                  outlookEmailsInferred={outlookEmailsInferred}
+                  gmailEmailsInferred={gmailEmailsInferred}
+                  messagesInferred={messagesInferred}
+                  loadingPreferences={loadingPreferences}
+                  onToggleSource={(category, key, currentValue) => {
+                    const setters: Record<string, React.Dispatch<React.SetStateAction<boolean>>> = {
+                      outlookContacts: setOutlookContactsEnabled,
+                      macosContacts: setMacosContactsEnabled,
+                      gmailContacts: setGmailContactsEnabled,
+                      outlookEmails: setOutlookEmailsInferred,
+                      gmailEmails: setGmailEmailsInferred,
+                      messages: setMessagesInferred,
+                    };
+                    handleContactSourceToggle(category, key, currentValue, setters[key]);
+                  }}
+                />
               </div>
             </div>
 

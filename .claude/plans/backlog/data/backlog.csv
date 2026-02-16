@@ -572,3 +572,11 @@ BACKLOG-692,Clickable contact rows everywhere for detail view,feature,Medium,Pen
 BACKLOG-693,Switch Add Manually and View Active Transactions button positions,ui,Low,In Progress,SPRINT-082,~5K,-,-,2026-02-13,,TASK-1985 — Swap button order in StartNewAuditModal grid
 BACKLOG-694,Skip AI tools for manual-only users on new audit,feature,Medium,Pending,SPRINT-082,~10K,-,-,2026-02-13,,TASK-1986 — Non-AI users go directly to Step 1 manual creation
 BACKLOG-695,Remove contact on Step 3 of new audit transaction,fix,Medium,In Progress,SPRINT-082,~10K,-,-,2026-02-13,,TASK-1987 — Add remove button to ContactRoleRow on Step 3
+BACKLOG-696,Transaction toolbar buttons should span full width on narrow viewports,ui,Low,Pending,-,~8K,-,-,2026-02-15,,Add w-full to buttons container to stretch on narrow viewports when wrapped below search bar
+BACKLOG-697,Add Outlook filter toggle to ContactSearchList,ui,High,Completed,SPRINT-083,~10K,-,-,2026-02-14,2026-02-15,TASK-1988 — PR #857 merged
+BACKLOG-698,Expand contacts import settings to multi-source (macOS + Outlook),ui,High,Completed,SPRINT-083,~25K,-,-,2026-02-14,2026-02-15,TASK-1989 — PR #860 merged
+BACKLOG-699,Wire Check for Updates button to updateService,ui,Medium,Completed,SPRINT-083,~8K,-,-,2026-02-14,2026-02-15,TASK-1990 — PR #858 merged
+BACKLOG-700,Add contact source stats breakdown in import settings,ui,Medium,Completed,SPRINT-083,~15K,-,-,2026-02-14,2026-02-15,TASK-1991 — PR #861 merged
+BACKLOG-701,Fix Outlook email search maxResults cap and contact filtering,fix,High,Completed,SPRINT-083,~15K,-,-,2026-02-14,2026-02-15,TASK-1992 — PR #859 merged
+BACKLOG-702,Email attachment search: free text search + audit period filter + load more,feature,Medium,In Progress,SPRINT-084,~30K,-,-,2026-02-15,,TASK-1993 — Server-side search + date filter + load more pagination
+BACKLOG-703,Manual test: Outlook email search improvements (TASK-1992),testing,Medium,Pending,SPRINT-084,~4K,-,-,2026-02-15,,TASK-1994 — Verify TASK-1992 + TASK-1993 email search improvements end-to-end

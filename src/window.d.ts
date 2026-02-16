@@ -133,6 +133,12 @@ interface ElectronAPI {
   onUpdateProgress: (callback: (progress: unknown) => void) => () => void;
   onUpdateDownloaded: (callback: (info: unknown) => void) => () => void;
   installUpdate: () => void;
+  checkForUpdates: () => Promise<{
+    updateAvailable: boolean;
+    version?: string;
+    currentVersion: string;
+    error?: string;
+  }>;
 
   // Outlook Integration
   outlookInitialize: () => Promise<{ success: boolean; error?: string }>;
@@ -341,6 +347,12 @@ interface MainAPI {
     onProgress: (callback: (progress: unknown) => void) => () => void;
     onDownloaded: (callback: (info: unknown) => void) => () => void;
     install: () => void;
+    checkForUpdates: () => Promise<{
+      updateAvailable: boolean;
+      version?: string;
+      currentVersion: string;
+      error?: string;
+    }>;
   };
 
   // Shell operations
@@ -1038,16 +1050,23 @@ interface MainAPI {
       contactCount?: number;
       error?: string;
     }>;
-    /**
-     * Sync Outlook contacts to external_contacts table (TASK-1921)
-     * Fetches contacts from Microsoft Graph API and syncs to local SQLite
-     * @param userId - User ID to sync contacts for
-     * @returns Sync result (count of contacts synced, reconnectRequired flag)
-     */
+    /** Sync Outlook contacts to external_contacts table */
     syncOutlookContacts: (userId: string) => Promise<{
       success: boolean;
       count?: number;
       reconnectRequired?: boolean;
+      error?: string;
+    }>;
+    /** Force re-import: wipe ALL external contacts then return */
+    forceReimport: (userId: string) => Promise<{
+      success: boolean;
+      cleared: number;
+      error?: string;
+    }>;
+    /** Get contact source stats - per-source counts */
+    getSourceStats: (userId: string) => Promise<{
+      success: boolean;
+      stats?: Record<string, number>;
       error?: string;
     }>;
   };

@@ -1448,6 +1448,80 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
     },
   );
 
+  // TASK-1991: Get contact source stats (per-source counts)
+  ipcMain.handle(
+    "contacts:getSourceStats",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<{
+      success: boolean;
+      stats?: Record<string, number>;
+      error?: string;
+    }> => {
+      try {
+        const validatedUserId = await getValidUserId(userId, "Contacts");
+        if (!validatedUserId) {
+          return { success: false, error: "No valid user found in database" };
+        }
+
+        const stats = externalContactDb.getContactSourceStats(validatedUserId);
+        return { success: true, stats };
+      } catch (error) {
+        logService.error("[Main] Get contact source stats failed", "Contacts", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Force re-import: wipe ALL external contacts (all sources), then re-import from enabled sources
+  ipcMain.handle(
+    "contacts:forceReimport",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<{
+      success: boolean;
+      cleared: number;
+      error?: string;
+    }> => {
+      try {
+        logService.info("[Main] Force re-import requested — wiping all sources", "Contacts", { userId });
+
+        const validatedUserId = await getValidUserId(userId, "Contacts");
+        if (!validatedUserId) {
+          return { success: false, cleared: 0, error: "No valid user found in database" };
+        }
+
+        // Wipe ALL external contacts regardless of which sources are enabled
+        const countBefore = externalContactDb.getCount(validatedUserId);
+        externalContactDb.clearAllForUser(validatedUserId);
+        const totalCleared = countBefore;
+
+        logService.info("[Main] Force re-import wipe complete", "Contacts", {
+          userId: validatedUserId,
+          cleared: totalCleared,
+        });
+
+        return { success: true, cleared: totalCleared };
+      } catch (error) {
+        logService.error("[Main] Force re-import wipe failed", "Contacts", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          cleared: 0,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
   // TASK-1921: Sync Outlook contacts to external_contacts table
   ipcMain.handle(
     "contacts:syncOutlookContacts",

@@ -1214,17 +1214,17 @@ export async function deleteContact(contactId: string): Promise<void> {
 
 /**
  * Remove a contact from local database (un-import)
- * For contacts from Contacts App, delete entirely (they exist in external_contacts)
- * For other sources, just mark as unimported
+ * For contacts from external sources (Contacts App, Outlook), delete entirely
+ * since they exist in the external_contacts shadow table and can be re-imported.
+ * For other sources, just mark as unimported.
  */
 export async function removeContact(contactId: string): Promise<void> {
-  // Check if this contact came from Contacts App
   const contact = dbGet<{ source: string }>(
     "SELECT source FROM contacts WHERE id = ?",
     [contactId]
   );
 
-  if (contact?.source === "contacts_app") {
+  if (contact?.source === "contacts_app" || contact?.source === "outlook") {
     // Delete entirely - contact exists in external_contacts shadow table
     dbRun("DELETE FROM contacts WHERE id = ?", [contactId]);
   } else {

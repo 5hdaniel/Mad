@@ -26,6 +26,28 @@ export function registerUpdaterHandlers(mainWindow: BrowserWindow): void {
   }
   handlersRegistered = true;
 
+  // Check for updates manually (TASK-1990)
+  ipcMain.handle("app:check-for-updates", async () => {
+    try {
+      if (!app.isPackaged) {
+        return { updateAvailable: false, currentVersion: app.getVersion() };
+      }
+      const result = await autoUpdater.checkForUpdatesAndNotify();
+      return {
+        updateAvailable: result?.isUpdateAvailable ?? false,
+        version: result?.updateInfo?.version,
+        currentVersion: app.getVersion(),
+      };
+    } catch (error) {
+      log.warn("Manual update check failed:", error);
+      return {
+        updateAvailable: false,
+        currentVersion: app.getVersion(),
+        error: error instanceof Error ? error.message : "Check failed",
+      };
+    }
+  });
+
   // Install update and restart
   ipcMain.on("install-update", () => {
     log.info("Installing update...");

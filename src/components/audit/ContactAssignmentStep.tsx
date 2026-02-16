@@ -252,7 +252,7 @@ function ContactAssignmentStep({
           email: contact.email,
           phone: contact.phone,
           company: contact.company,
-          source: "contacts_app",
+          source: contact.source || "contacts_app",
         });
 
         if (result.success && result.data) {
