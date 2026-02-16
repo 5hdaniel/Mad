@@ -339,9 +339,14 @@ export function registerSystemHandlers(): void {
       }
 
       isInitializing = true;
+      const t0 = Date.now();
       try {
         // Initialize database - this triggers keychain prompt for db encryption key
         await initializeDatabase();
+        logService.info(
+          `[PERF] initializeDatabase: ${Date.now() - t0}ms`,
+          "SystemHandlers",
+        );
         logService.info(
           "Database initialized with encryption",
           "SystemHandlers",

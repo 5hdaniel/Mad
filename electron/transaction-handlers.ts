@@ -452,9 +452,11 @@ export const registerTransactionHandlers = (
           );
         }
 
+        const t0 = Date.now();
         const details = await transactionService.getTransactionDetails(
           validatedTransactionId,
         );
+        const t1 = Date.now();
 
         if (!details) {
           return {
@@ -462,6 +464,11 @@ export const registerTransactionHandlers = (
             error: "Transaction not found",
           };
         }
+
+        const commCount = details.communications?.length || 0;
+        const contactCount = details.contact_assignments?.length || 0;
+        const dataSize = JSON.stringify(details).length;
+        logService.info(`[PERF] getDetails: ${t1 - t0}ms, ${commCount} comms, ${contactCount} contacts, ${Math.round(dataSize / 1024)}KB payload`, "Transactions");
 
         return {
           success: true,
@@ -478,6 +485,82 @@ export const registerTransactionHandlers = (
             error: `Validation error: ${error.message}`,
           };
         }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // PERF: Filtered communications — only emails or only texts
+  ipcMain.handle(
+    "transactions:get-communications",
+    async (
+      _event: IpcMainInvokeEvent,
+      transactionId: string,
+      channelFilter: "email" | "text",
+    ): Promise<TransactionResponse> => {
+      try {
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError("Transaction ID validation failed", "transactionId");
+        }
+        const t0 = Date.now();
+        const details = await transactionService.getTransactionDetails(
+          validatedTransactionId,
+          channelFilter,
+        );
+        if (!details) {
+          return { success: false, error: "Transaction not found" };
+        }
+        const commCount = details.communications?.length || 0;
+        logService.info(
+          `[PERF] getCommunications(${channelFilter}): ${Date.now() - t0}ms, ${commCount} comms`,
+          "Transactions",
+        );
+        return { success: true, transaction: details };
+      } catch (error) {
+        logService.error("Get filtered communications failed", "Transactions", {
+          transactionId,
+          channelFilter,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // PERF: Lightweight overview — contacts only, no communications
+  ipcMain.handle(
+    "transactions:get-overview",
+    async (
+      _event: IpcMainInvokeEvent,
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError("Transaction ID validation failed", "transactionId");
+        }
+
+        const t0 = Date.now();
+        const details = await transactionService.getTransactionOverview(validatedTransactionId);
+        if (!details) {
+          return { success: false, error: "Transaction not found" };
+        }
+        const contactCount = details.contact_assignments?.length || 0;
+        logService.info(`[PERF] getOverview: ${Date.now() - t0}ms, ${contactCount} contacts`, "Transactions");
+
+        return { success: true, transaction: details };
+      } catch (error) {
+        logService.error("Get transaction overview failed", "Transactions", {
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",
@@ -3410,6 +3493,7 @@ export const registerTransactionHandlers = (
           );
         }
 
+        const t0 = Date.now();
         const db = databaseService.getRawDatabase();
 
         // Build date filter params
@@ -3503,6 +3587,11 @@ export const registerTransactionHandlers = (
         const textAttachments = textResult?.count || 0;
         const emailAttachments = emailResult?.count || 0;
         const totalSizeBytes = (textSizeResult?.total_size || 0) + (emailSizeResult?.total_size || 0);
+
+        logService.info(
+          `[PERF] getAttachmentCounts: ${Date.now() - t0}ms, ${textAttachments} text + ${emailAttachments} email`,
+          "Transactions",
+        );
 
         return {
           success: true,

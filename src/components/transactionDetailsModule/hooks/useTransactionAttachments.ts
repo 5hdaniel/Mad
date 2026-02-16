@@ -2,7 +2,7 @@
  * useTransactionAttachments Hook
  * Fetches and manages email attachments linked to a transaction
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import type { Transaction, Communication } from "@/types";
 
 /**
@@ -90,23 +90,53 @@ function parseAttachmentMetadata(
 }
 
 /**
- * Hook for fetching email attachments linked to a transaction.
- * Extracts attachment metadata from email communications.
+ * Hook for email attachments linked to a transaction.
+ * PERF: No longer calls getDetails — receives communications from useTransactionDetails.
  *
  * @param transaction - The transaction to fetch attachments for
+ * @param communications - Pre-loaded communications from useTransactionDetails
  * @returns Attachments data, loading state, error state, and refresh function
  */
 export function useTransactionAttachments(
-  transaction: Transaction
+  transaction: Transaction,
+  communications?: Communication[],
 ): UseTransactionAttachmentsResult {
-  const [attachments, setAttachments] = useState<TransactionAttachment[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  // Derive attachments from pre-loaded communications (no IPC call)
+  const derivedAttachments = useMemo(() => {
+    if (!communications) return null;
+
+    const emailAttachments: TransactionAttachment[] = communications
+      .filter(
+        (comm: Communication) =>
+          (comm.channel === "email" || comm.communication_type === "email") && comm.has_attachments
+      )
+      .flatMap((email: Communication) => {
+        const metadata = parseAttachmentMetadata(email.attachment_metadata);
+        return metadata.map((att) => ({
+          id: att.id,
+          filename: att.filename,
+          mimeType: att.mimeType,
+          size: att.size,
+          emailId: email.id,
+          emailSubject: email.subject || "No Subject",
+          emailDate: email.sent_at?.toString() || email.received_at?.toString() || "",
+        }));
+      });
+
+    emailAttachments.sort((a, b) => {
+      const dateA = a.emailDate ? new Date(a.emailDate).getTime() : 0;
+      const dateB = b.emailDate ? new Date(b.emailDate).getTime() : 0;
+      return dateB - dateA;
+    });
+
+    return emailAttachments;
+  }, [communications]);
+
+  // Fallback state for refresh
+  const [fetchedAttachments, setFetchedAttachments] = useState<TransactionAttachment[]>([]);
+  const [loading, setLoading] = useState<boolean>(!communications);
   const [error, setError] = useState<string | null>(null);
 
-  /**
-   * Load attachments from transaction details
-   * Filters communications to emails with attachments and extracts metadata
-   */
   const loadAttachments = useCallback(async (): Promise<void> => {
     setLoading(true);
     setError(null);
@@ -118,7 +148,6 @@ export function useTransactionAttachments(
         const allCommunications: Communication[] =
           result.transaction.communications || [];
 
-        // Filter for emails with attachments and extract attachment metadata
         const emailAttachments: TransactionAttachment[] = allCommunications
           .filter(
             (comm: Communication) =>
@@ -137,36 +166,42 @@ export function useTransactionAttachments(
             }));
           });
 
-        // Sort by email date, most recent first
         emailAttachments.sort((a, b) => {
           const dateA = a.emailDate ? new Date(a.emailDate).getTime() : 0;
           const dateB = b.emailDate ? new Date(b.emailDate).getTime() : 0;
           return dateB - dateA;
         });
 
-        setAttachments(emailAttachments);
+        setFetchedAttachments(emailAttachments);
       } else {
-        setAttachments([]);
+        setFetchedAttachments([]);
       }
     } catch (err) {
       console.error("Failed to load attachments:", err);
       setError("Failed to load attachments");
-      setAttachments([]);
+      setFetchedAttachments([]);
     } finally {
       setLoading(false);
     }
   }, [transaction.id]);
 
-  /**
-   * Load attachments when transaction changes
-   */
   useEffect(() => {
-    loadAttachments();
-  }, [loadAttachments]);
+    if (!communications) {
+      loadAttachments();
+    }
+  }, [communications, loadAttachments]);
+
+  useEffect(() => {
+    if (communications) {
+      setLoading(false);
+    }
+  }, [communications]);
+
+  const attachments = derivedAttachments ?? fetchedAttachments;
 
   return {
     attachments,
-    loading,
+    loading: communications ? false : loading,
     error,
     count: attachments.length,
     refresh: loadAttachments,
@@ -185,7 +220,9 @@ export function useTransactionAttachments(
 export function useAttachmentCounts(
   transactionId: string,
   auditStart?: string | Date | null,
-  auditEnd?: string | Date | null
+  auditEnd?: string | Date | null,
+  /** If true, don't auto-load on mount — call refresh() manually when needed */
+  lazy?: boolean,
 ): UseAttachmentCountsResult {
   const [counts, setCounts] = useState<AttachmentCounts>({
     textAttachments: 0,
@@ -193,7 +230,7 @@ export function useAttachmentCounts(
     total: 0,
     totalSizeBytes: 0,
   });
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(!lazy);
   const [error, setError] = useState<string | null>(null);
 
   const loadCounts = useCallback(async (): Promise<void> => {
@@ -259,8 +296,10 @@ export function useAttachmentCounts(
   }, [transactionId, auditStart, auditEnd]);
 
   useEffect(() => {
-    loadCounts();
-  }, [loadCounts]);
+    if (!lazy) {
+      loadCounts();
+    }
+  }, [loadCounts, lazy]);
 
   return {
     counts,

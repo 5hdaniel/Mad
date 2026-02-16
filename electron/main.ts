@@ -741,7 +741,9 @@ function createWindow(): void {
   }
 }
 
+const appStartTime = Date.now();
 app.whenReady().then(async () => {
+  log.info(`[PERF] app.whenReady: ${Date.now() - appStartTime}ms`);
   // Configure auto-updater after app is ready
   autoUpdater.logger = log;
 
@@ -793,7 +795,9 @@ app.whenReady().then(async () => {
   // 1. Database initialization (triggers keychain prompt)
   // 2. Clearing sessions/tokens for session-only OAuth
 
+  log.info(`[PERF] pre-createWindow: ${Date.now() - appStartTime}ms`);
   createWindow();
+  log.info(`[PERF] post-createWindow: ${Date.now() - appStartTime}ms`);
 
   // ==========================================
   // RENDERER CRASH RECOVERY (TASK-1968)

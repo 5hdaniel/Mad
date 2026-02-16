@@ -128,9 +128,7 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
       userId: string,
     ): Promise<ContactResponse> => {
       try {
-        logService.info("Getting all imported contacts", "Contacts", {
-          userId,
-        });
+        const t0 = Date.now();
 
         // BACKLOG-551: Validate user ID exists in local DB
         // BACKLOG-615: Return empty array gracefully during deferred DB init (onboarding)
@@ -147,6 +145,11 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         const importedContacts =
           await databaseService.getImportedContactsByUserIdAsync(validatedUserId);
 
+        logService.info(
+          `[PERF] contacts.getAll: ${Date.now() - t0}ms, ${importedContacts.length} contacts`,
+          "Contacts",
+        );
+
         // Backfill missing emails/phones in background (once per session, non-blocking)
         // Deferred so it doesn't block the initial contact list render
         backfillImportedContactsFromExternal(validatedUserId).then((backfillResult) => {
@@ -159,12 +162,6 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         }).catch((err) => {
           logService.warn(`Background backfill failed: ${err}`, "Contacts");
         });
-
-        logService.info(
-          `Found ${importedContacts.length} imported contacts`,
-          "Contacts",
-          { userId },
-        );
 
         return {
           success: true,

@@ -99,6 +99,20 @@ export const transactionBridge = {
     ipcRenderer.invoke("transactions:get-details", transactionId),
 
   /**
+   * PERF: Lightweight overview — contacts only, no communications.
+   * Use this for initial load; fetch full details only when needed.
+   */
+  getOverview: (transactionId: string) =>
+    ipcRenderer.invoke("transactions:get-overview", transactionId),
+
+  /**
+   * PERF: Filtered communications — only emails or only texts.
+   * Much faster than getDetails when transaction has many communications.
+   */
+  getCommunications: (transactionId: string, channelFilter: "email" | "text") =>
+    ipcRenderer.invoke("transactions:get-communications", transactionId, channelFilter),
+
+  /**
    * Gets transaction with all associated contacts
    * @param transactionId - Transaction ID to retrieve
    * @returns Transaction with contacts
