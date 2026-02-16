@@ -1046,6 +1046,20 @@ export interface WindowApi {
       cleared: number;
       error?: string;
     }>;
+    /** Look up contact names by phone numbers (batch) */
+    getNamesByPhones: (phones: string[]) => Promise<{
+      success: boolean;
+      names: Record<string, string>;
+      error?: string;
+    }>;
+    /** Search contacts at database level (for selection modal) */
+    searchContacts: (userId: string, query: string) => Promise<{
+      success: boolean;
+      contacts?: Contact[];
+      error?: string;
+    }>;
+    /** Listen for external contacts sync completion */
+    onExternalSyncComplete: (callback: () => void) => () => void;
   };
 
   // Transaction methods
@@ -1089,6 +1103,41 @@ export interface WindowApi {
       };
       error?: string;
     }>;
+    /**
+     * PERF: Lightweight overview - contacts only, no communications.
+     */
+    getOverview: (transactionId: string) => Promise<{
+      success: boolean;
+      transaction?: Transaction & {
+        contact_assignments?: Array<{
+          id: string;
+          contact_id: string;
+          contact_name?: string;
+          contact_email?: string;
+          contact_phone?: string;
+          contact_company?: string;
+          role?: string;
+          specific_role?: string;
+          is_primary?: number;
+          notes?: string;
+        }>;
+      };
+      error?: string;
+    }>;
+    /**
+     * PERF: Filtered communications - only emails or only texts.
+     */
+    getCommunications: (transactionId: string, channelFilter?: "email" | "text") => Promise<{
+      success: boolean;
+      communications?: Communication[];
+      error?: string;
+    }>;
+    getWithContacts: (transactionId: string) => Promise<{
+      success: boolean;
+      transaction?: Transaction;
+      contacts?: Array<Record<string, unknown>>;
+      error?: string;
+    }>;
     create: (
       userId: string,
       transactionData: Record<string, unknown>,
@@ -1112,6 +1161,10 @@ export interface WindowApi {
     delete: (
       transactionId: string,
     ) => Promise<{ success: boolean; error?: string }>;
+    exportPDF: (
+      transactionId: string,
+      outputPath: string,
+    ) => Promise<{ success: boolean; filePath?: string; error?: string }>;
     exportEnhanced: (
       transactionId: string,
       options?: {
@@ -1174,6 +1227,175 @@ export interface WindowApi {
       success: boolean;
       updatedCount?: number;
       errors?: string[];
+      error?: string;
+    }>;
+
+    // ============================================
+    // MESSAGE / EMAIL LINK METHODS
+    // ============================================
+
+    /** Gets unlinked messages (SMS/iMessage not attached to any transaction) */
+    getUnlinkedMessages: (userId: string) => Promise<{
+      success: boolean;
+      messages?: unknown[];
+      error?: string;
+    }>;
+    /** Gets unlinked emails with server-side search support (TASK-1993) */
+    getUnlinkedEmails: (
+      userId: string,
+      options?: {
+        query?: string;
+        after?: string;
+        before?: string;
+        maxResults?: number;
+        skip?: number;
+        transactionId?: string;
+      },
+    ) => Promise<{
+      success: boolean;
+      emails?: Array<{
+        id: string;
+        subject: string | null;
+        sender: string | null;
+        sent_at: string | null;
+        body_preview?: string | null;
+        email_thread_id?: string | null;
+        has_attachments?: boolean;
+      }>;
+      error?: string;
+    }>;
+    /** Gets distinct contacts with unlinked message counts */
+    getMessageContacts: (userId: string) => Promise<{
+      success: boolean;
+      contacts?: unknown[];
+      error?: string;
+    }>;
+    /** Gets unlinked messages for a specific contact */
+    getMessagesByContact: (userId: string, contact: string) => Promise<{
+      success: boolean;
+      messages?: unknown[];
+      error?: string;
+    }>;
+    /** Links messages to a transaction */
+    linkMessages: (messageIds: string[], transactionId: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    /** Unlinks messages from a transaction */
+    unlinkMessages: (messageIds: string[], transactionId?: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    /** Link emails to a transaction */
+    linkEmails: (emailIds: string[], transactionId: string) => Promise<{
+      success: boolean;
+      linked?: number;
+      error?: string;
+    }>;
+    /** Auto-links text messages to a transaction based on assigned contacts */
+    autoLinkTexts: (transactionId: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    /** Re-syncs auto-link communications for all contacts on a transaction */
+    resyncAutoLink: (transactionId: string) => Promise<{
+      success: boolean;
+      contactsProcessed?: number;
+      totalEmailsLinked?: number;
+      totalMessagesLinked?: number;
+      totalAlreadyLinked?: number;
+      totalErrors?: number;
+      message?: string;
+      error?: string;
+    }>;
+    /** Sync emails from provider for a transaction */
+    syncAndFetchEmails: (transactionId: string) => Promise<{
+      success: boolean;
+      provider?: "gmail" | "outlook";
+      emailsFetched?: number;
+      emailsStored?: number;
+      totalEmailsLinked?: number;
+      totalMessagesLinked?: number;
+      totalAlreadyLinked?: number;
+      totalErrors?: number;
+      error?: string;
+      message?: string;
+    }>;
+    /** Export transaction to organized folder structure */
+    exportFolder: (transactionId: string, options?: {
+      includeEmails?: boolean;
+      includeTexts?: boolean;
+      includeAttachments?: boolean;
+    }) => Promise<{
+      success: boolean;
+      path?: string;
+      error?: string;
+    }>;
+    /** Get earliest communication date for contacts (TASK-1974) */
+    getEarliestCommunicationDate: (contactIds: string[], userId: string) => Promise<{
+      success: boolean;
+      date?: string | null;
+      error?: string;
+    }>;
+    reanalyze: (
+      userId: string,
+      provider: string,
+      propertyAddress: string,
+      dateRange: { start?: string | Date; end?: string | Date },
+    ) => Promise<{
+      success: boolean;
+      newCount?: number;
+      updatedCount?: number;
+      error?: string;
+    }>;
+
+    // ============================================
+    // EMAIL ATTACHMENT METHODS (TASK-1776)
+    // ============================================
+
+    /** Get attachments for a specific email */
+    getEmailAttachments: (emailId: string) => Promise<{
+      success: boolean;
+      data?: Array<{
+        id: string;
+        filename: string;
+        mime_type: string | null;
+        file_size_bytes: number | null;
+        storage_path: string | null;
+      }>;
+      error?: string;
+    }>;
+    /** Backfill missing email attachments */
+    backfillAttachments: (userId: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    /** Open attachment with system viewer */
+    openAttachment: (storagePath: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    /** Get attachment data as base64 data URL for preview */
+    getAttachmentData: (storagePath: string, mimeType: string) => Promise<{
+      success: boolean;
+      data?: string;
+      error?: string;
+    }>;
+    /** Get attachment buffer as raw base64 (for DOCX conversion) */
+    getAttachmentBuffer: (storagePath: string) => Promise<{
+      success: boolean;
+      data?: string;
+      error?: string;
+    }>;
+    /** Get attachment counts for a transaction (TASK-1781) */
+    getAttachmentCounts: (transactionId: string, auditStart?: string, auditEnd?: string) => Promise<{
+      success: boolean;
+      data?: {
+        textAttachments: number;
+        emailAttachments: number;
+        total: number;
+        totalSizeBytes?: number;
+      };
       error?: string;
     }>;
 

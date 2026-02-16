@@ -180,9 +180,7 @@ export function EmailViewModal({
   useEffect(() => {
     if (email?.id && email.has_attachments) {
       setLoadingAttachments(true);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const transactionsApi = window.api.transactions as any;
-      transactionsApi
+      window.api.transactions
         .getEmailAttachments(email.id)
         .then((result: { success: boolean; data?: EmailAttachment[]; error?: string }) => {
           if (result.success && result.data) {
@@ -206,9 +204,7 @@ export function EmailViewModal({
     }
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const transactionsApi = window.api.transactions as any;
-      const result = await transactionsApi.openAttachment(attachment.storage_path);
+      const result = await window.api.transactions.openAttachment(attachment.storage_path);
       if (!result.success) {
         console.error("Failed to open attachment:", result.error);
       }
