@@ -492,6 +492,21 @@ export function clearAllForUser(userId: string): void {
   logService.info('Cleared all external contacts', 'ExternalContactDbService', { userId });
 }
 
+/**
+ * Clear all external contacts for a user by source
+ * Used by Force Re-import to wipe a specific source before fresh import
+ */
+export function clearBySource(userId: string, source: 'macos' | 'iphone' | 'outlook'): number {
+  const result = dbRun(
+    'DELETE FROM external_contacts WHERE user_id = ? AND source = ?',
+    [userId, source]
+  );
+  if (result.changes > 0) {
+    logService.info(`Cleared ${result.changes} ${source} external contacts`, 'ExternalContactDbService', { userId });
+  }
+  return result.changes;
+}
+
 // ============================================
 // SYNC OPERATIONS
 // ============================================

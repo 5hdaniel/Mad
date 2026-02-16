@@ -29,7 +29,7 @@ function ContactFormModal({
   const [error, setError] = useState<string | undefined>(undefined);
 
   // Check if this is an external contact being imported (missing required data)
-  const isExternalContact = contact?.id?.startsWith("msg_") || contact?.is_message_derived;
+  const isExternalContact = contact?.id?.startsWith("msg_") || !!contact?.is_message_derived;
   const hasContactInfo = !!(formData.email.trim() || formData.phone.trim());
   const showMissingInfoWarning = isExternalContact && !hasContactInfo;
   const canSave = !!formData.name.trim() && hasContactInfo;

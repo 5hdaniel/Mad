@@ -1,5 +1,5 @@
 import React from "react";
-import { SourcePill, ContactSource as SourcePillSource } from "./SourcePill";
+import { SourcePill, ImportStatusPill, ContactSource as SourcePillSource } from "./SourcePill";
 import type { ExtendedContact } from "../../types/components";
 import type { ContactSource as ModelContactSource } from "../../../electron/types/models";
 
@@ -75,19 +75,25 @@ function mapToSourcePillSource(
     return source;
   }
 
-  // External contacts (from Contacts App, not yet imported) show "Contacts App" pill
-  if (isExternal) {
-    return "external";
+  // Outlook contacts always show "Outlook" pill regardless of import status
+  if (source === "outlook") {
+    return "outlook";
   }
 
-  // Imported contacts - check source for specific display
+  // Contacts App source (imported or not)
+  if (isExternal || source === "contacts_app") {
+    return "contacts_app";
+  }
+
+  // Check specific source
   switch (source) {
     case "manual":
       return "manual";
-    case "contacts_app":
-      return "contacts_app";
+    case "email":
+    case "inferred":
+      return "email";
     default:
-      return "imported";
+      return "email";
   }
 }
 
@@ -216,6 +222,7 @@ export function ContactRow({
             source={mapToSourcePillSource(contact.source, isExternal)}
             size="sm"
           />
+          {!isAdded && <ImportStatusPill isImported={!isExternal} size="sm" />}
         </div>
         {email && (
           <p

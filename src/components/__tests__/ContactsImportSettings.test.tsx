@@ -1,11 +1,12 @@
 /**
  * Tests for ContactsImportSettings component (TASK-1989)
  *
- * Tests multi-source contacts import settings:
- * - macOS Contacts section (macOS only)
- * - Outlook Contacts section (when Microsoft connected)
+ * Tests unified contacts settings card:
+ * - Source toggle switches (persisted via props)
+ * - Source stats grid
+ * - Import button respects enabled sources
+ * - Outlook reconnect handling
  * - No sources available state
- * - reconnectRequired handling
  */
 
 import React from "react";
@@ -37,6 +38,25 @@ const mockSyncOutlookContacts = jest.fn().mockResolvedValue({
   success: true,
   count: 5,
 });
+const mockGetSourceStats = jest.fn().mockResolvedValue({
+  success: true,
+  stats: { macos: 10, iphone: 0, outlook: 5 },
+});
+
+const mockOnToggleSource = jest.fn();
+
+/** Default props for the unified component */
+const defaultProps = {
+  userId: "user-1",
+  outlookContactsEnabled: true,
+  macosContactsEnabled: true,
+  gmailContactsEnabled: true,
+  outlookEmailsInferred: false,
+  gmailEmailsInferred: false,
+  messagesInferred: false,
+  loadingPreferences: false,
+  onToggleSource: mockOnToggleSource,
+};
 
 /**
  * Helper to render with PlatformProvider with a specific platform
@@ -55,6 +75,9 @@ function renderWithPlatform(
       contacts: {
         getExternalSyncStatus: mockGetExternalSyncStatus,
         syncOutlookContacts: mockSyncOutlookContacts,
+        syncExternal: jest.fn().mockResolvedValue({ success: true }),
+        forceReimport: jest.fn().mockResolvedValue({ success: true, cleared: 0 }),
+        getSourceStats: mockGetSourceStats,
       },
     },
     writable: true,
@@ -68,6 +91,8 @@ beforeEach(() => {
   mockRequestSync.mockClear();
   mockGetExternalSyncStatus.mockClear();
   mockSyncOutlookContacts.mockClear();
+  mockGetSourceStats.mockClear();
+  mockOnToggleSource.mockClear();
 
   // Reset mocks to default success values
   mockGetExternalSyncStatus.mockResolvedValue({
@@ -78,6 +103,10 @@ beforeEach(() => {
   mockSyncOutlookContacts.mockResolvedValue({
     success: true,
     count: 5,
+  });
+  mockGetSourceStats.mockResolvedValue({
+    success: true,
+    stats: { macos: 10, iphone: 0, outlook: 5 },
   });
 });
 
@@ -91,34 +120,31 @@ afterEach(() => {
 
 describe("ContactsImportSettings", () => {
   describe("macOS platform", () => {
-    it("should render macOS Contacts section on macOS", () => {
+    it("should render toggle switches and import button on macOS", () => {
       renderWithPlatform(
-        <ContactsImportSettings userId="user-1" />,
+        <ContactsImportSettings {...defaultProps} />,
         "darwin"
       );
 
-      expect(screen.getByText("macOS Contacts")).toBeInTheDocument();
-      expect(
-        screen.getByText(/Import contacts from the macOS Contacts app/)
-      ).toBeInTheDocument();
+      expect(screen.getByText("Contacts")).toBeInTheDocument();
       expect(screen.getByText("Import Contacts")).toBeInTheDocument();
       expect(screen.getByText("Force Re-import")).toBeInTheDocument();
+      expect(screen.getByLabelText("macOS iPhone Contacts import")).toBeInTheDocument();
     });
 
-    it("should render both macOS and Outlook sections when Microsoft is connected", () => {
+    it("should render both macOS and Outlook toggles when Microsoft is connected", () => {
       renderWithPlatform(
-        <ContactsImportSettings userId="user-1" isMicrosoftConnected={true} />,
+        <ContactsImportSettings {...defaultProps} isMicrosoftConnected={true} />,
         "darwin"
       );
 
-      expect(screen.getByText("macOS Contacts")).toBeInTheDocument();
-      expect(screen.getByText("Outlook Contacts")).toBeInTheDocument();
-      expect(screen.getByText("Import Outlook Contacts")).toBeInTheDocument();
+      expect(screen.getByLabelText("macOS iPhone Contacts import")).toBeInTheDocument();
+      expect(screen.getByLabelText("Outlook Contacts import")).toBeInTheDocument();
     });
 
     it("should trigger macOS contacts sync when Import Contacts is clicked", () => {
       renderWithPlatform(
-        <ContactsImportSettings userId="user-1" />,
+        <ContactsImportSettings {...defaultProps} />,
         "darwin"
       );
 
@@ -129,9 +155,9 @@ describe("ContactsImportSettings", () => {
   });
 
   describe("non-macOS platform (Windows)", () => {
-    it("should not render macOS Contacts section on Windows", () => {
+    it("should not render macOS toggle on Windows", () => {
       renderWithPlatform(
-        <ContactsImportSettings userId="user-1" />,
+        <ContactsImportSettings {...defaultProps} />,
         "win32"
       );
 
@@ -139,44 +165,42 @@ describe("ContactsImportSettings", () => {
       expect(
         screen.getByText(/Connect a Microsoft account or use macOS/)
       ).toBeInTheDocument();
-      expect(screen.queryByText("macOS Contacts")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("macOS iPhone Contacts import")).not.toBeInTheDocument();
     });
 
-    it("should render Outlook section on Windows when Microsoft connected", () => {
+    it("should render Outlook toggle on Windows when Microsoft connected", () => {
       renderWithPlatform(
-        <ContactsImportSettings userId="user-1" isMicrosoftConnected={true} />,
+        <ContactsImportSettings {...defaultProps} isMicrosoftConnected={true} />,
         "win32"
       );
 
-      expect(screen.getByText("Outlook Contacts")).toBeInTheDocument();
-      expect(screen.getByText("Import Outlook Contacts")).toBeInTheDocument();
-      expect(screen.queryByText("macOS Contacts")).not.toBeInTheDocument();
+      expect(screen.getByLabelText("Outlook Contacts import")).toBeInTheDocument();
+      expect(screen.queryByLabelText("macOS iPhone Contacts import")).not.toBeInTheDocument();
     });
   });
 
   describe("no sources available", () => {
     it("should show helpful message when no sources available (Windows, no Microsoft)", () => {
       renderWithPlatform(
-        <ContactsImportSettings userId="user-1" isMicrosoftConnected={false} />,
+        <ContactsImportSettings {...defaultProps} isMicrosoftConnected={false} />,
         "win32"
       );
 
       expect(
         screen.getByText(/Connect a Microsoft account or use macOS/)
       ).toBeInTheDocument();
-      // The heading "Import Contacts" in the no-sources fallback
-      expect(screen.getByText("Import Contacts")).toBeInTheDocument();
+      expect(screen.getByText("Contacts")).toBeInTheDocument();
     });
   });
 
   describe("Outlook contacts import", () => {
-    it("should trigger Outlook contacts sync when button is clicked", async () => {
+    it("should trigger Outlook contacts sync via unified Import button", async () => {
       renderWithPlatform(
-        <ContactsImportSettings userId="user-1" isMicrosoftConnected={true} />,
-        "darwin"
+        <ContactsImportSettings {...defaultProps} isMicrosoftConnected={true} macosContactsEnabled={false} />,
+        "win32"
       );
 
-      fireEvent.click(screen.getByText("Import Outlook Contacts"));
+      fireEvent.click(screen.getByText("Import Contacts"));
 
       await waitFor(() => {
         expect(mockSyncOutlookContacts).toHaveBeenCalledWith("user-1");
@@ -185,11 +209,11 @@ describe("ContactsImportSettings", () => {
 
     it("should show success result after Outlook sync", async () => {
       renderWithPlatform(
-        <ContactsImportSettings userId="user-1" isMicrosoftConnected={true} />,
-        "darwin"
+        <ContactsImportSettings {...defaultProps} isMicrosoftConnected={true} />,
+        "win32"
       );
 
-      fireEvent.click(screen.getByText("Import Outlook Contacts"));
+      fireEvent.click(screen.getByText("Import Contacts"));
 
       await waitFor(() => {
         expect(screen.getByText(/Outlook contacts synced/)).toBeInTheDocument();
@@ -204,11 +228,11 @@ describe("ContactsImportSettings", () => {
       });
 
       renderWithPlatform(
-        <ContactsImportSettings userId="user-1" isMicrosoftConnected={true} />,
-        "darwin"
+        <ContactsImportSettings {...defaultProps} isMicrosoftConnected={true} />,
+        "win32"
       );
 
-      fireEvent.click(screen.getByText("Import Outlook Contacts"));
+      fireEvent.click(screen.getByText("Import Contacts"));
 
       await waitFor(() => {
         expect(
@@ -224,38 +248,50 @@ describe("ContactsImportSettings", () => {
       });
 
       renderWithPlatform(
-        <ContactsImportSettings userId="user-1" isMicrosoftConnected={true} />,
-        "darwin"
+        <ContactsImportSettings {...defaultProps} isMicrosoftConnected={true} />,
+        "win32"
       );
 
-      fireEvent.click(screen.getByText("Import Outlook Contacts"));
+      fireEvent.click(screen.getByText("Import Contacts"));
 
       await waitFor(() => {
-        expect(screen.getByText(/Sync failed: Network error/)).toBeInTheDocument();
+        expect(screen.getByText(/Outlook sync failed: Network error/)).toBeInTheDocument();
       });
     });
+  });
 
-    it("should hide Import Outlook Contacts button when reconnect is required", async () => {
-      mockSyncOutlookContacts.mockResolvedValue({
-        success: false,
-        reconnectRequired: true,
-      });
-
+  describe("source toggle callbacks", () => {
+    it("should call onToggleSource when Outlook toggle is clicked", () => {
       renderWithPlatform(
-        <ContactsImportSettings userId="user-1" isMicrosoftConnected={true} />,
+        <ContactsImportSettings {...defaultProps} isMicrosoftConnected={true} />,
         "darwin"
       );
 
-      fireEvent.click(screen.getByText("Import Outlook Contacts"));
+      fireEvent.click(screen.getByLabelText("Outlook Contacts import"));
 
-      await waitFor(() => {
-        expect(
-          screen.getByText(/disconnect and reconnect your Microsoft mailbox/)
-        ).toBeInTheDocument();
-      });
+      expect(mockOnToggleSource).toHaveBeenCalledWith("direct", "outlookContacts", true);
+    });
 
-      // The button should not be visible when reconnect is required
-      expect(screen.queryByText("Import Outlook Contacts")).not.toBeInTheDocument();
+    it("should call onToggleSource when macOS toggle is clicked", () => {
+      renderWithPlatform(
+        <ContactsImportSettings {...defaultProps} />,
+        "darwin"
+      );
+
+      fireEvent.click(screen.getByLabelText("macOS iPhone Contacts import"));
+
+      expect(mockOnToggleSource).toHaveBeenCalledWith("direct", "macosContacts", true);
+    });
+
+    it("should call onToggleSource when Messages toggle is clicked", () => {
+      renderWithPlatform(
+        <ContactsImportSettings {...defaultProps} />,
+        "darwin"
+      );
+
+      fireEvent.click(screen.getByLabelText("Messages SMS auto-discover"));
+
+      expect(mockOnToggleSource).toHaveBeenCalledWith("inferred", "messages", false);
     });
   });
 

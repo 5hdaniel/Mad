@@ -1,5 +1,5 @@
 import React from "react";
-import { SourcePill, type ContactSource } from "./SourcePill";
+import { SourcePill, ImportStatusPill, type ContactSource } from "./SourcePill";
 import type { ExtendedContact } from "../../types/components";
 import type { ContactSource as ModelContactSource } from "../../../electron/types/models";
 
@@ -57,19 +57,25 @@ function mapToSourcePillSource(
     return source;
   }
 
-  // External contacts (from Contacts App, not yet imported) show "Contacts App" pill
-  if (isExternal) {
-    return "external";
+  // Outlook contacts always show "Outlook" pill regardless of import status
+  if (source === "outlook") {
+    return "outlook";
   }
 
-  // Imported contacts - check source for specific display
+  // Contacts App source (imported or not)
+  if (isExternal || source === "contacts_app") {
+    return "contacts_app";
+  }
+
+  // Check specific source
   switch (source) {
     case "manual":
       return "manual";
-    case "contacts_app":
-      return "contacts_app";
+    case "email":
+    case "inferred":
+      return "email";
     default:
-      return "imported";
+      return "email";
   }
 }
 
@@ -211,26 +217,17 @@ export function ContactPreview({
             )}
           </div>
 
-          {/* Source Pill */}
-          <SourcePill source={sourcePillSource} size="md" />
+          {/* Source & Status Pills */}
+          <div className="flex items-center gap-2">
+            <SourcePill source={sourcePillSource} size="md" />
+            <ImportStatusPill isImported={!isExternal} size="md" />
+          </div>
         </div>
 
-        {/* Transactions Section (imported only) or External Message */}
-        {(isExternal || isLoadingTransactions || transactions.length > 0) && (
+        {/* Transactions Section (imported contacts only) */}
+        {!isExternal && (isLoadingTransactions || transactions.length > 0) && (
         <div className="flex-1 overflow-y-auto border-t border-gray-200 px-6 py-4">
-          {isExternal ? (
-            <div
-              className="text-center text-gray-500 py-4"
-              data-testid="contact-preview-external-message"
-            >
-              <p className="font-medium mb-1">
-                Not yet imported to Magic Audit
-              </p>
-              <p className="text-sm">
-                Import this contact to assign them to transactions.
-              </p>
-            </div>
-          ) : isLoadingTransactions ? (
+          {isLoadingTransactions ? (
             <div
               className="text-center py-4"
               data-testid="contact-preview-loading"
@@ -240,7 +237,7 @@ export function ContactPreview({
           ) : (
             <>
               <h3 className="text-sm font-semibold text-gray-700 mb-3">
-                Transactions
+                Transactions ({transactions.length})
               </h3>
               <div
                 className="space-y-2"

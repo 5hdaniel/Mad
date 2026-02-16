@@ -388,10 +388,11 @@ describe("Contacts - Deletion Prevention", () => {
         expect(screen.getByText("John Doe")).toBeInTheDocument();
       });
 
-      expect(screen.getByText("Imported")).toBeInTheDocument();
+      expect(screen.getByTestId("source-pill-manual")).toBeInTheDocument();
+      expect(screen.getByTestId("status-pill-imported")).toBeInTheDocument();
     });
 
-    it("should display From Email badge for email contacts", async () => {
+    it("should display Email badge for email contacts", async () => {
       window.api.contacts.getAll.mockResolvedValue({
         success: true,
         contacts: [mockContacts[1]], // source: 'email'
@@ -403,8 +404,8 @@ describe("Contacts - Deletion Prevention", () => {
         expect(screen.getByText("Jane Smith")).toBeInTheDocument();
       });
 
-      // Use testid to avoid conflict with the "Imported" filter button
-      expect(screen.getByTestId("source-pill-imported")).toBeInTheDocument();
+      expect(screen.getByTestId("source-pill-email")).toBeInTheDocument();
+      expect(screen.getByTestId("status-pill-imported")).toBeInTheDocument();
     });
 
     it("should display Contacts App badge for contacts_app contacts", async () => {
@@ -419,8 +420,8 @@ describe("Contacts - Deletion Prevention", () => {
         expect(screen.getByText("Bob Wilson")).toBeInTheDocument();
       });
 
-      // Use testid to avoid conflict with the "Imported" filter button
-      expect(screen.getByTestId("source-pill-imported")).toBeInTheDocument();
+      expect(screen.getByTestId("source-pill-contacts_app")).toBeInTheDocument();
+      expect(screen.getByTestId("status-pill-imported")).toBeInTheDocument();
     });
   });
 

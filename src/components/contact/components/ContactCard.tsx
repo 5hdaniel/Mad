@@ -44,23 +44,29 @@ function mapToSourcePillSource(
   source: ModelContactSource | string | undefined,
   isMessageDerived: boolean
 ): SourcePillSource {
-  // If message-derived, show as external regardless of source
-  if (isMessageDerived) {
-    return "external";
+  // Outlook contacts always show "Outlook" pill
+  if (source === "outlook") {
+    return "outlook";
   }
 
-  // Map model sources to SourcePill sources
+  // SMS/messages source takes priority
+  if (source === "sms" || source === "messages") {
+    return source;
+  }
+
+  // Contacts App source (imported or external/message-derived)
+  if (isMessageDerived || source === "contacts_app") {
+    return "contacts_app";
+  }
+
+  // Check specific source
   switch (source) {
     case "manual":
       return "manual";
-    case "contacts_app":
-      return "contacts_app";
-    case "sms":
-      return "sms";
     case "email":
     case "inferred":
     default:
-      return "imported";
+      return "email";
   }
 }
 

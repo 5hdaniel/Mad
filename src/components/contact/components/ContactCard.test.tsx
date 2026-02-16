@@ -47,21 +47,21 @@ describe("ContactCard", () => {
       renderContactCard({
         contact: createTestContact({ source: "contacts_app", is_message_derived: false }),
       });
-      expect(screen.getByTestId("source-pill-imported")).toBeInTheDocument();
+      expect(screen.getByTestId("source-pill-contacts_app")).toBeInTheDocument();
     });
 
     it("shows [External] pill for message-derived contacts", () => {
       renderContactCard({
         contact: createTestContact({ is_message_derived: true }),
       });
-      expect(screen.getByTestId("source-pill-external")).toBeInTheDocument();
+      expect(screen.getByTestId("source-pill-contacts_app")).toBeInTheDocument();
     });
 
     it("shows [External] pill for message-derived contacts with is_message_derived=1", () => {
       renderContactCard({
         contact: createTestContact({ is_message_derived: 1 }),
       });
-      expect(screen.getByTestId("source-pill-external")).toBeInTheDocument();
+      expect(screen.getByTestId("source-pill-contacts_app")).toBeInTheDocument();
     });
 
     it("shows [Message] pill for sms source when not message-derived", () => {
@@ -71,11 +71,11 @@ describe("ContactCard", () => {
       expect(screen.getByTestId("source-pill-message")).toBeInTheDocument();
     });
 
-    it("shows [Imported] pill for email source", () => {
+    it("shows [Email] pill for email source", () => {
       renderContactCard({
         contact: createTestContact({ source: "email", is_message_derived: false }),
       });
-      expect(screen.getByTestId("source-pill-imported")).toBeInTheDocument();
+      expect(screen.getByTestId("source-pill-email")).toBeInTheDocument();
     });
 
     it("shows [External] for message-derived even with contacts_app source", () => {
@@ -83,7 +83,7 @@ describe("ContactCard", () => {
       renderContactCard({
         contact: createTestContact({ source: "contacts_app", is_message_derived: true }),
       });
-      expect(screen.getByTestId("source-pill-external")).toBeInTheDocument();
+      expect(screen.getByTestId("source-pill-contacts_app")).toBeInTheDocument();
     });
   });
 

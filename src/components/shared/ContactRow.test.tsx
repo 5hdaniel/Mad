@@ -59,14 +59,14 @@ describe("ContactRow", () => {
       renderContactRow({
         contact: createTestContact({ source: "contacts_app" }),
       });
-      expect(screen.getByTestId("source-pill-imported")).toBeInTheDocument();
+      expect(screen.getByTestId("source-pill-contacts_app")).toBeInTheDocument();
     });
 
     it("displays external source pill for message-derived contacts", () => {
       renderContactRow({
         contact: createTestContact({ is_message_derived: true }),
       });
-      expect(screen.getByTestId("source-pill-external")).toBeInTheDocument();
+      expect(screen.getByTestId("source-pill-contacts_app")).toBeInTheDocument();
     });
 
     it("handles missing email gracefully", () => {
@@ -338,21 +338,21 @@ describe("ContactRow", () => {
       renderContactRow({
         contact: createTestContact({ source: "contacts_app", is_message_derived: false }),
       });
-      expect(screen.getByTestId("source-pill-imported")).toBeInTheDocument();
+      expect(screen.getByTestId("source-pill-contacts_app")).toBeInTheDocument();
     });
 
     it("shows external variant for message-derived contacts", () => {
       renderContactRow({
         contact: createTestContact({ is_message_derived: true }),
       });
-      expect(screen.getByTestId("source-pill-external")).toBeInTheDocument();
+      expect(screen.getByTestId("source-pill-contacts_app")).toBeInTheDocument();
     });
 
     it("shows external variant for message-derived contacts with is_message_derived=1", () => {
       renderContactRow({
         contact: createTestContact({ is_message_derived: 1 }),
       });
-      expect(screen.getByTestId("source-pill-external")).toBeInTheDocument();
+      expect(screen.getByTestId("source-pill-contacts_app")).toBeInTheDocument();
     });
 
     it("shows message variant for sms source when not message-derived", () => {
@@ -362,11 +362,11 @@ describe("ContactRow", () => {
       expect(screen.getByTestId("source-pill-message")).toBeInTheDocument();
     });
 
-    it("shows imported variant for email source", () => {
+    it("shows email variant for email source", () => {
       renderContactRow({
         contact: createTestContact({ source: "email", is_message_derived: false }),
       });
-      expect(screen.getByTestId("source-pill-imported")).toBeInTheDocument();
+      expect(screen.getByTestId("source-pill-email")).toBeInTheDocument();
     });
   });
 

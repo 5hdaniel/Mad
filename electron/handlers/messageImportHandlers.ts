@@ -93,9 +93,9 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
       }
 
       // TASK-1952: Load message import filter preferences
-      // Defaults: 6 months lookback, 250K max messages (matches UI defaults)
-      const DEFAULT_LOOKBACK_MONTHS = 6;
-      const DEFAULT_MAX_MESSAGES = 250000;
+      // Defaults: 3 months lookback, 50K max messages (matches UI defaults)
+      const DEFAULT_LOOKBACK_MONTHS = 3;
+      const DEFAULT_MAX_MESSAGES = 50000;
       let importFilters: MessageImportFilters = {
         lookbackMonths: DEFAULT_LOOKBACK_MONTHS,
         maxMessages: DEFAULT_MAX_MESSAGES,

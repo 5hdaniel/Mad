@@ -113,6 +113,10 @@ export function EditContactsModal({
   // Contacts without roles (for validation highlighting)
   const [contactsWithoutRoles, setContactsWithoutRoles] = useState<Set<string>>(new Set());
 
+  // Edit contact state (Screen 1 → ContactFormModal)
+  const [editContact, setEditContact] = useState<ExtendedContact | undefined>(undefined);
+  const [showEditModal, setShowEditModal] = useState(false);
+
   // Store original assignments for save diffing
   const [originalAssignments, setOriginalAssignments] = useState<
     ContactAssignment[]
@@ -349,7 +353,27 @@ export function EditContactsModal({
                 }}
                 onOpenAddModal={() => setShowAddModal(true)}
                 onRemoveContact={handleRemoveContact}
+                onEditContact={(contact) => {
+                  setEditContact(contact);
+                  setShowEditModal(true);
+                }}
                 contactsWithoutRoles={contactsWithoutRoles}
+              />
+            )}
+
+            {/* Edit Contact Modal (from Screen 1 preview) */}
+            {showEditModal && transaction.user_id && (
+              <ContactFormModal
+                userId={transaction.user_id}
+                contact={editContact}
+                onClose={() => {
+                  setEditContact(undefined);
+                  setShowEditModal(false);
+                }}
+                onSuccess={() => {
+                  setEditContact(undefined);
+                  setShowEditModal(false);
+                }}
               />
             )}
           </div>
@@ -407,6 +431,7 @@ interface Screen1ContentProps {
   onRoleAssignmentsChange: (assignments: RoleAssignments) => void;
   onOpenAddModal: () => void;
   onRemoveContact: (contactId: string) => void;
+  onEditContact?: (contact: ExtendedContact) => void;
   /** Contacts that are missing roles (for validation highlighting) */
   contactsWithoutRoles?: Set<string>;
 }
@@ -421,6 +446,7 @@ function Screen1Content({
   onRoleAssignmentsChange,
   onOpenAddModal,
   onRemoveContact,
+  onEditContact,
   contactsWithoutRoles = new Set(),
 }: Screen1ContentProps): React.ReactElement {
   const { contacts, loading: contactsLoading, error: contactsError } = useContacts();
@@ -609,7 +635,11 @@ function Screen1Content({
           contact={previewContact}
           isExternal={isExternal(previewContact)}
           transactions={[]}
-          onEdit={() => setPreviewContact(null)}
+          onEdit={() => {
+            const contact = previewContact;
+            setPreviewContact(null);
+            if (contact && onEditContact) onEditContact(contact);
+          }}
           onClose={() => setPreviewContact(null)}
         />
       )}
@@ -744,7 +774,7 @@ function Screen2Overlay({
           email: contact.email,
           phone: contact.phone,
           company: contact.company,
-          source: "contacts_app",
+          source: contact.source || "contacts_app",
         });
 
         if (result.success && result.data) {

@@ -230,6 +230,9 @@ export function ContactSearchList({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // Normalize phone to last 10 digits for consistent matching (mirrors backend normalizeToE164 logic)
+  const normPhone = (p: string) => p.replace(/\D/g, "").slice(-10);
+
   // Build sets of emails/phones from imported contacts for deduplication and isAdded check
   const { importedEmails, importedPhones } = useMemo(() => {
     const emails = new Set<string>();
@@ -237,8 +240,8 @@ export function ContactSearchList({
     contacts.forEach((c) => {
       if (c.email) emails.add(c.email.toLowerCase());
       c.allEmails?.forEach((e) => emails.add(e.toLowerCase()));
-      if (c.phone) phones.add(c.phone.replace(/\D/g, ""));
-      c.allPhones?.forEach((p) => phones.add(p.replace(/\D/g, "")));
+      if (c.phone) phones.add(normPhone(c.phone));
+      c.allPhones?.forEach((p) => phones.add(normPhone(p)));
     });
     return { importedEmails: emails, importedPhones: phones };
   }, [contacts]);
@@ -250,7 +253,7 @@ export function ContactSearchList({
     if (emailMatch) return true;
 
     const phones = [contact.phone, ...(contact.allPhones || [])].filter(Boolean);
-    const phoneMatch = phones.some((p) => importedPhones.has(p!.replace(/\D/g, "")));
+    const phoneMatch = phones.some((p) => importedPhones.has(normPhone(p!)));
     return phoneMatch;
   }, [importedEmails, importedPhones]);
 

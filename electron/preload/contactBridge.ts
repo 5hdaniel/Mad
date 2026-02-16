@@ -146,6 +146,18 @@ export const contactBridge = {
   }> => ipcRenderer.invoke("contacts:getSourceStats", userId),
 
   /**
+   * Force re-import: wipes ALL external contacts (every source),
+   * then the caller triggers normal import to re-fetch from enabled sources.
+   * @param userId - User ID to force re-import for
+   * @returns Wipe result (cleared count)
+   */
+  forceReimport: (userId: string): Promise<{
+    success: boolean;
+    cleared: number;
+    error?: string;
+  }> => ipcRenderer.invoke("contacts:forceReimport", userId),
+
+  /**
    * TASK-1921: Sync Outlook contacts to external_contacts table
    * Fetches contacts from Microsoft Graph API and syncs to local SQLite
    * @param userId - User ID to sync contacts for
