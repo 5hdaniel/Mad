@@ -2773,6 +2773,7 @@ export const registerTransactionHandlers = (
                 contactEmails,
                 after: startDate,
                 before: endDate,
+                maxResults: 1000,
               });
 
               emailsFetched = fetchedEmails.length;

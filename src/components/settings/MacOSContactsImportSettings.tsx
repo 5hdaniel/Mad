@@ -151,9 +151,7 @@ export function ContactsImportSettings({
     setOutlookReconnectRequired(false);
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const contactsApi = window.api.contacts as any;
-      const result = await contactsApi.syncOutlookContacts(userId);
+      const result = await window.api.contacts.syncOutlookContacts(userId);
 
       if (result.success) {
         setOutlookLastResult({ success: true, count: result.count });
@@ -226,6 +224,7 @@ export function ContactsImportSettings({
   const anySyncing = isSyncing || outlookSyncing;
 
   // Unified import: triggers only user-selected sources
+  // Fire-and-forget by design — each sync has its own loading/error state
   const handleImportAll = useCallback(async () => {
     if (anySyncing || isOtherSyncRunning) return;
     // macOS: call syncExternal directly to populate external_contacts from macOS Contacts
@@ -242,15 +241,13 @@ export function ContactsImportSettings({
     if (anySyncing || isOtherSyncRunning || forceReimporting) return;
     setForceReimporting(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const contactsApi = window.api.contacts as any;
-      const wipeResult = await contactsApi.forceReimport(userId);
+      const wipeResult = await window.api.contacts.forceReimport(userId);
       if (!wipeResult.success) {
         setLastResult({ success: false, error: wipeResult.error || "Failed to clear contacts" });
         return;
       }
       // Now trigger normal import to re-fetch fresh data
-      handleImportAll();
+      await handleImportAll();
     } catch (error) {
       setLastResult({
         success: false,
@@ -599,7 +596,10 @@ export function ContactsImportSettings({
         <div className="relative">
           <button
             type="button"
-            onClick={() => setShowInfoTooltip(!showInfoTooltip)}
+            onMouseDown={(e) => {
+              e.preventDefault(); // Prevent blur from firing on self-click
+              setShowInfoTooltip(!showInfoTooltip);
+            }}
             onBlur={() => setShowInfoTooltip(false)}
             className="text-gray-400 hover:text-gray-600 transition-colors"
             aria-label="Import info"

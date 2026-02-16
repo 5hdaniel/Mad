@@ -270,6 +270,14 @@ export interface IpcChannels {
     request: { userId: string; contactsToImport: NewContact[] };
     response: { success: boolean; contacts?: Contact[]; error?: string };
   };
+  "contacts:forceReimport": {
+    request: { userId: string };
+    response: { success: boolean; cleared: number; error?: string };
+  };
+  "contacts:syncOutlookContacts": {
+    request: { userId: string };
+    response: { success: boolean; count?: number; reconnectRequired?: boolean; error?: string };
+  };
 
   // ============================================
   // COMMUNICATION CHANNELS
@@ -1016,6 +1024,19 @@ export interface WindowApi {
     getSourceStats: (userId: string) => Promise<{
       success: boolean;
       stats?: Record<string, number>;
+      error?: string;
+    }>;
+    /** Sync Outlook contacts to external_contacts table */
+    syncOutlookContacts: (userId: string) => Promise<{
+      success: boolean;
+      count?: number;
+      reconnectRequired?: boolean;
+      error?: string;
+    }>;
+    /** Force re-import: wipe ALL external contacts then return */
+    forceReimport: (userId: string) => Promise<{
+      success: boolean;
+      cleared: number;
       error?: string;
     }>;
   };

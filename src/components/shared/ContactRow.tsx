@@ -1,7 +1,6 @@
 import React from "react";
-import { SourcePill, ImportStatusPill, ContactSource as SourcePillSource } from "./SourcePill";
+import { SourcePill, ImportStatusPill, mapToSourcePillSource } from "./SourcePill";
 import type { ExtendedContact } from "../../types/components";
-import type { ContactSource as ModelContactSource } from "../../../electron/types/models";
 
 export interface ContactRowProps {
   /** The contact to display */
@@ -59,42 +58,6 @@ function getPrimaryEmail(contact: ExtendedContact): string | undefined {
 function isExternalContact(contact: ExtendedContact): boolean {
   // is_message_derived can be number (1) or boolean (true)
   return contact.is_message_derived === 1 || contact.is_message_derived === true;
-}
-
-/**
- * Maps model ContactSource to SourcePill's ContactSource
- * Model: "manual" | "email" | "sms" | "messages" | "contacts_app" | "inferred"
- * SourcePill: "imported" | "external" | "manual" | "contacts_app" | "sms" | "messages"
- */
-function mapToSourcePillSource(
-  source: ModelContactSource | string | undefined,
-  isExternal: boolean
-): SourcePillSource {
-  // sms/messages source takes priority - always show "Message" pill
-  if (source === "sms" || source === "messages") {
-    return source;
-  }
-
-  // Outlook contacts always show "Outlook" pill regardless of import status
-  if (source === "outlook") {
-    return "outlook";
-  }
-
-  // Contacts App source (imported or not)
-  if (isExternal || source === "contacts_app") {
-    return "contacts_app";
-  }
-
-  // Check specific source
-  switch (source) {
-    case "manual":
-      return "manual";
-    case "email":
-    case "inferred":
-      return "email";
-    default:
-      return "email";
-  }
 }
 
 /**

@@ -1,7 +1,6 @@
 import React from "react";
-import { SourcePill, ImportStatusPill, type ContactSource } from "./SourcePill";
+import { SourcePill, ImportStatusPill, mapToSourcePillSource } from "./SourcePill";
 import type { ExtendedContact } from "../../types/components";
-import type { ContactSource as ModelContactSource } from "../../../electron/types/models";
 
 /**
  * Transaction associated with a contact
@@ -43,40 +42,6 @@ function getDisplayName(contact: ExtendedContact): string {
  */
 function getInitial(name: string): string {
   return name.charAt(0).toUpperCase();
-}
-
-/**
- * Maps model ContactSource to SourcePill's ContactSource
- */
-function mapToSourcePillSource(
-  source: ModelContactSource | string | undefined,
-  isExternal: boolean
-): ContactSource {
-  // sms/messages source takes priority - always show "Message" pill
-  if (source === "sms" || source === "messages") {
-    return source;
-  }
-
-  // Outlook contacts always show "Outlook" pill regardless of import status
-  if (source === "outlook") {
-    return "outlook";
-  }
-
-  // Contacts App source (imported or not)
-  if (isExternal || source === "contacts_app") {
-    return "contacts_app";
-  }
-
-  // Check specific source
-  switch (source) {
-    case "manual":
-      return "manual";
-    case "email":
-    case "inferred":
-      return "email";
-    default:
-      return "email";
-  }
 }
 
 /**

@@ -1,4 +1,5 @@
 import React from "react";
+import type { ContactSource as ModelContactSource } from "../../../electron/types/models";
 
 /**
  * Contact source types supported by the SourcePill component.
@@ -151,6 +152,28 @@ export function ImportStatusPill({
       {styles.label}
     </span>
   );
+}
+
+/**
+ * Maps model ContactSource to SourcePill's ContactSource.
+ * Shared utility used by ContactRow, ContactPreview, ContactRoleRow, and ContactCard.
+ */
+export function mapToSourcePillSource(
+  source: ModelContactSource | string | undefined,
+  isExternal: boolean
+): ContactSource {
+  if (source === "sms" || source === "messages") return source;
+  if (source === "outlook") return "outlook";
+  if (isExternal || source === "contacts_app") return "contacts_app";
+  switch (source) {
+    case "manual":
+      return "manual";
+    case "email":
+    case "inferred":
+      return "email";
+    default:
+      return "email";
+  }
 }
 
 export default SourcePill;
