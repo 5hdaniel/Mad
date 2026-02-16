@@ -610,7 +610,7 @@ function setupContentSecurityPolicy(): void {
           // NOTE: 'unsafe-inline' required for CSS-in-JS and dynamic styling.
           // This is also needed in production for the same reason.
           "style-src 'self' 'unsafe-inline'",
-          "img-src 'self' data: https:",
+          "img-src 'self' data: cid: https:",
           "font-src 'self' data:",
           // Tightened: Specific port 5173 instead of wildcard localhost:*
           // Port 5173 is Vite's default dev server port (see vite.config.js and package.json)
@@ -628,7 +628,7 @@ function setupContentSecurityPolicy(): void {
           "script-src 'self'",
           // NOTE: 'unsafe-inline' required for CSS-in-JS and dynamic styling
           "style-src 'self' 'unsafe-inline'",
-          "img-src 'self' data: https:",
+          "img-src 'self' data: cid: https:",
           "font-src 'self' data:",
           "connect-src 'self' https:",
           "media-src 'self'",

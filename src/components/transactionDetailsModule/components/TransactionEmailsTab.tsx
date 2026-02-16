@@ -6,6 +6,7 @@
  */
 import React, { useState, useCallback, useMemo } from "react";
 import type { Communication } from "../types";
+import { useAuth } from "../../../contexts";
 import { AttachEmailsModal } from "./modals";
 import {
   EmailThreadCard,
@@ -58,6 +59,7 @@ export function TransactionEmailsTab({
   auditStartDate,
   auditEndDate,
 }: TransactionEmailsTabProps): React.ReactElement {
+  const { currentUser } = useAuth();
   const [showAttachModal, setShowAttachModal] = useState(false);
 
   // Process communications into email threads
@@ -299,6 +301,7 @@ export function TransactionEmailsTab({
             onViewEmail={onViewEmail}
             onUnlink={() => handleUnlinkThread(thread)}
             isUnlinking={unlinkingThreadId === thread.id}
+            userEmail={currentUser?.email}
           />
         ))}
       </div>

@@ -978,6 +978,13 @@ export interface WindowApi {
       contactId: string,
       updates: Record<string, unknown>,
     ) => Promise<{ success: boolean; error?: string }>;
+    /** TASK-1995: Get email/phone entries with row IDs for multi-entry editing */
+    getEditData: (contactId: string) => Promise<{
+      success: boolean;
+      emails?: { id: string; email: string; is_primary: boolean }[];
+      phones?: { id: string; phone: string; is_primary: boolean }[];
+      error?: string;
+    }>;
     delete: (
       contactId: string,
     ) => Promise<{ success: boolean; error?: string }>;

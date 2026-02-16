@@ -286,6 +286,8 @@ export const transactionBridge = {
       after?: string;
       before?: string;
       maxResults?: number;
+      skip?: number;
+      transactionId?: string;
     },
   ) =>
     ipcRenderer.invoke("transactions:get-unlinked-emails", userId, options),

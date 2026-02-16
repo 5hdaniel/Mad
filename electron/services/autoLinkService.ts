@@ -222,17 +222,17 @@ async function findEmailsByContactEmails(
     return [];
   }
 
-  // Build email patterns for LIKE matching
+  // Build email patterns for LIKE matching (sender, recipients, and cc)
   // BACKLOG-506: Query emails table (content) and check communications (junction) for links
   const emailConditions = contactEmails
-    .map(() => "(LOWER(e.sender) LIKE ? OR LOWER(e.recipients) LIKE ?)")
+    .map(() => "(LOWER(e.sender) LIKE ? OR LOWER(e.recipients) LIKE ? OR LOWER(e.cc) LIKE ?)")
     .join(" OR ");
 
   const params: (string | number)[] = [userId, transactionId];
 
   // Add email patterns
   for (const email of contactEmails) {
-    params.push(`%${email}%`, `%${email}%`);
+    params.push(`%${email}%`, `%${email}%`, `%${email}%`);
   }
 
   // Add date range
@@ -257,7 +257,7 @@ async function findEmailsByContactEmails(
   // Reorder params: transactionId for JOIN, userId for WHERE, then email patterns, then date range
   const reorderedParams: (string | number)[] = [transactionId, userId];
   for (const email of contactEmails) {
-    reorderedParams.push(`%${email}%`, `%${email}%`);
+    reorderedParams.push(`%${email}%`, `%${email}%`, `%${email}%`);
   }
   reorderedParams.push(dateRange.start.toISOString());
   reorderedParams.push(dateRange.end.toISOString());
@@ -358,43 +358,54 @@ async function findMessagesByContactPhones(
  * @param linkConfidence - Confidence score
  * @returns true if linked, false if already linked to this transaction
  */
-async function linkExistingCommunication(
-  communicationId: string,
+async function linkEmailToTransaction(
+  emailId: string,
   transactionId: string,
   linkSource: "auto" | "manual" | "scan" = "auto",
   linkConfidence: number = 0.85
-): Promise<boolean> {
-  // Check if already linked to this transaction
+): Promise<"linked" | "already_linked" | "error"> {
+  // Check if this email is already linked to this transaction via communications table
   const checkSql = `
-    SELECT transaction_id FROM communications WHERE id = ?
+    SELECT id, transaction_id FROM communications
+    WHERE email_id = ? AND transaction_id = ?
   `;
-  const existing = dbGet<{ transaction_id: string | null }>(checkSql, [communicationId]);
+  const existing = dbGet<{ id: string; transaction_id: string }>(checkSql, [emailId, transactionId]);
 
-  if (!existing) {
+  if (existing) {
+    // Already linked to this transaction
+    return "already_linked";
+  }
+
+  // Get the email's user_id to create a proper communication record
+  const emailRow = dbGet<{ user_id: string }>(
+    "SELECT user_id FROM emails WHERE id = ?",
+    [emailId]
+  );
+
+  if (!emailRow) {
     await logService.warn(
-      `Communication ${communicationId} not found when trying to link`,
+      `Email ${emailId} not found when trying to link`,
       "AutoLinkService"
     );
-    return false;
+    return "error";
   }
 
-  if (existing.transaction_id === transactionId) {
-    // Already linked to this transaction
-    return false;
-  }
-
-  // Update the communication to link it to the transaction
-  const updateSql = `
-    UPDATE communications
-    SET transaction_id = ?,
-        link_source = ?,
-        link_confidence = ?,
-        linked_at = CURRENT_TIMESTAMP
-    WHERE id = ?
+  // Create a new communication record linking this email to the transaction
+  const { v4: uuidv4 } = await import("uuid");
+  const insertSql = `
+    INSERT INTO communications (id, user_id, transaction_id, email_id, communication_type, link_source, link_confidence, linked_at)
+    VALUES (?, ?, ?, ?, 'email', ?, ?, CURRENT_TIMESTAMP)
   `;
-  dbRun(updateSql, [transactionId, linkSource, linkConfidence, communicationId]);
+  dbRun(insertSql, [
+    uuidv4(),
+    emailRow.user_id,
+    transactionId,
+    emailId,
+    linkSource,
+    linkConfidence,
+  ]);
 
-  return true;
+  return "linked";
 }
 
 // ============================================
@@ -536,26 +547,27 @@ export async function autoLinkCommunicationsForContact(
     }
 
     // 6. Link emails to transaction
-    // Emails are already in the communications table, so we update
-    // their transaction_id directly using linkExistingCommunication
-    for (const communicationId of emailIds) {
+    // Creates communication records linking emails to the transaction
+    for (const emailId of emailIds) {
       try {
-        const linked = await linkExistingCommunication(
-          communicationId,
+        const linkResult = await linkEmailToTransaction(
+          emailId,
           transactionId,
           "auto",
           0.85 // Email matching confidence
         );
 
-        if (linked) {
+        if (linkResult === "linked") {
           result.emailsLinked++;
-        } else {
+        } else if (linkResult === "already_linked") {
           result.alreadyLinked++;
+        } else {
+          result.errors++;
         }
       } catch (error) {
         result.errors++;
         await logService.warn(
-          `Failed to link email ${communicationId}: ${error instanceof Error ? error.message : "Unknown"}`,
+          `Failed to link email ${emailId}: ${error instanceof Error ? error.message : "Unknown"}`,
           "AutoLinkService"
         );
       }
