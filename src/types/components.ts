@@ -50,6 +50,24 @@ export interface TransactionWithRoles extends Transaction {
 }
 
 /**
+ * Individual email entry for multi-email editing
+ */
+export interface ContactEmailEntry {
+  id?: string;
+  email: string;
+  is_primary: boolean;
+}
+
+/**
+ * Individual phone entry for multi-phone editing
+ */
+export interface ContactPhoneEntry {
+  id?: string;
+  phone: string;
+  is_primary: boolean;
+}
+
+/**
  * Contact form data for add/edit operations
  */
 export interface ContactFormData {
@@ -58,6 +76,8 @@ export interface ContactFormData {
   phone: string;
   company: string;
   title: string;
+  emails?: ContactEmailEntry[];
+  phones?: ContactPhoneEntry[];
 }
 
 /**

@@ -7,12 +7,13 @@ import { ipcMain, BrowserWindow } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import { randomUUID } from "crypto";
 import databaseService, { TransactionWithRoles as DbTransactionWithRoles } from "./services/databaseService";
+import { getContactEmailEntries, getContactPhoneEntries } from "./services/db/contactDbService";
 import { getContactNames } from "./services/contactsService";
 import auditService from "./services/auditService";
 import logService from "./services/logService";
 import * as externalContactDb from "./services/db/externalContactDbService";
 import { queryContacts, isPoolReady } from "./workers/contactWorkerPool";
-import { dbAll, dbGet } from "./services/db/core/dbConnection";
+import { dbAll, dbGet, dbRun } from "./services/db/core/dbConnection";
 import type { Contact, Transaction, ContactSource } from "./types/models";
 
 // Import validation utilities
@@ -940,6 +941,41 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
     },
   );
 
+  // Get contact edit data (emails/phones with row IDs for multi-entry editing)
+  ipcMain.handle(
+    "contacts:get-edit-data",
+    async (
+      _event: IpcMainInvokeEvent,
+      contactId: string,
+    ): Promise<{
+      success: boolean;
+      emails?: { id: string; email: string; is_primary: boolean }[];
+      phones?: { id: string; phone: string; is_primary: boolean }[];
+      error?: string;
+    }> => {
+      try {
+        const validatedContactId = validateContactId(contactId);
+        if (!validatedContactId) {
+          throw new ValidationError("Contact ID validation failed", "contactId");
+        }
+
+        const emails = getContactEmailEntries(validatedContactId);
+        const phones = getContactPhoneEntries(validatedContactId);
+
+        return { success: true, emails, phones };
+      } catch (error) {
+        logService.error("Get contact edit data failed", "Contacts", {
+          contactId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
   // Update contact
   ipcMain.handle(
     "contacts:update",
@@ -978,6 +1014,153 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         };
 
         await databaseService.updateContact(validatedContactId, updatesData);
+
+        // TASK-1995: Multi-email/phone array update support
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rawUpdates = sanitizeObject(updates || {}) as any;
+
+        if (Array.isArray(rawUpdates.emails)) {
+          // Array payload: sync contact_emails rows (insert/update/delete)
+          const incomingEmails: Array<{ id?: string; email: string; is_primary: boolean }> = rawUpdates.emails
+            .filter((e: { email?: string }) => e.email && e.email.trim())
+            .map((e: { id?: string; email: string; is_primary: boolean }) => ({
+              id: e.id || undefined,
+              email: e.email.toLowerCase().trim(),
+              is_primary: !!e.is_primary,
+            }));
+
+          // Enforce exactly one primary
+          const hasPrimary = incomingEmails.some(e => e.is_primary);
+          if (!hasPrimary && incomingEmails.length > 0) {
+            incomingEmails[0].is_primary = true;
+          }
+
+          // Get existing rows
+          const existingEmails = getContactEmailEntries(validatedContactId);
+          const existingIds = new Set(existingEmails.map(e => e.id));
+          const incomingIds = new Set(incomingEmails.filter(e => e.id).map(e => e.id));
+
+          // Delete rows not in incoming
+          for (const existing of existingEmails) {
+            if (!incomingIds.has(existing.id)) {
+              dbRun("DELETE FROM contact_emails WHERE id = ?", [existing.id]);
+            }
+          }
+
+          // Update existing / insert new
+          for (const entry of incomingEmails) {
+            if (entry.id && existingIds.has(entry.id)) {
+              dbRun(
+                "UPDATE contact_emails SET email = ?, is_primary = ? WHERE id = ?",
+                [entry.email, entry.is_primary ? 1 : 0, entry.id]
+              );
+            } else {
+              dbRun(
+                "INSERT INTO contact_emails (id, contact_id, email, is_primary, source, created_at) VALUES (?, ?, ?, ?, 'manual', CURRENT_TIMESTAMP)",
+                [randomUUID(), validatedContactId, entry.email, entry.is_primary ? 1 : 0]
+              );
+            }
+          }
+
+          logService.info("Contact emails synced (multi)", "Contacts", {
+            contactId: validatedContactId,
+            count: incomingEmails.length,
+          });
+        } else if (validatedUpdates.email !== undefined) {
+          // Legacy single-email update (backward compat)
+          const newEmail = (validatedUpdates.email as string)?.trim();
+          if (newEmail) {
+            const normalizedEmail = newEmail.toLowerCase();
+            const targetExists = dbGet<{ id: string }>(
+              "SELECT id FROM contact_emails WHERE contact_id = ? AND LOWER(email) = LOWER(?)",
+              [validatedContactId, normalizedEmail]
+            );
+
+            if (targetExists) {
+              dbRun("UPDATE contact_emails SET is_primary = 0 WHERE contact_id = ? AND id != ?", [validatedContactId, targetExists.id]);
+              dbRun("UPDATE contact_emails SET is_primary = 1 WHERE id = ?", [targetExists.id]);
+            } else {
+              dbRun("DELETE FROM contact_emails WHERE contact_id = ?", [validatedContactId]);
+              dbRun(
+                "INSERT INTO contact_emails (id, contact_id, email, is_primary, source) VALUES (?, ?, ?, 1, 'manual')",
+                [randomUUID(), validatedContactId, normalizedEmail]
+              );
+            }
+          }
+        }
+
+        if (Array.isArray(rawUpdates.phones)) {
+          // Array payload: sync contact_phones rows
+          const incomingPhones: Array<{ id?: string; phone: string; is_primary: boolean }> = rawUpdates.phones
+            .filter((p: { phone?: string }) => p.phone && p.phone.trim())
+            .map((p: { id?: string; phone: string; is_primary: boolean }) => ({
+              id: p.id || undefined,
+              phone: p.phone.trim(),
+              is_primary: !!p.is_primary,
+            }));
+
+          const hasPrimary = incomingPhones.some(p => p.is_primary);
+          if (!hasPrimary && incomingPhones.length > 0) {
+            incomingPhones[0].is_primary = true;
+          }
+
+          const existingPhones = getContactPhoneEntries(validatedContactId);
+          const existingIds = new Set(existingPhones.map(p => p.id));
+          const incomingIds = new Set(incomingPhones.filter(p => p.id).map(p => p.id));
+
+          for (const existing of existingPhones) {
+            if (!incomingIds.has(existing.id)) {
+              dbRun("DELETE FROM contact_phones WHERE id = ?", [existing.id]);
+            }
+          }
+
+          for (const entry of incomingPhones) {
+            if (entry.id && existingIds.has(entry.id)) {
+              dbRun(
+                "UPDATE contact_phones SET phone_e164 = ?, is_primary = ? WHERE id = ?",
+                [entry.phone, entry.is_primary ? 1 : 0, entry.id]
+              );
+            } else {
+              dbRun(
+                "INSERT INTO contact_phones (id, contact_id, phone_e164, is_primary, source, created_at) VALUES (?, ?, ?, ?, 'manual', CURRENT_TIMESTAMP)",
+                [randomUUID(), validatedContactId, entry.phone, entry.is_primary ? 1 : 0]
+              );
+            }
+          }
+
+          logService.info("Contact phones synced (multi)", "Contacts", {
+            contactId: validatedContactId,
+            count: incomingPhones.length,
+          });
+        } else if (validatedUpdates.phone !== undefined) {
+          // Legacy single-phone update (backward compat)
+          const newPhone = (validatedUpdates.phone as string)?.trim();
+          if (newPhone) {
+            const targetPhoneExists = dbGet<{ id: string }>(
+              "SELECT id FROM contact_phones WHERE contact_id = ? AND phone_e164 = ?",
+              [validatedContactId, newPhone]
+            );
+
+            if (targetPhoneExists) {
+              dbRun("UPDATE contact_phones SET is_primary = 0 WHERE contact_id = ? AND id != ?", [validatedContactId, targetPhoneExists.id]);
+              dbRun("UPDATE contact_phones SET is_primary = 1 WHERE id = ?", [targetPhoneExists.id]);
+            } else {
+              const existingPhone = dbGet<{ id: string }>(
+                "SELECT id FROM contact_phones WHERE contact_id = ? ORDER BY is_primary DESC LIMIT 1",
+                [validatedContactId]
+              );
+              if (existingPhone) {
+                dbRun("UPDATE contact_phones SET phone_e164 = ?, is_primary = 1 WHERE id = ?", [newPhone, existingPhone.id]);
+              } else {
+                dbRun(
+                  "INSERT INTO contact_phones (id, contact_id, phone_e164, is_primary, source) VALUES (?, ?, ?, 1, 'manual')",
+                  [randomUUID(), validatedContactId, newPhone]
+                );
+              }
+            }
+          }
+        }
+
         const contact =
           await databaseService.getContactById(validatedContactId);
 
