@@ -63,6 +63,18 @@ export const contactBridge = {
     ipcRenderer.invoke("contacts:update", contactId, updates),
 
   /**
+   * TASK-1995: Get contact email/phone entries with row IDs for multi-entry editing
+   * @param contactId - Contact ID to get edit data for
+   * @returns Email and phone entries with IDs and is_primary flags
+   */
+  getEditData: (contactId: string): Promise<{
+    success: boolean;
+    emails?: { id: string; email: string; is_primary: boolean }[];
+    phones?: { id: string; phone: string; is_primary: boolean }[];
+    error?: string;
+  }> => ipcRenderer.invoke("contacts:get-edit-data", contactId),
+
+  /**
    * Checks if a contact can be deleted (not assigned to transactions)
    * @param contactId - Contact ID to check
    * @returns Deletion eligibility

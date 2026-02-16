@@ -368,9 +368,38 @@ export function createContactsBatch(
  * Get contact by ID
  */
 export async function getContactById(contactId: string): Promise<Contact | null> {
-  const sql = "SELECT * FROM contacts WHERE id = ?";
-  const contact = dbGet<Contact>(sql, [contactId]);
-  return contact || null;
+  const sql = `
+    SELECT c.*,
+      c.display_name as name,
+      COALESCE(
+        (SELECT email FROM contact_emails WHERE contact_id = c.id AND is_primary = 1 LIMIT 1),
+        (SELECT email FROM contact_emails WHERE contact_id = c.id LIMIT 1)
+      ) as email,
+      COALESCE(
+        (SELECT phone_e164 FROM contact_phones WHERE contact_id = c.id AND is_primary = 1 LIMIT 1),
+        (SELECT phone_e164 FROM contact_phones WHERE contact_id = c.id LIMIT 1)
+      ) as phone,
+      (SELECT json_group_array(email) FROM contact_emails WHERE contact_id = c.id) as all_emails_json,
+      (SELECT json_group_array(phone_e164) FROM contact_phones WHERE contact_id = c.id) as all_phones_json
+    FROM contacts c
+    WHERE c.id = ?
+  `;
+  const row = dbGet<Contact & { all_emails_json?: string; all_phones_json?: string }>(sql, [contactId]);
+  if (!row) return null;
+
+  const allEmails: string[] = row.all_emails_json
+    ? JSON.parse(row.all_emails_json).filter((e: string | null) => e !== null)
+    : [];
+  const allPhones: string[] = row.all_phones_json
+    ? JSON.parse(row.all_phones_json).filter((p: string | null) => p !== null)
+    : [];
+
+  const { all_emails_json, all_phones_json, ...rest } = row;
+  return {
+    ...rest,
+    allEmails,
+    allPhones,
+  } as Contact;
 }
 
 /**
@@ -1439,6 +1468,34 @@ export function searchContactsForSelection(
     });
     throw error;
   }
+}
+
+/**
+ * Get email entries (with row IDs) for a contact — used by edit form
+ */
+export function getContactEmailEntries(contactId: string): { id: string; email: string; is_primary: boolean }[] {
+  const sql = `
+    SELECT id, email, is_primary
+    FROM contact_emails
+    WHERE contact_id = ?
+    ORDER BY is_primary DESC, created_at ASC
+  `;
+  const rows = dbAll<{ id: string; email: string; is_primary: number }>(sql, [contactId]);
+  return rows.map(r => ({ id: r.id, email: r.email, is_primary: r.is_primary === 1 }));
+}
+
+/**
+ * Get phone entries (with row IDs) for a contact — used by edit form
+ */
+export function getContactPhoneEntries(contactId: string): { id: string; phone: string; is_primary: boolean }[] {
+  const sql = `
+    SELECT id, phone_e164 as phone, is_primary
+    FROM contact_phones
+    WHERE contact_id = ?
+    ORDER BY is_primary DESC, created_at ASC
+  `;
+  const rows = dbAll<{ id: string; phone: string; is_primary: number }>(sql, [contactId]);
+  return rows.map(r => ({ id: r.id, phone: r.phone, is_primary: r.is_primary === 1 }));
 }
 
 // Export types for consumers

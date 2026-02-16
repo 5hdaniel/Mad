@@ -98,6 +98,7 @@ function TransactionDetails({
     resolvedSuggestions,
     loading,
     loadDetails,
+    loadCommunications,
     setCommunications,
     setResolvedSuggestions,
     updateSuggestedContacts,
@@ -105,6 +106,28 @@ function TransactionDetails({
 
   // Tab state hook - use initialTab prop
   const { activeTab, setActiveTab } = useTransactionTabs(initialTab);
+
+  // PERF: Load only the channel needed for the active tab.
+  // Overview only needs contacts (loaded by loadOverview on mount).
+  // Emails tab loads only email comms; Messages tab loads only text comms.
+  const loadedChannelsRef = React.useRef<Set<string>>(new Set());
+  // Reset loaded channels when transaction changes
+  useEffect(() => {
+    loadedChannelsRef.current.clear();
+  }, [transaction.id]);
+  useEffect(() => {
+    if (activeTab === "emails" && !loadedChannelsRef.current.has("email")) {
+      loadedChannelsRef.current.add("email");
+      loadCommunications("email");
+    } else if (activeTab === "messages" && !loadedChannelsRef.current.has("text")) {
+      loadedChannelsRef.current.add("text");
+      loadCommunications("text");
+    } else if (activeTab === "attachments" && !loadedChannelsRef.current.has("email")) {
+      // Attachments come from emails
+      loadedChannelsRef.current.add("email");
+      loadCommunications("email");
+    }
+  }, [activeTab, loadCommunications]);
 
   // Communications hook
   const {
@@ -125,25 +148,30 @@ function TransactionDetails({
     handleAcceptAll,
   } = useSuggestedContacts(transaction);
 
-  // Messages hook
+  // Messages hook — uses pre-loaded communications to avoid duplicate getDetails call
   const {
     messages: textMessages,
     loading: messagesLoading,
     error: messagesError,
     refresh: refreshMessages,
-  } = useTransactionMessages(transaction);
+  } = useTransactionMessages(transaction, communications);
 
-  // Attachments hook (for tab display - parses email metadata)
+  // Attachments hook — uses pre-loaded communications to avoid duplicate getDetails call
   const {
     attachments,
     loading: attachmentsLoading,
     error: attachmentsError,
     count: attachmentCount,
-  } = useTransactionAttachments(transaction);
+  } = useTransactionAttachments(transaction, communications);
 
   // Accurate attachment counts from database (TASK-1781)
-  // Used for submission preview - counts actual downloaded files
-  const { counts: dbAttachmentCounts } = useAttachmentCounts(transaction.id);
+  // PERF: Lazy-loaded — only fetched when Submit modal opens (takes ~1.3s)
+  const { counts: dbAttachmentCounts, refresh: loadAttachmentCounts } = useAttachmentCounts(
+    transaction.id,
+    undefined,
+    undefined,
+    true, // lazy: don't auto-load on mount
+  );
 
   // Transaction status update hook
   const { state: statusState, approve, reject, restore } = useTransactionStatusUpdate(userId);
@@ -417,6 +445,18 @@ function TransactionDetails({
     }
   }, [transaction.id, showSuccess, showError, refreshMessages]);
 
+  // Show a loading overlay while initial data loads
+  if (loading && contactAssignments.length === 0) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[70vh] max-h-[90vh] flex flex-col items-center justify-center">
+          <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-gray-500 mt-4">Loading transaction...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[70vh] max-h-[90vh] flex flex-col">
@@ -445,6 +485,8 @@ function TransactionDetails({
             } catch (err) {
               console.error("Failed to refresh transaction before submit:", err);
             }
+            // Load attachment counts now (deferred from mount for perf)
+            loadAttachmentCounts();
             setShowSubmitModal(true);
           }}
         />
@@ -502,6 +544,8 @@ function TransactionDetails({
               propertyAddress={transaction.property_address}
               onEmailsChanged={loadDetails}
               onShowSuccess={showSuccess}
+              auditStartDate={transaction.started_at ? String(transaction.started_at) : undefined}
+              auditEndDate={transaction.closed_at ? String(transaction.closed_at) : undefined}
             />
           )}
 
@@ -509,7 +553,7 @@ function TransactionDetails({
           {activeTab === "messages" && (
             <TransactionMessagesTab
               messages={textMessages}
-              loading={messagesLoading}
+              loading={messagesLoading || loading}
               error={messagesError}
               userId={userId}
               transactionId={transaction.id}

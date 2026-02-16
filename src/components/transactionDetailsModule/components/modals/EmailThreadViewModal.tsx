@@ -94,6 +94,8 @@ interface EmailThreadViewModalProps {
   onClose: () => void;
   /** Optional callback when an email is clicked for full view */
   onViewEmail?: (email: Communication) => void;
+  /** User's email address — emails from this sender show as "You" */
+  userEmail?: string;
 }
 
 /**
@@ -172,10 +174,24 @@ function formatTime(date: Date): string {
 }
 
 /**
+ * Check if sender matches the user's email
+ */
+function isSelfSender(sender: string | undefined, userEmail?: string): boolean {
+  if (!sender || !userEmail) return false;
+  const normalizedUser = userEmail.toLowerCase().trim();
+  const match = sender.match(/<([^>]+)>/);
+  const email = match ? match[1].toLowerCase() : sender.toLowerCase().trim();
+  return email === normalizedUser;
+}
+
+/**
  * Extract sender name from email address
  */
-function extractSenderName(sender: string | undefined): string {
+function extractSenderName(sender: string | undefined, userEmail?: string): string {
   if (!sender) return "Unknown";
+
+  // Show "You" for the user's own emails
+  if (isSelfSender(sender, userEmail)) return "You";
 
   const nameMatch = sender.match(/^([^<]+)/);
   if (nameMatch) {
@@ -236,6 +252,7 @@ function EmailBubble({
   attachments,
   loadingAttachments,
   onPreviewAttachment,
+  userEmail,
 }: {
   email: Communication;
   isExpanded: boolean;
@@ -244,10 +261,12 @@ function EmailBubble({
   attachments: EmailAttachment[];
   loadingAttachments: boolean;
   onPreviewAttachment: (attachment: EmailAttachment) => void;
+  userEmail?: string;
 }): React.ReactElement {
   const emailDate = new Date(email.sent_at || email.received_at || 0);
-  const senderName = extractSenderName(email.sender);
-  const avatarInitial = getAvatarInitial(email.sender);
+  const isMe = isSelfSender(email.sender, userEmail);
+  const senderName = extractSenderName(email.sender, userEmail);
+  const avatarInitial = isMe ? "Y" : getAvatarInitial(email.sender);
   const avatarColor = getSenderColor(email.sender);
   const preview = useMemo(() => getPlainTextPreview(email), [email]);
   const [attachmentsExpanded, setAttachmentsExpanded] = useState(false);
@@ -428,6 +447,7 @@ export function EmailThreadViewModal({
   thread,
   onClose,
   onViewEmail,
+  userEmail,
 }: EmailThreadViewModalProps): React.ReactElement {
   // Track which emails are expanded (default: none - show just content bubbles)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -559,6 +579,7 @@ export function EmailThreadViewModal({
               attachments={attachmentsByEmail.get(email.id) || []}
               loadingAttachments={loadingAttachmentIds.has(email.id)}
               onPreviewAttachment={setPreviewAttachment}
+              userEmail={userEmail}
             />
           ))}
         </div>

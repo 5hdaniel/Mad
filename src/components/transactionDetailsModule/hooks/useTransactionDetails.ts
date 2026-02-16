@@ -20,6 +20,7 @@ interface UseTransactionDetailsResult {
 
   // Actions
   loadDetails: () => Promise<void>;
+  loadCommunications: (channelFilter: "email" | "text") => Promise<void>;
   setCommunications: React.Dispatch<React.SetStateAction<Communication[]>>;
   setResolvedSuggestions: React.Dispatch<React.SetStateAction<ResolvedSuggestedContact[]>>;
   updateSuggestedContacts: (remainingSuggestions: SuggestedContact[]) => Promise<void>;
@@ -55,7 +56,8 @@ export function useTransactionDetails(
   }, [transaction.suggested_contacts]);
 
   /**
-   * Load transaction details
+   * Load full transaction details (including communications).
+   * Called on-demand when user navigates to emails/messages/attachments tabs.
    */
   const loadDetails = useCallback(async (): Promise<void> => {
     try {
@@ -70,6 +72,68 @@ export function useTransactionDetails(
       }
     } catch (err) {
       console.error("Failed to load details:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [transaction.id]);
+
+  /**
+   * PERF: Load only emails or only texts — avoids fetching all 74K+ communications.
+   * Used when user navigates to the Emails or Messages tab.
+   */
+  const loadCommunications = useCallback(async (channelFilter: "email" | "text"): Promise<void> => {
+    try {
+      setLoading(true);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const txApi = window.api.transactions as any;
+      const result = typeof txApi.getCommunications === "function"
+        ? await txApi.getCommunications(transaction.id, channelFilter)
+        : await window.api.transactions.getDetails(transaction.id);
+
+      if (result.success && result.transaction) {
+        // Merge with existing communications (don't overwrite other channel)
+        setCommunications(prev => {
+          const newComms: Communication[] = result.transaction.communications || [];
+          const newIds = new Set(newComms.map((c: Communication) => c.id));
+          // Keep existing comms that aren't in the new result (different channel)
+          const kept = prev.filter((c: Communication) => !newIds.has(c.id));
+          return [...kept, ...newComms];
+        });
+        setContactAssignments(result.transaction.contact_assignments || []);
+      }
+    } catch (err) {
+      console.error(`Failed to load ${channelFilter} communications:`, err);
+    } finally {
+      setLoading(false);
+    }
+  }, [transaction.id]);
+
+  /**
+   * PERF: Load lightweight overview (contacts only, no communications).
+   * Used for initial render of overview tab — avoids expensive 3-way JOIN.
+   */
+  const loadOverview = useCallback(async (): Promise<void> => {
+    try {
+      setLoading(true);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (window.api.transactions as any).getOverview(transaction.id);
+
+      if (result.success && result.transaction) {
+        setContactAssignments(
+          result.transaction.contact_assignments || []
+        );
+      }
+    } catch (err) {
+      console.error("Failed to load overview:", err);
+      // Fallback to full details if overview not available
+      try {
+        const fallback = await window.api.transactions.getDetails(transaction.id);
+        if (fallback.success && fallback.transaction) {
+          setContactAssignments(fallback.transaction.contact_assignments || []);
+        }
+      } catch (e) {
+        console.error("Fallback getDetails also failed:", e);
+      }
     } finally {
       setLoading(false);
     }
@@ -108,11 +172,13 @@ export function useTransactionDetails(
   }, [suggestedContacts, transaction.user_id]);
 
   /**
-   * Load details when transaction changes
+   * PERF: Load lightweight overview on mount (contacts only, no communications).
+   * Full details (loadDetails) are loaded on-demand when user navigates to
+   * emails/messages/attachments tabs.
    */
   useEffect(() => {
-    loadDetails();
-  }, [loadDetails]);
+    loadOverview();
+  }, [loadOverview]);
 
   /**
    * Helper to update suggested_contacts in database after processing
@@ -136,6 +202,7 @@ export function useTransactionDetails(
     resolvedSuggestions,
     loading,
     loadDetails,
+    loadCommunications,
     setCommunications,
     setResolvedSuggestions,
     updateSuggestedContacts,

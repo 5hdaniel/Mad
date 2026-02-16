@@ -1,7 +1,7 @@
 # SPRINT-084: Email Attachment Search Improvements
 
 **Created:** 2026-02-15
-**Status:** Planning
+**Status:** In Progress
 **Branch:** `sprint/084-email-attachment-search`
 **Base:** `develop`
 
@@ -28,7 +28,7 @@ The fix is straightforward because both `gmailFetchService.searchEmails()` and `
 
 | ID | Title | Task | PR | Status |
 |----|-------|------|-----|--------|
-| BACKLOG-702 | Email attachment search: free text + date filter + load more | TASK-1993 | - | Pending |
+| BACKLOG-702 | Email attachment search: free text + date filter + load more | TASK-1993 | - | In Progress |
 | BACKLOG-703 | Manual test: Outlook email search improvements | TASK-1994 | - | Pending |
 
 **Total Estimated Tokens:** ~35K (engineering) + ~20K (SR review overhead) = ~55K
