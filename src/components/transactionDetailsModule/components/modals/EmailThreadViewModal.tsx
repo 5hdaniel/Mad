@@ -464,8 +464,7 @@ export function EmailThreadViewModal({
 
     if (emailsWithAttachments.length === 0) return;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const transactionsApi = window.api?.transactions as any;
+    const transactionsApi = window.api?.transactions;
     if (!transactionsApi?.getEmailAttachments) return;
 
     // Mark all as loading
@@ -512,8 +511,7 @@ export function EmailThreadViewModal({
   // TASK-1782: Handle opening an attachment with system viewer
   const handleOpenAttachment = useCallback(async (storagePath: string) => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const transactionsApi = window.api?.transactions as any;
+      const transactionsApi = window.api?.transactions;
       if (transactionsApi?.openAttachment) {
         const result = await transactionsApi.openAttachment(storagePath);
         if (!result.success) {

@@ -236,15 +236,10 @@ export function AttachEmailsModal({
       if (skip > 0) options.skip = skip;
       options.transactionId = transactionId;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (window.api.transactions as any).getUnlinkedEmails(
+      const result = await window.api.transactions.getUnlinkedEmails(
         userId,
         options,
-      ) as {
-        success: boolean;
-        emails?: EmailInfo[];
-        error?: string;
-      };
+      );
 
       if (result.success && result.emails) {
         if (isLoadMore) {
@@ -369,11 +364,10 @@ export function AttachEmailsModal({
     setAttaching(true);
     setError(null);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (window.api.transactions as any).linkEmails(
+      const result = await window.api.transactions.linkEmails(
         selectedEmailIds,
         transactionId
-      ) as { success: boolean; error?: string };
+      );
 
       if (result.success) {
         onAttached();

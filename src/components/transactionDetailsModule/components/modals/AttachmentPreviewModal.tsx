@@ -103,8 +103,7 @@ export function AttachmentPreviewModal({
     if (isImage && attachment.storage_path && attachment.mime_type) {
       setImageLoading(true);
       setImageError(false);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const api = (window as any).api?.transactions;
+      const api = window.api?.transactions;
       if (api?.getAttachmentData) {
         api
           .getAttachmentData(attachment.storage_path, attachment.mime_type)
@@ -134,8 +133,7 @@ export function AttachmentPreviewModal({
     if (isPdf && attachment.storage_path) {
       setPdfLoading(true);
       setPdfError(null);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const api = (window as any).api?.transactions;
+      const api = window.api?.transactions;
       if (api?.getAttachmentData) {
         api
           .getAttachmentData(attachment.storage_path, "application/pdf")
@@ -164,8 +162,7 @@ export function AttachmentPreviewModal({
     if (isDocx && attachment.storage_path) {
       setDocxLoading(true);
       setDocxError(null);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const api = (window as any).api?.transactions;
+      const api = window.api?.transactions;
       if (api?.getAttachmentBuffer) {
         api
           .getAttachmentBuffer(attachment.storage_path)
