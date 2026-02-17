@@ -1161,7 +1161,10 @@ interface MainAPI {
      */
     getCommunications: (transactionId: string, channelFilter?: "email" | "text") => Promise<{
       success: boolean;
-      communications?: unknown[];
+      transaction?: Transaction & {
+        communications?: unknown[];
+        contact_assignments?: unknown[];
+      };
       error?: string;
     }>;
     getContacts: (transactionId: string) => Promise<{

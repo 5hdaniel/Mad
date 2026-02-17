@@ -84,16 +84,16 @@ export function useTransactionDetails(
   const loadCommunications = useCallback(async (channelFilter: "email" | "text"): Promise<void> => {
     try {
       setLoading(true);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const txApi = window.api.transactions as any;
-      const result = typeof txApi.getCommunications === "function"
-        ? await txApi.getCommunications(transaction.id, channelFilter)
-        : await window.api.transactions.getDetails(transaction.id);
+      // getCommunications returns { success, transaction: { communications, contact_assignments } }
+      const result = await window.api.transactions.getCommunications(transaction.id, channelFilter) as {
+        success: boolean;
+        transaction?: { communications?: Communication[]; contact_assignments?: ContactAssignment[] };
+      };
 
       if (result.success && result.transaction) {
         // Merge with existing communications (don't overwrite other channel)
         setCommunications(prev => {
-          const newComms: Communication[] = result.transaction.communications || [];
+          const newComms: Communication[] = result.transaction?.communications || [];
           const newIds = new Set(newComms.map((c: Communication) => c.id));
           // Keep existing comms that aren't in the new result (different channel)
           const kept = prev.filter((c: Communication) => !newIds.has(c.id));
@@ -115,8 +115,7 @@ export function useTransactionDetails(
   const loadOverview = useCallback(async (): Promise<void> => {
     try {
       setLoading(true);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (window.api.transactions as any).getOverview(transaction.id);
+      const result = await window.api.transactions.getOverview(transaction.id);
 
       if (result.success && result.transaction) {
         setContactAssignments(

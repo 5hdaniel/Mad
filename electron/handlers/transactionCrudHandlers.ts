@@ -8,6 +8,7 @@ import type { BrowserWindow } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import transactionService from "../services/transactionService";
 import { getEarliestCommunicationDate } from "../services/transactionService";
+import type { AuditedTransactionData } from "../services/transactionService";
 import auditService from "../services/auditService";
 import logService from "../services/logService";
 import { autoLinkCommunicationsForContact } from "../services/autoLinkService";
@@ -17,6 +18,7 @@ import type {
   NewTransaction,
   UpdateTransaction,
 } from "../types/models";
+import type { TransactionResponse } from "../types/handlerTypes";
 import {
   ValidationError,
   validateUserId,
@@ -27,15 +29,6 @@ import {
   sanitizeObject,
 } from "../utils/validation";
 import type { OAuthProvider } from "../types/models";
-
-// Type definitions
-interface TransactionResponse {
-  success: boolean;
-  error?: string;
-  transaction?: Transaction | any;
-  transactions?: Transaction[] | any[];
-  [key: string]: unknown;
-}
 
 /**
  * Register transaction CRUD IPC handlers
@@ -248,7 +241,7 @@ export function registerTransactionCrudHandlers(
         );
       const userId = existingTransaction?.user_id || "unknown";
 
-      const updated = await transactionService.updateTransaction(
+      await transactionService.updateTransaction(
         validatedTransactionId,
         validatedUpdates as unknown as Partial<UpdateTransaction>,
       );
@@ -270,7 +263,6 @@ export function registerTransactionCrudHandlers(
 
       return {
         success: true,
-        transaction: updated,
       };
     }, { module: "Transactions" }),
   );
@@ -346,7 +338,7 @@ export function registerTransactionCrudHandlers(
       // for all assigned contacts internally
       const transaction = await transactionService.createAuditedTransaction(
         validatedUserId as string,
-        validatedData as any,
+        validatedData as AuditedTransactionData,
       );
 
       return {
