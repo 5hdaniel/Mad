@@ -11,16 +11,20 @@ import transactionService from "../services/transactionService";
 import logService from "../services/logService";
 import { autoLinkAllToTransaction } from "../services/messageMatchingService";
 import { autoLinkCommunicationsForContact } from "../services/autoLinkService";
-import { dbAll, dbGet } from "../services/db/core/dbConnection";
-import { createEmail, getEmailByExternalId } from "../services/db/emailDbService";
+import { createEmail, getEmailByExternalId, countEmailsByUser } from "../services/db/emailDbService";
 import { createCommunication } from "../services/db/communicationDbService";
+import {
+  getContactEmailsForTransaction,
+  getEmailsByContactId,
+  resolveContactEmailsByQuery,
+} from "../services/db/contactDbService";
 import databaseService from "../services/databaseService";
 import gmailFetchService from "../services/gmailFetchService";
 import outlookFetchService from "../services/outlookFetchService";
 import emailAttachmentService from "../services/emailAttachmentService";
 import { backfillMissingAttachments } from "./attachmentHandlers";
 import { wrapHandler } from "../utils/wrapHandler";
-import type { Transaction } from "../types/models";
+import type { TransactionResponse } from "../types/handlerTypes";
 import {
   ValidationError,
   validateUserId,
@@ -28,18 +32,6 @@ import {
   sanitizeObject,
 } from "../utils/validation";
 import { rateLimiters } from "../utils/rateLimit";
-
-// Type definitions
-interface TransactionResponse {
-  success: boolean;
-  error?: string;
-  transaction?: Transaction | any;
-  transactions?: Transaction[] | any[];
-  transactionsFound?: number;
-  emailsScanned?: number;
-  realEstateEmailsFound?: number;
-  [key: string]: unknown;
-}
 
 interface ScanOptions {
   onProgress?: (progress: unknown) => void;
@@ -209,14 +201,7 @@ export function registerEmailSyncHandlers(
         const validatedTxnId = validateTransactionId(options.transactionId);
         if (validatedTxnId) {
           try {
-            const contactEmailRows = dbAll<{ email: string }>(
-              `SELECT DISTINCT LOWER(ce.email) as email
-               FROM transaction_contacts tc
-               JOIN contact_emails ce ON tc.contact_id = ce.contact_id
-               WHERE tc.transaction_id = ?`,
-              [validatedTxnId],
-            );
-            contactEmails = contactEmailRows.map(r => r.email);
+            contactEmails = getContactEmailsForTransaction(validatedTxnId);
             logService.info(`Found ${contactEmails.length} contact emails for transaction`, "Transactions", {
               transactionId: validatedTxnId,
             });
@@ -249,24 +234,15 @@ export function registerEmailSyncHandlers(
       // Note: we use a separate list (not the transaction contactEmails) so that
       // searching "agustin" only returns Agustin's emails, not all transaction contacts.
       if (options?.query?.trim()) {
-        const queryLower = options.query.toLowerCase().trim();
-        const resolvedEmails = dbAll<{ email: string }>(
-          `SELECT DISTINCT LOWER(ce.email) as email
-           FROM contacts c
-           JOIN contact_emails ce ON c.id = ce.contact_id
-           WHERE c.user_id = ?
-             AND (LOWER(c.display_name) LIKE ? OR LOWER(ce.email) LIKE ?
-                  OR LOWER(c.company) LIKE ? OR LOWER(c.title) LIKE ?)`,
-          [validatedUserId, `%${queryLower}%`, `%${queryLower}%`, `%${queryLower}%`, `%${queryLower}%`],
-        );
+        const resolvedEmails = resolveContactEmailsByQuery(validatedUserId, options.query);
 
         if (resolvedEmails.length > 0) {
           // Use ONLY the resolved emails as filter (not the transaction contact list)
-          searchParams.contactEmails = resolvedEmails.map(r => r.email);
+          searchParams.contactEmails = resolvedEmails;
           // Clear the text query to avoid AND-ing contact filter with text search
           searchParams.query = "";
           logService.info(`Resolved query "${options.query}" to ${resolvedEmails.length} contact emails`, "Transactions", {
-            resolvedEmails: resolvedEmails.map(r => r.email),
+            resolvedEmails,
           });
         }
         // If no contacts matched, the text query passes through as-is for subject/body search
@@ -813,7 +789,7 @@ export function registerEmailSyncHandlers(
         };
       }
 
-      const contactAssignments = (transactionDetails as any).contact_assignments || [];
+      const contactAssignments = transactionDetails.contact_assignments || [];
 
       if (contactAssignments.length === 0) {
         return {
@@ -937,7 +913,7 @@ export function registerEmailSyncHandlers(
       }
 
       const userId = transactionDetails.user_id;
-      const contactAssignments = (transactionDetails as any).contact_assignments || [];
+      const contactAssignments = transactionDetails.contact_assignments || [];
 
       if (contactAssignments.length === 0) {
         return {
@@ -954,16 +930,13 @@ export function registerEmailSyncHandlers(
       const contactEmails: string[] = [];
       for (const assignment of contactAssignments) {
         // Get contact's email addresses from contact_emails table
-        const emails = dbAll<{ email: string }>(
-          "SELECT email FROM contact_emails WHERE contact_id = ?",
-          [assignment.contact_id]
-        );
+        const emails = getEmailsByContactId(assignment.contact_id);
         logService.info(`Contact ${assignment.contact_id}: found ${emails.length} emails in contact_emails`, "Transactions", {
-          emails: emails.map(e => e.email),
+          emails,
         });
-        for (const e of emails) {
-          if (e.email && !contactEmails.includes(e.email.toLowerCase())) {
-            contactEmails.push(e.email.toLowerCase());
+        for (const email of emails) {
+          if (email && !contactEmails.includes(email.toLowerCase())) {
+            contactEmails.push(email.toLowerCase());
           }
         }
       }
@@ -1008,11 +981,8 @@ export function registerEmailSyncHandlers(
       }
 
       // Diagnostic: how many emails are in the local DB for this user?
-      const emailCount = dbGet<{ count: number }>(
-        "SELECT COUNT(*) as count FROM emails WHERE user_id = ?",
-        [userId]
-      );
-      logService.info(`Local emails table has ${emailCount?.count ?? 0} emails for user`, "Transactions", {
+      const emailCount = await countEmailsByUser(userId);
+      logService.info(`Local emails table has ${emailCount} emails for user`, "Transactions", {
         userId,
       });
 

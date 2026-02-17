@@ -275,8 +275,7 @@ export function AttachMessagesModal({
         try {
           // Load both message contacts and all contacts in parallel
           const [messageContactsResult, allContactsResult] = await Promise.all([
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (window.api.transactions as any).getMessageContacts(userId) as Promise<{
+            window.api.transactions.getMessageContacts(userId) as Promise<{
               success: boolean;
               contacts?: ContactInfo[];
               error?: string;
@@ -331,8 +330,7 @@ export function AttachMessagesModal({
     const timeoutId = setTimeout(() => {
       async function loadContactMessages() {
         try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const result = await (window.api.transactions as any).getMessagesByContact(userId, selectedContact) as {
+          const result = await window.api.transactions.getMessagesByContact(userId, selectedContact!) as {
             success: boolean;
             messages?: MessageLike[];
             error?: string;
@@ -444,11 +442,10 @@ export function AttachMessagesModal({
         }
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (window.api.transactions as any).linkMessages(
+      const result = await window.api.transactions.linkMessages(
         messageIds,
-        transactionId
-      ) as { success: boolean; error?: string };
+        transactionId,
+      );
 
       if (result.success) {
         onAttached();

@@ -1664,5 +1664,56 @@ export function setContactPrimaryPhone(
   }
 }
 
+// ============================================
+// CONTACT EMAIL QUERY HELPERS (TASK-2000)
+// Extracted from emailSyncHandlers.ts raw SQL
+// ============================================
+
+/**
+ * Get all distinct email addresses for contacts assigned to a transaction.
+ * Used by email sync to filter provider searches by relevant contacts.
+ */
+export function getContactEmailsForTransaction(transactionId: string): string[] {
+  const rows = dbAll<{ email: string }>(
+    `SELECT DISTINCT LOWER(ce.email) as email
+     FROM transaction_contacts tc
+     JOIN contact_emails ce ON tc.contact_id = ce.contact_id
+     WHERE tc.transaction_id = ?`,
+    [transactionId],
+  );
+  return rows.map((r) => r.email);
+}
+
+/**
+ * Get email addresses for a single contact (by contact ID).
+ * Used during email sync to collect per-contact emails.
+ */
+export function getEmailsByContactId(contactId: string): string[] {
+  const rows = dbAll<{ email: string }>(
+    "SELECT email FROM contact_emails WHERE contact_id = ?",
+    [contactId],
+  );
+  return rows.map((r) => r.email);
+}
+
+/**
+ * Resolve a search query to matching contact email addresses.
+ * Searches display_name, email, company, and title fields.
+ * Used to translate user search terms into email-based provider filters.
+ */
+export function resolveContactEmailsByQuery(userId: string, query: string): string[] {
+  const queryLower = query.toLowerCase().trim();
+  const rows = dbAll<{ email: string }>(
+    `SELECT DISTINCT LOWER(ce.email) as email
+     FROM contacts c
+     JOIN contact_emails ce ON c.id = ce.contact_id
+     WHERE c.user_id = ?
+       AND (LOWER(c.display_name) LIKE ? OR LOWER(ce.email) LIKE ?
+            OR LOWER(c.company) LIKE ? OR LOWER(c.title) LIKE ?)`,
+    [userId, `%${queryLower}%`, `%${queryLower}%`, `%${queryLower}%`, `%${queryLower}%`],
+  );
+  return rows.map((r) => r.email);
+}
+
 // Export types for consumers
 export type { ContactWithActivity, TransactionWithRoles };

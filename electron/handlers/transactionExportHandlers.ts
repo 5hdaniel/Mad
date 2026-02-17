@@ -8,6 +8,7 @@ import { ipcMain } from "electron";
 import type { BrowserWindow } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import transactionService from "../services/transactionService";
+import type { TransactionWithDetails } from "../services/transactionService";
 import auditService from "../services/auditService";
 import logService from "../services/logService";
 import submissionService from "../services/submissionService";
@@ -18,22 +19,13 @@ import enhancedExportService from "../services/enhancedExportService";
 import folderExportService from "../services/folderExportService";
 import { wrapHandler } from "../utils/wrapHandler";
 import type { SubmissionProgress } from "../services/submissionService";
-import type { Transaction } from "../types/models";
+import type { TransactionResponse } from "../types/handlerTypes";
 import {
   ValidationError,
   validateTransactionId,
   validateFilePath,
   sanitizeObject,
 } from "../utils/validation";
-
-// Type definitions
-interface TransactionResponse {
-  success: boolean;
-  error?: string;
-  transaction?: Transaction | any;
-  path?: string;
-  [key: string]: unknown;
-}
 
 interface ExportOptions {
   exportFormat?: string;
@@ -96,7 +88,7 @@ export function registerTransactionExportHandlers(
       // Generate combined PDF using folder export service
       const generatedPath = await folderExportService.exportTransactionToCombinedPDF(
         details,
-        (details as any).communications || [],
+        details.communications || [],
         pdfPath,
       );
 
@@ -162,7 +154,7 @@ export function registerTransactionExportHandlers(
       // Export with options
       const exportPath = await enhancedExportService.exportTransaction(
         details,
-        (details as any).communications || [],
+        details.communications || [],
         sanitizedOptions as any,
       );
 
@@ -240,7 +232,7 @@ export function registerTransactionExportHandlers(
       }
 
       // Filter communications by date range if transaction has dates set
-      let communications = (details as any).communications || [];
+      let communications = details.communications || [];
       const startDate = details.started_at;
       const endDate = details.closed_at;
 
@@ -258,7 +250,7 @@ export function registerTransactionExportHandlers(
         });
 
         logService.info("Filtered communications by date range", "Transactions", {
-          original: ((details as any).communications || []).length,
+          original: (details.communications || []).length,
           filtered: communications.length,
           startDate: startDate,
           endDate: endDate,

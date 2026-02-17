@@ -3,6 +3,25 @@
  * These types replace `any` types in handler files for better type safety
  */
 
+import type { Transaction } from "./models";
+
+// ============================================
+// TRANSACTION HANDLER RESPONSE TYPES
+// ============================================
+
+/**
+ * Standard response shape for transaction IPC handlers.
+ * Consolidated from duplicate definitions in transactionCrudHandlers,
+ * transactionExportHandlers, and emailSyncHandlers (TASK-2000).
+ */
+export interface TransactionResponse {
+  success: boolean;
+  error?: string;
+  transaction?: Transaction | null;
+  transactions?: Array<Partial<Transaction> & { id: string }>;
+  [key: string]: unknown;
+}
+
 // ============================================
 // SQLITE ROW TYPES
 // ============================================

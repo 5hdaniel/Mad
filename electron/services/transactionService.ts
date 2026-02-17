@@ -148,7 +148,7 @@ interface ContactAssignment {
   notes?: string;
 }
 
-interface AuditedTransactionData {
+export interface AuditedTransactionData {
   property_address: string;
   property_street?: string;
   property_city?: string;
@@ -173,7 +173,7 @@ interface ContactRoleUpdate {
  * Transaction with communications and contact assignments populated.
  * Returned by getTransactionDetails and getTransactionWithContacts.
  */
-interface TransactionWithDetails extends Transaction {
+export interface TransactionWithDetails extends Transaction {
   communications?: Communication[];
   contact_assignments?: TransactionContactResult[];
 }
