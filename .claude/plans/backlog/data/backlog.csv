@@ -14,7 +14,7 @@ BACKLOG-012,Manually Add Missing Texts to Audit,ui,Medium,Completed,-,-,-,-,2025
 BACKLOG-013,Duplicate Transaction Detection,service,High,Pending,-,-,-,-,2025-12-15,,-
 BACKLOG-014,Update Joyride Demo for New Users,ui,Medium,Completed,SPRINT-011,~35K,~18K,-72%,2025-12-15,2026-01-01,[BACKLOG-014.md](BACKLOG-014.md)
 BACKLOG-015,Display Last Sync Time in UI,ui,Medium,Completed,-,-,-,-,2025-12-15,2026-01-23,-
-BACKLOG-016,Refactor Contact Import,refactor,High,Pending,-,-,-,-,2025-12-15,,-
+BACKLOG-016,Refactor Contact Import,refactor,High,Completed,-,-,-,Reference model implemented: contacts + contact_emails/phones + transaction_participants,2025-12-15,2026-02-16,-
 BACKLOG-017,Naming Convention Documentation,docs,Low,Pending,-,-,-,-,2025-12-15,,-
 BACKLOG-018,Smart Contact Sync,service,High,Pending,-,-,-,-,2025-12-15,,-
 BACKLOG-019,Returning User Experience,ui,Medium,Pending,-,-,-,-,2025-12-15,,-
@@ -187,7 +187,7 @@ BACKLOG-186,Continue Button Not Working After Import,ui,Critical,Completed,SPRIN
 BACKLOG-187,Display Attachments (Images/GIFs) in Text Messages,ui,Medium,Pending,-,~50K,-,-,2026-01-10,,[BACKLOG-187.md](BACKLOG-187.md)
 BACKLOG-188,Scan Lookback Period Setting Not Persisting,service,Medium,Pending,-,~15K,-,-,2026-01-10,,[BACKLOG-188.md](BACKLOG-188.md)
 BACKLOG-189,Configurable Attachment Size Limit,feature,Low,Pending,-,~15K,-,-,2026-01-10,,[BACKLOG-189.md](BACKLOG-189.md)
-BACKLOG-190,Transaction Date Range for Message Linking,service,Critical,Pending,-,~20K,-,-,2026-01-10,,[BACKLOG-190.md](BACKLOG-190.md)
+BACKLOG-190,Transaction Date Range for Message Linking,service,Critical,Completed,Date filtering in message linking + UI step renamed,~20K,-,-,2026-01-10,2026-02-16,[BACKLOG-190.md](BACKLOG-190.md)
 BACKLOG-191,Add Test Coverage for Core Service Layer,test,Critical,Obsolete,-,~115K,-,-,2026-01-11,,[BACKLOG-191.md](BACKLOG-191.md)
 BACKLOG-192,Clean Up Console Statements (186 Remaining),refactor,Medium,Pending,-,~30K,-,-,2026-01-11,,[BACKLOG-192.md](BACKLOG-192.md)
 BACKLOG-193,"Refactor databaseService.ts (1,223 Lines)",refactor,High,Pending,-,~80K,-,-,2026-01-11,,[BACKLOG-193.md](BACKLOG-193.md)
@@ -591,9 +591,9 @@ BACKLOG-711,Load More in Attach Emails shows out-of-order dates,fix,Medium,Compl
 BACKLOG-712,Attach Emails search should filter by transaction contacts,enhancement,Medium,Completed,SPRINT-084,~5K,-,-,2026-02-15,2026-02-16,TASK-1998 — pass transactionId to handler and look up contact_emails for provider filter
 BACKLOG-713,Loading spinner animation consistency between license check and keychain loading,enhancement,Low,Pending,-,~2K,-,-,2026-02-15,,The circular loading spinner animation during license check phase should match the keychain/encryption initialization phase spinner for consistent UX
 BACKLOG-714,Removed Outlook contact not visible in UI after re-import,fix,Medium,Pending,-,-,-,-,2026-02-15,,Hard-deleted contact remains in external_contacts; Outlook sync upserts back but UI doesn't reload available-to-import external contacts or filtering issue in contacts:get-available
-BACKLOG-715,Split transaction-handlers.ts into domain handler files,refactor,High,In Progress,SPRINT-085,~40K,-,-,2026-02-16,,TASK-1999 — Split 3754-line monolith (43 handlers) into transactionCrudHandlers + transactionExportHandlers + emailSyncHandlers + attachmentHandlers
-BACKLOG-716,Extract business logic and fix getTransactionDetails return type,refactor,High,Pending,SPRINT-085,~15K,-,-,2026-02-16,,TASK-2000 — Fix TransactionDetails type to include communications and contact_assignments; extract inline SQL from handlers into services
+BACKLOG-715,Split transaction-handlers.ts into domain handler files,refactor,High,Completed,SPRINT-085,~40K,-,-,2026-02-16,2026-02-17,TASK-1999 — Split 3754-line monolith (43 handlers) into transactionCrudHandlers + transactionExportHandlers + emailSyncHandlers + attachmentHandlers
+BACKLOG-716,Extract business logic and fix getTransactionDetails return type,refactor,High,Completed,SPRINT-085,~15K,-,-,2026-02-16,2026-02-17,TASK-2000 — Fix TransactionDetails type to include communications and contact_assignments; extract inline SQL from handlers into services
 BACKLOG-717,Fix window.api bridge type declarations,tech-debt,High,Completed,SPRINT-085,~30K,-,-,2026-02-16,,TASK-2001 — Add 11 missing method signatures to transactionBridge.ts and contactBridge.ts; remove 10 production as-any casts
 BACKLOG-718,Create wrapHandler() HOF for IPC error handling boilerplate,refactor,High,Completed,SPRINT-085,~15K,-,-,2026-02-16,,TASK-2002 — Error pattern repeated 179 times across 9 handler files; create shared utility with ValidationError and unknown error handling
 BACKLOG-719,Extract raw SQL from contact-handlers.ts into contactDbService,refactor,High,Completed,SPRINT-085,~12K,-,-,2026-02-16,,TASK-2003 — contacts:update handler has ~140 lines of raw SQL for email/phone sync; extract to syncContactEmails and syncContactPhones service methods
-BACKLOG-720,Split system-handlers.ts into domain handler files,refactor,High,Pending,SPRINT-085,~30K,-,-,2026-02-16,,TASK-2004 — Split 2019-line monolith (39 handlers) into diagnosticHandlers + userSettingsHandlers + systemHandlers
+BACKLOG-720,Split system-handlers.ts into domain handler files,refactor,High,Completed,SPRINT-085,~30K,-,-,2026-02-16,2026-02-17,TASK-2004 — Split 2019-line monolith (39 handlers) into diagnosticHandlers + userSettingsHandlers + systemHandlers
