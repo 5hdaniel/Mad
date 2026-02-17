@@ -1,0 +1,937 @@
+// ============================================
+// TRANSACTION CRUD IPC HANDLERS
+// Handles: create, read, update, delete, and contact management
+// ============================================
+
+import { ipcMain } from "electron";
+import type { BrowserWindow } from "electron";
+import type { IpcMainInvokeEvent } from "electron";
+import transactionService from "../services/transactionService";
+import { getEarliestCommunicationDate } from "../services/transactionService";
+import auditService from "../services/auditService";
+import logService from "../services/logService";
+import { autoLinkCommunicationsForContact } from "../services/autoLinkService";
+import { wrapHandler } from "../utils/wrapHandler";
+import type {
+  Transaction,
+  NewTransaction,
+  UpdateTransaction,
+} from "../types/models";
+import {
+  ValidationError,
+  validateUserId,
+  validateTransactionId,
+  validateContactId,
+  validateTransactionData,
+  validateProvider,
+  sanitizeObject,
+} from "../utils/validation";
+import type { OAuthProvider } from "../types/models";
+
+// Type definitions
+interface TransactionResponse {
+  success: boolean;
+  error?: string;
+  transaction?: Transaction | any;
+  transactions?: Transaction[] | any[];
+  [key: string]: unknown;
+}
+
+/**
+ * Register transaction CRUD IPC handlers
+ * @param _mainWindow - Main window instance (unused in CRUD handlers)
+ */
+export function registerTransactionCrudHandlers(
+  _mainWindow: BrowserWindow | null,
+): void {
+  // Get all transactions for a user
+  ipcMain.handle(
+    "transactions:get-all",
+    wrapHandler(async (
+      event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<TransactionResponse> => {
+      // Validate input
+      const validatedUserId = validateUserId(userId);
+      if (!validatedUserId) {
+        throw new ValidationError("User ID validation failed", "userId");
+      }
+
+      const transactions =
+        await transactionService.getTransactions(validatedUserId);
+
+      // Debug: log detection fields being returned to frontend
+      if (transactions.length > 0) {
+        logService.debug("First transaction detection fields", "TransactionHandlers", {
+          id: transactions[0].id,
+          detection_source: transactions[0].detection_source,
+          detection_status: transactions[0].detection_status,
+          detection_confidence: transactions[0].detection_confidence,
+        });
+      }
+
+      return {
+        success: true,
+        transactions,
+      };
+    }, { module: "Transactions" }),
+  );
+
+  // Create manual transaction
+  ipcMain.handle(
+    "transactions:create",
+    wrapHandler(async (
+      event: IpcMainInvokeEvent,
+      userId: string,
+      transactionData: unknown,
+    ): Promise<TransactionResponse> => {
+      // Validate inputs
+      const validatedUserId = validateUserId(userId);
+      if (!validatedUserId) {
+        throw new ValidationError("User ID validation failed", "userId");
+      }
+      const validatedData = validateTransactionData(transactionData, false);
+
+      const transaction = await transactionService.createManualTransaction(
+        validatedUserId,
+        validatedData as unknown as Partial<NewTransaction>,
+      );
+
+      // Audit log transaction creation
+      await auditService.log({
+        userId: validatedUserId,
+        action: "TRANSACTION_CREATE",
+        resourceType: "TRANSACTION",
+        resourceId: transaction.id,
+        metadata: { propertyAddress: transaction.property_address },
+        success: true,
+      });
+
+      logService.info("Transaction created", "Transactions", {
+        userId: validatedUserId,
+        transactionId: transaction.id,
+      });
+
+      return {
+        success: true,
+        transaction,
+      };
+    }, { module: "Transactions" }),
+  );
+
+  // Get transaction details with communications
+  ipcMain.handle(
+    "transactions:get-details",
+    wrapHandler(async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      // Validate input
+      const validatedTransactionId = validateTransactionId(transactionId);
+      if (!validatedTransactionId) {
+        throw new ValidationError(
+          "Transaction ID validation failed",
+          "transactionId",
+        );
+      }
+
+      const t0 = Date.now();
+      const details = await transactionService.getTransactionDetails(
+        validatedTransactionId,
+      );
+      const t1 = Date.now();
+
+      if (!details) {
+        return {
+          success: false,
+          error: "Transaction not found",
+        };
+      }
+
+      const commCount = details.communications?.length || 0;
+      const contactCount = details.contact_assignments?.length || 0;
+      logService.debug(`[PERF] getDetails: ${t1 - t0}ms, ${commCount} comms, ${contactCount} contacts`, "Transactions");
+
+      return {
+        success: true,
+        transaction: details,
+      };
+    }, { module: "Transactions" }),
+  );
+
+  // PERF: Filtered communications -- only emails or only texts
+  ipcMain.handle(
+    "transactions:get-communications",
+    wrapHandler(async (
+      _event: IpcMainInvokeEvent,
+      transactionId: string,
+      channelFilter: "email" | "text",
+    ): Promise<TransactionResponse> => {
+      const validatedTransactionId = validateTransactionId(transactionId);
+      if (!validatedTransactionId) {
+        throw new ValidationError("Transaction ID validation failed", "transactionId");
+      }
+      // Validate channelFilter to prevent injection
+      if (channelFilter !== "email" && channelFilter !== "text") {
+        throw new ValidationError(
+          "channelFilter must be 'email' or 'text'",
+          "channelFilter",
+        );
+      }
+      const t0 = Date.now();
+      const details = await transactionService.getTransactionDetails(
+        validatedTransactionId,
+        channelFilter,
+      );
+      if (!details) {
+        return { success: false, error: "Transaction not found" };
+      }
+      const commCount = details.communications?.length || 0;
+      logService.debug(
+        `[PERF] getCommunications(${channelFilter}): ${Date.now() - t0}ms, ${commCount} comms`,
+        "Transactions",
+      );
+      return { success: true, transaction: details };
+    }, { module: "Transactions" }),
+  );
+
+  // PERF: Lightweight overview -- contacts only, no communications
+  ipcMain.handle(
+    "transactions:get-overview",
+    wrapHandler(async (
+      _event: IpcMainInvokeEvent,
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      const validatedTransactionId = validateTransactionId(transactionId);
+      if (!validatedTransactionId) {
+        throw new ValidationError("Transaction ID validation failed", "transactionId");
+      }
+
+      const t0 = Date.now();
+      const details = await transactionService.getTransactionOverview(validatedTransactionId);
+      if (!details) {
+        return { success: false, error: "Transaction not found" };
+      }
+      const contactCount = details.contact_assignments?.length || 0;
+      logService.debug(`[PERF] getOverview: ${Date.now() - t0}ms, ${contactCount} contacts`, "Transactions");
+
+      return { success: true, transaction: details };
+    }, { module: "Transactions" }),
+  );
+
+  // Update transaction
+  ipcMain.handle(
+    "transactions:update",
+    wrapHandler(async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+      updates: unknown,
+    ): Promise<TransactionResponse> => {
+      // Validate inputs
+      const validatedTransactionId = validateTransactionId(transactionId);
+      if (!validatedTransactionId) {
+        throw new ValidationError(
+          "Transaction ID validation failed",
+          "transactionId",
+        );
+      }
+      const sanitizedUpdates = sanitizeObject(updates || {});
+      const validatedUpdates = validateTransactionData(
+        sanitizedUpdates,
+        true,
+      );
+
+      // Get transaction before update for audit logging (to get user_id)
+      const existingTransaction =
+        await transactionService.getTransactionDetails(
+          validatedTransactionId,
+        );
+      const userId = existingTransaction?.user_id || "unknown";
+
+      const updated = await transactionService.updateTransaction(
+        validatedTransactionId,
+        validatedUpdates as unknown as Partial<UpdateTransaction>,
+      );
+
+      // Audit log transaction update
+      await auditService.log({
+        userId,
+        action: "TRANSACTION_UPDATE",
+        resourceType: "TRANSACTION",
+        resourceId: validatedTransactionId,
+        metadata: { updatedFields: Object.keys(validatedUpdates) },
+        success: true,
+      });
+
+      logService.info("Transaction updated", "Transactions", {
+        userId,
+        transactionId: validatedTransactionId,
+      });
+
+      return {
+        success: true,
+        transaction: updated,
+      };
+    }, { module: "Transactions" }),
+  );
+
+  // Delete transaction
+  ipcMain.handle(
+    "transactions:delete",
+    wrapHandler(async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      // Validate input
+      const validatedTransactionId = validateTransactionId(transactionId);
+      if (!validatedTransactionId) {
+        throw new ValidationError(
+          "Transaction ID validation failed",
+          "transactionId",
+        );
+      }
+
+      // Get transaction before delete for audit logging
+      const existingTransaction =
+        await transactionService.getTransactionDetails(
+          validatedTransactionId,
+        );
+      const userId = existingTransaction?.user_id || "unknown";
+      const propertyAddress =
+        existingTransaction?.property_address || "unknown";
+
+      await transactionService.deleteTransaction(validatedTransactionId);
+
+      // Audit log transaction deletion
+      await auditService.log({
+        userId,
+        action: "TRANSACTION_DELETE",
+        resourceType: "TRANSACTION",
+        resourceId: validatedTransactionId,
+        metadata: { propertyAddress },
+        success: true,
+      });
+
+      logService.info("Transaction deleted", "Transactions", {
+        userId,
+        transactionId: validatedTransactionId,
+      });
+
+      return {
+        success: true,
+      };
+    }, { module: "Transactions" }),
+  );
+
+  // Create audited transaction with contact assignments
+  ipcMain.handle(
+    "transactions:create-audited",
+    wrapHandler(async (
+      event: IpcMainInvokeEvent,
+      userId: string,
+      transactionData: unknown,
+    ): Promise<TransactionResponse> => {
+      logService.info("Creating audited transaction", "Transactions", {
+        userId,
+      });
+
+      // Validate inputs
+      const validatedUserId = validateUserId(userId);
+      const validatedData = validateTransactionData(
+        sanitizeObject(transactionData || {}),
+        false,
+      );
+
+      // TASK-1031: createAuditedTransaction now auto-links communications
+      // for all assigned contacts internally
+      const transaction = await transactionService.createAuditedTransaction(
+        validatedUserId as string,
+        validatedData as any,
+      );
+
+      return {
+        success: true,
+        transaction,
+      };
+    }, { module: "Transactions" }),
+  );
+
+  // Get transaction with contacts
+  ipcMain.handle(
+    "transactions:get-with-contacts",
+    wrapHandler(async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      // Validate input
+      const validatedTransactionId = validateTransactionId(transactionId);
+      if (!validatedTransactionId) {
+        throw new ValidationError(
+          "Transaction ID validation failed",
+          "transactionId",
+        );
+      }
+
+      const transaction = await transactionService.getTransactionWithContacts(
+        validatedTransactionId,
+      );
+
+      if (!transaction) {
+        return {
+          success: false,
+          error: "Transaction not found",
+        };
+      }
+
+      return {
+        success: true,
+        transaction,
+      };
+    }, { module: "Transactions" }),
+  );
+
+  // Assign contact to transaction
+  ipcMain.handle(
+    "transactions:assign-contact",
+    wrapHandler(async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+      contactId: string,
+      role: string,
+      roleCategory: string,
+      isPrimary: boolean,
+      notes?: string,
+    ): Promise<TransactionResponse> => {
+      // Validate inputs
+      const validatedTransactionId = validateTransactionId(transactionId);
+      if (!validatedTransactionId) {
+        throw new ValidationError(
+          "Transaction ID validation failed",
+          "transactionId",
+        );
+      }
+      const validatedContactId = validateContactId(contactId);
+
+      // Validate role and roleCategory as strings
+      if (!role || typeof role !== "string" || role.trim().length === 0) {
+        throw new ValidationError(
+          "Role is required and must be a non-empty string",
+          "role",
+        );
+      }
+      if (
+        !roleCategory ||
+        typeof roleCategory !== "string" ||
+        roleCategory.trim().length === 0
+      ) {
+        throw new ValidationError(
+          "Role category is required and must be a non-empty string",
+          "roleCategory",
+        );
+      }
+
+      // Validate isPrimary as boolean
+      if (typeof isPrimary !== "boolean") {
+        throw new ValidationError("isPrimary must be a boolean", "isPrimary");
+      }
+
+      // Validate notes (optional)
+      const validatedNotes =
+        notes && typeof notes === "string" ? notes.trim() : null;
+
+      // TASK-1031: assignContactToTransaction now auto-links communications
+      // for the newly added contact
+      const result = await transactionService.assignContactToTransaction(
+        validatedTransactionId as string,
+        validatedContactId as string,
+        role.trim(),
+        roleCategory.trim(),
+        isPrimary,
+        validatedNotes ?? undefined,
+      );
+
+      // Log auto-link results if any communications were linked
+      if (result.autoLink) {
+        const { emailsLinked, messagesLinked } = result.autoLink;
+        if (emailsLinked > 0 || messagesLinked > 0) {
+          logService.info("Auto-linked communications for new contact", "Transactions", {
+            transactionId: validatedTransactionId,
+            contactId: validatedContactId,
+            emailsLinked,
+            messagesLinked,
+          });
+        }
+      }
+
+      return {
+        success: true,
+        // TASK-1031: Return auto-link results so UI can notify user
+        autoLink: result.autoLink,
+      };
+    }, { module: "Transactions" }),
+  );
+
+  // Remove contact from transaction
+  ipcMain.handle(
+    "transactions:remove-contact",
+    wrapHandler(async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+      contactId: string,
+    ): Promise<TransactionResponse> => {
+      // Validate inputs
+      const validatedTransactionId = validateTransactionId(transactionId);
+      if (!validatedTransactionId) {
+        throw new ValidationError(
+          "Transaction ID validation failed",
+          "transactionId",
+        );
+      }
+      const validatedContactId = validateContactId(contactId);
+
+      await transactionService.removeContactFromTransaction(
+        validatedTransactionId as string,
+        validatedContactId as string,
+      );
+
+      return {
+        success: true,
+      };
+    }, { module: "Transactions" }),
+  );
+
+  // Batch update contact assignments for a transaction
+  ipcMain.handle(
+    "transactions:batchUpdateContacts",
+    wrapHandler(async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+      operations: Array<{
+        action: "add" | "remove";
+        contactId: string;
+        role?: string;
+        roleCategory?: string;
+        specificRole?: string;
+        isPrimary?: boolean;
+        notes?: string;
+      }>,
+    ): Promise<TransactionResponse> => {
+      // Validate transaction ID
+      const validatedTransactionId = validateTransactionId(transactionId);
+      if (!validatedTransactionId) {
+        throw new ValidationError(
+          "Transaction ID validation failed",
+          "transactionId",
+        );
+      }
+
+      // Validate operations array
+      if (!Array.isArray(operations)) {
+        throw new ValidationError(
+          "Operations must be an array",
+          "operations",
+        );
+      }
+
+      // Validate each operation
+      const validatedOperations = operations.map((op, index) => {
+        if (!op.action || (op.action !== "add" && op.action !== "remove")) {
+          throw new ValidationError(
+            `Invalid action at index ${index}: must be 'add' or 'remove'`,
+            "operations",
+          );
+        }
+
+        const validatedContactId = validateContactId(op.contactId);
+        if (!validatedContactId) {
+          throw new ValidationError(
+            `Invalid contact ID at index ${index}`,
+            "operations",
+          );
+        }
+
+        return {
+          action: op.action,
+          contactId: validatedContactId,
+          role: op.role?.trim(),
+          roleCategory: op.roleCategory?.trim(),
+          specificRole: op.specificRole?.trim(),
+          isPrimary: op.isPrimary ?? false,
+          notes: op.notes?.trim(),
+        };
+      });
+
+      await transactionService.batchUpdateContactAssignments(
+        validatedTransactionId as string,
+        validatedOperations,
+      );
+
+      logService.info(
+        "Batch contact assignments updated",
+        "Transactions",
+        {
+          transactionId: validatedTransactionId,
+          operationCount: validatedOperations.length,
+        },
+      );
+
+      // TASK-1126: Auto-link communications for each added contact
+      const autoLinkResults: Array<{
+        contactId: string;
+        emailsLinked: number;
+        messagesLinked: number;
+        alreadyLinked: number;
+        errors: number;
+      }> = [];
+
+      const addOperations = validatedOperations.filter(
+        (op) => op.action === "add"
+      );
+
+      for (const op of addOperations) {
+        try {
+          const result = await autoLinkCommunicationsForContact({
+            contactId: op.contactId,
+            transactionId: validatedTransactionId as string,
+          });
+
+          autoLinkResults.push({
+            contactId: op.contactId,
+            ...result,
+          });
+
+          logService.debug(
+            "Auto-link complete for contact",
+            "Transactions",
+            {
+              contactId: op.contactId,
+              emailsLinked: result.emailsLinked,
+              messagesLinked: result.messagesLinked,
+              alreadyLinked: result.alreadyLinked,
+            }
+          );
+        } catch (error) {
+          // Log but don't fail the entire operation
+          logService.warn(
+            `Auto-link failed for contact ${op.contactId}`,
+            "Transactions",
+            {
+              error: error instanceof Error ? error.message : "Unknown",
+            }
+          );
+        }
+      }
+
+      return {
+        success: true,
+        autoLinkResults:
+          autoLinkResults.length > 0 ? autoLinkResults : undefined,
+      };
+    }, { module: "Transactions" }),
+  );
+
+  // Unlink communication (email) from transaction
+  ipcMain.handle(
+    "transactions:unlink-communication",
+    wrapHandler(async (
+      event: IpcMainInvokeEvent,
+      communicationId: string,
+      reason?: string,
+    ): Promise<TransactionResponse> => {
+      logService.info("Unlinking communication from transaction", "Transactions", {
+        communicationId,
+        reason,
+      });
+
+      // Validate communication ID (using same format as contact ID)
+      if (
+        !communicationId ||
+        typeof communicationId !== "string" ||
+        communicationId.trim().length === 0
+      ) {
+        return {
+          success: false,
+          error: "Invalid communication ID",
+        };
+      }
+
+      await transactionService.unlinkCommunication(
+        communicationId.trim(),
+        reason,
+      );
+
+      logService.info("Communication unlinked successfully", "Transactions", {
+        communicationId,
+      });
+
+      return {
+        success: true,
+      };
+    }, { module: "Transactions" }),
+  );
+
+  // Re-analyze property (rescan emails for specific address)
+  ipcMain.handle(
+    "transactions:reanalyze",
+    wrapHandler(async (
+      event: IpcMainInvokeEvent,
+      userId: string,
+      provider: string,
+      propertyAddress: string,
+      dateRange?: unknown,
+    ): Promise<TransactionResponse> => {
+      // Validate inputs
+      const validatedUserId = validateUserId(userId);
+      const validatedProvider = validateProvider(provider);
+
+      // Validate property address
+      if (
+        !propertyAddress ||
+        typeof propertyAddress !== "string" ||
+        propertyAddress.trim().length < 5
+      ) {
+        throw new ValidationError(
+          "Property address is required and must be at least 5 characters",
+          "propertyAddress",
+        );
+      }
+
+      // Validate dateRange (optional object with start/end)
+      const sanitizedDateRange = sanitizeObject(dateRange || {});
+
+      const result = await transactionService.reanalyzeProperty(
+        validatedUserId as string,
+        validatedProvider as OAuthProvider,
+        propertyAddress.trim(),
+        sanitizedDateRange as { start?: Date; end?: Date },
+      );
+
+      return {
+        success: true,
+        ...result,
+      };
+    }, { module: "Transactions" }),
+  );
+
+  // Bulk delete transactions
+  ipcMain.handle(
+    "transactions:bulk-delete",
+    wrapHandler(async (
+      event: IpcMainInvokeEvent,
+      transactionIds: string[],
+    ): Promise<TransactionResponse> => {
+      logService.info("Starting bulk delete", "Transactions", {
+        count: transactionIds?.length || 0,
+      });
+
+      // Validate input
+      if (!Array.isArray(transactionIds) || transactionIds.length === 0) {
+        throw new ValidationError(
+          "Transaction IDs must be a non-empty array",
+          "transactionIds",
+        );
+      }
+
+      // Validate each transaction ID
+      const validatedIds: string[] = [];
+      for (const id of transactionIds) {
+        const validatedId = validateTransactionId(id);
+        if (!validatedId) {
+          throw new ValidationError(
+            `Invalid transaction ID: ${id}`,
+            "transactionIds",
+          );
+        }
+        validatedIds.push(validatedId);
+      }
+
+      // Delete each transaction
+      let deletedCount = 0;
+      const errors: string[] = [];
+
+      for (const transactionId of validatedIds) {
+        try {
+          // Get transaction before delete for audit logging
+          const existingTransaction =
+            await transactionService.getTransactionDetails(transactionId);
+          const userId = existingTransaction?.user_id || "unknown";
+          const propertyAddress =
+            existingTransaction?.property_address || "unknown";
+
+          await transactionService.deleteTransaction(transactionId);
+
+          // Audit log transaction deletion
+          await auditService.log({
+            userId,
+            action: "TRANSACTION_DELETE",
+            resourceType: "TRANSACTION",
+            resourceId: transactionId,
+            metadata: { propertyAddress, bulkOperation: true },
+            success: true,
+          });
+
+          deletedCount++;
+        } catch (err) {
+          errors.push(
+            `Failed to delete ${transactionId}: ${err instanceof Error ? err.message : "Unknown error"}`,
+          );
+        }
+      }
+
+      logService.info("Bulk delete completed", "Transactions", {
+        deletedCount,
+        errorCount: errors.length,
+      });
+
+      return {
+        success: errors.length === 0,
+        deletedCount,
+        errors: errors.length > 0 ? errors : undefined,
+      };
+    }, { module: "Transactions" }),
+  );
+
+  // Bulk update transaction status
+  ipcMain.handle(
+    "transactions:bulk-update-status",
+    wrapHandler(async (
+      event: IpcMainInvokeEvent,
+      transactionIds: string[],
+      status: string,
+    ): Promise<TransactionResponse> => {
+      logService.info("Starting bulk status update", "Transactions", {
+        count: transactionIds?.length || 0,
+        status,
+      });
+
+      // Validate input
+      if (!Array.isArray(transactionIds) || transactionIds.length === 0) {
+        throw new ValidationError(
+          "Transaction IDs must be a non-empty array",
+          "transactionIds",
+        );
+      }
+
+      // Validate status - allow all 4 transaction statuses
+      if (!status || !["pending", "active", "closed", "rejected"].includes(status)) {
+        throw new ValidationError(
+          "Status must be 'pending', 'active', 'closed', or 'rejected'",
+          "status",
+        );
+      }
+
+      // Validate each transaction ID
+      const validatedIds: string[] = [];
+      for (const id of transactionIds) {
+        const validatedId = validateTransactionId(id);
+        if (!validatedId) {
+          throw new ValidationError(
+            `Invalid transaction ID: ${id}`,
+            "transactionIds",
+          );
+        }
+        validatedIds.push(validatedId);
+      }
+
+      // TASK-984: Validate that manual transactions cannot be set to pending/rejected
+      // These statuses are only meaningful for AI-detected transactions
+      if (status === "pending" || status === "rejected") {
+        const manualTransactionIds: string[] = [];
+        for (const transactionId of validatedIds) {
+          const tx = await transactionService.getTransactionDetails(transactionId);
+          if (tx?.detection_source === "manual") {
+            manualTransactionIds.push(transactionId);
+          }
+        }
+
+        if (manualTransactionIds.length > 0) {
+          throw new ValidationError(
+            `Cannot set manual transactions to "${status}". Manual transactions can only be "active" or "closed".`,
+            "status",
+          );
+        }
+      }
+
+      // Update each transaction
+      let updatedCount = 0;
+      const errors: string[] = [];
+
+      for (const transactionId of validatedIds) {
+        try {
+          // Get transaction before update for audit logging
+          const existingTransaction =
+            await transactionService.getTransactionDetails(transactionId);
+          const userId = existingTransaction?.user_id || "unknown";
+
+          await transactionService.updateTransaction(transactionId, {
+            status: status as "pending" | "active" | "closed" | "rejected",
+          });
+
+          // Audit log transaction update
+          await auditService.log({
+            userId,
+            action: "TRANSACTION_UPDATE",
+            resourceType: "TRANSACTION",
+            resourceId: transactionId,
+            metadata: { updatedFields: ["status"], newStatus: status, bulkOperation: true },
+            success: true,
+          });
+
+          updatedCount++;
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : "Unknown error";
+          logService.error("Failed to update transaction status", "Transactions", {
+            transactionId,
+            status,
+            error: errorMsg,
+            stack: err instanceof Error ? err.stack : undefined,
+          });
+          errors.push(`Failed to update ${transactionId}: ${errorMsg}`);
+        }
+      }
+
+      logService.info("Bulk status update completed", "Transactions", {
+        updatedCount,
+        errorCount: errors.length,
+      });
+
+      return {
+        success: errors.length === 0,
+        updatedCount,
+        errors: errors.length > 0 ? errors : undefined,
+      };
+    }, { module: "Transactions" }),
+  );
+
+  // ============================================
+  // AUTO-DETECT START DATE (TASK-1974)
+  // ============================================
+
+  /**
+   * Get the earliest communication date for a set of contacts.
+   * Used by the audit wizard to auto-detect the transaction start date.
+   */
+  ipcMain.handle(
+    "transactions:get-earliest-communication-date",
+    wrapHandler(async (
+      _event: IpcMainInvokeEvent,
+      contactIds: string[],
+      userId: string,
+    ): Promise<{ success: boolean; date?: string | null; error?: string }> => {
+      validateUserId(userId);
+
+      if (!Array.isArray(contactIds) || contactIds.length === 0) {
+        return { success: true, date: null };
+      }
+
+      // Validate each contact ID
+      for (const id of contactIds) {
+        validateContactId(id);
+      }
+
+      const date = getEarliestCommunicationDate(contactIds, userId);
+
+      return { success: true, date: date || null };
+    }, { module: "Transactions" }),
+  );
+}

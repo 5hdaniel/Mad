@@ -4,7 +4,7 @@
  * try/catch boilerplate found across handler files.
  *
  * Error handling behavior:
- * - ValidationError -> { success: false, error: message } (no logging, expected input failure)
+ * - ValidationError -> { success: false, error: "Validation error: " + message } (no logging, expected input failure)
  * - Error -> { success: false, error: message } (logged via logService)
  * - Non-Error throw -> { success: false, error: "Unknown error" } (logged via logService)
  *
@@ -16,10 +16,8 @@ import type { IpcMainInvokeEvent } from "electron";
 import { ValidationError } from "./validation";
 import logService from "../services/logService";
 
-type IpcHandler = (
-  event: IpcMainInvokeEvent,
-  ...args: unknown[]
-) => Promise<unknown>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyIpcHandler = (event: IpcMainInvokeEvent, ...args: any[]) => Promise<any>;
 
 /**
  * Wraps an IPC handler function with standardized error handling.
@@ -39,7 +37,7 @@ type IpcHandler = (
  * );
  * ```
  */
-export function wrapHandler<T extends IpcHandler>(
+export function wrapHandler<T extends AnyIpcHandler>(
   handler: T,
   options?: {
     /** Module name for error logging (defaults to "IPC") */
@@ -54,7 +52,7 @@ export function wrapHandler<T extends IpcHandler>(
       return await handler(event, ...args);
     } catch (error) {
       if (error instanceof ValidationError) {
-        return { success: false, error: error.message };
+        return { success: false, error: `Validation error: ${error.message}` };
       }
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
