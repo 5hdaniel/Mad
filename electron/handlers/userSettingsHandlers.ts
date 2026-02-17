@@ -1,0 +1,367 @@
+// ============================================
+// USER SETTINGS IPC HANDLERS
+// Handles: user preferences, phone type, notifications, user DB checks
+// ============================================
+
+import { ipcMain, Notification } from "electron";
+import type { IpcMainInvokeEvent } from "electron";
+import databaseService from "../services/databaseService";
+import supabaseService from "../services/supabaseService";
+import logService from "../services/logService";
+import { wrapHandler } from "../utils/wrapHandler";
+import {
+  ValidationError,
+  validateUserId,
+} from "../utils/validation";
+import { isInitializationComplete, ensureUserInLocalDb } from "./systemHandlers";
+
+/**
+ * Register all user settings IPC handlers
+ */
+export function registerUserSettingsHandlers(): void {
+  // ===== USER PHONE TYPE PREFERENCES =====
+
+  /**
+   * Get user's mobile phone type preference
+   * Note: Cannot use wrapHandler because error response requires phoneType: null
+   * @param userId - User ID to get phone type for
+   * @returns Phone type ('iphone' | 'android' | null)
+   */
+  ipcMain.handle(
+    "user:get-phone-type",
+    async (
+      event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<{
+      success: boolean;
+      phoneType: "iphone" | "android" | null;
+      error?: string;
+    }> => {
+      try {
+        const validatedUserId = validateUserId(userId);
+        // validateUserId throws when required (default), so validatedUserId is never null here
+        const user = await databaseService.getUserById(validatedUserId!);
+
+        if (!user) {
+          return { success: true, phoneType: null };
+        }
+
+        return {
+          success: true,
+          phoneType: user.mobile_phone_type as "iphone" | "android" | null,
+        };
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error("Failed to get user phone type", "Settings", {
+          error: errorMessage,
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            phoneType: null,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return { success: false, phoneType: null, error: errorMessage };
+      }
+    },
+  );
+
+  /**
+   * Set user's mobile phone type preference
+   * @param userId - User ID to set phone type for
+   * @param phoneType - Phone type to set ('iphone' | 'android')
+   */
+  ipcMain.handle(
+    "user:set-phone-type",
+    wrapHandler(async (
+      event: IpcMainInvokeEvent,
+      userId: string,
+      phoneType: "iphone" | "android",
+    ): Promise<{ success: boolean; error?: string }> => {
+      const validatedUserId = validateUserId(userId);
+
+      // Validate phone type
+      if (phoneType !== "iphone" && phoneType !== "android") {
+        return {
+          success: false,
+          error: 'Invalid phone type. Must be "iphone" or "android"',
+        };
+      }
+
+      // validateUserId throws when required (default), so validatedUserId is never null here
+      await databaseService.updateUser(validatedUserId!, {
+        mobile_phone_type: phoneType,
+      });
+      logService.info(
+        `Updated phone type for user ${validatedUserId} to ${phoneType}`,
+        "Settings",
+      );
+
+      return { success: true };
+    }, { module: "Settings" }),
+  );
+
+  // ===== CLOUD PHONE TYPE PREFERENCES (TASK-1600) =====
+
+  /**
+   * Get user's mobile phone type from Supabase cloud storage
+   * TASK-1600: Available before local DB initialization
+   * @param userId - User ID to get phone type for
+   * @returns Phone type from user_preferences.preferences.phone_type
+   */
+  ipcMain.handle(
+    "user:get-phone-type-cloud",
+    wrapHandler(async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<{
+      success: boolean;
+      phoneType?: "iphone" | "android";
+      error?: string;
+    }> => {
+      const validatedUserId = validateUserId(userId);
+
+      const preferences = await supabaseService.getPreferences(
+        validatedUserId!,
+      );
+      const phoneType = preferences?.phone_type as
+        | "iphone"
+        | "android"
+        | undefined;
+
+      logService.info(
+        `[user:get-phone-type-cloud] Retrieved phone type from Supabase: ${phoneType || "none"}`,
+        "Settings",
+        { userId: validatedUserId?.substring(0, 8) + "..." },
+      );
+
+      return { success: true, phoneType };
+    }, { module: "Settings" }),
+  );
+
+  /**
+   * Set user's mobile phone type in Supabase cloud storage
+   * TASK-1600: Available before local DB initialization
+   * Uses upsert to handle both new and existing user_preferences rows
+   * @param userId - User ID to set phone type for
+   * @param phoneType - Phone type to set ('iphone' | 'android')
+   */
+  ipcMain.handle(
+    "user:set-phone-type-cloud",
+    wrapHandler(async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+      phoneType: "iphone" | "android",
+    ): Promise<{ success: boolean; error?: string }> => {
+      const validatedUserId = validateUserId(userId);
+
+      // Validate phone type
+      if (phoneType !== "iphone" && phoneType !== "android") {
+        return {
+          success: false,
+          error: 'Invalid phone type. Must be "iphone" or "android"',
+        };
+      }
+
+      // Get existing preferences to merge
+      let existingPreferences: Record<string, unknown> = {};
+      try {
+        existingPreferences = await supabaseService.getPreferences(
+          validatedUserId!,
+        );
+      } catch {
+        // No existing preferences - start fresh
+      }
+
+      // Merge phone_type into preferences
+      const updatedPreferences = {
+        ...existingPreferences,
+        phone_type: phoneType,
+      };
+
+      // Sync to Supabase (uses upsert internally)
+      await supabaseService.syncPreferences(
+        validatedUserId!,
+        updatedPreferences,
+      );
+
+      logService.info(
+        `[user:set-phone-type-cloud] Saved phone type to Supabase: ${phoneType}`,
+        "Settings",
+        { userId: validatedUserId?.substring(0, 8) + "..." },
+      );
+
+      return { success: true };
+    }, { module: "Settings" }),
+  );
+
+  /**
+   * Sync user's phone type from Supabase cloud to local database
+   * Used by DataSyncStep to ensure local DB has phone_type before FDA step
+   * @param userId - User ID to sync phone type for
+   */
+  ipcMain.handle(
+    "user:sync-phone-type-from-cloud",
+    wrapHandler(async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<{ success: boolean; error?: string }> => {
+      const validatedUserId = validateUserId(userId);
+      if (!validatedUserId) {
+        return { success: false, error: "Invalid user ID" };
+      }
+
+      // 1. Get phone_type from Supabase
+      const preferences = await supabaseService.getPreferences(validatedUserId);
+      const cloudPhoneType = preferences?.phone_type as "iphone" | "android" | undefined;
+
+      if (!cloudPhoneType) {
+        logService.info(
+          "[user:sync-phone-type] No phone type in cloud, nothing to sync",
+          "Settings",
+          { userId: validatedUserId.substring(0, 8) + "..." },
+        );
+        return { success: true };
+      }
+
+      // 2. Check if local DB already has it
+      const user = await databaseService.getUserById(validatedUserId);
+      if (user?.mobile_phone_type === cloudPhoneType) {
+        logService.info(
+          "[user:sync-phone-type] Local DB already in sync",
+          "Settings",
+          { userId: validatedUserId.substring(0, 8) + "...", phoneType: cloudPhoneType },
+        );
+        return { success: true };
+      }
+
+      // 3. Update local DB
+      if (user) {
+        await databaseService.updateUser(validatedUserId, {
+          mobile_phone_type: cloudPhoneType,
+        });
+        logService.info(
+          `[user:sync-phone-type] Synced phone type to local DB: ${cloudPhoneType}`,
+          "Settings",
+          { userId: validatedUserId.substring(0, 8) + "..." },
+        );
+      } else {
+        logService.warn(
+          "[user:sync-phone-type] User not found in local DB, cannot sync",
+          "Settings",
+          { userId: validatedUserId.substring(0, 8) + "..." },
+        );
+      }
+
+      return { success: true };
+    }, { module: "Settings" }),
+  );
+
+  // ============================================
+  // NOTIFICATION HANDLERS
+  // ============================================
+
+  /**
+   * Check if notifications are supported on this platform
+   */
+  ipcMain.handle(
+    "notification:is-supported",
+    wrapHandler(async (): Promise<{ success: boolean; supported: boolean }> => {
+      return {
+        success: true,
+        supported: Notification.isSupported(),
+      };
+    }, { module: "Settings" }),
+  );
+
+  /**
+   * Send an OS notification
+   * @param title - Notification title
+   * @param body - Notification body text
+   */
+  ipcMain.handle(
+    "notification:send",
+    wrapHandler(async (
+      _event: IpcMainInvokeEvent,
+      title: string,
+      body: string,
+    ): Promise<{ success: boolean; error?: string }> => {
+      if (!Notification.isSupported()) {
+        return {
+          success: false,
+          error: "Notifications are not supported on this platform",
+        };
+      }
+
+      const notification = new Notification({
+        title,
+        body,
+        silent: false,
+      });
+
+      notification.show();
+      logService.debug("Notification sent", "Settings", { title });
+
+      return { success: true };
+    }, { module: "Settings" }),
+  );
+
+  // ============================================
+  // USER DB CHECK HANDLERS
+  // ============================================
+
+  /**
+   * IPC Handler: Verify user exists in local database
+   * Called by AccountVerificationStep to ensure user is created before email connection.
+   */
+  ipcMain.handle(
+    "system:verify-user-in-local-db",
+    wrapHandler(async (): Promise<{ success: boolean; userId?: string; error?: string }> => {
+      logService.info("verify-user-in-local-db handler called", "Settings");
+
+      if (!isInitializationComplete()) {
+        logService.warn("verify-user-in-local-db: DB not initialized", "Settings");
+        return { success: false, error: "Database not initialized" };
+      }
+
+      return ensureUserInLocalDb();
+    }, { module: "Settings" }),
+  );
+
+  /**
+   * Check if a user exists in the local database
+   * BACKLOG-611: Used to determine if secure-storage step should be shown
+   * even on machines with previous installs (different user)
+   * @param userId - User ID to check
+   * @returns Whether the user exists in the local DB
+   */
+  ipcMain.handle(
+    "system:check-user-in-local-db",
+    wrapHandler(async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<{ success: boolean; exists: boolean; error?: string }> => {
+      // If database is not initialized, user can't exist
+      if (!databaseService.isInitialized()) {
+        return { success: true, exists: false };
+      }
+
+      const validatedUserId = validateUserId(userId, false); // Don't throw if null
+      if (!validatedUserId) {
+        return { success: true, exists: false };
+      }
+
+      const user = await databaseService.getUserById(validatedUserId);
+      const exists = user !== null;
+
+      logService.debug(
+        `[system:check-user-in-local-db] User ${validatedUserId.substring(0, 8)}... exists: ${exists}`,
+        "Settings",
+      );
+
+      return { success: true, exists };
+    }, { module: "Settings" }),
+  );
+}
