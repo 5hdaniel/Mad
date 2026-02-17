@@ -3,7 +3,7 @@
  *
  * Verifies that the wrapper produces identical error response shapes
  * to the existing handler pattern:
- *   - ValidationError -> { success: false, error: "message" }
+ *   - ValidationError -> { success: false, error: "Validation error: message" }
  *   - Error -> { success: false, error: "error.message" }
  *   - Non-Error throw -> { success: false, error: "Unknown error" }
  */
@@ -43,7 +43,7 @@ describe("wrapHandler", () => {
     expect(handler).toHaveBeenCalledWith(mockEvent, "arg1", "arg2");
   });
 
-  it("catches ValidationError and returns { success: false, error: message }", async () => {
+  it("catches ValidationError and returns { success: false, error: 'Validation error: message' }", async () => {
     const handler = jest.fn().mockRejectedValue(
       new ValidationError("User ID is required", "userId"),
     );
@@ -53,7 +53,7 @@ describe("wrapHandler", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "User ID is required",
+      error: "Validation error: User ID is required",
     });
   });
 
