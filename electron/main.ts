@@ -69,7 +69,9 @@ import { registerAttachmentHandlers } from "./handlers/attachmentHandlers";
 import { registerContactHandlers } from "./contact-handlers";
 import { registerAddressHandlers } from "./address-handlers";
 import { registerFeedbackHandlers } from "./feedback-handlers";
-import { registerSystemHandlers } from "./system-handlers";
+import { registerSystemHandlers } from "./handlers/systemHandlers";
+import { registerDiagnosticHandlers } from "./handlers/diagnosticHandlers";
+import { registerUserSettingsHandlers } from "./handlers/userSettingsHandlers";
 import { registerPreferenceHandlers } from "./preference-handlers";
 import {
   registerDeviceHandlers,
@@ -894,6 +896,8 @@ app.whenReady().then(async () => {
   registerAddressHandlers();
   registerFeedbackHandlers();
   registerSystemHandlers();
+  registerDiagnosticHandlers();
+  registerUserSettingsHandlers();
   registerPreferenceHandlers();
   registerDeviceHandlers(mainWindow!);
   registerBackupHandlers(mainWindow!);
