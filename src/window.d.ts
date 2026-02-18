@@ -1262,6 +1262,7 @@ interface MainAPI {
         includeEmails?: boolean;
         includeTexts?: boolean;
         includeAttachments?: boolean;
+        emailExportMode?: "thread" | "individual";
       },
     ) => Promise<{
       success: boolean;

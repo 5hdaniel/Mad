@@ -32,6 +32,7 @@ export interface FolderExportOptions {
   includeEmails: boolean;
   includeTexts: boolean;
   includeAttachments: boolean;
+  emailExportMode?: "thread" | "individual";
   onProgress?: (progress: FolderExportProgress) => void;
 }
 
@@ -71,7 +72,7 @@ class FolderExportService {
     communications: Communication[],
     options: FolderExportOptions
   ): Promise<string> {
-    const { includeEmails, includeTexts, includeAttachments, onProgress } = options;
+    const { includeEmails, includeTexts, includeAttachments, emailExportMode, onProgress } = options;
 
     try {
       logService.info("[Folder Export] Starting folder export", "FolderExport", {
@@ -166,17 +167,34 @@ class FolderExportService {
         message: "Summary report complete",
       });
 
-      // Export individual emails as PDFs
+      // Export emails as PDFs
       if (includeEmails && emails.length > 0) {
-        for (let i = 0; i < emails.length; i++) {
+        if (emailExportMode === "individual") {
+          // Individual mode: one PDF per email, quotes stripped
+          for (let i = 0; i < emails.length; i++) {
+            onProgress?.({
+              stage: "emails",
+              current: i + 1,
+              total: emails.length,
+              message: `Exporting email ${i + 1} of ${emails.length}...`,
+            });
+            await this.exportEmailToPDF(emails[i], i + 1, emailsPath, true);
+          }
+        } else {
+          // Thread mode (default): one PDF per conversation thread
           onProgress?.({
             stage: "emails",
-            current: i + 1,
-            total: emails.length,
-            message: `Exporting email ${i + 1} of ${emails.length}...`,
+            current: 0,
+            total: 1,
+            message: "Exporting email threads...",
           });
-
-          await this.exportEmailToPDF(emails[i], i + 1, emailsPath);
+          await this.exportEmailThreads(emails, emailsPath);
+          onProgress?.({
+            stage: "emails",
+            current: 1,
+            total: 1,
+            message: "Email threads exported",
+          });
         }
       }
 
@@ -602,16 +620,126 @@ class FolderExportService {
   }
 
   /**
+   * Format a date/time for display in exported emails.
+   */
+  private formatEmailDateTime(dateString: string | Date): string {
+    if (!dateString) return "N/A";
+    const date = typeof dateString === "string" ? new Date(dateString) : dateString;
+    return date.toLocaleString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  /**
+   * Detect whether a string is HTML content (more robust than simple `<` check).
+   */
+  private isHtmlContent(body: string | null | undefined): boolean {
+    if (!body) return false;
+    return /<(?:html|div|p|br|table|span|head|body|style|meta|img|a|ul|ol|li|h[1-6])\b/i.test(body);
+  }
+
+  /**
+   * Strip "Re:", "Fwd:", "FW:" prefixes from email subjects for cleaner thread headers.
+   */
+  private stripSubjectPrefixes(subject: string): string {
+    return subject.replace(/^(?:(?:Re|Fwd|FW)\s*:\s*)+/i, "").trim();
+  }
+
+  /**
+   * Strip quoted content from HTML email bodies.
+   * Handles Outlook (Graph API), Gmail, Proton Mail, and generic email reply patterns.
+   *
+   * TECH DEBT: The caller injects raw HTML body content into PDF templates without
+   * sanitization. This is a known XSS risk — malicious email HTML could contain
+   * <script>, <iframe>, or event handlers. Since PDFs are rendered in a temporary
+   * BrowserWindow, this could execute code in Electron's context. A proper HTML
+   * sanitizer (e.g. sanitize-html) should be applied before injection.
+   * See backlog for tracking.
+   */
+  private stripHtmlQuotedContent(html: string): string {
+    let result = html;
+
+    // --- Outlook / Microsoft Graph patterns ---
+    // Outlook mobile separator line + <hr> + divRplyFwdMsg (entire quoted block)
+    result = result.replace(/<div[^>]*id=["']ms-outlook-mobile-body-separator-line["'][^>]*>[\s\S]*$/gi, "");
+    // Outlook reply divider: <hr tabindex="-1" ...> followed by <div id="divRplyFwdMsg">
+    result = result.replace(/<hr[^>]*tabindex=["']-1["'][^>]*>[\s\S]*$/gi, "");
+    // Outlook reply divider: <div id="divRplyFwdMsg"> or <div id="x_divRplyFwdMsg">
+    result = result.replace(/<div[^>]*id=["'](?:x_)?divRplyFwdMsg["'][^>]*>[\s\S]*$/gi, "");
+    // Outlook separator: <hr> with display:inline-block (Outlook-specific pattern)
+    result = result.replace(/<hr[^>]*style=["'][^"']*display:\s*inline-block[^"']*border-top[^"']*["'][^>]*>[\s\S]*$/gi, "");
+    result = result.replace(/<hr[^>]*style=["'][^"']*border-top[^"']*display:\s*inline-block[^"']*["'][^>]*>[\s\S]*$/gi, "");
+    // Outlook "From:" block: uses border:none + border-top (Outlook's specific separator pattern)
+    result = result.replace(/<div[^>]*style=["'][^"']*border:\s*none[^"']*border-top[^"']*["'][^>]*>[\s\S]*$/gi, "");
+
+    // --- Proton Mail patterns ---
+    // Proton Mail wraps quotes in <div class="protonmail_quote">...<blockquote class="protonmail_quote">
+    result = result.replace(/<div[^>]*class=["'][^"']*protonmail_quote[^"']*["'][^>]*>[\s\S]*$/gi, "");
+
+    // --- Gmail patterns ---
+    // Gmail quoted blocks: <div class="gmail_quote">...</div> (greedy to end — quote is always last)
+    result = result.replace(/<div[^>]*class=["'][^"']*gmail_quote[^"']*["'][^>]*>[\s\S]*$/gi, "");
+    // Gmail blockquotes: <blockquote class="gmail_quote">
+    result = result.replace(/<blockquote[^>]*class=["'][^"']*gmail_quote[^"']*["'][^>]*>[\s\S]*?<\/blockquote>/gi, "");
+
+    // --- Generic patterns ---
+    // Generic <blockquote> with type="cite" (used by many clients for quoted replies)
+    result = result.replace(/<blockquote[^>]*type=["']cite["'][^>]*>[\s\S]*?<\/blockquote>/gi, "");
+    // "-----Original Message-----" text (Outlook plain-style within HTML)
+    result = result.replace(/<div[^>]*>-{3,}\s*Original Message\s*-{3,}[\s\S]*$/gi, "");
+    result = result.replace(/-{3,}\s*Original Message\s*-{3,}[\s\S]*$/gi, "");
+    // "On [date] ... wrote:" lines (Gmail/Apple Mail reply headers)
+    result = result.replace(/<div[^>]*>On\s.{10,80}\s+wrote:\s*<\/div>/gi, "");
+    result = result.replace(/<p[^>]*>On\s.{10,80}\s+wrote:\s*<\/p>/gi, "");
+
+    return result.trim();
+  }
+
+  /**
+   * Strip quoted content from plain text email bodies.
+   * Removes lines starting with ">", "On ... wrote:" headers, and "Original Message" dividers.
+   */
+  private stripPlainTextQuotedContent(text: string): string {
+    const lines = text.split("\n");
+    const result: string[] = [];
+    for (const line of lines) {
+      // Stop at "On ... wrote:" line
+      if (/^On\s.{10,80}\s+wrote:\s*$/i.test(line.trim())) break;
+      // Stop at "-----Original Message-----"
+      if (/^-{3,}\s*Original Message\s*-{3,}/i.test(line.trim())) break;
+      // Skip quoted lines (starting with >)
+      if (/^\s*>/.test(line)) continue;
+      result.push(line);
+    }
+    return result.join("\n").trim();
+  }
+
+  /**
+   * Strip quoted content from an email body (routes to HTML or plain text handler).
+   */
+  private stripQuotedContent(body: string, isHtml: boolean): string {
+    return isHtml
+      ? this.stripHtmlQuotedContent(body)
+      : this.stripPlainTextQuotedContent(body);
+  }
+
+  /**
    * Export a single email to PDF
    */
   private async exportEmailToPDF(
     email: Communication,
     index: number,
-    outputPath: string
+    outputPath: string,
+    stripQuotes: boolean = false
   ): Promise<void> {
     // TASK-1780: Get attachments for this email to list in PDF
     const attachments = email.id ? this.getAttachmentsForEmail(email.id) : [];
-    const html = this.generateEmailHTML(email, attachments);
+    const html = this.generateEmailHTML(email, attachments, stripQuotes);
     const pdfBuffer = await this.htmlToPdf(html);
 
     const date = new Date(email.sent_at as string);
@@ -624,26 +752,154 @@ class FolderExportService {
   }
 
   /**
+   * Export emails grouped by thread — one PDF per conversation thread.
+   * Mirrors the pattern used by exportTextConversations.
+   */
+  private async exportEmailThreads(
+    emails: Communication[],
+    outputPath: string
+  ): Promise<void> {
+    // Group emails by thread
+    const threads = new Map<string, Communication[]>();
+    for (const email of emails) {
+      const key = this.getThreadKey(email);
+      const thread = threads.get(key) || [];
+      thread.push(email);
+      threads.set(key, thread);
+    }
+
+    // Sort messages within each thread chronologically
+    threads.forEach((msgs, key) => {
+      threads.set(
+        key,
+        msgs.sort((a, b) => {
+          const dateA = new Date(a.sent_at as string).getTime();
+          const dateB = new Date(b.sent_at as string).getTime();
+          return dateA - dateB;
+        })
+      );
+    });
+
+    // Export each thread as a single PDF
+    let threadIndex = 0;
+    for (const [, msgs] of threads) {
+      const html = this.generateEmailThreadHTML(msgs);
+      const pdfBuffer = await this.htmlToPdf(html);
+
+      const firstDate = msgs[0].sent_at
+        ? new Date(msgs[0].sent_at as string).toISOString().split("T")[0]
+        : "unknown";
+      const subject = this.sanitizeFileName(msgs[0].subject || "no_subject");
+      const paddedIndex = String(threadIndex + 1).padStart(3, "0");
+      const fileName = `thread_${paddedIndex}_${firstDate}_${subject}.pdf`;
+
+      await fs.writeFile(path.join(outputPath, fileName), pdfBuffer);
+      threadIndex++;
+    }
+  }
+
+  /**
+   * Generate HTML for an email thread — all messages in one document with separators.
+   * Quotes are stripped from each message since the full thread provides context.
+   */
+  private generateEmailThreadHTML(emails: Communication[]): string {
+    const messagesHtml = emails.map((email, idx) => {
+      const rawBody = email.body || email.body_plain || "(No content)";
+      const isHtmlBody = this.isHtmlContent(email.body);
+      const bodyContent = rawBody !== "(No content)"
+        ? this.stripQuotedContent(rawBody, isHtmlBody)
+        : rawBody;
+
+      const attachments = email.id ? this.getAttachmentsForEmail(email.id) : [];
+
+      return `
+      ${idx > 0 ? '<hr class="thread-separator">' : ""}
+      <div class="thread-message">
+        <div class="thread-msg-header">
+          <div class="thread-msg-subject">${this.escapeHtml(email.subject || "(No Subject)")}</div>
+          <div class="thread-msg-meta">
+            <span class="label">From:</span> ${this.escapeHtml(email.sender || "Unknown")}
+          </div>
+          <div class="thread-msg-meta">
+            <span class="label">To:</span> ${this.escapeHtml(email.recipients || "Unknown")}
+          </div>
+          ${email.cc ? `<div class="thread-msg-meta"><span class="label">CC:</span> ${this.escapeHtml(email.cc)}</div>` : ""}
+          <div class="thread-msg-meta">
+            <span class="label">Date:</span> ${this.formatEmailDateTime(email.sent_at as string)}
+          </div>
+        </div>
+        <div class="thread-msg-body ${!isHtmlBody ? "email-body-text" : ""}">
+          ${isHtmlBody ? bodyContent : this.escapeHtml(bodyContent)}
+        </div>
+        ${attachments.length > 0 ? `
+        <div class="thread-msg-attachments">
+          <span class="att-label">Attachments:</span> ${attachments.map(a => this.escapeHtml(a.filename)).join(", ")}
+        </div>` : ""}
+      </div>`;
+    }).join("");
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 40px;
+      color: #1a202c;
+      background: white;
+    }
+    .thread-header {
+      border-bottom: 4px solid #667eea;
+      padding-bottom: 20px;
+      margin-bottom: 30px;
+    }
+    .thread-header h1 { font-size: 20px; color: #1a202c; margin-bottom: 4px; }
+    .thread-header .meta { font-size: 13px; color: #718096; }
+    .thread-separator {
+      border: none;
+      border-top: 2px solid #e2e8f0;
+      margin: 24px 0;
+    }
+    .thread-message { margin-bottom: 16px; }
+    .thread-msg-header { margin-bottom: 12px; }
+    .thread-msg-subject { font-size: 16px; font-weight: 600; color: #2d3748; margin-bottom: 6px; }
+    .thread-msg-meta { font-size: 13px; color: #4a5568; margin-bottom: 2px; }
+    .thread-msg-meta .label { font-weight: 600; color: #718096; display: inline-block; width: 50px; }
+    .thread-msg-body { padding: 12px 0; line-height: 1.6; font-size: 14px; }
+    .email-body-text { white-space: pre-wrap; }
+    .thread-msg-attachments {
+      font-size: 12px;
+      color: #718096;
+      padding-top: 8px;
+      border-top: 1px solid #f0f0f0;
+    }
+    .thread-msg-attachments .att-label { font-weight: 600; }
+    @media print { body { padding: 20px; } }
+  </style>
+</head>
+<body>
+  <div class="thread-header">
+    <h1>${this.escapeHtml(this.stripSubjectPrefixes(emails[0].subject || "(No Subject)"))}</h1>
+    <div class="meta">${emails.length} message${emails.length !== 1 ? "s" : ""} in thread</div>
+  </div>
+  ${messagesHtml}
+</body>
+</html>
+    `;
+  }
+
+  /**
    * Generate HTML for a single email
    * TASK-1780: Updated to list attachment filenames instead of generic message
    */
   private generateEmailHTML(
     email: Communication,
-    attachments: { filename: string; file_size_bytes: number | null }[] = []
+    attachments: { filename: string; file_size_bytes: number | null }[] = [],
+    stripQuotes: boolean = false
   ): string {
-    const formatDateTime = (dateString: string | Date): string => {
-      if (!dateString) return "N/A";
-      const date = typeof dateString === "string" ? new Date(dateString) : dateString;
-      return date.toLocaleString("en-US", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    };
-
     // TASK-1780: Format file size for display
     const formatFileSize = (bytes: number | null): string => {
       if (bytes === null || bytes === 0) return "";
@@ -653,8 +909,11 @@ class FolderExportService {
     };
 
     // Use HTML body if available, otherwise use plain text
-    const bodyContent = email.body || email.body_plain || "(No content)";
-    const isHtmlBody = email.body && email.body.includes("<");
+    const rawBody = email.body || email.body_plain || "(No content)";
+    const isHtmlBody = this.isHtmlContent(email.body);
+    const bodyContent = stripQuotes && rawBody !== "(No content)"
+      ? this.stripQuotedContent(rawBody, isHtmlBody)
+      : rawBody;
 
     return `
 <!DOCTYPE html>
@@ -740,7 +999,7 @@ class FolderExportService {
       <div><span class="label">From:</span> ${this.escapeHtml(email.sender || "Unknown")}</div>
       <div><span class="label">To:</span> ${this.escapeHtml(email.recipients || "Unknown")}</div>
       ${email.cc ? `<div><span class="label">CC:</span> ${this.escapeHtml(email.cc)}</div>` : ""}
-      <div><span class="label">Date:</span> ${formatDateTime(email.sent_at as string)}</div>
+      <div><span class="label">Date:</span> ${this.formatEmailDateTime(email.sent_at as string)}</div>
     </div>
   </div>
 
@@ -887,13 +1146,30 @@ class FolderExportService {
   }
 
   /**
-   * Get thread key for grouping messages (uses thread_id if available)
+   * Get thread key for grouping messages (uses thread_id if available).
+   * For emails without thread_id, falls back to normalized subject + sorted participants.
+   * For texts without thread_id, falls back to phone-number-based participant matching.
    */
   private getThreadKey(msg: Communication): string {
     // Use thread_id if available
     if (msg.thread_id) return msg.thread_id;
 
-    // Fallback: compute from participants
+    // Email-specific fallback: use normalized subject + sorted sender/recipients
+    if (msg.communication_type === "email") {
+      const subject = msg.subject
+        ? msg.subject.replace(/^(?:(?:Re|Fwd|FW)\s*:\s*)+/i, "").trim().toLowerCase()
+        : "";
+      const participants = [msg.sender, msg.recipients]
+        .filter(Boolean)
+        .map(s => (s || "").toLowerCase().trim())
+        .sort()
+        .join("-");
+      if (subject || participants) {
+        return `email-thread-${subject}-${participants}`;
+      }
+    }
+
+    // Text message fallback: compute from participants using phone normalization
     try {
       if (msg.participants) {
         const parsed =
@@ -2223,7 +2499,8 @@ class FolderExportService {
     transaction: Transaction,
     communications: Communication[],
     outputPath: string,
-    summaryOnly: boolean = false
+    summaryOnly: boolean = false,
+    emailExportMode: "thread" | "individual" = "thread"
   ): Promise<string> {
     // Create temp folder for individual PDFs
     const tempDir = app.getPath("temp");
@@ -2284,9 +2561,13 @@ class FolderExportService {
 
       // For summaryOnly mode, skip full content PDFs (emails and texts)
       if (!summaryOnly) {
-        // Generate individual email PDFs
-        for (let i = 0; i < emails.length; i++) {
-          await this.exportEmailToPDF(emails[i], i + 1, emailsPath);
+        // Generate email PDFs — respect user's export mode preference
+        if (emailExportMode === "individual") {
+          for (let i = 0; i < emails.length; i++) {
+            await this.exportEmailToPDF(emails[i], i + 1, emailsPath, true);
+          }
+        } else {
+          await this.exportEmailThreads(emails, emailsPath);
         }
 
         // Generate text conversation PDFs

@@ -19,10 +19,16 @@
  */
 
 import { contextBridge } from "electron";
-import { hookupIpc as sentryHookupIpc } from "@sentry/electron/preload";
-
 // Initialize Sentry IPC bridge so renderer can communicate with main process Sentry
-sentryHookupIpc();
+// Note: hookupIpc may be undefined depending on @sentry/electron version/exports
+try {
+  const { hookupIpc: sentryHookupIpc } = require("@sentry/electron/preload");
+  if (typeof sentryHookupIpc === "function") {
+    sentryHookupIpc();
+  }
+} catch {
+  // Sentry preload bridge not available — non-critical, continue without it
+}
 
 import {
   authBridge,

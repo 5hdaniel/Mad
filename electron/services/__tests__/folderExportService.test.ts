@@ -643,4 +643,460 @@ describe("FolderExportService", () => {
       expect(textPdfCalls.length).toBeGreaterThan(0);
     });
   });
+
+  describe("stripHtmlQuotedContent", () => {
+    // Access private method via bracket notation for unit testing
+    const strip = (html: string): string =>
+      (folderExportService as any).stripHtmlQuotedContent(html);
+
+    it("should strip Gmail quoted blocks (div.gmail_quote)", () => {
+      const html = `<div>Original message content</div><div class="gmail_quote">On Mon, Jan 1 wrote:<br><blockquote>Quoted text</blockquote></div>`;
+      const result = strip(html);
+      expect(result).toContain("Original message content");
+      expect(result).not.toContain("gmail_quote");
+      expect(result).not.toContain("Quoted text");
+    });
+
+    it("should strip Gmail blockquotes", () => {
+      const html = `<p>My reply</p><blockquote class="gmail_quote" style="margin:0">Previous email</blockquote>`;
+      const result = strip(html);
+      expect(result).toContain("My reply");
+      expect(result).not.toContain("Previous email");
+    });
+
+    it("should strip Outlook divRplyFwdMsg blocks", () => {
+      const html = `<div>Reply content here</div><div id="divRplyFwdMsg" dir="ltr"><font><b>From:</b> sender</font><div>Original message</div></div>`;
+      const result = strip(html);
+      expect(result).toContain("Reply content here");
+      expect(result).not.toContain("divRplyFwdMsg");
+      expect(result).not.toContain("Original message");
+    });
+
+    it("should strip Outlook x_divRplyFwdMsg (prefixed) blocks", () => {
+      const html = `<div>My reply</div><div id="x_divRplyFwdMsg"><hr>Quoted</div>`;
+      const result = strip(html);
+      expect(result).toContain("My reply");
+      expect(result).not.toContain("Quoted");
+    });
+
+    it("should strip Outlook mobile separator line", () => {
+      const html = `<div>Content</div><div id="ms-outlook-mobile-body-separator-line" style="height:1px"></div><div>Old message</div>`;
+      const result = strip(html);
+      expect(result).toContain("Content");
+      expect(result).not.toContain("Old message");
+    });
+
+    it("should strip Outlook hr with tabindex=-1", () => {
+      const html = `<div>New content</div><hr tabindex="-1" style="display:inline-block;width:98%"><div id="divRplyFwdMsg">Old content</div>`;
+      const result = strip(html);
+      expect(result).toContain("New content");
+      expect(result).not.toContain("Old content");
+    });
+
+    it("should strip Outlook border-top style hr with display:inline-block", () => {
+      const html = `<p>Reply</p><hr style="display:inline-block;width:98%;border-top:1px solid #ccc"><div>From: sender</div>`;
+      const result = strip(html);
+      expect(result).toContain("Reply");
+      expect(result).not.toContain("From: sender");
+    });
+
+    it("should strip Proton Mail quoted blocks", () => {
+      const html = `<div>My Proton Mail reply</div><div class="protonmail_quote"><blockquote class="protonmail_quote" type="cite">Original sender content</blockquote></div>`;
+      const result = strip(html);
+      expect(result).toContain("My Proton Mail reply");
+      expect(result).not.toContain("protonmail_quote");
+      expect(result).not.toContain("Original sender content");
+    });
+
+    it("should strip generic blockquote with type=cite", () => {
+      const html = `<p>Reply text</p><blockquote type="cite">Cited content from previous email</blockquote>`;
+      const result = strip(html);
+      expect(result).toContain("Reply text");
+      expect(result).not.toContain("Cited content");
+    });
+
+    it("should strip '-----Original Message-----' dividers", () => {
+      const html = `<div>My reply</div><div>-----Original Message-----</div><div>From: someone</div>`;
+      const result = strip(html);
+      expect(result).toContain("My reply");
+      expect(result).not.toContain("Original Message");
+    });
+
+    it("should strip bare '-----Original Message-----' without wrapping div", () => {
+      const html = `<p>Reply</p>-----Original Message-----<br>Old content`;
+      const result = strip(html);
+      expect(result).toContain("Reply");
+      expect(result).not.toContain("Old content");
+    });
+
+    it("should strip 'On ... wrote:' header lines in divs", () => {
+      const html = `<div>My response</div><div>On January 15, 2024 at 2:30 PM John wrote:</div><div>Previous message</div>`;
+      const result = strip(html);
+      expect(result).toContain("My response");
+      expect(result).not.toContain("John wrote:");
+    });
+
+    it("should strip 'On ... wrote:' header lines in p tags", () => {
+      const html = `<p>Response</p><p>On Mon, Jan 15, 2024 at 2:30 PM John Doe &lt;john@example.com&gt; wrote:</p>`;
+      const result = strip(html);
+      expect(result).toContain("Response");
+      expect(result).not.toContain("wrote:");
+    });
+
+    it("should return content unchanged when no quotes present", () => {
+      const html = `<div>Just a simple email with no quoted content</div>`;
+      const result = strip(html);
+      expect(result).toBe(html);
+    });
+
+    it("should return empty/minimal content when body is all quoted", () => {
+      const html = `<div class="gmail_quote">On Mon wrote:<br>Everything is quoted</div>`;
+      const result = strip(html);
+      expect(result).not.toContain("Everything is quoted");
+    });
+
+    it("should strip Outlook border:none + border-top div pattern", () => {
+      const html = `<p>Reply text</p><div style="border:none;border-top:solid #E1E1E1 1.0pt;padding:3.0pt 0in 0in 0in"><p><b>From:</b> sender@example.com</p></div>`;
+      const result = strip(html);
+      expect(result).toContain("Reply text");
+      expect(result).not.toContain("sender@example.com");
+    });
+
+    it("should NOT strip legitimate div with decorative border-top", () => {
+      const html = `<div>Content</div><div style="border-top:2px solid red;padding:10px">This is a styled section, not a quote</div>`;
+      const result = strip(html);
+      expect(result).toContain("Content");
+      expect(result).toContain("This is a styled section, not a quote");
+    });
+  });
+
+  describe("stripPlainTextQuotedContent", () => {
+    const strip = (text: string): string =>
+      (folderExportService as any).stripPlainTextQuotedContent(text);
+
+    it("should strip lines starting with >", () => {
+      const text = "My reply\n\n> Original message\n> Second quoted line";
+      const result = strip(text);
+      expect(result).toContain("My reply");
+      expect(result).not.toContain("Original message");
+      expect(result).not.toContain("Second quoted line");
+    });
+
+    it("should stop at 'On ... wrote:' line", () => {
+      const text = "My reply\n\nOn Mon, Jan 15, 2024 at 2:30 PM John Doe wrote:\n> Quoted text";
+      const result = strip(text);
+      expect(result).toContain("My reply");
+      expect(result).not.toContain("John Doe wrote:");
+      expect(result).not.toContain("Quoted text");
+    });
+
+    it("should stop at '-----Original Message-----'", () => {
+      const text = "Reply content\n\n-----Original Message-----\nFrom: sender\nSent: Monday\nOld message";
+      const result = strip(text);
+      expect(result).toContain("Reply content");
+      expect(result).not.toContain("Original Message");
+      expect(result).not.toContain("Old message");
+    });
+
+    it("should return text unchanged when no quotes", () => {
+      const text = "Just a plain email\nWith multiple lines\nNo quoting here";
+      const result = strip(text);
+      expect(result).toBe(text);
+    });
+
+    it("should handle text that is all quoted", () => {
+      const text = "> Everything\n> Is\n> Quoted";
+      const result = strip(text);
+      expect(result).toBe("");
+    });
+
+    it("should handle indented > markers", () => {
+      const text = "Reply\n  > Indented quote\n  > More quoted";
+      const result = strip(text);
+      expect(result).toContain("Reply");
+      expect(result).not.toContain("Indented quote");
+    });
+  });
+
+  describe("stripQuotedContent", () => {
+    const strip = (body: string, isHtml: boolean): string =>
+      (folderExportService as any).stripQuotedContent(body, isHtml);
+
+    it("should route HTML content to HTML stripper", () => {
+      const html = `<div>Reply</div><div class="gmail_quote">Quoted</div>`;
+      const result = strip(html, true);
+      expect(result).toContain("Reply");
+      expect(result).not.toContain("Quoted");
+    });
+
+    it("should route plain text to plain text stripper", () => {
+      const text = "Reply\n> Quoted line";
+      const result = strip(text, false);
+      expect(result).toContain("Reply");
+      expect(result).not.toContain("Quoted line");
+    });
+  });
+
+  describe("isHtmlContent", () => {
+    const isHtml = (body: string | null): boolean =>
+      (folderExportService as any).isHtmlContent(body);
+
+    it("should detect HTML with common tags", () => {
+      expect(isHtml("<div>Hello</div>")).toBe(true);
+      expect(isHtml("<p>Paragraph</p>")).toBe(true);
+      expect(isHtml("<html><body>Content</body></html>")).toBe(true);
+      expect(isHtml("<br>")).toBe(true);
+      expect(isHtml("<table><tr><td>Cell</td></tr></table>")).toBe(true);
+    });
+
+    it("should not falsely detect plain text with < symbols", () => {
+      expect(isHtml("x < y")).toBe(false);
+      expect(isHtml("price <$500")).toBe(false);
+      expect(isHtml("a < b and c > d")).toBe(false);
+    });
+
+    it("should handle null/undefined", () => {
+      expect(isHtml(null)).toBe(false);
+      expect(isHtml(undefined as any)).toBe(false);
+    });
+
+    it("should handle empty string", () => {
+      expect(isHtml("")).toBe(false);
+    });
+  });
+
+  describe("stripSubjectPrefixes", () => {
+    const stripPrefix = (subject: string): string =>
+      (folderExportService as any).stripSubjectPrefixes(subject);
+
+    it("should strip Re: prefix", () => {
+      expect(stripPrefix("Re: Meeting tomorrow")).toBe("Meeting tomorrow");
+    });
+
+    it("should strip Fwd: prefix", () => {
+      expect(stripPrefix("Fwd: Important document")).toBe("Important document");
+    });
+
+    it("should strip FW: prefix", () => {
+      expect(stripPrefix("FW: Status update")).toBe("Status update");
+    });
+
+    it("should strip multiple nested prefixes", () => {
+      expect(stripPrefix("Re: Re: Re: Original subject")).toBe("Original subject");
+      expect(stripPrefix("Re: Fwd: Re: Chain mail")).toBe("Chain mail");
+    });
+
+    it("should preserve subjects without prefixes", () => {
+      expect(stripPrefix("Meeting tomorrow")).toBe("Meeting tomorrow");
+      expect(stripPrefix("Regular email")).toBe("Regular email");
+    });
+
+    it("should be case insensitive", () => {
+      expect(stripPrefix("RE: Caps")).toBe("Caps");
+      expect(stripPrefix("re: lower")).toBe("lower");
+      expect(stripPrefix("fwd: forward")).toBe("forward");
+    });
+  });
+
+  describe("getThreadKey — email fallback", () => {
+    const getThreadKey = (msg: Partial<Communication>): string =>
+      (folderExportService as any).getThreadKey(msg);
+
+    it("should use thread_id when available", () => {
+      const result = getThreadKey({ thread_id: "AAMkAGE1MDQ5NjU3" } as any);
+      expect(result).toBe("AAMkAGE1MDQ5NjU3");
+    });
+
+    it("should group emails by normalized subject + participants when no thread_id", () => {
+      const email1 = {
+        communication_type: "email",
+        subject: "Re: Project update",
+        sender: "alice@example.com",
+        recipients: "bob@example.com",
+      };
+      const email2 = {
+        communication_type: "email",
+        subject: "Re: Re: Project update",
+        sender: "bob@example.com",
+        recipients: "alice@example.com",
+      };
+      // Both should produce the same key (same subject after stripping, same participants sorted)
+      const key1 = getThreadKey(email1 as any);
+      const key2 = getThreadKey(email2 as any);
+      expect(key1).toBe(key2);
+    });
+
+    it("should not use phone normalization for emails", () => {
+      const email = {
+        communication_type: "email",
+        subject: "Test",
+        sender: "user@example.com",
+        recipients: "other@example.com",
+        participants: JSON.stringify({ from: "user@example.com", to: ["other@example.com"] }),
+      };
+      const result = getThreadKey(email as any);
+      expect(result).toContain("email-thread-");
+      expect(result).not.toContain("participants-");
+    });
+
+    it("should fall back to msg-id for emails with no subject or participants", () => {
+      const email = {
+        id: "msg-999",
+        communication_type: "email",
+      };
+      const result = getThreadKey(email as any);
+      expect(result).toBe("msg-msg-999");
+    });
+
+    it("should still use phone normalization for text messages", () => {
+      const text = {
+        communication_type: "text",
+        participants: JSON.stringify({ from: "+15551234567", to: ["+15559876543"] }),
+      };
+      const result = getThreadKey(text as any);
+      expect(result).toContain("participants-");
+    });
+  });
+
+  describe("email thread export", () => {
+    const mockTransaction: Transaction = {
+      id: "txn-email-test",
+      user_id: "user-123",
+      property_address: "456 Email Ave",
+      transaction_type: "purchase",
+      is_active: true,
+      created_at: new Date().toISOString(),
+    } as Transaction;
+
+    const createEmail = (
+      id: string,
+      threadId: string,
+      subject: string,
+      body: string,
+      direction: "inbound" | "outbound",
+      sender: string,
+      recipients: string,
+      sentAt: string
+    ): Communication => ({
+      id,
+      user_id: "user-123",
+      thread_id: threadId,
+      subject,
+      body,
+      sender,
+      recipients,
+      direction,
+      sent_at: sentAt,
+      communication_type: "email",
+      channel: "email",
+      has_attachments: false,
+      is_false_positive: false,
+      created_at: new Date().toISOString(),
+    } as unknown as Communication);
+
+    it("should export emails in thread mode by default (one PDF per thread)", async () => {
+      const emails: Communication[] = [
+        createEmail("e1", "thread-A", "Project update", "<div>First email</div>", "inbound", "alice@test.com", "bob@test.com", "2024-01-15T10:00:00Z"),
+        createEmail("e2", "thread-A", "Re: Project update", "<div>Reply</div>", "outbound", "bob@test.com", "alice@test.com", "2024-01-15T11:00:00Z"),
+        createEmail("e3", "thread-B", "Different topic", "<div>Other email</div>", "inbound", "carol@test.com", "bob@test.com", "2024-01-15T12:00:00Z"),
+      ];
+
+      await folderExportService.exportTransactionToFolder(
+        mockTransaction,
+        emails,
+        {
+          transactionId: mockTransaction.id,
+          outputPath: "/mock/output",
+          includeEmails: true,
+          includeTexts: false,
+          includeAttachments: false,
+        }
+      );
+
+      // Should export 2 thread PDFs (thread-A and thread-B)
+      const threadPdfCalls = mockWriteFile.mock.calls.filter(
+        (call: unknown[]) => (call[0] as string).includes("thread_") && (call[0] as string).endsWith(".pdf")
+      );
+      expect(threadPdfCalls).toHaveLength(2);
+    });
+
+    it("should export emails in individual mode (one PDF per email, quotes stripped)", async () => {
+      const emails: Communication[] = [
+        createEmail("e1", "thread-A", "Update", "<div>First</div>", "inbound", "alice@test.com", "bob@test.com", "2024-01-15T10:00:00Z"),
+        createEmail("e2", "thread-A", "Re: Update", '<div>Reply</div><div class="gmail_quote">Quoted first</div>', "outbound", "bob@test.com", "alice@test.com", "2024-01-15T11:00:00Z"),
+      ];
+
+      await folderExportService.exportTransactionToFolder(
+        mockTransaction,
+        emails,
+        {
+          transactionId: mockTransaction.id,
+          outputPath: "/mock/output",
+          includeEmails: true,
+          includeTexts: false,
+          includeAttachments: false,
+          emailExportMode: "individual",
+        }
+      );
+
+      // Should export 2 individual PDFs
+      const emailPdfCalls = mockWriteFile.mock.calls.filter(
+        (call: unknown[]) => (call[0] as string).includes("email_") && (call[0] as string).endsWith(".pdf")
+      );
+      expect(emailPdfCalls).toHaveLength(2);
+    });
+
+    it("should strip quotes in thread mode HTML generation", async () => {
+      const emails: Communication[] = [
+        createEmail("e1", "thread-A", "Topic", "<div>Original message</div>", "inbound", "alice@test.com", "bob@test.com", "2024-01-15T10:00:00Z"),
+        createEmail("e2", "thread-A", "Re: Topic", '<div>My reply</div><div class="gmail_quote"><blockquote>Original message</blockquote></div>', "outbound", "bob@test.com", "alice@test.com", "2024-01-15T11:00:00Z"),
+      ];
+
+      await folderExportService.exportTransactionToFolder(
+        mockTransaction,
+        emails,
+        {
+          transactionId: mockTransaction.id,
+          outputPath: "/mock/output",
+          includeEmails: true,
+          includeTexts: false,
+          includeAttachments: false,
+        }
+      );
+
+      // The thread HTML should contain both messages but the reply should have quotes stripped
+      const htmlContent = lastLoadedHtmlContent;
+      expect(htmlContent).not.toBeNull();
+      expect(htmlContent).toContain("Original message");
+      expect(htmlContent).toContain("My reply");
+      // gmail_quote should have been stripped
+      expect(htmlContent).not.toContain("gmail_quote");
+    });
+
+    it("should strip Re:/Fwd: from thread header subject", async () => {
+      const emails: Communication[] = [
+        createEmail("e1", "thread-A", "Re: Re: Important topic", "<div>Content</div>", "inbound", "alice@test.com", "bob@test.com", "2024-01-15T10:00:00Z"),
+      ];
+
+      await folderExportService.exportTransactionToFolder(
+        mockTransaction,
+        emails,
+        {
+          transactionId: mockTransaction.id,
+          outputPath: "/mock/output",
+          includeEmails: true,
+          includeTexts: false,
+          includeAttachments: false,
+        }
+      );
+
+      const htmlContent = lastLoadedHtmlContent;
+      expect(htmlContent).not.toBeNull();
+      // The thread header h1 should have Re: stripped
+      expect(htmlContent).toContain("Important topic");
+      // Should not have "Re: Re:" in the thread header (it's OK in individual message subjects)
+      const h1Match = htmlContent?.match(/<h1>(.*?)<\/h1>/);
+      expect(h1Match?.[1]).not.toMatch(/^Re:/i);
+    });
+  });
 });
