@@ -282,39 +282,49 @@ class DatabaseService implements IDatabaseService {
     }
   }
 
-  // Migration code stays in facade - see runMigrations() in original
+  // ============================================
+  // MIGRATIONS (Version-based runner)
+  // ============================================
 
+  /**
+   * Run database migrations.
+   *
+   * 1. Create pre-migration backup
+   * 2. Run schema.sql (all IF NOT EXISTS — safe for existing DBs)
+   * 3. Run versioned migrations for anything beyond the baseline
+   *
+   * Baseline version = 29 (all historical migrations 1-28 folded into schema.sql)
+   */
   async runMigrations(): Promise<void> {
     const db = this._ensureDb();
     const schemaPath = path.join(__dirname, "../database/schema.sql");
     const schemaSql = fs.readFileSync(schemaPath, "utf8");
 
     // Pre-migration backup (TASK-1969)
-    // Create a backup before any schema changes in case a migration fails
     if (this.dbPath && fs.existsSync(this.dbPath)) {
       try {
         const timestamp = new Date().toISOString().replace(/[:.]/g, "").slice(0, 15);
         const backupPath = this.dbPath.replace(".db", `-backup-${timestamp}.db`);
 
-        // Checkpoint WAL if enabled (ensures all data is in main file before copy)
         try {
           db.pragma("wal_checkpoint(TRUNCATE)");
         } catch {
-          // WAL may not be enabled - safe to ignore
+          // WAL may not be enabled — safe to ignore
         }
 
         fs.copyFileSync(this.dbPath, backupPath);
         console.log(`[DB] Pre-migration backup created: ${backupPath}`);
       } catch (backupError) {
-        // Backup failure should not prevent migrations from running
         console.warn("[DB] Pre-migration backup failed:", backupError);
       }
     }
 
     try {
-      await this._runPreSchemaMigrations();
+      // schema.sql uses CREATE TABLE/INDEX IF NOT EXISTS throughout,
+      // so it's safe to run on both fresh and existing databases.
       db.exec(schemaSql);
-      await this._runAdditionalMigrations();
+
+      await this._runVersionedMigrations();
     } catch (error) {
       await logService.error("Failed to run migrations", "DatabaseService", {
         error: error instanceof Error ? error.message : String(error),
@@ -323,909 +333,19 @@ class DatabaseService implements IDatabaseService {
     }
   }
 
-  // Pre-schema migrations helper
-  private async _runPreSchemaMigrations(): Promise<void> {
+  /**
+   * Version-based migration runner.
+   *
+   * Reads current schema version, then runs any migrations with version > current.
+   * After each migration, the version is bumped in the schema_version table.
+   *
+   * Baseline = 29 (schema.sql contains everything through migration 28).
+   * Future migrations add entries to the `migrations` array below.
+   */
+  private async _runVersionedMigrations(): Promise<void> {
     const db = this._ensureDb();
 
-    const addMissingColumns = async (tableName: string, columns: { name: string; sql: string }[]) => {
-      const tableExists = db.prepare(
-        `SELECT name FROM sqlite_master WHERE type='table' AND name=?`
-      ).get(tableName);
-      if (!tableExists) return;
-
-      const tableColumns = db.prepare(`PRAGMA table_info(${tableName})`).all() as { name: string }[];
-      const columnNames = tableColumns.map(c => c.name);
-
-      for (const col of columns) {
-        if (!columnNames.includes(col.name)) {
-          try {
-            db.exec(col.sql);
-          } catch { /* Column may already exist */ }
-        }
-      }
-    };
-
-    await addMissingColumns('contacts', [
-      { name: 'display_name', sql: `ALTER TABLE contacts ADD COLUMN display_name TEXT` },
-      { name: 'company', sql: `ALTER TABLE contacts ADD COLUMN company TEXT` },
-      { name: 'title', sql: `ALTER TABLE contacts ADD COLUMN title TEXT` },
-      { name: 'source', sql: `ALTER TABLE contacts ADD COLUMN source TEXT DEFAULT 'manual'` },
-      { name: 'metadata', sql: `ALTER TABLE contacts ADD COLUMN metadata TEXT` },
-      { name: 'last_inbound_at', sql: `ALTER TABLE contacts ADD COLUMN last_inbound_at DATETIME` },
-      { name: 'last_outbound_at', sql: `ALTER TABLE contacts ADD COLUMN last_outbound_at DATETIME` },
-      { name: 'total_messages', sql: `ALTER TABLE contacts ADD COLUMN total_messages INTEGER DEFAULT 0` },
-      { name: 'tags', sql: `ALTER TABLE contacts ADD COLUMN tags TEXT` },
-    ]);
-
-    await addMissingColumns('transactions', [
-      { name: 'stage', sql: `ALTER TABLE transactions ADD COLUMN stage TEXT` },
-      { name: 'stage_source', sql: `ALTER TABLE transactions ADD COLUMN stage_source TEXT` },
-      { name: 'stage_confidence', sql: `ALTER TABLE transactions ADD COLUMN stage_confidence REAL` },
-      { name: 'stage_updated_at', sql: `ALTER TABLE transactions ADD COLUMN stage_updated_at DATETIME` },
-      { name: 'listing_price', sql: `ALTER TABLE transactions ADD COLUMN listing_price REAL` },
-      { name: 'sale_price', sql: `ALTER TABLE transactions ADD COLUMN sale_price REAL` },
-      { name: 'earnest_money_amount', sql: `ALTER TABLE transactions ADD COLUMN earnest_money_amount REAL` },
-      { name: 'mutual_acceptance_date', sql: `ALTER TABLE transactions ADD COLUMN mutual_acceptance_date DATE` },
-      { name: 'inspection_deadline', sql: `ALTER TABLE transactions ADD COLUMN inspection_deadline DATE` },
-      { name: 'financing_deadline', sql: `ALTER TABLE transactions ADD COLUMN financing_deadline DATE` },
-      { name: 'closing_deadline', sql: `ALTER TABLE transactions ADD COLUMN closing_deadline DATE` },
-      { name: 'export_status', sql: `ALTER TABLE transactions ADD COLUMN export_status TEXT DEFAULT 'not_exported'` },
-      { name: 'export_format', sql: `ALTER TABLE transactions ADD COLUMN export_format TEXT` },
-      { name: 'export_count', sql: `ALTER TABLE transactions ADD COLUMN export_count INTEGER DEFAULT 0` },
-      { name: 'last_exported_at', sql: `ALTER TABLE transactions ADD COLUMN last_exported_at DATETIME` },
-      { name: 'last_exported_on', sql: `ALTER TABLE transactions ADD COLUMN last_exported_on DATETIME` },
-      // BACKLOG-396: Stored thread count for consistent display
-      { name: 'text_thread_count', sql: `ALTER TABLE transactions ADD COLUMN text_thread_count INTEGER DEFAULT 0` },
-    ]);
-
-    await addMissingColumns('messages', [
-      { name: 'external_id', sql: `ALTER TABLE messages ADD COLUMN external_id TEXT` },
-      { name: 'thread_id', sql: `ALTER TABLE messages ADD COLUMN thread_id TEXT` },
-      { name: 'participants_flat', sql: `ALTER TABLE messages ADD COLUMN participants_flat TEXT` },
-      { name: 'message_id_header', sql: `ALTER TABLE messages ADD COLUMN message_id_header TEXT` },
-      { name: 'content_hash', sql: `ALTER TABLE messages ADD COLUMN content_hash TEXT` },
-      { name: 'duplicate_of', sql: `ALTER TABLE messages ADD COLUMN duplicate_of TEXT` },
-    ]);
-
-    // TASK-975: Add message_id reference column and link metadata to communications table
-    // This transforms communications into a junction/reference table linking messages to transactions
-    // Also add legacy columns that may be missing from old databases to prevent index creation failures
-    await addMissingColumns('communications', [
-      { name: 'message_id', sql: `ALTER TABLE communications ADD COLUMN message_id TEXT REFERENCES messages(id) ON DELETE CASCADE` },
-      { name: 'link_source', sql: `ALTER TABLE communications ADD COLUMN link_source TEXT CHECK (link_source IN ('auto', 'manual', 'scan'))` },
-      { name: 'link_confidence', sql: `ALTER TABLE communications ADD COLUMN link_confidence REAL` },
-      { name: 'linked_at', sql: `ALTER TABLE communications ADD COLUMN linked_at DATETIME DEFAULT CURRENT_TIMESTAMP` },
-      // Legacy columns - ensure they exist for index creation
-      { name: 'sent_at', sql: `ALTER TABLE communications ADD COLUMN sent_at DATETIME` },
-      { name: 'sender', sql: `ALTER TABLE communications ADD COLUMN sender TEXT` },
-      { name: 'communication_type', sql: `ALTER TABLE communications ADD COLUMN communication_type TEXT DEFAULT 'email'` },
-      // BACKLOG-506: Email reference column (must be added before schema.sql creates index)
-      { name: 'email_id', sql: `ALTER TABLE communications ADD COLUMN email_id TEXT REFERENCES emails(id) ON DELETE CASCADE` },
-    ]);
-
-    // TASK-1110: Add external_message_id to attachments for stable message linking
-    // This allows attachments to be linked to messages even when message_id changes on re-import
-    // TASK-1775: Add email_id for email attachments (must be added before schema.sql creates index)
-    // TASK-1775: Make message_id nullable (was NOT NULL originally) to allow email attachments
-    const attachmentsExists = db.prepare(
-      `SELECT name FROM sqlite_master WHERE type='table' AND name='attachments'`
-    ).get();
-
-    if (attachmentsExists) {
-      // Check if message_id has NOT NULL constraint
-      const colInfo = db.prepare(`PRAGMA table_info(attachments)`).all() as { name: string; notnull: number }[];
-      const messageIdCol = colInfo.find(c => c.name === 'message_id');
-
-      if (messageIdCol && messageIdCol.notnull === 1) {
-        await logService.info("TASK-1775: Migrating attachments table to make message_id nullable", "DatabaseService");
-
-        // SQLite requires table recreation to change NOT NULL constraint
-        // Get existing columns to preserve data
-        const existingCols = colInfo.map(c => c.name);
-        const hasEmailId = existingCols.includes('email_id');
-        const hasExternalMessageId = existingCols.includes('external_message_id');
-
-        // Create new table with nullable message_id
-        db.exec(`
-          CREATE TABLE attachments_new (
-            id TEXT PRIMARY KEY,
-            message_id TEXT,
-            ${hasEmailId ? 'email_id TEXT,' : ''}
-            ${hasExternalMessageId ? 'external_message_id TEXT,' : ''}
-            filename TEXT NOT NULL,
-            mime_type TEXT,
-            file_size_bytes INTEGER,
-            storage_path TEXT,
-            text_content TEXT,
-            document_type TEXT,
-            document_type_confidence REAL,
-            document_type_source TEXT CHECK (document_type_source IN ('pattern', 'llm', 'user')),
-            analysis_metadata TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
-            ${hasEmailId ? ', FOREIGN KEY (email_id) REFERENCES emails(id) ON DELETE CASCADE' : ''}
-          )
-        `);
-
-        // Copy data - build column list dynamically
-        const copyColumns = ['id', 'message_id', 'filename', 'mime_type', 'file_size_bytes', 'storage_path',
-          'text_content', 'document_type', 'document_type_confidence', 'document_type_source',
-          'analysis_metadata', 'created_at'];
-        if (hasEmailId) copyColumns.splice(2, 0, 'email_id');
-        if (hasExternalMessageId) copyColumns.splice(hasEmailId ? 3 : 2, 0, 'external_message_id');
-
-        const colList = copyColumns.filter(c => existingCols.includes(c)).join(', ');
-        db.exec(`INSERT INTO attachments_new (${colList}) SELECT ${colList} FROM attachments`);
-
-        // Swap tables
-        db.exec(`DROP TABLE attachments`);
-        db.exec(`ALTER TABLE attachments_new RENAME TO attachments`);
-
-        await logService.info("TASK-1775: Attachments table migrated successfully", "DatabaseService");
-      }
-    }
-
-    await addMissingColumns('attachments', [
-      { name: 'external_message_id', sql: `ALTER TABLE attachments ADD COLUMN external_message_id TEXT` },
-      { name: 'email_id', sql: `ALTER TABLE attachments ADD COLUMN email_id TEXT REFERENCES emails(id) ON DELETE CASCADE` },
-    ]);
-
-    // Populate display_name from name column if it exists
-    const contactsExists = db.prepare(
-      `SELECT name FROM sqlite_master WHERE type='table' AND name='contacts'`
-    ).get();
-    if (contactsExists) {
-      const contactColumns = db.prepare(`PRAGMA table_info(contacts)`).all() as { name: string }[];
-      if (contactColumns.some(c => c.name === 'name')) {
-        try {
-          db.exec(`UPDATE contacts SET display_name = name WHERE display_name IS NULL AND name IS NOT NULL`);
-        } catch { /* Ignore */ }
-      }
-    }
-  }
-
-  // Additional migrations - condensed version
-  private async _runAdditionalMigrations(): Promise<void> {
-    const db = this._ensureDb();
-
-    // Helper to get column info
-    const getColumns = (table: string) => {
-      return (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(c => c.name);
-    };
-
-    // Helper to run SQL safely
-    const runSafe = (sql: string) => {
-      try { db.exec(sql); } catch { /* Ignore */ }
-    };
-
-    // Migration 1: User compliance columns
-    const userColumns = getColumns('users_local');
-    if (!userColumns.includes('terms_accepted_at')) runSafe(`ALTER TABLE users_local ADD COLUMN terms_accepted_at DATETIME`);
-    if (!userColumns.includes('terms_version_accepted')) runSafe(`ALTER TABLE users_local ADD COLUMN terms_version_accepted TEXT`);
-    if (!userColumns.includes('privacy_policy_accepted_at')) runSafe(`ALTER TABLE users_local ADD COLUMN privacy_policy_accepted_at DATETIME`);
-    if (!userColumns.includes('privacy_policy_version_accepted')) runSafe(`ALTER TABLE users_local ADD COLUMN privacy_policy_version_accepted TEXT`);
-    if (!userColumns.includes('email_onboarding_completed_at')) runSafe(`ALTER TABLE users_local ADD COLUMN email_onboarding_completed_at DATETIME`);
-    if (!userColumns.includes('mobile_phone_type')) runSafe(`ALTER TABLE users_local ADD COLUMN mobile_phone_type TEXT`);
-
-    // Migration 2: Transaction columns
-    const txColumns = getColumns('transactions');
-    const txMigrations = [
-      { name: 'status', sql: `ALTER TABLE transactions ADD COLUMN status TEXT DEFAULT 'active'` },
-      { name: 'representation_start_date', sql: `ALTER TABLE transactions ADD COLUMN representation_start_date DATE` },
-      { name: 'closing_date_verified', sql: `ALTER TABLE transactions ADD COLUMN closing_date_verified INTEGER DEFAULT 0` },
-      { name: 'representation_start_confidence', sql: `ALTER TABLE transactions ADD COLUMN representation_start_confidence INTEGER` },
-      { name: 'closing_date_confidence', sql: `ALTER TABLE transactions ADD COLUMN closing_date_confidence INTEGER` },
-      { name: 'buyer_agent_id', sql: `ALTER TABLE transactions ADD COLUMN buyer_agent_id TEXT` },
-      { name: 'seller_agent_id', sql: `ALTER TABLE transactions ADD COLUMN seller_agent_id TEXT` },
-      { name: 'escrow_officer_id', sql: `ALTER TABLE transactions ADD COLUMN escrow_officer_id TEXT` },
-      { name: 'inspector_id', sql: `ALTER TABLE transactions ADD COLUMN inspector_id TEXT` },
-      { name: 'other_contacts', sql: `ALTER TABLE transactions ADD COLUMN other_contacts TEXT` },
-    ];
-    for (const m of txMigrations) {
-      if (!txColumns.includes(m.name)) runSafe(m.sql);
-    }
-
-    runSafe(`CREATE TRIGGER IF NOT EXISTS update_transactions_timestamp AFTER UPDATE ON transactions BEGIN UPDATE transactions SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END;`);
-    runSafe(`CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status)`);
-
-    // Migration 3: Transaction contacts enhanced roles
-    const tcColumns = getColumns('transaction_contacts');
-    if (!tcColumns.includes('role_category')) runSafe(`ALTER TABLE transaction_contacts ADD COLUMN role_category TEXT`);
-    if (!tcColumns.includes('specific_role')) runSafe(`ALTER TABLE transaction_contacts ADD COLUMN specific_role TEXT`);
-    if (!tcColumns.includes('is_primary')) runSafe(`ALTER TABLE transaction_contacts ADD COLUMN is_primary INTEGER DEFAULT 0`);
-    if (!tcColumns.includes('notes')) runSafe(`ALTER TABLE transaction_contacts ADD COLUMN notes TEXT`);
-    if (!tcColumns.includes('updated_at')) runSafe(`ALTER TABLE transaction_contacts ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP`);
-
-    runSafe(`CREATE INDEX IF NOT EXISTS idx_transaction_contacts_specific_role ON transaction_contacts(specific_role)`);
-    runSafe(`CREATE INDEX IF NOT EXISTS idx_transaction_contacts_category ON transaction_contacts(role_category)`);
-    runSafe(`CREATE INDEX IF NOT EXISTS idx_transaction_contacts_primary ON transaction_contacts(is_primary)`);
-    runSafe(`CREATE TRIGGER IF NOT EXISTS update_transaction_contacts_timestamp AFTER UPDATE ON transaction_contacts BEGIN UPDATE transaction_contacts SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END;`);
-
-    // Migration 4: Export tracking
-    if (!txColumns.includes('export_status')) {
-      runSafe(`ALTER TABLE transactions ADD COLUMN export_status TEXT DEFAULT 'not_exported' CHECK (export_status IN ('not_exported', 'exported', 're_export_needed'))`);
-      runSafe(`ALTER TABLE transactions ADD COLUMN export_format TEXT CHECK (export_format IN ('pdf', 'csv', 'json', 'txt_eml', 'excel'))`);
-      runSafe(`ALTER TABLE transactions ADD COLUMN export_count INTEGER DEFAULT 0`);
-      runSafe(`ALTER TABLE transactions ADD COLUMN last_exported_on DATETIME`);
-      runSafe(`CREATE INDEX IF NOT EXISTS idx_transactions_export_status ON transactions(export_status)`);
-      runSafe(`CREATE INDEX IF NOT EXISTS idx_transactions_last_exported_on ON transactions(last_exported_on)`);
-    }
-
-    // Migration 5-6: Contact import tracking
-    const contactColumns = getColumns('contacts');
-    if (!contactColumns.includes('display_name')) runSafe(`ALTER TABLE contacts ADD COLUMN display_name TEXT`);
-    if (!contactColumns.includes('company')) runSafe(`ALTER TABLE contacts ADD COLUMN company TEXT`);
-    if (!contactColumns.includes('title')) runSafe(`ALTER TABLE contacts ADD COLUMN title TEXT`);
-    if (!contactColumns.includes('source')) runSafe(`ALTER TABLE contacts ADD COLUMN source TEXT DEFAULT 'manual'`);
-    if (!contactColumns.includes('metadata')) runSafe(`ALTER TABLE contacts ADD COLUMN metadata TEXT`);
-    if (!contactColumns.includes('is_imported')) {
-      runSafe(`ALTER TABLE contacts ADD COLUMN is_imported INTEGER DEFAULT 1`);
-      runSafe(`UPDATE contacts SET is_imported = 1 WHERE source IN ('manual', 'email')`);
-      runSafe(`CREATE INDEX IF NOT EXISTS idx_contacts_is_imported ON contacts(is_imported)`);
-      runSafe(`CREATE INDEX IF NOT EXISTS idx_contacts_user_imported ON contacts(user_id, is_imported)`);
-    }
-
-    // Migration 7: Audit logs table
-    const auditTableExists = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='audit_logs'`).get();
-    if (!auditTableExists) {
-      db.exec(`
-        CREATE TABLE audit_logs (
-          id TEXT PRIMARY KEY,
-          timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          user_id TEXT NOT NULL,
-          session_id TEXT,
-          action TEXT NOT NULL,
-          resource_type TEXT NOT NULL,
-          resource_id TEXT,
-          metadata TEXT,
-          ip_address TEXT,
-          user_agent TEXT,
-          success INTEGER NOT NULL DEFAULT 1,
-          error_message TEXT,
-          synced_at DATETIME,
-          CHECK (action IN ('LOGIN', 'LOGOUT', 'LOGIN_FAILED', 'SESSION_REFRESH', 'DATA_ACCESS', 'DATA_EXPORT', 'DATA_DELETE', 'TRANSACTION_CREATE', 'TRANSACTION_UPDATE', 'TRANSACTION_DELETE', 'TRANSACTION_SUBMIT', 'CONTACT_CREATE', 'CONTACT_UPDATE', 'CONTACT_DELETE', 'EXPORT_START', 'EXPORT_COMPLETE', 'EXPORT_FAIL', 'SETTINGS_CHANGE', 'SETTINGS_UPDATE', 'TERMS_ACCEPT', 'MAILBOX_CONNECT', 'MAILBOX_DISCONNECT')),
-          CHECK (resource_type IN ('USER', 'SESSION', 'TRANSACTION', 'CONTACT', 'COMMUNICATION', 'EXPORT', 'MAILBOX', 'SETTINGS', 'SUBMISSION'))
-        )
-      `);
-      runSafe(`CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id)`);
-      runSafe(`CREATE INDEX idx_audit_logs_timestamp ON audit_logs(timestamp)`);
-      runSafe(`CREATE INDEX idx_audit_logs_action ON audit_logs(action)`);
-      runSafe(`CREATE INDEX idx_audit_logs_synced ON audit_logs(synced_at)`);
-      runSafe(`CREATE INDEX idx_audit_logs_resource_type ON audit_logs(resource_type)`);
-      runSafe(`CREATE INDEX idx_audit_logs_session_id ON audit_logs(session_id)`);
-      runSafe(`CREATE TRIGGER prevent_audit_update BEFORE UPDATE ON audit_logs BEGIN SELECT RAISE(ABORT, 'Audit logs cannot be modified'); END`);
-      runSafe(`CREATE TRIGGER prevent_audit_delete BEFORE DELETE ON audit_logs BEGIN SELECT RAISE(ABORT, 'Audit logs cannot be deleted'); END`);
-    }
-
-    // Migration 8: Normalize transaction status
-    runSafe(`UPDATE transactions SET status = 'closed' WHERE status = 'completed'`);
-    runSafe(`UPDATE transactions SET status = 'active' WHERE status = 'pending'`);
-    runSafe(`UPDATE transactions SET status = 'active' WHERE status = 'open'`);
-    runSafe(`UPDATE transactions SET status = 'active' WHERE status IS NULL OR status = ''`);
-    runSafe(`UPDATE transactions SET status = 'closed' WHERE status = 'cancelled'`);
-
-    // Migration 9: Normalize contacts display_name
-    runSafe(`UPDATE contacts SET display_name = name WHERE (display_name IS NULL OR display_name = '') AND name IS NOT NULL AND name != ''`);
-    runSafe(`UPDATE contacts SET display_name = 'Unknown' WHERE display_name IS NULL OR display_name = ''`);
-
-    // Migration 10: Remove orphaned tables
-    const orphanedExists = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='extraction_metrics'`).get();
-    if (orphanedExists) {
-      runSafe(`DROP INDEX IF EXISTS idx_extraction_metrics_user_id`);
-      runSafe(`DROP INDEX IF EXISTS idx_extraction_metrics_field`);
-      runSafe(`DROP INDEX IF EXISTS idx_user_feedback_user_id`);
-      runSafe(`DROP INDEX IF EXISTS idx_user_feedback_transaction_id`);
-      runSafe(`DROP INDEX IF EXISTS idx_user_feedback_field_name`);
-      runSafe(`DROP INDEX IF EXISTS idx_user_feedback_type`);
-      runSafe(`DROP TRIGGER IF EXISTS update_extraction_metrics_timestamp`);
-      runSafe(`DROP TABLE IF EXISTS extraction_metrics`);
-      runSafe(`DROP TABLE IF EXISTS user_feedback`);
-    }
-
-    // Migration 11: AI Detection Fields
-    const txDetectionColumns = getColumns('transactions');
-    if (!txDetectionColumns.includes('detection_source')) {
-      runSafe(`ALTER TABLE transactions ADD COLUMN detection_source TEXT DEFAULT 'manual' CHECK (detection_source IN ('manual', 'auto', 'hybrid'))`);
-      runSafe(`ALTER TABLE transactions ADD COLUMN detection_status TEXT DEFAULT 'confirmed' CHECK (detection_status IN ('pending', 'confirmed', 'rejected'))`);
-      runSafe(`ALTER TABLE transactions ADD COLUMN detection_confidence REAL`);
-      runSafe(`ALTER TABLE transactions ADD COLUMN detection_method TEXT`);
-      runSafe(`ALTER TABLE transactions ADD COLUMN suggested_contacts TEXT`);
-      runSafe(`ALTER TABLE transactions ADD COLUMN reviewed_at DATETIME`);
-      runSafe(`ALTER TABLE transactions ADD COLUMN rejection_reason TEXT`);
-    }
-
-    // Migration 11: LLM settings table
-    const llmSettingsExists = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='llm_settings'`).get();
-    if (!llmSettingsExists) {
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS llm_settings (
-          id TEXT PRIMARY KEY,
-          user_id TEXT NOT NULL UNIQUE,
-          openai_api_key_encrypted TEXT,
-          anthropic_api_key_encrypted TEXT,
-          preferred_provider TEXT DEFAULT 'openai' CHECK (preferred_provider IN ('openai', 'anthropic')),
-          openai_model TEXT DEFAULT 'gpt-4o-mini',
-          anthropic_model TEXT DEFAULT 'claude-3-haiku-20240307',
-          tokens_used_this_month INTEGER DEFAULT 0,
-          budget_limit_tokens INTEGER,
-          budget_reset_date DATE,
-          platform_allowance_tokens INTEGER DEFAULT 0,
-          platform_allowance_used INTEGER DEFAULT 0,
-          use_platform_allowance INTEGER DEFAULT 0,
-          enable_auto_detect INTEGER DEFAULT 1,
-          enable_role_extraction INTEGER DEFAULT 1,
-          llm_data_consent INTEGER DEFAULT 0,
-          llm_data_consent_at DATETIME,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
-        )
-      `);
-      runSafe(`CREATE INDEX IF NOT EXISTS idx_llm_settings_user ON llm_settings(user_id)`);
-    }
-
-    // Migration 11: Add llm_analysis to messages
-    const messagesColumns = getColumns('messages');
-    if (!messagesColumns.includes('llm_analysis')) {
-      runSafe(`ALTER TABLE messages ADD COLUMN llm_analysis TEXT`);
-    }
-
-    // Migration 12 (TASK-975): Create indexes for communications.message_id column
-    // This supports the junction table pattern for linking messages to transactions
-    runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_message_id ON communications(message_id)`);
-    runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_txn_msg ON communications(transaction_id, message_id)`);
-    runSafe(`CREATE UNIQUE INDEX IF NOT EXISTS idx_communications_msg_txn_unique ON communications(message_id, transaction_id) WHERE message_id IS NOT NULL`);
-
-    // Migration 13 (TASK-1110): Create index for attachments.external_message_id column
-    // This supports stable attachment linking when message_id changes on re-import
-    runSafe(`CREATE INDEX IF NOT EXISTS idx_attachments_external_message_id ON attachments(external_message_id)`);
-
-    // Migration 14 (BACKLOG-396): Backfill text_thread_count for existing transactions
-    // This only runs when the column is newly added (all values are 0)
-    // Uses a simplified SQL approach to count unique thread_ids per transaction
-    const needsBackfill = db.prepare(`
-      SELECT COUNT(*) as count FROM transactions
-      WHERE text_thread_count = 0
-      AND id IN (
-        SELECT DISTINCT c.transaction_id FROM communications c
-        INNER JOIN messages m ON (c.message_id IS NOT NULL AND c.message_id = m.id)
-                              OR (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
-        WHERE m.channel IN ('text', 'sms', 'imessage')
-      )
-    `).get() as { count: number } | undefined;
-
-    if (needsBackfill && needsBackfill.count > 0) {
-      await logService.info(`BACKLOG-396: Backfilling text_thread_count for ${needsBackfill.count} transactions`, "DatabaseService");
-
-      // Use a SQL-only approach for efficiency
-      // This counts unique thread_ids using the same logic as groupMessagesByThread
-      runSafe(`
-        UPDATE transactions
-        SET text_thread_count = (
-          SELECT COUNT(DISTINCT COALESCE(m.thread_id, 'msg-' || m.id))
-          FROM communications c
-          INNER JOIN messages m ON (c.message_id IS NOT NULL AND c.message_id = m.id)
-                                OR (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
-          WHERE c.transaction_id = transactions.id
-          AND m.channel IN ('text', 'sms', 'imessage')
-        )
-        WHERE text_thread_count = 0
-        AND id IN (
-          SELECT DISTINCT c.transaction_id FROM communications c
-          INNER JOIN messages m ON (c.message_id IS NOT NULL AND c.message_id = m.id)
-                                OR (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
-          WHERE m.channel IN ('text', 'sms', 'imessage')
-        )
-      `);
-
-      await logService.info("BACKLOG-396: text_thread_count backfill completed", "DatabaseService");
-    }
-
-    // Migration 15 (BACKLOG-390): B2B Submission Tracking
-    // Add columns to track broker review workflow state
-    const txSubmissionColumns = getColumns('transactions');
-    if (!txSubmissionColumns.includes('submission_status')) {
-      runSafe(`ALTER TABLE transactions ADD COLUMN submission_status TEXT DEFAULT 'not_submitted' CHECK (submission_status IN ('not_submitted', 'submitted', 'under_review', 'needs_changes', 'resubmitted', 'approved', 'rejected'))`);
-      runSafe(`ALTER TABLE transactions ADD COLUMN submission_id TEXT`);
-      runSafe(`ALTER TABLE transactions ADD COLUMN submitted_at DATETIME`);
-      runSafe(`ALTER TABLE transactions ADD COLUMN last_review_notes TEXT`);
-      runSafe(`CREATE INDEX IF NOT EXISTS idx_transactions_submission_status ON transactions(submission_status)`);
-      runSafe(`CREATE INDEX IF NOT EXISTS idx_transactions_submission_id ON transactions(submission_id)`);
-      await logService.info("BACKLOG-390: Added B2B submission tracking columns", "DatabaseService");
-    }
-
-    // Migration 16 (BACKLOG-426): License Type Support
-    // Add columns for license-aware feature gating
-    const userLicenseColumns = getColumns('users_local');
-    if (!userLicenseColumns.includes('license_type')) {
-      runSafe(`ALTER TABLE users_local ADD COLUMN license_type TEXT DEFAULT 'individual' CHECK (license_type IN ('individual', 'team', 'enterprise'))`);
-      runSafe(`ALTER TABLE users_local ADD COLUMN ai_detection_enabled INTEGER DEFAULT 0`);
-      runSafe(`ALTER TABLE users_local ADD COLUMN organization_id TEXT`);
-      runSafe(`CREATE INDEX IF NOT EXISTS idx_users_local_license_type ON users_local(license_type)`);
-      runSafe(`CREATE INDEX IF NOT EXISTS idx_users_local_organization ON users_local(organization_id)`);
-      await logService.info("BACKLOG-426: Added license type columns to users_local", "DatabaseService");
-    }
-
-    // Migration 17: Removed (BACKLOG-592 — was a one-time hardcoded backfill)
-
-    // Migration 18: Performance indexes to reduce UI freezes during queries
-    // BACKLOG-497: Quick win before full worker thread refactor
-    runSafe(`CREATE INDEX IF NOT EXISTS idx_contacts_user_id ON contacts(user_id)`);
-    runSafe(`CREATE INDEX IF NOT EXISTS idx_contact_emails_contact_id ON contact_emails(contact_id)`);
-    runSafe(`CREATE INDEX IF NOT EXISTS idx_contact_emails_email ON contact_emails(email)`);
-    runSafe(`CREATE INDEX IF NOT EXISTS idx_contact_phones_contact_id ON contact_phones(contact_id)`);
-    runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_user_id ON communications(user_id)`);
-    runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_sender ON communications(sender)`);
-    runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_sent_at ON communications(sent_at)`);
-    runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_user_sent ON communications(user_id, sent_at)`);
-    runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_transaction ON communications(transaction_id)`);
-    runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_user_id ON messages(user_id)`);
-    runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_sent_at ON messages(sent_at)`);
-    runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id)`);
-    runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_user_sent ON messages(user_id, sent_at)`);
-    runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel)`);
-
-    // Migration 20: Add UNIQUE constraint on messages.external_id to prevent import duplicates
-    // The import service uses INSERT OR IGNORE but without a unique constraint it does nothing!
-    // First, delete duplicate messages keeping only the oldest one (by created_at or id)
-    const dupMessagesCount = (db.prepare(`
-      SELECT COUNT(*) as count FROM messages m1
-      WHERE EXISTS (
-        SELECT 1 FROM messages m2
-        WHERE m2.user_id = m1.user_id
-        AND m2.external_id = m1.external_id
-        AND m2.external_id IS NOT NULL
-        AND m2.id < m1.id
-      )
-    `).get() as { count: number })?.count || 0;
-
-    if (dupMessagesCount > 0) {
-      await logService.info(`Migration 20: Found ${dupMessagesCount} duplicate messages to clean up`, "DatabaseService");
-      runSafe(`
-        DELETE FROM messages
-        WHERE id IN (
-          SELECT m1.id FROM messages m1
-          WHERE EXISTS (
-            SELECT 1 FROM messages m2
-            WHERE m2.user_id = m1.user_id
-            AND m2.external_id = m1.external_id
-            AND m2.external_id IS NOT NULL
-            AND m2.id < m1.id
-          )
-        )
-      `);
-      await logService.info("Migration 20: Duplicate messages cleaned up", "DatabaseService");
-    }
-
-    // Now add the unique index so INSERT OR IGNORE actually works
-    runSafe(`CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_user_external_id ON messages(user_id, external_id) WHERE external_id IS NOT NULL`);
-
-    // Migration 21: Delete content-based duplicates (same body_text + sent_at)
-    // This catches duplicates that have different external_ids but same content
-    const contentDupCount = (db.prepare(`
-      SELECT COUNT(*) as count FROM messages m1
-      WHERE m1.channel IN ('sms', 'imessage')
-      AND EXISTS (
-        SELECT 1 FROM messages m2
-        WHERE m2.user_id = m1.user_id
-        AND m2.body_text = m1.body_text
-        AND m2.sent_at = m1.sent_at
-        AND m2.channel IN ('sms', 'imessage')
-        AND m2.id < m1.id
-      )
-    `).get() as { count: number })?.count || 0;
-
-    if (contentDupCount > 0) {
-      await logService.info(`Migration 21: Found ${contentDupCount} content-duplicate messages to clean up`, "DatabaseService");
-      runSafe(`
-        DELETE FROM messages
-        WHERE id IN (
-          SELECT m1.id FROM messages m1
-          WHERE m1.channel IN ('sms', 'imessage')
-          AND EXISTS (
-            SELECT 1 FROM messages m2
-            WHERE m2.user_id = m1.user_id
-            AND m2.body_text = m1.body_text
-            AND m2.sent_at = m1.sent_at
-            AND m2.channel IN ('sms', 'imessage')
-            AND m2.id < m1.id
-          )
-        )
-      `);
-      await logService.info("Migration 21: Content-duplicate messages cleaned up", "DatabaseService");
-    }
-
-    // NOTE: Migration 19 (legacy communication cleanup) was removed after BACKLOG-506
-    // because the body_plain and communication_type columns no longer exist on communications.
-    // Legacy records are now handled by migration 23 which filters them out during table recreation.
-
-    // Migration 22: Create emails table and add email_id to communications (BACKLOG-506)
-    const emailsTableExists = db.prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='emails'"
-    ).get();
-
-    if (!emailsTableExists) {
-      await logService.info("Running migration 22: Create emails table", "DatabaseService");
-
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS emails (
-          id TEXT PRIMARY KEY,
-          user_id TEXT NOT NULL,
-          external_id TEXT,
-          source TEXT CHECK (source IN ('gmail', 'outlook')),
-          account_id TEXT,
-          direction TEXT CHECK (direction IN ('inbound', 'outbound')),
-          subject TEXT,
-          body_plain TEXT,
-          body_html TEXT,
-          sender TEXT,
-          recipients TEXT,
-          cc TEXT,
-          bcc TEXT,
-          thread_id TEXT,
-          in_reply_to TEXT,
-          references_header TEXT,
-          sent_at DATETIME,
-          received_at DATETIME,
-          has_attachments INTEGER DEFAULT 0,
-          attachment_count INTEGER DEFAULT 0,
-          message_id_header TEXT,
-          content_hash TEXT,
-          labels TEXT,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
-        )
-      `);
-
-      // Create indexes
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_emails_user_id ON emails(user_id)`);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_emails_thread_id ON emails(thread_id)`);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_emails_sent_at ON emails(sent_at)`);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_emails_sender ON emails(sender)`);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_emails_external_id ON emails(external_id)`);
-      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_emails_user_external ON emails(user_id, external_id) WHERE external_id IS NOT NULL`);
-      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_emails_message_id_header ON emails(user_id, message_id_header) WHERE message_id_header IS NOT NULL`);
-
-      await logService.info("Migration 22: emails table created", "DatabaseService");
-    }
-
-    // Add email_id column to communications table (if not exists)
-    const commEmailIdExists = db.prepare(`
-      SELECT COUNT(*) as count FROM pragma_table_info('communications') WHERE name='email_id'
-    `).get() as { count: number };
-
-    if (!commEmailIdExists || commEmailIdExists.count === 0) {
-      await logService.info("Migration 22: Adding email_id column to communications", "DatabaseService");
-      db.exec(`ALTER TABLE communications ADD COLUMN email_id TEXT REFERENCES emails(id) ON DELETE CASCADE`);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_communications_email_id ON communications(email_id)`);
-      await logService.info("Migration 22: email_id column added to communications", "DatabaseService");
-    }
-
-    // Migration 23: Recreate communications as pure junction table (BACKLOG-506 Phase 5)
-    // This removes all legacy content columns (subject, body_plain, sender, etc.)
-    // Content now lives in emails table (for emails) and messages table (for texts)
-    const currentSchemaVersion = (db.prepare("SELECT version FROM schema_version WHERE id = 1").get() as { version: number } | undefined)?.version || 0;
-    if (currentSchemaVersion < 23) {
-      await logService.info("Running migration 23: Recreate communications as pure junction table", "DatabaseService");
-
-      // Step 1: Create new table with clean schema (10 columns only)
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS communications_new (
-          id TEXT PRIMARY KEY,
-          user_id TEXT NOT NULL,
-          transaction_id TEXT,
-          message_id TEXT,
-          email_id TEXT,
-          thread_id TEXT,
-          link_source TEXT CHECK (link_source IN ('auto', 'manual', 'scan')),
-          link_confidence REAL,
-          linked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
-          FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL,
-          FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
-          FOREIGN KEY (email_id) REFERENCES emails(id) ON DELETE CASCADE,
-          CHECK (message_id IS NOT NULL OR email_id IS NOT NULL OR thread_id IS NOT NULL)
-        )
-      `);
-
-      // Step 2: Copy data from old table (only junction fields)
-      // Filter: Only copy records that have at least one content reference
-      // IMPORTANT: Deduplicate to avoid unique constraint violations
-      // Use subqueries to get one row per unique combination
-      db.exec(`
-        INSERT INTO communications_new (
-          id, user_id, transaction_id, message_id, email_id, thread_id,
-          link_source, link_confidence, linked_at, created_at
-        )
-        SELECT
-          id, user_id, transaction_id, message_id, email_id, thread_id,
-          link_source, link_confidence, linked_at, created_at
-        FROM communications
-        WHERE (message_id IS NOT NULL OR email_id IS NOT NULL OR thread_id IS NOT NULL)
-          AND id IN (
-            -- Get first ID for each unique email_id + transaction_id
-            SELECT MIN(id) FROM communications
-            WHERE email_id IS NOT NULL
-            GROUP BY email_id, transaction_id
-            UNION
-            -- Get first ID for each unique message_id + transaction_id
-            SELECT MIN(id) FROM communications
-            WHERE message_id IS NOT NULL
-            GROUP BY message_id, transaction_id
-            UNION
-            -- Get first ID for each unique thread_id + transaction_id (without message/email)
-            SELECT MIN(id) FROM communications
-            WHERE thread_id IS NOT NULL AND message_id IS NULL AND email_id IS NULL
-            GROUP BY thread_id, transaction_id
-          )
-      `);
-
-      // Step 3: Drop old table
-      db.exec(`DROP TABLE communications`);
-
-      // Step 4: Rename new table
-      db.exec(`ALTER TABLE communications_new RENAME TO communications`);
-
-      // Step 5: Recreate indexes
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_communications_user_id ON communications(user_id)`);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_communications_transaction_id ON communications(transaction_id)`);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_communications_message_id ON communications(message_id)`);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_communications_email_id ON communications(email_id)`);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_communications_thread_id ON communications(thread_id)`);
-      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_comm_msg_txn ON communications(message_id, transaction_id) WHERE message_id IS NOT NULL`);
-      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_comm_email_txn ON communications(email_id, transaction_id) WHERE email_id IS NOT NULL`);
-      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_comm_thread_txn ON communications(thread_id, transaction_id) WHERE thread_id IS NOT NULL AND message_id IS NULL AND email_id IS NULL`);
-
-      db.exec(`UPDATE schema_version SET version = 23, updated_at = CURRENT_TIMESTAMP WHERE id = 1`);
-      await logService.info("Migration 23 complete: communications is now pure junction table (10 columns)", "DatabaseService");
-    }
-
-    // Migration 24: Create phone_last_message lookup table for fast contact sorting (BACKLOG-567)
-    // This enables O(1) lookup of last message date by phone number instead of O(n) LIKE scans
-    const phoneLastMsgExists = db.prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='phone_last_message'"
-    ).get();
-
-    if (!phoneLastMsgExists) {
-      await logService.info("Running migration 24: Create phone_last_message lookup table", "DatabaseService");
-
-      db.exec(`
-        CREATE TABLE phone_last_message (
-          phone_normalized TEXT NOT NULL,
-          user_id TEXT NOT NULL,
-          last_message_at DATETIME NOT NULL,
-          PRIMARY KEY (phone_normalized, user_id),
-          FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
-        )
-      `);
-      db.exec(`CREATE INDEX idx_phone_last_msg_user ON phone_last_message(user_id)`);
-
-      await logService.info("Migration 24 complete: phone_last_message table created", "DatabaseService");
-    }
-
-    // Migration 25: Create external_contacts shadow table (BACKLOG-569, TASK-1773)
-    // This caches macOS Contacts with pre-computed last_message_at for instant sorted loading
-    const externalContactsExists = db.prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='external_contacts'"
-    ).get();
-
-    if (!externalContactsExists) {
-      await logService.info("Running migration 25: Create external_contacts shadow table", "DatabaseService");
-
-      db.exec(`
-        CREATE TABLE external_contacts (
-          id TEXT PRIMARY KEY,
-          user_id TEXT NOT NULL,
-          name TEXT,
-          phones_json TEXT,
-          emails_json TEXT,
-          company TEXT,
-          last_message_at DATETIME,
-          macos_record_id TEXT,
-          synced_at DATETIME,
-          FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
-          UNIQUE(user_id, macos_record_id)
-        )
-      `);
-      db.exec(`CREATE INDEX idx_external_contacts_user ON external_contacts(user_id)`);
-      db.exec(`CREATE INDEX idx_external_contacts_last_msg ON external_contacts(user_id, last_message_at DESC)`);
-
-      await logService.info("Migration 25 complete: external_contacts shadow table created", "DatabaseService");
-    }
-
-    // Migration 26: Add email_id to attachments table for email attachment support (TASK-1775)
-    // This enables storing attachments from Gmail/Outlook emails alongside iMessage attachments
-    const attachmentsColumns = getColumns('attachments');
-    if (!attachmentsColumns.includes('email_id')) {
-      await logService.info("Running migration 26: Add email_id to attachments table", "DatabaseService");
-
-      // Add email_id column (nullable - existing attachments have message_id, new email attachments have email_id)
-      runSafe(`ALTER TABLE attachments ADD COLUMN email_id TEXT REFERENCES emails(id) ON DELETE CASCADE`);
-
-      // Create index for email_id lookups
-      runSafe(`CREATE INDEX IF NOT EXISTS idx_attachments_email_id ON attachments(email_id)`);
-
-      // Note: CHECK constraint (message_id IS NOT NULL OR email_id IS NOT NULL) is enforced
-      // by the service layer (emailAttachmentService and macOSMessagesImportService)
-      // because SQLite ALTER TABLE cannot add CHECK constraints without table recreation.
-
-      await logService.info("Migration 26 complete: email_id column added to attachments", "DatabaseService");
-    }
-
-    // Migration 27: Update external_contacts schema for multi-source support (SPRINT-068, BACKLOG-585)
-    // Renames macos_record_id to external_record_id and adds source column
-    // This enables Windows + iPhone sync to use the same table architecture as macOS
-    const extContactsCols = getColumns('external_contacts');
-    if (extContactsCols.includes('macos_record_id') && !extContactsCols.includes('external_record_id')) {
-      await logService.info("Running migration 27: Update external_contacts for multi-source support", "DatabaseService");
-
-      // Use table recreation pattern (safer than RENAME COLUMN for SQLite compatibility)
-      // Step 1: Create new table with correct schema
-      db.exec(`
-        CREATE TABLE external_contacts_new (
-          id TEXT PRIMARY KEY,
-          user_id TEXT NOT NULL,
-          name TEXT,
-          phones_json TEXT,
-          emails_json TEXT,
-          company TEXT,
-          last_message_at DATETIME,
-          external_record_id TEXT,
-          source TEXT DEFAULT 'macos',
-          synced_at DATETIME,
-          FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
-          UNIQUE(user_id, source, external_record_id)
-        )
-      `);
-
-      // Step 2: Copy data from old table (existing records are macOS contacts)
-      db.exec(`
-        INSERT INTO external_contacts_new
-          (id, user_id, name, phones_json, emails_json, company, last_message_at,
-           external_record_id, source, synced_at)
-        SELECT
-          id, user_id, name, phones_json, emails_json, company, last_message_at,
-          macos_record_id, 'macos', synced_at
-        FROM external_contacts
-      `);
-
-      // Step 3: Drop old table
-      db.exec(`DROP TABLE external_contacts`);
-
-      // Step 4: Rename new table
-      db.exec(`ALTER TABLE external_contacts_new RENAME TO external_contacts`);
-
-      // Step 5: Recreate indexes
-      db.exec(`CREATE INDEX idx_external_contacts_user ON external_contacts(user_id)`);
-      db.exec(`CREATE INDEX idx_external_contacts_last_msg ON external_contacts(user_id, last_message_at DESC)`);
-      db.exec(`CREATE INDEX idx_external_contacts_source ON external_contacts(user_id, source)`);
-
-      await logService.info("Migration 27 complete: external_contacts updated for multi-source support", "DatabaseService");
-    }
-
-    // Migration 27b: Migrate existing iPhone contacts from contacts table to external_contacts (SPRINT-068)
-    // This is a data migration for Windows users who already synced iPhone contacts
-    // TASK-1792: Added idempotency check - skip if already migrated
-    const iPhoneContactsInExternalTable = db.prepare(`
-      SELECT COUNT(*) as count FROM external_contacts WHERE source = 'iphone'
-    `).get() as { count: number } | undefined;
-
-    const iPhoneContactsInContactsTable = db.prepare(`
-      SELECT COUNT(*) as count FROM contacts
-      WHERE source = 'contacts_app' AND is_imported = 0
-    `).get() as { count: number } | undefined;
-
-    // Only run migration if there are iPhone contacts to migrate AND they haven't been migrated yet
-    const needsMigration = iPhoneContactsInContactsTable && iPhoneContactsInContactsTable.count > 0 &&
-      (!iPhoneContactsInExternalTable || iPhoneContactsInExternalTable.count === 0);
-
-    if (needsMigration) {
-      await logService.info(`Migration 27b: Migrating ${iPhoneContactsInContactsTable.count} iPhone contacts to external_contacts`, "DatabaseService");
-
-      // Insert iPhone contacts into external_contacts if not already present
-      db.exec(`
-        INSERT OR IGNORE INTO external_contacts
-          (id, user_id, name, phones_json, emails_json, company, external_record_id, source, synced_at)
-        SELECT
-          c.id,
-          c.user_id,
-          c.display_name,
-          (SELECT json_group_array(cp.phone_e164) FROM contact_phones cp WHERE cp.contact_id = c.id),
-          (SELECT json_group_array(ce.email) FROM contact_emails ce WHERE ce.contact_id = c.id),
-          c.company,
-          c.id,
-          'iphone',
-          c.updated_at
-        FROM contacts c
-        WHERE c.source = 'contacts_app' AND c.is_imported = 0
-      `);
-
-      await logService.info("Migration 27b complete: iPhone contacts migrated to external_contacts", "DatabaseService");
-    }
-
-    // Migration 27c: Backfill participants_flat for iPhone-synced messages (SPRINT-068)
-    // This column was missing from iPhoneSyncStorageService, causing auto-link to fail on Windows
-    const messagesNeedingBackfill = db.prepare(`
-      SELECT COUNT(*) as count FROM messages
-      WHERE channel IN ('sms', 'imessage')
-        AND participants_flat IS NULL
-        AND participants IS NOT NULL
-    `).get() as { count: number } | undefined;
-
-    if (messagesNeedingBackfill && messagesNeedingBackfill.count > 0) {
-      await logService.info(`Migration 27c: Backfilling participants_flat for ${messagesNeedingBackfill.count} messages`, "DatabaseService");
-
-      // Extract phone digits from participants JSON and populate participants_flat
-      // Uses json_extract to get the 'from' or 'to[0]' phone number, then extracts digits
-      db.exec(`
-        UPDATE messages
-        SET participants_flat = (
-          CASE
-            WHEN json_extract(participants, '$.from') != 'me'
-            THEN REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
-              json_extract(participants, '$.from'),
-              '+', ''), '-', ''), '(', ''), ')', ''), ' ', '')
-            ELSE REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
-              json_extract(participants, '$.to[0]'),
-              '+', ''), '-', ''), '(', ''), ')', ''), ' ', '')
-          END
-        )
-        WHERE channel IN ('sms', 'imessage')
-          AND participants_flat IS NULL
-          AND participants IS NOT NULL
-      `);
-
-      await logService.info("Migration 27c complete: participants_flat backfilled for existing messages", "DatabaseService");
-    }
-
-    // Migration 28: Add message_type column to messages table (TASK-1799)
-    // This enables UI differentiation between text, voice messages, location shares, etc.
-    const messagesColumnsM28 = getColumns('messages');
-    if (!messagesColumnsM28.includes('message_type')) {
-      await logService.info("Running migration 28: Add message_type column to messages", "DatabaseService");
-
-      // Add the column with CHECK constraint for valid values
-      db.exec(`
-        ALTER TABLE messages ADD COLUMN message_type TEXT
-        CHECK (message_type IS NULL OR message_type IN ('text', 'voice_message', 'location', 'attachment_only', 'system', 'unknown'))
-      `);
-
-      await logService.info("Migration 28: message_type column added to messages", "DatabaseService");
-
-      // Backfill existing messages with audio attachments as voice_message
-      const audioMessagesCount = db.prepare(`
-        SELECT COUNT(DISTINCT m.id) as count
-        FROM messages m
-        JOIN attachments a ON a.message_id = m.id
-        WHERE a.mime_type LIKE 'audio/%'
-          AND m.message_type IS NULL
-      `).get() as { count: number } | undefined;
-
-      if (audioMessagesCount && audioMessagesCount.count > 0) {
-        await logService.info(`Migration 28: Backfilling ${audioMessagesCount.count} voice messages`, "DatabaseService");
-
-        db.exec(`
-          UPDATE messages SET message_type = 'voice_message'
-          WHERE id IN (
-            SELECT DISTINCT m.id FROM messages m
-            JOIN attachments a ON a.message_id = m.id
-            WHERE a.mime_type LIKE 'audio/%'
-          ) AND message_type IS NULL
-        `);
-
-        await logService.info("Migration 28: Voice messages backfilled", "DatabaseService");
-      }
-
-      await logService.info("Migration 28 complete: message_type column and backfill done", "DatabaseService");
-    }
-
-    // Note: Migration 29 (TRANSACTION_SUBMIT in audit_logs) is handled by the
-    // updated CHECK constraint in Migration 7's CREATE TABLE statement.
-    // No separate migration needed for fresh databases.
-
-    // Finalize schema version (create table if missing for backwards compatibility)
+    // Ensure schema_version table exists (may be missing on very old DBs)
     const schemaVersionExists = db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
     ).get();
@@ -1237,13 +357,51 @@ class DatabaseService implements IDatabaseService {
           version INTEGER NOT NULL DEFAULT 1,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
-        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 23);
+        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 29);
       `);
-    } else {
-      const finalVersion = (db.prepare("SELECT version FROM schema_version").get() as { version: number } | undefined)?.version || 0;
-      if (finalVersion < 23) {
-        db.exec("UPDATE schema_version SET version = 23");
+    }
+
+    const currentVersion = (
+      db.prepare("SELECT version FROM schema_version WHERE id = 1").get() as
+        { version: number } | undefined
+    )?.version || 0;
+
+    // -------------------------------------------------------
+    // Future migrations go here. Example:
+    //
+    // { version: 30, description: "Add new_column to some_table",
+    //   migrate: (d) => { d.exec("ALTER TABLE some_table ADD COLUMN new_column TEXT"); } },
+    // -------------------------------------------------------
+    const migrations: {
+      version: number;
+      description: string;
+      migrate: (d: DatabaseType) => void;
+    }[] = [
+      // Baseline = 29. Add new migrations below.
+    ];
+
+    for (const m of migrations) {
+      if (m.version > currentVersion) {
+        await logService.info(
+          `Running migration ${m.version}: ${m.description}`,
+          "DatabaseService"
+        );
+        m.migrate(db);
+        db.exec(
+          `UPDATE schema_version SET version = ${m.version}, updated_at = CURRENT_TIMESTAMP WHERE id = 1`
+        );
+        await logService.info(
+          `Migration ${m.version} complete: ${m.description}`,
+          "DatabaseService"
+        );
       }
+    }
+
+    // Ensure version is at least 29 (the consolidated baseline)
+    if (currentVersion < 29) {
+      db.exec(
+        "UPDATE schema_version SET version = 29, updated_at = CURRENT_TIMESTAMP WHERE id = 1"
+      );
     }
 
     await logService.info("All database migrations completed successfully", "DatabaseService");
@@ -2386,19 +1544,15 @@ class DatabaseService implements IDatabaseService {
     try {
       await logService.info("Starting database reindex operation", "DatabaseService");
 
-      // Performance indexes from Migration 18 (BACKLOG-497)
-      // Drop and recreate to ensure fresh, optimized indexes
+      // Performance indexes — drop and recreate to ensure fresh, optimized indexes
       const performanceIndexes = [
         // Contact indexes
         { name: "idx_contacts_user_id", sql: "CREATE INDEX IF NOT EXISTS idx_contacts_user_id ON contacts(user_id)" },
         { name: "idx_contact_emails_contact_id", sql: "CREATE INDEX IF NOT EXISTS idx_contact_emails_contact_id ON contact_emails(contact_id)" },
         { name: "idx_contact_emails_email", sql: "CREATE INDEX IF NOT EXISTS idx_contact_emails_email ON contact_emails(email)" },
         { name: "idx_contact_phones_contact_id", sql: "CREATE INDEX IF NOT EXISTS idx_contact_phones_contact_id ON contact_phones(contact_id)" },
-        // Communication indexes
+        // Communication indexes (pure junction table — no sender/sent_at columns)
         { name: "idx_communications_user_id", sql: "CREATE INDEX IF NOT EXISTS idx_communications_user_id ON communications(user_id)" },
-        { name: "idx_communications_sender", sql: "CREATE INDEX IF NOT EXISTS idx_communications_sender ON communications(sender)" },
-        { name: "idx_communications_sent_at", sql: "CREATE INDEX IF NOT EXISTS idx_communications_sent_at ON communications(sent_at)" },
-        { name: "idx_communications_user_sent", sql: "CREATE INDEX IF NOT EXISTS idx_communications_user_sent ON communications(user_id, sent_at)" },
         { name: "idx_communications_transaction", sql: "CREATE INDEX IF NOT EXISTS idx_communications_transaction ON communications(transaction_id)" },
         // Message indexes
         { name: "idx_messages_user_id", sql: "CREATE INDEX IF NOT EXISTS idx_messages_user_id ON messages(user_id)" },
