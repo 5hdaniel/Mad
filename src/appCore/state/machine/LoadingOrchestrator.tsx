@@ -13,7 +13,7 @@
  * @module appCore/state/machine/LoadingOrchestrator
  */
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useCallback } from "react";
 import { useAppState } from "./useAppState";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { ErrorScreen } from "./components/ErrorScreen";
@@ -51,6 +51,21 @@ export function LoadingOrchestrator({
   // Detect platform once at startup (cached in ref to avoid re-detection)
   const platformRef = useRef(detectPlatform());
 
+  // Helper to dispatch API_NOT_READY error (used by all phases)
+  const dispatchApiNotReady = useCallback(
+    (err: unknown) => {
+      dispatch({
+        type: "ERROR",
+        error: {
+          code: "API_NOT_READY",
+          message: (err as Error).message,
+        },
+        recoverable: true,
+      });
+    },
+    [dispatch]
+  );
+
   // Get full platform info including hasIPhone (determined during onboarding)
   const getPlatformInfo = (): PlatformInfo => ({
     ...platformRef.current,
@@ -82,15 +97,7 @@ export function LoadingOrchestrator({
       try {
         await waitForApi();
       } catch (err) {
-        if (cancelled) return;
-        dispatch({
-          type: "ERROR",
-          error: {
-            code: "API_NOT_READY",
-            message: (err as Error).message,
-          },
-          recoverable: true,
-        });
+        if (!cancelled) dispatchApiNotReady(err);
         return;
       }
 
@@ -127,7 +134,7 @@ export function LoadingOrchestrator({
     return () => {
       cancelled = true;
     };
-  }, [state.status, loadingPhase, dispatch]);
+  }, [state.status, loadingPhase, dispatch, dispatchApiNotReady]);
 
   // ============================================
   // PHASE 2: Initialize database (platform-specific)
@@ -166,15 +173,7 @@ export function LoadingOrchestrator({
         try {
           await waitForApi();
         } catch (err) {
-          if (cancelled) return;
-          dispatch({
-            type: "ERROR",
-            error: {
-              code: "API_NOT_READY",
-              message: (err as Error).message,
-            },
-            recoverable: true,
-          });
+          if (!cancelled) dispatchApiNotReady(err);
           return;
         }
 
@@ -221,15 +220,7 @@ export function LoadingOrchestrator({
         try {
           await waitForApi();
         } catch (err) {
-          if (cancelled) return;
-          dispatch({
-            type: "ERROR",
-            error: {
-              code: "API_NOT_READY",
-              message: (err as Error).message,
-            },
-            recoverable: true,
-          });
+          if (!cancelled) dispatchApiNotReady(err);
           return;
         }
 
@@ -265,7 +256,7 @@ export function LoadingOrchestrator({
         cancelled = true;
       };
     }
-  }, [state.status, loadingPhase, dispatch]);
+  }, [state.status, loadingPhase, dispatch, dispatchApiNotReady]);
 
   // ============================================
   // PHASE 3: Load auth state
@@ -291,15 +282,7 @@ export function LoadingOrchestrator({
       try {
         await waitForApi();
       } catch (err) {
-        if (cancelled) return;
-        dispatch({
-          type: "ERROR",
-          error: {
-            code: "API_NOT_READY",
-            message: (err as Error).message,
-          },
-          recoverable: true,
-        });
+        if (!cancelled) dispatchApiNotReady(err);
         return;
       }
 
@@ -308,76 +291,76 @@ export function LoadingOrchestrator({
       window.api.auth
         .getCurrentUser()
         .then((result) => {
-        /* console.log("[LoadingOrchestrator] PHASE 3: Auth check result:", {
-          success: result.success,
-          hasUser: !!result.user,
-          isNewUser: result.isNewUser,
-        }); */
-        if (cancelled) return;
+          /* console.log("[LoadingOrchestrator] PHASE 3: Auth check result:", {
+            success: result.success,
+            hasUser: !!result.user,
+            isNewUser: result.isNewUser,
+          }); */
+          if (cancelled) return;
 
-        if (result.success && result.user) {
-          // Type the user from the API response
-          const apiUser = result.user as {
-            id: string;
-            email: string;
-            display_name?: string;
-            avatar_url?: string;
-          };
+          if (result.success && result.user) {
+            // Type the user from the API response
+            const apiUser = result.user as {
+              id: string;
+              email: string;
+              display_name?: string;
+              avatar_url?: string;
+            };
 
-          const user: User = {
-            id: apiUser.id,
-            email: apiUser.email,
-            displayName: apiUser.display_name,
-            avatarUrl: apiUser.avatar_url,
-          };
+            const user: User = {
+              id: apiUser.id,
+              email: apiUser.email,
+              displayName: apiUser.display_name,
+              avatarUrl: apiUser.avatar_url,
+            };
 
-          // Store for USER_DATA_LOADED phase
-          authDataRef.current = { user, platform };
+            // Store for USER_DATA_LOADED phase
+            authDataRef.current = { user, platform };
 
-          // Sync to AuthContext so currentUser is available in UI
-          const authContextUser = {
-            id: apiUser.id,
-            email: apiUser.email,
-            display_name: apiUser.display_name,
-            avatar_url: apiUser.avatar_url,
-          };
-          login(
-            authContextUser,
-            result.sessionToken ?? "",
-            result.provider ?? "",
-            result.subscription,
-            result.isNewUser ?? false,
-          );
+            // Sync to AuthContext so currentUser is available in UI
+            const authContextUser = {
+              id: apiUser.id,
+              email: apiUser.email,
+              display_name: apiUser.display_name,
+              avatar_url: apiUser.avatar_url,
+            };
+            login(
+              authContextUser,
+              result.sessionToken ?? "",
+              result.provider ?? "",
+              result.subscription,
+              result.isNewUser ?? false,
+            );
 
-          // console.log("[LoadingOrchestrator] PHASE 3: Dispatching AUTH_LOADED with user:", user.email);
-          dispatch({
-            type: "AUTH_LOADED",
-            user,
-            isNewUser: result.isNewUser ?? false,
-            platform,
-          });
-        } else {
-          // No session - user needs to login
-          // console.log("[LoadingOrchestrator] PHASE 3: No session, dispatching AUTH_LOADED with null user");
+            // console.log("[LoadingOrchestrator] PHASE 3: Dispatching AUTH_LOADED with user:", user.email);
+            dispatch({
+              type: "AUTH_LOADED",
+              user,
+              isNewUser: result.isNewUser ?? false,
+              platform,
+            });
+          } else {
+            // No session - user needs to login
+            // console.log("[LoadingOrchestrator] PHASE 3: No session, dispatching AUTH_LOADED with null user");
+            dispatch({
+              type: "AUTH_LOADED",
+              user: null,
+              isNewUser: false,
+              platform,
+            });
+          }
+        })
+        .catch((error: Error) => {
+          if (cancelled) return;
+          // No session is not necessarily an error - just means user needs to login
+          // console.warn("[LoadingOrchestrator] PHASE 3: Auth check failed:", error);
           dispatch({
             type: "AUTH_LOADED",
             user: null,
             isNewUser: false,
-            platform,
+            platform: getPlatformInfo(),
           });
-        }
-      })
-      .catch((error: Error) => {
-        if (cancelled) return;
-        // No session is not necessarily an error - just means user needs to login
-        // console.warn("[LoadingOrchestrator] PHASE 3: Auth check failed:", error);
-        dispatch({
-          type: "AUTH_LOADED",
-          user: null,
-          isNewUser: false,
-          platform: getPlatformInfo(),
         });
-      });
     };
 
     runPhase();
@@ -385,7 +368,7 @@ export function LoadingOrchestrator({
     return () => {
       cancelled = true;
     };
-  }, [state.status, loadingPhase, dispatch, getPlatformInfo, login]);
+  }, [state.status, loadingPhase, dispatch, dispatchApiNotReady, getPlatformInfo, login]);
 
   // ============================================
   // PHASE 4: Load user data (if authenticated)
@@ -427,27 +410,6 @@ export function LoadingOrchestrator({
     }
 
     let cancelled = false;
-
-    const runPhase = async () => {
-      try {
-        await waitForApi();
-      } catch (err) {
-        if (cancelled) return;
-        dispatch({
-          type: "ERROR",
-          error: {
-            code: "API_NOT_READY",
-            message: (err as Error).message,
-          },
-          recoverable: true,
-        });
-        return;
-      }
-
-      if (cancelled) return;
-
-      await loadUserDataAndDispatch();
-    };
 
     // Load actual user data from database APIs
     const loadUserData = async (): Promise<UserData> => {
@@ -586,6 +548,19 @@ export function LoadingOrchestrator({
         });
     };
 
+    const runPhase = async () => {
+      try {
+        await waitForApi();
+      } catch (err) {
+        if (!cancelled) dispatchApiNotReady(err);
+        return;
+      }
+
+      if (cancelled) return;
+
+      await loadUserDataAndDispatch();
+    };
+
     runPhase();
 
     return () => {
@@ -594,7 +569,7 @@ export function LoadingOrchestrator({
     // Note: We read state.user and state.platform for LOGIN_SUCCESS flow,
     // but those are set atomically with loadingPhase, so state.status and loadingPhase
     // are sufficient dependencies.
-  }, [state.status, loadingPhase, dispatch]);
+  }, [state.status, loadingPhase, dispatch, dispatchApiNotReady]);
 
   // ============================================
   // RENDER BASED ON STATE
