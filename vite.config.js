@@ -11,8 +11,8 @@ export default defineConfig({
     ...(process.env.SENTRY_AUTH_TOKEN ? [
       sentryVitePlugin({
         authToken: process.env.SENTRY_AUTH_TOKEN,
-        org: 'magic-audit',
-        project: 'magic-audit-electron',
+        org: 'magicaudit',
+        project: 'electron',
         sourcemaps: {
           filesToDeleteAfterUpload: ['**/*.js.map'], // Don't ship source maps
         },

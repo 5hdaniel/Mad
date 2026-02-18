@@ -7,6 +7,7 @@
 import { ipcMain, app, BrowserWindow } from "electron";
 import { autoUpdater } from "electron-updater";
 import log from "electron-log";
+import * as Sentry from "@sentry/electron/main";
 import logService from "../services/logService";
 
 // Track registration to prevent duplicate handlers
@@ -40,6 +41,7 @@ export function registerUpdaterHandlers(mainWindow: BrowserWindow): void {
       };
     } catch (error) {
       log.warn("Manual update check failed:", error);
+      Sentry.captureException(error, { tags: { component: "auto-updater", trigger: "manual-check" } });
       return {
         updateAvailable: false,
         currentVersion: app.getVersion(),
