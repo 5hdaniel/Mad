@@ -49,6 +49,7 @@ function ExportModal({
 
   const [contentType, setContentType] = useState("both"); // text, email, both
   const [exportFormat, setExportFormat] = useState("folder"); // folder, pdf, excel, csv, json, txt_eml
+  const [emailExportMode, setEmailExportMode] = useState<"thread" | "individual">("thread");
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exportProgress, setExportProgress] = useState<{
@@ -70,11 +71,15 @@ function ExportModal({
           const result = await window.api.preferences.get(userId);
           if (result.success && result.preferences) {
             const prefs = result.preferences as {
-              export?: { defaultFormat?: string };
+              export?: { defaultFormat?: string; emailExportMode?: string };
             };
             // Only use saved preference if it's an implemented format
             if (prefs.export?.defaultFormat && implementedFormats.includes(prefs.export.defaultFormat)) {
               setExportFormat(prefs.export.defaultFormat);
+            }
+            // Load email export mode preference
+            if (prefs.export?.emailExportMode === "thread" || prefs.export?.emailExportMode === "individual") {
+              setEmailExportMode(prefs.export.emailExportMode);
             }
           }
         } catch (error) {
@@ -141,12 +146,13 @@ function ExportModal({
         // Use folder export for comprehensive audit package
         // Note: Type cast needed due to type inference issue with window.d.ts
         const exportFolderFn = (window.api.transactions as unknown as {
-          exportFolder: (id: string, opts: { includeEmails: boolean; includeTexts: boolean; includeAttachments: boolean; startDate?: string; endDate?: string }) => Promise<{ success: boolean; path?: string; error?: string }>;
+          exportFolder: (id: string, opts: { includeEmails: boolean; includeTexts: boolean; includeAttachments: boolean; emailExportMode?: "thread" | "individual"; startDate?: string; endDate?: string }) => Promise<{ success: boolean; path?: string; error?: string }>;
         }).exportFolder;
         result = await exportFolderFn(transaction.id, {
           includeEmails: contentType === "email" || contentType === "both",
           includeTexts: contentType === "text" || contentType === "both",
           includeAttachments: true,
+          emailExportMode,
           startDate,
           endDate,
         });

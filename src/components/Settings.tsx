@@ -102,6 +102,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
     string | null
   >(null);
   const [exportFormat, setExportFormat] = useState<string>("pdf"); // Default export format
+  const [emailExportMode, setEmailExportMode] = useState<"thread" | "individual">("thread");
   const [scanLookbackMonths, setScanLookbackMonths] = useState<number>(9); // Default 9 months
   const [emailSyncLookbackMonths, setEmailSyncLookbackMonths] = useState<number>(3); // TASK-1966: Default 3 months (matches legacy 90-day behavior)
   const [autoSyncOnLogin, setAutoSyncOnLogin] = useState<boolean>(true); // Default auto-sync ON
@@ -205,6 +206,11 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         if (result.preferences.export?.defaultFormat) {
           setExportFormat(result.preferences.export.defaultFormat);
         }
+        // Load email export mode preference
+        const loadedEmailMode = (result.preferences.export as { emailExportMode?: string } | undefined)?.emailExportMode;
+        if (loadedEmailMode === "thread" || loadedEmailMode === "individual") {
+          setEmailExportMode(loadedEmailMode);
+        }
         // Load scan lookback preference - use type check for numbers
         const loadedLookback = result.preferences.scan?.lookbackMonths;
         if (typeof loadedLookback === "number" && loadedLookback > 0) {
@@ -267,6 +273,19 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         },
       });
       // Silently handle - preference will still be applied locally for this session
+    } catch {
+      // Silently handle - preference will still be applied locally for this session
+    }
+  };
+
+  const handleEmailExportModeChange = async (mode: "thread" | "individual"): Promise<void> => {
+    setEmailExportMode(mode);
+    try {
+      await window.api.preferences.update(userId, {
+        export: {
+          emailExportMode: mode,
+        },
+      });
     } catch {
       // Silently handle - preference will still be applied locally for this session
     }
@@ -1108,6 +1127,21 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                     <option value="csv">CSV</option>
                     <option value="json">JSON</option>
                     <option value="txt_eml">TXT + EML Files</option>
+                  </select>
+                </div>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <span className="text-sm text-gray-700">Email Export Mode</span>
+                    <p className="text-xs text-gray-500 mt-0.5">How emails are grouped in exported PDFs</p>
+                  </div>
+                  <select
+                    value={emailExportMode}
+                    onChange={(e) => handleEmailExportModeChange(e.target.value as "thread" | "individual")}
+                    disabled={loadingPreferences}
+                    className="text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="thread">Thread (one PDF per conversation)</option>
+                    <option value="individual">Individual (one PDF per email, quotes stripped)</option>
                   </select>
                 </div>
                 {/* TODO: Implement export location chooser with native folder picker */}
