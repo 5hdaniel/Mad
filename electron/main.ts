@@ -62,11 +62,16 @@ import {
 
 // Import handler registration functions
 import { registerAuthHandlers } from "./auth-handlers";
-import { registerTransactionHandlers, cleanupTransactionHandlers } from "./transaction-handlers";
+import { registerTransactionCrudHandlers } from "./handlers/transactionCrudHandlers";
+import { registerTransactionExportHandlers, cleanupTransactionHandlers } from "./handlers/transactionExportHandlers";
+import { registerEmailSyncHandlers } from "./handlers/emailSyncHandlers";
+import { registerAttachmentHandlers } from "./handlers/attachmentHandlers";
 import { registerContactHandlers } from "./contact-handlers";
 import { registerAddressHandlers } from "./address-handlers";
 import { registerFeedbackHandlers } from "./feedback-handlers";
-import { registerSystemHandlers } from "./system-handlers";
+import { registerSystemHandlers } from "./handlers/systemHandlers";
+import { registerDiagnosticHandlers } from "./handlers/diagnosticHandlers";
+import { registerUserSettingsHandlers } from "./handlers/userSettingsHandlers";
 import { registerPreferenceHandlers } from "./preference-handlers";
 import {
   registerDeviceHandlers,
@@ -883,11 +888,16 @@ app.whenReady().then(async () => {
 
   // Register existing handler modules
   registerAuthHandlers(mainWindow!);
-  registerTransactionHandlers(mainWindow!);
+  registerTransactionCrudHandlers(mainWindow!);
+  registerTransactionExportHandlers(mainWindow!);
+  registerEmailSyncHandlers(mainWindow!);
+  registerAttachmentHandlers(mainWindow!);
   registerContactHandlers(mainWindow!);
   registerAddressHandlers();
   registerFeedbackHandlers();
   registerSystemHandlers();
+  registerDiagnosticHandlers();
+  registerUserSettingsHandlers();
   registerPreferenceHandlers();
   registerDeviceHandlers(mainWindow!);
   registerBackupHandlers(mainWindow!);

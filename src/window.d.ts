@@ -1144,9 +1144,27 @@ interface MainAPI {
       contacts?: Array<Record<string, unknown>>;
       error?: string;
     }>;
-    getCommunications: (transactionId: string) => Promise<{
+    /**
+     * PERF: Lightweight overview - contacts only, no communications.
+     * Use this for initial load; fetch full details only when needed.
+     */
+    getOverview: (transactionId: string) => Promise<{
       success: boolean;
-      communications?: unknown[];
+      transaction?: Transaction & {
+        contact_assignments?: unknown[];
+      };
+      error?: string;
+    }>;
+    /**
+     * PERF: Filtered communications - only emails or only texts.
+     * Much faster than getDetails when transaction has many communications.
+     */
+    getCommunications: (transactionId: string, channelFilter?: "email" | "text") => Promise<{
+      success: boolean;
+      transaction?: Transaction & {
+        communications?: unknown[];
+        contact_assignments?: unknown[];
+      };
       error?: string;
     }>;
     getContacts: (transactionId: string) => Promise<{
@@ -1274,6 +1292,49 @@ interface MainAPI {
       error?: string;
     }>;
     /**
+     * Gets unlinked emails (not attached to any transaction)
+     * Supports server-side search with query, date range, and pagination (TASK-1993)
+     */
+    getUnlinkedEmails: (
+      userId: string,
+      options?: {
+        query?: string;
+        after?: string;
+        before?: string;
+        maxResults?: number;
+        skip?: number;
+        transactionId?: string;
+      },
+    ) => Promise<{
+      success: boolean;
+      emails?: Array<{
+        id: string;
+        subject: string | null;
+        sender: string | null;
+        sent_at: string | null;
+        body_preview?: string | null;
+        email_thread_id?: string | null;
+        has_attachments?: boolean;
+      }>;
+      error?: string;
+    }>;
+    /**
+     * Gets distinct contacts with unlinked message counts
+     */
+    getMessageContacts: (userId: string) => Promise<{
+      success: boolean;
+      contacts?: unknown[];
+      error?: string;
+    }>;
+    /**
+     * Gets unlinked messages for a specific contact
+     */
+    getMessagesByContact: (userId: string, contact: string) => Promise<{
+      success: boolean;
+      messages?: unknown[];
+      error?: string;
+    }>;
+    /**
      * Links messages to a transaction
      */
     linkMessages: (
@@ -1286,9 +1347,41 @@ interface MainAPI {
     /**
      * Unlinks messages from a transaction (sets transaction_id to null)
      */
-    unlinkMessages: (messageIds: string[]) => Promise<{
+    unlinkMessages: (messageIds: string[], transactionId?: string) => Promise<{
       success: boolean;
       error?: string;
+    }>;
+    /**
+     * Link emails to a transaction
+     */
+    linkEmails: (emailIds: string[], transactionId: string) => Promise<{
+      success: boolean;
+      linked?: number;
+      error?: string;
+    }>;
+    /**
+     * Auto-links text messages to a transaction based on assigned contacts
+     */
+    autoLinkTexts: (transactionId: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    /**
+     * Sync emails from provider (Gmail/Outlook) for a transaction.
+     * Fetches NEW emails from connected email provider based on
+     * contact email addresses, stores them, then runs auto-link.
+     */
+    syncAndFetchEmails: (transactionId: string) => Promise<{
+      success: boolean;
+      provider?: "gmail" | "outlook";
+      emailsFetched?: number;
+      emailsStored?: number;
+      totalEmailsLinked?: number;
+      totalMessagesLinked?: number;
+      totalAlreadyLinked?: number;
+      totalErrors?: number;
+      error?: string;
+      message?: string;
     }>;
     /**
      * Re-syncs auto-link communications for all contacts on a transaction.
@@ -1301,6 +1394,7 @@ interface MainAPI {
       totalMessagesLinked?: number;
       totalAlreadyLinked?: number;
       totalErrors?: number;
+      message?: string;
       error?: string;
     }>;
 
@@ -1400,6 +1494,15 @@ interface MainAPI {
     // ============================================
     // EMAIL ATTACHMENT METHODS (TASK-1776)
     // ============================================
+
+    /**
+     * Backfill missing email attachments (runs in background after login)
+     * Downloads attachments for emails that have has_attachments=true but no DB records
+     */
+    backfillAttachments: (userId: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
 
     /**
      * Get attachments for a specific email

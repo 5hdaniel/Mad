@@ -30,6 +30,7 @@ export interface TransactionContactResult extends TransactionContactData {
   contact_phone?: string;
   contact_company?: string;
   contact_title?: string;
+  contact_source?: string;
 }
 
 /**
@@ -171,7 +172,8 @@ export async function getTransactionContactsWithRoles(
         (SELECT phone_e164 FROM contact_phones WHERE contact_id = c.id LIMIT 1)
       ) as contact_phone,
       c.company as contact_company,
-      c.title as contact_title
+      c.title as contact_title,
+      c.source as contact_source
     FROM transaction_contacts tc
     LEFT JOIN contacts c ON tc.contact_id = c.id
     WHERE tc.transaction_id = ?
@@ -201,7 +203,8 @@ export async function getTransactionContactsByRole(
         (SELECT phone_e164 FROM contact_phones WHERE contact_id = c.id LIMIT 1)
       ) as contact_phone,
       c.company as contact_company,
-      c.title as contact_title
+      c.title as contact_title,
+      c.source as contact_source
     FROM transaction_contacts tc
     LEFT JOIN contacts c ON tc.contact_id = c.id
     WHERE tc.transaction_id = ? AND tc.specific_role = ?

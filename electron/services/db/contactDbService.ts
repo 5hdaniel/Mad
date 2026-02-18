@@ -1498,5 +1498,222 @@ export function getContactPhoneEntries(contactId: string): { id: string; phone: 
   return rows.map(r => ({ id: r.id, phone: r.phone, is_primary: r.is_primary === 1 }));
 }
 
+/**
+ * Sync contact email entries. Handles insert/update/delete to match incoming array.
+ * Enforces exactly one primary email.
+ */
+export function syncContactEmails(
+  contactId: string,
+  emails: Array<{ id?: string; email: string; is_primary: boolean }>,
+): void {
+  // Filter and normalize incoming emails
+  const incomingEmails = emails
+    .filter((e) => e.email && e.email.trim())
+    .map((e) => ({
+      id: e.id || undefined,
+      email: e.email.toLowerCase().trim(),
+      is_primary: !!e.is_primary,
+    }));
+
+  // Enforce exactly one primary
+  const hasPrimary = incomingEmails.some((e) => e.is_primary);
+  if (!hasPrimary && incomingEmails.length > 0) {
+    incomingEmails[0].is_primary = true;
+  }
+
+  // Get existing rows
+  const existingEmails = getContactEmailEntries(contactId);
+  const existingIds = new Set(existingEmails.map((e) => e.id));
+  const incomingIds = new Set(incomingEmails.filter((e) => e.id).map((e) => e.id));
+
+  // Delete rows not in incoming
+  for (const existing of existingEmails) {
+    if (!incomingIds.has(existing.id)) {
+      dbRun("DELETE FROM contact_emails WHERE id = ?", [existing.id]);
+    }
+  }
+
+  // Update existing / insert new
+  for (const entry of incomingEmails) {
+    if (entry.id && existingIds.has(entry.id)) {
+      dbRun(
+        "UPDATE contact_emails SET email = ?, is_primary = ? WHERE id = ?",
+        [entry.email, entry.is_primary ? 1 : 0, entry.id],
+      );
+    } else {
+      dbRun(
+        "INSERT INTO contact_emails (id, contact_id, email, is_primary, source, created_at) VALUES (?, ?, ?, ?, 'manual', CURRENT_TIMESTAMP)",
+        [crypto.randomUUID(), contactId, entry.email, entry.is_primary ? 1 : 0],
+      );
+    }
+  }
+}
+
+/**
+ * Set a single email as primary for a contact (legacy backward-compat path).
+ * If email doesn't exist in contact_emails, replaces all emails with this one.
+ */
+export function setContactPrimaryEmail(
+  contactId: string,
+  email: string,
+): void {
+  const newEmail = email?.trim();
+  if (!newEmail) return;
+
+  const normalizedEmail = newEmail.toLowerCase();
+  const targetExists = dbGet<{ id: string }>(
+    "SELECT id FROM contact_emails WHERE contact_id = ? AND LOWER(email) = LOWER(?)",
+    [contactId, normalizedEmail],
+  );
+
+  if (targetExists) {
+    dbRun("UPDATE contact_emails SET is_primary = 0 WHERE contact_id = ? AND id != ?", [contactId, targetExists.id]);
+    dbRun("UPDATE contact_emails SET is_primary = 1 WHERE id = ?", [targetExists.id]);
+  } else {
+    dbRun("DELETE FROM contact_emails WHERE contact_id = ?", [contactId]);
+    dbRun(
+      "INSERT INTO contact_emails (id, contact_id, email, is_primary, source) VALUES (?, ?, ?, 1, 'manual')",
+      [crypto.randomUUID(), contactId, normalizedEmail],
+    );
+  }
+}
+
+/**
+ * Sync contact phone entries. Handles insert/update/delete to match incoming array.
+ * Enforces exactly one primary phone.
+ */
+export function syncContactPhones(
+  contactId: string,
+  phones: Array<{ id?: string; phone: string; is_primary: boolean }>,
+): void {
+  // Filter and normalize incoming phones
+  const incomingPhones = phones
+    .filter((p) => p.phone && p.phone.trim())
+    .map((p) => ({
+      id: p.id || undefined,
+      phone: p.phone.trim(),
+      is_primary: !!p.is_primary,
+    }));
+
+  // Enforce exactly one primary
+  const hasPrimary = incomingPhones.some((p) => p.is_primary);
+  if (!hasPrimary && incomingPhones.length > 0) {
+    incomingPhones[0].is_primary = true;
+  }
+
+  // Get existing rows
+  const existingPhones = getContactPhoneEntries(contactId);
+  const existingIds = new Set(existingPhones.map((p) => p.id));
+  const incomingIds = new Set(incomingPhones.filter((p) => p.id).map((p) => p.id));
+
+  // Delete rows not in incoming
+  for (const existing of existingPhones) {
+    if (!incomingIds.has(existing.id)) {
+      dbRun("DELETE FROM contact_phones WHERE id = ?", [existing.id]);
+    }
+  }
+
+  // Update existing / insert new
+  for (const entry of incomingPhones) {
+    if (entry.id && existingIds.has(entry.id)) {
+      dbRun(
+        "UPDATE contact_phones SET phone_e164 = ?, is_primary = ? WHERE id = ?",
+        [entry.phone, entry.is_primary ? 1 : 0, entry.id],
+      );
+    } else {
+      dbRun(
+        "INSERT INTO contact_phones (id, contact_id, phone_e164, is_primary, source, created_at) VALUES (?, ?, ?, ?, 'manual', CURRENT_TIMESTAMP)",
+        [crypto.randomUUID(), contactId, entry.phone, entry.is_primary ? 1 : 0],
+      );
+    }
+  }
+}
+
+/**
+ * Set a single phone as primary for a contact (legacy backward-compat path).
+ * If phone doesn't exist in contact_phones, updates the top phone or inserts new.
+ */
+export function setContactPrimaryPhone(
+  contactId: string,
+  phone: string,
+): void {
+  const newPhone = phone?.trim();
+  if (!newPhone) return;
+
+  const targetPhoneExists = dbGet<{ id: string }>(
+    "SELECT id FROM contact_phones WHERE contact_id = ? AND phone_e164 = ?",
+    [contactId, newPhone],
+  );
+
+  if (targetPhoneExists) {
+    dbRun("UPDATE contact_phones SET is_primary = 0 WHERE contact_id = ? AND id != ?", [contactId, targetPhoneExists.id]);
+    dbRun("UPDATE contact_phones SET is_primary = 1 WHERE id = ?", [targetPhoneExists.id]);
+  } else {
+    const existingPhone = dbGet<{ id: string }>(
+      "SELECT id FROM contact_phones WHERE contact_id = ? ORDER BY is_primary DESC LIMIT 1",
+      [contactId],
+    );
+    if (existingPhone) {
+      dbRun("UPDATE contact_phones SET phone_e164 = ?, is_primary = 1 WHERE id = ?", [newPhone, existingPhone.id]);
+    } else {
+      dbRun(
+        "INSERT INTO contact_phones (id, contact_id, phone_e164, is_primary, source) VALUES (?, ?, ?, 1, 'manual')",
+        [crypto.randomUUID(), contactId, newPhone],
+      );
+    }
+  }
+}
+
+// ============================================
+// CONTACT EMAIL QUERY HELPERS (TASK-2000)
+// Extracted from emailSyncHandlers.ts raw SQL
+// ============================================
+
+/**
+ * Get all distinct email addresses for contacts assigned to a transaction.
+ * Used by email sync to filter provider searches by relevant contacts.
+ */
+export function getContactEmailsForTransaction(transactionId: string): string[] {
+  const rows = dbAll<{ email: string }>(
+    `SELECT DISTINCT LOWER(ce.email) as email
+     FROM transaction_contacts tc
+     JOIN contact_emails ce ON tc.contact_id = ce.contact_id
+     WHERE tc.transaction_id = ?`,
+    [transactionId],
+  );
+  return rows.map((r) => r.email);
+}
+
+/**
+ * Get email addresses for a single contact (by contact ID).
+ * Used during email sync to collect per-contact emails.
+ */
+export function getEmailsByContactId(contactId: string): string[] {
+  const rows = dbAll<{ email: string }>(
+    "SELECT email FROM contact_emails WHERE contact_id = ?",
+    [contactId],
+  );
+  return rows.map((r) => r.email);
+}
+
+/**
+ * Resolve a search query to matching contact email addresses.
+ * Searches display_name, email, company, and title fields.
+ * Used to translate user search terms into email-based provider filters.
+ */
+export function resolveContactEmailsByQuery(userId: string, query: string): string[] {
+  const queryLower = query.toLowerCase().trim();
+  const rows = dbAll<{ email: string }>(
+    `SELECT DISTINCT LOWER(ce.email) as email
+     FROM contacts c
+     JOIN contact_emails ce ON c.id = ce.contact_id
+     WHERE c.user_id = ?
+       AND (LOWER(c.display_name) LIKE ? OR LOWER(ce.email) LIKE ?
+            OR LOWER(c.company) LIKE ? OR LOWER(c.title) LIKE ?)`,
+    [userId, `%${queryLower}%`, `%${queryLower}%`, `%${queryLower}%`, `%${queryLower}%`],
+  );
+  return rows.map((r) => r.email);
+}
+
 // Export types for consumers
 export type { ContactWithActivity, TransactionWithRoles };

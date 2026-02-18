@@ -175,8 +175,7 @@ export function TransactionMessagesTab({
       if (phones.length === 0) return;
 
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const result = await (window.api.contacts as any).getNamesByPhones(phones);
+        const result = await window.api.contacts.getNamesByPhones(phones);
 
         if (result.success && result.names) {
           // Build a lookup map with both original and normalized phone keys
@@ -242,8 +241,7 @@ export function TransactionMessagesTab({
 
       const messageIds = threadMessages.map((m) => m.id);
       // TASK-1116: Pass transactionId for thread-based unlinking
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (window.api.transactions as any).unlinkMessages(messageIds, transactionId) as { success: boolean; error?: string };
+      const result = await window.api.transactions.unlinkMessages(messageIds, transactionId);
 
       if (result.success) {
         onShowSuccess?.("Messages removed from transaction");
