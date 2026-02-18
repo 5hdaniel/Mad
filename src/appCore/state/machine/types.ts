@@ -114,6 +114,7 @@ export interface AppError {
  * Error codes for different failure scenarios.
  */
 export type AppErrorCode =
+  | "API_NOT_READY" // Preload bridge not available (race condition)
   | "STORAGE_CHECK_FAILED" // Failed to check secure storage
   | "DB_INIT_FAILED" // Failed to initialize database
   | "AUTH_FAILED" // Failed to authenticate user
