@@ -621,22 +621,43 @@ class FolderExportService {
 
   /**
    * Strip quoted content from HTML email bodies.
-   * Removes Gmail blockquotes, Outlook "Original Message" dividers, and "On ... wrote:" headers.
+   * Handles Outlook (Graph API), Gmail, and generic email reply patterns.
    */
   private stripHtmlQuotedContent(html: string): string {
     let result = html;
-    // Remove Gmail-style quoted blocks: <div class="gmail_quote">...</div>
-    result = result.replace(/<div[^>]*class="gmail_quote"[^>]*>[\s\S]*$/gi, "");
-    // Remove <blockquote class="gmail_quote">...</blockquote>
-    result = result.replace(/<blockquote[^>]*class="gmail_quote"[^>]*>[\s\S]*?<\/blockquote>/gi, "");
-    // Remove generic <blockquote> that likely contains quoted replies
-    result = result.replace(/<blockquote[^>]*>[\s\S]*?<\/blockquote>/gi, "");
-    // Remove Outlook-style "-----Original Message-----" and everything after
+
+    // --- Outlook / Microsoft Graph patterns ---
+    // Outlook mobile separator line + <hr> + divRplyFwdMsg (entire quoted block)
+    result = result.replace(/<div[^>]*id=["']ms-outlook-mobile-body-separator-line["'][^>]*>[\s\S]*$/gi, "");
+    // Outlook reply divider: <hr tabindex="-1" ...> followed by <div id="divRplyFwdMsg">
+    result = result.replace(/<hr[^>]*tabindex=["']-1["'][^>]*>[\s\S]*$/gi, "");
+    // Outlook reply divider: <div id="divRplyFwdMsg"> or <div id="x_divRplyFwdMsg">
+    result = result.replace(/<div[^>]*id=["'](?:x_)?divRplyFwdMsg["'][^>]*>[\s\S]*$/gi, "");
+    // Outlook separator: <hr> with border-top style
+    result = result.replace(/<hr[^>]*style=["'][^"']*border-top[^"']*["'][^>]*>[\s\S]*$/gi, "");
+    // Outlook "From:" block that starts quoted section
+    result = result.replace(/<div[^>]*style=["'][^"']*border-top[^"']*["'][^>]*>[\s\S]*$/gi, "");
+
+    // --- Proton Mail patterns ---
+    // Proton Mail wraps quotes in <div class="protonmail_quote">...<blockquote class="protonmail_quote">
+    result = result.replace(/<div[^>]*class=["'][^"']*protonmail_quote[^"']*["'][^>]*>[\s\S]*$/gi, "");
+
+    // --- Gmail patterns ---
+    // Gmail quoted blocks: <div class="gmail_quote">...</div> (greedy to end — quote is always last)
+    result = result.replace(/<div[^>]*class=["'][^"']*gmail_quote[^"']*["'][^>]*>[\s\S]*$/gi, "");
+    // Gmail blockquotes: <blockquote class="gmail_quote">
+    result = result.replace(/<blockquote[^>]*class=["'][^"']*gmail_quote[^"']*["'][^>]*>[\s\S]*?<\/blockquote>/gi, "");
+
+    // --- Generic patterns ---
+    // Generic <blockquote> with type="cite" (used by many clients for quoted replies)
+    result = result.replace(/<blockquote[^>]*type=["']cite["'][^>]*>[\s\S]*?<\/blockquote>/gi, "");
+    // "-----Original Message-----" text (Outlook plain-style within HTML)
     result = result.replace(/<div[^>]*>-{3,}\s*Original Message\s*-{3,}[\s\S]*$/gi, "");
     result = result.replace(/-{3,}\s*Original Message\s*-{3,}[\s\S]*$/gi, "");
-    // Remove "On [date] ... wrote:" lines (common in replies)
+    // "On [date] ... wrote:" lines (Gmail/Apple Mail reply headers)
     result = result.replace(/<div[^>]*>On\s.{10,80}\s+wrote:\s*<\/div>/gi, "");
     result = result.replace(/<p[^>]*>On\s.{10,80}\s+wrote:\s*<\/p>/gi, "");
+
     return result.trim();
   }
 
