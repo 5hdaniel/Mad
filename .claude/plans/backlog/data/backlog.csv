@@ -79,8 +79,8 @@ BACKLOG-077,AI MVP Phase 4 - Feedback Loop,service,Medium,Completed,SPRINT-006,~
 BACKLOG-078,AI MVP Phase 5 - UI Enhancements,ui,Medium,Completed,SPRINT-006,~40K,-,[BACKLOG-078.md](BACKLOG-078.md),2025-12-16,,
 BACKLOG-079,AI MVP Phase 6 - Integration Testing,test,Medium,Completed,SPRINT-006,~40K,-,[BACKLOG-079.md](BACKLOG-079.md),2025-12-16,,
 BACKLOG-081,Consolidate AI Consent into T&C,feature,Medium,Pending,-,-,-,[BACKLOG-081.md](BACKLOG-081.md),2025-12-20,,
-BACKLOG-082,Consolidate Database Connection Systems,feature,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-082.md](items/BACKLOG-082.md)
-BACKLOG-083,Fix schema_version Migration Warning,feature,Medium,Pending,-,-,-,-,2026-01-23,,[BACKLOG-083.md](items/BACKLOG-083.md)
+BACKLOG-082,Consolidate Database Connection Systems,feature,Medium,Completed,-,-,-,Main DB consolidated into databaseService singleton; external system DBs are separate by design,2026-01-23,2026-02-17,[BACKLOG-082.md](items/BACKLOG-082.md)
+BACKLOG-083,Fix schema_version Migration Warning,feature,Medium,Completed,-,-,-,schema_version table handled with IF NOT EXISTS guards + explicit existence checks in BACKLOG-592 consolidation,2026-01-23,2026-02-17,[BACKLOG-083.md](items/BACKLOG-083.md)
 BACKLOG-084,Thread-Based Transaction Detection,service,High,Completed,SPRINT-007,-,-,[BACKLOG-084.md](BACKLOG-084.md),2025-12-20,,
 BACKLOG-085,Test Thread-Based Detection Accuracy,test,High,Completed,SPRINT-007,-,-,[BACKLOG-085.md](BACKLOG-085.md),2025-12-20,,
 BACKLOG-086,Local ML Model with Hybrid Training,service,Medium,Pending,-,-,-,[BACKLOG-086.md](BACKLOG-086.md),2025-12-20,,
@@ -261,7 +261,7 @@ BACKLOG-259,Fix Memory Leak in useAutoRefresh Event Listeners,performance,High,P
 BACKLOG-260,Implement Virtual Scrolling for Large Lists,performance,High,Pending,-,~60K,-,Transaction/message lists need virtualization,2026-01-17,,-
 BACKLOG-261,Unify Logging Architecture,refactor,High,Pending,-,~70K,-,280 structured vs 87 console.log,2026-01-17,,-
 BACKLOG-262,Add Pre-Deployment Validation,infra,High,Pending,-,~40K,-,No validation before deploy,2026-01-17,,-
-BACKLOG-263,Add Auto-Updater Metrics and Failure Tracking,infra,High,Pending,-,~35K,-,Silent update failures possible,2026-01-17,,-
+BACKLOG-263,Add Auto-Updater Metrics and Failure Tracking,infra,High,Pending,-,~35K,-,Use Sentry (already integrated TASK-1967) to capture auto-updater events. DSN commented out in dev — uncomment to test. Silent update failures still untracked.,2026-01-17,,-
 BACKLOG-264,Document LLM Service API,docs,High,Pending,-,~40K,-,Complex retry/batch logic undocumented,2026-01-17,,-
 BACKLOG-265,Document Complex Algorithms,docs,High,Pending,-,~50K,-,"messageMatchingService, autoLinkService",2026-01-17,,-
 BACKLOG-266,Consolidate Duplicate Utility Functions,refactor,Medium,Pending,-,~35K,-,"formatCurrency, formatDate duplicates",2026-01-17,,-

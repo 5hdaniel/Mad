@@ -759,6 +759,7 @@ app.whenReady().then(async () => {
 
   autoUpdater.on("update-available", (info) => {
     log.info("Update available:", info);
+    Sentry.addBreadcrumb({ category: "auto-updater", message: `Update available: ${info.version}`, level: "info" });
     if (mainWindow) {
       mainWindow.webContents.send("update-available", info);
     }
@@ -770,6 +771,7 @@ app.whenReady().then(async () => {
 
   autoUpdater.on("error", (err) => {
     log.error("Error in auto-updater:", err);
+    Sentry.captureException(err, { tags: { component: "auto-updater" } });
   });
 
   autoUpdater.on("download-progress", (progressObj) => {
@@ -782,6 +784,7 @@ app.whenReady().then(async () => {
 
   autoUpdater.on("update-downloaded", (info) => {
     log.info("Update downloaded:", info);
+    Sentry.addBreadcrumb({ category: "auto-updater", message: `Update downloaded: ${info.version}`, level: "info" });
     if (mainWindow) {
       mainWindow.webContents.send("update-downloaded", info);
     }
