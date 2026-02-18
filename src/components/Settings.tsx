@@ -286,8 +286,8 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
           emailExportMode: mode,
         },
       });
-    } catch {
-      // Silently handle - preference will still be applied locally for this session
+    } catch (err) {
+      console.error("Failed to save email export mode preference:", err);
     }
   };
 

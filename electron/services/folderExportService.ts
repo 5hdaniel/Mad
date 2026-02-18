@@ -620,8 +620,46 @@ class FolderExportService {
   }
 
   /**
+   * Format a date/time for display in exported emails.
+   */
+  private formatEmailDateTime(dateString: string | Date): string {
+    if (!dateString) return "N/A";
+    const date = typeof dateString === "string" ? new Date(dateString) : dateString;
+    return date.toLocaleString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  /**
+   * Detect whether a string is HTML content (more robust than simple `<` check).
+   */
+  private isHtmlContent(body: string | null | undefined): boolean {
+    if (!body) return false;
+    return /<(?:html|div|p|br|table|span|head|body|style|meta|img|a|ul|ol|li|h[1-6])\b/i.test(body);
+  }
+
+  /**
+   * Strip "Re:", "Fwd:", "FW:" prefixes from email subjects for cleaner thread headers.
+   */
+  private stripSubjectPrefixes(subject: string): string {
+    return subject.replace(/^(?:(?:Re|Fwd|FW)\s*:\s*)+/i, "").trim();
+  }
+
+  /**
    * Strip quoted content from HTML email bodies.
-   * Handles Outlook (Graph API), Gmail, and generic email reply patterns.
+   * Handles Outlook (Graph API), Gmail, Proton Mail, and generic email reply patterns.
+   *
+   * TECH DEBT: The caller injects raw HTML body content into PDF templates without
+   * sanitization. This is a known XSS risk — malicious email HTML could contain
+   * <script>, <iframe>, or event handlers. Since PDFs are rendered in a temporary
+   * BrowserWindow, this could execute code in Electron's context. A proper HTML
+   * sanitizer (e.g. sanitize-html) should be applied before injection.
+   * See backlog for tracking.
    */
   private stripHtmlQuotedContent(html: string): string {
     let result = html;
@@ -764,24 +802,11 @@ class FolderExportService {
    * Quotes are stripped from each message since the full thread provides context.
    */
   private generateEmailThreadHTML(emails: Communication[]): string {
-    const formatDateTime = (dateString: string | Date): string => {
-      if (!dateString) return "N/A";
-      const date = typeof dateString === "string" ? new Date(dateString) : dateString;
-      return date.toLocaleString("en-US", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    };
-
     const messagesHtml = emails.map((email, idx) => {
       const rawBody = email.body || email.body_plain || "(No content)";
-      const isHtmlBody = email.body && email.body.includes("<");
+      const isHtmlBody = this.isHtmlContent(email.body);
       const bodyContent = rawBody !== "(No content)"
-        ? this.stripQuotedContent(rawBody, !!isHtmlBody)
+        ? this.stripQuotedContent(rawBody, isHtmlBody)
         : rawBody;
 
       const attachments = email.id ? this.getAttachmentsForEmail(email.id) : [];
@@ -799,7 +824,7 @@ class FolderExportService {
           </div>
           ${email.cc ? `<div class="thread-msg-meta"><span class="label">CC:</span> ${this.escapeHtml(email.cc)}</div>` : ""}
           <div class="thread-msg-meta">
-            <span class="label">Date:</span> ${formatDateTime(email.sent_at as string)}
+            <span class="label">Date:</span> ${this.formatEmailDateTime(email.sent_at as string)}
           </div>
         </div>
         <div class="thread-msg-body ${!isHtmlBody ? "email-body-text" : ""}">
@@ -856,7 +881,7 @@ class FolderExportService {
 </head>
 <body>
   <div class="thread-header">
-    <h1>${this.escapeHtml(emails[0].subject || "(No Subject)")}</h1>
+    <h1>${this.escapeHtml(this.stripSubjectPrefixes(emails[0].subject || "(No Subject)"))}</h1>
     <div class="meta">${emails.length} message${emails.length !== 1 ? "s" : ""} in thread</div>
   </div>
   ${messagesHtml}
@@ -874,19 +899,6 @@ class FolderExportService {
     attachments: { filename: string; file_size_bytes: number | null }[] = [],
     stripQuotes: boolean = false
   ): string {
-    const formatDateTime = (dateString: string | Date): string => {
-      if (!dateString) return "N/A";
-      const date = typeof dateString === "string" ? new Date(dateString) : dateString;
-      return date.toLocaleString("en-US", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    };
-
     // TASK-1780: Format file size for display
     const formatFileSize = (bytes: number | null): string => {
       if (bytes === null || bytes === 0) return "";
@@ -897,9 +909,9 @@ class FolderExportService {
 
     // Use HTML body if available, otherwise use plain text
     const rawBody = email.body || email.body_plain || "(No content)";
-    const isHtmlBody = email.body && email.body.includes("<");
+    const isHtmlBody = this.isHtmlContent(email.body);
     const bodyContent = stripQuotes && rawBody !== "(No content)"
-      ? this.stripQuotedContent(rawBody, !!isHtmlBody)
+      ? this.stripQuotedContent(rawBody, isHtmlBody)
       : rawBody;
 
     return `
@@ -986,7 +998,7 @@ class FolderExportService {
       <div><span class="label">From:</span> ${this.escapeHtml(email.sender || "Unknown")}</div>
       <div><span class="label">To:</span> ${this.escapeHtml(email.recipients || "Unknown")}</div>
       ${email.cc ? `<div><span class="label">CC:</span> ${this.escapeHtml(email.cc)}</div>` : ""}
-      <div><span class="label">Date:</span> ${formatDateTime(email.sent_at as string)}</div>
+      <div><span class="label">Date:</span> ${this.formatEmailDateTime(email.sent_at as string)}</div>
     </div>
   </div>
 
@@ -1133,13 +1145,30 @@ class FolderExportService {
   }
 
   /**
-   * Get thread key for grouping messages (uses thread_id if available)
+   * Get thread key for grouping messages (uses thread_id if available).
+   * For emails without thread_id, falls back to normalized subject + sorted participants.
+   * For texts without thread_id, falls back to phone-number-based participant matching.
    */
   private getThreadKey(msg: Communication): string {
     // Use thread_id if available
     if (msg.thread_id) return msg.thread_id;
 
-    // Fallback: compute from participants
+    // Email-specific fallback: use normalized subject + sorted sender/recipients
+    if (msg.communication_type === "email") {
+      const subject = msg.subject
+        ? msg.subject.replace(/^(?:(?:Re|Fwd|FW)\s*:\s*)+/i, "").trim().toLowerCase()
+        : "";
+      const participants = [msg.sender, msg.recipients]
+        .filter(Boolean)
+        .map(s => (s || "").toLowerCase().trim())
+        .sort()
+        .join("-");
+      if (subject || participants) {
+        return `email-thread-${subject}-${participants}`;
+      }
+    }
+
+    // Text message fallback: compute from participants using phone normalization
     try {
       if (msg.participants) {
         const parsed =
@@ -2469,7 +2498,8 @@ class FolderExportService {
     transaction: Transaction,
     communications: Communication[],
     outputPath: string,
-    summaryOnly: boolean = false
+    summaryOnly: boolean = false,
+    emailExportMode: "thread" | "individual" = "thread"
   ): Promise<string> {
     // Create temp folder for individual PDFs
     const tempDir = app.getPath("temp");
@@ -2530,8 +2560,14 @@ class FolderExportService {
 
       // For summaryOnly mode, skip full content PDFs (emails and texts)
       if (!summaryOnly) {
-        // Generate email PDFs — always use thread mode for combined PDF
-        await this.exportEmailThreads(emails, emailsPath);
+        // Generate email PDFs — respect user's export mode preference
+        if (emailExportMode === "individual") {
+          for (let i = 0; i < emails.length; i++) {
+            await this.exportEmailToPDF(emails[i], i + 1, emailsPath, true);
+          }
+        } else {
+          await this.exportEmailThreads(emails, emailsPath);
+        }
 
         // Generate text conversation PDFs
         if (texts.length > 0) {
