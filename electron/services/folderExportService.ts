@@ -671,10 +671,11 @@ class FolderExportService {
     result = result.replace(/<hr[^>]*tabindex=["']-1["'][^>]*>[\s\S]*$/gi, "");
     // Outlook reply divider: <div id="divRplyFwdMsg"> or <div id="x_divRplyFwdMsg">
     result = result.replace(/<div[^>]*id=["'](?:x_)?divRplyFwdMsg["'][^>]*>[\s\S]*$/gi, "");
-    // Outlook separator: <hr> with border-top style
-    result = result.replace(/<hr[^>]*style=["'][^"']*border-top[^"']*["'][^>]*>[\s\S]*$/gi, "");
-    // Outlook "From:" block that starts quoted section
-    result = result.replace(/<div[^>]*style=["'][^"']*border-top[^"']*["'][^>]*>[\s\S]*$/gi, "");
+    // Outlook separator: <hr> with display:inline-block (Outlook-specific pattern)
+    result = result.replace(/<hr[^>]*style=["'][^"']*display:\s*inline-block[^"']*border-top[^"']*["'][^>]*>[\s\S]*$/gi, "");
+    result = result.replace(/<hr[^>]*style=["'][^"']*border-top[^"']*display:\s*inline-block[^"']*["'][^>]*>[\s\S]*$/gi, "");
+    // Outlook "From:" block: uses border:none + border-top (Outlook's specific separator pattern)
+    result = result.replace(/<div[^>]*style=["'][^"']*border:\s*none[^"']*border-top[^"']*["'][^>]*>[\s\S]*$/gi, "");
 
     // --- Proton Mail patterns ---
     // Proton Mail wraps quotes in <div class="protonmail_quote">...<blockquote class="protonmail_quote">

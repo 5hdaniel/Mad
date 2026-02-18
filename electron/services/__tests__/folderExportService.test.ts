@@ -693,7 +693,7 @@ describe("FolderExportService", () => {
       expect(result).not.toContain("Old content");
     });
 
-    it("should strip Outlook border-top style hr", () => {
+    it("should strip Outlook border-top style hr with display:inline-block", () => {
       const html = `<p>Reply</p><hr style="display:inline-block;width:98%;border-top:1px solid #ccc"><div>From: sender</div>`;
       const result = strip(html);
       expect(result).toContain("Reply");
@@ -755,11 +755,18 @@ describe("FolderExportService", () => {
       expect(result).not.toContain("Everything is quoted");
     });
 
-    it("should handle border-top style div (Outlook From block)", () => {
-      const html = `<p>Reply text</p><div style="padding:10px;border-top:1px solid #ccc"><b>From:</b> sender@example.com</div>`;
+    it("should strip Outlook border:none + border-top div pattern", () => {
+      const html = `<p>Reply text</p><div style="border:none;border-top:solid #E1E1E1 1.0pt;padding:3.0pt 0in 0in 0in"><p><b>From:</b> sender@example.com</p></div>`;
       const result = strip(html);
       expect(result).toContain("Reply text");
       expect(result).not.toContain("sender@example.com");
+    });
+
+    it("should NOT strip legitimate div with decorative border-top", () => {
+      const html = `<div>Content</div><div style="border-top:2px solid red;padding:10px">This is a styled section, not a quote</div>`;
+      const result = strip(html);
+      expect(result).toContain("Content");
+      expect(result).toContain("This is a styled section, not a quote");
     });
   });
 
