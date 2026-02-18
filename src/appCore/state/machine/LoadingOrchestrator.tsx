@@ -58,7 +58,7 @@ export function LoadingOrchestrator({
         type: "ERROR",
         error: {
           code: "API_NOT_READY",
-          message: (err as Error).message,
+          message: err instanceof Error ? err.message : String(err),
         },
         recoverable: true,
       });
@@ -503,7 +503,7 @@ export function LoadingOrchestrator({
     };
 
     const loadUserDataAndDispatch = () => {
-      loadUserData()
+      return loadUserData()
         .then((userData) => {
           if (cancelled) return;
 
