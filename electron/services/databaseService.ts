@@ -331,6 +331,26 @@ class DatabaseService implements IDatabaseService {
       });
       throw error;
     }
+
+    // Backup retention: keep last 3, delete older (SR review gap #2)
+    if (this.dbPath) {
+      try {
+        const dbDir = path.dirname(this.dbPath);
+        const dbName = path.basename(this.dbPath, ".db");
+        const backupFiles = fs
+          .readdirSync(dbDir)
+          .filter((f) => f.startsWith(`${dbName}-backup-`) && f.endsWith(".db"))
+          .sort()
+          .reverse(); // newest first (timestamp-based names sort chronologically)
+
+        for (const old of backupFiles.slice(3)) {
+          fs.unlinkSync(path.join(dbDir, old));
+          console.log(`[DB] Removed old backup: ${old}`);
+        }
+      } catch {
+        // Cleanup failures must not affect the app
+      }
+    }
   }
 
   /**
@@ -386,10 +406,15 @@ class DatabaseService implements IDatabaseService {
           `Running migration ${m.version}: ${m.description}`,
           "DatabaseService"
         );
-        m.migrate(db);
-        db.exec(
-          `UPDATE schema_version SET version = ${m.version}, updated_at = CURRENT_TIMESTAMP WHERE id = 1`
-        );
+        // Wrap migration + version bump in a transaction so partial failures
+        // don't leave the DB in a half-migrated state (SR review gap #1)
+        const runInTransaction = db.transaction(() => {
+          m.migrate(db);
+          db.exec(
+            `UPDATE schema_version SET version = ${m.version}, updated_at = CURRENT_TIMESTAMP WHERE id = 1`
+          );
+        });
+        runInTransaction();
         await logService.info(
           `Migration ${m.version} complete: ${m.description}`,
           "DatabaseService"
