@@ -746,21 +746,7 @@ class DatabaseService implements IDatabaseService {
       await logService.info("BACKLOG-426: Added license type columns to users_local", "DatabaseService");
     }
 
-    // Migration 17: Backfill known missing contact emails
-    // One-time fix for contacts imported before junction table was properly populated
-    const danielHaimId = '33b96e25-d88b-418d-a1ac-1b46ca960ae7';
-    const danielHaimEmailExists = db.prepare(
-      "SELECT 1 FROM contact_emails WHERE contact_id = ? AND email = 'hd@berkeley.edu'"
-    ).get(danielHaimId);
-    if (!danielHaimEmailExists) {
-      // Check if contact exists first
-      const contactExists = db.prepare("SELECT 1 FROM contacts WHERE id = ?").get(danielHaimId);
-      if (contactExists) {
-        runSafe(`INSERT OR IGNORE INTO contact_emails (id, contact_id, email, is_primary, source, created_at)
-                 VALUES ('${crypto.randomUUID()}', '${danielHaimId}', 'hd@berkeley.edu', 1, 'migration', CURRENT_TIMESTAMP)`);
-        logService.info("Migration 17: Backfilled email for Daniel Haim contact", "DatabaseService");
-      }
-    }
+    // Migration 17: Removed (BACKLOG-592 — was a one-time hardcoded backfill)
 
     // Migration 18: Performance indexes to reduce UI freezes during queries
     // BACKLOG-497: Quick win before full worker thread refactor
