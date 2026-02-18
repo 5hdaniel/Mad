@@ -491,3 +491,75 @@ describe("LoadingOrchestrator phase transitions", () => {
     expect(mockApi.system.initializeSecureStorage).not.toHaveBeenCalled();
   });
 });
+
+// ============================================
+// PRELOAD BRIDGE RACE CONDITION TESTS (TASK-2005)
+// ============================================
+
+describe("LoadingOrchestrator preload bridge race condition", () => {
+  it("does not throw when window.api is undefined at mount time", async () => {
+    // Remove window.api to simulate the race condition
+    const savedApi = window.api;
+    delete (window as unknown as { api?: typeof mockApi }).api;
+
+    // Should not throw - the waitForApi guard prevents the TypeError
+    expect(() => {
+      render(
+        <TestWrapper>
+          <div data-testid="children">App Content</div>
+        </TestWrapper>
+      );
+    }).not.toThrow();
+
+    // Restore window.api so waitForApi resolves and the component
+    // can proceed (prevents act() warnings from dangling promises)
+    (window as unknown as { api: typeof mockApi }).api = savedApi;
+
+    // Wait for the component to process the restored API
+    await waitFor(
+      () => {
+        // The loading screen should still be visible (or children if it transitioned)
+        expect(document.body.querySelector("[role='status']") ||
+          document.body.querySelector("[data-testid='children']")).toBeTruthy();
+      },
+      { timeout: 2000 }
+    );
+  });
+
+  it("recovers when window.api becomes available after initial undefined", async () => {
+    // Remove window.api to simulate the race condition
+    const savedApi = window.api;
+    delete (window as unknown as { api?: typeof mockApi }).api;
+
+    // Setup: when API becomes available, storage check succeeds
+    mockApi.system.hasEncryptionKeyStore.mockResolvedValue({
+      success: true,
+      hasKeyStore: true,
+    });
+    // Stay at initializing-db phase
+    mockApi.system.initializeSecureStorage.mockReturnValue(new Promise(() => {}));
+
+    render(
+      <TestWrapper>
+        <div data-testid="children">App Content</div>
+      </TestWrapper>
+    );
+
+    // Initially showing loading screen (waitForApi is polling)
+    expect(screen.getByText("Checking secure storage...")).toBeInTheDocument();
+
+    // Restore window.api after a short delay (simulates preload finishing)
+    await new Promise((r) => setTimeout(r, 60));
+    (window as unknown as { api: typeof mockApi }).api = savedApi;
+
+    // Should eventually transition to the next phase after API becomes available
+    await waitFor(
+      () => {
+        expect(
+          screen.getByText("Waiting for Keychain access...")
+        ).toBeInTheDocument();
+      },
+      { timeout: 3000 }
+    );
+  });
+});
