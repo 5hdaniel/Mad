@@ -13,9 +13,9 @@ Make the codebase presentable for external due diligence review. Remove dead cod
 
 ## Sprint Narrative
 
-A software due diligence assessment identified 12 issues (BACKLOG-721 through BACKLOG-732) spanning dead code, non-blocking CI steps, low coverage thresholds, and minor hygiene gaps. This sprint addresses the 9 items that have the highest signal-to-effort ratio -- the things a technical reviewer would flag within the first hour of examining the repo.
+A software due diligence assessment identified 19 issues (BACKLOG-721 through BACKLOG-739) spanning dead code, non-blocking CI steps, low coverage thresholds, security gaps, and minor hygiene issues. This sprint addresses the 9 items that have the highest signal-to-effort ratio -- the things a technical reviewer would flag within the first hour of examining the repo.
 
-The Electron v35-to-v40 upgrade (BACKLOG-721), session.json encryption (BACKLOG-722), and the imessage-parser vulnerability chain (BACKLOG-723) are deferred to dedicated sprints due to their size, risk profile, or requiring focused testing.
+The remaining 10 items (Electron upgrade, session encryption, imessage-parser replacement, Google OAuth PKCE, source map leakage, auto-generated window.d.ts, ESLint TS plugin, react-hooks exhaustive-deps, oversized service files, Supabase service_role key) are deferred to future sprints due to their size, risk profile, or requiring focused testing.
 
 ---
 
@@ -33,7 +33,7 @@ The Electron v35-to-v40 upgrade (BACKLOG-721), session.json encryption (BACKLOG-
 | BACKLOG-729 | Add Electron backend tests to CI pipeline | TASK-2010 | 2 | Pending |
 | BACKLOG-730 | Raise CI test coverage threshold to 40% | TASK-2011 | 2 | Pending |
 
-**Total Estimated Tokens:** ~55K (engineering ~35K + SR review ~20K)
+**Total Estimated Tokens:** ~58K (engineering ~38K + SR review ~20K)
 
 ## Out-of-Scope / Deferred
 
@@ -58,23 +58,25 @@ Phase 1: Code Cleanup
 |   4. Consolidate ~20 duplicate backlog items
 |
 +-- TASK-2007: Remove deprecated components (BACKLOG-725)             [PARALLEL]
-|   1. Remove 6 deprecated component imports from AppRouter.tsx
-|   2. Remove WelcomeTerms import from AppModals.tsx
-|   3. Delete 6 deprecated component files
-|   4. Delete associated test files
-|   5. Verify no other imports remain
+|   1. Remove 4 deprecated component imports from AppRouter.tsx
+|   2. Delete 5 deprecated component files (NOT WelcomeTerms — it is active)
+|   3. Delete 3 associated test files
+|   4. Verify no other imports remain
+|   NOTE: WelcomeTerms is NOT deprecated. AppModals.tsx is NOT touched.
+|         Handler cleanup in flow hooks deferred to follow-up.
 |
 +-- TASK-2008: Replace console.log with logService (BACKLOG-726)      [PARALLEL]
 |   1. Replace 77 console.log calls in 17 src/ files
-|   2. Replace 6 console.log calls in 5 electron/ production files
-|   3. Skip test files (console.log in tests is acceptable)
+|   2. Replace 3 console.log calls in 2 electron/ production files
+|   3. Skip test files and JSDoc comments (not executable code)
+|   4. Also convert console.error/warn in files already being modified
 |
 +-- CI gate: type-check, lint, test all pass
 ```
 
 **Parallelism justification:**
 - TASK-2006 touches: backlog CSV, .gitignore, electron/schema.sql -- no overlap with 2007/2008
-- TASK-2007 touches: AppRouter.tsx, AppModals.tsx, 6 component files -- no overlap with 2008
+- TASK-2007 touches: AppRouter.tsx, 5 component files -- no overlap with 2008 (AppModals.tsx NOT touched)
 - TASK-2008 touches: 22 production files (hooks, services, state) -- no overlap with AppRouter/AppModals since those have no console.log calls
 
 ### Phase 2: CI Hardening (Sequential)
@@ -84,8 +86,9 @@ Phase 2: CI Hardening (depends on Phase 1 merged)
 +-- TASK-2009: Make lint and npm audit blocking (BACKLOG-728)         [FIRST]
 |   1. Remove continue-on-error from lint step
 |   2. Remove continue-on-error from npm audit step
-|   3. Remove continue-on-error from npm outdated step (or remove step)
-|   4. Fix any lint errors that would now block CI
+|   3. Keep continue-on-error on npm outdated (informational only)
+|   4. Fix dual ESLint config issue (1 blocking error from missing react-hooks plugin)
+|   5. Choose npm audit strategy (try --audit-level=high for known imessage-parser chain)
 |
 +-- TASK-2010: Add electron tests to CI (BACKLOG-729)                 [AFTER 2009]
 |   1. Update jest.config.js testMatch for CI to include electron/**
@@ -201,12 +204,12 @@ Sprint Complete
 | TASK-2006 | cleanup | ~4K | x0.5 | ~2K | ~3K |
 | TASK-2007 | cleanup | ~10K | x0.5 | ~5K | ~3K |
 | TASK-2008 | cleanup | ~15K | x0.5 | ~8K | ~4K |
-| TASK-2009 | config | ~5K | x0.5 | ~3K | ~3K |
+| TASK-2009 | config | ~15K | x0.7 | ~10K | ~3K |
 | TASK-2010 | config | ~15K | x0.5 | ~8K | ~4K |
 | TASK-2011 | config | ~10K | x0.5 | ~5K | ~3K |
-| **Totals** | | | | **~31K** | **~20K** |
+| **Totals** | | | | **~38K** | **~20K** |
 
-**Grand total: ~51K estimated billable tokens.**
+**Grand total: ~58K estimated billable tokens.**
 
 Sprint is well under the 100-120K budget, leaving room for Phase 2 tasks encountering more lint/test fixes than expected.
 
