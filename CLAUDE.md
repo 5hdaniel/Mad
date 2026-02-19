@@ -97,6 +97,22 @@ Undocumented issues lead to:
 
 ---
 
+## Workflow Rules
+
+When in plan mode, fully complete the plan and wait for user approval before implementing. Do not exit plan mode prematurely or start implementing without explicit "go ahead" from the user.
+
+### Pre-Work Confirmation (MANDATORY)
+
+Before starting any non-trivial implementation, confirm your approach with the user:
+
+1. **Confirm you're on the correct branch** — run `git branch --show-current` and state it
+2. **List the specific files you plan to modify** — no surprises
+3. **Describe your approach in 3 bullet points** — what you'll do and why
+
+Wait for user approval before writing any code. This prevents wasted effort from wrong-approach starts.
+
+---
+
 ## MANDATORY: Follow Instructions Exactly
 
 **Do ONLY what is explicitly requested. Nothing more.**
@@ -126,6 +142,12 @@ Adding unrequested actions:
 
 ---
 
+## Tech Stack
+
+This project uses TypeScript (primary), Supabase (database), Electron (desktop app), and Next.js (broker portal). Always use TypeScript for new code. Run type checks after edits with `npx tsc --noEmit`.
+
+---
+
 ## Project Overview
 
 Magic Audit is an Electron-based desktop application for real estate transaction auditing. It features:
@@ -134,6 +156,12 @@ Magic Audit is an Electron-based desktop application for real estate transaction
 - SQLite with encryption for local storage
 - Supabase for cloud sync
 - Microsoft Graph and Gmail API integrations
+
+## Git Workflow
+
+Before starting any work, confirm the correct branch. Check `git branch` and verify with the user if uncertain. Never commit to `claude/*` branches or wrong feature branches without explicit instruction.
+
+Use separate git worktrees for docs, plans, and sprint files to avoid polluting the user's active testing environment. Run `git worktree add ../worktree-name branch-name` when creating non-code deliverables.
 
 ## Git Branching Strategy
 
@@ -368,6 +396,10 @@ After CI passes, merge with traditional merge (not squash):
 gh pr merge <PR-NUMBER> --merge
 ```
 
+## UI Development
+
+When making UI/CSS changes, match the existing reference implementation exactly. If the user says "make it look like X", study X pixel-by-pixel before writing code. Do not substitute icons, layouts, or spacing without asking.
+
 ## Code Standards
 
 ### TypeScript
@@ -472,7 +504,7 @@ npx prebuild-install --runtime=electron --target=35.7.5 --arch=x64 --platform=wi
 |----------|----------|---------|
 | **Docs Index** | `.claude/docs/INDEX.md` | Master index of all documentation |
 | **PR SOP** | `.claude/docs/PR-SOP.md` | Complete PR checklist (all phases) |
-| **Senior Engineer** | `.claude/agents/senior-engineer-pr-lead.md` | Architecture standards, advanced reviews |
+| **Senior Engineer** | `.claude/docs/PR-SOP.md` + `senior-engineer-pr-lead` agent | Architecture standards, advanced reviews |
 | **This Guide** | `CLAUDE.md` | Quick start, branching, workflow |
 
 ### Shared References (Canonical Sources)
