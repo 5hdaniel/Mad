@@ -29,7 +29,7 @@ The remaining 10 items (Electron upgrade, session encryption, imessage-parser re
 | BACKLOG-732 | Consolidate duplicate backlog items | TASK-2006 | 1 | Completed |
 | BACKLOG-725 | Remove deprecated components from AppRouter | TASK-2007 | 1 | Completed |
 | BACKLOG-726 | Replace console.log with logService | TASK-2008 | 1 | Completed |
-| BACKLOG-741 | Fix pre-existing contact-handlers & App test failures | TASK-2012 | 1.5 | In Progress |
+| BACKLOG-741 | Fix pre-existing contact-handlers & App test failures | TASK-2012 | 1.5 | Testing |
 | BACKLOG-728 | Make lint and npm audit blocking in CI | TASK-2009 | 2 | Pending |
 | BACKLOG-729 | Add Electron backend tests to CI pipeline | TASK-2010 | 2 | Pending |
 | BACKLOG-730 | Raise CI test coverage threshold to 40% | TASK-2011 | 2 | Pending |
@@ -185,7 +185,7 @@ Sprint Complete
 | 1a | TASK-2006 (repo hygiene) | None | Yes - with 2007, 2008 | **COMPLETED** |
 | 1b | TASK-2007 (deprecated components) | None | Yes - with 2006, 2008 | **COMPLETED** |
 | 1c | TASK-2008 (console.log cleanup) | None | Yes - with 2006, 2007 | **COMPLETED** |
-| 1.5 | TASK-2012 (contact-handlers & App test fix) | Phase 1 merged | No | **IN PROGRESS** |
+| 1.5 | TASK-2012 (contact-handlers & App test fix) | Phase 1 merged | No | **TESTING (PR #885)** |
 | 2 | TASK-2009 (lint/audit blocking) | Phase 1.5 merged + Phase Gate | No |
 | 3 | TASK-2010 (electron tests in CI) | TASK-2009 | No |
 | 4 | TASK-2011 (coverage threshold) | TASK-2010 | No |
@@ -199,7 +199,7 @@ Sprint Complete
 | TASK-2006 | `chore/task-2006-repo-hygiene` | develop | develop | Merged (PR #882) |
 | TASK-2007 | `chore/task-2007-remove-deprecated-components` | develop | develop | Merged (PR #883) |
 | TASK-2008 | `chore/task-2008-replace-console-log` | develop | develop | Merged (PR #884) |
-| TASK-2012 | `fix/task-2012-contact-handlers-tests` | develop | develop | In Progress |
+| TASK-2012 | `fix/task-2012-contact-handlers-tests` | develop | develop | Testing (PR #885) |
 | TASK-2009 | `ci/task-2009-lint-audit-blocking` | develop | develop | Pending |
 | TASK-2010 | `ci/task-2010-electron-tests-in-ci` | develop | develop | Pending |
 | TASK-2011 | `ci/task-2011-coverage-threshold-40` | develop | develop | Pending |
