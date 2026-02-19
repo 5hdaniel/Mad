@@ -10,6 +10,7 @@ import type {
   ContactAssignment,
   Communication,
 } from "../types";
+import logger from '../../../utils/logger';
 
 interface UseTransactionDetailsResult {
   // Data
@@ -71,7 +72,7 @@ export function useTransactionDetails(
         );
       }
     } catch (err) {
-      console.error("Failed to load details:", err);
+      logger.error("Failed to load details:", err);
     } finally {
       setLoading(false);
     }
@@ -102,7 +103,7 @@ export function useTransactionDetails(
         setContactAssignments(result.transaction.contact_assignments || []);
       }
     } catch (err) {
-      console.error(`Failed to load ${channelFilter} communications:`, err);
+      logger.error(`Failed to load ${channelFilter} communications:`, err);
     } finally {
       setLoading(false);
     }
@@ -123,7 +124,7 @@ export function useTransactionDetails(
         );
       }
     } catch (err) {
-      console.error("Failed to load overview:", err);
+      logger.error("Failed to load overview:", err);
       // Fallback to full details if overview not available
       try {
         const fallback = await window.api.transactions.getDetails(transaction.id);
@@ -131,7 +132,7 @@ export function useTransactionDetails(
           setContactAssignments(fallback.transaction.contact_assignments || []);
         }
       } catch (e) {
-        console.error("Fallback getDetails also failed:", e);
+        logger.error("Fallback getDetails also failed:", e);
       }
     } finally {
       setLoading(false);
@@ -161,7 +162,7 @@ export function useTransactionDetails(
           setResolvedSuggestions(resolved);
         }
       } catch (err) {
-        console.error("Failed to resolve suggested contacts:", err);
+        logger.error("Failed to resolve suggested contacts:", err);
         // Still show suggestions without contact details
         setResolvedSuggestions(suggestedContacts.map((sc) => ({ ...sc })));
       }

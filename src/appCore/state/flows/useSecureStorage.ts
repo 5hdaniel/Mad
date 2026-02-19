@@ -37,6 +37,7 @@ import {
   selectIsInitializingDatabase,
   selectIsDeferredDbInit,
 } from "../machine";
+import logger from '../../../utils/logger';
 
 // Interface kept for API compatibility - callers still pass these props
 // but they are not used (state machine is source of truth)
@@ -139,13 +140,13 @@ export function useSecureStorage(
             try {
               const syncResult = await settingsService.setPhoneType(userId, phoneType);
               if (syncResult.success) {
-                console.log("[useSecureStorage] Synced queued phone type to DB:", phoneType);
+                logger.info("[useSecureStorage] Synced queued phone type to DB:", phoneType);
               } else {
-                console.warn("[useSecureStorage] Failed to sync phone type to DB:", syncResult.error);
+                logger.warn("[useSecureStorage] Failed to sync phone type to DB:", syncResult.error);
               }
             } catch (syncError) {
               // Log but don't fail - phone type is already in state
-              console.warn("[useSecureStorage] Failed to sync phone type to DB:", syncError);
+              logger.warn("[useSecureStorage] Failed to sync phone type to DB:", syncError);
             }
           }
 

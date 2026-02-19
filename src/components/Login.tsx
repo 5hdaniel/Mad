@@ -10,6 +10,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import type { User, Subscription } from "../../electron/types/models";
+import logger from '../utils/logger';
 
 // Type for pending OAuth data
 export interface PendingOAuthData {
@@ -100,7 +101,7 @@ const Login = ({
    * Called when browser OAuth completes and returns via magicaudit://callback
    */
   const handleDeepLinkSuccess = useCallback((data: DeepLinkAuthData) => {
-    console.log("[Login] Deep link auth success:", data.userId);
+    logger.debug("[Login] Deep link auth success:", data.userId);
     setBrowserAuthInProgress(false);
     setLoading(false);
     setProvider(null);
@@ -115,7 +116,7 @@ const Login = ({
    * Called when browser OAuth fails or returns invalid tokens
    */
   const handleDeepLinkError = useCallback((data: { error: string; code: string }) => {
-    console.error("[Login] Deep link auth error:", data);
+    logger.error("[Login] Deep link auth error:", data);
     setBrowserAuthInProgress(false);
     setLoading(false);
     setProvider(null);
@@ -131,7 +132,7 @@ const Login = ({
     blockReason: string;
     licenseStatus: unknown;
   }) => {
-    console.warn("[Login] License blocked:", data.blockReason);
+    logger.warn("[Login] License blocked:", data.blockReason);
     setBrowserAuthInProgress(false);
     setLoading(false);
     setProvider(null);
@@ -155,7 +156,7 @@ const Login = ({
       deviceLimit: number;
     };
   }) => {
-    console.warn("[Login] Device limit reached");
+    logger.warn("[Login] Device limit reached");
     setBrowserAuthInProgress(false);
     setLoading(false);
     setProvider(null);
@@ -225,7 +226,7 @@ const Login = ({
       // If success, we wait for deep link callback event
       // Loading state will be cleared by the event handler
     } catch (err) {
-      console.error("Browser login error:", err);
+      logger.error("Browser login error:", err);
       const errorMessage =
         err instanceof Error ? err.message : "Failed to start browser login";
       setError(errorMessage);
@@ -327,7 +328,7 @@ const Login = ({
         cleanup();
       }
     } catch (err) {
-      console.error("Google login error:", err);
+      logger.error("Google login error:", err);
       const errorMessage =
         err instanceof Error ? err.message : "Failed to start Google login";
       setError(errorMessage);
@@ -429,7 +430,7 @@ const Login = ({
         cleanup();
       }
     } catch (err) {
-      console.error("Microsoft login error:", err);
+      logger.error("Microsoft login error:", err);
       const errorMessage =
         err instanceof Error ? err.message : "Failed to start Microsoft login";
       setError(errorMessage);
@@ -483,7 +484,7 @@ const Login = ({
         setLoading(false);
       }
     } catch (err) {
-      console.error("Code exchange error:", err);
+      logger.error("Code exchange error:", err);
       const errorMessage =
         err instanceof Error ? err.message : "Failed to complete login";
       setError(errorMessage);

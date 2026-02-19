@@ -6,6 +6,7 @@
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import type { MessageLike } from "../MessageThreadCard";
 import { parseDateSafe } from "../../../../utils/dateFormatters";
+import logger from '../../../../utils/logger';
 
 /**
  * Attachment info for display (TASK-1012)
@@ -365,7 +366,7 @@ export function ConversationViewModal({
           setAttachmentsMap(result);
         }
       } catch (error) {
-        console.error("Failed to load attachments:", error);
+        logger.error("Failed to load attachments:", error);
       } finally {
         setAttachmentsLoading(false);
       }

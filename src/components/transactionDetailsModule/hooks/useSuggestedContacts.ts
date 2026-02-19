@@ -5,6 +5,7 @@
 import { useState, useCallback } from "react";
 import type { Transaction } from "@/types";
 import type { ResolvedSuggestedContact, SuggestedContact } from "../types";
+import logger from '../../../utils/logger';
 
 interface UseSuggestedContactsResult {
   processingContactId: string | null;
@@ -110,7 +111,7 @@ export function useSuggestedContacts(
         }
         showSuccess("Contact suggestion accepted");
       } catch (err) {
-        console.error("Failed to accept suggestion:", err);
+        logger.error("Failed to accept suggestion:", err);
         showError("Failed to accept contact suggestion. Please try again.");
       } finally {
         setProcessingContactId(null);
@@ -168,7 +169,7 @@ export function useSuggestedContacts(
         }
         showSuccess("Contact suggestion rejected");
       } catch (err) {
-        console.error("Failed to reject suggestion:", err);
+        logger.error("Failed to reject suggestion:", err);
         showError("Failed to reject contact suggestion. Please try again.");
       } finally {
         setProcessingContactId(null);
@@ -234,7 +235,7 @@ export function useSuggestedContacts(
         }
         showSuccess("All contact suggestions accepted");
       } catch (err) {
-        console.error("Failed to accept all suggestions:", err);
+        logger.error("Failed to accept all suggestions:", err);
         showError("Failed to accept all suggestions. Please try again.");
       } finally {
         setProcessingAll(false);

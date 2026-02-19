@@ -5,8 +5,10 @@
  * and render decisions during the onboarding flow.
  */
 
-// Enable/disable debug logging
-const DEBUG_ENABLED = true;
+import logger from '../../../utils/logger';
+
+// Enable/disable debug logging based on environment
+const DEBUG_ENABLED = process.env.NODE_ENV !== 'production';
 
 /**
  * Log a state change with all relevant flags
@@ -20,11 +22,10 @@ export function logStateChange(
 
   const time = new Date().toISOString().split('T')[1].split('.')[0];
 
-  console.log(
-    `%c[DEBUG] ${time} | ${source} | ${action}`,
-    'background: #222; color: #bada55; font-weight: bold;'
+  logger.debug(
+    `${time} | ${source} | ${action}`
   );
-  console.log('Flags:', flags);
+  logger.debug('Flags:', flags);
 }
 
 /**
@@ -37,7 +38,7 @@ export function logStepVisibility(
   context: Record<string, unknown>
 ): void {
   if (!DEBUG_ENABLED) return;
-  console.log(`[STEP] ${stepId}: ${shouldShow ? 'SHOW' : 'HIDE'}`, context);
+  logger.debug(`[STEP] ${stepId}: ${shouldShow ? 'SHOW' : 'HIDE'}`, context);
 }
 
 /**
@@ -49,7 +50,7 @@ export function logNavigation(
   trigger: string
 ): void {
   if (!DEBUG_ENABLED) return;
-  console.log(`[NAV] ${from} → ${to} (${trigger})`);
+  logger.debug(`[NAV] ${from} → ${to} (${trigger})`);
 }
 
 /**
@@ -60,5 +61,5 @@ export function logAllFlags(
   flags: Record<string, unknown>
 ): void {
   if (!DEBUG_ENABLED) return;
-  console.log(`[FLAGS] ${source}:`, flags);
+  logger.debug(`[FLAGS] ${source}:`, flags);
 }

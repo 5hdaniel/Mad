@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import type { Transaction } from "../../electron/types/models";
+import logger from '../utils/logger';
 
 interface ExportModalProps {
   transaction: Transaction;
@@ -83,7 +84,7 @@ function ExportModal({
             }
           }
         } catch (error) {
-          console.error("Failed to load export format preference:", error);
+          logger.error("Failed to load export format preference:", error);
           // If loading fails, keep the default 'folder' format
         }
       }
@@ -203,7 +204,7 @@ function ExportModal({
       try {
         await window.api.transactions.update(transaction.id, { status: "closed" });
       } catch (err) {
-        console.error("Failed to close transaction:", err);
+        logger.error("Failed to close transaction:", err);
         // Continue to success screen even if closing fails
       }
     }

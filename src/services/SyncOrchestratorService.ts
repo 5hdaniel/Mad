@@ -16,6 +16,7 @@
 
 import { isMacOS } from '../utils/platform';
 import type { ImportSource, UserPreferences } from './settingsService';
+import logger from '../utils/logger';
 
 export type SyncType = 'contacts' | 'emails' | 'messages';
 
@@ -89,7 +90,7 @@ class SyncOrchestratorServiceClass {
         return prefs.messages.source;
       }
     } catch (err) {
-      console.warn('[SyncOrchestrator] Failed to read import source preference, defaulting to macos-native:', err);
+      logger.warn('[SyncOrchestrator] Failed to read import source preference, defaulting to macos-native:', err);
     }
     return 'macos-native';
   }
@@ -101,22 +102,22 @@ class SyncOrchestratorServiceClass {
    */
   initializeSyncFunctions(): void {
     if (this.initialized) {
-      console.log('[SyncOrchestrator] Already initialized, skipping');
+      logger.info('[SyncOrchestrator] Already initialized, skipping');
       return;
     }
 
     const macOS = isMacOS();
-    console.log('[SyncOrchestrator] Initializing sync functions, isMacOS:', macOS);
+    logger.info('[SyncOrchestrator] Initializing sync functions, isMacOS:', macOS);
 
     // Register contacts sync (macOS Contacts + Outlook contacts on all platforms)
     // TASK-1953: Always register contacts sync so Outlook contacts work on all platforms
     this.registerSyncFunction('contacts', async (userId, onProgress) => {
-      console.log('[SyncOrchestrator] Starting contacts sync');
+      logger.info('[SyncOrchestrator] Starting contacts sync');
       onProgress(0);
 
       // TASK-1979: Read import source preference to decide which contacts to sync
       const importSource = await this.getImportSource(userId);
-      console.log('[SyncOrchestrator] Import source preference:', importSource);
+      logger.info('[SyncOrchestrator] Import source preference:', importSource);
 
       // Phase 1: macOS Contacts sync (macOS only, skip if iphone-sync selected)
       if (macOS && importSource !== 'iphone-sync') {
@@ -134,12 +135,12 @@ class SyncOrchestratorServiceClass {
           if (!result.success) {
             throw new Error(result.error || 'Contacts sync failed');
           }
-          console.log('[SyncOrchestrator] macOS Contacts sync complete');
+          logger.info('[SyncOrchestrator] macOS Contacts sync complete');
         } finally {
           cleanup();
         }
       } else if (macOS && importSource === 'iphone-sync') {
-        console.log('[SyncOrchestrator] Skipping macOS Contacts (import source: iphone-sync)');
+        logger.info('[SyncOrchestrator] Skipping macOS Contacts (import source: iphone-sync)');
       }
 
       onProgress(50);
@@ -151,42 +152,42 @@ class SyncOrchestratorServiceClass {
         const contactsApi = window.api.contacts as any;
         const outlookResult = await contactsApi.syncOutlookContacts(userId);
         if (outlookResult.success) {
-          console.log('[SyncOrchestrator] Outlook contacts synced:', outlookResult.count);
+          logger.info('[SyncOrchestrator] Outlook contacts synced:', outlookResult.count);
         } else if (outlookResult.reconnectRequired) {
-          console.warn('[SyncOrchestrator] Outlook contacts need reconnection');
+          logger.warn('[SyncOrchestrator] Outlook contacts need reconnection');
         } else {
-          console.warn('[SyncOrchestrator] Outlook contacts sync returned error:', outlookResult.error);
+          logger.warn('[SyncOrchestrator] Outlook contacts sync returned error:', outlookResult.error);
         }
       } catch (err) {
         // Don't fail the whole contacts sync if Outlook fails
-        console.warn('[SyncOrchestrator] Outlook contacts sync failed (non-fatal):', err);
+        logger.warn('[SyncOrchestrator] Outlook contacts sync failed (non-fatal):', err);
       }
 
       onProgress(100);
-      console.log('[SyncOrchestrator] All contacts sync complete');
+      logger.info('[SyncOrchestrator] All contacts sync complete');
     });
 
     // Register emails sync (all platforms - API-based)
     this.registerSyncFunction('emails', async (userId, onProgress) => {
-      console.log('[SyncOrchestrator] Starting emails sync');
+      logger.info('[SyncOrchestrator] Starting emails sync');
       onProgress(0);
       const result = await window.api.transactions.scan(userId);
       if (!result.success) {
         throw new Error(result.error || 'Email sync failed');
       }
       onProgress(100);
-      console.log('[SyncOrchestrator] Emails sync complete');
+      logger.info('[SyncOrchestrator] Emails sync complete');
     });
 
     // Register messages sync (macOS only - local iMessage database)
     if (macOS) {
       this.registerSyncFunction('messages', async (userId, onProgress) => {
-        console.log('[SyncOrchestrator] Starting messages sync');
+        logger.info('[SyncOrchestrator] Starting messages sync');
 
         // TASK-1979: Skip macOS Messages import when iphone-sync is selected
         const importSource = await this.getImportSource(userId);
         if (importSource === 'iphone-sync') {
-          console.log('[SyncOrchestrator] Skipping macOS Messages (import source: iphone-sync)');
+          logger.info('[SyncOrchestrator] Skipping macOS Messages (import source: iphone-sync)');
           onProgress(100);
           return;
         }
@@ -222,7 +223,7 @@ class SyncOrchestratorServiceClass {
             throw new Error(result.error || 'Message import failed');
           }
           onProgress(100);
-          console.log('[SyncOrchestrator] Messages sync complete, imported:', result.messagesImported);
+          logger.info('[SyncOrchestrator] Messages sync complete, imported:', result.messagesImported);
 
           // Return warning if message cap was exceeded
           if (result.wasCapped && result.totalAvailable) {
@@ -236,7 +237,7 @@ class SyncOrchestratorServiceClass {
     }
 
     this.initialized = true;
-    console.log('[SyncOrchestrator] Sync functions initialized');
+    logger.info('[SyncOrchestrator] Sync functions initialized');
   }
 
   /**
@@ -339,7 +340,7 @@ class SyncOrchestratorServiceClass {
     // Filter to only types that have registered sync functions
     const validTypes = types.filter((type) => this.syncFunctions.has(type));
     if (validTypes.length === 0) {
-      console.warn('[SyncOrchestrator] No valid sync types in request:', types);
+      logger.warn('[SyncOrchestrator] No valid sync types in request:', types);
       return;
     }
 
@@ -389,7 +390,7 @@ class SyncOrchestratorServiceClass {
         }
 
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-        console.error(`[SyncOrchestrator] ${type} sync failed:`, error);
+        logger.error(`[SyncOrchestrator] ${type} sync failed:`, error);
         this.updateQueueItem(type, { status: 'error', error: errorMsg });
       }
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import type { Subscription } from "../../electron/types/models";
 import { useLicense } from "@/contexts/LicenseContext";
+import logger from '../utils/logger';
 
 interface User {
   id: string;
@@ -118,7 +119,7 @@ function Profile({
           },
         });
       } catch (error) {
-        console.error("Error checking email connections:", error);
+        logger.error("Error checking email connections:", error);
       }
     };
 

@@ -10,6 +10,7 @@ import DOMPurify from "dompurify";
 import type { Communication } from "../../types";
 import type { EmailThread } from "../EmailThreadCard";
 import { AttachmentPreviewModal } from "./AttachmentPreviewModal";
+import logger from '../../../../utils/logger';
 
 /**
  * Email attachment structure from IPC
@@ -484,7 +485,7 @@ export function EmailThreadViewModal({
           }
         })
         .catch((err: Error) => {
-          console.error(`Failed to fetch attachments for email ${email.id}:`, err);
+          logger.error(`Failed to fetch attachments for email ${email.id}:`, err);
         })
         .finally(() => {
           setLoadingAttachmentIds(prev => {
@@ -515,11 +516,11 @@ export function EmailThreadViewModal({
       if (transactionsApi?.openAttachment) {
         const result = await transactionsApi.openAttachment(storagePath);
         if (!result.success) {
-          console.error("Failed to open attachment:", result.error);
+          logger.error("Failed to open attachment:", result.error);
         }
       }
     } catch (err) {
-      console.error("Error opening attachment:", err);
+      logger.error("Error opening attachment:", err);
     }
   }, []);
 

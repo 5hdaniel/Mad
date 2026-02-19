@@ -5,6 +5,7 @@ import type {
   SyncStatus,
   UseIPhoneSyncReturn,
 } from "../types/iphone";
+import logger from '../utils/logger';
 
 /**
  * useIPhoneSync Hook
@@ -57,7 +58,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       };
       const syncApi = window.api?.sync as SyncApiWithUnifiedStatus | undefined;
       if (!syncApi?.getUnifiedStatus) {
-        console.warn("[useIPhoneSync] getUnifiedStatus not available");
+        logger.warn("[useIPhoneSync] getUnifiedStatus not available");
         return;
       }
 
@@ -65,7 +66,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       setSyncLocked(status.isAnyOperationRunning);
       setLockReason(status.currentOperation);
     } catch (err) {
-      console.error("[useIPhoneSync] Failed to check sync status:", err);
+      logger.error("[useIPhoneSync] Failed to check sync status:", err);
     }
   }, []);
 
@@ -76,7 +77,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     const deviceApi = window.api?.device;
 
     if (!syncApi && !deviceApi) {
-      console.warn("[useIPhoneSync] Neither sync nor device API available");
+      logger.warn("[useIPhoneSync] Neither sync nor device API available");
       return;
     }
 
@@ -96,7 +97,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       setIsConnected(true);
       setDevice(mappedDevice);
       setError(null);
-      console.log("[useIPhoneSync] Device connected:", mappedDevice.name);
+      logger.debug("[useIPhoneSync] Device connected:", mappedDevice.name);
 
       // Fetch last sync time for this device
       try {
@@ -111,13 +112,13 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
           const status = await backupApi.checkStatus(connectedDevice.udid);
           if (status?.success && status.lastSyncTime) {
             setLastSyncTime(new Date(status.lastSyncTime));
-            console.log("[useIPhoneSync] Last sync time:", status.lastSyncTime);
+            logger.info("[useIPhoneSync] Last sync time:", status.lastSyncTime);
           } else {
             setLastSyncTime(null);
           }
         }
       } catch (err) {
-        console.warn("[useIPhoneSync] Failed to fetch backup status:", err);
+        logger.warn("[useIPhoneSync] Failed to fetch backup status:", err);
         setLastSyncTime(null);
       }
     };
@@ -133,7 +134,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       // Device disconnected via sync API
       if (syncApi.onDeviceDisconnected) {
         const unsub = syncApi.onDeviceDisconnected(() => {
-          console.log("[useIPhoneSync] Device disconnected");
+          logger.debug("[useIPhoneSync] Device disconnected");
           setIsConnected(false);
           setDevice(null);
           // Only show error if sync is in a phase that requires the device
@@ -148,7 +149,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
                 return "error";
               }
               // In extracting/storing phases, disconnect is fine - just log it
-              console.log("[useIPhoneSync] Device disconnected but in safe phase:", currentPhase);
+              logger.debug("[useIPhoneSync] Device disconnected but in safe phase:", currentPhase);
             }
             return current;
           });
@@ -205,7 +206,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       // Password required event
       if (syncApi.onPasswordRequired) {
         const unsub = syncApi.onPasswordRequired(() => {
-          console.log("[useIPhoneSync] Password required for encrypted backup");
+          logger.debug("[useIPhoneSync] Password required for encrypted backup");
           setNeedsPassword(true);
         });
         cleanups.push(unsub);
@@ -214,7 +215,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       // Passcode waiting event (user needs to enter passcode on iPhone)
       if (syncApi.onWaitingForPasscode) {
         const unsub = syncApi.onWaitingForPasscode(() => {
-          console.log("[useIPhoneSync] Waiting for user to enter passcode on iPhone");
+          logger.debug("[useIPhoneSync] Waiting for user to enter passcode on iPhone");
           setIsWaitingForPasscode(true);
           setProgress((prev) => ({
             phase: "backing_up",
@@ -228,7 +229,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       // Passcode entered event (user entered passcode, backup starting)
       if (syncApi.onPasscodeEntered) {
         const unsub = syncApi.onPasscodeEntered(() => {
-          console.log("[useIPhoneSync] User entered passcode, backup starting");
+          logger.info("[useIPhoneSync] User entered passcode, backup starting");
           setIsWaitingForPasscode(false);
           setProgress((prev) => ({
             phase: "backing_up",
@@ -242,7 +243,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       // Sync error events
       if (syncApi.onError) {
         const unsub = syncApi.onError((err) => {
-          console.error("[useIPhoneSync] Sync error:", err.message);
+          logger.error("[useIPhoneSync] Sync error:", err.message);
           setSyncStatus("error");
           setError(err.message);
         });
@@ -260,7 +261,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
         }
         const unsub = syncApi.onComplete((data: unknown) => {
           const result = data as SyncResultType;
-          console.log("[useIPhoneSync] Sync extraction complete:", {
+          logger.info("[useIPhoneSync] Sync extraction complete:", {
             messages: result.messageCount ?? 0,
             contacts: result.contactCount ?? 0,
             conversations: result.conversationCount ?? 0,
@@ -298,7 +299,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
 
       if (syncApiWithStorage.onStorageComplete) {
         const unsub = syncApiWithStorage.onStorageComplete((result) => {
-          console.log("[useIPhoneSync] Storage complete:", {
+          logger.info("[useIPhoneSync] Storage complete:", {
             messagesStored: result.messagesStored,
             contactsStored: result.contactsStored,
             duration: result.duration,
@@ -318,7 +319,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       // Storage error event
       if (syncApiWithStorage.onStorageError) {
         const unsub = syncApiWithStorage.onStorageError((err) => {
-          console.error("[useIPhoneSync] Storage error:", err.error);
+          logger.error("[useIPhoneSync] Storage error:", err.error);
           // Still mark as complete since extraction succeeded, just storage failed
           setSyncStatus("complete");
           setProgress({
@@ -366,7 +367,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
                 return "error";
               }
               // In extracting/storing phases, disconnect is fine
-              console.log("[useIPhoneSync] Device disconnected but in safe phase:", currentPhase);
+              logger.debug("[useIPhoneSync] Device disconnected but in safe phase:", currentPhase);
             }
             return current;
           });
@@ -377,7 +378,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
 
     // === NOW START DEVICE DETECTION (after all listeners are set up) ===
     // This order ensures we don't miss any events
-    console.log("[useIPhoneSync] Starting device detection...");
+    logger.info("[useIPhoneSync] Starting device detection...");
     if (syncApi?.startDetection) {
       syncApi.startDetection();
     } else if (deviceApi?.startDetection) {
@@ -409,14 +410,14 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
   // Start sync operation
   const startSync = useCallback(async () => {
     if (!device) {
-      console.error("[useIPhoneSync] Cannot start sync: No device connected");
+      logger.error("[useIPhoneSync] Cannot start sync: No device connected");
       setError("No device connected");
       return;
     }
 
     const syncApi = window.api?.sync;
     if (!syncApi?.start) {
-      console.error("[useIPhoneSync] Sync API not available");
+      logger.error("[useIPhoneSync] Sync API not available");
       setError("Sync service not available");
       return;
     }
@@ -433,13 +434,13 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       try {
         const status = await syncApiTyped.getUnifiedStatus();
         if (status.isAnyOperationRunning) {
-          console.warn("[useIPhoneSync] Sync blocked - another operation running:", status.currentOperation);
+          logger.warn("[useIPhoneSync] Sync blocked - another operation running:", status.currentOperation);
           setSyncLocked(true);
           setLockReason(status.currentOperation);
           return;
         }
       } catch (err) {
-        console.error("[useIPhoneSync] Failed to check sync status:", err);
+        logger.error("[useIPhoneSync] Failed to check sync status:", err);
         // Continue with sync attempt if status check fails
       }
     }
@@ -454,7 +455,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     });
 
     try {
-      console.log("[useIPhoneSync] Starting sync for device:", device.udid);
+      logger.info("[useIPhoneSync] Starting sync for device:", device.udid);
 
       // If we have a pending password, include it
       const result = await syncApi.start({
@@ -467,7 +468,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       setPendingPassword(null);
 
       if (!result) {
-        console.error("[useIPhoneSync] Sync returned null result");
+        logger.error("[useIPhoneSync] Sync returned null result");
         setSyncStatus("error");
         setError("Sync service returned no result");
         return;
@@ -476,14 +477,14 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       // Result handling is done via onComplete callback
       // But we handle immediate errors here
       if (!result.success && result.error) {
-        console.error("[useIPhoneSync] Sync failed:", result.error);
+        logger.error("[useIPhoneSync] Sync failed:", result.error);
         setSyncStatus("error");
         setError(result.error);
       }
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "An unexpected error occurred";
-      console.error("[useIPhoneSync] Sync error:", errorMessage);
+      logger.error("[useIPhoneSync] Sync error:", errorMessage);
       setSyncStatus("error");
       setError(errorMessage);
     }
@@ -493,14 +494,14 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
   const submitPassword = useCallback(
     async (password: string) => {
       if (!device) {
-        console.error(
+        logger.error(
           "[useIPhoneSync] Cannot submit password: No device connected"
         );
         setError("No device connected");
         return;
       }
 
-      console.log("[useIPhoneSync] Password submitted, retrying sync");
+      logger.info("[useIPhoneSync] Password submitted, retrying sync");
       setError(null);
       setPendingPassword(password);
       setNeedsPassword(false);
@@ -542,7 +543,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : "An unexpected error occurred";
-        console.error("[useIPhoneSync] Password submit error:", errorMessage);
+        logger.error("[useIPhoneSync] Password submit error:", errorMessage);
         setNeedsPassword(true);
         setError(errorMessage);
         setPendingPassword(null);
@@ -553,7 +554,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
 
   // Cancel ongoing sync
   const cancelSync = useCallback(async () => {
-    console.log("[useIPhoneSync] Cancelling sync");
+    logger.info("[useIPhoneSync] Cancelling sync");
 
     try {
       const syncApi = window.api?.sync;
@@ -561,7 +562,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
         await syncApi.cancel();
       }
     } catch (err) {
-      console.warn("[useIPhoneSync] Cancel error (ignored):", err);
+      logger.warn("[useIPhoneSync] Cancel error (ignored):", err);
     }
 
     setSyncStatus("idle");

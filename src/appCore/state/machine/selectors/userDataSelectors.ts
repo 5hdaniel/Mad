@@ -9,6 +9,7 @@
  */
 
 import type { AppState, OnboardingStep } from "../types";
+import logger from '../../../../utils/logger';
 
 /**
  * Step order for comparison.
@@ -234,7 +235,7 @@ export function selectHasEmailConnectedNullable(
     result = undefined;
   }
 
-  console.log('[selectHasEmailConnectedNullable]', {
+  logger.debug('[selectHasEmailConnectedNullable]', {
     status: state.status,
     'state.hasEmailConnected': state.status === 'onboarding' ? (state as any).hasEmailConnected : 'N/A',
     result,

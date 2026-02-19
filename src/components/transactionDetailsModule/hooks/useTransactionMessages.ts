@@ -5,6 +5,7 @@
  */
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { Transaction, Communication } from "@/types";
+import logger from '../../../utils/logger';
 
 interface UseTransactionMessagesResult {
   /** Text messages linked to the transaction (SMS and iMessage only) */
@@ -74,7 +75,7 @@ export function useTransactionMessages(
         setFetchedMessages([]);
       }
     } catch (err) {
-      console.error("Failed to load messages:", err);
+      logger.error("Failed to load messages:", err);
       setError("Failed to load messages");
       setFetchedMessages([]);
     } finally {

@@ -313,9 +313,9 @@ class DatabaseService implements IDatabaseService {
         }
 
         fs.copyFileSync(this.dbPath, backupPath);
-        console.log(`[DB] Pre-migration backup created: ${backupPath}`);
+        await logService.info(`Pre-migration backup created: ${backupPath}`, "DatabaseService");
       } catch (backupError) {
-        console.warn("[DB] Pre-migration backup failed:", backupError);
+        await logService.warn("Pre-migration backup failed", "DatabaseService", { error: backupError instanceof Error ? backupError.message : String(backupError) });
       }
     }
 
@@ -345,7 +345,7 @@ class DatabaseService implements IDatabaseService {
 
         for (const old of backupFiles.slice(3)) {
           fs.unlinkSync(path.join(dbDir, old));
-          console.log(`[DB] Removed old backup: ${old}`);
+          await logService.info(`Removed old backup: ${old}`, "DatabaseService");
         }
       } catch {
         // Cleanup failures must not affect the app

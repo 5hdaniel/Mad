@@ -599,7 +599,7 @@ function setupContentSecurityPolicy(): void {
 
   // Log CSP mode on startup for debugging
   if (isDevelopment) {
-    console.log("[CSP] Development mode - tightened CSP active");
+    log.info("[CSP] Development mode - tightened CSP active");
   }
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {

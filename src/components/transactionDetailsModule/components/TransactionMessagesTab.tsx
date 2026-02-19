@@ -14,6 +14,7 @@ import {
 } from "./MessageThreadCard";
 import { AttachMessagesModal, UnlinkMessageModal } from "./modals";
 import { parseDateSafe } from "../../../utils/dateFormatters";
+import logger from '../../../utils/logger';
 
 /**
  * Format a date range for display in the toggle label
@@ -191,7 +192,7 @@ export function TransactionMessagesTab({
           setContactNames(namesWithNormalized);
         }
       } catch (err) {
-        console.error("Failed to look up contact names:", err);
+        logger.error("Failed to look up contact names:", err);
       }
     };
 
@@ -253,7 +254,7 @@ export function TransactionMessagesTab({
         onShowError?.(result.error || "Failed to remove messages");
       }
     } catch (err) {
-      console.error("Failed to unlink messages:", err);
+      logger.error("Failed to unlink messages:", err);
       onShowError?.(
         err instanceof Error ? err.message : "Failed to remove messages"
       );

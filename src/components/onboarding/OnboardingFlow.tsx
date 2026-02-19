@@ -22,6 +22,7 @@ import {
 import { logAllFlags, logNavigation, logStateChange } from "../../appCore/state/machine/debug";
 import type { AppStateMachine } from "../../appCore/state/types";
 import type { StepAction } from "./types";
+import logger from '../../utils/logger';
 
 /**
  * Props for the OnboardingFlow component.
@@ -125,7 +126,7 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
     }
 
     // Legacy fallback - use app properties directly
-    console.log('[OnboardingFlow] Using LEGACY path - machineState is null');
+    logger.debug('[OnboardingFlow] Using LEGACY path - machineState is null');
     return {
       phoneType: app.selectedPhoneType,
       emailConnected: app.hasEmailConnected,
@@ -283,7 +284,7 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
       });
       // Persist to API (async, fire-and-forget)
       app.handleEmailOnboardingComplete().catch((err: unknown) => {
-        console.error("[OnboardingFlow] Failed to persist email onboarding:", err);
+        logger.error("[OnboardingFlow] Failed to persist email onboarding:", err);
       });
     }
   }, [machineState, appState, app]);
@@ -381,7 +382,7 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
             step: "email-connect",
           });
           app.handleEmailOnboardingComplete().catch((err: unknown) => {
-            console.error("[OnboardingFlow] Failed to persist email onboarding:", err);
+            logger.error("[OnboardingFlow] Failed to persist email onboarding:", err);
           });
         }
       }

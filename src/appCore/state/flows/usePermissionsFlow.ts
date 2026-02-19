@@ -11,6 +11,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { systemService } from "@/services";
 import type { AppStep } from "../types";
 import type { AppAction } from "../machine/types";
+import logger from '../../../utils/logger';
 
 export interface UsePermissionsFlowOptions {
   isWindows: boolean;
@@ -69,7 +70,7 @@ export function usePermissionsFlow({
         onSetShowMoveAppPrompt(true);
       }
     } catch (error) {
-      console.error("[usePermissionsFlow] Error checking app location:", error);
+      logger.error("[usePermissionsFlow] Error checking app location:", error);
     }
   }, [onSetShowMoveAppPrompt]);
 

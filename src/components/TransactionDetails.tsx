@@ -46,6 +46,7 @@ import { useSubmitForReview } from "./transactionDetailsModule/hooks/useSubmitFo
 import type { AutoLinkResult } from "./transactionDetailsModule/components/modals/EditContactsModal";
 
 import type { TransactionTab } from "./transactionDetailsModule/types";
+import logger from '../utils/logger';
 
 interface TransactionDetailsComponentProps {
   transaction: Transaction;
@@ -243,7 +244,7 @@ function TransactionDetails({
         onTransactionUpdated?.();
       }
     } catch (err) {
-      console.error("Failed to refresh transaction after export:", err);
+      logger.error("Failed to refresh transaction after export:", err);
     }
     // Note: Close transaction prompt is now handled within ExportModal (step 4)
   };
@@ -255,7 +256,7 @@ function TransactionDetails({
       onClose();
       onTransactionUpdated?.();
     } catch (err) {
-      console.error("Failed to delete transaction:", err);
+      logger.error("Failed to delete transaction:", err);
       showError("Failed to delete transaction. Please try again.");
     }
   };
@@ -397,7 +398,7 @@ function TransactionDetails({
         showError(result.error || "Failed to sync communications");
       }
     } catch (err) {
-      console.error("Failed to sync communications:", err);
+      logger.error("Failed to sync communications:", err);
       showError("Failed to sync communications. Please try again.");
     } finally {
       setSyncingCommunications(false);
@@ -438,7 +439,7 @@ function TransactionDetails({
         showError(result.error || "Failed to sync messages");
       }
     } catch (err) {
-      console.error("Failed to sync messages:", err);
+      logger.error("Failed to sync messages:", err);
       showError("Failed to sync messages. Please try again.");
     } finally {
       setSyncingMessages(false);
@@ -483,7 +484,7 @@ function TransactionDetails({
                 setTransaction(refreshed.transaction as Transaction);
               }
             } catch (err) {
-              console.error("Failed to refresh transaction before submit:", err);
+              logger.error("Failed to refresh transaction before submit:", err);
             }
             // Load attachment counts now (deferred from mount for perf)
             loadAttachmentCounts();

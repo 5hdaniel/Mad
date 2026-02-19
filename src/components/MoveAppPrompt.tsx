@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import logger from '../utils/logger';
 
 interface MoveAppPromptProps {
   appPath: string;
@@ -30,7 +31,7 @@ export default function MoveAppPrompt({
       }
       onDismiss();
     } catch (error) {
-      console.error("Error opening Applications folder:", error);
+      logger.error("Error opening Applications folder:", error);
     }
   };
 

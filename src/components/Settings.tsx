@@ -9,6 +9,7 @@ import {
   emitEmailConnectionChanged,
   useEmailConnectionListener,
 } from "@/utils/emailConnectionEvents";
+import logger from '../utils/logger';
 
 interface ConnectionError {
   type: string;
@@ -189,7 +190,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
       }
       return null;
     } catch (error) {
-      console.error("Failed to check connections:", error);
+      logger.error("Failed to check connections:", error);
       return null;
     } finally {
       setLoadingConnections(false);
@@ -253,11 +254,11 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
           }
         }
       } else if (!result.success) {
-        console.error("[Settings] Failed to load preferences:", result.error);
+        logger.error("[Settings] Failed to load preferences:", result.error);
       }
     } catch (error) {
       // Log preference loading errors for debugging
-      console.error("[Settings] Error loading preferences:", error);
+      logger.error("[Settings] Error loading preferences:", error);
     } finally {
       setLoadingPreferences(false);
     }
@@ -287,7 +288,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         },
       });
     } catch (err) {
-      console.error("Failed to save email export mode preference:", err);
+      logger.error("Failed to save email export mode preference:", err);
     }
   };
 
@@ -300,10 +301,10 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         },
       });
       if (!result.success) {
-        console.error("[Settings] Failed to save scan lookback:", result);
+        logger.error("[Settings] Failed to save scan lookback:", result);
       }
     } catch (error) {
-      console.error("[Settings] Error saving scan lookback:", error);
+      logger.error("[Settings] Error saving scan lookback:", error);
     }
   };
 
@@ -317,10 +318,10 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         },
       });
       if (!result.success) {
-        console.error("[Settings] Failed to save email sync lookback:", result);
+        logger.error("[Settings] Failed to save email sync lookback:", result);
       }
     } catch (error) {
-      console.error("[Settings] Error saving email sync lookback:", error);
+      logger.error("[Settings] Error saving email sync lookback:", error);
     }
   };
 
@@ -334,10 +335,10 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         },
       });
       if (!result.success) {
-        console.error("[Settings] Failed to save start date default:", result);
+        logger.error("[Settings] Failed to save start date default:", result);
       }
     } catch (error) {
-      console.error("[Settings] Error saving start date default:", error);
+      logger.error("[Settings] Error saving start date default:", error);
     }
   };
 
@@ -476,7 +477,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         );
       }
     } catch (error) {
-      console.error("Failed to connect Google:", error);
+      logger.error("Failed to connect Google:", error);
       setConnectingProvider(null);
       if (cleanup) cleanup();
     }
@@ -515,7 +516,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         );
       }
     } catch (error) {
-      console.error("Failed to connect Microsoft:", error);
+      logger.error("Failed to connect Microsoft:", error);
       setConnectingProvider(null);
       if (cleanup) cleanup();
     }
@@ -535,7 +536,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         emitEmailConnectionChanged({ connected: false, provider: "google" });
       }
     } catch (error) {
-      console.error("Failed to disconnect Google:", error);
+      logger.error("Failed to disconnect Google:", error);
     } finally {
       setDisconnectingProvider(null);
     }
@@ -555,7 +556,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         emitEmailConnectionChanged({ connected: false, provider: "microsoft" });
       }
     } catch (error) {
-      console.error("Failed to disconnect Microsoft:", error);
+      logger.error("Failed to disconnect Microsoft:", error);
     } finally {
       setDisconnectingProvider(null);
     }
@@ -592,7 +593,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         });
       }
     } catch (error) {
-      console.error("Failed to reindex database:", error);
+      logger.error("Failed to reindex database:", error);
       setReindexResult({
         success: false,
         message: "An unexpected error occurred while optimizing the database",

@@ -22,6 +22,7 @@ import type {
   OnboardingStepContentProps,
 } from "../types";
 import type { UserVerifiedInLocalDbAction } from "../types/actions";
+import logger from '../../../utils/logger';
 
 // =============================================================================
 // CONSTANTS
@@ -51,7 +52,7 @@ export const meta: OnboardingStepMeta = {
   // Show only if DB is initialized but user not yet verified in local DB
   shouldShow: (context) => {
     const shouldShow = context.isDatabaseInitialized && !context.isUserVerifiedInLocalDb;
-    console.log(
+    logger.debug(
       `%c[STEP] account-verification: ${shouldShow ? 'SHOW' : 'HIDE'}`,
       `background: ${shouldShow ? '#DAA520' : '#228B22'}; color: white; font-weight: bold; padding: 2px 8px;`,
       { isDatabaseInitialized: context.isDatabaseInitialized, isUserVerifiedInLocalDb: context.isUserVerifiedInLocalDb }
@@ -183,7 +184,7 @@ export function AccountVerificationContent({
         }
       }
     } catch (error) {
-      console.error('[AccountVerificationStep] Verification failed:', error);
+      logger.error('[AccountVerificationStep] Verification failed:', error);
       // Auto-retry on exception
       if (attempt < MAX_RETRIES) {
         setRetryCount(attempt + 1);

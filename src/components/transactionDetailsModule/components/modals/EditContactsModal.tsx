@@ -28,6 +28,7 @@ import {
 import { contactService } from "../../../../services";
 // Category filtering is now handled by ContactSearchList with its built-in pill-style filters
 import { sortByRecentCommunication } from "../../../../utils/contactSortUtils";
+import logger from '../../../../utils/logger';
 
 // ============================================
 // TYPES
@@ -159,7 +160,7 @@ export function EditContactsModal({
         setRoleAssignments(assignments);
       }
     } catch (err) {
-      console.error("Failed to load contact assignments:", err);
+      logger.error("Failed to load contact assignments:", err);
       setError("Failed to load contacts");
     } finally {
       setLoading(false);
@@ -697,7 +698,7 @@ function Screen2Overlay({
           setExternalContacts(external);
         }
       } catch (err) {
-        console.error("Failed to load external contacts:", err);
+        logger.error("Failed to load external contacts:", err);
       } finally {
         setExternalLoading(false);
         setExternalLoaded(true);
@@ -806,7 +807,7 @@ function Screen2Overlay({
       await handleImportAndAddContact(previewContact);
       setPreviewContact(null);
     } catch (err) {
-      console.error("Failed to import contact:", err);
+      logger.error("Failed to import contact:", err);
     }
   }, [previewContact, handleImportAndAddContact]);
 

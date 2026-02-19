@@ -4,6 +4,7 @@
  * Includes "Show in Folder" button to reveal the exported file in Finder/Explorer
  */
 import React, { useCallback } from "react";
+import logger from '../../../utils/logger';
 
 interface ExportSuccessMessageProps {
   message: string;
@@ -24,7 +25,7 @@ export function ExportSuccessMessage({
       };
       await systemApi.showInFolder(message);
     } catch (error) {
-      console.error("Failed to show file in folder:", error);
+      logger.error("Failed to show file in folder:", error);
     }
   }, [message]);
 

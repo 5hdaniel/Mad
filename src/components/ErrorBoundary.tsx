@@ -12,6 +12,7 @@
  */
 
 import React, { Component, ErrorInfo, ReactNode } from "react";
+import logger from '../utils/logger';
 
 interface Props {
   children: ReactNode;
@@ -48,8 +49,8 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   async componentDidCatch(error: Error, errorInfo: ErrorInfo): Promise<void> {
-    console.error("[ErrorBoundary] Caught error:", error);
-    console.error("[ErrorBoundary] Error info:", errorInfo);
+    logger.error("[ErrorBoundary] Caught error:", error);
+    logger.error("[ErrorBoundary] Error info:", errorInfo);
 
     this.setState({ errorInfo });
 
@@ -62,7 +63,7 @@ class ErrorBoundary extends Component<Props, State> {
         }
       }
     } catch (diagError) {
-      console.error("[ErrorBoundary] Failed to get diagnostics:", diagError);
+      logger.error("[ErrorBoundary] Failed to get diagnostics:", diagError);
     }
 
     // Call optional error handler
@@ -111,7 +112,7 @@ class ErrorBoundary extends Component<Props, State> {
       this.setState({ copiedToClipboard: true });
       setTimeout(() => this.setState({ copiedToClipboard: false }), 3000);
     } catch (err) {
-      console.error("[ErrorBoundary] Failed to copy error report:", err);
+      logger.error("[ErrorBoundary] Failed to copy error report:", err);
     }
   };
 
@@ -146,7 +147,7 @@ class ErrorBoundary extends Component<Props, State> {
         alert(`Support email copied to clipboard: ${SUPPORT_EMAIL}`);
       }
     } catch (err) {
-      console.error("[ErrorBoundary] Failed to open support email:", err);
+      logger.error("[ErrorBoundary] Failed to open support email:", err);
     }
   };
 

@@ -12,6 +12,7 @@ import {
   ContactPreview,
   type ContactTransaction,
 } from "./shared/ContactPreview";
+import logger from '../utils/logger';
 
 interface ContactsProps {
   userId: string;
@@ -160,7 +161,7 @@ function Contacts({ userId, onClose }: ContactsProps) {
 
         throw new Error(result.error || "Failed to import contact");
       } catch (err) {
-        console.error("Failed to import contact:", err);
+        logger.error("Failed to import contact:", err);
         throw err;
       }
     },
@@ -187,7 +188,7 @@ function Contacts({ userId, onClose }: ContactsProps) {
       await handleImportContact(previewContact);
       setPreviewContact(null);
     } catch (err) {
-      console.error("Failed to import contact:", err);
+      logger.error("Failed to import contact:", err);
     }
   };
 
