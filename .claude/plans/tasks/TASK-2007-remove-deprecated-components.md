@@ -10,7 +10,9 @@
 
 ## Objective
 
-Remove 6 deprecated legacy components that are still imported in `AppRouter.tsx` and `AppModals.tsx`. These components were replaced by `onboarding/steps/` equivalents but their old files and imports were never cleaned up. Delete the component files, their test files, and all references.
+Remove 5 deprecated legacy components that are still imported in `AppRouter.tsx`. These components were replaced by `onboarding/steps/` equivalents but their old files and imports were never cleaned up. Delete the component files, their test files, and all references.
+
+**CRITICAL: Do NOT touch WelcomeTerms.** It is NOT deprecated — only its `onDecline` prop is. WelcomeTerms is actively used in `AppModals.tsx` for terms acceptance by new users and is wired through 6 layers of the app (DB, cloud, auth handlers, auth context, state machine, UI). Deleting it would break the entire new-user and terms re-acceptance flow.
 
 ---
 
@@ -27,14 +29,12 @@ During the onboarding refactor (SPRINT-063/070), new step-based components were 
 | `PhoneTypeSelection` | `onboarding/steps/PhoneTypeStep.tsx` | `src/components/PhoneTypeSelection.tsx` |
 | `AndroidComingSoon` | `onboarding/steps/AndroidComingSoonStep.tsx` | `src/components/AndroidComingSoon.tsx` |
 | `SetupProgressIndicator` | `onboarding/shell/ProgressIndicator.tsx` | `src/components/SetupProgressIndicator.tsx` |
-| `WelcomeTerms` | (terms shown in auth flow) | `src/components/WelcomeTerms.tsx` |
 
 **Import locations found:**
 
 | File | Imports |
 |------|---------|
 | `src/appCore/AppRouter.tsx` | AppleDriverSetup, KeychainExplanation, PhoneTypeSelection, AndroidComingSoon |
-| `src/appCore/AppModals.tsx` | WelcomeTerms |
 | `src/components/KeychainExplanation.tsx` | SetupProgressIndicator (internal import) |
 | `src/components/AppleDriverSetup.tsx` | (standalone) |
 
@@ -56,48 +56,40 @@ During the onboarding refactor (SPRINT-063/070), new step-based components were 
    - Remove import of `AppleDriverSetup`
    - Remove all JSX usage of these components (the route cases that render them)
 
-2. **Remove imports** from `src/appCore/AppModals.tsx`:
-   - Remove import of `WelcomeTerms`
-   - Remove all JSX usage of `WelcomeTerms`
-
-3. **Remove any handler props** that were only used by the deprecated components:
-   - `handleAppleDriverSetupComplete`, `handleAppleDriverSetupSkip`
-   - `handleKeychainExplanationContinue`
-   - `skipKeychainExplanation`
-   - Trace these to their source -- if they are defined in hooks/state and ONLY used by deprecated components, remove them. If used elsewhere, leave them.
-
-4. **Delete deprecated component files:**
+2. **Delete deprecated component files:**
    - `src/components/AppleDriverSetup.tsx`
    - `src/components/KeychainExplanation.tsx`
    - `src/components/PhoneTypeSelection.tsx`
    - `src/components/AndroidComingSoon.tsx`
    - `src/components/SetupProgressIndicator.tsx`
-   - `src/components/WelcomeTerms.tsx`
 
-5. **Delete associated test files:**
+3. **Delete associated test files:**
    - `src/components/__tests__/AppleDriverSetup.test.tsx`
    - `src/components/__tests__/PhoneTypeSelection.test.tsx`
    - `src/components/__tests__/KeychainExplanation.test.tsx`
 
-6. **Verify no other imports remain** after deletion:
+4. **Verify no other imports remain** after deletion:
    ```bash
-   grep -r "AppleDriverSetup\|KeychainExplanation\|PhoneTypeSelection\|AndroidComingSoon\|SetupProgressIndicator\|WelcomeTerms" --include="*.ts" --include="*.tsx" src/
+   grep -r "AppleDriverSetup\|KeychainExplanation\|PhoneTypeSelection\|AndroidComingSoon\|SetupProgressIndicator" --include="*.ts" --include="*.tsx" src/
    ```
    This should return zero results (excluding any comments in this task file).
 
+**OUT OF SCOPE:** Handler cleanup in flow hooks (`usePhoneHandlers.ts`, `useSecureStorage.ts`, etc.) that contain `if (!USE_NEW_ONBOARDING)` guards. These are legacy code paths but removing them requires tracing through 14+ files — too risky for a cleanup sprint. Create a follow-up backlog item for removing `USE_NEW_ONBOARDING` legacy code paths.
+
 ### Must NOT Do:
+- Do NOT touch `WelcomeTerms.tsx` or `AppModals.tsx` — WelcomeTerms is NOT deprecated and is actively used
 - Do NOT modify or delete the onboarding/steps/ replacement components
 - Do NOT change the onboarding flow logic or state machine
-- Do NOT remove handler functions that are used by non-deprecated components
-- Do NOT touch Dashboard.tsx if WelcomeTerms is referenced there (check first -- it may just be a type reference)
+- Do NOT remove handler functions from flow hooks (usePhoneHandlers, useSecureStorage, etc.) — defer to follow-up
 - Do NOT add any new functionality
 
 ---
 
 ## Acceptance Criteria
 
-- [ ] All 6 deprecated component files deleted
+- [ ] All 5 deprecated component files deleted
 - [ ] All 3 associated test files deleted
+- [ ] WelcomeTerms.tsx and AppModals.tsx are UNTOUCHED
 - [ ] No imports of deprecated components remain in any .ts/.tsx file
 - [ ] `npm run type-check` passes (no missing import errors)
 - [ ] `npm run lint` passes
@@ -109,7 +101,6 @@ During the onboarding refactor (SPRINT-063/070), new step-based components were 
 ## Files to Modify
 
 - `src/appCore/AppRouter.tsx` - Remove 4 deprecated imports and their JSX usage
-- `src/appCore/AppModals.tsx` - Remove WelcomeTerms import and usage
 
 ## Files to Delete
 
@@ -118,17 +109,19 @@ During the onboarding refactor (SPRINT-063/070), new step-based components were 
 - `src/components/PhoneTypeSelection.tsx`
 - `src/components/AndroidComingSoon.tsx`
 - `src/components/SetupProgressIndicator.tsx`
-- `src/components/WelcomeTerms.tsx`
 - `src/components/__tests__/AppleDriverSetup.test.tsx`
 - `src/components/__tests__/PhoneTypeSelection.test.tsx`
 - `src/components/__tests__/KeychainExplanation.test.tsx`
 
+## Files NOT to Touch
+
+- `src/components/WelcomeTerms.tsx` — NOT deprecated, actively used for terms acceptance
+- `src/appCore/AppModals.tsx` — renders WelcomeTerms, must remain unchanged
+
 ## Files to Read (for context)
 
 - `src/appCore/AppRouter.tsx` - Understand current import/usage pattern
-- `src/appCore/AppModals.tsx` - Understand WelcomeTerms usage
 - `src/components/onboarding/steps/` - Verify replacements exist
-- `src/appCore/state/flows/useAuthFlow.ts` - Check WelcomeTerms reference
 
 ---
 
@@ -150,7 +143,7 @@ During the onboarding refactor (SPRINT-063/070), new step-based components were 
 
 ## PR Preparation
 
-- **Title:** `chore: remove 6 deprecated components still imported in AppRouter`
+- **Title:** `chore: remove 5 deprecated components still imported in AppRouter`
 - **Branch:** `chore/task-2007-remove-deprecated-components`
 - **Target:** `develop`
 
@@ -172,12 +165,11 @@ Pre-Work:
 - [ ] Read task file completely
 
 Implementation:
-- [ ] All deprecated imports removed from AppRouter.tsx
-- [ ] WelcomeTerms removed from AppModals.tsx
-- [ ] All 6 component files deleted
+- [ ] All 4 deprecated imports removed from AppRouter.tsx
+- [ ] WelcomeTerms and AppModals.tsx confirmed UNTOUCHED
+- [ ] All 5 component files deleted
 - [ ] All 3 test files deleted
-- [ ] Grep confirms zero remaining references
-- [ ] Handler props traced and cleaned if orphaned
+- [ ] Grep confirms zero remaining references (excluding WelcomeTerms)
 - [ ] Type check passes (npm run type-check)
 - [ ] Lint passes (npm run lint)
 - [ ] Tests pass (npm test)
@@ -214,7 +206,7 @@ Completion:
 
 **STOP and ask PM if:**
 - A deprecated component is NOT actually deprecated (no `@deprecated` tag)
-- Removing a handler prop causes type errors in non-deprecated code
+- Removing imports from AppRouter causes type errors in non-deprecated code
 - You find the deprecated components are still rendered in a code path that is NOT covered by the onboarding/steps/ replacements
-- WelcomeTerms is used in Dashboard.tsx for something other than a dead import
-- More than 9 files need deletion (scope may be bigger than expected)
+- More than 8 files need deletion (scope may be bigger than expected)
+- You feel tempted to touch WelcomeTerms, AppModals.tsx, or any flow hooks — these are OUT OF SCOPE

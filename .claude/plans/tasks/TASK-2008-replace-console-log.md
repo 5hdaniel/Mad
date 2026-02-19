@@ -32,15 +32,14 @@ The project has a structured `LogService` at `electron/services/logService.ts` w
 | `src/appCore/state/flows/usePhoneTypeApi.ts` | 2 | API calls |
 | Other files (11 files) | 1 each | Scattered |
 
-**Electron main process (electron/) -- 6 occurrences across 5 production files:**
+**Electron main process (electron/) -- 3 real occurrences across 2 production files:**
 
-| File | Count |
-|------|-------|
-| `electron/services/databaseService.ts` | 2 |
-| `electron/services/deviceDetectionService.ts` | 1 |
-| `electron/main.ts` | 1 |
-| `electron/services/syncOrchestrator.ts` | 1 |
-| `electron/services/syncStatusService.ts` | 1 |
+| File | Count | Notes |
+|------|-------|-------|
+| `electron/services/databaseService.ts` | 2 | Lines 316, 348 — real calls (also 1 `console.warn` at line 318) |
+| `electron/main.ts` | 1 | Line 602 — CSP dev mode message |
+
+**NOTE:** `syncOrchestrator.ts`, `deviceDetectionService.ts`, and `syncStatusService.ts` contain `console.log` only inside JSDoc comments (example code), NOT executable code. Do NOT modify those files.
 
 **Test files (skip) -- 74 occurrences across 3 test files:**
 - `electron/services/__tests__/cost-measurement.test.ts` (27)
@@ -101,6 +100,12 @@ The project has a structured `LogService` at `electron/services/logService.ts` w
 3. **Replace console.log in electron/ production files** with `logService`:
    - Import: `import logService from './logService';` (adjust path)
    - Replace `console.log(msg)` with `logService.info(msg, 'context')` where context is the service name
+   - Only 2 files need changes: `databaseService.ts` (2 console.log + 1 console.warn) and `main.ts` (1 console.log)
+   - Do NOT modify `syncOrchestrator.ts`, `deviceDetectionService.ts`, or `syncStatusService.ts` — their `console.log` references are inside JSDoc comments only
+
+4. **Replace console.error/console.warn in files you're already touching:**
+   - When replacing `console.log` in a file, also convert any `console.error` → `logger.error()` and `console.warn` → `logger.warn()` in that same file
+   - Do NOT do a separate sweep across the entire codebase for console.error/console.warn — only convert them in files already being modified for console.log
 
 4. **Handle debug.ts specially:**
    - `src/appCore/state/machine/debug.ts` is a debug utility that intentionally uses `console.log` with styled output (`%c` formatting)
@@ -154,12 +159,9 @@ The project has a structured `LogService` at `electron/services/logService.ts` w
 - `src/appCore/state/flows/useSecureStorage.ts` (1)
 - `src/appCore/state/flows/useAuthFlow.ts` (1)
 
-**electron/ (main process) -- 5 files:**
-- `electron/services/databaseService.ts` (2)
-- `electron/services/deviceDetectionService.ts` (1)
-- `electron/main.ts` (1)
-- `electron/services/syncOrchestrator.ts` (1)
-- `electron/services/syncStatusService.ts` (1)
+**electron/ (main process) -- 2 files:**
+- `electron/services/databaseService.ts` (2 console.log + 1 console.warn)
+- `electron/main.ts` (1 console.log)
 
 ## Files to Read (for context)
 
@@ -209,7 +211,7 @@ Pre-Work:
 Implementation:
 - [ ] src/utils/logger.ts created
 - [ ] All src/ console.log replaced (77 occurrences in 17 files)
-- [ ] All electron/ console.log replaced (6 occurrences in 5 files)
+- [ ] All electron/ console.log replaced (3 occurrences in 2 files)
 - [ ] debug.ts updated with NODE_ENV check
 - [ ] Verification grep shows zero production console.log
 - [ ] Type check passes (npm run type-check)
@@ -250,5 +252,5 @@ Completion:
 - You find console.log calls in significantly more files than listed (>25 production files)
 - The existing logService API does not support the patterns used (e.g., formatted objects)
 - Replacing console.log causes test failures (tests may mock console)
-- You discover console.warn or console.error calls that also need replacement (ask if in scope)
+- You discover console.warn or console.error calls in files NOT already being modified (those are out of scope)
 - LoadingOrchestrator uses console.log for timing-critical debug output that logger overhead could affect

@@ -4,7 +4,7 @@
 **Sprint:** SPRINT-087
 **Phase:** Phase 2 - CI Hardening
 **Branch:** `ci/task-2009-lint-audit-blocking`
-**Estimated Tokens:** ~3K
+**Estimated Tokens:** ~8-12K
 
 ---
 
@@ -59,15 +59,17 @@ A due diligence reviewer checking CI configuration will immediately flag non-blo
 
 3. **Keep `continue-on-error: true`** on the npm outdated step -- this is informational and should not block PRs.
 
-4. **Verify lint passes on develop.** Before removing continue-on-error, check that `npm run lint` currently passes on the develop branch. If there are existing lint errors:
-   - Fix them in this same PR
-   - Document what was fixed in the PR description
-   - If there are more than ~10 lint errors to fix, STOP and ask PM (scope may need adjustment)
+4. **Verify lint passes on develop.** Before removing continue-on-error, check that `npm run lint` currently passes on the develop branch. Known issues:
+   - **Dual ESLint config:** The project has both `.eslintrc.js` (legacy) and `eslint.config.js` (flat config). Verify which one `npm run lint` actually uses. The legacy config references `react-hooks/exhaustive-deps` which causes 1 error because the plugin definition is not found. Fix by either deleting the unused config file or adding the missing plugin.
+   - **560 lint warnings:** These are warnings (not errors) and will not block CI. Most are `no-console` warnings which Phase 1 TASK-2008 will reduce by ~77.
+   - Fix any actual errors in this same PR and document what was fixed
+   - If there are more than ~10 lint errors to fix (beyond the config fix), STOP and ask PM
 
-5. **Verify npm audit passes at moderate level.** Run `npm audit --audit-level=moderate` on develop. If there are findings:
-   - Document them in the PR description
-   - If they are from the imessage-parser chain (BACKLOG-723), add `--omit=optional` or use `.npmrc` audit exceptions to exclude known issues tracked in BACKLOG-723
-   - If there are other findings, STOP and ask PM
+5. **Verify npm audit passes.** Run `npm audit --audit-level=moderate` on develop. Known state: **72 vulnerabilities (1 low, 4 moderate, 67 high)**, primarily from the `imessage-parser → sqlite3 → tar` chain (tracked in BACKLOG-723). Strategy:
+   - **First try:** `npm audit --audit-level=high` — if only moderate findings remain from the imessage-parser chain, change CI to `--audit-level=high` as a pragmatic compromise and document that moderate findings are tracked in BACKLOG-723
+   - **If that still fails:** Use `npm audit --audit-level=critical` temporarily, then add a comment in CI noting the tracked items. Or use an `.nsprc` / `audit-ci` config to exclude known/tracked vulnerabilities
+   - **Document the chosen strategy** in the PR description with the full vulnerability count and reasoning
+   - If there are findings OUTSIDE the imessage-parser chain, STOP and ask PM
 
 ### Must NOT Do:
 - Do NOT remove continue-on-error from the npm outdated step
@@ -94,10 +96,22 @@ A due diligence reviewer checking CI configuration will immediately flag non-blo
 
 - `.github/workflows/ci.yml` - Remove continue-on-error from lint and audit steps
 
+## Known Issues
+
+### Dual ESLint Config
+The project has both `.eslintrc.js` (legacy) and `eslint.config.js` (flat config). ESLint 9+ uses flat config by default. The legacy config references `react-hooks/exhaustive-deps` which causes 1 error because the plugin is not properly loaded. The engineer should:
+1. Check which config `npm run lint` actually uses
+2. Fix the 1 blocking error (either delete unused config or add missing plugin)
+3. Consider deleting the unused config file to prevent future confusion
+
+### Phase 1 Interaction
+After Phase 1 TASK-2008 replaces `console.log` with `logger.*()`, approximately 77 `no-console` lint warnings disappear. This means Phase 2 lint will be cleaner than what you see on develop today.
+
 ## Files to Read (for context)
 
 - `.github/workflows/ci.yml` - Full CI configuration
-- `.eslintrc.js` or `eslint.config.js` - Current lint rules (to understand what is enforced)
+- `.eslintrc.js` - Legacy ESLint config (may be unused)
+- `eslint.config.js` - Flat ESLint config (likely the active one)
 - `package.json` - Check for lint script definition
 
 ---
