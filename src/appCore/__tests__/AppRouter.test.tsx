@@ -49,12 +49,6 @@ jest.mock("../../components/OutlookExport", () => {
   return { __esModule: true, default: MockOutlookExport };
 });
 
-jest.mock("../../components/KeychainExplanation", () => {
-  const MockKeychainExplanation = () => <div data-testid="keychain-explanation-component">Keychain Explanation</div>;
-  MockKeychainExplanation.displayName = "KeychainExplanation";
-  return { __esModule: true, default: MockKeychainExplanation };
-});
-
 jest.mock("../../components/Dashboard", () => {
   const MockDashboard = () => <div data-testid="dashboard-component">Dashboard</div>;
   MockDashboard.displayName = "Dashboard";
@@ -65,24 +59,6 @@ jest.mock("../../components/OfflineFallback", () => {
   const MockOfflineFallback = () => <div data-testid="offline-fallback-component">Offline Fallback</div>;
   MockOfflineFallback.displayName = "OfflineFallback";
   return { __esModule: true, default: MockOfflineFallback };
-});
-
-jest.mock("../../components/PhoneTypeSelection", () => {
-  const MockPhoneTypeSelection = () => <div data-testid="phone-type-selection-component">Phone Type Selection</div>;
-  MockPhoneTypeSelection.displayName = "PhoneTypeSelection";
-  return { __esModule: true, default: MockPhoneTypeSelection };
-});
-
-jest.mock("../../components/AndroidComingSoon", () => {
-  const MockAndroidComingSoon = () => <div data-testid="android-coming-soon-component">Android Coming Soon</div>;
-  MockAndroidComingSoon.displayName = "AndroidComingSoon";
-  return { __esModule: true, default: MockAndroidComingSoon };
-});
-
-jest.mock("../../components/AppleDriverSetup", () => {
-  const MockAppleDriverSetup = () => <div data-testid="apple-driver-setup-component">Apple Driver Setup</div>;
-  MockAppleDriverSetup.displayName = "AppleDriverSetup";
-  return { __esModule: true, default: MockAppleDriverSetup };
 });
 
 jest.mock("../../components/onboarding", () => ({
@@ -338,65 +314,6 @@ describe("AppRouter", () => {
     });
   });
 
-  describe("Keychain Explanation State", () => {
-    it("should render KeychainExplanation when step is keychain-explanation on macOS", () => {
-      const app = createAppStateMock({
-        currentStep: "keychain-explanation",
-        isMacOS: true,
-      });
-      render(<AppRouter app={app} />);
-      expect(screen.getByTestId("keychain-explanation-component")).toBeInTheDocument();
-    });
-
-    it("should not render KeychainExplanation when not on macOS", () => {
-      const app = createAppStateMock({
-        currentStep: "keychain-explanation",
-        isMacOS: false,
-        isWindows: true,
-      });
-      render(<AppRouter app={app} />);
-      expect(screen.queryByTestId("keychain-explanation-component")).not.toBeInTheDocument();
-    });
-  });
-
-  describe("Phone Type Selection State", () => {
-    it("should render PhoneTypeSelection when step is phone-type-selection", () => {
-      const app = createAppStateMock({ currentStep: "phone-type-selection" });
-      render(<AppRouter app={app} />);
-      expect(screen.getByTestId("phone-type-selection-component")).toBeInTheDocument();
-    });
-  });
-
-  describe("Android Coming Soon State", () => {
-    it("should render AndroidComingSoon when step is android-coming-soon", () => {
-      const app = createAppStateMock({ currentStep: "android-coming-soon" });
-      render(<AppRouter app={app} />);
-      expect(screen.getByTestId("android-coming-soon-component")).toBeInTheDocument();
-    });
-  });
-
-  describe("Apple Driver Setup State", () => {
-    it("should render AppleDriverSetup when step is apple-driver-setup on Windows", () => {
-      const app = createAppStateMock({
-        currentStep: "apple-driver-setup",
-        isWindows: true,
-        isMacOS: false,
-      });
-      render(<AppRouter app={app} />);
-      expect(screen.getByTestId("apple-driver-setup-component")).toBeInTheDocument();
-    });
-
-    it("should not render AppleDriverSetup when not on Windows", () => {
-      const app = createAppStateMock({
-        currentStep: "apple-driver-setup",
-        isWindows: false,
-        isMacOS: true,
-      });
-      render(<AppRouter app={app} />);
-      expect(screen.queryByTestId("apple-driver-setup-component")).not.toBeInTheDocument();
-    });
-  });
-
   describe("Microsoft Login State", () => {
     it("should render MicrosoftLogin when step is microsoft-login", () => {
       const app = createAppStateMock({ currentStep: "microsoft-login" });
@@ -456,12 +373,12 @@ describe("AppRouter", () => {
 
   describe("Onboarding Flow", () => {
     it("should not render OnboardingFlow when USE_NEW_ONBOARDING is disabled", () => {
-      // With USE_NEW_ONBOARDING mocked as false, onboarding steps use legacy routing
+      // With USE_NEW_ONBOARDING mocked as false, onboarding steps fall through to null
       const app = createAppStateMock({ currentStep: "phone-type-selection" });
-      render(<AppRouter app={app} />);
+      const { container } = render(<AppRouter app={app} />);
       expect(screen.queryByTestId("onboarding-flow-component")).not.toBeInTheDocument();
-      // Should render PhoneTypeSelection instead (legacy routing)
-      expect(screen.getByTestId("phone-type-selection-component")).toBeInTheDocument();
+      // Legacy route blocks removed - falls through to null fallback
+      expect(container.innerHTML).toBe("");
     });
   });
 
