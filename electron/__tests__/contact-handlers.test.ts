@@ -34,6 +34,7 @@ jest.mock("../services/databaseService", () => ({
   __esModule: true,
   default: {
     getImportedContactsByUserId: jest.fn(),
+    getImportedContactsByUserIdAsync: jest.fn(),
     getUnimportedContactsByUserId: jest.fn(),
     getContactsSortedByActivity: jest.fn(),
     createContact: jest.fn(),
@@ -86,6 +87,7 @@ jest.mock("../services/logService", () => ({
     info: jest.fn(),
     error: jest.fn(),
     warn: jest.fn(),
+    debug: jest.fn(),
   },
 }));
 
@@ -206,7 +208,7 @@ describe("Contact Handlers", () => {
         { id: "contact-1", name: "John Doe", email: "john@example.com" },
         { id: "contact-2", name: "Jane Smith", email: "jane@example.com" },
       ];
-      mockDatabaseService.getImportedContactsByUserId.mockResolvedValue(
+      mockDatabaseService.getImportedContactsByUserIdAsync.mockResolvedValue(
         mockContacts,
       );
 
@@ -215,10 +217,9 @@ describe("Contact Handlers", () => {
 
       expect(result.success).toBe(true);
       expect(result.contacts).toHaveLength(2);
-      expect(mockLogService.info).toHaveBeenCalledWith(
-        "Getting all imported contacts",
+      expect(mockLogService.debug).toHaveBeenCalledWith(
+        expect.stringContaining("[PERF] contacts.getAll:"),
         "Contacts",
-        expect.any(Object),
       );
     });
 
@@ -231,7 +232,7 @@ describe("Contact Handlers", () => {
     });
 
     it("should handle database error", async () => {
-      mockDatabaseService.getImportedContactsByUserId.mockRejectedValue(
+      mockDatabaseService.getImportedContactsByUserIdAsync.mockRejectedValue(
         new Error("Database error"),
       );
 
@@ -277,7 +278,7 @@ describe("Contact Handlers", () => {
       ]);
 
       mockDatabaseService.getUnimportedContactsByUserId.mockResolvedValue([]);
-      mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([]);
+      mockDatabaseService.getImportedContactsByUserIdAsync.mockResolvedValue([]);
 
       const handler = registeredHandlers.get("contacts:get-available");
       const result = await handler(mockEvent, TEST_USER_ID);
@@ -320,7 +321,7 @@ describe("Contact Handlers", () => {
       ]);
 
       mockDatabaseService.getUnimportedContactsByUserId.mockResolvedValue([]);
-      mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([
+      mockDatabaseService.getImportedContactsByUserIdAsync.mockResolvedValue([
         { name: "John Doe", email: "john@example.com" },
       ]);
 
@@ -348,7 +349,7 @@ describe("Contact Handlers", () => {
       (externalContactDb.getCount as jest.Mock).mockReturnValue(0); // Empty shadow table
 
       mockDatabaseService.getUnimportedContactsByUserId.mockResolvedValue([]);
-      mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([]);
+      mockDatabaseService.getImportedContactsByUserIdAsync.mockResolvedValue([]);
       mockContactsService.getContactNames.mockRejectedValue(
         new Error("Contacts access denied"),
       );
@@ -385,7 +386,7 @@ describe("Contact Handlers", () => {
           },
           status: "loaded",
         });
-        mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([]);
+        mockDatabaseService.getImportedContactsByUserIdAsync.mockResolvedValue([]);
 
         const handler = registeredHandlers.get("contacts:get-available");
         const result = await handler(mockEvent, TEST_USER_ID);
@@ -416,7 +417,7 @@ describe("Contact Handlers", () => {
           },
           status: "loaded",
         });
-        mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([]);
+        mockDatabaseService.getImportedContactsByUserIdAsync.mockResolvedValue([]);
 
         const handler = registeredHandlers.get("contacts:get-available");
         const result = await handler(mockEvent, TEST_USER_ID);
@@ -447,7 +448,7 @@ describe("Contact Handlers", () => {
           },
           status: "loaded",
         });
-        mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([]);
+        mockDatabaseService.getImportedContactsByUserIdAsync.mockResolvedValue([]);
 
         const handler = registeredHandlers.get("contacts:get-available");
         const result = await handler(mockEvent, TEST_USER_ID);
@@ -472,7 +473,7 @@ describe("Contact Handlers", () => {
           },
           status: "loaded",
         });
-        mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([]);
+        mockDatabaseService.getImportedContactsByUserIdAsync.mockResolvedValue([]);
 
         const handler = registeredHandlers.get("contacts:get-available");
         const result = await handler(mockEvent, TEST_USER_ID);
@@ -498,7 +499,7 @@ describe("Contact Handlers", () => {
           },
           status: "loaded",
         });
-        mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([]);
+        mockDatabaseService.getImportedContactsByUserIdAsync.mockResolvedValue([]);
 
         const handler = registeredHandlers.get("contacts:get-available");
         const result = await handler(mockEvent, TEST_USER_ID);
@@ -522,7 +523,7 @@ describe("Contact Handlers", () => {
           },
           status: "loaded",
         });
-        mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([]);
+        mockDatabaseService.getImportedContactsByUserIdAsync.mockResolvedValue([]);
 
         const handler = registeredHandlers.get("contacts:get-available");
         const result = await handler(mockEvent, TEST_USER_ID);
@@ -554,7 +555,7 @@ describe("Contact Handlers", () => {
           },
           status: "loaded",
         });
-        mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([]);
+        mockDatabaseService.getImportedContactsByUserIdAsync.mockResolvedValue([]);
 
         const handler = registeredHandlers.get("contacts:get-available");
         const result = await handler(mockEvent, TEST_USER_ID);
@@ -597,7 +598,7 @@ describe("Contact Handlers", () => {
             phone: "555-1111",
           },
         ]);
-        mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([]);
+        mockDatabaseService.getImportedContactsByUserIdAsync.mockResolvedValue([]);
 
         const handler = registeredHandlers.get("contacts:get-available");
         const result = await handler(mockEvent, TEST_USER_ID);
@@ -621,7 +622,7 @@ describe("Contact Handlers", () => {
           },
           status: "loaded",
         });
-        mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([
+        mockDatabaseService.getImportedContactsByUserIdAsync.mockResolvedValue([
           {
             name: "Other Name",
             email: "other@email.com",
@@ -1082,7 +1083,7 @@ describe("Contact Handlers", () => {
           return true;
         }
       );
-      mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([]);
+      mockDatabaseService.getImportedContactsByUserIdAsync.mockResolvedValue([]);
 
       const handler = registeredHandlers.get("contacts:get-available");
       const result = await handler(mockEvent, TEST_USER_ID);
@@ -1094,7 +1095,7 @@ describe("Contact Handlers", () => {
 
     it("should include iPhone DB contacts when macOS source is enabled", async () => {
       mockIsContactSourceEnabled.mockResolvedValue(true);
-      mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([]);
+      mockDatabaseService.getImportedContactsByUserIdAsync.mockResolvedValue([]);
       mockDatabaseService.getUnimportedContactsByUserId.mockResolvedValue([
         {
           id: "iphone-1",
@@ -1124,7 +1125,7 @@ describe("Contact Handlers", () => {
           return true;
         }
       );
-      mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([]);
+      mockDatabaseService.getImportedContactsByUserIdAsync.mockResolvedValue([]);
       mockDatabaseService.getUnimportedContactsByUserId.mockResolvedValue([]);
 
       // Set up shadow table with both macOS and Outlook contacts
@@ -1166,7 +1167,7 @@ describe("Contact Handlers", () => {
     it("should return all contacts when no preferences are set (default behavior)", async () => {
       // All sources enabled by default
       mockIsContactSourceEnabled.mockResolvedValue(true);
-      mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([]);
+      mockDatabaseService.getImportedContactsByUserIdAsync.mockResolvedValue([]);
       mockDatabaseService.getUnimportedContactsByUserId.mockResolvedValue([
         {
           id: "iphone-1",

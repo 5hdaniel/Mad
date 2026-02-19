@@ -886,25 +886,26 @@ describe("App", () => {
 
   describe("Email Onboarding Flow", () => {
     it("should show email onboarding when user has no email connected", async () => {
-      // Configure mock for phone type selection step
-      // Note: selectedPhoneType must be null for the PhoneTypeStep to render
+      // After PR #883 (TASK-2007), legacy onboarding routes (phone-type-selection,
+      // keychain-explanation, etc.) were removed from AppRouter. When an unonboarded
+      // user is at a non-existent step, the router returns null (fallback).
+      // This test now verifies the dashboard renders the setup prompt for users
+      // who haven't connected email yet.
       mockUseAppStateMachine.mockReturnValue(createAppStateMock({
-        currentStep: "phone-type-selection",
+        currentStep: "dashboard",
         isAuthenticated: true,
         hasSelectedPhoneType: false,
-        selectedPhoneType: null, // Must be null for PhoneTypeStep to show
+        selectedPhoneType: null,
         hasCompletedEmailOnboarding: false,
         hasEmailConnected: false,
+        showSetupPromptDismissed: false,
       }));
 
       renderApp();
 
       await waitFor(() => {
-        // Should show onboarding screen (starts at phone type selection step)
-        // The new OnboardingFlow uses PhoneTypeStep with "What phone do you use?" heading
-        expect(
-          screen.getByRole("heading", { name: /What phone do you use/i }),
-        ).toBeInTheDocument();
+        // Dashboard should render with setup prompt visible (hasEmailConnected=false)
+        expect(screen.getByText(/Welcome to Magic Audit/i)).toBeInTheDocument();
       });
     });
 
