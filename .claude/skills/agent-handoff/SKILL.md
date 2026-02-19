@@ -16,19 +16,23 @@ This skill defines how agents hand off work during sprint task execution. Read t
 |------|--------|---------------|-------------|
 | 1 | Verify task file exists with context | — | - (abort if missing) |
 | 2-4 | Setup (worktree, branch, status) | CSV + Sprint → `In Progress` | - |
-| 5 | Task ready for planning | — | Engineer (plan mode) |
+| 5 | Task ready for planning | — | Engineer (read-only exploration) |
 | 8 | Plan reviewed | Sprint notes: "Plan approved" | Engineer (implement) or User (if rejected) |
 | 11 | Implementation reviewed | CSV + Sprint → `Testing` | SR Engineer (create PR) |
 | 14 | After PR merged | CSV + Sprint → `Completed` | Record effort metrics |
 | 15 | All tasks complete | Sprint → `Completed` | Close sprint |
 
-**Status update files:** `.claude/plans/sprints/SPRINT-XXX.md` + `.claude/plans/backlog/data/backlog.csv`
+**Status update files (ALL three at every transition):**
+1. `.claude/plans/backlog/data/backlog.csv` — status column (source of truth)
+2. `.claude/plans/backlog/items/BACKLOG-XXX.md` — if detail file exists, update status there too
+3. `.claude/plans/sprints/SPRINT-XXX.md` — In-Scope table Status column
+
 **Valid CSV statuses:** `Pending`, `In Progress`, `Testing`, `Completed`, `Deferred`
 
 ### Engineer Agent Steps
 | Step | Action | Hand Off To |
 |------|--------|-------------|
-| 6 | Create/revise plan in plan mode | SR Engineer (plan review) |
+| 6 | Explore codebase (read-only), write plan | SR Engineer (plan review) |
 | 9 | Implement, commit, push | SR Engineer (impl review) |
 | 12 (CI fail) | Fix CI issues | SR Engineer (re-review) |
 
@@ -70,18 +74,22 @@ PHASE A: SETUP (PM)
     - Files: `.claude/plans/sprints/SPRINT-XXX.md` + `.claude/plans/backlog/data/backlog.csv`
     - Valid CSV statuses: Pending, In Progress, Testing, Completed, Deferred
 
-5.  PM → ENGINEER: Handoff task for planning (plan mode)
+5.  PM → ENGINEER: Handoff task for planning (read-only exploration)
     - Use handoff message template
     - Specify: Task ID, task file path, branch name
-    - Instruct engineer to use plan mode (EnterPlanMode) before implementation
+    - Instruct engineer: "Plan only — explore codebase, write plan, do NOT edit production files"
 
 PHASE B: PLANNING
 -----------------
-6.  ENGINEER: Enter plan mode, create/revise plan
+6.  ENGINEER: Explore codebase and create implementation plan
     - Read task file thoroughly
-    - Explore codebase for context
-    - Write plan to plan file
-    - Exit plan mode → SR ENGINEER for review
+    - Use Glob, Grep, Read tools to explore relevant code (read-only)
+    - Write implementation plan to task file or plan file
+    - Do NOT edit production files — planning phase is read-only
+    - Return plan → SR ENGINEER for review
+    NOTE: Do NOT use EnterPlanMode — it requires interactive user approval
+    and does not work inside subagent context. Instead, exercise discipline:
+    read and plan only, save implementation for Step 9.
 
 7.  SR ENGINEER: Review plan
     ├─ Request changes → Step 6 (back to Engineer)

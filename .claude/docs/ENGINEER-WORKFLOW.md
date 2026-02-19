@@ -4,7 +4,7 @@
 
 ---
 
-## Quick Reference: 5-Step Task Cycle
+## Quick Reference: 6-Step Task Cycle (within 15-step handoff lifecycle)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -22,7 +22,13 @@
 │                                                                             │
 │  STEP 5: IMPLEMENT   → Engineer implements approved plan                    │
 │                         📋 Record: Engineer Agent ID                        │
+│                                                                             │
+│  STEP 6: PM UPDATE   → PM updates status + records metrics                  │
+│                         📋 See: PM Status Updates section below             │
 └─────────────────────────────────────────────────────────────────────────────┘
+
+**This 6-step cycle maps to Steps 5-14 of the 15-step agent-handoff lifecycle.**
+**Full lifecycle:** `.claude/skills/agent-handoff/SKILL.md`
 ```
 
 **CRITICAL:**
@@ -59,8 +65,8 @@ grep "<engineer_agent_id>" .claude/metrics/tokens.csv
 
 ```bash
 # Always start from the sprint branch (or develop)
-git checkout project/licensing-and-auth-flow  # or develop
-git pull origin project/licensing-and-auth-flow
+git checkout develop  # or develop
+git pull origin develop
 
 # Create feature branch with task ID
 git checkout -b feature/task-XXX-description
@@ -73,22 +79,21 @@ git checkout -b feature/task-XXX-description
 
 ---
 
-## Step 1: PLAN (Plan Agent — Plan Mode Required)
+## Step 1: PLAN (Read-Only Exploration)
 
 **Purpose:** Create a detailed implementation plan before any code is written.
 
-**Who:** Plan Agent (invoke via Task tool with `subagent_type="Plan"`)
+**Who:** Engineer agent — planning phase is read-only (no Edit/Write of production files).
 
-**IMPORTANT:** The engineer MUST use plan mode (EnterPlanMode) before writing any code. This is not optional. Plan mode restricts the agent to read-only exploration, preventing premature implementation.
+**IMPORTANT:** Do NOT use `EnterPlanMode` — it requires interactive user approval and does not work inside subagent context. Instead, the engineer explores with read-only tools (Glob, Grep, Read) and writes the plan to the task file.
 
 **Actions:**
-1. Enter plan mode (EnterPlanMode)
-2. Read the task file (`.claude/plans/tasks/TASK-XXX.md`)
-3. Explore relevant codebase files
-4. Identify all files to modify/create
-5. Create step-by-step implementation plan
-6. Document any risks or concerns
-7. Exit plan mode (ExitPlanMode) for review
+1. Read the task file (`.claude/plans/tasks/TASK-XXX.md`)
+2. Explore relevant codebase files (read-only)
+3. Identify all files to modify/create
+4. Create step-by-step implementation plan
+5. Document any risks or concerns
+6. Write plan to task file — do NOT edit production files yet
 
 **Deliverable:** Implementation plan written to task file or separate plan file
 
@@ -275,10 +280,10 @@ git commit -m "type(scope): description
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
-Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 
 git push -u origin your-branch-name
-gh pr create --base project/licensing-and-auth-flow --title "..." --body "..."
+gh pr create --base develop --title "..." --body "..."
 ```
 
 ### CI and Debug Failures

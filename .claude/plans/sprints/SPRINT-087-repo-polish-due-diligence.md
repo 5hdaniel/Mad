@@ -198,14 +198,18 @@ Sprint Complete
 
 ## PM Status Update Checkpoints
 
-PM updates status at each transition. Files: sprint plan (In-Scope table) + backlog CSV.
+PM updates status at each transition across ALL three locations:
 
-| When | CSV Status | Sprint Status | Trigger |
-|------|-----------|---------------|---------|
-| Engineer agent assigned | `In Progress` | `In Progress` | PM kicks off engineer |
-| PR created + CI passes | `Testing` | `Testing` | SR notifies PM |
-| PR merged | `Completed` | `Completed` | SR confirms merge |
-| Phase gate passed | — | Update sprint narrative | PM runs regression check |
+1. `.claude/plans/backlog/data/backlog.csv` — status column (source of truth)
+2. `.claude/plans/backlog/items/BACKLOG-XXX.md` — if detail file exists, update status there too
+3. This sprint file — In-Scope table Status column
+
+| When | Status | Trigger |
+|------|--------|---------|
+| Engineer agent assigned | → `In Progress` | PM kicks off engineer |
+| PR created + CI passes | → `Testing` | SR notifies PM |
+| PR merged | → `Completed` | SR confirms merge |
+| Phase gate passed | Update sprint narrative | PM runs regression check |
 
 **Valid CSV statuses:** `Pending`, `In Progress`, `Testing`, `Completed`, `Deferred`
 

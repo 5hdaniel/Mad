@@ -109,13 +109,13 @@ A due diligence assessment flagged these issues:
 
 ## PM Status Updates
 
-PM updates these files at each transition (engineer does NOT update status):
+PM updates ALL three locations at each transition (engineer does NOT update status):
 
-| When | Backlog CSV Status | Sprint Table Status | Files |
-|------|-------------------|--------------------|----|
-| Engineer assigned | `In Progress` | `In Progress` | backlog.csv + SPRINT-087.md |
-| PR created + CI passes | `Testing` | `Testing` | backlog.csv + SPRINT-087.md |
-| PR merged | `Completed` | `Completed` | backlog.csv + SPRINT-087.md |
+| When | Status | Where |
+|------|--------|-------|
+| Engineer assigned | → `In Progress` | backlog.csv + BACKLOG-XXX.md (if exists) + SPRINT-087.md |
+| PR created + CI passes | → `Testing` | backlog.csv + BACKLOG-XXX.md (if exists) + SPRINT-087.md |
+| PR merged | → `Completed` | backlog.csv + BACKLOG-XXX.md (if exists) + SPRINT-087.md |
 
 **Backlog IDs to update:** BACKLOG-724, BACKLOG-727, BACKLOG-731, BACKLOG-732
 
