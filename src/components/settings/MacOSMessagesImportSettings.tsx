@@ -14,6 +14,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { usePlatform } from "../../contexts/PlatformContext";
+import logger from '../../utils/logger';
 
 /** Import progress state for inline display */
 interface ImportProgressState {
@@ -102,7 +103,7 @@ export function MacOSMessagesImportSettings({
         });
       }
     } catch (error) {
-      console.error("Failed to load import status:", error);
+      logger.error("Failed to load import status:", error);
     }
   };
 

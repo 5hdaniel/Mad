@@ -17,6 +17,7 @@ import type {
 } from "../types";
 import { setMessagesImportTriggered } from "../../../utils/syncFlags";
 import { useSyncOrchestrator } from "../../../hooks/useSyncOrchestrator";
+import logger from '../../../utils/logger';
 
 /**
  * Shield icon with lock - represents security/permissions
@@ -243,19 +244,19 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
 
   // Auto-check permissions on mount and periodically after user starts the flow
   const checkPermissions = useCallback(async () => {
-    console.log('[PermissionsStep] checkPermissions called');
+    logger.debug('[PermissionsStep] checkPermissions called');
     try {
-      console.log('[PermissionsStep] Calling window.api.system.checkPermissions...');
+      logger.debug('[PermissionsStep] Calling window.api.system.checkPermissions...');
       const result = await window.api.system.checkPermissions();
-      console.log('[PermissionsStep] checkPermissions result:', result);
+      logger.debug('[PermissionsStep] checkPermissions result:', result);
       if (result.hasPermission) {
         // Permissions granted - trigger import first, then continue
-        console.log('[PermissionsStep] Permissions granted, calling triggerImport');
+        logger.debug('[PermissionsStep] Permissions granted, calling triggerImport');
         triggerImport();
       }
       return result.hasPermission;
     } catch (error) {
-      console.error("[PermissionsStep] Error checking permissions:", error);
+      logger.error("[PermissionsStep] Error checking permissions:", error);
       return false;
     }
   }, [triggerImport]);
@@ -289,19 +290,19 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
       await window.api.system.openSystemSettings();
       markStepComplete(1);
     } catch (error) {
-      console.error("Error opening system settings:", error);
+      logger.error("Error opening system settings:", error);
     }
   };
 
   const handleManualCheck = async () => {
-    console.log('[PermissionsStep] Check Permissions button clicked');
+    logger.debug('[PermissionsStep] Check Permissions button clicked');
     setIsChecking(true);
     try {
-      console.log('[PermissionsStep] Calling checkPermissions...');
+      logger.debug('[PermissionsStep] Calling checkPermissions...');
       await checkPermissions();
-      console.log('[PermissionsStep] checkPermissions completed');
+      logger.info('[PermissionsStep] checkPermissions completed');
     } catch (error) {
-      console.error('[PermissionsStep] checkPermissions error:', error);
+      logger.error('[PermissionsStep] checkPermissions error:', error);
     }
     setIsChecking(false);
   };
@@ -392,7 +393,7 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
             try {
               await window.api.system.triggerFullDiskAccess();
             } catch (error) {
-              console.error("Error triggering full disk access:", error);
+              logger.error("Error triggering full disk access:", error);
             }
             setCurrentInstructionStep(1);
           }}

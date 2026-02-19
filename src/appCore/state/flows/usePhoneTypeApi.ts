@@ -28,6 +28,7 @@ import {
   selectPhoneType,
   selectIsDatabaseInitialized,
 } from "../machine";
+import logger from '../../../utils/logger';
 
 interface UsePhoneTypeApiOptions {
   userId: string | undefined;
@@ -132,12 +133,12 @@ export function usePhoneTypeApi({
 
         if (!cloudResult.success) {
           // Log but don't fail - graceful degradation
-          console.warn(
+          logger.warn(
             "[usePhoneTypeApi] Failed to save to Supabase, continuing:",
             cloudResult.error
           );
         } else {
-          console.log(
+          logger.debug(
             "[usePhoneTypeApi] Phone type saved to Supabase:",
             phoneType
           );
@@ -153,20 +154,20 @@ export function usePhoneTypeApi({
               phoneType
             );
             if (!localResult.success) {
-              console.warn(
+              logger.warn(
                 "[usePhoneTypeApi] Failed to save to local DB:",
                 localResult.error
               );
             }
           } catch (localError) {
             // Log but don't fail - Supabase is primary storage
-            console.warn(
+            logger.warn(
               "[usePhoneTypeApi] Error saving to local DB:",
               localError
             );
           }
         } else {
-          console.log(
+          logger.debug(
             "[usePhoneTypeApi] Local DB not initialized, phone type queued in state"
           );
         }
@@ -182,7 +183,7 @@ export function usePhoneTypeApi({
 
         return true;
       } catch (error) {
-        console.error("[usePhoneTypeApi] Error saving phone type:", error);
+        logger.error("[usePhoneTypeApi] Error saving phone type:", error);
         return false;
       }
     },

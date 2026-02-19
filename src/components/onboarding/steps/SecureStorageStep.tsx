@@ -16,6 +16,7 @@ import type {
   OnboardingStepContentProps,
   SecureStorageSetupAction,
 } from "../types";
+import logger from '../../../utils/logger';
 
 // =============================================================================
 // STEP METADATA
@@ -40,7 +41,7 @@ export const meta: OnboardingStepMeta = {
   // The secure-storage step explains keychain access - if DB is initialized, keychain is already set up
   shouldShow: (context) => {
     const shouldShow = !context.isDatabaseInitialized;
-    console.log(
+    logger.debug(
       `%c[STEP] secure-storage: ${shouldShow ? 'SHOW' : 'HIDE'}`,
       `background: ${shouldShow ? '#DAA520' : '#228B22'}; color: white; font-weight: bold; padding: 2px 8px;`,
       { isDatabaseInitialized: context.isDatabaseInitialized }

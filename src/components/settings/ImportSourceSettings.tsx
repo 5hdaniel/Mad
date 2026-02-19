@@ -13,6 +13,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { usePlatform } from "../../contexts/PlatformContext";
 import type { ImportSource, UserPreferences } from "../../services/settingsService";
+import logger from '../../utils/logger';
 
 // Re-export type for consumers
 export type { ImportSource } from "../../services/settingsService";
@@ -44,7 +45,7 @@ export function ImportSourceSettings({ userId }: ImportSourceSettingsProps) {
           setSource(prefs.messages.source);
         }
       } catch (error) {
-        console.error("[ImportSourceSettings] Failed to load preference:", error);
+        logger.error("[ImportSourceSettings] Failed to load preference:", error);
       } finally {
         setLoading(false);
       }
@@ -67,7 +68,7 @@ export function ImportSourceSettings({ userId }: ImportSourceSettingsProps) {
           },
         });
       } catch (error) {
-        console.error("[ImportSourceSettings] Failed to save preference:", error);
+        logger.error("[ImportSourceSettings] Failed to save preference:", error);
         // Revert on error
         setSource(source);
       } finally {

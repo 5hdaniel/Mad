@@ -31,6 +31,7 @@ import React, {
 } from "react";
 import type { ExtendedContact } from "../types/components";
 import { contactService } from "../services";
+import logger from '../utils/logger';
 
 // ============================================
 // TYPES
@@ -123,7 +124,7 @@ export function ContactsProvider({
     } catch (err) {
       if (!isMountedRef.current) return;
 
-      console.error("ContactsContext: Failed to load contacts:", err);
+      logger.error("ContactsContext: Failed to load contacts:", err);
       setState((prev) => ({
         ...prev,
         loading: false,

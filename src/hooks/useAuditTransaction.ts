@@ -15,6 +15,7 @@ import {
   ROLE_TO_CATEGORY,
 } from "../constants/contactRoles";
 import type { Transaction, Contact } from "../../electron/types/models";
+import logger from '../utils/logger';
 
 // Type definitions
 export interface AddressData {
@@ -280,7 +281,7 @@ export function useAuditTransaction({
       }
     } catch (err) {
       if (!isMountedRef.current) return;
-      console.error("Failed to load contacts:", err);
+      logger.error("Failed to load contacts:", err);
       setContactsError("Unable to load contacts");
     } finally {
       if (isMountedRef.current) {
@@ -313,7 +314,7 @@ export function useAuditTransaction({
       }
     } catch (err) {
       if (!isMountedRef.current) return;
-      console.error("Failed to load external contacts:", err);
+      logger.error("Failed to load external contacts:", err);
     } finally {
       if (isMountedRef.current) {
         setExternalContactsLoading(false);
@@ -433,7 +434,7 @@ export function useAuditTransaction({
         try {
           await window.api.address.initialize("");
         } catch (initError: unknown) {
-          console.warn(
+          logger.warn(
             "[AuditTransaction] Address verification not available:",
             initError,
           );
@@ -608,7 +609,7 @@ export function useAuditTransaction({
           );
         }
       } catch (err) {
-        console.error("[useAuditTransaction] Failed to fetch transaction details:", err);
+        logger.error("[useAuditTransaction] Failed to fetch transaction details:", err);
         // On error, fall back to data from passed transaction
         const extendedTransaction = editTransaction as Transaction & {
           contact_assignments?: Array<{
@@ -651,7 +652,7 @@ export function useAuditTransaction({
           setShowAddressAutocomplete(false);
         }
       } catch (fetchError: unknown) {
-        console.error("[AuditTransaction] Failed to fetch address suggestions:", fetchError);
+        logger.error("[AuditTransaction] Failed to fetch address suggestions:", fetchError);
         setShowAddressAutocomplete(false);
       }
     } else {
@@ -704,7 +705,7 @@ export function useAuditTransaction({
         }));
       }
     } catch (detailsError: unknown) {
-      console.error("[AuditTransaction] Failed to get address details:", detailsError);
+      logger.error("[AuditTransaction] Failed to get address details:", detailsError);
       setAddressData(prev => ({
         ...prev,
         property_address: suggestion.formatted_address || suggestion.description || "",

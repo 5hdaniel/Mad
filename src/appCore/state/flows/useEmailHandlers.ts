@@ -21,6 +21,7 @@ import { emitEmailConnectionChanged } from "@/utils/emailConnectionEvents";
 import type { AppStep, PendingOnboardingData } from "../types";
 import type { PendingOAuthData } from "../../../components/Login";
 import { USE_NEW_ONBOARDING } from "../../routing/routeConfig";
+import logger from '../../../utils/logger';
 
 export interface UseEmailHandlersOptions {
   // Auth state - currentUserId is REQUIRED after flow reorder (DB always initialized)
@@ -157,7 +158,7 @@ export function useEmailHandlers({
    */
   const handleStartGoogleEmailConnect = useCallback(async (): Promise<void> => {
     if (!currentUserId) {
-      console.error("[useEmailHandlers] No user ID available for Google OAuth");
+      logger.error("[useEmailHandlers] No user ID available for Google OAuth");
       return;
     }
 
@@ -165,7 +166,7 @@ export function useEmailHandlers({
       const result = await authService.googleConnectMailbox(currentUserId);
 
       if (!result.success) {
-        console.error(
+        logger.error(
           "[useEmailHandlers] Failed to start Google OAuth:",
           result.error,
         );
@@ -194,7 +195,7 @@ export function useEmailHandlers({
         },
       );
     } catch (error) {
-      console.error("[useEmailHandlers] Error starting Google OAuth:", error);
+      logger.error("[useEmailHandlers] Error starting Google OAuth:", error);
     }
   }, [
     currentUserId,
@@ -211,7 +212,7 @@ export function useEmailHandlers({
   const handleStartMicrosoftEmailConnect =
     useCallback(async (): Promise<void> => {
       if (!currentUserId) {
-        console.error("[useEmailHandlers] No user ID available for Microsoft OAuth");
+        logger.error("[useEmailHandlers] No user ID available for Microsoft OAuth");
         return;
       }
 
@@ -219,7 +220,7 @@ export function useEmailHandlers({
         const result = await authService.microsoftConnectMailbox(currentUserId);
 
         if (!result.success) {
-          console.error(
+          logger.error(
             "[useEmailHandlers] Failed to start Microsoft OAuth:",
             result.error,
           );
@@ -248,7 +249,7 @@ export function useEmailHandlers({
           },
         );
       } catch (error) {
-        console.error(
+        logger.error(
           "[useEmailHandlers] Error starting Microsoft OAuth:",
           error,
         );

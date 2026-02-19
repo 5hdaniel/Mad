@@ -6,6 +6,7 @@
  */
 
 import type { Transaction } from "@/types";
+import logger from '../utils/logger';
 
 /**
  * Valid detection status values
@@ -150,7 +151,7 @@ export const transactionService = {
       return { success: true };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
-      console.error("Failed to record feedback:", message);
+      logger.error("Failed to record feedback:", message);
       // Don't fail the whole operation if feedback fails
       return { success: true }; // Silently succeed - feedback is not critical
     }

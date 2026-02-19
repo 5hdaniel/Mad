@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect } from "react";
+import logger from '../utils/logger';
 
 const SUPPORT_EMAIL = "magicauditwa@gmail.com";
 
@@ -93,7 +94,7 @@ function OfflineFallback({
         alert(`Support email copied to clipboard: ${SUPPORT_EMAIL}`);
       }
     } catch (err) {
-      console.error("[OfflineFallback] Failed to open support email:", err);
+      logger.error("[OfflineFallback] Failed to open support email:", err);
     }
   };
 

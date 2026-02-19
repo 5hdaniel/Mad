@@ -4,6 +4,7 @@
  */
 import { useState, useCallback } from "react";
 import type { Communication } from "../types";
+import logger from '../../../utils/logger';
 
 interface UseTransactionCommunicationsResult {
   unlinkingCommId: string | null;
@@ -48,11 +49,11 @@ export function useTransactionCommunications(): UseTransactionCommunicationsResu
           setShowUnlinkConfirm(null);
           onSuccess();
         } else {
-          console.error("Failed to unlink communication:", result.error);
+          logger.error("Failed to unlink communication:", result.error);
           onError("Failed to unlink email. Please try again.");
         }
       } catch (err) {
-        console.error("Failed to unlink communication:", err);
+        logger.error("Failed to unlink communication:", err);
         onError("Failed to unlink email. Please try again.");
       } finally {
         setUnlinkingCommId(null);

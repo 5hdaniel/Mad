@@ -22,6 +22,7 @@ import type {
   OnboardingStepMeta,
   OnboardingStepContentProps,
 } from "../types";
+import logger from '../../../utils/logger';
 
 // =============================================================================
 // CONSTANTS
@@ -51,7 +52,7 @@ export const meta: OnboardingStepMeta = {
   // Show only if DB is initialized and we have a userId
   shouldShow: (context) => {
     const shouldShow = context.isDatabaseInitialized && context.userId !== null;
-    console.log(
+    logger.debug(
       `%c[STEP] data-sync: ${shouldShow ? 'SHOW' : 'HIDE'}`,
       `background: ${shouldShow ? '#DAA520' : '#228B22'}; color: white; font-weight: bold; padding: 2px 8px;`,
       { isDatabaseInitialized: context.isDatabaseInitialized, hasUserId: context.userId !== null }
@@ -151,7 +152,7 @@ export function DataSyncContent({
           await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
           return syncDataWithRetry(retries - 1);
         }
-        console.error("[DataSyncStep] Sync error after retries:", error);
+        logger.error("[DataSyncStep] Sync error after retries:", error);
         return false;
       }
     }
@@ -162,7 +163,7 @@ export function DataSyncContent({
       if (success) {
         setStatus('success');
       } else {
-        console.warn("[DataSyncStep] Sync failed, continuing anyway");
+        logger.warn("[DataSyncStep] Sync failed, continuing anyway");
         setStatus('skipped');
       }
 

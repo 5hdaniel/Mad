@@ -17,6 +17,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { usePlatform } from "../../contexts/PlatformContext";
 import { useSyncOrchestrator } from "../../hooks/useSyncOrchestrator";
+import logger from '../../utils/logger';
 
 interface ContactsImportSettingsProps {
   userId: string;
@@ -116,7 +117,7 @@ export function ContactsImportSettings({
         });
       }
     } catch (error) {
-      console.error("Failed to load sync status:", error);
+      logger.error("Failed to load sync status:", error);
     }
   };
 

@@ -13,6 +13,7 @@ import type {
   OnboardingStepMeta,
   OnboardingStepContentProps,
 } from "../types";
+import logger from '../../../utils/logger';
 
 // =============================================================================
 // TYPES
@@ -120,7 +121,7 @@ function AppleDriverStepContent({
     const checkDriverStatus = async () => {
       const drivers = getDriversAPI();
       if (!drivers) {
-        console.error("[AppleDriverStep] Drivers API not available");
+        logger.error("[AppleDriverStep] Drivers API not available");
         setStatus("error");
         setErrorMessage("Driver management is not available on this platform.");
         return;
@@ -147,7 +148,7 @@ function AppleDriverStepContent({
                 return;
               }
             } catch (updateError) {
-              console.warn(
+              logger.warn(
                 "[AppleDriverStep] Could not check for updates:",
                 updateError
               );
@@ -164,7 +165,7 @@ function AppleDriverStepContent({
         setHasBundled(bundledResult.hasBundled);
         setStatus("not-installed");
       } catch (error) {
-        console.error("[AppleDriverStep] Error checking drivers:", error);
+        logger.error("[AppleDriverStep] Error checking drivers:", error);
         setStatus("not-installed");
       }
     };
@@ -215,7 +216,7 @@ function AppleDriverStepContent({
     try {
       await drivers.openITunesStore();
     } catch (error) {
-      console.error("[AppleDriverStep] Error opening iTunes store:", error);
+      logger.error("[AppleDriverStep] Error opening iTunes store:", error);
     }
   }, []);
 

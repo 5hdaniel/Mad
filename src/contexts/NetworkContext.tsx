@@ -17,6 +17,7 @@ import React, {
   useCallback,
   ReactNode,
 } from "react";
+import logger from '../utils/logger';
 
 interface NetworkState {
   isOnline: boolean;
@@ -94,7 +95,7 @@ export function NetworkProvider({ children }: NetworkProviderProps) {
 
       return online;
     } catch (error) {
-      console.error("[NetworkContext] Connection check failed:", error);
+      logger.error("[NetworkContext] Connection check failed:", error);
       setState((prev) => ({
         ...prev,
         isOnline: false,

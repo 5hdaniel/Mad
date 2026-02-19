@@ -4,6 +4,7 @@
  */
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { Transaction, Communication } from "@/types";
+import logger from '../../../utils/logger';
 
 /**
  * Interface for parsed email attachment metadata
@@ -177,7 +178,7 @@ export function useTransactionAttachments(
         setFetchedAttachments([]);
       }
     } catch (err) {
-      console.error("Failed to load attachments:", err);
+      logger.error("Failed to load attachments:", err);
       setError("Failed to load attachments");
       setFetchedAttachments([]);
     } finally {
@@ -287,7 +288,7 @@ export function useAttachmentCounts(
         setCounts({ textAttachments: 0, emailAttachments: 0, total: 0, totalSizeBytes: 0 });
       }
     } catch (err) {
-      console.error("Failed to load attachment counts:", err);
+      logger.error("Failed to load attachment counts:", err);
       setError("Failed to load attachment counts");
       setCounts({ textAttachments: 0, emailAttachments: 0, total: 0, totalSizeBytes: 0 });
     } finally {
