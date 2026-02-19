@@ -79,10 +79,28 @@ Phase 1: Code Cleanup
 - TASK-2007 touches: AppRouter.tsx, 5 component files -- no overlap with 2008 (AppModals.tsx NOT touched)
 - TASK-2008 touches: 22 production files (hooks, services, state) -- no overlap with AppRouter/AppModals since those have no console.log calls
 
+### Phase Gate: Regression Check (PM-Owned)
+
+After all Phase 1 PRs are merged to develop, PM runs a regression check before starting Phase 2:
+
+```
+Phase Gate: Regression Verification
++-- PM: Pull latest develop (with all 3 Phase 1 PRs merged)
++-- PM: Run full validation suite:
+|   1. npm run type-check
+|   2. npm run lint
+|   3. npm test
+|   4. Verify app starts: npm run dev (manual spot-check)
++-- If any step fails → investigate before starting Phase 2
++-- If all pass → update sprint status, proceed to Phase 2
+```
+
+**Why:** Phase 1 tasks touch different files but collectively modify imports (TASK-2007), logging (TASK-2008), and repo config (TASK-2006). Each PR passes CI individually, but combined changes on develop could regress.
+
 ### Phase 2: CI Hardening (Sequential)
 
 ```
-Phase 2: CI Hardening (depends on Phase 1 merged)
+Phase 2: CI Hardening (depends on Phase 1 merged + regression gate passed)
 +-- TASK-2009: Make lint and npm audit blocking (BACKLOG-728)         [FIRST]
 |   1. Remove continue-on-error from lint step
 |   2. Remove continue-on-error from npm audit step
@@ -118,6 +136,10 @@ Phase 1 (Parallel):
 TASK-2006 (repo hygiene) ----+
 TASK-2007 (deprecated comps) +---> All merged to develop
 TASK-2008 (console.log)  ----+
+                              |
+                              v
+Phase Gate: Regression Check (PM)
+  type-check → lint → test → dev spot-check
                               |
                               v
 Phase 2 (Sequential):
@@ -171,6 +193,21 @@ Sprint Complete
 | Electron tests fail in CI due to missing native modules | Medium | High | CI may need electron test setup; if too many failures, add electron tests behind a separate job |
 | Coverage cannot reach 40% even with electron tests | Low | Medium | Set threshold to actual measured coverage minus 2% margin; document path to 40% |
 | console.log removal breaks debug-only code paths | Low | Low | Only replace in production files; logService has debug level for dev-only output |
+
+---
+
+## PM Status Update Checkpoints
+
+PM updates status at each transition. Files: sprint plan (In-Scope table) + backlog CSV.
+
+| When | CSV Status | Sprint Status | Trigger |
+|------|-----------|---------------|---------|
+| Engineer agent assigned | `In Progress` | `In Progress` | PM kicks off engineer |
+| PR created + CI passes | `Testing` | `Testing` | SR notifies PM |
+| PR merged | `Completed` | `Completed` | SR confirms merge |
+| Phase gate passed | — | Update sprint narrative | PM runs regression check |
+
+**Valid CSV statuses:** `Pending`, `In Progress`, `Testing`, `Completed`, `Deferred`
 
 ---
 

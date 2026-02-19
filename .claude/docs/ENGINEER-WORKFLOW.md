@@ -73,18 +73,22 @@ git checkout -b feature/task-XXX-description
 
 ---
 
-## Step 1: PLAN (Plan Agent)
+## Step 1: PLAN (Plan Agent — Plan Mode Required)
 
 **Purpose:** Create a detailed implementation plan before any code is written.
 
 **Who:** Plan Agent (invoke via Task tool with `subagent_type="Plan"`)
 
+**IMPORTANT:** The engineer MUST use plan mode (EnterPlanMode) before writing any code. This is not optional. Plan mode restricts the agent to read-only exploration, preventing premature implementation.
+
 **Actions:**
-1. Read the task file (`.claude/plans/tasks/TASK-XXX.md`)
-2. Explore relevant codebase files
-3. Identify all files to modify/create
-4. Create step-by-step implementation plan
-5. Document any risks or concerns
+1. Enter plan mode (EnterPlanMode)
+2. Read the task file (`.claude/plans/tasks/TASK-XXX.md`)
+3. Explore relevant codebase files
+4. Identify all files to modify/create
+5. Create step-by-step implementation plan
+6. Document any risks or concerns
+7. Exit plan mode (ExitPlanMode) for review
 
 **Deliverable:** Implementation plan written to task file or separate plan file
 
@@ -204,22 +208,36 @@ Engineer Agent ID: <agent_id from Task tool output>
 
 ---
 
-## Step 6: PM UPDATE (After Task Completion)
+## PM Status Updates (At EVERY Transition)
 
-**Purpose:** PM updates tracking files after task passes testing and is merged.
+**CRITICAL:** PM updates status at each workflow transition, not just at task completion. This prevents status drift and ensures the sprint plan always reflects reality.
 
-**Who:** PM Agent or PM (human)
-
-**Actions:**
-1. Update sprint plan status (task marked complete)
-2. Update backlog CSV (BACKLOG-XXX status)
-3. Record actual metrics vs estimates
-4. Log metrics to `tokens.csv`
+**Who:** PM Agent or PM (human) — engineers do NOT update status files.
 
 **Files Updated:**
-- `.claude/plans/sprints/SPRINT-XXX.md` - Task status → Complete
-- `.claude/backlog/backlog.csv` - Item status → Done
-- `.claude/metrics/tokens.csv` - Actual token usage logged
+- `.claude/plans/sprints/SPRINT-XXX.md` — In-Scope table `Status` column
+- `.claude/plans/backlog/data/backlog.csv` — `status` column for each BACKLOG-XXX
+
+**Valid CSV Statuses:** `Pending`, `In Progress`, `Testing`, `Completed`, `Deferred`
+
+### When PM Updates Status
+
+| Transition | Backlog CSV | Sprint Table | Trigger |
+|-----------|-------------|--------------|---------|
+| Engineer agent assigned (Step 5) | → `In Progress` | → `In Progress` | PM kicks off engineer |
+| PR created + CI passes (Step 12) | → `Testing` | → `Testing` | SR notifies PM |
+| PR merged (Step 12b) | → `Completed` | → `Completed` | SR confirms merge |
+| Plan rejected (Step 8) | → `Deferred` | → `Deferred` | SR rejects plan |
+
+### PM Final Update (After Merge)
+
+After each task's PR merges:
+
+**PM Actions:**
+1. Verify backlog CSV status is `Completed`
+2. Verify sprint plan In-Scope table status is `Completed`
+3. Record actual metrics vs estimates
+4. Log metrics to `.claude/metrics/tokens.csv`
 
 **PM Metrics to Record:**
 
@@ -232,8 +250,8 @@ Engineer Agent ID: <agent_id from Task tool output>
 | Variance | Estimated vs Actual | Sprint plan |
 
 **Exit Criteria:**
-- [ ] Sprint plan updated with task completion
-- [ ] Backlog CSV updated
+- [ ] Backlog CSV status → `Completed` (NOT "Done")
+- [ ] Sprint plan status → `Completed`
 - [ ] Metrics logged and variance calculated
 
 ---

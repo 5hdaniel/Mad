@@ -12,15 +12,18 @@ This skill defines how agents hand off work during sprint task execution. Read t
 ## Quick Reference: Who Am I? What's Next?
 
 ### PM Agent Steps
-| Step | Action | Hand Off To |
-|------|--------|-------------|
-| 1 | Verify task file exists with context | - (abort if missing) |
-| 2-4 | Setup (worktree, branch, status) | - |
-| 5 | Task ready for planning | Engineer (plan mode) |
-| 8 | Plan reviewed | Engineer (implement) or User (if rejected) |
-| 11 | Implementation reviewed | SR Engineer (create PR) |
-| 14 | Record effort metrics (sum agent sessions) | - |
-| 15 | All tasks complete | Close sprint |
+| Step | Action | Status Update | Hand Off To |
+|------|--------|---------------|-------------|
+| 1 | Verify task file exists with context | — | - (abort if missing) |
+| 2-4 | Setup (worktree, branch, status) | CSV + Sprint → `In Progress` | - |
+| 5 | Task ready for planning | — | Engineer (plan mode) |
+| 8 | Plan reviewed | Sprint notes: "Plan approved" | Engineer (implement) or User (if rejected) |
+| 11 | Implementation reviewed | CSV + Sprint → `Testing` | SR Engineer (create PR) |
+| 14 | After PR merged | CSV + Sprint → `Completed` | Record effort metrics |
+| 15 | All tasks complete | Sprint → `Completed` | Close sprint |
+
+**Status update files:** `.claude/plans/sprints/SPRINT-XXX.md` + `.claude/plans/backlog/data/backlog.csv`
+**Valid CSV statuses:** `Pending`, `In Progress`, `Testing`, `Completed`, `Deferred`
 
 ### Engineer Agent Steps
 | Step | Action | Hand Off To |
@@ -61,13 +64,16 @@ PHASE A: SETUP (PM)
     - If worktree: already created in step 2
     - If sequential: git checkout -b feature/TASK-XXXX develop
 
-4.  PM: Update task status to "in_progress"
-    - Update sprint file progress table
-    - Update backlog CSV status column
+4.  PM: Update task status to "In Progress"
+    - Update sprint file In-Scope table: Status → `In Progress`
+    - Update backlog CSV status column → `In Progress`
+    - Files: `.claude/plans/sprints/SPRINT-XXX.md` + `.claude/plans/backlog/data/backlog.csv`
+    - Valid CSV statuses: Pending, In Progress, Testing, Completed, Deferred
 
 5.  PM → ENGINEER: Handoff task for planning (plan mode)
     - Use handoff message template
     - Specify: Task ID, task file path, branch name
+    - Instruct engineer to use plan mode (EnterPlanMode) before implementation
 
 PHASE B: PLANNING
 -----------------
@@ -90,10 +96,11 @@ PHASE B: PLANNING
 
 8.  PM: Update backlog CSV + sprint docs
     ├─ If approved → ENGINEER: Start implementation (Step 9)
-    │   - Update status to "implementing"
+    │   - Status stays `In Progress` (plan approved, implementation starting)
+    │   - Update sprint file notes: "Plan approved, implementing"
     │   - Handoff with approval context
     └─ If rejected → Notify user, END
-        - Update status to "rejected"
+        - Update backlog CSV status → `Deferred`
         - Document reason in task file
 
 PHASE C: IMPLEMENTATION
@@ -115,7 +122,9 @@ PHASE C: IMPLEMENTATION
         - Document rejection reason
 
 11. PM: Update status
-    - Update status to "pr_pending"
+    - Update backlog CSV status → `Testing`
+    - Update sprint file In-Scope table: Status → `Testing`
+    - Files: `.claude/plans/sprints/SPRINT-XXX.md` + `.claude/plans/backlog/data/backlog.csv`
     - → SR ENGINEER: Create PR (Step 12)
 
 PHASE D: PR, TEST & MERGE
@@ -149,7 +158,9 @@ PHASE D: PR, TEST & MERGE
     - git worktree remove ../Mad-TASK-XXXX
     - → PM: Task merged notification
 
-14. PM: Record effort metrics
+14. PM: Record effort metrics + mark Completed
+    - Update backlog CSV status → `Completed`
+    - Update sprint file In-Scope table: Status → `Completed`
     - Run: `python .claude/skills/log-metrics/sum_effort.py --task TASK-XXXX`
     - Copy output totals to task file `## Actual Effort` section
     - Update sprint file progress table

@@ -119,6 +119,20 @@ After TASK-2010 adds electron tests to CI, the measured coverage should increase
 
 ---
 
+## PM Status Updates
+
+PM updates these files at each transition (engineer does NOT update status):
+
+| When | Backlog CSV Status | Sprint Table Status | Files |
+|------|-------------------|--------------------|----|
+| Engineer assigned | `In Progress` | `In Progress` | backlog.csv + SPRINT-087.md |
+| PR created + CI passes | `Testing` | `Testing` | backlog.csv + SPRINT-087.md |
+| PR merged | `Completed` | `Completed` | backlog.csv + SPRINT-087.md |
+
+**Backlog IDs to update:** BACKLOG-730
+
+---
+
 ## Implementation Summary (Engineer-Owned)
 
 **REQUIRED: Complete this section before creating PR.**
