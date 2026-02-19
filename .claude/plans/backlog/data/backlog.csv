@@ -432,7 +432,7 @@ BACKLOG-461,Under Review Status When Broker Opens Submission,feature,High,Pendin
 BACKLOG-462,Verify AI Add-on Feature Gating Completeness,qa,Critical,Completed,SPRINT-053,~15K,-,-,2026-01-23,,[BACKLOG-462.md](items/BACKLOG-462.md)
 BACKLOG-463,Single-Screen Contact Management Flow,ux,High,Pending,SPRINT-055b,~45K,-,-,2026-01-23,,[BACKLOG-463.md](items/BACKLOG-463.md)
 BACKLOG-464,OAuth Reconnect Popup Not Opening,bug,Critical,Completed,SPRINT-052,~20K,-,-,2026-01-24,,[BACKLOG-464.md](items/BACKLOG-464.md)
-BACKLOG-475,Verify Auto-Updater End-to-End,infrastructure,High,Pending,SPRINT-056,~15K,-,-,2026-01-24,,[BACKLOG-475.md](items/BACKLOG-475.md)
+BACKLOG-475,Verify Auto-Updater End-to-End,infrastructure,High,Completed,SPRINT-056,~15K,-,ZIP targets added in v2.2.1 (PR #832). Full auto-update pipeline implemented: startup check (5s delay) periodic checks (4h interval) manual check button in Settings (TASK-1990). Verified working across 8 releases (v2.2.1–v2.4.1). See BACKLOG-740 for UX improvements.,2026-01-24,2026-02-19,[BACKLOG-475.md](items/BACKLOG-475.md)
 BACKLOG-476,Complete Signed Release Cycle Test,infrastructure,Medium,Pending,SPRINT-056,~5K,-,-,2026-01-24,,[BACKLOG-476.md](items/BACKLOG-476.md)
 BACKLOG-477,User License Schema in Supabase,schema,Critical,Completed,SPRINT-062,~25K,~28K,+12%,2026-01-24,2026-02-17,[BACKLOG-477.md](items/BACKLOG-477.md)
 BACKLOG-478,License Validation Service,service,Critical,Completed,SPRINT-062,~30K,~45K,+50%,2026-01-24,2026-01-27,[BACKLOG-478.md](items/BACKLOG-478.md)
@@ -449,7 +449,7 @@ BACKLOG-488,Transaction & Feature Events,service,High,Pending,SPRINT-059,~10K,-,
 BACKLOG-489,Privacy Controls & Error Tracking,service,High,Pending,SPRINT-059,~5K,-,-,2026-01-24,,[BACKLOG-489.md](items/BACKLOG-489.md)
 BACKLOG-490,Fix EMAIL_CONNECTED Not Updating in Ready State,bug,Critical,Completed,SPRINT-052,~15K,-,-,2026-01-24,2026-01-25,[BACKLOG-490.md](items/BACKLOG-490.md)
 BACKLOG-491,Remove Excessive NavigationButtons Logging,bug,High,Completed,SPRINT-052,~5K,-,-,2026-01-24,2026-01-25,[BACKLOG-491.md](items/BACKLOG-491.md)
-BACKLOG-492,Test Outlook/Microsoft Email Sync,testing,Critical,Deferred,-,~5K,-,-,2026-01-24,,[BACKLOG-492.md](items/BACKLOG-492.md)
+BACKLOG-492,Test Outlook/Microsoft Email Sync,testing,Critical,Completed,-,~5K,-,Outlook email sync tested with Madison (Cbolympia). Fixed contact filtering via Graph API $filter (PR #841). Released in v2.2.5.,2026-01-24,2026-02-12,[BACKLOG-492.md](items/BACKLOG-492.md)
 BACKLOG-493,Cannot Unlink Emails from Transactions,bug,High,Completed,SPRINT-052,~10K,-,-,2026-01-24,2026-01-25,[BACKLOG-493.md](items/BACKLOG-493.md)
 BACKLOG-494,Display Emails in Natural Thread Format,feature,Critical,Completed,SPRINT-052,~25K,-,-,2026-01-24,2026-01-25,[BACKLOG-494.md](items/BACKLOG-494.md)
 BACKLOG-497,Move SQLite Queries to Worker Thread,refactor,High,Pending,-,~150K,-,-,2026-01-24,,[BACKLOG-497.md](items/BACKLOG-497.md)
@@ -544,7 +544,7 @@ BACKLOG-658,Outlook contacts not synced during auto-refresh,bug,High,Completed,S
 BACKLOG-659,Source filter missing on contact selection screens,bug,Medium,Completed,SPRINT-079,~30K,-,-,2026-02-10,2026-02-10,
 BACKLOG-660,ImportContactsModal does not refresh after manual sync,bug,Medium,Completed,SPRINT-079,~15K,-,-,2026-02-10,2026-02-10,
 BACKLOG-661,Move external contacts query to worker thread (main process freeze fix),enhancement,High,Completed,SPRINT-080,~25K,-,-,2026-02-11,2026-02-11,BACKLOG-661.md
-BACKLOG-662,Configure Electron Fuses for production hardening,security,Critical,Pending,SPRINT-080A,~30K,-,-,2026-02-11,,
+BACKLOG-662,Configure Electron Fuses for production hardening,security,Critical,Completed,SPRINT-080A,~30K,-,TASK-1960 implemented fuses. Refined in v2.2.2 (GrantFileProtocol fix) v2.2.3 (removed restricted entitlement) v2.2.4 (disabled EnableCookieEncryption). PRs #838 #839 #840.,2026-02-11,2026-02-12,
 BACKLOG-663,Enable explicit ASAR integrity,security,Critical,Pending,SPRINT-080A,~10K,-,-,2026-02-11,,
 BACKLOG-664,Add deny-by-default permission request handler,security,Critical,Pending,SPRINT-080A,~15K,-,-,2026-02-11,,
 BACKLOG-665,Windows code signing setup,security,Critical,Deferred,SPRINT-080A,~20K,-,-,2026-02-11,,Deferred — no Windows release target yet
@@ -597,3 +597,4 @@ BACKLOG-717,Fix window.api bridge type declarations,tech-debt,High,Completed,SPR
 BACKLOG-718,Create wrapHandler() HOF for IPC error handling boilerplate,refactor,High,Completed,SPRINT-085,~15K,-,-,2026-02-16,,TASK-2002 — Error pattern repeated 179 times across 9 handler files; create shared utility with ValidationError and unknown error handling
 BACKLOG-719,Extract raw SQL from contact-handlers.ts into contactDbService,refactor,High,Completed,SPRINT-085,~12K,-,-,2026-02-16,,TASK-2003 — contacts:update handler has ~140 lines of raw SQL for email/phone sync; extract to syncContactEmails and syncContactPhones service methods
 BACKLOG-720,Split system-handlers.ts into domain handler files,refactor,High,Completed,SPRINT-085,~30K,-,-,2026-02-16,2026-02-17,TASK-2004 — Split 2019-line monolith (39 handlers) into diagnosticHandlers + userSettingsHandlers + systemHandlers
+BACKLOG-740,Settings: prompt user to download and install when update available,ux,Medium,Pending,-,~15K,-,Check for Updates button only shows "Update available (vX.Y.Z)" for 5 seconds then resets. Should show download progress and an Install & Restart button. Wire onAvailable/onProgress/onDownloaded event listeners in Settings.tsx to give users a complete in-app update experience. Related: BACKLOG-475.,2026-02-19,,
