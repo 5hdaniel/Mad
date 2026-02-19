@@ -1,6 +1,6 @@
 # Documentation Index
 
-**Last Updated:** 2026-01-24
+**Last Updated:** 2026-02-19
 
 This is the master index for all Claude agent documentation in Magic Audit.
 
@@ -19,13 +19,15 @@ This is the master index for all Claude agent documentation in Magic Audit.
 
 ---
 
-## Agent Configurations
+## Agent Types & Configuration
 
-| Agent | File | When to Use |
-|-------|------|-------------|
-| **Engineer** | `.claude/agents/engineer.md` | Task implementation, branch creation, PR submission |
-| **SR Engineer** | `.claude/agents/senior-engineer-pr-lead.md` | PR review, architecture decisions, merge approval |
-| **PM** | `.claude/agents/agentic-pm.md` | Sprint planning, backlog management, task assignment |
+These agents are **built-in Task tool types** (invoked via `subagent_type`), not markdown files on disk. Their behavior is configured by the docs listed below.
+
+| Agent (`subagent_type`) | Config Docs | When to Use |
+|-------------------------|-------------|-------------|
+| **`engineer`** | `.claude/docs/ENGINEER-WORKFLOW.md` + `.claude/skills/agent-handoff/SKILL.md` | Task implementation, branch creation, PR submission |
+| **`senior-engineer-pr-lead`** | `.claude/docs/PR-SOP.md` + `.claude/skills/agent-handoff/SKILL.md` | PR review, architecture decisions, merge approval |
+| **`agentic-pm`** | `.claude/skills/agentic-pm/SKILL.md` + `.claude/skills/agent-handoff/SKILL.md` | Sprint planning, backlog management, task assignment |
 
 ---
 
@@ -34,7 +36,7 @@ This is the master index for all Claude agent documentation in Magic Audit.
 | Document | Location | Purpose |
 |----------|----------|---------|
 | **PR-SOP** | `.claude/docs/PR-SOP.md` | Complete 9-phase PR checklist |
-| **Engineer Workflow** | `.claude/docs/ENGINEER-WORKFLOW.md` | 8-step task implementation checklist |
+| **Engineer Workflow** | `.claude/docs/ENGINEER-WORKFLOW.md` | 6-step task implementation checklist (within the 15-step handoff lifecycle) |
 | **LLM Integration Testing** | `.claude/docs/LLM-INTEGRATION-TESTING.md` | AI feature testing checklist |
 
 ---
@@ -81,10 +83,13 @@ The PM skill uses progressive disclosure - load only what you need.
 | Sprint plans | `.claude/plans/sprints/` | `SPRINT-NNN-slug.md` |
 | Task files | `.claude/plans/tasks/` | `TASK-NNN-slug.md` |
 | Archived tasks | `.claude/plans/tasks/archive/` | `TASK-NNN-slug.md` |
-| Backlog items | `.claude/plans/backlog/` | `BACKLOG-NNN.md` |
-| Backlog index | `.claude/plans/backlog/INDEX.md` | Single file |
+| **Backlog CSV (source of truth)** | `.claude/plans/backlog/data/backlog.csv` | One row per item |
+| Backlog detail files (legacy) | `.claude/plans/backlog/items/` | `BACKLOG-NNN.md` (not all items have one) |
+| Backlog README | `.claude/plans/backlog/README.md` | Schema, status flow, query examples |
 | Decision log | `.claude/plans/decision-log.md` | Single file |
 | Risk register | `.claude/plans/risk-register.md` | Single file |
+
+**Note:** The CSV is the canonical source. 264 CSV entries have no `.md` detail file; 77 `.md` files have no CSV entry (orphans needing migration). Always add/update in CSV first.
 
 ---
 

@@ -4,7 +4,7 @@
 
 ---
 
-## Quick Reference: 5-Step Task Cycle
+## Quick Reference: 6-Step Task Cycle (within 15-step handoff lifecycle)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -22,7 +22,13 @@
 │                                                                             │
 │  STEP 5: IMPLEMENT   → Engineer implements approved plan                    │
 │                         📋 Record: Engineer Agent ID                        │
+│                                                                             │
+│  STEP 6: PM UPDATE   → PM updates status + records metrics                  │
+│                         📋 See: PM Status Updates section below             │
 └─────────────────────────────────────────────────────────────────────────────┘
+
+**This 6-step cycle maps to Steps 5-14 of the 15-step agent-handoff lifecycle.**
+**Full lifecycle:** `.claude/skills/agent-handoff/SKILL.md`
 ```
 
 **CRITICAL:**
@@ -59,8 +65,8 @@ grep "<engineer_agent_id>" .claude/metrics/tokens.csv
 
 ```bash
 # Always start from the sprint branch (or develop)
-git checkout project/licensing-and-auth-flow  # or develop
-git pull origin project/licensing-and-auth-flow
+git checkout develop  # or develop
+git pull origin develop
 
 # Create feature branch with task ID
 git checkout -b feature/task-XXX-description
@@ -73,18 +79,21 @@ git checkout -b feature/task-XXX-description
 
 ---
 
-## Step 1: PLAN (Plan Agent)
+## Step 1: PLAN (Read-Only Exploration)
 
 **Purpose:** Create a detailed implementation plan before any code is written.
 
-**Who:** Plan Agent (invoke via Task tool with `subagent_type="Plan"`)
+**Who:** Engineer agent — planning phase is read-only (no Edit/Write of production files).
+
+**IMPORTANT:** Do NOT use `EnterPlanMode` — it requires interactive user approval and does not work inside subagent context. Instead, the engineer explores with read-only tools (Glob, Grep, Read) and writes the plan to the task file.
 
 **Actions:**
 1. Read the task file (`.claude/plans/tasks/TASK-XXX.md`)
-2. Explore relevant codebase files
+2. Explore relevant codebase files (read-only)
 3. Identify all files to modify/create
 4. Create step-by-step implementation plan
 5. Document any risks or concerns
+6. Write plan to task file — do NOT edit production files yet
 
 **Deliverable:** Implementation plan written to task file or separate plan file
 
@@ -204,22 +213,36 @@ Engineer Agent ID: <agent_id from Task tool output>
 
 ---
 
-## Step 6: PM UPDATE (After Task Completion)
+## PM Status Updates (At EVERY Transition)
 
-**Purpose:** PM updates tracking files after task passes testing and is merged.
+**CRITICAL:** PM updates status at each workflow transition, not just at task completion. This prevents status drift and ensures the sprint plan always reflects reality.
 
-**Who:** PM Agent or PM (human)
-
-**Actions:**
-1. Update sprint plan status (task marked complete)
-2. Update backlog CSV (BACKLOG-XXX status)
-3. Record actual metrics vs estimates
-4. Log metrics to `tokens.csv`
+**Who:** PM Agent or PM (human) — engineers do NOT update status files.
 
 **Files Updated:**
-- `.claude/plans/sprints/SPRINT-XXX.md` - Task status → Complete
-- `.claude/backlog/backlog.csv` - Item status → Done
-- `.claude/metrics/tokens.csv` - Actual token usage logged
+- `.claude/plans/sprints/SPRINT-XXX.md` — In-Scope table `Status` column
+- `.claude/plans/backlog/data/backlog.csv` — `status` column for each BACKLOG-XXX
+
+**Valid CSV Statuses:** `Pending`, `In Progress`, `Testing`, `Completed`, `Deferred`
+
+### When PM Updates Status
+
+| Transition | Backlog CSV | Sprint Table | Trigger |
+|-----------|-------------|--------------|---------|
+| Engineer agent assigned (Step 5) | → `In Progress` | → `In Progress` | PM kicks off engineer |
+| PR created + CI passes (Step 12) | → `Testing` | → `Testing` | SR notifies PM |
+| PR merged (Step 12b) | → `Completed` | → `Completed` | SR confirms merge |
+| Plan rejected (Step 8) | → `Deferred` | → `Deferred` | SR rejects plan |
+
+### PM Final Update (After Merge)
+
+After each task's PR merges:
+
+**PM Actions:**
+1. Verify backlog CSV status is `Completed`
+2. Verify sprint plan In-Scope table status is `Completed`
+3. Record actual metrics vs estimates
+4. Log metrics to `.claude/metrics/tokens.csv`
 
 **PM Metrics to Record:**
 
@@ -232,8 +255,8 @@ Engineer Agent ID: <agent_id from Task tool output>
 | Variance | Estimated vs Actual | Sprint plan |
 
 **Exit Criteria:**
-- [ ] Sprint plan updated with task completion
-- [ ] Backlog CSV updated
+- [ ] Backlog CSV status → `Completed` (NOT "Done")
+- [ ] Sprint plan status → `Completed`
 - [ ] Metrics logged and variance calculated
 
 ---
@@ -257,10 +280,10 @@ git commit -m "type(scope): description
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
-Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 
 git push -u origin your-branch-name
-gh pr create --base project/licensing-and-auth-flow --title "..." --body "..."
+gh pr create --base develop --title "..." --body "..."
 ```
 
 ### CI and Debug Failures

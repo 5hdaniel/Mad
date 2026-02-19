@@ -129,18 +129,24 @@ npm run lint -- --fix
 🤖 **LLM Assist**: Claude can propose consistent patterns and refactors for naming/structure.
 
 ### 2.3 Structured Error Logging
-Ensure proper logging using the central `LogService` (`electron/services/logService.ts`):
+Use the appropriate logger for each process:
+
+**Electron main process:** `LogService` (`electron/services/logService.ts`)
+**Renderer process:** `logger` (`src/utils/logger.ts`)
+
 - [ ] Use appropriate log levels: `debug`, `info`, `warn`, `error`
 - [ ] Include context in log messages (function name, relevant IDs)
 - [ ] No sensitive data in logs (tokens, passwords, PII)
 - [ ] Use structured metadata for additional context
 
 ```typescript
-// Example usage
-import { log } from '../services/logService';
+// Electron main process
+import logService from './logService';
+logService.info('Processing transaction', 'TransactionService');
 
-log.info('Processing transaction', { context: 'TransactionService', metadata: { transactionId: '123' } });
-log.error('Failed to sync', { context: 'SyncService', metadata: { error: err.message } });
+// Renderer process
+import logger from '@/utils/logger';
+logger.info('Sync started', { transactionId: '123' });
 ```
 
 🤖 **LLM Assist**: Claude can generate consistent, standardized log statements using the LogService pattern.
