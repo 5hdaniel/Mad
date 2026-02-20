@@ -97,13 +97,23 @@ Switching between packaged (DMG) and dev mode can break `safeStorage`:
 
 ## Implementation Summary
 
-_To be filled by Engineer after implementation._
+Implemented safeStorage encryption for session tokens in `sessionService.ts`. Session data is now encrypted at rest using Electron's safeStorage API (OS Keychain on macOS, DPAPI on Windows, libsecret on Linux). The implementation includes: (1) encrypted wrapper format `{"encrypted":"<base64>"}` to distinguish encrypted from plaintext files, (2) seamless migration of pre-existing plaintext sessions on first read, (3) graceful fallback to plaintext when safeStorage is unavailable, (4) decrypt failure handling that deletes the corrupt session file and forces re-login instead of crashing. All 66 existing + new tests pass.
 
 | Field | Value |
 |-------|-------|
-| Agent ID | |
-| Branch | |
-| PR | |
-| Files Changed | |
-| Tests Added/Modified | |
-| Actual Tokens | |
+| Agent ID | TBD (auto-captured) |
+| Branch | feature/TASK-2017-encrypt-session-tokens |
+| PR | TBD |
+| Files Changed | 5 (1 modified service, 3 updated test files, 1 new test file) |
+| Tests Added/Modified | 4 test files updated, 1 new (sessionService.encryption.test.ts with 10 tests) |
+| Actual Tokens | TBD (auto-captured) |
+
+### Engineer Checklist
+- [x] Session tokens encrypted at rest in session.json
+- [x] Existing plaintext sessions auto-migrated on first read
+- [x] Decrypt failure (keychain conflict) gracefully forces re-login
+- [x] Missing safeStorage falls back to plaintext with warning
+- [x] npm test passes (66/66 tests)
+- [x] npm run type-check passes
+- [x] resetService.ts verified -- no changes needed (uses clearSession which deletes file)
+- [x] No deviations from task requirements
