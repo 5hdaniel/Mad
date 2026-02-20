@@ -75,7 +75,6 @@ function ContactFormModal({
         setFormData((prev) => ({ ...prev, emails, phones }));
       })
       .finally(() => setLoadingEntries(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contact?.id]);
 
   // For new contacts, seed entries from single fields if not already set
