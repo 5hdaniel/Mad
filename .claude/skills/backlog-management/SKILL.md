@@ -84,18 +84,19 @@ pending_high = [
 2. **All items need .md files** - Create BACKLOG-XXX.md for every item
 3. **Run validation** - Execute `python .claude/plans/backlog/scripts/validate.py` before committing
 4. **Log key changes** - Add entries to changelog.csv for significant changes
-5. **Column order matters** - The CSV column order is: `id,title,category,priority,status,sprint,est_tokens,actual_tokens,variance,created_at,completed_at,file`
+5. **Column order matters** - The CSV column order is: `id,title,type,area,priority,status,sprint,est_tokens,actual_tokens,variance,created_at,completed_at,file,description`
 
 ### CSV Column Order (Quick Reference)
 
 ```
-id,title,category,priority,status,sprint,est_tokens,actual_tokens,variance,created_at,completed_at,file
+id,title,type,area,priority,status,sprint,est_tokens,actual_tokens,variance,created_at,completed_at,file,description
 ```
 
-> **Common Mistake:** Swapping category/priority/status positions. Always verify positions 3-5:
-> - Position 3: `category` (enhancement, bug, feature, etc.)
-> - Position 4: `priority` (high, medium, low, critical)
-> - Position 5: `status` (pending, in-progress, testing, etc.)
+> **Common Mistake:** Swapping type/area/priority/status positions. Always verify positions 3-6:
+> - Position 3: `type` (bug, feature, chore, refactor, test, docs)
+> - Position 4: `area` (ui, electron, infra, service, security, schema, ipc)
+> - Position 5: `priority` (high, medium, low, critical)
+> - Position 6: `status` (pending, in-progress, testing, etc.)
 
 ---
 

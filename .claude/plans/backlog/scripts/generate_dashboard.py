@@ -27,20 +27,25 @@ BACKLOG_FILE = DATA_DIR / 'backlog.csv'
 
 
 def extract_description(md_path: Path) -> str:
-    """Extract the Description section from a markdown file."""
+    """Extract a description from a markdown file, trying multiple heading patterns."""
     if not md_path.exists():
         return ''
 
     try:
         content = md_path.read_text(encoding='utf-8')
-        # Find ## Description section
-        match = re.search(r'## Description\s*\n(.*?)(?=\n## |\Z)', content, re.DOTALL)
-        if match:
-            desc = match.group(1).strip()
-            # Limit to first 500 chars for display
-            if len(desc) > 500:
-                desc = desc[:500] + '...'
-            return desc
+        # Try headings in priority order
+        headings = ['Description', 'Summary', 'Problem Statement', 'Problem', 'Background', 'Overview']
+        for heading in headings:
+            match = re.search(
+                rf'## {re.escape(heading)}\s*\n(.*?)(?=\n## |\Z)',
+                content, re.DOTALL
+            )
+            if match:
+                desc = match.group(1).strip()
+                if desc:
+                    if len(desc) > 500:
+                        desc = desc[:500] + '...'
+                    return desc
     except Exception:
         pass
     return ''
@@ -51,11 +56,13 @@ def load_backlog() -> list[dict]:
     with open(BACKLOG_FILE, newline='', encoding='utf-8') as f:
         items = list(csv.DictReader(f))
 
-    # Add descriptions from markdown files
+    # Add descriptions: prefer .md file, fall back to CSV description column
     for item in items:
         item_id = item.get('id', '')
         md_file = ITEMS_DIR / f'{item_id}.md'
-        item['description'] = extract_description(md_file)
+        md_desc = extract_description(md_file)
+        csv_desc = item.get('description', '').strip()
+        item['description'] = md_desc or csv_desc
 
     return items
 

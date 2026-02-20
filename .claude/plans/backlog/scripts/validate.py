@@ -15,6 +15,8 @@ import sys
 from pathlib import Path
 
 # Valid enum values (case-insensitive, allow markdown formatting)
+VALID_TYPES = {'bug', 'feature', 'chore', 'refactor', 'test', 'docs'}
+VALID_AREAS = {'ui', 'electron', 'infra', 'service', 'security', 'schema', 'ipc'}
 VALID_PRIORITIES = {'critical', 'high', 'medium', 'low'}
 VALID_STATUSES = {
     'pending', 'in-progress', 'in progress', 'completed', 'blocked', 'deferred',
@@ -54,6 +56,16 @@ def validate_backlog() -> list:
                 errors.append(f"Line {i}: Missing id")
             if not row.get('title'):
                 errors.append(f"{item_id}: Missing title")
+
+            # Type validation
+            item_type = row.get('type', '').strip()
+            if item_type and normalize(item_type) not in VALID_TYPES and item_type != '-':
+                errors.append(f"{item_id}: Invalid type '{item_type}'")
+
+            # Area validation
+            area = row.get('area', '').strip()
+            if area and normalize(area) not in VALID_AREAS and area != '-':
+                errors.append(f"{item_id}: Invalid area '{area}'")
 
             # Priority validation
             priority = row.get('priority', '').strip()
