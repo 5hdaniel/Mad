@@ -2,6 +2,33 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { sentryVitePlugin } from '@sentry/vite-plugin';
 import path from 'path';
+import fs from 'fs';
+
+/** Unconditionally delete .js.map files after build so source maps never ship. */
+function deleteSourceMaps() {
+  return {
+    name: 'delete-source-maps',
+    closeBundle: {
+      sequential: true,
+      order: 'post',
+      handler() {
+        const distDir = path.resolve(__dirname, 'dist');
+        if (!fs.existsSync(distDir)) return;
+        const files = fs.readdirSync(distDir, { recursive: true });
+        let count = 0;
+        for (const file of files) {
+          if (typeof file === 'string' && file.endsWith('.js.map')) {
+            fs.unlinkSync(path.join(distDir, file));
+            count++;
+          }
+        }
+        if (count > 0) {
+          console.log(`[delete-source-maps] Removed ${count} source map file(s)`);
+        }
+      },
+    },
+  };
+}
 
 export default defineConfig({
   plugins: [
@@ -18,6 +45,7 @@ export default defineConfig({
         },
       }),
     ] : []),
+    deleteSourceMaps(),
   ],
   base: './',
   resolve: {
