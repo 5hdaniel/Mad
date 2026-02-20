@@ -398,6 +398,31 @@ class DatabaseService implements IDatabaseService {
       migrate: (d: DatabaseType) => void;
     }[] = [
       // Baseline = 29. Add new migrations below.
+      {
+        version: 30,
+        description: "Fix transaction_summary view to count from transaction_contacts instead of deprecated transaction_participants",
+        migrate: (d) => {
+          d.exec(`
+            DROP VIEW IF EXISTS transaction_summary;
+            CREATE VIEW IF NOT EXISTS transaction_summary AS
+            SELECT
+              t.id,
+              t.user_id,
+              t.property_address,
+              t.transaction_type,
+              t.status,
+              t.stage,
+              t.started_at,
+              t.closed_at,
+              t.message_count,
+              t.attachment_count,
+              t.confidence_score,
+              (SELECT COUNT(*) FROM transaction_contacts tc WHERE tc.transaction_id = t.id) as participant_count,
+              (SELECT COUNT(*) FROM audit_packages ap WHERE ap.transaction_id = t.id) as audit_count
+            FROM transactions t;
+          `);
+        },
+      },
     ];
 
     for (const m of migrations) {
