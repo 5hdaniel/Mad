@@ -1,7 +1,7 @@
 # SPRINT-087: Repo Polish for Due Diligence
 
 **Created:** 2026-02-19
-**Status:** In Progress
+**Status:** Completed
 **Branch:** `develop` (task branches off develop)
 **Base:** `develop`
 
@@ -29,10 +29,10 @@ The remaining 10 items (Electron upgrade, session encryption, imessage-parser re
 | BACKLOG-732 | Consolidate duplicate backlog items | TASK-2006 | 1 | Completed |
 | BACKLOG-725 | Remove deprecated components from AppRouter | TASK-2007 | 1 | Completed |
 | BACKLOG-726 | Replace console.log with logService | TASK-2008 | 1 | Completed |
-| BACKLOG-741 | Fix pre-existing contact-handlers & App test failures | TASK-2012 | 1.5 | Testing |
-| BACKLOG-728 | Make lint and npm audit blocking in CI | TASK-2009 | 2 | Pending |
-| BACKLOG-729 | Add Electron backend tests to CI pipeline | TASK-2010 | 2 | Pending |
-| BACKLOG-730 | Raise CI test coverage threshold to 40% | TASK-2011 | 2 | Pending |
+| BACKLOG-741 | Fix pre-existing contact-handlers & App test failures | TASK-2012 | 1.5 | Completed |
+| BACKLOG-728 | Make lint and npm audit blocking in CI | TASK-2009 | 2 | Completed |
+| BACKLOG-729 | Add Electron backend tests to CI pipeline | TASK-2010 | 2 | Completed |
+| BACKLOG-730 | Raise CI test coverage threshold to 40% | TASK-2011 | 2 | Completed |
 
 **Total Estimated Tokens:** ~66K (engineering ~46K + SR review ~20K)
 
