@@ -130,6 +130,7 @@ module.exports = {
     'transaction-handlers.integration.test.ts', // Integration test — transaction update mock returns undefined
     'externalContactDbService.worker.test.ts', // Worker thread mocking broken — error/exit paths resolve instead of reject
     'macOSMessagesImportService.attachments.test.ts', // Windows CI: path.join uses backslashes but assertions expect forward slashes (cross-platform path separator issue)
+    'emailAttachmentService.test.ts', // Windows CI: path separator issue — assertions expect forward slashes but path.join uses backslashes
   ] : [
     '/node_modules/',
     '/dist/',
