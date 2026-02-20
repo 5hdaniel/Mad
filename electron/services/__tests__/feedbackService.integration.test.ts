@@ -55,8 +55,8 @@ describe("Feedback Integration Tests", () => {
         id: `fb-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         user_id: data.user_id,
         transaction_id: data.transaction_id,
-        communication_id: data.communication_id,
-        field_name: data.field_name,
+        message_id: data.message_id,
+        contact_id: data.contact_id,
         feedback_type: data.feedback_type,
         original_value: data.original_value,
         corrected_value: data.corrected_value,
@@ -66,11 +66,11 @@ describe("Feedback Integration Tests", () => {
       return feedback;
     });
 
-    // Mock getFeedbackByField to retrieve from memory
+    // Mock getFeedbackByField to retrieve from memory (queries by feedback_type)
     mockDatabaseService.getFeedbackByField.mockImplementation(
       async (userId, fieldName, limit = 100) => {
         return feedbackStorage
-          .filter((f) => f.user_id === userId && f.field_name === fieldName)
+          .filter((f) => f.user_id === userId && f.feedback_type === fieldName)
           .slice(0, limit);
       }
     );
@@ -97,12 +97,13 @@ describe("Feedback Integration Tests", () => {
       const saved = feedbackStorage[0];
       expect(saved.user_id).toBe(TEST_USER_ID);
       expect(saved.transaction_id).toBe("tx-001");
-      expect(saved.field_name).toBe("llm_transaction_action");
-      expect(saved.feedback_type).toBe("confirmation");
+      expect(saved.feedback_type).toBe("transaction_link");
 
       // Verify metadata in original_value
       const metadata = JSON.parse(saved.original_value || "{}");
       expect(metadata.action).toBe("transaction_approved");
+      expect(metadata.category).toBe("llm_transaction_action");
+      expect(metadata.dbFeedbackType).toBe("confirmation");
       expect(metadata.modelVersion).toBe("openai:gpt-4o-mini");
       expect(metadata.promptVersion).toBe("v1.0.0");
     });
@@ -119,10 +120,11 @@ describe("Feedback Integration Tests", () => {
       expect(feedbackStorage).toHaveLength(1);
 
       const saved = feedbackStorage[0];
-      expect(saved.feedback_type).toBe("rejection");
+      expect(saved.feedback_type).toBe("transaction_link");
 
       const metadata = JSON.parse(saved.original_value || "{}");
       expect(metadata.action).toBe("transaction_rejected");
+      expect(metadata.dbFeedbackType).toBe("rejection");
     });
 
     it("should record transaction approval with corrections as edit", async () => {
@@ -139,10 +141,11 @@ describe("Feedback Integration Tests", () => {
       await feedbackService.recordTransactionFeedback(TEST_USER_ID, feedback);
 
       const saved = feedbackStorage[0];
-      expect(saved.feedback_type).toBe("correction");
+      expect(saved.feedback_type).toBe("transaction_link");
 
       const metadata = JSON.parse(saved.original_value || "{}");
       expect(metadata.action).toBe("transaction_edited");
+      expect(metadata.dbFeedbackType).toBe("correction");
 
       const corrections = JSON.parse(saved.corrected_value || "{}");
       expect(corrections.propertyAddress).toBe("123 Main St, Updated");
@@ -164,12 +167,13 @@ describe("Feedback Integration Tests", () => {
       expect(feedbackStorage).toHaveLength(1);
 
       const saved = feedbackStorage[0];
-      expect(saved.field_name).toBe("llm_contact_role");
-      expect(saved.feedback_type).toBe("correction");
+      expect(saved.feedback_type).toBe("contact_role");
+      expect(saved.contact_id).toBe("contact-001");
       expect(saved.corrected_value).toBe("seller_agent");
 
       const metadata = JSON.parse(saved.original_value || "{}");
       expect(metadata.action).toBe("contact_role_corrected");
+      expect(metadata.category).toBe("llm_contact_role");
       expect(metadata.contactId).toBe("contact-001");
       expect(metadata.originalRole).toBe("buyer_agent");
       expect(metadata.modelVersion).toBe("gpt-4-turbo");
@@ -185,12 +189,13 @@ describe("Feedback Integration Tests", () => {
       await feedbackService.recordCommunicationFeedback(TEST_USER_ID, feedback);
 
       const saved = feedbackStorage[0];
-      expect(saved.field_name).toBe("llm_communication");
-      expect(saved.feedback_type).toBe("rejection");
+      expect(saved.message_id).toBe("comm-001");
+      expect(saved.feedback_type).toBe("message_relevance");
 
       const metadata = JSON.parse(saved.original_value || "{}");
       expect(metadata.action).toBe("communication_unlinked");
       expect(metadata.wasRelevant).toBe(false);
+      expect(metadata.dbFeedbackType).toBe("rejection");
     });
 
     it("should record communication add feedback with correct transaction", async () => {
@@ -204,13 +209,14 @@ describe("Feedback Integration Tests", () => {
       await feedbackService.recordCommunicationFeedback(TEST_USER_ID, feedback);
 
       const saved = feedbackStorage[0];
-      expect(saved.field_name).toBe("llm_communication");
-      expect(saved.feedback_type).toBe("confirmation");
+      expect(saved.message_id).toBe("comm-002");
+      expect(saved.feedback_type).toBe("message_relevance");
       expect(saved.corrected_value).toBe("tx-correct");
 
       const metadata = JSON.parse(saved.original_value || "{}");
       expect(metadata.action).toBe("communication_added");
       expect(metadata.wasRelevant).toBe(true);
+      expect(metadata.dbFeedbackType).toBe("confirmation");
     });
   });
 

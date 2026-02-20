@@ -1,6 +1,11 @@
 /**
- * User Feedback Database Service
- * Handles all user feedback-related database operations
+ * Classification Feedback Database Service
+ * Handles all classification feedback database operations
+ *
+ * Maps to the classification_feedback table in schema.sql.
+ * Columns: id, user_id, message_id, attachment_id, transaction_id,
+ *          contact_id, feedback_type, original_value, corrected_value,
+ *          reason, created_at
  */
 
 import crypto from "crypto";
@@ -9,7 +14,7 @@ import { DatabaseError } from "../../types";
 import { dbGet, dbAll, dbRun } from "./core/dbConnection";
 
 /**
- * Save user feedback on extracted data
+ * Save user feedback on classified data
  */
 export async function saveFeedback(
   feedbackData: Omit<UserFeedback, "id" | "created_at">,
@@ -17,9 +22,9 @@ export async function saveFeedback(
   const id = crypto.randomUUID();
 
   const sql = `
-    INSERT INTO user_feedback (
-      id, user_id, transaction_id, communication_id, feedback_type,
-      field_name, original_value, corrected_value, feedback_text
+    INSERT INTO classification_feedback (
+      id, user_id, transaction_id, message_id, contact_id,
+      feedback_type, original_value, corrected_value, reason
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
@@ -27,18 +32,18 @@ export async function saveFeedback(
     id,
     feedbackData.user_id,
     feedbackData.transaction_id || null,
-    feedbackData.communication_id || null,
+    feedbackData.message_id || null,
+    feedbackData.contact_id || null,
     feedbackData.feedback_type,
-    feedbackData.field_name || null,
     feedbackData.original_value || null,
     feedbackData.corrected_value || null,
-    feedbackData.feedback_text || null,
+    feedbackData.reason || null,
   ];
 
   dbRun(sql, params);
 
   const feedback = dbGet<UserFeedback>(
-    "SELECT * FROM user_feedback WHERE id = ?",
+    "SELECT * FROM classification_feedback WHERE id = ?",
     [id],
   );
   if (!feedback) {
@@ -55,7 +60,7 @@ export async function getFeedbackByTransaction(
   transactionId: string,
 ): Promise<UserFeedback[]> {
   const sql = `
-    SELECT * FROM user_feedback
+    SELECT * FROM classification_feedback
     WHERE transaction_id = ?
     ORDER BY created_at DESC
   `;
@@ -64,7 +69,7 @@ export async function getFeedbackByTransaction(
 }
 
 /**
- * Get feedback by field name
+ * Get feedback by feedback type
  */
 export async function getFeedbackByField(
   userId: string,
@@ -72,8 +77,8 @@ export async function getFeedbackByField(
   limit: number = 100,
 ): Promise<UserFeedback[]> {
   const sql = `
-    SELECT * FROM user_feedback
-    WHERE user_id = ? AND field_name = ?
+    SELECT * FROM classification_feedback
+    WHERE user_id = ? AND feedback_type = ?
     ORDER BY created_at DESC
     LIMIT ?
   `;
@@ -89,7 +94,7 @@ export async function getFeedbackByUser(
   limit: number = 100,
 ): Promise<UserFeedback[]> {
   const sql = `
-    SELECT * FROM user_feedback
+    SELECT * FROM classification_feedback
     WHERE user_id = ?
     ORDER BY created_at DESC
     LIMIT ?
@@ -104,7 +109,7 @@ export async function getFeedbackByUser(
 export async function getFeedbackById(
   feedbackId: string,
 ): Promise<UserFeedback | null> {
-  const sql = "SELECT * FROM user_feedback WHERE id = ?";
+  const sql = "SELECT * FROM classification_feedback WHERE id = ?";
   const feedback = dbGet<UserFeedback>(sql, [feedbackId]);
   return feedback || null;
 }
@@ -113,6 +118,6 @@ export async function getFeedbackById(
  * Delete feedback
  */
 export async function deleteFeedback(feedbackId: string): Promise<void> {
-  const sql = "DELETE FROM user_feedback WHERE id = ?";
+  const sql = "DELETE FROM classification_feedback WHERE id = ?";
   dbRun(sql, [feedbackId]);
 }

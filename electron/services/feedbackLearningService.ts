@@ -548,7 +548,7 @@ class FeedbackLearningService {
       // Get all LLM transaction feedback for this user
       const feedback = await databaseService.getFeedbackByField(
         userId,
-        "llm_transaction_action",
+        "transaction_link",
         1000,
       );
 
@@ -597,7 +597,7 @@ class FeedbackLearningService {
       // Get all LLM transaction feedback for this user
       const feedback = await databaseService.getFeedbackByField(
         userId,
-        "llm_transaction_action",
+        "transaction_link",
         1000,
       );
 
@@ -644,12 +644,23 @@ class FeedbackLearningService {
       // Get all LLM transaction feedback for this user
       const feedback = await databaseService.getFeedbackByField(
         userId,
-        "llm_transaction_action",
+        "transaction_link",
         1000,
       );
 
-      // Filter to rejections only
-      const rejections = feedback.filter((f) => f.feedback_type === "rejection");
+      // Filter to rejections only (check metadata for dbFeedbackType or action)
+      const rejections = feedback.filter((f) => {
+        // Check original_value metadata for rejection indicators
+        try {
+          if (f.original_value) {
+            const metadata = JSON.parse(f.original_value);
+            return metadata.dbFeedbackType === "rejection" || metadata.action === "transaction_rejected";
+          }
+        } catch {
+          // Ignore parse errors
+        }
+        return false;
+      });
 
       if (rejections.length === 0) {
         return [];
