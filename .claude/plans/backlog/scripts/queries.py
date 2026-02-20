@@ -8,12 +8,13 @@ Usage:
     python queries.py status pending           # Items by status
     python queries.py priority high            # Items by priority
     python queries.py sprint SPRINT-042        # Items in a sprint
-    python queries.py category bug             # Items by category
+    python queries.py type bug                  # Items by type
+    python queries.py area ui                   # Items by area
     python queries.py search "sync"            # Search titles
     python queries.py stats                    # Summary statistics
 
 Module usage:
-    from queries import get_items_by_status, get_sprint_items
+    from queries import get_items_by_status, get_sprint_items, get_items_by_type, get_items_by_area
 """
 
 import argparse
@@ -64,12 +65,21 @@ def get_items_by_priority(priority: str) -> list[dict]:
     ]
 
 
-def get_items_by_category(category: str) -> list[dict]:
-    """Get items matching a category."""
-    category_norm = normalize(category)
+def get_items_by_type(item_type: str) -> list[dict]:
+    """Get items matching a type."""
+    type_norm = normalize(item_type)
     return [
         item for item in load_backlog()
-        if normalize(item.get('category', '')) == category_norm
+        if normalize(item.get('type', '')) == type_norm
+    ]
+
+
+def get_items_by_area(area: str) -> list[dict]:
+    """Get items matching an area."""
+    area_norm = normalize(area)
+    return [
+        item for item in load_backlog()
+        if normalize(item.get('area', '')) == area_norm
     ]
 
 
@@ -118,7 +128,8 @@ def get_statistics() -> dict:
 
     status_counts = Counter(normalize(item.get('status', 'unknown')) for item in items)
     priority_counts = Counter(normalize(item.get('priority', 'unknown')) for item in items)
-    category_counts = Counter(normalize(item.get('category', 'unknown')) for item in items)
+    type_counts = Counter(normalize(item.get('type', 'unknown')) for item in items)
+    area_counts = Counter(normalize(item.get('area', 'unknown')) for item in items)
 
     sprint_status_counts = Counter(normalize(s.get('status', 'unknown')) for s in sprints)
 
@@ -127,7 +138,8 @@ def get_statistics() -> dict:
         'total_sprints': len(sprints),
         'by_status': dict(status_counts),
         'by_priority': dict(priority_counts),
-        'by_category': dict(category_counts),
+        'by_type': dict(type_counts),
+        'by_area': dict(area_counts),
         'sprints_by_status': dict(sprint_status_counts),
     }
 
@@ -170,9 +182,14 @@ def print_stats(stats: dict):
         print(f"  {priority}: {count}")
     print()
 
-    print("By Category (top 10):")
-    for category, count in sorted(stats['by_category'].items(), key=lambda x: -x[1])[:10]:
-        print(f"  {category}: {count}")
+    print("By Type:")
+    for t, count in sorted(stats['by_type'].items(), key=lambda x: -x[1]):
+        print(f"  {t}: {count}")
+    print()
+
+    print("By Area:")
+    for a, count in sorted(stats['by_area'].items(), key=lambda x: -x[1]):
+        print(f"  {a}: {count}")
     print()
 
     print("Sprints by Status:")
@@ -194,7 +211,7 @@ Examples:
 """
     )
 
-    parser.add_argument('query_type', choices=['status', 'priority', 'category', 'sprint', 'search', 'open', 'ready', 'stats'],
+    parser.add_argument('query_type', choices=['status', 'priority', 'type', 'area', 'sprint', 'search', 'open', 'ready', 'stats'],
                         help='Type of query to run')
     parser.add_argument('value', nargs='?', help='Value to query for')
     parser.add_argument('--status', help='Filter by status (for priority/category queries)')
@@ -234,8 +251,12 @@ Examples:
         items = get_items_by_priority(args.value)
         if args.status:
             items = [i for i in items if normalize(i.get('status', '')) == normalize(args.status)]
-    elif args.query_type == 'category':
-        items = get_items_by_category(args.value)
+    elif args.query_type == 'type':
+        items = get_items_by_type(args.value)
+        if args.status:
+            items = [i for i in items if normalize(i.get('status', '')) == normalize(args.status)]
+    elif args.query_type == 'area':
+        items = get_items_by_area(args.value)
         if args.status:
             items = [i for i in items if normalize(i.get('status', '')) == normalize(args.status)]
     elif args.query_type == 'sprint':

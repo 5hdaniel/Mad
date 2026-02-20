@@ -10,32 +10,37 @@ The main backlog table. Source of truth for all items.
 |--------|------|----------|-------------|
 | `id` | string | Yes | Unique identifier (BACKLOG-XXX) |
 | `title` | string | Yes | Brief description of the item |
-| `category` | enum | Yes | Type of work (see valid values below) |
+| `type` | enum | Yes | Kind of work (see valid values below) |
+| `area` | enum | Yes | System area affected (see valid values below) |
 | `priority` | enum | Yes | Importance level |
 | `status` | enum | Yes | Current state |
 | `sprint` | string | No | Sprint assignment (SPRINT-XXX or -) |
 | `est_tokens` | string | No | Estimated tokens (e.g., "~30K") |
 | `actual_tokens` | string | No | Actual tokens used |
 | `variance` | string | No | Percentage difference from estimate |
-| `file` | string | Yes | Link to detail file (BACKLOG-XXX.md) |
+| `created_at` | date | No | Date item was created (YYYY-MM-DD) |
+| `completed_at` | date | No | Date item was completed (YYYY-MM-DD) |
+| `file` | string | No | Link to detail file (BACKLOG-XXX.md) |
+| `description` | string | No | Short description (fallback when no .md file) |
 
 ### Valid Values
 
-**category:**
-- `bug` - Bug fix
-- `feature` - New functionality
-- `enhancement` - Improvement to existing feature
-- `refactor` - Code restructuring
-- `tech-debt` - Technical debt reduction
+**type:**
+- `bug` - Something broken that needs fixing
+- `feature` - New functionality or enhancement to existing feature
+- `chore` - Maintenance, config, cleanup, infrastructure work
+- `refactor` - Code restructuring without behavior change
 - `test` - Testing improvements
 - `docs` - Documentation
-- `infra` - Infrastructure/build
-- `security` - Security fix
-- `schema` - Database schema change
-- `service` - Backend service work
-- `ui` - User interface work
-- `ipc` - IPC layer work
-- `config` - Configuration
+
+**area:**
+- `ui` - User interface, components, styling, UX
+- `electron` - Main process, preload, native modules, desktop-specific
+- `infra` - CI/CD, build, deploy, tooling, config
+- `service` - Backend services, APIs, sync, data processing
+- `security` - Auth, encryption, tokens, permissions
+- `schema` - Database schema, migrations, RLS
+- `ipc` - IPC layer, handler bridges between main/renderer
 
 **priority:**
 - `critical` - Must be done immediately
@@ -132,6 +137,6 @@ with open('.claude/plans/backlog/data/backlog.csv') as f:
 # Find all high priority pending items
 grep ",high,pending," .claude/plans/backlog/data/backlog.csv
 
-# Count items by status
-cut -d',' -f5 .claude/plans/backlog/data/backlog.csv | sort | uniq -c
+# Count items by status (column 6)
+cut -d',' -f6 .claude/plans/backlog/data/backlog.csv | sort | uniq -c
 ```
