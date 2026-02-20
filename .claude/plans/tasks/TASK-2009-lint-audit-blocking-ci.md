@@ -191,7 +191,7 @@ Completion:
 - **Before**: Lint and npm audit steps had `continue-on-error: true`, making them advisory-only. 1 lint error from undefined `react-hooks/exhaustive-deps` rule reference.
 - **After**: Both steps are now blocking. Lint passes with 0 errors. Audit passes with `--audit-level=critical` (72 known high/moderate vulnerabilities tracked in BACKLOG-723).
 - **Actual Tokens**: ~15K (Est: ~8-12K)
-- **PR**: [pending]
+- **PR**: https://github.com/5hdaniel/Mad/pull/886
 
 ### Notes
 
