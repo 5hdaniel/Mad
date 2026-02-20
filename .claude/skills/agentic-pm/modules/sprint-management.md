@@ -223,15 +223,102 @@ gh pr view <PR-NUMBER> --json state --jq '.state'
 # Must show: MERGED (not OPEN, not CLOSED)
 ```
 
+#### Metrics Collection (Before Closure)
+
+For each task in the sprint:
+
+1. **Label agent metrics** — Collect agent_ids from all handoff messages:
+   ```bash
+   python .claude/skills/log-metrics/log_metrics.py \
+     --label --agent-id <ID> -t engineer -i TASK-XXXX -d "implementation"
+   python .claude/skills/log-metrics/log_metrics.py \
+     --label --agent-id <ID> -t sr-engineer -i TASK-XXXX -d "PR review"
+   ```
+
+2. **Aggregate per-task totals:**
+   ```bash
+   python .claude/skills/log-metrics/sum_effort.py --task TASK-XXXX --pretty
+   ```
+
+3. **Record actuals** — Copy totals to:
+   - Task file `## Actual Effort` section
+   - Sprint file In-Scope table `Actual Tokens` column
+
+4. **Build estimation accuracy table:**
+   | Task | Est Tokens | Actual Tokens | Variance |
+   |------|-----------|---------------|----------|
+   | TASK-XXXX | ~30K | ~45K | +50% |
+
+#### Sprint Rollup PR Creation
+
+The sprint rollup PR (sprint/* → develop) **must include `## Engineer Metrics`** to pass `pr-metrics-check.yml`.
+
+**Template for PR body:**
+```markdown
+## Engineer Metrics: SPRINT-XXX
+
+### Agent ID
+Sprint aggregate across N engineer + N SR agents
+
+### Metrics (Auto-Captured)
+| Metric | Value |
+|--------|-------|
+| **Total Tokens** | ~XXXK |
+| Duration | X minutes |
+| API Calls | N PRs |
+
+**Variance:** Est ~XK vs Actual ~XK (X% over/under)
+```
+
+#### Retrospective Generation
+
+Populate the sprint file `## Sprint Retrospective` section with:
+
+1. **Estimation accuracy table** — est vs actual per task, with variance %
+2. **Issues summary** — aggregated from all task handoff `### Issues/Blockers` sections
+3. **What went well / didn't / lessons learned** — derived from the sprint
+
+#### Sprint File Required Sections
+
+Every sprint file In-Scope table must include an `Actual Tokens` column:
+```
+| ID | Title | Task | Phase | Est Tokens | Actual Tokens | Status |
+```
+
+Every sprint file must have a `## Sprint Retrospective` section (populated at close):
+```markdown
+## Sprint Retrospective
+
+### Estimation Accuracy
+| Task | Est Tokens | Actual Tokens | Variance | Notes |
+|------|-----------|---------------|----------|-------|
+
+### Issues Encountered
+| # | Task | Issue | Severity | Resolution | Time Impact |
+|---|------|-------|----------|------------|-------------|
+
+### What Went Well
+- [bullet points]
+
+### What Didn't Go Well
+- [bullet points]
+
+### Lessons for Future Sprints
+- [bullet points]
+```
+
 #### Full Closure Checklist
 
 - [ ] **PR Audit complete** - `gh pr list --state open` shows no sprint PRs
 - [ ] **All PRs verified MERGED** - Not just approved, actually merged
+- [ ] **All agent metrics labeled** - Every agent_id from handoffs labeled in tokens.csv
+- [ ] **Per-task actuals recorded** - sum_effort.py run for each task
 - [ ] All task files have actual (monitored) token data
 - [ ] Token variance analysis complete
+- [ ] **Sprint Retrospective populated** - Estimation accuracy, issues, lessons
 - [ ] INDEX.md updated with completion
 - [ ] Worktrees cleaned up
-- [ ] Retrospective notes captured
+- [ ] **Sprint rollup PR created** with `## Engineer Metrics` section
 
 ### Retrospective Data Points
 

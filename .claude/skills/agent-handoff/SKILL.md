@@ -117,6 +117,9 @@ PHASE C: IMPLEMENTATION
     - Follow the approved plan
     - Make atomic commits
     - Push branch to remote
+    - Engineer MUST include `### Effort` section in handoff message
+      with agent_id and token count. The agent_id is returned by
+      the Task tool when the agent completes.
     - → SR ENGINEER: Handoff for implementation review
 
 10. SR ENGINEER: Review implementation
@@ -125,6 +128,7 @@ PHASE C: IMPLEMENTATION
     │   - Use handoff message template
     ├─ Approve → Step 11
     │   - Confirm implementation matches plan
+    │   - SR Engineer MUST include own `### Effort` section in handoff
     │   - Handoff to PM
     └─ Reject → Step 11 (notify PM with rejected status)
         - Document rejection reason
@@ -160,6 +164,8 @@ PHASE D: PR, TEST & MERGE
 12b. SR ENGINEER: Merge PR (only after user approval)
     - gh pr merge <PR> --merge
     - Verify merge succeeded
+    - SR Engineer MUST include own `### Effort` section in handoff to PM
+    - If fix agents were spawned for CI failures, include those agent_ids too
     - → Step 13
 
 13. SR ENGINEER: Delete worktree
@@ -169,16 +175,30 @@ PHASE D: PR, TEST & MERGE
 14. PM: Record effort metrics + mark Completed
     - Update backlog CSV status → `Completed`
     - Update sprint file In-Scope table: Status → `Completed`
-    - Run: `python .claude/skills/log-metrics/sum_effort.py --task TASK-XXXX`
-    - Copy output totals to task file `## Actual Effort` section
-    - Update sprint file progress table
-    - Update backlog CSV actual_tokens column
+    - Collect agent_ids from ALL handoff messages for this task
+    - Label each agent entry in tokens.csv:
+      python .claude/skills/log-metrics/log_metrics.py \
+        --label --agent-id <ID> -t <type> -i TASK-XXXX -d "<desc>"
+    - Aggregate totals:
+      python .claude/skills/log-metrics/sum_effort.py --task TASK-XXXX --pretty
+    - Copy aggregated totals to task file `## Actual Effort` section
+    - Update sprint file In-Scope table `Actual Tokens` column
+    - Collect issues from handoff messages → sprint file `## Issues Summary`
 
 15. PM: When ALL sprint tasks complete → Close sprint
     - Verify all tasks are complete
+    - Aggregate all task metrics for the sprint:
+      python .claude/skills/log-metrics/sum_effort.py --task TASK-XXXX --pretty
+      (repeat for each task)
+    - Populate sprint file `## Sprint Retrospective` section:
+      - Estimation accuracy table (est vs actual per task)
+      - Issues summary (aggregated from all task handoffs)
+      - What went well / didn't / lessons learned
+    - Create sprint rollup PR (sprint/* → develop) with
+      `## Engineer Metrics` section populated from aggregated data
+      (this passes the CI pr-metrics-check)
+    - Include Agent ID, Total Tokens, Duration, Variance in PR body
     - Update sprint status to "completed"
-    - Generate sprint summary
-    - Include total effort across all tasks
 ```
 
 ---
