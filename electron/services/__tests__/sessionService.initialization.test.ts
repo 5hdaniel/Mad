@@ -15,12 +15,21 @@
 import { jest } from "@jest/globals";
 import path from "path";
 
-// Mock Electron app module
+// Mock Electron app and safeStorage modules
 const mockGetPath = jest.fn(() => "/mock/user/data");
 
 jest.mock("electron", () => ({
   app: {
     getPath: mockGetPath,
+  },
+  safeStorage: {
+    isEncryptionAvailable: jest.fn(() => true),
+    encryptString: jest.fn((str: string) => Buffer.from(`encrypted:${str}`)),
+    decryptString: jest.fn((buf: Buffer) => {
+      const str = buf.toString();
+      if (str.startsWith("encrypted:")) return str.slice("encrypted:".length);
+      throw new Error("Cannot decrypt");
+    }),
   },
 }));
 
@@ -132,7 +141,10 @@ describe("SessionService - Initialization Bug Fix", () => {
         createdAt: Date.now(),
       };
 
-      mockFs.readFile.mockResolvedValue(JSON.stringify(sessionData));
+      // Create encrypted file content matching mock safeStorage format
+      const json = JSON.stringify(sessionData);
+      const encrypted = Buffer.from(`encrypted:${json}`).toString("base64");
+      mockFs.readFile.mockResolvedValue(JSON.stringify({ encrypted }));
       mockGetPath.mockClear();
 
       await sessionService.loadSession();
@@ -193,7 +205,9 @@ describe("SessionService - Initialization Bug Fix", () => {
       expect(secondCallCount).toBe(1); // Should still be 1, not incremented
 
       // Third call (different method) should also use cached path
-      mockFs.readFile.mockResolvedValue(JSON.stringify(sessionData));
+      const json = JSON.stringify(sessionData);
+      const encrypted = Buffer.from(`encrypted:${json}`).toString("base64");
+      mockFs.readFile.mockResolvedValue(JSON.stringify({ encrypted }));
       await sessionService.loadSession();
       const thirdCallCount = mockGetPath.mock.calls.length;
       expect(thirdCallCount).toBe(1); // Should still be 1
@@ -281,7 +295,9 @@ describe("SessionService - Initialization Bug Fix", () => {
         createdAt: Date.now(),
       };
 
-      mockFs.readFile.mockResolvedValue(JSON.stringify(sessionData));
+      const jsonStr = JSON.stringify(sessionData);
+      const encryptedB64 = Buffer.from(`encrypted:${jsonStr}`).toString("base64");
+      mockFs.readFile.mockResolvedValue(JSON.stringify({ encrypted: encryptedB64 }));
 
       // Perform multiple operations
       await sessionService.saveSession(sessionData);

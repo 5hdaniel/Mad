@@ -1,8 +1,8 @@
 /**
  * Supabase Service
  * Handles all cloud database operations and sync
- * Currently uses service_role key for development
- * TODO: Refactor to use Supabase Auth for production
+ * Uses SUPABASE_ANON_KEY (public/publishable key) for all client operations.
+ * RLS policies provide security at the database level.
  */
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
@@ -105,16 +105,21 @@ class SupabaseService {
     }
 
     const supabaseUrl = process.env.SUPABASE_URL;
-    // Use anon key (public/publishable) - safe for packaged builds
-    // Falls back to service key for backward compatibility during development
-    const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_KEY;
+    // Use anon key (public/publishable) only - never fall back to service_role key.
+    // The service_role key bypasses all RLS and must never be used in client code.
+    const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
+      const missing = [];
+      if (!supabaseUrl) missing.push("SUPABASE_URL");
+      if (!supabaseKey) missing.push("SUPABASE_ANON_KEY");
       logService.error(
-        "[Supabase] Missing credentials. Check .env.development or .env.production file.",
+        `[Supabase] Missing required environment variable(s): ${missing.join(", ")}. Check .env.development or .env.production file.`,
         "Supabase"
       );
-      throw new Error("Supabase credentials not configured");
+      throw new Error(
+        `Supabase credentials not configured: missing ${missing.join(", ")}`
+      );
     }
 
     logService.info("[Supabase] Initializing with URL:", "Supabase", { supabaseUrl });

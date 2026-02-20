@@ -203,11 +203,28 @@ SR Engineer Agent ID: <agent_id from Task tool output>
 Engineer Agent ID: <agent_id from Task tool output>
 ```
 
+The agent_id is returned by the Task tool when the agent completes. Record it immediately — it is the key that links to `.claude/metrics/tokens.csv` for PM aggregation and sprint retrospectives.
+
+**MANDATORY: Effort Reporting in Handoff**
+
+When handing off to SR Engineer or PM, the engineer MUST include the `### Effort` section from the handoff template:
+
+```markdown
+### Effort
+- **Agent ID:** `<agent_id>`
+- **Total Tokens:** ~XK
+- **Duration:** ~X min
+- **Task Estimate:** ~XK (from task file)
+```
+
+Without this data, PM cannot label metrics entries, `sum_effort.py` cannot aggregate task totals, and the sprint rollup PR will fail the `pr-metrics-check` CI validation.
+
 **Exit Criteria:**
 - [ ] Code implemented per plan
 - [ ] All tests pass
 - [ ] PR created and merged
 - [ ] Engineer Agent ID recorded
+- [ ] `### Effort` section included in handoff message
 
 **STOP if you encounter blockers** - ask PM before proceeding.
 
