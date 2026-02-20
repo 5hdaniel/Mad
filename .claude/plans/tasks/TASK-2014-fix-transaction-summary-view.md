@@ -98,13 +98,30 @@ FROM transactions t;
 
 ## Implementation Summary
 
-_To be filled by Engineer after implementation._
-
 | Field | Value |
 |-------|-------|
-| Agent ID | |
-| Branch | |
-| PR | |
-| Files Changed | |
-| Tests Added/Modified | |
-| Actual Tokens | |
+| Agent ID | TBD (auto-captured) |
+| Branch | fix/task-2014-fix-transaction-summary-view |
+| PR | TBD |
+| Files Changed | 2 (schema.sql, databaseService.ts) |
+| Tests Added/Modified | 0 (SQL view change, no new tests needed) |
+| Actual Tokens | TBD (auto-captured) |
+
+### Changes Made
+
+1. **`electron/database/schema.sql` (line 1030)**: Changed subquery from `transaction_participants tp` to `transaction_contacts tc` in the `transaction_summary` view definition. Column alias kept as `participant_count`.
+
+2. **`electron/services/databaseService.ts`**: Added migration version 30 that drops and recreates `transaction_summary` view with the corrected table reference. This ensures existing databases are updated on next app launch.
+
+### Consumer Analysis
+
+- No TypeScript code references `participant_count` or queries `transaction_summary` directly.
+- Column alias kept as `participant_count` for backward compatibility.
+- `transaction_participants` table NOT dropped per task constraints (separate BACKLOG-506 / TASK-1213 tracks that).
+
+### Verification
+
+- `npm run type-check`: PASS
+- `npm test`: 1531/1533 pass (2 pre-existing failures in transaction-handlers.integration.test.ts, confirmed same on base branch)
+
+**Issues/Blockers:** None
