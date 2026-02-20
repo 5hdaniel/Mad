@@ -68,13 +68,41 @@ Remove the `|| process.env.SUPABASE_SERVICE_KEY` fallback from the Supabase clie
 
 ## Implementation Summary
 
-_To be filled by Engineer after implementation._
-
 | Field | Value |
 |-------|-------|
-| Agent ID | |
-| Branch | |
-| PR | |
-| Files Changed | |
-| Tests Added/Modified | |
-| Actual Tokens | |
+| Agent ID | (auto-captured) |
+| Branch | fix/task-2013-remove-service-role-fallback |
+| PR | TBD |
+| Files Changed | 3 |
+| Tests Added/Modified | 2 test files updated |
+| Actual Tokens | ~5K |
+
+### Changes Made
+
+1. **`electron/services/supabaseService.ts`**:
+   - Updated file header comment to remove service_role key mention
+   - Removed `|| process.env.SUPABASE_SERVICE_KEY` fallback from line 110
+   - Enhanced error message to list which specific env vars are missing (SUPABASE_URL and/or SUPABASE_ANON_KEY)
+
+2. **`electron/services/__tests__/supabaseService.test.ts`**:
+   - Changed `SUPABASE_SERVICE_KEY` env setup to `SUPABASE_ANON_KEY` (line 46)
+   - Updated "missing credentials" test to save/restore `SUPABASE_ANON_KEY` instead of `SUPABASE_SERVICE_KEY` (lines 105-126)
+
+3. **`electron/services/__tests__/supabaseService.conflict.test.ts`**:
+   - Changed `SUPABASE_SERVICE_KEY` env setup to `SUPABASE_ANON_KEY` (line 38)
+
+### Verification
+
+- `npm run type-check`: PASS
+- `supabaseService.test.ts`: 39/39 PASS
+- `supabaseService.conflict.test.ts`: 9 pre-existing failures (confirmed identical on base branch), 6 PASS
+- Lint: PASS
+- No other production code references to `SUPABASE_SERVICE_KEY` (only docs, CI configs, and server-side Edge Functions)
+
+### Deviations
+
+None.
+
+### Issues/Blockers
+
+None.
