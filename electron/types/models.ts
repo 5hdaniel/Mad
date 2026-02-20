@@ -1045,17 +1045,19 @@ export type TransactionContact = TransactionParticipant;
 
 /**
  * @deprecated Use ClassificationFeedback instead.
+ * Aligned with classification_feedback table columns.
  */
 export interface UserFeedback {
   id: string;
   user_id: string;
+  message_id?: string;
+  attachment_id?: string;
   transaction_id?: string;
-  communication_id?: string;
-  feedback_type: FeedbackType;
-  field_name?: string;
+  contact_id?: string;
+  feedback_type: string;
   original_value?: string;
   corrected_value?: string;
-  feedback_text?: string;
+  reason?: string;
   created_at: Date | string;
 }
 
