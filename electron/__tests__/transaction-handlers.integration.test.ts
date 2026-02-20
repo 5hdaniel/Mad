@@ -66,6 +66,7 @@ const mockDatabaseService = {
     updateTransaction: jest.fn(),
   },
   updateTransaction: jest.fn(),
+  isInitialized: jest.fn().mockReturnValue(true),
 };
 
 jest.mock("../services/transactionService", () => ({

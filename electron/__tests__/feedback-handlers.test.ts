@@ -26,6 +26,7 @@ jest.mock("../services/databaseService", () => ({
     saveFeedback: jest.fn(),
     getFeedbackByTransaction: jest.fn(),
     getFeedbackByField: jest.fn(),
+    isInitialized: jest.fn().mockReturnValue(true),
   },
 }));
 
