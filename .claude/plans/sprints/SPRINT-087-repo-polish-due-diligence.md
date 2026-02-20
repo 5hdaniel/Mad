@@ -1,7 +1,7 @@
 # SPRINT-087: Repo Polish for Due Diligence
 
 **Created:** 2026-02-19
-**Status:** Planning
+**Status:** In Progress
 **Branch:** `develop` (task branches off develop)
 **Base:** `develop`
 
@@ -23,17 +23,18 @@ The remaining 10 items (Electron upgrade, session encryption, imessage-parser re
 
 | ID | Title | Task | Phase | Status |
 |----|-------|------|-------|--------|
-| BACKLOG-724 | Delete empty electron/schema.sql artifact | TASK-2006 | 1 | Pending |
-| BACKLOG-727 | Fix backlog CSV status casing | TASK-2006 | 1 | Pending |
-| BACKLOG-731 | Gitignore mad.db and backlog-dashboard.html | TASK-2006 | 1 | Pending |
-| BACKLOG-732 | Consolidate duplicate backlog items | TASK-2006 | 1 | Pending |
-| BACKLOG-725 | Remove deprecated components from AppRouter | TASK-2007 | 1 | Pending |
-| BACKLOG-726 | Replace console.log with logService | TASK-2008 | 1 | Pending |
+| BACKLOG-724 | Delete empty electron/schema.sql artifact | TASK-2006 | 1 | Completed |
+| BACKLOG-727 | Fix backlog CSV status casing | TASK-2006 | 1 | Completed |
+| BACKLOG-731 | Gitignore mad.db and backlog-dashboard.html | TASK-2006 | 1 | Completed |
+| BACKLOG-732 | Consolidate duplicate backlog items | TASK-2006 | 1 | Completed |
+| BACKLOG-725 | Remove deprecated components from AppRouter | TASK-2007 | 1 | Completed |
+| BACKLOG-726 | Replace console.log with logService | TASK-2008 | 1 | Completed |
+| BACKLOG-741 | Fix pre-existing contact-handlers & App test failures | TASK-2012 | 1.5 | Testing |
 | BACKLOG-728 | Make lint and npm audit blocking in CI | TASK-2009 | 2 | Pending |
 | BACKLOG-729 | Add Electron backend tests to CI pipeline | TASK-2010 | 2 | Pending |
 | BACKLOG-730 | Raise CI test coverage threshold to 40% | TASK-2011 | 2 | Pending |
 
-**Total Estimated Tokens:** ~58K (engineering ~38K + SR review ~20K)
+**Total Estimated Tokens:** ~66K (engineering ~46K + SR review ~20K)
 
 ## Out-of-Scope / Deferred
 
@@ -79,13 +80,30 @@ Phase 1: Code Cleanup
 - TASK-2007 touches: AppRouter.tsx, 5 component files -- no overlap with 2008 (AppModals.tsx NOT touched)
 - TASK-2008 touches: 22 production files (hooks, services, state) -- no overlap with AppRouter/AppModals since those have no console.log calls
 
+### Phase 1.5: Test Baseline Fix (Sequential, after Phase 1)
+
+```
+Phase 1.5: Test Baseline Fix (depends on Phase 1 merged)
++-- TASK-2012: Fix contact-handlers & App test failures (BACKLOG-741)    [SEQUENTIAL]
+|   1. Read contactDbService.ts to find current method names
+|   2. Update test mocks in contact-handlers.test.ts to match
+|   3. Update App.test.tsx "Email Onboarding Flow" test assertion
+|   4. Verify all 52 contact-handlers tests pass
+|   5. Verify App.test.tsx passes
+|   6. Verify no regressions in full test suite
+|
++-- CI gate: all 52 contact-handlers tests pass, App.test.tsx passes, npm test passes
+```
+
+**Why Phase 1.5:** SPRINT-085 (TASK-2003) extracted contactDbService and renamed `getImportedContactsByUserIdAsync`, but test mocks were not updated. PR #883 (TASK-2007) removed PhoneTypeStep route from AppRouter, breaking 1 App.test.tsx test. Phase 2 (TASK-2010) will add electron tests to CI -- these must pass first, or CI will be red from day one.
+
 ### Phase Gate: Regression Check (PM-Owned)
 
-After all Phase 1 PRs are merged to develop, PM runs a regression check before starting Phase 2:
+After all Phase 1 and Phase 1.5 PRs are merged to develop, PM runs a regression check before starting Phase 2:
 
 ```
 Phase Gate: Regression Verification
-+-- PM: Pull latest develop (with all 3 Phase 1 PRs merged)
++-- PM: Pull latest develop (with all Phase 1 + Phase 1.5 PRs merged)
 +-- PM: Run full validation suite:
 |   1. npm run type-check
 |   2. npm run lint
@@ -132,14 +150,19 @@ Phase 2: CI Hardening (depends on Phase 1 merged + regression gate passed)
 ## Dependency Graph
 
 ```
-Phase 1 (Parallel):
+Phase 1 (Parallel) — COMPLETED:
 TASK-2006 (repo hygiene) ----+
-TASK-2007 (deprecated comps) +---> All merged to develop
+TASK-2007 (deprecated comps) +---> All merged to develop (PRs #882, #883, #884)
 TASK-2008 (console.log)  ----+
                               |
                               v
+Phase 1.5 (Sequential) — IN PROGRESS:
+TASK-2012 (fix contact-handlers & App tests)
+  Fix 18 pre-existing test failures + 1 App.test.tsx failure
+                              |
+                              v
 Phase Gate: Regression Check (PM)
-  type-check → lint → test → dev spot-check
+  type-check -> lint -> test -> dev spot-check
                               |
                               v
 Phase 2 (Sequential):
@@ -159,10 +182,11 @@ Sprint Complete
 
 | Order | Task | Depends On | Parallel? |
 |-------|------|------------|-----------|
-| 1a | TASK-2006 (repo hygiene) | None | Yes - with 2007, 2008 |
-| 1b | TASK-2007 (deprecated components) | None | Yes - with 2006, 2008 |
-| 1c | TASK-2008 (console.log cleanup) | None | Yes - with 2006, 2007 |
-| 2 | TASK-2009 (lint/audit blocking) | Phase 1 merged | No |
+| 1a | TASK-2006 (repo hygiene) | None | Yes - with 2007, 2008 | **COMPLETED** |
+| 1b | TASK-2007 (deprecated components) | None | Yes - with 2006, 2008 | **COMPLETED** |
+| 1c | TASK-2008 (console.log cleanup) | None | Yes - with 2006, 2007 | **COMPLETED** |
+| 1.5 | TASK-2012 (contact-handlers & App test fix) | Phase 1 merged | No | **TESTING (PR #885)** |
+| 2 | TASK-2009 (lint/audit blocking) | Phase 1.5 merged + Phase Gate | No |
 | 3 | TASK-2010 (electron tests in CI) | TASK-2009 | No |
 | 4 | TASK-2011 (coverage threshold) | TASK-2010 | No |
 
@@ -170,17 +194,19 @@ Sprint Complete
 
 ## Merge Plan
 
-| Task | Branch Name | Base | Target |
-|------|-------------|------|--------|
-| TASK-2006 | `chore/task-2006-repo-hygiene` | develop | develop |
-| TASK-2007 | `chore/task-2007-remove-deprecated-components` | develop | develop |
-| TASK-2008 | `chore/task-2008-replace-console-log` | develop | develop |
-| TASK-2009 | `ci/task-2009-lint-audit-blocking` | develop | develop |
-| TASK-2010 | `ci/task-2010-electron-tests-in-ci` | develop | develop |
-| TASK-2011 | `ci/task-2011-coverage-threshold-40` | develop | develop |
+| Task | Branch Name | Base | Target | Status |
+|------|-------------|------|--------|--------|
+| TASK-2006 | `chore/task-2006-repo-hygiene` | develop | develop | Merged (PR #882) |
+| TASK-2007 | `chore/task-2007-remove-deprecated-components` | develop | develop | Merged (PR #883) |
+| TASK-2008 | `chore/task-2008-replace-console-log` | develop | develop | Merged (PR #884) |
+| TASK-2012 | `fix/task-2012-contact-handlers-tests` | develop | develop | Testing (PR #885) |
+| TASK-2009 | `ci/task-2009-lint-audit-blocking` | develop | develop | Pending |
+| TASK-2010 | `ci/task-2010-electron-tests-in-ci` | develop | develop | Pending |
+| TASK-2011 | `ci/task-2011-coverage-threshold-40` | develop | develop | Pending |
 
-**Phase 1 merge order:** Any order (no dependencies between them).
-**Phase 2 merge order:** TASK-2009 -> TASK-2010 -> TASK-2011 (strict sequence).
+**Phase 1 merge order:** Any order (no dependencies between them). **ALL MERGED.**
+**Phase 1.5 merge order:** TASK-2012 after all Phase 1 PRs merged. **IN PROGRESS.**
+**Phase 2 merge order:** TASK-2009 -> TASK-2010 -> TASK-2011 (strict sequence, after Phase Gate).
 
 ---
 
@@ -224,6 +250,7 @@ PM updates status at each transition across ALL three locations:
 | TASK-2006 | N/A (data/config only) | N/A | Verify .gitignore works, CSV validates |
 | TASK-2007 | Delete deprecated test files | Run existing test suite | Verify onboarding flow still works |
 | TASK-2008 | N/A (logging only) | N/A | Spot-check log output in dev mode |
+| TASK-2012 | Fix 18 failing mocks + 1 App test | Run full test suite | All 52 contact-handlers tests + App test pass |
 | TASK-2009 | N/A (CI config) | N/A | Verify CI blocks on lint failure |
 | TASK-2010 | Run electron tests in CI | N/A | Verify CI runs electron tests |
 | TASK-2011 | N/A (threshold config) | N/A | Verify CI reports coverage correctly |
@@ -245,12 +272,13 @@ PM updates status at each transition across ALL three locations:
 | TASK-2006 | cleanup | ~4K | x0.5 | ~2K | ~3K |
 | TASK-2007 | cleanup | ~10K | x0.5 | ~5K | ~3K |
 | TASK-2008 | cleanup | ~15K | x0.5 | ~8K | ~4K |
+| TASK-2012 | bug fix | ~8K | x1.0 | ~8K | ~2K |
 | TASK-2009 | config | ~15K | x0.7 | ~10K | ~3K |
 | TASK-2010 | config | ~15K | x0.5 | ~8K | ~4K |
 | TASK-2011 | config | ~10K | x0.5 | ~5K | ~3K |
-| **Totals** | | | | **~38K** | **~20K** |
+| **Totals** | | | | **~46K** | **~22K** |
 
-**Grand total: ~58K estimated billable tokens.**
+**Grand total: ~68K estimated billable tokens.**
 
 Sprint is well under the 100-120K budget, leaving room for Phase 2 tasks encountering more lint/test fixes than expected.
 

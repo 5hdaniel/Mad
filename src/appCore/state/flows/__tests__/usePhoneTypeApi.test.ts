@@ -203,7 +203,7 @@ describe("usePhoneTypeApi", () => {
         dispatch: mockDispatch,
       });
 
-      const consoleSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+      const consoleSpy = jest.spyOn(console, "debug").mockImplementation(() => {});
 
       const { result } = renderHook(() =>
         usePhoneTypeApi({ userId: "user-123", isWindows: false })
@@ -221,7 +221,7 @@ describe("usePhoneTypeApi", () => {
       // Local DB should NOT be called (not initialized)
       expect(mockSetPhoneType).not.toHaveBeenCalled();
 
-      // Info log about DB not initialized
+      // Debug log about DB not initialized (logger.debug -> console.debug)
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining("Local DB not initialized")
       );
