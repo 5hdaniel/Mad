@@ -78,6 +78,17 @@ export const registerFeedbackHandlers = (): void => {
           );
         }
 
+        if ((sanitizedData as any).field_name) {
+          (sanitizedData as any).field_name = validateString(
+            (sanitizedData as any).field_name,
+            "field_name",
+            {
+              required: false,
+              maxLength: 100,
+            },
+          );
+        }
+
         const feedback = await databaseService.saveFeedback({
           user_id: validatedUserId,
           ...(sanitizedData as any),
