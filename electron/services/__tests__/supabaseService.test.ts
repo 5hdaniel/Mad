@@ -43,7 +43,7 @@ jest.mock("dotenv", () => ({
 
 // Set environment variables before importing
 process.env.SUPABASE_URL = "https://test.supabase.co";
-process.env.SUPABASE_SERVICE_KEY = "test-service-key";
+process.env.SUPABASE_ANON_KEY = "test-anon-key";
 
 describe("SupabaseService", () => {
   let supabaseService: typeof import("../supabaseService").default;
@@ -106,10 +106,10 @@ describe("SupabaseService", () => {
       // Reset module and clear env vars
       jest.resetModules();
       const originalUrl = process.env.SUPABASE_URL;
-      const originalKey = process.env.SUPABASE_SERVICE_KEY;
+      const originalKey = process.env.SUPABASE_ANON_KEY;
 
       delete process.env.SUPABASE_URL;
-      delete process.env.SUPABASE_SERVICE_KEY;
+      delete process.env.SUPABASE_ANON_KEY;
 
       const module = await import("../supabaseService");
       const service = module.default;
@@ -122,7 +122,7 @@ describe("SupabaseService", () => {
 
       // Restore env vars
       process.env.SUPABASE_URL = originalUrl;
-      process.env.SUPABASE_SERVICE_KEY = originalKey;
+      process.env.SUPABASE_ANON_KEY = originalKey;
     });
   });
 
