@@ -1,7 +1,12 @@
 #!/bin/bash
-# Track token usage after engineer agents complete
-# Triggered by SubagentStop hook
-# Writes to tokens.csv (CSV format)
+# Track token usage after sub-agents (engineer, PM, SR, etc.) complete.
+# Triggered by SubagentStop hook — fires ONLY for sub-agents.
+#
+# IMPORTANT: This hook does NOT fire for the main session (top-level Claude
+# conversation). Main session tokens are NOT auto-captured. The main session
+# must log manually via: /log-metrics --agent-type main
+#
+# Writes to .claude/metrics/tokens.csv (CSV format)
 
 # Log that hook was called (for debugging)
 echo "[HOOK FIRED] $(date)" >> /tmp/claude-hook-debug.log

@@ -54,6 +54,46 @@ PHASE D: Merge & Cleanup (Steps 12-15)
 
 ---
 
+## MANDATORY: Main Session Orchestration Rules
+
+**The main session (top-level Claude conversation) is an orchestrator, NOT an implementer.**
+
+### Main Session MAY
+
+- Read files, run `git`/`gh` commands, explore the codebase
+- Invoke sub-agents (`engineer`, `sr-engineer`, `pm`, `qa`, `fix-agent`, etc.)
+- Update `.claude/` docs, plans, sprint files, and backlog CSV
+- Run CI checks and review results
+
+### Main Session MUST NOT
+
+- Edit files under `src/`, `electron/`, or any `*.test.*` / `*.spec.*` files directly
+- Fix CI failures by editing source/test code — always delegate to an engineer sub-agent
+- Implement task requirements — always delegate via the 15-step agent-handoff workflow
+
+### CI Failure Protocol
+
+When CI fails on a PR branch:
+
+1. **Identify failures** — read CI logs via `gh run view` or build output
+2. **Invoke engineer sub-agent** — use the Task tool with `subagent_type=engineer` (or `fix-agent` for isolated fixes)
+3. **Engineer fixes and pushes** — the sub-agent edits code, commits, and pushes
+4. **Never fix directly** — even "obvious one-liner" fixes must go through a sub-agent
+
+### Effort Tracking
+
+The `SubagentStop` hook (`track-agent-tokens.sh`) auto-captures sub-agent tokens but **does NOT fire for the main session**. At session end, log main session effort manually:
+
+```bash
+python .claude/skills/log-metrics/log_metrics.py \
+  -t main -i SPRINT-XXX -d "Sprint orchestration" \
+  --input <tokens> --output <tokens>
+```
+
+**Incident Reference:** SPRINT-087 — main session edited 3 test files across 3 CI iterations (~20 min wasted) instead of delegating to one engineer agent. Effort was invisible because main session tokens aren't auto-captured.
+
+---
+
 ## MANDATORY: Issue Documentation
 
 **Full reference:** `.claude/skills/issue-log/SKILL.md`

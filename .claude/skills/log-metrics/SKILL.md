@@ -18,6 +18,20 @@ All agents (engineer, PM, SR Engineer, QA, etc.) should log their metrics:
 - **At handoff** - When passing work to another agent
 - **At session end** - When finishing a work session
 
+### MANDATORY: Main Session Logging
+
+Sub-agent tokens are auto-captured by the `SubagentStop` hook (`track-agent-tokens.sh`), but **the main session is NOT a sub-agent** — its tokens are invisible unless logged manually.
+
+At the end of every main session that performed orchestration work (sprint planning, CI triage, agent coordination), log effort:
+
+```bash
+python .claude/skills/log-metrics/log_metrics.py \
+  -t main -i SPRINT-XXX -d "Sprint orchestration and CI triage" \
+  --input <tokens> --output <tokens>
+```
+
+Without this step, `sum_effort.py` will undercount total sprint effort.
+
 ## Action
 
 Run the Python script with your metrics:

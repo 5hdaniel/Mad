@@ -34,7 +34,7 @@ This skill defines how agents hand off work during sprint task execution. Read t
 |------|--------|-------------|
 | 6 | Explore codebase (read-only), write plan | SR Engineer (plan review) |
 | 9 | Implement, commit, push | SR Engineer (impl review) |
-| 12 (CI fail) | Fix CI issues | SR Engineer (re-review) |
+| 12 (CI fail) | Fix CI issues [MUST be sub-agent, never main session] | SR Engineer (re-review) |
 
 ### SR Engineer Agent Steps
 | Step | Action | Hand Off To |
@@ -142,9 +142,10 @@ PHASE D: PR, TEST & MERGE
     - Review code quality, security, architecture
     - Wait for CI
     ├─ CI passes → Step 12a
-    ├─ CI fails → ENGINEER: Fix issues → Step 9
+    ├─ CI fails → ENGINEER SUB-AGENT: Fix issues → Step 9
         - Identify failing tests/checks
-        - Handoff to Engineer with details
+        - Invoke engineer sub-agent via Task tool (NEVER fix directly in main session)
+        - Sub-agent fixes, commits, and pushes
 
     *** MANDATORY: NEVER merge without explicit user approval ***
 
@@ -239,8 +240,9 @@ Did CI pass?
 │   → DO NOT MERGE — wait for user approval (Step 12a)
 └─ No, checks failed
     → Identify failing checks
-    → Handoff to Engineer (Step 9)
-    → Include failure details
+    → Invoke engineer sub-agent via Task tool (Step 9)
+    → NEVER fix directly in main session — always sub-agent
+    → Include failure details in sub-agent prompt
 ```
 
 ### At Step 12a (User Testing Gate)
