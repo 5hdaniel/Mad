@@ -142,7 +142,7 @@ export function AppRouter({ app }: AppRouterProps) {
       // The email-connections element is in the Settings modal (cross-component),
       // so we resolve the ref after the modal mounts via setTimeout.
       setTimeout(() => {
-        emailSectionRef.current = document.getElementById("email-connections");
+        emailSectionRef.current = document.getElementById("settings-email");
         if (emailSectionRef.current) {
           emailSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
           // Add highlight effect

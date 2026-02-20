@@ -1,10 +1,13 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { LLMSettings } from "./settings/LLMSettings";
 import { MacOSMessagesImportSettings } from "./settings/MacOSMessagesImportSettings";
 import { ContactsImportSettings } from "./settings/MacOSContactsImportSettings";
 import { ImportSourceSettings } from "./settings/ImportSourceSettings";
 import { LicenseGate } from "./common/LicenseGate";
+import { SettingsTabBar } from "./settings/SettingsTabBar";
 import { useNotification } from "@/hooks/useNotification";
+import { useScrollSpy } from "@/hooks/useScrollSpy";
+import { useLicense } from "@/contexts/LicenseContext";
 import {
   emitEmailConnectionChanged,
   useEmailConnectionListener,
@@ -76,6 +79,17 @@ interface ConnectionResult {
   success: boolean;
 }
 
+const SETTINGS_TABS = [
+  { id: "settings-general", label: "General" },
+  { id: "settings-email", label: "Email" },
+  { id: "settings-messages", label: "Messages" },
+  { id: "settings-contacts", label: "Contacts" },
+  { id: "settings-export", label: "Export" },
+  { id: "settings-ai", label: "AI" },
+  { id: "settings-data", label: "Data" },
+  { id: "settings-about", label: "About" },
+];
+
 interface SettingsComponentProps {
   onClose: () => void;
   userId: string;
@@ -91,6 +105,15 @@ interface SettingsComponentProps {
  */
 function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: SettingsComponentProps) {
   const { notify } = useNotification();
+  const { hasAIAddon } = useLicense();
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const visibleTabs = useMemo(
+    () => SETTINGS_TABS.filter((t) => t.id !== "settings-ai" || hasAIAddon),
+    [hasAIAddon]
+  );
+  const visibleTabIds = useMemo(() => visibleTabs.map((t) => t.id), [visibleTabs]);
+
   const [connections, setConnections] = useState<Connections>({
     google: null,
     microsoft: null,
@@ -120,6 +143,15 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
   const [loadingPreferences, setLoadingPreferences] = useState<boolean>(true);
   // TASK-1980: Start date default mode preference
   const [startDateDefault, setStartDateDefault] = useState<"auto" | "manual">("manual");
+
+  const activeTabId = useScrollSpy(visibleTabIds, scrollContainerRef, 44, !loadingPreferences);
+
+  const handleTabClick = useCallback((id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, []);
 
   // Database maintenance state
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'up-to-date' | 'available' | 'error'>('idle');
@@ -630,16 +662,21 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         </div>
 
         {/* Settings Content - Scrollable area */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
+        <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto scroll-smooth scroll-pt-12 px-6 pb-6">
           {loadingPreferences ? (
-            <div className="flex flex-col items-center justify-center py-20">
+            <div className="flex flex-col items-center justify-center pt-24 pb-20">
               <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-3" />
               <p className="text-sm text-gray-500">Loading settings...</p>
             </div>
           ) : (
           <>
+            <SettingsTabBar
+              tabs={visibleTabs}
+              activeTabId={activeTabId}
+              onTabClick={handleTabClick}
+            />
             {/* General Settings */}
-            <div className="mb-8">
+            <div id="settings-general" className="mt-6 mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 General
               </h3>
@@ -816,7 +853,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
             </div>
 
             {/* Email Connections */}
-            <div id="email-connections" className="mb-8">
+            <div id="settings-email" className="mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 Email Connections
               </h3>
@@ -1065,7 +1102,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
             </div>
 
             {/* macOS Messages Import - Only shows on macOS */}
-            <div className="mb-8">
+            <div id="settings-messages" className="mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 Messages
               </h3>
@@ -1078,7 +1115,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
             </div>
 
             {/* Contacts Import - macOS Contacts + Outlook (TASK-1989) */}
-            <div className="mb-8">
+            <div id="settings-contacts" className="mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 Contacts
               </h3>
@@ -1110,7 +1147,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
             </div>
 
             {/* Export Settings */}
-            <div className="mb-8">
+            <div id="settings-export" className="mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 Export
               </h3>
@@ -1160,7 +1197,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
 
             {/* AI Settings - Only visible with AI add-on (BACKLOG-462) */}
             <LicenseGate requires="ai_addon">
-              <div className="mb-8">
+              <div id="settings-ai" className="mb-8">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">
                   AI Settings
                 </h3>
@@ -1169,7 +1206,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
             </LicenseGate>
 
             {/* Data & Privacy */}
-            <div className="mb-8">
+            <div id="settings-data" className="mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 Data & Privacy
               </h3>
@@ -1239,36 +1276,6 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                   </div>
                 </button>
 
-                {/* TODO: Implement data viewer showing transactions, contacts, and cached emails */}
-                <button
-                  disabled
-                  className="w-full text-left p-4 bg-gray-50 rounded-lg border border-gray-200 opacity-50 cursor-not-allowed"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-900">
-                        View Stored Data
-                      </h4>
-                      <p className="text-xs text-gray-600 mt-1">
-                        See all data stored locally on your device
-                      </p>
-                    </div>
-                    <svg
-                      className="w-5 h-5 text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
-                  </div>
-                </button>
-
                 {/* TODO: Implement data clearing with confirmation dialog */}
                 <button
                   disabled
@@ -1302,7 +1309,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
             </div>
 
             {/* About */}
-            <div>
+            <div id="settings-about">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 About
               </h3>
