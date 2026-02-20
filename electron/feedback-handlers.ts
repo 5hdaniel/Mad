@@ -67,10 +67,10 @@ export const registerFeedbackHandlers = (): void => {
         const sanitizedData = sanitizeObject(feedbackData);
 
         // Validate required fields in feedback data
-        if ((sanitizedData as any).field_name) {
-          (sanitizedData as any).field_name = validateString(
-            (sanitizedData as any).field_name,
-            "field_name",
+        if ((sanitizedData as any).feedback_type) {
+          (sanitizedData as any).feedback_type = validateString(
+            (sanitizedData as any).feedback_type,
+            "feedback_type",
             {
               required: false,
               maxLength: 100,
@@ -83,11 +83,11 @@ export const registerFeedbackHandlers = (): void => {
           ...(sanitizedData as any),
         } as Omit<UserFeedback, "id" | "created_at">);
 
-        // Clear pattern cache for this field so new patterns are detected
-        if ((sanitizedData as any).field_name) {
+        // Clear pattern cache for this feedback type so new patterns are detected
+        if ((sanitizedData as any).feedback_type) {
           feedbackLearningService.clearCache(
             validatedUserId,
-            (sanitizedData as any).field_name,
+            (sanitizedData as any).feedback_type,
           );
         }
 

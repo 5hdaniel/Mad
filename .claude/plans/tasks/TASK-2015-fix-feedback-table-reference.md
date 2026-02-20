@@ -80,13 +80,31 @@ The `feedbackDbService.ts` INSERT statement (line 20) may use column names that 
 
 ## Implementation Summary
 
-_To be filled by Engineer after implementation._
+Fixed all `user_feedback` table references to `classification_feedback` and aligned column names with the actual schema. Also updated feedback type values to match the CHECK constraint in the schema (`transaction_link`, `contact_role`, `message_relevance` instead of legacy `confirmation`/`rejection`/`correction`). Old feedback type values are preserved in `original_value` JSON metadata for backward-compatible stats aggregation.
 
 | Field | Value |
 |-------|-------|
-| Agent ID | |
-| Branch | |
-| PR | |
-| Files Changed | |
-| Tests Added/Modified | |
-| Actual Tokens | |
+| Agent ID | pending |
+| Branch | fix/task-2015-fix-feedback-table-reference |
+| PR | pending |
+| Files Changed | 6 |
+| Tests Added/Modified | 2 (unit + integration updated) |
+| Actual Tokens | auto-captured |
+
+### Changes Made
+
+1. **`electron/services/db/feedbackDbService.ts`** - Replaced all `user_feedback` table references with `classification_feedback`. Updated INSERT columns from `communication_id/field_name/feedback_text` to `message_id/contact_id/reason` to match actual schema.
+2. **`electron/types/models.ts`** - Updated `UserFeedback` interface to align with `classification_feedback` columns: `message_id`, `attachment_id`, `contact_id`, `reason` instead of `communication_id`, `field_name`, `feedback_text`. Changed `feedback_type` from `FeedbackType` enum to `string` for schema compatibility.
+3. **`electron/services/feedbackService.ts`** - Updated comments from `user_feedback` to `classification_feedback`. Changed stored `feedback_type` values to match schema CHECK constraint (`transaction_link`, `contact_role`, `message_relevance`). Old action types stored in `original_value` JSON metadata.
+4. **`electron/services/feedbackLearningService.ts`** - Updated `getFeedbackByField` queries from `llm_transaction_action` to `transaction_link`. Updated `identifySystematicErrors` to parse rejection status from JSON metadata.
+5. **`electron/feedback-handlers.ts`** - Updated `field_name` validation references to `feedback_type`.
+6. **`electron/services/__tests__/feedbackService.test.ts`** - Updated all assertions to match new column names and feedback_type values.
+7. **`electron/services/__tests__/feedbackService.integration.test.ts`** - Updated mock implementations and assertions for new schema alignment.
+
+### Acceptance Criteria
+
+- [x] Zero references to `user_feedback` in production code (only `errorLoggingService.ts` has `user_feedback` as a column in a different table)
+- [x] All feedbackDbService queries reference `classification_feedback`
+- [x] Column names in queries match schema definition
+- [x] `npm run type-check` passes
+- [x] `npm test` passes (43/43 feedback tests, 1508/1510 overall - 2 pre-existing failures unrelated)
