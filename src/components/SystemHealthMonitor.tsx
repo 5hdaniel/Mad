@@ -99,7 +99,7 @@ function SystemHealthMonitor({
           onOpenSettings();
           // Scroll to and highlight email connections section after modal opens
           setTimeout(() => {
-            const emailSection = document.getElementById("email-connections");
+            const emailSection = document.getElementById("settings-email");
             if (emailSection) {
               emailSection.scrollIntoView({ behavior: "smooth", block: "start" });
               // Add highlight effect
