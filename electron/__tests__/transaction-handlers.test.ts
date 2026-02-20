@@ -98,6 +98,7 @@ jest.mock("../services/databaseService", () => ({
       updateTransaction: jest.fn(),
     },
     updateTransaction: jest.fn(),
+    isInitialized: jest.fn().mockReturnValue(true),
   },
 }));
 
