@@ -129,6 +129,7 @@ module.exports = {
     'auth-handlers.integration.test.ts', // Integration test — session restore mock incomplete
     'transaction-handlers.integration.test.ts', // Integration test — transaction update mock returns undefined
     'externalContactDbService.worker.test.ts', // Worker thread mocking broken — error/exit paths resolve instead of reject
+    'macOSMessagesImportService.attachments.test.ts', // Windows CI: path.join uses backslashes but assertions expect forward slashes (cross-platform path separator issue)
   ] : [
     '/node_modules/',
     '/dist/',

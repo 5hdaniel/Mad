@@ -382,9 +382,6 @@ describe("MicrosoftAuthService - authenticateForLogin", () => {
 
   afterEach(() => {
     delete process.env.MICROSOFT_CLIENT_ID;
-  });
-
-  afterEach(() => {
     microsoftAuthService.stopLocalServer();
   });
 
