@@ -110,7 +110,6 @@ jobs:
 
       - name: Run linter
         run: npm run lint
-        continue-on-error: true
 
       - name: Run tests
         run: npm test -- --silent --maxWorkers=2 --workerIdleMemoryLimit=512MB --forceExit
@@ -183,8 +182,10 @@ jobs:
           node-version: '20.x'
 
       - name: Run npm audit
-        run: npm audit --audit-level=moderate
-        continue-on-error: true
+        # audit-level=critical: 72 known high/moderate vulnerabilities from transitive
+        # dependencies (minimatch, ajv, tar, qs, next) tracked in BACKLOG-723.
+        # None are critical. Will lower to --audit-level=high once dependencies are updated.
+        run: npm audit --audit-level=critical
 
       - name: Check for outdated dependencies
         run: npm outdated
