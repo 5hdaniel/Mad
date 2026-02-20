@@ -16,10 +16,19 @@
 import { jest } from "@jest/globals";
 import path from "path";
 
-// Mock Electron app module
+// Mock Electron app and safeStorage modules
 jest.mock("electron", () => ({
   app: {
     getPath: jest.fn(() => "/mock/user/data"),
+  },
+  safeStorage: {
+    isEncryptionAvailable: jest.fn(() => true),
+    encryptString: jest.fn((str: string) => Buffer.from(`encrypted:${str}`)),
+    decryptString: jest.fn((buf: Buffer) => {
+      const str = buf.toString();
+      if (str.startsWith("encrypted:")) return str.slice("encrypted:".length);
+      throw new Error("Cannot decrypt");
+    }),
   },
 }));
 
@@ -51,6 +60,35 @@ jest.mock("../logService", () => {
 
 // Reference to mock for assertions
 const mockLogService = jest.requireMock("../logService").default;
+
+/**
+ * Helper: extract the session data from a writeFile call.
+ * Since saveSession now encrypts via safeStorage, the written string is
+ * a JSON wrapper {"encrypted":"<base64>"} where the base64 decodes to
+ * "encrypted:<original_json>" due to our mock. This helper reverses that.
+ */
+function extractSavedSessionData(writeCallArg: string): Record<string, unknown> {
+  const wrapper = JSON.parse(writeCallArg);
+  if (wrapper.encrypted) {
+    // Our mock encryptString produces Buffer.from(`encrypted:${str}`)
+    // and the wrapper stores it as base64, so decode base64 -> strip prefix
+    const decoded = Buffer.from(wrapper.encrypted, "base64").toString();
+    const json = decoded.startsWith("encrypted:") ? decoded.slice("encrypted:".length) : decoded;
+    return JSON.parse(json);
+  }
+  // Fallback: plaintext (encryption unavailable)
+  return wrapper;
+}
+
+/**
+ * Helper: create an encrypted file content string from session data,
+ * matching the mock safeStorage format so readFile returns decryptable data.
+ */
+function createEncryptedFileContent(sessionData: Record<string, unknown>): string {
+  const json = JSON.stringify(sessionData);
+  const encrypted = Buffer.from(`encrypted:${json}`).toString("base64");
+  return JSON.stringify({ encrypted });
+}
 
 describe("SessionService", () => {
   let sessionService: typeof import("../sessionService").default;
@@ -99,9 +137,9 @@ describe("SessionService", () => {
       );
 
       // Verify the saved data includes savedAt timestamp
-      const savedData = JSON.parse(mockFs.writeFile.mock.calls[0][1] as string);
+      const savedData = extractSavedSessionData(mockFs.writeFile.mock.calls[0][1] as string);
       expect(savedData.savedAt).toBeDefined();
-      expect(savedData.user.email).toBe("test@example.com");
+      expect((savedData.user as any).email).toBe("test@example.com");
     });
 
     it("should preserve existing createdAt if provided", async () => {
@@ -126,7 +164,7 @@ describe("SessionService", () => {
 
       await sessionService.saveSession(sessionData);
 
-      const savedData = JSON.parse(mockFs.writeFile.mock.calls[0][1] as string);
+      const savedData = extractSavedSessionData(mockFs.writeFile.mock.calls[0][1] as string);
       expect(savedData.createdAt).toBe(originalCreatedAt);
     });
 
@@ -186,9 +224,9 @@ describe("SessionService", () => {
 
       await sessionService.saveSession(sessionData);
 
-      const savedData = JSON.parse(mockFs.writeFile.mock.calls[0][1] as string);
-      expect(savedData.subscription.tier).toBe("pro");
-      expect(savedData.subscription.isActive).toBe(true);
+      const savedData = extractSavedSessionData(mockFs.writeFile.mock.calls[0][1] as string);
+      expect((savedData.subscription as any).tier).toBe("pro");
+      expect((savedData.subscription as any).isActive).toBe(true);
     });
   });
 
@@ -208,7 +246,7 @@ describe("SessionService", () => {
         createdAt: Date.now(),
       };
 
-      mockFs.readFile.mockResolvedValue(JSON.stringify(sessionData));
+      mockFs.readFile.mockResolvedValue(createEncryptedFileContent(sessionData));
 
       const result = await sessionService.loadSession();
 
@@ -232,7 +270,7 @@ describe("SessionService", () => {
         createdAt: Date.now() - 48 * 60 * 60 * 1000,
       };
 
-      mockFs.readFile.mockResolvedValue(JSON.stringify(sessionData));
+      mockFs.readFile.mockResolvedValue(createEncryptedFileContent(sessionData));
 
       const result = await sessionService.loadSession();
 
@@ -266,6 +304,8 @@ describe("SessionService", () => {
       const result = await sessionService.loadSession();
 
       expect(result).toBeNull();
+      // File should be deleted on corrupt content
+      expect(mockFs.unlink).toHaveBeenCalled();
     });
   });
 
@@ -316,7 +356,7 @@ describe("SessionService", () => {
         createdAt: Date.now(),
       };
 
-      mockFs.readFile.mockResolvedValue(JSON.stringify(sessionData));
+      mockFs.readFile.mockResolvedValue(createEncryptedFileContent(sessionData));
 
       const result = await sessionService.hasValidSession();
 
@@ -348,7 +388,7 @@ describe("SessionService", () => {
         createdAt: Date.now() - 48 * 60 * 60 * 1000,
       };
 
-      mockFs.readFile.mockResolvedValue(JSON.stringify(sessionData));
+      mockFs.readFile.mockResolvedValue(createEncryptedFileContent(sessionData));
 
       const result = await sessionService.hasValidSession();
 
@@ -372,7 +412,7 @@ describe("SessionService", () => {
         createdAt: Date.now(),
       };
 
-      mockFs.readFile.mockResolvedValue(JSON.stringify(existingSession));
+      mockFs.readFile.mockResolvedValue(createEncryptedFileContent(existingSession));
 
       const updates = {
         user: {
@@ -386,8 +426,8 @@ describe("SessionService", () => {
       expect(result).toBe(true);
       expect(mockFs.writeFile).toHaveBeenCalled();
 
-      const savedData = JSON.parse(mockFs.writeFile.mock.calls[0][1] as string);
-      expect(savedData.user.first_name).toBe("Updated");
+      const savedData = extractSavedSessionData(mockFs.writeFile.mock.calls[0][1] as string);
+      expect((savedData.user as any).first_name).toBe("Updated");
       expect(savedData.sessionToken).toBe("existing-token");
     });
 
@@ -418,7 +458,7 @@ describe("SessionService", () => {
         createdAt: Date.now(),
       };
 
-      mockFs.readFile.mockResolvedValue(JSON.stringify(existingSession));
+      mockFs.readFile.mockResolvedValue(createEncryptedFileContent(existingSession));
       mockFs.writeFile.mockRejectedValue(new Error("Write failed"));
 
       // Update may succeed or fail depending on implementation
@@ -445,11 +485,11 @@ describe("SessionService", () => {
         savedAt: Date.now() - 1000,
       };
 
-      mockFs.readFile.mockResolvedValue(JSON.stringify(existingSession));
+      mockFs.readFile.mockResolvedValue(createEncryptedFileContent(existingSession));
 
       await sessionService.updateSession({ sessionToken: "updated-token" });
 
-      const savedData = JSON.parse(mockFs.writeFile.mock.calls[0][1] as string);
+      const savedData = extractSavedSessionData(mockFs.writeFile.mock.calls[0][1] as string);
       expect(savedData.savedAt).toBeGreaterThan(existingSession.savedAt);
     });
 
@@ -475,7 +515,7 @@ describe("SessionService", () => {
         },
       };
 
-      mockFs.readFile.mockResolvedValue(JSON.stringify(existingSession));
+      mockFs.readFile.mockResolvedValue(createEncryptedFileContent(existingSession));
 
       const updates = {
         subscription: {
@@ -490,9 +530,9 @@ describe("SessionService", () => {
 
       await sessionService.updateSession(updates);
 
-      const savedData = JSON.parse(mockFs.writeFile.mock.calls[0][1] as string);
-      expect(savedData.subscription.tier).toBe("pro");
-      expect(savedData.subscription.isActive).toBe(true);
+      const savedData = extractSavedSessionData(mockFs.writeFile.mock.calls[0][1] as string);
+      expect((savedData.subscription as any).tier).toBe("pro");
+      expect((savedData.subscription as any).isActive).toBe(true);
     });
   });
 
@@ -520,7 +560,7 @@ describe("SessionService", () => {
         createdAt: now - 24 * 60 * 60 * 1000,
       };
 
-      mockFs.readFile.mockResolvedValue(JSON.stringify(sessionData));
+      mockFs.readFile.mockResolvedValue(createEncryptedFileContent(sessionData));
 
       // Due to timing, this could be null or valid depending on execution speed
       const result = await sessionService.loadSession();
@@ -544,7 +584,7 @@ describe("SessionService", () => {
         // No expiresAt field
       };
 
-      mockFs.readFile.mockResolvedValue(JSON.stringify(sessionData));
+      mockFs.readFile.mockResolvedValue(createEncryptedFileContent(sessionData));
 
       const result = await sessionService.loadSession();
 
@@ -567,7 +607,7 @@ describe("SessionService", () => {
         createdAt: oneYearAgo - 24 * 60 * 60 * 1000,
       };
 
-      mockFs.readFile.mockResolvedValue(JSON.stringify(sessionData));
+      mockFs.readFile.mockResolvedValue(createEncryptedFileContent(sessionData));
 
       const result = await sessionService.loadSession();
 
@@ -627,7 +667,7 @@ describe("SessionService", () => {
         createdAt: Date.now(),
       };
 
-      mockFs.readFile.mockResolvedValue(JSON.stringify(sessionData));
+      mockFs.readFile.mockResolvedValue(createEncryptedFileContent(sessionData));
 
       const result = await sessionService.loadSession();
 
@@ -649,7 +689,7 @@ describe("SessionService", () => {
         createdAt: Date.now(),
       };
 
-      mockFs.readFile.mockResolvedValue(JSON.stringify(sessionData));
+      mockFs.readFile.mockResolvedValue(createEncryptedFileContent(sessionData));
 
       const result = await sessionService.loadSession();
 
