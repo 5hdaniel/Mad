@@ -20,6 +20,7 @@ export function useScrollSpy(
   useEffect(() => {
     const container = containerRef.current;
     if (!enabled || !container || sectionIds.length === 0) return;
+    if (typeof IntersectionObserver === "undefined") return; // jsdom safety
 
     const visibleSet = new Set<string>();
 

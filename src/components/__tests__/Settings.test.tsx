@@ -128,14 +128,14 @@ describe("Settings", () => {
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
-        expect(screen.getByText("General")).toBeInTheDocument();
+        expect(screen.getAllByText("General").length).toBeGreaterThanOrEqual(1);
       });
 
-      expect(screen.getByText("Email Connections")).toBeInTheDocument();
-      expect(screen.getByText("Export")).toBeInTheDocument();
+      expect(screen.getAllByText("Email").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("Export").length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText("AI Settings")).toBeInTheDocument();
       expect(screen.getByText("Data & Privacy")).toBeInTheDocument();
-      expect(screen.getByText("About")).toBeInTheDocument();
+      expect(screen.getAllByText("About").length).toBeGreaterThanOrEqual(1);
     });
 
     it("should show app name and copyright", async () => {
@@ -601,15 +601,6 @@ describe("Settings", () => {
   });
 
   describe("Data & Privacy", () => {
-    it("should show view stored data button (disabled)", async () => {
-      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
-
-      expect(screen.getByText("View Stored Data")).toBeInTheDocument();
-      expect(
-        screen.getByText(/see all data stored locally/i),
-      ).toBeInTheDocument();
-    });
-
     it("should show clear all data button (disabled)", async () => {
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 

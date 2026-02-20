@@ -144,7 +144,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
   // TASK-1980: Start date default mode preference
   const [startDateDefault, setStartDateDefault] = useState<"auto" | "manual">("manual");
 
-  const activeTabId = useScrollSpy(visibleTabIds, scrollContainerRef, 44, !loadingPreferences);
+  const activeTabId = useScrollSpy(visibleTabIds, scrollContainerRef, 48, !loadingPreferences);
 
   const handleTabClick = useCallback((id: string) => {
     const el = document.getElementById(id);
