@@ -374,6 +374,14 @@ describe("MicrosoftAuthService - authenticateForLogin", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     microsoftAuthService.stopLocalServer();
+    // Provide test client ID so initialize() doesn't throw
+    process.env.MICROSOFT_CLIENT_ID = "test-client-id";
+    // Reset singleton initialized state to force re-initialization with test env
+    (microsoftAuthService as any).initialized = false;
+  });
+
+  afterEach(() => {
+    delete process.env.MICROSOFT_CLIENT_ID;
   });
 
   afterEach(() => {
@@ -406,9 +414,14 @@ describe("MicrosoftAuthService - authenticateForMailbox", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     microsoftAuthService.stopLocalServer();
+    // Provide test client ID so initialize() doesn't throw
+    process.env.MICROSOFT_CLIENT_ID = "test-client-id";
+    // Reset singleton initialized state to force re-initialization with test env
+    (microsoftAuthService as any).initialized = false;
   });
 
   afterEach(() => {
+    delete process.env.MICROSOFT_CLIENT_ID;
     microsoftAuthService.stopLocalServer();
   });
 

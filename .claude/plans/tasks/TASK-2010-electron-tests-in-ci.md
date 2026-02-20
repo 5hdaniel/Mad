@@ -165,28 +165,28 @@ PM updates ALL three locations at each transition (engineer does NOT update stat
 **REQUIRED: Complete this section before creating PR.**
 **See: `.claude/docs/ENGINEER-WORKFLOW.md` for full workflow**
 
-*Completed: <DATE>*
+*Completed: 2026-02-19*
 
 ### Engineer Checklist
 
 ```
 Pre-Work:
-- [ ] Created branch from develop
-- [ ] Noted start time: ___
-- [ ] Read task file completely
+- [x] Created branch from develop
+- [x] Noted start time: session start
+- [x] Read task file completely
 
 Implementation:
-- [ ] jest.config.js updated for CI electron test inclusion
-- [ ] CI=true npm test run locally with electron tests
-- [ ] Failing tests identified and fixed or excluded
-- [ ] Excluded tests documented with reasons
-- [ ] Coverage includes electron/ files
-- [ ] Type check passes (npm run type-check)
-- [ ] Lint passes (npm run lint)
-- [ ] Tests pass 3x (npm test)
+- [x] jest.config.js updated for CI electron test inclusion
+- [x] CI=true npm test run locally with electron tests
+- [x] Failing tests identified and fixed or excluded
+- [x] Excluded tests documented with reasons
+- [x] Coverage includes electron/ files
+- [x] Type check passes (npm run type-check)
+- [x] Lint passes (npm run lint)
+- [x] Tests pass 3x (npm test)
 
 PR Submission:
-- [ ] This summary section completed
+- [x] This summary section completed
 - [ ] PR created with Engineer Metrics (see template)
 - [ ] CI passes (gh pr checks --watch)
 - [ ] SR Engineer review requested
@@ -198,18 +198,36 @@ Completion:
 
 ### Results
 
-- **Before**: [state before]
-- **After**: [state after]
-- **Actual Tokens**: ~XK (Est: ~8K)
-- **PR**: [URL after PR created]
+- **Before**: CI ran 101 test suites (src/ only), 0 electron tests in CI
+- **After**: CI runs 210 test suites (101 src + 109 electron), 209 pass, 1 self-skips (nativeModules)
+- **Tests added to CI**: 109 electron test suites (2572+ tests)
+- **Tests fixed**: 3 suites (pdfExportService, microsoftAuthService, transactionService)
+- **Tests excluded**: 6 suites with documented reasons
+- **Actual Tokens**: Est: ~8K
+- **PR**: pending
+
+### Failure Analysis
+
+| Suite | Tests | Issue | Resolution |
+|-------|-------|-------|------------|
+| pdfExportService.test.ts | 17->0 fail | Missing `loadFile` mock on BrowserWindow | Added `loadFile` to mock |
+| microsoftAuthService.test.ts | 3->0 fail | Missing MICROSOFT_CLIENT_ID env var | Set test env var + reset singleton |
+| transactionService.test.ts | 1->0 fail | Stale assertion (getCommunicationsByTransaction gained params) | Updated assertion to include undefined params |
+| iosMessagesParser.test.ts | 55 | Requires real native sqlite3 binary | Excluded - CI uses mocked bindings |
+| autoLinkService.test.ts | 8 | Stale mocks from inferred contact source refactor | Excluded - needs test rewrite |
+| supabaseService.conflict.test.ts | 9 | Stale sync/subscription/device mocks | Excluded - needs test rewrite |
+| auth-handlers.integration.test.ts | 1 | Integration test, session restore mock incomplete | Excluded - integration test |
+| transaction-handlers.integration.test.ts | 2 | Integration test, update mock returns undefined | Excluded - integration test |
+| externalContactDbService.worker.test.ts | 8 | Worker thread mocking broken | Excluded - needs rewrite |
 
 ### Notes
 
-**Deviations from plan:**
-[If you deviated, explain what and why]
+**Deviations from plan:** None
 
 **Issues encountered:**
-[Document any challenges]
+- pdfExportService had an additional custom BrowserWindow mock in its error test case that also lacked `loadFile` (2 mock locations, not just the top-level one)
+- nativeModules.test.ts already had `skipInCI` via `describe.skip` conditional -- no action needed
+- Coverage `collectCoverageFrom` already included electron/services and electron/utils -- no changes needed
 
 ---
 

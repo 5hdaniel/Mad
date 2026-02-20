@@ -14,6 +14,7 @@ import path from "path";
 jest.mock("electron", () => ({
   BrowserWindow: jest.fn().mockImplementation(() => ({
     loadURL: jest.fn().mockResolvedValue(undefined),
+    loadFile: jest.fn().mockResolvedValue(undefined),
     webContents: {
       printToPDF: jest.fn().mockResolvedValue(Buffer.from("mock-pdf-data")),
     },
@@ -190,6 +191,7 @@ describe("PDFExportService", () => {
       // Make printToPDF fail
       const mockWindow = {
         loadURL: jest.fn().mockResolvedValue(undefined),
+        loadFile: jest.fn().mockResolvedValue(undefined),
         webContents: {
           printToPDF: jest
             .fn()
