@@ -142,7 +142,7 @@ describe("TransactionService - Database Method Fixes", () => {
 
       expect(
         databaseService.getCommunicationsByTransaction,
-      ).toHaveBeenCalledWith(mockTransactionId);
+      ).toHaveBeenCalledWith(mockTransactionId, undefined, undefined);
       expect(
         databaseService.getTransactionContactsWithRoles,
       ).toHaveBeenCalledWith(mockTransactionId);
