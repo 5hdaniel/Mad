@@ -8,6 +8,7 @@ import React, { useState, useCallback, useMemo, useEffect } from "react";
 import DOMPurify from "dompurify";
 import type { Communication } from "../../types";
 import { AttachmentPreviewModal } from "./AttachmentPreviewModal";
+import { formatFileSize } from "../../../../utils/formatUtils";
 import logger from '../../../../utils/logger';
 
 /**
@@ -19,16 +20,6 @@ interface EmailAttachment {
   mime_type: string | null;
   file_size_bytes: number | null;
   storage_path: string | null;
-}
-
-/**
- * Format file size in human-readable format
- */
-function formatFileSize(bytes: number | null): string {
-  if (bytes === null || bytes === 0) return "";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /**

@@ -15,6 +15,7 @@ import {
 import { Document, Page, pdfjs } from "react-pdf";
 import DOMPurify from "dompurify";
 import mammoth from "mammoth";
+import { formatFileSize } from "../../../../utils/formatUtils";
 
 // Import react-pdf styles for annotations and text layer
 import "react-pdf/dist/Page/AnnotationLayer.css";
@@ -34,17 +35,6 @@ interface AttachmentPreviewModalProps {
   };
   onClose: () => void;
   onOpenWithSystem: (storagePath: string) => void;
-}
-
-/**
- * Format file size in human-readable format
- */
-function formatFileSize(bytes: number | null): string {
-  if (bytes === null || bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
 /**
