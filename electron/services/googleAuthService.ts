@@ -11,6 +11,7 @@
  * via dotenv. Do not import dotenv here.
  */
 
+import * as Sentry from "@sentry/electron/main";
 import axios, { AxiosError } from "axios";
 import crypto from "crypto";
 import http from "http";
@@ -455,6 +456,7 @@ class GoogleAuthService {
       logService.error("[GoogleAuth] Code exchange failed:", "GoogleAuth", {
         error: axiosError.response?.data || axiosError.message || error,
       });
+      Sentry.captureException(error, { tags: { service: "google-auth", operation: "exchangeCodeForTokens" } });
       throw error;
     }
   }
@@ -552,6 +554,7 @@ class GoogleAuthService {
       logService.error("[GoogleAuth] Failed to get user info:", "GoogleAuth", {
         error: axiosError.response?.data || axiosError.message || error,
       });
+      Sentry.captureException(error, { tags: { service: "google-auth", operation: "getUserInfo" } });
       throw error;
     }
   }
@@ -598,6 +601,7 @@ class GoogleAuthService {
       logService.error("[GoogleAuth] Token refresh failed:", "GoogleAuth", {
         error: axiosError.response?.data || axiosError.message || error,
       });
+      Sentry.captureException(error, { tags: { service: "google-auth", operation: "refreshToken" } });
       throw error;
     }
   }
