@@ -4,8 +4,9 @@
  * Supports two-step consent: login (minimal scopes) + mailbox access (Gmail scopes)
  *
  * BACKLOG-733: Migrated from googleapis OAuth2Client to manual PKCE flow (RFC 8252)
- * This eliminates GOOGLE_CLIENT_SECRET from the binary, improving security for
- * desktop/public clients.
+ * PKCE is kept as defense-in-depth, but client_secret is still required because
+ * Google's OAuth server requires it for ALL app types (including Desktop).
+ * See: https://discuss.google.dev/t/authorization-code-flow-without-client-secret/168113
  *
  * Note: Environment variable GOOGLE_CLIENT_ID is loaded centrally in electron/main.ts
  * via dotenv. Do not import dotenv here.
@@ -85,6 +86,7 @@ interface GoogleTokenResponse {
 
 class GoogleAuthService {
   private clientId: string = "";
+  private clientSecret: string = "";
   private initialized: boolean = false;
   private redirectUri: string = "http://localhost:3001/callback"; // Different port than Microsoft
   private server: http.Server | null = null;
@@ -93,7 +95,9 @@ class GoogleAuthService {
   private codeRejecter: ((error: Error) => void) | null = null;
 
   /**
-   * Initialize Google OAuth2 configuration (PKCE - no client secret needed)
+   * Initialize Google OAuth2 configuration (PKCE + client_secret)
+   * Google requires client_secret for all app types, including Desktop.
+   * PKCE is kept as defense-in-depth.
    */
   initialize(): void {
     if (this.initialized) {
@@ -101,10 +105,19 @@ class GoogleAuthService {
     }
 
     const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
     if (!clientId) {
       logService.error(
         "[GoogleAuth] Missing GOOGLE_CLIENT_ID. Check .env.development file.",
+        "GoogleAuth",
+      );
+      throw new Error("Google OAuth credentials not configured");
+    }
+
+    if (!clientSecret) {
+      logService.error(
+        "[GoogleAuth] Missing GOOGLE_CLIENT_SECRET. Check .env.development file.",
         "GoogleAuth",
       );
       throw new Error("Google OAuth credentials not configured");
@@ -117,8 +130,9 @@ class GoogleAuthService {
     );
 
     this.clientId = clientId;
+    this.clientSecret = clientSecret;
     this.initialized = true;
-    logService.debug("[GoogleAuth] Initialized successfully (PKCE mode)", "GoogleAuth");
+    logService.debug("[GoogleAuth] Initialized successfully (PKCE + client_secret mode)", "GoogleAuth");
   }
 
   /**
@@ -398,7 +412,8 @@ class GoogleAuthService {
   }
 
   /**
-   * Exchange authorization code for tokens using PKCE (no client_secret)
+   * Exchange authorization code for tokens using PKCE + client_secret
+   * Google requires client_secret for all app types; PKCE is defense-in-depth.
    * @param code - Authorization code from OAuth callback
    * @param codeVerifier - PKCE code verifier from the auth flow
    * @returns Tokens and user info
@@ -407,16 +422,17 @@ class GoogleAuthService {
     this._ensureInitialized();
 
     try {
-      logService.debug("[GoogleAuth] Exchanging code for tokens (PKCE)", "GoogleAuth");
+      logService.debug("[GoogleAuth] Exchanging code for tokens (PKCE + client_secret)", "GoogleAuth");
 
       const params = new URLSearchParams({
         client_id: this.clientId,
+        client_secret: this.clientSecret,
         code: code,
         redirect_uri: this.redirectUri,
         grant_type: "authorization_code",
       });
 
-      // Include code_verifier for PKCE flow (required for public clients)
+      // Include code_verifier for PKCE flow (defense-in-depth)
       if (codeVerifier) {
         params.append("code_verifier", codeVerifier);
       }
@@ -433,7 +449,7 @@ class GoogleAuthService {
 
       const tokenResponse = response.data;
 
-      logService.debug("[GoogleAuth] Tokens obtained successfully (PKCE)", "GoogleAuth");
+      logService.debug("[GoogleAuth] Tokens obtained successfully", "GoogleAuth");
 
       // Get user info
       const userInfo = await this.getUserInfo(tokenResponse.access_token);
@@ -560,7 +576,7 @@ class GoogleAuthService {
   }
 
   /**
-   * Refresh access token using refresh token via HTTP POST (no client_secret for public clients)
+   * Refresh access token using refresh token via HTTP POST (client_secret required)
    * @param refreshToken - Refresh token
    * @returns New tokens
    */
@@ -568,10 +584,11 @@ class GoogleAuthService {
     this._ensureInitialized();
 
     try {
-      logService.info("[GoogleAuth] Refreshing access token (PKCE/public client)", "GoogleAuth");
+      logService.info("[GoogleAuth] Refreshing access token", "GoogleAuth");
 
       const params = new URLSearchParams({
         client_id: this.clientId,
+        client_secret: this.clientSecret,
         refresh_token: refreshToken,
         grant_type: "refresh_token",
       });

@@ -82,6 +82,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
           MICROSOFT_CLIENT_ID: ${{ secrets.MICROSOFT_CLIENT_ID }}
           MICROSOFT_TENANT_ID: ${{ secrets.MICROSOFT_TENANT_ID }}
@@ -92,6 +93,7 @@ jobs:
             echo "SUPABASE_URL=${SUPABASE_URL}"
             echo "SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}"
             echo "GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}"
+            echo "GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}"
             echo "GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}"
             echo "MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID}"
             echo "MICROSOFT_TENANT_ID=${MICROSOFT_TENANT_ID}"
@@ -206,6 +208,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
           MICROSOFT_CLIENT_ID: ${{ secrets.MICROSOFT_CLIENT_ID }}
           MICROSOFT_TENANT_ID: ${{ secrets.MICROSOFT_TENANT_ID }}
@@ -215,6 +218,7 @@ jobs:
             "SUPABASE_URL=$env:SUPABASE_URL",
             "SUPABASE_ANON_KEY=$env:SUPABASE_ANON_KEY",
             "GOOGLE_CLIENT_ID=$env:GOOGLE_CLIENT_ID",
+            "GOOGLE_CLIENT_SECRET=$env:GOOGLE_CLIENT_SECRET",
             "GOOGLE_MAPS_API_KEY=$env:GOOGLE_MAPS_API_KEY",
             "MICROSOFT_CLIENT_ID=$env:MICROSOFT_CLIENT_ID",
             "MICROSOFT_TENANT_ID=$env:MICROSOFT_TENANT_ID",

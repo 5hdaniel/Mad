@@ -221,7 +221,7 @@ https://www.googleapis.com/auth/gmail.readonly
 1. Verify credentials in `.env.development`:
    ```bash
    GOOGLE_CLIENT_ID=892134553674-0vc87dp5oseka55i7rgi37oo5phmfjem.apps.googleusercontent.com
-   # Note: GOOGLE_CLIENT_SECRET is no longer needed (PKCE flow, BACKLOG-733)
+   GOOGLE_CLIENT_SECRET=GOCSPX-xxxxx
    ```
 2. Copy exact values from Google Cloud Console → Credentials
 3. Ensure no extra spaces or line breaks
@@ -282,7 +282,7 @@ Only request the scopes you actually need:
 ```bash
 # Never commit these to git
 GOOGLE_CLIENT_ID=xxxxx
-# Note: GOOGLE_CLIENT_SECRET is no longer needed (PKCE flow, BACKLOG-733)
+GOOGLE_CLIENT_SECRET=xxxxx
 
 # Ensure .env.development is in .gitignore
 ```
