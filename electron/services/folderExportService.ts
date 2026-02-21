@@ -22,12 +22,10 @@ import { app, BrowserWindow } from "electron";
 import { PDFDocument } from "pdf-lib";
 import logService from "./logService";
 import databaseService from "./databaseService";
-import { getContactNames } from "./contactsService";
 import { getUserById } from "./db/userDbService";
 import type { Transaction, Communication } from "../types/models";
 import { isEmailMessage, isTextMessage } from "../utils/channelHelpers";
 import {
-  resolvePhoneNames,
   resolveHandles as resolveAllHandles,
   resolveGroupChatParticipants as sharedResolveGroupChatParticipants,
   extractParticipantHandles,
@@ -561,8 +559,8 @@ class FolderExportService {
    * Generate HTML for text conversations index in summary
    */
   private generateTextIndex(texts: Communication[], phoneNameMap?: Record<string, string>): string {
-    // Use provided phoneNameMap or fall back to sync lookup
-    const nameMap = phoneNameMap || this.getContactNamesByPhones(this.extractAllPhones(texts));
+    // Use provided phoneNameMap or fall back to sync lookup (TASK-2027: use shared extractParticipantHandles)
+    const nameMap = phoneNameMap || this.getContactNamesByPhones(extractParticipantHandles(texts));
 
     // Group by thread
     const textThreads = new Map<string, Communication[]>();
@@ -1033,8 +1031,8 @@ class FolderExportService {
     userName?: string,
     userEmail?: string
   ): Promise<void> {
-    // Use provided phoneNameMap or fall back to sync lookup
-    const nameMap = phoneNameMap || this.getContactNamesByPhones(this.extractAllPhones(texts));
+    // Use provided phoneNameMap or fall back to sync lookup (TASK-2027: use shared extractParticipantHandles)
+    const nameMap = phoneNameMap || this.getContactNamesByPhones(extractParticipantHandles(texts));
 
     // Group texts by thread
     const textThreads = new Map<string, Communication[]>();
@@ -1062,7 +1060,11 @@ class FolderExportService {
     for (const [, msgs] of textThreads) {
       const contact = this.getThreadContact(msgs, nameMap);
       const isGroupChat = this._isGroupChat(msgs);
-      const participants = isGroupChat ? this.getGroupChatParticipants(msgs, nameMap, userName, userEmail) : undefined;
+      // TASK-2027: Delegate to shared service, adapt ResolvedParticipant to {phone, name} format
+      const participants = isGroupChat
+        ? (await sharedResolveGroupChatParticipants(msgs, nameMap, userName, userEmail))
+            .map(p => ({ phone: p.handle, name: p.name }))
+        : undefined;
       const html = this.generateTextThreadHTML(
         msgs,
         contact,
@@ -1093,53 +1095,8 @@ class FolderExportService {
     }
   }
 
-  /**
-   * Normalize phone number to last 10 digits for matching
-   */
-  private normalizePhone(phone: string): string {
-    return phone.replace(/\D/g, "").slice(-10);
-  }
-
-  /**
-   * Extract all unique phone numbers from communications
-   * Includes both sender field and all participants (from/to) from JSON
-   */
-  private extractAllPhones(communications: Communication[]): string[] {
-    const phones = new Set<string>();
-
-    for (const comm of communications) {
-      // Add sender if it's a phone number
-      if (comm.sender && (comm.sender.startsWith("+") || /^\d{7,}$/.test(comm.sender.replace(/\D/g, "")))) {
-        phones.add(comm.sender);
-      }
-
-      // Parse participants JSON to get all phone numbers
-      if (comm.participants) {
-        try {
-          const parsed = typeof comm.participants === "string"
-            ? JSON.parse(comm.participants)
-            : comm.participants;
-
-          if (parsed.from && (parsed.from.startsWith("+") || /^\d{7,}$/.test(parsed.from.replace(/\D/g, "")))) {
-            phones.add(parsed.from);
-          }
-
-          if (parsed.to) {
-            const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
-            for (const p of toList) {
-              if (p && (p.startsWith("+") || /^\d{7,}$/.test(p.replace(/\D/g, "")))) {
-                phones.add(p);
-              }
-            }
-          }
-        } catch {
-          // Ignore parse errors
-        }
-      }
-    }
-
-    return Array.from(phones);
-  }
+  // TASK-2027: normalizePhone() and extractAllPhones() deleted.
+  // Uses sharedNormalizePhone() and extractParticipantHandles() from contactResolutionService.
 
   /**
    * Get thread key for grouping messages (uses thread_id if available).
@@ -1174,11 +1131,11 @@ class FolderExportService {
             : msg.participants;
 
         const allParticipants = new Set<string>();
-        if (parsed.from) allParticipants.add(this.normalizePhone(parsed.from));
+        if (parsed.from) allParticipants.add(sharedNormalizePhone(parsed.from));
         if (parsed.to) {
           const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
           toList.forEach((p: string) =>
-            allParticipants.add(this.normalizePhone(p))
+            allParticipants.add(sharedNormalizePhone(p))
           );
         }
 
@@ -1219,7 +1176,7 @@ class FolderExportService {
           }
 
           if (phone) {
-            const normalized = this.normalizePhone(phone);
+            const normalized = sharedNormalizePhone(phone);
             const name =
               phoneNameMap[normalized] || phoneNameMap[phone] || null;
             return { phone, name };
@@ -1231,7 +1188,7 @@ class FolderExportService {
 
       // Fallback to sender
       if (msg.sender) {
-        const normalized = this.normalizePhone(msg.sender);
+        const normalized = sharedNormalizePhone(msg.sender);
         const name =
           phoneNameMap[normalized] || phoneNameMap[msg.sender] || null;
         return { phone: msg.sender, name };
@@ -1302,121 +1259,8 @@ class FolderExportService {
     return participants.size > 2;
   }
 
-  /**
-   * Get all participants in a group chat with their names and phone numbers
-   * Uses chat_members (from Apple's chat_handle_join table) as the authoritative source
-   * Falls back to from/to extraction only if chat_members unavailable
-   */
-  private getGroupChatParticipants(
-    msgs: Communication[],
-    phoneNameMap: Record<string, string>,
-    userName?: string,
-    userEmail?: string
-  ): Array<{ phone: string; name: string | null }> {
-    const participantPhones = new Set<string>();
-    let hasChatMembers = false;
-    let userIdentifier: string | null = null;
-
-    // First pass: look for chat_members (authoritative source from Apple's chat_handle_join)
-    // Also extract the user's identifier from outbound messages
-    for (const msg of msgs) {
-      try {
-        if (msg.participants) {
-          const parsed =
-            typeof msg.participants === "string"
-              ? JSON.parse(msg.participants)
-              : msg.participants;
-
-          // Use chat_members as authoritative source if available
-          if (!hasChatMembers && parsed.chat_members && Array.isArray(parsed.chat_members) && parsed.chat_members.length > 0) {
-            hasChatMembers = true;
-            parsed.chat_members.forEach((member: string) => participantPhones.add(member));
-          }
-
-          // Extract user's identifier from outbound messages (from field when direction is outbound)
-          // The from field now contains the actual identifier (email or phone) instead of "me"
-          if (!userIdentifier && msg.direction === "outbound" && parsed.from) {
-            userIdentifier = parsed.from;
-          }
-        }
-      } catch {
-        // Continue
-      }
-    }
-
-    // Add user's identifier (or fallback to "me" for old data)
-    if (hasChatMembers) {
-      participantPhones.add(userIdentifier || "me");
-    }
-
-    // Fallback: if no chat_members, extract from from/to (less reliable)
-    if (!hasChatMembers) {
-      for (const msg of msgs) {
-        try {
-          if (msg.participants) {
-            const parsed =
-              typeof msg.participants === "string"
-                ? JSON.parse(msg.participants)
-                : msg.participants;
-
-            if (parsed.from) {
-              participantPhones.add(parsed.from);
-            }
-            if (parsed.to) {
-              const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
-              toList.forEach((p: string) => participantPhones.add(p));
-            }
-          }
-        } catch {
-          // Continue
-        }
-      }
-    }
-
-    // Convert to array with names, handling special cases
-    return Array.from(participantPhones)
-      .filter((phone) => {
-        // Filter out empty/null values
-        if (!phone || phone.trim() === "") return false;
-        // Filter out "unknown" - ghost participants from NULL handles (only relevant in fallback path)
-        if (phone.toLowerCase().trim() === "unknown") return false;
-        return true;
-      })
-      .map((phone) => {
-        const lowerPhone = phone.toLowerCase().trim();
-
-        // Handle "me" - this is the user
-        if (lowerPhone === "me") {
-          return { phone: "", name: userName || "You" };
-        }
-
-        // Check if it's a valid phone number (has digits)
-        const isPhone = /\d{7,}/.test(phone.replace(/\D/g, ""));
-
-        if (isPhone) {
-          const normalized = this.normalizePhone(phone);
-          const name = phoneNameMap[normalized] || phoneNameMap[phone] || null;
-          return { phone, name };
-        }
-
-        // If it's not "me" or a phone number, it might be an Apple ID/email (like "magicauditwa")
-        // Check if it matches the user's email identifier - if so, show their name
-        if (userName && userEmail) {
-          const emailPrefix = userEmail.split("@")[0].toLowerCase();
-          // Check if this identifier matches the user's email or email prefix
-          if (lowerPhone === userEmail.toLowerCase() ||
-              lowerPhone === emailPrefix ||
-              lowerPhone.includes(emailPrefix)) {
-            // This is the user's iMessage identifier
-            return { phone, name: userName };
-          }
-        }
-
-        // Try to look it up in contacts, otherwise use it as the display name
-        const name = phoneNameMap[phone] || null;
-        return { phone, name: name || phone };
-      });
-  }
+  // TASK-2027: getGroupChatParticipants() deleted.
+  // Uses sharedResolveGroupChatParticipants() from contactResolutionService with adapter.
 
   /**
    * Look up contact names for phone numbers from multiple sources:
@@ -1480,17 +1324,8 @@ class FolderExportService {
     return result;
   }
 
-  /**
-   * Async version that also checks macOS Contacts database.
-   * TASK-2026: Delegates to shared ContactResolutionService for phone resolution,
-   * then also resolves email handles found in messages.
-   */
-  private async getContactNamesByPhonesAsync(phones: string[]): Promise<Record<string, string>> {
-    if (phones.length === 0) return {};
-
-    // Delegate to shared service (handles both imported contacts + macOS Contacts)
-    return resolvePhoneNames(phones);
-  }
+  // TASK-2027: getContactNamesByPhonesAsync() deleted.
+  // Callers now use resolvePhoneNames() from contactResolutionService directly.
 
   /**
    * Generate HTML for a single text conversation thread (styled like PDF export)
@@ -1689,7 +1524,7 @@ class FolderExportService {
     if (!isOutbound) {
       if (isGroupChat && msg.sender) {
         // TASK-2026: Try multiple lookup strategies for sender resolution
-        const normalized = this.normalizePhone(msg.sender);
+        const normalized = sharedNormalizePhone(msg.sender);
         const resolvedName =
           phoneNameMap[normalized] ||
           phoneNameMap[msg.sender] ||

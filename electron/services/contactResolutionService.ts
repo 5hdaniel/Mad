@@ -28,10 +28,17 @@ export interface ResolvedParticipant {
 
 /**
  * Normalize phone number to last 10 digits for matching.
- * Extracted from folderExportService.normalizePhone().
+ * For email handles, returns lowercase as-is (don't strip non-digit chars).
+ *
+ * TASK-2027: Fixed to handle email handles correctly. The old version
+ * stripped all non-digits, turning "madisonsola@gmail.com" into "" (empty string),
+ * causing duplicate conversation PDFs and unresolved email participants in exports.
  */
 export function normalizePhone(phone: string): string {
-  return phone.replace(/\D/g, "").slice(-10);
+  // If it looks like an email, don't strip non-digits
+  if (phone.includes("@")) return phone.toLowerCase();
+  const digits = phone.replace(/\D/g, "");
+  return digits.length >= 10 ? digits.slice(-10) : digits;
 }
 
 /**

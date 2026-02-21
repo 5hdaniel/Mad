@@ -6,6 +6,7 @@
 import React, { useState } from "react";
 import type { Communication, Message } from "../types";
 import { ConversationViewModal } from "./modals";
+import { normalizePhoneForLookup, getSenderPhone } from "../../../utils/phoneNormalization";
 
 /**
  * Union type for messages - can be from messages table or communications table
@@ -177,41 +178,7 @@ function formatParticipantNames(
   return `${uniqueNames.slice(0, maxShow).join(", ")} +${uniqueNames.length - maxShow} more`;
 }
 
-/**
- * Extract sender phone from a message's participants.
- */
-function getSenderPhone(msg: MessageLike): string | null {
-  if (msg.direction === "outbound") return null; // Outbound = user sent it
-
-  try {
-    if (msg.participants) {
-      const parsed = typeof msg.participants === 'string'
-        ? JSON.parse(msg.participants)
-        : msg.participants;
-      if (parsed.from) return parsed.from;
-    }
-  } catch {
-    // Fall through
-  }
-
-  // Fallback to sender field if available
-  if ("sender" in msg && msg.sender) {
-    return msg.sender;
-  }
-
-  return null;
-}
-
-/**
- * Normalize phone for lookup (last 10 digits).
- * TASK-2026: For email handles, return lowercase as-is (don't strip chars).
- */
-function normalizePhoneForLookup(phone: string): string {
-  // If it looks like an email, don't strip non-digits
-  if (phone.includes("@")) return phone.toLowerCase();
-  const digits = phone.replace(/\D/g, '');
-  return digits.length >= 10 ? digits.slice(-10) : digits;
-}
+// getSenderPhone and normalizePhoneForLookup imported from src/utils/phoneNormalization.ts (TASK-2027)
 
 /**
  * MessageThreadCard component for displaying a conversation thread.

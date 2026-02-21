@@ -14,6 +14,7 @@ import {
 } from "./MessageThreadCard";
 import { AttachMessagesModal, UnlinkMessageModal } from "./modals";
 import { parseDateSafe } from "../../../utils/dateFormatters";
+import { extractAllHandles } from "../../../utils/phoneNormalization";
 import { mergeThreadsByContact, type MergedThreadEntry } from "../../../utils/threadMergeUtils";
 import logger from '../../../utils/logger';
 
@@ -98,56 +99,7 @@ interface TransactionMessagesTabProps {
  * Messages tab content component.
  * Shows loading state, empty state, or message threads.
  */
-/**
- * TASK-2026: Extract all unique participant handles from messages for contact lookup.
- * Collects phone numbers, email handles, and Apple IDs from:
- * - chat_members (authoritative for group chats)
- * - from/to fields
- * - sender field
- *
- * Replaces the old extractAllPhones() which only collected phone-like handles.
- */
-function extractAllHandles(messages: MessageLike[]): string[] {
-  const handles = new Set<string>();
-
-  for (const msg of messages) {
-    try {
-      if (msg.participants) {
-        const parsed = typeof msg.participants === 'string'
-          ? JSON.parse(msg.participants)
-          : msg.participants;
-
-        // chat_members (authoritative for group chats -- includes email handles)
-        if (parsed.chat_members && Array.isArray(parsed.chat_members)) {
-          for (const member of parsed.chat_members) {
-            if (member && member !== "me" && member !== "unknown" && member.trim() !== "") {
-              handles.add(member);
-            }
-          }
-        }
-
-        if (parsed.from && parsed.from !== "me" && parsed.from !== "unknown") {
-          handles.add(parsed.from);
-        }
-        if (parsed.to) {
-          const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
-          toList.forEach((p: string) => {
-            if (p && p !== "me" && p !== "unknown") handles.add(p);
-          });
-        }
-      }
-    } catch {
-      // Skip invalid JSON
-    }
-
-    // Also check sender field
-    if ("sender" in msg && msg.sender && msg.sender !== "me" && msg.sender !== "unknown") {
-      handles.add(msg.sender);
-    }
-  }
-
-  return Array.from(handles);
-}
+// extractAllHandles imported from src/utils/phoneNormalization.ts (TASK-2027)
 
 export function TransactionMessagesTab({
   messages,
