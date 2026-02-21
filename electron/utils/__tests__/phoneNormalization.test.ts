@@ -44,6 +44,20 @@ describe("phoneNormalization", () => {
     it("should handle short numbers", () => {
       expect(normalizePhoneNumber("1234567")).toBe("+1234567");
     });
+
+    it("should preserve email handles unchanged (lowercased)", () => {
+      expect(normalizePhoneNumber("user@icloud.com")).toBe("user@icloud.com");
+    });
+
+    it("should lowercase email handles", () => {
+      expect(normalizePhoneNumber("User@ICLOUD.COM")).toBe("user@icloud.com");
+    });
+
+    it("should preserve complex email handles", () => {
+      expect(normalizePhoneNumber("madison.jones+tag@gmail.com")).toBe(
+        "madison.jones+tag@gmail.com",
+      );
+    });
   });
 
   describe("phoneNumbersMatch", () => {

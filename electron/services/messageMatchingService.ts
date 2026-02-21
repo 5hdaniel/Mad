@@ -58,6 +58,9 @@ export interface AutoLinkOptions {
 export function normalizePhone(phone: string | null | undefined): string | null {
   if (!phone) return null;
 
+  // Preserve email handles (e.g., iMessage email addresses)
+  if (phone.includes("@")) return phone.toLowerCase();
+
   // Remove all non-digit characters
   const digits = phone.replace(/\D/g, "");
 

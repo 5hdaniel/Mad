@@ -48,6 +48,20 @@ describe("messageMatchingService", () => {
       // Numbers with extensions: all digits are kept, treated as international (>10 digits)
       expect(normalizePhone("4155550000 ext 123")).toBe("+4155550000123");
     });
+
+    it("preserves email handles unchanged (lowercased)", () => {
+      expect(normalizePhone("user@icloud.com")).toBe("user@icloud.com");
+    });
+
+    it("lowercases email handles", () => {
+      expect(normalizePhone("User@ICLOUD.COM")).toBe("user@icloud.com");
+    });
+
+    it("preserves complex email handles", () => {
+      expect(normalizePhone("madison.jones+tag@gmail.com")).toBe(
+        "madison.jones+tag@gmail.com",
+      );
+    });
   });
 
   describe("phonesMatch", () => {

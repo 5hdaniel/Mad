@@ -66,6 +66,7 @@ function getExternalParticipants(messages: MessageLike[]): Set<string> {
  * Normalize a phone number to last 10 digits for comparison.
  */
 function normalizePhone(phone: string): string {
+  if (phone.includes("@")) return phone.toLowerCase();
   const digits = phone.replace(/\D/g, "");
   return digits.length >= 10 ? digits.slice(-10) : digits;
 }
