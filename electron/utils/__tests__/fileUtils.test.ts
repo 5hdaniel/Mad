@@ -5,6 +5,7 @@
 import {
   sanitizeFilename,
   sanitizeFilenamePreserveCase,
+  sanitizeFileSystemName,
   createTimestampedFilename,
   ensureUniqueFilename,
 } from "../fileUtils";
@@ -91,6 +92,54 @@ describe("fileUtils", () => {
       expect(sanitizeFilenamePreserveCase("My Document (Final).pdf")).toBe(
         "My Document _Final__pdf",
       );
+    });
+  });
+
+  describe("sanitizeFileSystemName", () => {
+    it("should keep alphanumeric characters, dots, hyphens, and underscores", () => {
+      expect(sanitizeFileSystemName("report-2024_final.pdf")).toBe(
+        "report-2024_final.pdf",
+      );
+    });
+
+    it("should replace special characters with underscores", () => {
+      expect(sanitizeFileSystemName("my file @home!.txt")).toBe(
+        "my_file_home_.txt",
+      );
+    });
+
+    it("should collapse consecutive underscores", () => {
+      expect(sanitizeFileSystemName("test!!!file")).toBe("test_file");
+    });
+
+    it("should remove directory traversal sequences", () => {
+      expect(sanitizeFileSystemName("../../etc/passwd")).toBe("_etc_passwd");
+    });
+
+    it("should remove leading dots", () => {
+      expect(sanitizeFileSystemName(".hidden")).toBe("hidden");
+    });
+
+    it("should truncate to 200 characters", () => {
+      const longName = "a".repeat(250) + ".txt";
+      expect(sanitizeFileSystemName(longName).length).toBe(200);
+    });
+
+    it("should return fallback for empty string", () => {
+      expect(sanitizeFileSystemName("")).toBe("file");
+    });
+
+    it("should return custom fallback when provided", () => {
+      expect(sanitizeFileSystemName("", "attachment")).toBe("attachment");
+    });
+
+    it("should preserve case", () => {
+      expect(sanitizeFileSystemName("MyDocument.PDF")).toBe("MyDocument.PDF");
+    });
+
+    it("should handle string that becomes empty after sanitization", () => {
+      // All leading dots are removed, leaving empty string
+      expect(sanitizeFileSystemName(".")).toBe("file");
     });
   });
 
