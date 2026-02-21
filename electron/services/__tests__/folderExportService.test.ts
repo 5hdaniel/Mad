@@ -89,6 +89,16 @@ jest.mock("../databaseService", () => ({
 
 import type { Communication, Transaction } from "../../types/models";
 
+// Import standalone helper functions extracted from FolderExportService
+import {
+  stripHtmlQuotedContent,
+  stripPlainTextQuotedContent,
+  stripQuotedContent,
+  isHtmlContent,
+  stripSubjectPrefixes,
+} from "../folderExport/emailExportHelpers";
+import { getThreadKey as getThreadKeyHelper } from "../folderExport/textExportHelpers";
+
 describe("FolderExportService", () => {
   let folderExportService: typeof import("../folderExportService").default;
 
@@ -645,9 +655,9 @@ describe("FolderExportService", () => {
   });
 
   describe("stripHtmlQuotedContent", () => {
-    // Access private method via bracket notation for unit testing
+    // Use standalone helper function (extracted from FolderExportService)
     const strip = (html: string): string =>
-      (folderExportService as any).stripHtmlQuotedContent(html);
+      stripHtmlQuotedContent(html);
 
     it("should strip Gmail quoted blocks (div.gmail_quote)", () => {
       const html = `<div>Original message content</div><div class="gmail_quote">On Mon, Jan 1 wrote:<br><blockquote>Quoted text</blockquote></div>`;
@@ -772,7 +782,7 @@ describe("FolderExportService", () => {
 
   describe("stripPlainTextQuotedContent", () => {
     const strip = (text: string): string =>
-      (folderExportService as any).stripPlainTextQuotedContent(text);
+      stripPlainTextQuotedContent(text);
 
     it("should strip lines starting with >", () => {
       const text = "My reply\n\n> Original message\n> Second quoted line";
@@ -820,7 +830,7 @@ describe("FolderExportService", () => {
 
   describe("stripQuotedContent", () => {
     const strip = (body: string, isHtml: boolean): string =>
-      (folderExportService as any).stripQuotedContent(body, isHtml);
+      stripQuotedContent(body, isHtml);
 
     it("should route HTML content to HTML stripper", () => {
       const html = `<div>Reply</div><div class="gmail_quote">Quoted</div>`;
@@ -839,7 +849,7 @@ describe("FolderExportService", () => {
 
   describe("isHtmlContent", () => {
     const isHtml = (body: string | null): boolean =>
-      (folderExportService as any).isHtmlContent(body);
+      isHtmlContent(body);
 
     it("should detect HTML with common tags", () => {
       expect(isHtml("<div>Hello</div>")).toBe(true);
@@ -867,7 +877,7 @@ describe("FolderExportService", () => {
 
   describe("stripSubjectPrefixes", () => {
     const stripPrefix = (subject: string): string =>
-      (folderExportService as any).stripSubjectPrefixes(subject);
+      stripSubjectPrefixes(subject);
 
     it("should strip Re: prefix", () => {
       expect(stripPrefix("Re: Meeting tomorrow")).toBe("Meeting tomorrow");
@@ -900,7 +910,7 @@ describe("FolderExportService", () => {
 
   describe("getThreadKey — email fallback", () => {
     const getThreadKey = (msg: Partial<Communication>): string =>
-      (folderExportService as any).getThreadKey(msg);
+      getThreadKeyHelper(msg as Communication);
 
     it("should use thread_id when available", () => {
       const result = getThreadKey({ thread_id: "AAMkAGE1MDQ5NjU3" } as any);
