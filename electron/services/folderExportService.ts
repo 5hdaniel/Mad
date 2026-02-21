@@ -26,6 +26,13 @@ import { getContactNames } from "./contactsService";
 import { getUserById } from "./db/userDbService";
 import type { Transaction, Communication } from "../types/models";
 import { isEmailMessage, isTextMessage } from "../utils/channelHelpers";
+import {
+  resolvePhoneNames,
+  resolveHandles as resolveAllHandles,
+  resolveGroupChatParticipants as sharedResolveGroupChatParticipants,
+  extractParticipantHandles,
+  normalizePhone as sharedNormalizePhone,
+} from "./contactResolutionService";
 
 export interface FolderExportOptions {
   transactionId: string;
@@ -125,9 +132,10 @@ class FolderExportService {
         return dateA - dateB;
       });
 
-      // Pre-load contact names for all phone numbers (from both imported contacts and macOS Contacts)
-      const allPhones = this.extractAllPhones(texts);
-      const phoneNameMap = await this.getContactNamesByPhonesAsync(allPhones);
+      // TASK-2026: Pre-load contact names for all handles (phones + emails + Apple IDs)
+      // Uses shared ContactResolutionService for unified resolution
+      const allHandles = extractParticipantHandles(texts);
+      const phoneNameMap = await resolveAllHandles(allHandles);
 
       // Get user's name and email for "me" display in group chats
       let userName: string | undefined;
@@ -1473,62 +1481,15 @@ class FolderExportService {
   }
 
   /**
-   * Async version that also checks macOS Contacts database
-   * Call this once at the start of export and pass the result to other methods
+   * Async version that also checks macOS Contacts database.
+   * TASK-2026: Delegates to shared ContactResolutionService for phone resolution,
+   * then also resolves email handles found in messages.
    */
   private async getContactNamesByPhonesAsync(phones: string[]): Promise<Record<string, string>> {
     if (phones.length === 0) return {};
 
-    // Start with synchronous lookup from imported contacts
-    const result = this.getContactNamesByPhones(phones);
-
-    // Source 2: macOS Contacts database (AddressBook)
-    try {
-      const { contactMap } = await getContactNames();
-
-      // Add any names from macOS Contacts that we don't already have
-      for (const phone of phones) {
-        const normalized = this.normalizePhone(phone);
-        const digitsOnly = phone.replace(/\D/g, "");
-
-        // Skip if we already have a name for this phone
-        if (result[normalized] || result[phone]) continue;
-
-        // Try to find in macOS contacts
-        // contactMap keys might be formatted differently, try multiple formats
-        const possibleKeys = [
-          phone,                          // +14082104874
-          normalized,                     // 4082104874 (last 10 digits)
-          digitsOnly,                     // 14082104874 (all digits)
-          `+1${normalized}`,              // +14082104874
-          `1${normalized}`,               // 14082104874
-          normalized.slice(-10),          // 4082104874
-          digitsOnly.slice(-10),          // 4082104874
-          digitsOnly.slice(-11),          // 14082104874 (with country code)
-        ];
-
-        for (const key of possibleKeys) {
-          if (key && contactMap[key]) {
-            result[normalized] = contactMap[key];
-            result[phone] = contactMap[key];
-            logService.debug("[Folder Export] Found contact in macOS Contacts", "FolderExport", {
-              phone,
-              matchedKey: key,
-              name: contactMap[key],
-            });
-            break;
-          }
-        }
-      }
-    } catch (error) {
-      logService.warn(
-        "[Folder Export] Failed to look up contact names from macOS Contacts",
-        "FolderExport",
-        { error }
-      );
-    }
-
-    return result;
+    // Delegate to shared service (handles both imported contacts + macOS Contacts)
+    return resolvePhoneNames(phones);
   }
 
   /**
@@ -1727,9 +1688,13 @@ class FolderExportService {
 
     if (!isOutbound) {
       if (isGroupChat && msg.sender) {
+        // TASK-2026: Try multiple lookup strategies for sender resolution
         const normalized = this.normalizePhone(msg.sender);
         const resolvedName =
-          phoneNameMap[normalized] || phoneNameMap[msg.sender];
+          phoneNameMap[normalized] ||
+          phoneNameMap[msg.sender] ||
+          phoneNameMap[msg.sender.toLowerCase()] ||
+          null;
         senderName = resolvedName || msg.sender;
         // Show phone only in group chats to identify sender
         if (resolvedName) senderPhone = msg.sender;
@@ -2520,9 +2485,10 @@ class FolderExportService {
         return dateA - dateB;
       });
 
-      // Pre-load contact names for all phone numbers (from both imported contacts and macOS Contacts)
-      const allPhones = this.extractAllPhones(texts);
-      const phoneNameMap = await this.getContactNamesByPhonesAsync(allPhones);
+      // TASK-2026: Pre-load contact names for all handles (phones + emails + Apple IDs)
+      // Uses shared ContactResolutionService for unified resolution
+      const allHandles = extractParticipantHandles(texts);
+      const phoneNameMap = await resolveAllHandles(allHandles);
 
       // Get user's name and email for "me" display in group chats
       let userName: string | undefined;

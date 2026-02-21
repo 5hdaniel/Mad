@@ -1052,6 +1052,12 @@ export interface WindowApi {
       names: Record<string, string>;
       error?: string;
     }>;
+    /** TASK-2026: Resolve any mix of phones, emails, Apple IDs to contact names */
+    resolveHandles: (handles: string[]) => Promise<{
+      success: boolean;
+      names: Record<string, string>;
+      error?: string;
+    }>;
     /** Search contacts at database level (for selection modal) */
     searchContacts: (userId: string, query: string) => Promise<{
       success: boolean;

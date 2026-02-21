@@ -80,6 +80,7 @@ function isPhoneNumber(s: string): boolean {
 /**
  * Resolve a participant to a contact name using the contactNames map.
  * Returns the contact name or null if not found.
+ * TASK-2026: Also handles email handles (e.g., madisonsola@gmail.com).
  */
 function resolveContactName(
   participant: string,
@@ -94,7 +95,20 @@ function resolveContactName(
   if (isPhoneNumber(participant)) {
     const normalized = normalizePhone(participant);
     for (const [phone, name] of Object.entries(contactNames)) {
-      if (normalizePhone(phone) === normalized) {
+      if (isPhoneNumber(phone) && normalizePhone(phone) === normalized) {
+        return name;
+      }
+    }
+  }
+
+  // TASK-2026: Email handle lookup (case-insensitive)
+  if (participant.includes("@")) {
+    const lowerParticipant = participant.toLowerCase();
+    if (contactNames[lowerParticipant]) {
+      return contactNames[lowerParticipant];
+    }
+    for (const [handle, name] of Object.entries(contactNames)) {
+      if (handle.toLowerCase() === lowerParticipant) {
         return name;
       }
     }

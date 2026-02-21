@@ -107,6 +107,15 @@ export const contactBridge = {
     ipcRenderer.invoke("contacts:get-names-by-phones", phones),
 
   /**
+   * TASK-2026: Resolve any mix of phone numbers, emails, and Apple IDs to contact names
+   * Uses shared ContactResolutionService (imported contacts + macOS Contacts + email lookup)
+   * @param handles - Array of phone numbers, emails, or Apple IDs to resolve
+   * @returns Map of handle -> contact name
+   */
+  resolveHandles: (handles: string[]): Promise<{ success: boolean; names: Record<string, string>; error?: string }> =>
+    ipcRenderer.invoke("contacts:resolve-handles", handles),
+
+  /**
    * Search contacts at database level (for selection modal)
    * This enables searching beyond the initial LIMIT 200 contacts.
    * @param userId - User ID to search contacts for

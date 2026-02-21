@@ -38,9 +38,12 @@ interface ConversationViewModalProps {
 }
 
 /**
- * Normalize phone for lookup (last 10 digits)
+ * Normalize phone for lookup (last 10 digits).
+ * TASK-2026: For email handles, return lowercase as-is (don't strip chars).
  */
 function normalizePhoneForLookup(phone: string): string {
+  // If it looks like an email, don't strip non-digits
+  if (phone.includes("@")) return phone.toLowerCase();
   const digits = phone.replace(/\D/g, "");
   return digits.length >= 10 ? digits.slice(-10) : digits;
 }
