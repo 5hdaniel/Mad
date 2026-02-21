@@ -46,7 +46,7 @@ import { useSubmitForReview } from "./transactionDetailsModule/hooks/useSubmitFo
 import type { AutoLinkResult } from "./transactionDetailsModule/components/modals/EditContactsModal";
 
 import type { TransactionTab } from "./transactionDetailsModule/types";
-import { isEmailMessage } from '../../electron/utils/channelHelpers';
+import { isEmailMessage } from '@/utils/channelHelpers';
 import logger from '../utils/logger';
 
 interface TransactionDetailsComponentProps {

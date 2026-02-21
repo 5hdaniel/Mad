@@ -5,7 +5,7 @@
  */
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { Transaction, Communication } from "@/types";
-import { isTextMessage } from "../../../../electron/utils/channelHelpers";
+import { isTextMessage } from "@/utils/channelHelpers";
 import logger from '../../../utils/logger';
 
 interface UseTransactionMessagesResult {

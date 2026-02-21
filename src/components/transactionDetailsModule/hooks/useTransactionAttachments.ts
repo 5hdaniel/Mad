@@ -4,7 +4,7 @@
  */
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { Transaction, Communication } from "@/types";
-import { isEmailMessage } from "../../../../electron/utils/channelHelpers";
+import { isEmailMessage } from "@/utils/channelHelpers";
 import logger from '../../../utils/logger';
 
 /**

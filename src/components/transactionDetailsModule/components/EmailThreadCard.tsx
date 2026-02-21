@@ -6,7 +6,7 @@
  */
 import React, { useState } from "react";
 import type { Communication } from "../types";
-import { isEmailMessage } from "../../../../electron/utils/channelHelpers";
+import { isEmailMessage } from "@/utils/channelHelpers";
 import { EmailThreadViewModal } from "./modals";
 
 /**

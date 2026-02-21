@@ -10,7 +10,7 @@ import type {
   ContactAssignment,
   Communication,
 } from "../types";
-import { isTextMessage, isEmailMessage } from "../../../../electron/utils/channelHelpers";
+import { isTextMessage, isEmailMessage } from "@/utils/channelHelpers";
 import logger from '../../../utils/logger';
 
 interface UseTransactionDetailsResult {
