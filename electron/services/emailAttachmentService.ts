@@ -25,6 +25,7 @@ import databaseService from "./databaseService";
 import gmailFetchService from "./gmailFetchService";
 import outlookFetchService from "./outlookFetchService";
 import logService from "./logService";
+import { sanitizeFileSystemName } from "../utils/fileUtils";
 
 // Constants
 const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024; // 50MB max per attachment
@@ -56,23 +57,7 @@ export interface DownloadResult {
   }[];
 }
 
-/**
- * Sanitize filename to prevent path traversal attacks
- * Removes path separators, null bytes, and directory traversal sequences
- */
-function sanitizeFilename(filename: string): string {
-  // Remove path separators and null bytes
-  let sanitized = filename.replace(/[\/\\:\0]/g, "_");
-  // Remove directory traversal sequences
-  sanitized = sanitized.replace(/\.\./g, "_");
-  // Remove leading dots to prevent hidden files
-  sanitized = sanitized.replace(/^\.+/, "");
-  // Ensure we have a valid filename
-  if (!sanitized || sanitized.length === 0) {
-    sanitized = "attachment";
-  }
-  return sanitized;
-}
+
 
 /**
  * Generate content hash for deduplication
@@ -246,7 +231,7 @@ class EmailAttachmentService {
     attachmentsDir: string,
     existingHashes: Set<string>
   ): Promise<{ filename: string; status: "stored" | "skipped" | "error"; reason?: string }> {
-    const sanitizedFilename = sanitizeFilename(attachment.filename);
+    const sanitizedFilename = sanitizeFileSystemName(attachment.filename, "attachment");
 
     // Skip oversized attachments
     if (attachment.size > MAX_ATTACHMENT_SIZE) {

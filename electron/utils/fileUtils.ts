@@ -59,6 +59,48 @@ export function createTimestampedFilename(
 }
 
 /**
+ * Sanitize a filename or folder name for safe filesystem use.
+ *
+ * Combines security protections (path traversal prevention, null byte removal,
+ * leading dot removal) with a strict allowlist approach (only alphanumeric,
+ * underscore, hyphen, dot). Collapses consecutive underscores and truncates
+ * to 200 characters.
+ *
+ * Preserves case and file extensions unlike sanitizeFilename/sanitizeFilenamePreserveCase.
+ *
+ * Unified from duplicated implementations in emailAttachmentService and
+ * enhancedExportService (TASK-2031).
+ *
+ * @param name - The raw filename or folder name to sanitize
+ * @param fallback - Fallback name if sanitization produces an empty string (default: "file")
+ * @returns A filesystem-safe name, truncated to 200 characters
+ */
+export function sanitizeFileSystemName(
+  name: string,
+  fallback = "file",
+): string {
+  let sanitized = name
+    // Remove directory traversal sequences first
+    .replace(/\.\./g, "_")
+    // Keep only safe characters: alphanumeric, underscore, hyphen, dot
+    .replace(/[^a-z0-9_\-\.]/gi, "_")
+    // Collapse consecutive underscores
+    .replace(/_+/g, "_")
+    // Remove leading dots to prevent hidden files
+    .replace(/^\.+/, "");
+
+  // Truncate to 200 characters
+  sanitized = sanitized.substring(0, 200);
+
+  // Ensure we have a valid name
+  if (!sanitized || sanitized.length === 0) {
+    sanitized = fallback;
+  }
+
+  return sanitized;
+}
+
+/**
  * Ensure filename is unique by appending number if needed
  * @param baseName - Base name for the file
  * @param extension - File extension (without dot)
