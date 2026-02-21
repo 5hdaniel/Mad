@@ -153,7 +153,7 @@ export function useTransactionAttachments(
         const emailAttachments: TransactionAttachment[] = allCommunications
           .filter(
             (comm: Communication) =>
-              comm.channel === "email" && comm.has_attachments
+              isEmailMessage(comm) && comm.has_attachments
           )
           .flatMap((email: Communication) => {
             const metadata = parseAttachmentMetadata(email.attachment_metadata);
