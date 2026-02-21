@@ -5,6 +5,7 @@ import { Transaction, Communication } from "../types/models";
 import { isEmailMessage, isTextMessage } from "../utils/channelHelpers";
 import logService from "./logService";
 import { dbAll } from "./db/core/dbConnection";
+import { normalizePhone as sharedNormalizePhone } from "./contactResolutionService";
 
 /**
  * Look up contact names for phone numbers
@@ -13,8 +14,8 @@ function getContactNamesByPhones(phones: string[]): Record<string, string> {
   if (phones.length === 0) return {};
 
   try {
-    // Normalize phones to last 10 digits for matching
-    const normalizedPhones = phones.map(p => p.replace(/\D/g, '').slice(-10));
+    // Normalize phones — email-safe (emails kept as-is, phones to last 10 digits)
+    const normalizedPhones = phones.map(p => sharedNormalizePhone(p));
 
     // Query contact_phones to find names
     const placeholders = normalizedPhones.map(() => '?').join(',');
@@ -37,8 +38,8 @@ function getContactNamesByPhones(phones: string[]): Record<string, string> {
     const nameMap: Record<string, string> = {};
     for (const row of results) {
       // Map both original and normalized forms
-      const e164Normalized = row.phone_e164.replace(/\D/g, '').slice(-10);
-      const displayNormalized = row.phone_display.replace(/\D/g, '').slice(-10);
+      const e164Normalized = sharedNormalizePhone(row.phone_e164);
+      const displayNormalized = sharedNormalizePhone(row.phone_display);
       nameMap[e164Normalized] = row.display_name;
       nameMap[displayNormalized] = row.display_name;
       nameMap[row.phone_e164] = row.display_name;
@@ -658,10 +659,8 @@ class PDFExportService {
       return escapeHtml(cleaned.substring(0, maxLen)) + '...';
     };
 
-    // Helper to normalize phone for matching
-    const normalizePhone = (phone: string): string => {
-      return phone.replace(/\D/g, '').slice(-10);
-    };
+    // TASK-2027: Use shared normalizePhone that handles email handles correctly
+    const normalizePhone = sharedNormalizePhone;
 
     // Helper to get thread key (matches UI logic)
     const getThreadKey = (msg: Communication): string => {
@@ -989,10 +988,11 @@ class PDFExportService {
             ? JSON.parse(msg.participants)
             : msg.participants;
 
-          if (parsed.from) participants.add(parsed.from.replace(/\D/g, '').slice(-10));
+          // TASK-2027: Use shared normalizePhone to handle email handles correctly
+          if (parsed.from) participants.add(sharedNormalizePhone(parsed.from));
           if (parsed.to) {
             const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
-            toList.forEach((p: string) => participants.add(p.replace(/\D/g, '').slice(-10)));
+            toList.forEach((p: string) => participants.add(sharedNormalizePhone(p)));
           }
         }
       } catch {

@@ -6,6 +6,7 @@
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import type { MessageLike } from "../MessageThreadCard";
 import { parseDateSafe } from "../../../../utils/dateFormatters";
+import { normalizePhoneForLookup, getSenderPhone } from "../../../../utils/phoneNormalization";
 import logger from '../../../../utils/logger';
 
 /**
@@ -37,41 +38,7 @@ interface ConversationViewModalProps {
   onClose: () => void;
 }
 
-/**
- * Normalize phone for lookup (last 10 digits).
- * TASK-2026: For email handles, return lowercase as-is (don't strip chars).
- */
-function normalizePhoneForLookup(phone: string): string {
-  // If it looks like an email, don't strip non-digits
-  if (phone.includes("@")) return phone.toLowerCase();
-  const digits = phone.replace(/\D/g, "");
-  return digits.length >= 10 ? digits.slice(-10) : digits;
-}
-
-/**
- * Extract sender phone from message participants
- */
-function getSenderPhone(msg: MessageLike): string | null {
-  if (msg.direction === "outbound") return null;
-
-  try {
-    if (msg.participants) {
-      const parsed =
-        typeof msg.participants === "string"
-          ? JSON.parse(msg.participants)
-          : msg.participants;
-      if (parsed.from) return parsed.from;
-    }
-  } catch {
-    // Fall through
-  }
-
-  if ("sender" in msg && msg.sender) {
-    return msg.sender;
-  }
-
-  return null;
-}
+// normalizePhoneForLookup and getSenderPhone imported from src/utils/phoneNormalization.ts (TASK-2027)
 
 /**
  * Format timestamp for display
