@@ -95,8 +95,14 @@ export function useTransactionDetails(
         // Merge with existing communications (don't overwrite other channel)
         setCommunications(prev => {
           const newComms: Communication[] = result.transaction?.communications || [];
-          // Keep only comms from the OTHER channel; replace the fetched channel entirely
-          const kept = prev.filter((c: Communication) => c.channel !== channelFilter);
+          // Keep only comms from the OTHER channel; replace the fetched channel entirely.
+          // Note: channelFilter is "email"|"text" (API param), but Message.channel is
+          // "email"|"sms"|"imessage". Map accordingly.
+          const isTextChannel = (c: Communication) =>
+            c.channel === "sms" || c.channel === "imessage";
+          const kept = channelFilter === "text"
+            ? prev.filter((c: Communication) => !isTextChannel(c))
+            : prev.filter((c: Communication) => c.channel !== "email");
           return [...kept, ...newComms];
         });
         setContactAssignments(result.transaction.contact_assignments || []);
