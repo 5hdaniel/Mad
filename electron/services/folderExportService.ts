@@ -25,6 +25,7 @@ import databaseService from "./databaseService";
 import { getContactNames } from "./contactsService";
 import { getUserById } from "./db/userDbService";
 import type { Transaction, Communication } from "../types/models";
+import { isEmailMessage, isTextMessage } from "../utils/channelHelpers";
 
 export interface FolderExportOptions {
   transactionId: string;
@@ -77,12 +78,8 @@ class FolderExportService {
     try {
       logService.info("[Folder Export] Starting folder export", "FolderExport", {
         transactionId: transaction.id,
-        emailCount: communications.filter((c) => c.communication_type === "email").length,
-        textCount: communications.filter((c) =>
-          c.communication_type === "sms" ||
-          c.communication_type === "imessage" ||
-          c.communication_type === "text"
-        ).length,
+        emailCount: communications.filter((c) => isEmailMessage(c)).length,
+        textCount: communications.filter((c) => isTextMessage(c)).length,
       });
 
       // Create base folder
@@ -112,13 +109,8 @@ class FolderExportService {
       });
 
       // Separate emails and texts
-      // Note: Text messages use channel 'sms' or 'imessage', not 'text'
-      const emails = communications.filter((c) => c.communication_type === "email");
-      const texts = communications.filter((c) =>
-        c.communication_type === "sms" ||
-        c.communication_type === "imessage" ||
-        c.communication_type === "text"  // Legacy fallback
-      );
+      const emails = communications.filter((c) => isEmailMessage(c));
+      const texts = communications.filter((c) => isTextMessage(c));
 
       // Sort by date (oldest first for indexing)
       emails.sort((a, b) => {
@@ -299,12 +291,8 @@ class FolderExportService {
       });
     };
 
-    const emails = communications.filter((c) => c.communication_type === "email");
-    const texts = communications.filter((c) =>
-      c.communication_type === "sms" ||
-      c.communication_type === "imessage" ||
-      c.communication_type === "text"  // Legacy fallback
-    );
+    const emails = communications.filter((c) => isEmailMessage(c));
+    const texts = communications.filter((c) => isTextMessage(c));
 
     // Calculate message type breakdown (TASK-1802)
     const messageTypeCounts = this.getMessageTypeCounts(texts);
@@ -1155,7 +1143,7 @@ class FolderExportService {
     if (msg.thread_id) return msg.thread_id;
 
     // Email-specific fallback: use normalized subject + sorted sender/recipients
-    if (msg.communication_type === "email") {
+    if (isEmailMessage(msg)) {
       const subject = msg.subject
         ? msg.subject.replace(/^(?:(?:Re|Fwd|FW)\s*:\s*)+/i, "").trim().toLowerCase()
         : "";
@@ -1932,13 +1920,10 @@ class FolderExportService {
 
     // TASK-1777: Separate email and text message communications
     const emailComms = communications.filter(
-      (comm) => comm.communication_type === "email"
+      (comm) => isEmailMessage(comm)
     );
     const textComms = communications.filter(
-      (comm) =>
-        comm.communication_type === "sms" ||
-        comm.communication_type === "imessage" ||
-        comm.communication_type === "text"
+      (comm) => isTextMessage(comm)
     );
 
     // Get message IDs for text messages
@@ -2519,12 +2504,8 @@ class FolderExportService {
       await fs.mkdir(textsPath, { recursive: true });
 
       // Separate emails and texts
-      const emails = communications.filter((c) => c.communication_type === "email");
-      const texts = communications.filter((c) =>
-        c.communication_type === "sms" ||
-        c.communication_type === "imessage" ||
-        c.communication_type === "text"
-      );
+      const emails = communications.filter((c) => isEmailMessage(c));
+      const texts = communications.filter((c) => isTextMessage(c));
 
       // Sort by date (oldest first for consistent ordering)
       emails.sort((a, b) => {

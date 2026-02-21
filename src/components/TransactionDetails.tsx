@@ -46,6 +46,7 @@ import { useSubmitForReview } from "./transactionDetailsModule/hooks/useSubmitFo
 import type { AutoLinkResult } from "./transactionDetailsModule/components/modals/EditContactsModal";
 
 import type { TransactionTab } from "./transactionDetailsModule/types";
+import { isEmailMessage } from '../../electron/utils/channelHelpers';
 import logger from '../utils/logger';
 
 interface TransactionDetailsComponentProps {
@@ -186,14 +187,8 @@ function TransactionDetails({
   const { isApproving, isRejecting, isRestoring } = statusState;
 
   // Filter emails only for Details tab
-  // Must explicitly check for 'email' to match the SQL count query
-  // which uses: communication_type = 'email'
   const emailCommunications = useMemo(() => {
-    return communications.filter((comm) => {
-      const channel = comm.channel || comm.communication_type;
-      // Only include emails - exclude sms, imessage, text, and undefined
-      return channel === 'email';
-    });
+    return communications.filter((comm) => isEmailMessage(comm));
   }, [communications]);
 
   // Note: conversation/message count for tabs now uses transaction.text_thread_count
