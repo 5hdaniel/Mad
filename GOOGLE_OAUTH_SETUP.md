@@ -215,7 +215,7 @@ https://www.googleapis.com/auth/gmail.readonly
 
 ### Issue 4: "Invalid client" error
 
-**Cause**: Client ID or secret is incorrect
+**Cause**: Client ID is incorrect
 
 **Solution**:
 1. Verify credentials in `.env.development`:

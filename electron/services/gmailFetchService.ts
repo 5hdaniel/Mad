@@ -144,7 +144,8 @@ class GmailFetchService {
       const accessToken = tokenRecord.access_token || "";
       const refreshToken = tokenRecord.refresh_token || null;
 
-      // Initialize OAuth2 client
+      // Initialize OAuth2 client for Gmail API calls
+      // Token refresh is handled by googleAuthService; this client is for API calls only
       const oauth2Client = new google.auth.OAuth2(
         process.env.GOOGLE_CLIENT_ID,
         process.env.GOOGLE_CLIENT_SECRET,

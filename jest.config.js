@@ -38,6 +38,8 @@ module.exports = {
     // TASK-1783: PDF and DOCX preview libraries
     '^react-pdf$': '<rootDir>/tests/__mocks__/react-pdf.js',
     '^mammoth$': '<rootDir>/tests/__mocks__/mammoth.js',
+    // Sentry - crashes in Jest because process.versions.electron is undefined
+    '^@sentry/electron(.*)$': '<rootDir>/tests/__mocks__/sentry-electron.js',
     // Path aliases from tsconfig
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@electron/(.*)$': '<rootDir>/electron/$1',
