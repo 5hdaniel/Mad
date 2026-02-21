@@ -14,8 +14,8 @@ function getContactNamesByPhones(phones: string[]): Record<string, string> {
   if (phones.length === 0) return {};
 
   try {
-    // Normalize phones to last 10 digits for matching
-    const normalizedPhones = phones.map(p => p.replace(/\D/g, '').slice(-10));
+    // Normalize phones — email-safe (emails kept as-is, phones to last 10 digits)
+    const normalizedPhones = phones.map(p => sharedNormalizePhone(p));
 
     // Query contact_phones to find names
     const placeholders = normalizedPhones.map(() => '?').join(',');
@@ -38,8 +38,8 @@ function getContactNamesByPhones(phones: string[]): Record<string, string> {
     const nameMap: Record<string, string> = {};
     for (const row of results) {
       // Map both original and normalized forms
-      const e164Normalized = row.phone_e164.replace(/\D/g, '').slice(-10);
-      const displayNormalized = row.phone_display.replace(/\D/g, '').slice(-10);
+      const e164Normalized = sharedNormalizePhone(row.phone_e164);
+      const displayNormalized = sharedNormalizePhone(row.phone_display);
       nameMap[e164Normalized] = row.display_name;
       nameMap[displayNormalized] = row.display_name;
       nameMap[row.phone_e164] = row.display_name;

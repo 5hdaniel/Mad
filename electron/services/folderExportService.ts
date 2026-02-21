@@ -1233,7 +1233,7 @@ class FolderExportService {
               : msg.participants;
 
           if (parsed.from) {
-            const normalized = parsed.from.replace(/\D/g, "").slice(-10);
+            const normalized = sharedNormalizePhone(parsed.from);
             // Skip "unknown" ghost participants
             if (normalized && parsed.from.toLowerCase() !== "unknown") {
               participants.add(normalized);
@@ -1242,7 +1242,7 @@ class FolderExportService {
           if (parsed.to) {
             const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
             toList.forEach((p: string) => {
-              const normalized = p.replace(/\D/g, "").slice(-10);
+              const normalized = sharedNormalizePhone(p);
               // Skip "unknown" ghost participants
               if (normalized && p.toLowerCase() !== "unknown") {
                 participants.add(normalized);
@@ -1274,10 +1274,8 @@ class FolderExportService {
 
     // Source 1: App's imported contacts
     try {
-      // Normalize phones to last 10 digits for matching
-      const normalizedPhones = phones.map((p) =>
-        p.replace(/\D/g, "").slice(-10)
-      );
+      // Normalize phones — email-safe (emails kept as-is, phones to last 10 digits)
+      const normalizedPhones = phones.map((p) => sharedNormalizePhone(p));
 
       // Query contact_phones to find names
       const placeholders = normalizedPhones.map(() => "?").join(",");
@@ -1302,12 +1300,12 @@ class FolderExportService {
       for (const row of rows) {
         if (row.display_name) {
           if (row.phone_e164) {
-            const norm = row.phone_e164.replace(/\D/g, "").slice(-10);
+            const norm = sharedNormalizePhone(row.phone_e164);
             result[norm] = row.display_name;
             result[row.phone_e164] = row.display_name;
           }
           if (row.phone_display) {
-            const norm = row.phone_display.replace(/\D/g, "").slice(-10);
+            const norm = sharedNormalizePhone(row.phone_display);
             result[norm] = row.display_name;
             result[row.phone_display] = row.display_name;
           }
