@@ -180,24 +180,24 @@ Straightforward extraction.
 **REQUIRED: Complete this section before creating PR.**
 **See: `.claude/docs/ENGINEER-WORKFLOW.md` for full workflow**
 
-*Completed: <DATE>*
+*Completed: 2026-02-21*
 
 ### Engineer Checklist
 
 ```
 Pre-Work:
-- [ ] Created branch from develop
-- [ ] Noted start time: ___
-- [ ] Read task file completely
+- [x] Created branch from develop
+- [x] Noted start time: 2026-02-21
+- [x] Read task file completely
 
 Implementation:
-- [ ] Code complete
-- [ ] Tests pass locally (npm test)
-- [ ] Type check passes (npm run type-check)
-- [ ] Lint passes (npm run lint)
+- [x] Code complete
+- [x] Tests pass locally (npm test)
+- [x] Type check passes (npm run type-check)
+- [x] Lint passes (npm run lint)
 
 PR Submission:
-- [ ] This summary section completed
+- [x] This summary section completed
 - [ ] PR created with Engineer Metrics (see template)
 - [ ] CI passes (gh pr checks --watch)
 - [ ] SR Engineer review requested
@@ -209,18 +209,21 @@ Completion:
 
 ### Results
 
-- **Before**: [state before]
-- **After**: [state after]
-- **Actual Tokens**: ~XK (Est: ~60K)
+- **Before**: 4 groups of duplicated utility functions across pdfExportService.ts and folderExportService.ts (escapeHtml x2, formatCurrency x2, formatDate x2, getContactNamesByPhones x2)
+- **After**: All 4 groups extracted to electron/utils/exportUtils.ts; both services import from shared module
+- **Actual Tokens**: ~15K (Est: ~60K)
 - **PR**: [URL after PR created]
 
 ### Notes
 
 **Deviations from plan:**
-[If you deviated, explain what and why]
+- escapeHtml: The two implementations used different single-quote encodings (&#039; vs &#39;). Standardized on &#039; in the shared version. Both are functionally identical in HTML rendering.
+- getContactNamesByPhones: Used the folderExportService's more robust SQL normalization (strips +, -, spaces) instead of pdfExportService's simpler version (only stripped +). Used dbAll() for DB access instead of databaseService.getRawDatabase().prepare() for consistency.
+- dateUtils.ts check: Confirmed electron/utils/dateUtils.ts has different functions (macTimestampToDate, formatDateForFilename) -- not overlapping. Created new exportUtils.ts as planned.
+- pdfExportService escapeHtml accepted null/undefined; the shared version requires string. Added `|| ''` guards at call sites passing nullable values.
 
 **Issues encountered:**
-[Document any challenges]
+**Issues/Blockers:** None. Straightforward extraction with no unexpected complications.
 
 ---
 

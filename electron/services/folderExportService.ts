@@ -25,6 +25,7 @@ import databaseService from "./databaseService";
 import { getUserById } from "./db/userDbService";
 import type { Transaction, Communication } from "../types/models";
 import { isEmailMessage, isTextMessage } from "../utils/channelHelpers";
+import { escapeHtml, formatCurrency, formatDate, getContactNamesByPhones } from "../utils/exportUtils";
 import {
   resolveHandles as resolveAllHandles,
   resolveGroupChatParticipants as sharedResolveGroupChatParticipants,
@@ -278,25 +279,6 @@ class FolderExportService {
     communications: Communication[],
     phoneNameMap?: Record<string, string>
   ): string {
-    const formatCurrency = (amount?: number | null): string => {
-      if (!amount) return "N/A";
-      return new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-        minimumFractionDigits: 0,
-      }).format(amount);
-    };
-
-    const formatDate = (dateString?: string | Date | null): string => {
-      if (!dateString) return "N/A";
-      const date = typeof dateString === "string" ? new Date(dateString) : dateString;
-      return date.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
-    };
-
     const emails = communications.filter((c) => isEmailMessage(c));
     const texts = communications.filter((c) => isTextMessage(c));
 
@@ -490,9 +472,9 @@ class FolderExportService {
         <div class="email-item">
           <div class="header-row">
             <span class="index">${String(index + 1).padStart(3, "0")}</span>
-            <span class="subject">${this.escapeHtml(email.subject || "(No Subject)")}</span>
+            <span class="subject">${escapeHtml(email.subject || "(No Subject)")}</span>
           </div>
-          <div class="from">${this.escapeHtml(email.sender || "Unknown")}</div>
+          <div class="from">${escapeHtml(email.sender || "Unknown")}</div>
         </div>
       `;
         })
@@ -560,7 +542,7 @@ class FolderExportService {
    */
   private generateTextIndex(texts: Communication[], phoneNameMap?: Record<string, string>): string {
     // Use provided phoneNameMap or fall back to sync lookup (TASK-2027: use shared extractParticipantHandles)
-    const nameMap = phoneNameMap || this.getContactNamesByPhones(extractParticipantHandles(texts));
+    const nameMap = phoneNameMap || getContactNamesByPhones(extractParticipantHandles(texts));
 
     // Group by thread
     const textThreads = new Map<string, Communication[]>();
@@ -605,7 +587,7 @@ class FolderExportService {
           <div class="text-item">
             <div class="header-row">
               <span class="index">${String(index + 1).padStart(3, "0")}</span>
-              <span class="contact">${this.escapeHtml(displayName)} (${msgs.length} msg${msgs.length === 1 ? "" : "s"})</span>
+              <span class="contact">${escapeHtml(displayName)} (${msgs.length} msg${msgs.length === 1 ? "" : "s"})</span>
             </div>
           </div>
         `;
@@ -810,24 +792,24 @@ class FolderExportService {
       ${idx > 0 ? '<hr class="thread-separator">' : ""}
       <div class="thread-message">
         <div class="thread-msg-header">
-          <div class="thread-msg-subject">${this.escapeHtml(email.subject || "(No Subject)")}</div>
+          <div class="thread-msg-subject">${escapeHtml(email.subject || "(No Subject)")}</div>
           <div class="thread-msg-meta">
-            <span class="label">From:</span> ${this.escapeHtml(email.sender || "Unknown")}
+            <span class="label">From:</span> ${escapeHtml(email.sender || "Unknown")}
           </div>
           <div class="thread-msg-meta">
-            <span class="label">To:</span> ${this.escapeHtml(email.recipients || "Unknown")}
+            <span class="label">To:</span> ${escapeHtml(email.recipients || "Unknown")}
           </div>
-          ${email.cc ? `<div class="thread-msg-meta"><span class="label">CC:</span> ${this.escapeHtml(email.cc)}</div>` : ""}
+          ${email.cc ? `<div class="thread-msg-meta"><span class="label">CC:</span> ${escapeHtml(email.cc)}</div>` : ""}
           <div class="thread-msg-meta">
             <span class="label">Date:</span> ${this.formatEmailDateTime(email.sent_at as string)}
           </div>
         </div>
         <div class="thread-msg-body ${!isHtmlBody ? "email-body-text" : ""}">
-          ${isHtmlBody ? bodyContent : this.escapeHtml(bodyContent)}
+          ${isHtmlBody ? bodyContent : escapeHtml(bodyContent)}
         </div>
         ${attachments.length > 0 ? `
         <div class="thread-msg-attachments">
-          <span class="att-label">Attachments:</span> ${attachments.map(a => this.escapeHtml(a.filename)).join(", ")}
+          <span class="att-label">Attachments:</span> ${attachments.map(a => escapeHtml(a.filename)).join(", ")}
         </div>` : ""}
       </div>`;
     }).join("");
@@ -876,7 +858,7 @@ class FolderExportService {
 </head>
 <body>
   <div class="thread-header">
-    <h1>${this.escapeHtml(this.stripSubjectPrefixes(emails[0].subject || "(No Subject)"))}</h1>
+    <h1>${escapeHtml(this.stripSubjectPrefixes(emails[0].subject || "(No Subject)"))}</h1>
     <div class="meta">${emails.length} message${emails.length !== 1 ? "s" : ""} in thread</div>
   </div>
   ${messagesHtml}
@@ -988,17 +970,17 @@ class FolderExportService {
 </head>
 <body>
   <div class="email-header">
-    <div class="email-subject">${this.escapeHtml(email.subject || "(No Subject)")}</div>
+    <div class="email-subject">${escapeHtml(email.subject || "(No Subject)")}</div>
     <div class="email-meta">
-      <div><span class="label">From:</span> ${this.escapeHtml(email.sender || "Unknown")}</div>
-      <div><span class="label">To:</span> ${this.escapeHtml(email.recipients || "Unknown")}</div>
-      ${email.cc ? `<div><span class="label">CC:</span> ${this.escapeHtml(email.cc)}</div>` : ""}
+      <div><span class="label">From:</span> ${escapeHtml(email.sender || "Unknown")}</div>
+      <div><span class="label">To:</span> ${escapeHtml(email.recipients || "Unknown")}</div>
+      ${email.cc ? `<div><span class="label">CC:</span> ${escapeHtml(email.cc)}</div>` : ""}
       <div><span class="label">Date:</span> ${this.formatEmailDateTime(email.sent_at as string)}</div>
     </div>
   </div>
 
   <div class="email-body ${!isHtmlBody ? "email-body-text" : ""}">
-    ${isHtmlBody ? bodyContent : this.escapeHtml(bodyContent)}
+    ${isHtmlBody ? bodyContent : escapeHtml(bodyContent)}
   </div>
 
   ${
@@ -1008,7 +990,7 @@ class FolderExportService {
     <h4>Attachments (${attachments.length || email.attachment_count || 0})</h4>
     ${
       attachments.length > 0
-        ? `<ul>${attachments.map(att => `<li>${this.escapeHtml(att.filename)}<span class="file-size">${formatFileSize(att.file_size_bytes)}</span></li>`).join("")}</ul>
+        ? `<ul>${attachments.map(att => `<li>${escapeHtml(att.filename)}<span class="file-size">${formatFileSize(att.file_size_bytes)}</span></li>`).join("")}</ul>
     <div class="note">Files available in the /attachments folder</div>`
         : `<div class="note">Attachments are available in the /attachments folder</div>`
     }
@@ -1032,7 +1014,7 @@ class FolderExportService {
     userEmail?: string
   ): Promise<void> {
     // Use provided phoneNameMap or fall back to sync lookup (TASK-2027: use shared extractParticipantHandles)
-    const nameMap = phoneNameMap || this.getContactNamesByPhones(extractParticipantHandles(texts));
+    const nameMap = phoneNameMap || getContactNamesByPhones(extractParticipantHandles(texts));
 
     // Group texts by thread
     const textThreads = new Map<string, Communication[]>();
@@ -1262,65 +1244,7 @@ class FolderExportService {
   // TASK-2027: getGroupChatParticipants() deleted.
   // Uses sharedResolveGroupChatParticipants() from contactResolutionService with adapter.
 
-  /**
-   * Look up contact names for phone numbers from multiple sources:
-   * 1. App's imported contacts (contact_phones table)
-   * 2. macOS Contacts database (AddressBook)
-   */
-  private getContactNamesByPhones(phones: string[]): Record<string, string> {
-    if (phones.length === 0) return {};
-
-    const result: Record<string, string> = {};
-
-    // Source 1: App's imported contacts
-    try {
-      // Normalize phones — email-safe (emails kept as-is, phones to last 10 digits)
-      const normalizedPhones = phones.map((p) => sharedNormalizePhone(p));
-
-      // Query contact_phones to find names
-      const placeholders = normalizedPhones.map(() => "?").join(",");
-      const sql = `
-        SELECT
-          cp.phone_e164,
-          cp.phone_display,
-          c.display_name
-        FROM contact_phones cp
-        JOIN contacts c ON cp.contact_id = c.id
-        WHERE substr(replace(replace(replace(cp.phone_e164, '+', ''), '-', ''), ' ', ''), -10) IN (${placeholders})
-           OR substr(replace(replace(replace(cp.phone_display, '+', ''), '-', ''), ' ', ''), -10) IN (${placeholders})
-      `;
-
-      const db = databaseService.getRawDatabase();
-      const rows = db.prepare(sql).all(...normalizedPhones, ...normalizedPhones) as {
-        phone_e164: string | null;
-        phone_display: string | null;
-        display_name: string | null;
-      }[];
-
-      for (const row of rows) {
-        if (row.display_name) {
-          if (row.phone_e164) {
-            const norm = sharedNormalizePhone(row.phone_e164);
-            result[norm] = row.display_name;
-            result[row.phone_e164] = row.display_name;
-          }
-          if (row.phone_display) {
-            const norm = sharedNormalizePhone(row.phone_display);
-            result[norm] = row.display_name;
-            result[row.phone_display] = row.display_name;
-          }
-        }
-      }
-    } catch (error) {
-      logService.warn(
-        "[Folder Export] Failed to look up contact names from imported contacts",
-        "FolderExport",
-        { error }
-      );
-    }
-
-    return result;
-  }
+  // TASK-2030: getContactNamesByPhones() moved to electron/utils/exportUtils.ts
 
   // TASK-2027: getContactNamesByPhonesAsync() deleted.
   // Callers now use resolvePhoneNames() from contactResolutionService directly.
@@ -1477,17 +1401,17 @@ class FolderExportService {
       if (!contact.name && contact.phone.toLowerCase() === "unknown") {
         return `Unknown Contact <span class="badge">#${threadId}</span>`;
       }
-      return `Conversation with ${this.escapeHtml(contact.name || contact.phone)} <span class="badge">#${threadId}</span>`;
+      return `Conversation with ${escapeHtml(contact.name || contact.phone)} <span class="badge">#${threadId}</span>`;
     })()}</h1>
-    <div class="meta">${!isGroupChat && contact.name ? this.escapeHtml(contact.phone) + " | " : ""}${msgs.length} message${msgs.length === 1 ? "" : "s"}</div>
+    <div class="meta">${!isGroupChat && contact.name ? escapeHtml(contact.phone) + " | " : ""}${msgs.length} message${msgs.length === 1 ? "" : "s"}</div>
     ${isGroupChat && participants && participants.length > 0 ? `
     <div class="participants" style="margin-top: 12px; padding: 12px; background: #f7fafc; border-radius: 8px; font-size: 13px;">
       <div style="font-weight: 600; margin-bottom: 8px; color: #4a5568;">Participants (${participants.length}):</div>
       <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px;">
         ${participants.map(p => `
           <div style="padding: 4px 0;">
-            <span style="color: #2d3748;">${this.escapeHtml(p.name || p.phone || "Unknown")}</span>
-            ${p.phone && p.name ? `<span style="color: #718096; font-size: 12px; display: block;">${this.escapeHtml(p.phone)}</span>` : ""}
+            <span style="color: #2d3748;">${escapeHtml(p.name || p.phone || "Unknown")}</span>
+            ${p.phone && p.name ? `<span style="color: #718096; font-size: 12px; display: block;">${escapeHtml(p.phone)}</span>` : ""}
           </div>
         `).join("")}
       </div>
@@ -1577,7 +1501,7 @@ class FolderExportService {
         const transcript = msg.body_text || msg.body_plain || "";
         specialIndicatorHtml = `<div class="special-indicator voice-message">[Voice Message${transcript ? " - Transcript:" : ""}]</div>`;
         if (transcript) {
-          bodyContent = this.escapeHtml(transcript);
+          bodyContent = escapeHtml(transcript);
         } else {
           bodyContent = "<em>[No transcript available]</em>";
         }
@@ -1588,7 +1512,7 @@ class FolderExportService {
           att.filename.toLowerCase().endsWith(".m4a")
         );
         if (audioAttachment) {
-          specialIndicatorHtml += `<div class="audio-file-ref">[Audio file: ${this.escapeHtml(audioAttachment.filename)}]</div>`;
+          specialIndicatorHtml += `<div class="audio-file-ref">[Audio file: ${escapeHtml(audioAttachment.filename)}]</div>`;
         }
         break;
       }
@@ -1597,7 +1521,7 @@ class FolderExportService {
         // Location message: show indicator and location text
         const locationText = msg.body_text || msg.body_plain || "";
         specialIndicatorHtml = `<div class="special-indicator location-message">[Location Shared]</div>`;
-        bodyContent = locationText ? this.escapeHtml(locationText) : "<em>Location information</em>";
+        bodyContent = locationText ? escapeHtml(locationText) : "<em>Location information</em>";
         break;
       }
 
@@ -1606,7 +1530,7 @@ class FolderExportService {
         const attachmentDesc = attachments.length > 0
           ? attachments.map(a => a.filename).join(", ")
           : "attachment";
-        specialIndicatorHtml = `<div class="special-indicator attachment-only">[Media Attachment: ${this.escapeHtml(attachmentDesc)}]</div>`;
+        specialIndicatorHtml = `<div class="special-indicator attachment-only">[Media Attachment: ${escapeHtml(attachmentDesc)}]</div>`;
         // No body content for attachment-only messages
         break;
       }
@@ -1616,7 +1540,7 @@ class FolderExportService {
         const systemText = msg.body_text || msg.body_plain || "System message";
         return `
     <div class="message system-message">
-      <div class="system-content">-- ${this.escapeHtml(systemText)} --</div>
+      <div class="system-content">-- ${escapeHtml(systemText)} --</div>
       <span class="time">${time}</span>
     </div>
     `;
@@ -1628,7 +1552,7 @@ class FolderExportService {
         const bodyText = msg.body_text || msg.body_plain || "";
         const hasBody = bodyText.trim().length > 0;
         bodyContent = hasBody
-          ? this.escapeHtml(bodyText)
+          ? escapeHtml(bodyText)
           : (attachments.length > 0 ? "" : ""); // Empty if no text and no attachments
         break;
       }
@@ -1652,10 +1576,10 @@ class FolderExportService {
             if (fsSync.existsSync(att.storage_path)) {
               // Use file:// URL - works because we load HTML from temp file
               const fileUrl = `file://${att.storage_path}`;
-              attachmentHtml += `<div class="attachment-image"><img src="${fileUrl}" alt="${this.escapeHtml(att.filename)}" /></div>`;
+              attachmentHtml += `<div class="attachment-image"><img src="${fileUrl}" alt="${escapeHtml(att.filename)}" /></div>`;
             } else {
               // Image file not found - show placeholder
-              attachmentHtml += `<div class="attachment-ref">[Image: ${this.escapeHtml(att.filename)} - file not found]</div>`;
+              attachmentHtml += `<div class="attachment-ref">[Image: ${escapeHtml(att.filename)} - file not found]</div>`;
             }
           } catch (error) {
             // Failed to read image - show placeholder
@@ -1663,12 +1587,12 @@ class FolderExportService {
               filename: att.filename,
               error,
             });
-            attachmentHtml += `<div class="attachment-ref">[Image: ${this.escapeHtml(att.filename)}]</div>`;
+            attachmentHtml += `<div class="attachment-ref">[Image: ${escapeHtml(att.filename)}]</div>`;
           }
         } else {
           // Non-image attachment - show reference with specific type
           const attachmentType = this.getAttachmentTypeLabel(att.mime_type, att.filename);
-          attachmentHtml += `<div class="attachment-ref">[${attachmentType}: ${this.escapeHtml(att.filename)}]</div>`;
+          attachmentHtml += `<div class="attachment-ref">[${attachmentType}: ${escapeHtml(att.filename)}]</div>`;
         }
       }
     } else {
@@ -1678,7 +1602,7 @@ class FolderExportService {
           try {
             if (fsSync.existsSync(att.storage_path)) {
               const fileUrl = `file://${att.storage_path}`;
-              attachmentHtml += `<div class="attachment-image"><img src="${fileUrl}" alt="${this.escapeHtml(att.filename)}" /></div>`;
+              attachmentHtml += `<div class="attachment-image"><img src="${fileUrl}" alt="${escapeHtml(att.filename)}" /></div>`;
             }
           } catch {
             // Ignore errors for inline images
@@ -1689,9 +1613,9 @@ class FolderExportService {
 
     return `
     <div class="message${isOutbound ? " outbound" : ""}">
-      <span class="sender">${this.escapeHtml(senderName)}</span>
+      <span class="sender">${escapeHtml(senderName)}</span>
       <span class="time">${time}</span>
-      ${senderPhone && isGroupChat ? `<span class="phone">${this.escapeHtml(senderPhone)}</span>` : ""}
+      ${senderPhone && isGroupChat ? `<span class="phone">${escapeHtml(senderPhone)}</span>` : ""}
       ${specialIndicatorHtml}
       ${bodyContent ? `<div class="body">${bodyContent}</div>` : ""}
       ${attachmentHtml}
@@ -2202,20 +2126,6 @@ class FolderExportService {
       .replace(/[^a-z0-9_\-\.]/gi, "_")
       .replace(/_+/g, "_")
       .substring(0, 100);
-  }
-
-  /**
-   * Escape HTML entities
-   */
-  private escapeHtml(text: string): string {
-    const htmlEscapes: Record<string, string> = {
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;",
-    };
-    return text.replace(/[&<>"']/g, (char) => htmlEscapes[char]);
   }
 
   /**
