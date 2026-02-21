@@ -148,7 +148,7 @@ function getMergeKey(
   for (const p of participants) {
     const name = resolveContactName(p, contactNames);
     if (name) {
-      return `contact:${name}`;
+      return `contact:${name.toLowerCase().trim()}`;
     }
     // Fall back to normalized phone/identifier
     if (isPhoneNumber(p)) {

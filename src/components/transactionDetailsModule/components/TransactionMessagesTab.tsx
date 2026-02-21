@@ -154,6 +154,7 @@ export function TransactionMessagesTab({
     threadId: string;
     phoneNumber: string;
     messageCount: number;
+    originalThreadIds?: string[];
   } | null>(null);
   const [isUnlinking, setIsUnlinking] = useState(false);
   const [contactNames, setContactNames] = useState<Record<string, string>>({});
@@ -234,6 +235,7 @@ export function TransactionMessagesTab({
           threadId, // Use the display key for lookup
           phoneNumber: extractPhoneFromThread(allMessages),
           messageCount: allMessages.length,
+          originalThreadIds: idsToCollect,
         });
       }
     },
@@ -250,10 +252,9 @@ export function TransactionMessagesTab({
       // Get all message IDs for this thread (or merged group of threads)
       const rawThreads = groupMessagesByThread(messages);
 
-      // Find the merged entry to get all original thread IDs
-      const mergedEntry = filteredThreads.find(([key]) => key === unlinkTarget.threadId);
-      const idsToCollect = mergedEntry && mergedEntry[2].length > 1
-        ? mergedEntry[2]
+      // Use stored originalThreadIds from handleUnlinkClick (avoids stale closure)
+      const idsToCollect = unlinkTarget.originalThreadIds && unlinkTarget.originalThreadIds.length > 1
+        ? unlinkTarget.originalThreadIds
         : [unlinkTarget.threadId];
 
       const allMessages: MessageLike[] = [];
@@ -299,8 +300,10 @@ export function TransactionMessagesTab({
   // Group messages by thread and sort by most recent
   // NOTE: These computations and useMemo MUST be called before any early returns
   // to comply with React's Rules of Hooks
-  const threads = groupMessagesByThread(messages);
-  const sortedThreads = sortThreadsByRecent(threads);
+  const sortedThreads = useMemo(() => {
+    const threads = groupMessagesByThread(messages);
+    return sortThreadsByRecent(threads);
+  }, [messages]);
 
   // TASK-2025: Merge threads from the same contact (display-layer only)
   // This combines SMS, iMessage, and iCloud email threads into one per contact.
