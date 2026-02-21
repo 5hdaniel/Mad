@@ -5,10 +5,11 @@
 | **Type**    | Bug                    |
 | **Area**    | UI                     |
 | **Priority**| High                   |
-| **Status**  | Pending                |
+| **Status**  | Completed              |
 | **Created** | 2026-02-20             |
+| **Completed** | 2026-02-21           |
 | **Sprint**  | SPRINT-089             |
-| **Task**    | TASK-2026              |
+| **Task**    | TASK-2026 (PR #906), TASK-2027 (PR #907) |
 
 ## Description
 
@@ -47,4 +48,5 @@ The export service works correctly because it uses `getGroupChatParticipants()` 
 - BACKLOG-542: Merge SMS/iMessage threads (same contact, different service)
 - BACKLOG-748: Merge duplicate 1:1 chats (iCloud email vs phone number)
 - BACKLOG-749: Group chat participants show phone numbers instead of resolved contact names
-- TASK-2026: Sprint task for this fix
+- TASK-2026: Sprint task for group chat participant resolution fix (PR #906)
+- TASK-2027: Sprint task for consolidating contact resolution + normalizePhone export bug fix (PR #907)
