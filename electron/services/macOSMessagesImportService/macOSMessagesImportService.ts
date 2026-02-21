@@ -11,6 +11,10 @@
  * 4. Deduplicates messages using message GUID
  * 5. Stores messages in the app's messages table
  * 6. Imports and stores image/GIF attachments (TASK-1012)
+ *
+ * Sub-modules:
+ * - types.ts: Type definitions and constants
+ * - importHelpers.ts: Standalone utility functions
  */
 
 import crypto from "crypto";
@@ -20,262 +24,46 @@ import fs from "fs";
 import sqlite3 from "sqlite3";
 import { promisify } from "util";
 import { app } from "electron";
-import cliProgress from "cli-progress";
 
-import databaseService from "./databaseService";
-import permissionService from "./permissionService";
-import logService from "./logService";
-import { getMessageText } from "../utils/messageParser";
-import { macTimestampToDate } from "../utils/dateUtils";
-import { detectMessageType } from "../utils/messageTypeDetector";
-import { MAC_EPOCH } from "../constants";
+import databaseService from "../databaseService";
+import permissionService from "../permissionService";
+import logService from "../logService";
+import { getMessageText } from "../../utils/messageParser";
+import { macTimestampToDate } from "../../utils/dateUtils";
+import { detectMessageType } from "../../utils/messageTypeDetector";
+import { MAC_EPOCH } from "../../constants";
 
-/**
- * Filter options for message import (TASK-1952)
- * Controls which messages are imported based on date range and count cap
- */
-export interface MessageImportFilters {
-  lookbackMonths?: number | null; // null = all time
-  maxMessages?: number | null; // null = unlimited
-}
+import type {
+  MessageImportFilters,
+  MacOSImportResult,
+  ImportProgressCallback,
+  MessageAttachment,
+  RawMacMessage,
+  ChatMemberRow,
+  ChatAccountRow,
+  RawMacAttachment,
+} from "./types";
 
-/**
- * Create a tqdm-style progress bar for console output
- */
-function createProgressBar(label: string): cliProgress.SingleBar {
-  return new cliProgress.SingleBar({
-    format: `${label} |{bar}| {percentage}% | {value}/{total} | ETA: {eta}s`,
-    barCompleteChar: "█",
-    barIncompleteChar: "░",
-    hideCursor: true,
-    clearOnComplete: true,
-  }, cliProgress.Presets.shades_classic);
-}
+import {
+  MAX_MESSAGE_TEXT_LENGTH,
+  MAX_HANDLE_LENGTH,
+  BATCH_SIZE,
+  DELETE_BATCH_SIZE,
+  YIELD_INTERVAL,
+  MAX_ATTACHMENT_SIZE,
+  ATTACHMENTS_DIR,
+} from "./types";
 
-/**
- * Result of importing macOS messages
- */
-export interface MacOSImportResult {
-  success: boolean;
-  messagesImported: number;
-  messagesSkipped: number;
-  attachmentsImported: number;
-  attachmentsUpdated: number; // TASK-1122: Count of attachments with updated message_id after re-sync
-  attachmentsSkipped: number;
-  duration: number;
-  error?: string;
-  /** Total messages available for the date range (before cap) */
-  totalAvailable?: number;
-  /** True when maxMessages cap truncated results */
-  wasCapped?: boolean;
-}
-
-/**
- * Progress callback for import operations
- */
-export type ImportProgressCallback = (progress: {
-  phase: "querying" | "deleting" | "importing" | "attachments";
-  current: number;
-  total: number;
-  percent: number;
-}) => void;
-
-// Input validation constants
-const MAX_MESSAGE_TEXT_LENGTH = 100000; // 100KB - truncate extremely long messages
-const MAX_HANDLE_LENGTH = 500; // Phone numbers, emails, etc.
-const MAX_GUID_LENGTH = 100; // Message GUID format
-const BATCH_SIZE = 100; // Messages per batch - small batches yield frequently for UI responsiveness
-const DELETE_BATCH_SIZE = 5000; // Messages per delete batch (larger for efficiency)
-const YIELD_INTERVAL = 1; // Yield every batch for UI responsiveness
-const MIN_QUERY_BATCH_SIZE = 10000; // Minimum query batch size
-
-/**
- * Calculate dynamic query batch size based on total message count.
- * Larger imports use larger batches to reduce overhead from yielding/progress updates.
- *
- * - Under 100K messages: 10% of total (min 10K)
- * - 100K - 200K messages: 15% of total
- * - Over 200K messages: 20% of total
- */
-function calculateQueryBatchSize(totalMessages: number): number {
-  let percentage: number;
-  if (totalMessages < 100000) {
-    percentage = 0.10; // 10%
-  } else if (totalMessages <= 200000) {
-    percentage = 0.15; // 15%
-  } else {
-    percentage = 0.20; // 20%
-  }
-
-  const calculated = Math.floor(totalMessages * percentage);
-  return Math.max(calculated, MIN_QUERY_BATCH_SIZE);
-}
-
-// Attachment constants (TASK-1012, expanded TASK-1122 to include videos)
-const SUPPORTED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".heic", ".webp", ".bmp", ".tiff", ".tif"];
-const SUPPORTED_VIDEO_EXTENSIONS = [".mp4", ".mov", ".m4v", ".avi", ".mkv", ".webm"];
-const SUPPORTED_AUDIO_EXTENSIONS = [".mp3", ".m4a", ".aac", ".wav", ".caf"]; // caf = Core Audio Format (iOS voice messages)
-const SUPPORTED_DOCUMENT_EXTENSIONS = [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".rtf"];
-const ALL_SUPPORTED_EXTENSIONS = [
-  ...SUPPORTED_IMAGE_EXTENSIONS,
-  ...SUPPORTED_VIDEO_EXTENSIONS,
-  ...SUPPORTED_AUDIO_EXTENSIONS,
-  ...SUPPORTED_DOCUMENT_EXTENSIONS,
-];
-const MAX_ATTACHMENT_SIZE = 100 * 1024 * 1024; // 100MB max per attachment (increased for videos)
-const ATTACHMENTS_DIR = "message-attachments"; // Directory name in app data
-
-/**
- * Yield to event loop - allows UI to remain responsive
- */
-function yieldToEventLoop(): Promise<void> {
-  return new Promise((resolve) => setImmediate(resolve));
-}
-
-/**
- * Sanitize and validate a string field
- */
-function sanitizeString(
-  value: string | null | undefined,
-  maxLength: number,
-  defaultValue = ""
-): string {
-  if (value === null || value === undefined) {
-    return defaultValue;
-  }
-  const str = String(value);
-  return str.length > maxLength ? str.substring(0, maxLength) : str;
-}
-
-/**
- * Validate a GUID/external ID format
- */
-function isValidGuid(guid: string | null | undefined): boolean {
-  if (!guid || typeof guid !== "string") return false;
-  // Allow alphanumeric, hyphens, underscores, colons, and dots
-  // macOS message GUIDs can be various formats
-  return (
-    guid.length > 0 && guid.length <= MAX_GUID_LENGTH && /^[\w\-:.]+$/.test(guid)
-  );
-}
-
-/**
- * Raw message from macOS Messages database
- */
-interface RawMacMessage {
-  id: number;
-  guid: string;
-  text: string | null;
-  attributedBody: Buffer | null;
-  date: number; // Mac timestamp (nanoseconds since 2001-01-01)
-  is_from_me: number;
-  handle_id: string | null;
-  service: string | null;
-  chat_id: number;
-  cache_has_attachments: number;
-}
-
-/**
- * Chat member info from chat_handle_join
- */
-interface ChatMemberRow {
-  chat_id: number;
-  handle_id: string;
-}
-
-/**
- * Chat account info - maps chat to user's identifier (phone/Apple ID)
- */
-interface ChatAccountRow {
-  chat_id: number;
-  account_login: string | null;
-}
-
-/**
- * Raw attachment from macOS Messages database (TASK-1012)
- */
-interface RawMacAttachment {
-  attachment_id: number;
-  message_id: number;
-  message_guid: string;
-  guid: string;
-  filename: string | null;
-  mime_type: string | null;
-  transfer_name: string | null;
-  total_bytes: number;
-  is_outgoing: number;
-}
-
-/**
- * Check if a file extension is a supported media type
- * TASK-1122: Expanded to include videos, audio, and documents
- */
-function isSupportedMediaType(filename: string | null): boolean {
-  if (!filename) return false;
-  const ext = path.extname(filename).toLowerCase();
-  return ALL_SUPPORTED_EXTENSIONS.includes(ext);
-}
-
-/**
- * Check if a file extension is a supported image type (for inline display)
- */
-function isSupportedImageType(filename: string | null): boolean {
-  if (!filename) return false;
-  const ext = path.extname(filename).toLowerCase();
-  return SUPPORTED_IMAGE_EXTENSIONS.includes(ext);
-}
-
-/**
- * Get MIME type from filename
- * TASK-1122: Expanded to support videos, audio, and documents
- */
-function getMimeTypeFromFilename(filename: string): string {
-  const ext = path.extname(filename).toLowerCase();
-  const mimeTypes: Record<string, string> = {
-    // Images
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".png": "image/png",
-    ".gif": "image/gif",
-    ".heic": "image/heic",
-    ".webp": "image/webp",
-    ".bmp": "image/bmp",
-    ".tiff": "image/tiff",
-    ".tif": "image/tiff",
-    // Videos
-    ".mp4": "video/mp4",
-    ".mov": "video/quicktime",
-    ".m4v": "video/x-m4v",
-    ".avi": "video/x-msvideo",
-    ".mkv": "video/x-matroska",
-    ".webm": "video/webm",
-    // Audio
-    ".mp3": "audio/mpeg",
-    ".m4a": "audio/mp4",
-    ".aac": "audio/aac",
-    ".wav": "audio/wav",
-    ".caf": "audio/x-caf",
-    // Documents
-    ".pdf": "application/pdf",
-    ".doc": "application/msword",
-    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ".xls": "application/vnd.ms-excel",
-    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    ".ppt": "application/vnd.ms-powerpoint",
-    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    ".txt": "text/plain",
-    ".rtf": "application/rtf",
-  };
-  return mimeTypes[ext] || "application/octet-stream";
-}
-
-/**
- * Generate a content hash for deduplication (async to avoid blocking)
- */
-async function generateContentHash(filePath: string): Promise<string> {
-  const fileBuffer = await fs.promises.readFile(filePath);
-  return crypto.createHash("sha256").update(fileBuffer).digest("hex");
-}
+import {
+  createProgressBar,
+  calculateQueryBatchSize,
+  yieldToEventLoop,
+  sanitizeString,
+  isValidGuid,
+  isSupportedMediaType,
+  getMimeTypeFromFilename,
+  generateContentHash,
+} from "./importHelpers";
 
 /**
  * macOS Messages Import Service
@@ -1947,18 +1735,6 @@ class MacOSMessagesImportService {
 
     return stats;
   }
-}
-
-/**
- * Attachment info returned from database (TASK-1012)
- */
-export interface MessageAttachment {
-  id: string;
-  message_id: string;
-  filename: string;
-  mime_type: string | null;
-  file_size_bytes: number | null;
-  storage_path: string | null;
 }
 
 // Export singleton instance
