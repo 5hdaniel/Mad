@@ -99,10 +99,16 @@ interface TransactionMessagesTabProps {
  * Shows loading state, empty state, or message threads.
  */
 /**
- * Extract all unique phone numbers from messages for contact lookup.
+ * TASK-2026: Extract all unique participant handles from messages for contact lookup.
+ * Collects phone numbers, email handles, and Apple IDs from:
+ * - chat_members (authoritative for group chats)
+ * - from/to fields
+ * - sender field
+ *
+ * Replaces the old extractAllPhones() which only collected phone-like handles.
  */
-function extractAllPhones(messages: MessageLike[]): string[] {
-  const phones = new Set<string>();
+function extractAllHandles(messages: MessageLike[]): string[] {
+  const handles = new Set<string>();
 
   for (const msg of messages) {
     try {
@@ -111,10 +117,23 @@ function extractAllPhones(messages: MessageLike[]): string[] {
           ? JSON.parse(msg.participants)
           : msg.participants;
 
-        if (parsed.from) phones.add(parsed.from);
+        // chat_members (authoritative for group chats -- includes email handles)
+        if (parsed.chat_members && Array.isArray(parsed.chat_members)) {
+          for (const member of parsed.chat_members) {
+            if (member && member !== "me" && member !== "unknown" && member.trim() !== "") {
+              handles.add(member);
+            }
+          }
+        }
+
+        if (parsed.from && parsed.from !== "me" && parsed.from !== "unknown") {
+          handles.add(parsed.from);
+        }
         if (parsed.to) {
           const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
-          toList.forEach((p: string) => phones.add(p));
+          toList.forEach((p: string) => {
+            if (p && p !== "me" && p !== "unknown") handles.add(p);
+          });
         }
       }
     } catch {
@@ -122,15 +141,12 @@ function extractAllPhones(messages: MessageLike[]): string[] {
     }
 
     // Also check sender field
-    if ("sender" in msg && msg.sender) {
-      phones.add(msg.sender);
+    if ("sender" in msg && msg.sender && msg.sender !== "me" && msg.sender !== "unknown") {
+      handles.add(msg.sender);
     }
   }
 
-  // Remove "me" placeholder
-  phones.delete("me");
-
-  return Array.from(phones);
+  return Array.from(handles);
 }
 
 export function TransactionMessagesTab({
@@ -169,26 +185,34 @@ export function TransactionMessagesTab({
   // Default to showing audit period only when dates are available
   const [showAuditPeriodOnly, setShowAuditPeriodOnly] = useState<boolean>(hasAuditDates);
 
-  // Look up contact names for all phone numbers in messages
+  // TASK-2026: Look up contact names for all handles (phones + emails + Apple IDs)
+  // Uses shared ContactResolutionService via resolveHandles IPC
   useEffect(() => {
     const lookupContactNames = async () => {
       if (messages.length === 0) return;
 
-      const phones = extractAllPhones(messages);
-      if (phones.length === 0) return;
+      const handles = extractAllHandles(messages);
+      if (handles.length === 0) return;
 
       try {
-        const result = await window.api.contacts.getNamesByPhones(phones);
+        const result = await window.api.contacts.resolveHandles(handles);
 
         if (result.success && result.names) {
-          // Build a lookup map with both original and normalized phone keys
+          // Build a lookup map with both original and normalized keys
           const namesWithNormalized: Record<string, string> = {};
-          Object.entries(result.names as Record<string, string>).forEach(([phone, name]) => {
-            namesWithNormalized[phone] = name;
-            // Also add normalized version (last 10 digits)
-            const normalized = phone.replace(/\D/g, '').slice(-10);
-            if (normalized.length >= 7) {
-              namesWithNormalized[normalized] = name;
+          Object.entries(result.names as Record<string, string>).forEach(([handle, name]) => {
+            namesWithNormalized[handle] = name;
+            // For phone-like handles, also add normalized version (last 10 digits)
+            const isPhone = handle.startsWith("+") || /^\d[\d\s\-()]{6,}$/.test(handle);
+            if (isPhone) {
+              const normalized = handle.replace(/\D/g, '').slice(-10);
+              if (normalized.length >= 7) {
+                namesWithNormalized[normalized] = name;
+              }
+            }
+            // For email handles, also store lowercase version
+            if (handle.includes("@")) {
+              namesWithNormalized[handle.toLowerCase()] = name;
             }
           });
           setContactNames(namesWithNormalized);

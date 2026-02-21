@@ -104,12 +104,7 @@ function isGroupChat(
 ): boolean {
   const participants = getThreadParticipants(messages);
 
-  // Resolve phone numbers to names and deduplicate
-  const normalizePhone = (phone: string): string => {
-    const digits = phone.replace(/\D/g, "");
-    return digits.length >= 10 ? digits.slice(-10) : digits;
-  };
-
+  // TASK-2026: Use normalizePhoneForLookup which handles both phones and emails
   const resolvedNames = new Set<string>();
   for (const p of participants) {
     // Try direct lookup
@@ -117,17 +112,17 @@ function isGroupChat(
       resolvedNames.add(contactNames[p]);
       continue;
     }
-    // Try normalized phone lookup
-    const normalized = normalizePhone(p);
+    // Try normalized lookup (handles both phone and email)
+    const normalized = normalizePhoneForLookup(p);
     let found = false;
     for (const [phone, name] of Object.entries(contactNames)) {
-      if (normalizePhone(phone) === normalized) {
+      if (normalizePhoneForLookup(phone) === normalized) {
         resolvedNames.add(name);
         found = true;
         break;
       }
     }
-    // If no name found, use phone as unique identifier
+    // If no name found, use the raw identifier
     if (!found) {
       resolvedNames.add(p);
     }
@@ -146,25 +141,21 @@ function formatParticipantNames(
   contactNames: Record<string, string>,
   maxShow: number = 3
 ): string {
-  const normalizePhone = (phone: string): string => {
-    const digits = phone.replace(/\D/g, "");
-    return digits.length >= 10 ? digits.slice(-10) : digits;
-  };
-
   // Check if a string looks like a phone number (starts with + or is mostly digits)
   const isPhoneNumber = (s: string): boolean => {
     return s.startsWith("+") || /^\d[\d\s\-()]{6,}$/.test(s);
   };
 
+  // TASK-2026: Use normalizePhoneForLookup which handles both phones and emails
   const names = participants.map((p) => {
     // Try direct lookup first
     if (contactNames[p]) return contactNames[p];
-    // Try normalized phone lookup
-    const normalized = normalizePhone(p);
+    // Try normalized lookup (handles both phone and email)
+    const normalized = normalizePhoneForLookup(p);
     for (const [phone, name] of Object.entries(contactNames)) {
-      if (normalizePhone(phone) === normalized) return name;
+      if (normalizePhoneForLookup(phone) === normalized) return name;
     }
-    // Fall back to phone number
+    // Fall back to raw identifier
     return p;
   });
 
@@ -212,9 +203,12 @@ function getSenderPhone(msg: MessageLike): string | null {
 }
 
 /**
- * Normalize phone for lookup (last 10 digits)
+ * Normalize phone for lookup (last 10 digits).
+ * TASK-2026: For email handles, return lowercase as-is (don't strip chars).
  */
 function normalizePhoneForLookup(phone: string): string {
+  // If it looks like an email, don't strip non-digits
+  if (phone.includes("@")) return phone.toLowerCase();
   const digits = phone.replace(/\D/g, '');
   return digits.length >= 10 ? digits.slice(-10) : digits;
 }

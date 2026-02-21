@@ -16,6 +16,7 @@ import {
   setContactPrimaryPhone,
 } from "./services/db/contactDbService";
 import { getContactNames } from "./services/contactsService";
+import { resolveHandles } from "./services/contactResolutionService";
 import auditService from "./services/auditService";
 import logService from "./services/logService";
 import * as externalContactDb from "./services/db/externalContactDbService";
@@ -1381,6 +1382,33 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         return { success: true, names };
       } catch (error) {
         logService.error("Get contact names by phones failed", "Contacts", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          names: {},
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // TASK-2026: Resolve any mix of phone numbers, emails, and Apple IDs to contact names
+  ipcMain.handle(
+    "contacts:resolve-handles",
+    async (
+      _event: IpcMainInvokeEvent,
+      handles: string[],
+    ): Promise<{ success: boolean; names: Record<string, string>; error?: string }> => {
+      try {
+        if (!Array.isArray(handles)) {
+          return { success: false, names: {}, error: "handles must be an array" };
+        }
+
+        const names = await resolveHandles(handles);
+        return { success: true, names };
+      } catch (error) {
+        logService.error("Resolve handles failed", "Contacts", {
           error: error instanceof Error ? error.message : "Unknown error",
         });
         return {
