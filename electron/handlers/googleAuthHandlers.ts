@@ -31,6 +31,10 @@ import {
   CURRENT_PRIVACY_POLICY_VERSION,
 } from "../constants/legalVersions";
 
+// Module-level storage for PKCE code verifiers between split IPC handlers
+// Key: flow type ("login" | "mailbox" | "mailbox-pending"), Value: codeVerifier
+const pendingCodeVerifiers = new Map<string, string>();
+
 // Type definitions
 interface AuthResponse {
   success: boolean;
@@ -117,9 +121,13 @@ export async function handleGoogleLogin(
       "AuthHandlers"
     );
 
-    // Start auth flow - returns authUrl and a promise for the code
-    const { authUrl, codePromise, scopes } =
+    // Start auth flow - returns authUrl, codePromise, codeVerifier, and scopes
+    const { authUrl, codePromise, codeVerifier, scopes } =
       await googleAuthService.authenticateForLogin();
+
+    // Store codeVerifier for the split handler (handleGoogleCompleteLogin)
+    // and for the setTimeout completion below
+    pendingCodeVerifiers.set("login", codeVerifier);
 
     await logService.info(
       "Opening Google auth URL in popup window",
@@ -258,8 +266,12 @@ export async function handleGoogleLogin(
         const code = await codeWithTimeout;
         await logService.info("Received Google authorization code, completing login", "AuthHandlers");
 
-        // Exchange code for tokens
-        const { tokens, userInfo } = await googleAuthService.exchangeCodeForTokens(code);
+        // Retrieve and clear the PKCE code verifier
+        const storedCodeVerifier = pendingCodeVerifiers.get("login");
+        pendingCodeVerifiers.delete("login");
+
+        // Exchange code for tokens (PKCE: codeVerifier required)
+        const { tokens, userInfo } = await googleAuthService.exchangeCodeForTokens(code, storedCodeVerifier);
 
         // BACKLOG-390: Sign in with Supabase Auth for RLS support
         // This creates a Supabase session so auth.uid() works in RLS policies
@@ -414,9 +426,13 @@ export async function handleGoogleCompleteLogin(
     // Validate input
     const validatedAuthCode = validateAuthCode(authCode);
 
-    // Exchange code for tokens
+    // Retrieve and clear the PKCE code verifier stored by handleGoogleLogin()
+    const codeVerifier = pendingCodeVerifiers.get("login");
+    pendingCodeVerifiers.delete("login");
+
+    // Exchange code for tokens (PKCE: codeVerifier required)
     const { tokens, userInfo } =
-      await googleAuthService.exchangeCodeForTokens(validatedAuthCode);
+      await googleAuthService.exchangeCodeForTokens(validatedAuthCode, codeVerifier);
 
     // BACKLOG-390: Sign in with Supabase Auth for RLS support
     if (tokens.id_token) {
@@ -656,8 +672,11 @@ export async function handleGoogleConnectMailbox(
     const loginHint = user?.email ?? undefined;
 
     // Start auth flow
-    const { authUrl, codePromise, scopes } =
+    const { authUrl, codePromise, codeVerifier, scopes } =
       await googleAuthService.authenticateForMailbox(loginHint);
+
+    // Store codeVerifier for the setTimeout completion below
+    pendingCodeVerifiers.set("mailbox", codeVerifier);
 
     await logService.info(
       "Opening Google mailbox auth URL in popup window",
@@ -780,8 +799,12 @@ export async function handleGoogleConnectMailbox(
           "AuthHandlers"
         );
 
-        // Exchange code for tokens
-        const { tokens } = await googleAuthService.exchangeCodeForTokens(code);
+        // Retrieve and clear the PKCE code verifier
+        const storedCodeVerifier = pendingCodeVerifiers.get("mailbox");
+        pendingCodeVerifiers.delete("mailbox");
+
+        // Exchange code for tokens (PKCE: codeVerifier required)
+        const { tokens } = await googleAuthService.exchangeCodeForTokens(code, storedCodeVerifier);
 
         const accessToken = tokens.access_token;
         const refreshToken = tokens.refresh_token || null;
@@ -923,8 +946,11 @@ export async function handleGoogleConnectMailboxPending(
     );
 
     // Start auth flow
-    const { authUrl, codePromise, scopes } =
+    const { authUrl, codePromise, codeVerifier, scopes } =
       await googleAuthService.authenticateForMailbox(emailHint);
+
+    // Store codeVerifier for use after code is received
+    pendingCodeVerifiers.set("mailbox-pending", codeVerifier);
 
     // Create a popup window
     const authWindow = new BrowserWindow({
@@ -1020,7 +1046,11 @@ export async function handleGoogleConnectMailboxPending(
     const code = await codePromise;
     authCompleted = true;
 
-    const { tokens } = await googleAuthService.exchangeCodeForTokens(code);
+    // Retrieve and clear the PKCE code verifier
+    const storedCodeVerifier = pendingCodeVerifiers.get("mailbox-pending");
+    pendingCodeVerifiers.delete("mailbox-pending");
+
+    const { tokens } = await googleAuthService.exchangeCodeForTokens(code, storedCodeVerifier);
     const userInfo = await googleAuthService.getUserInfo(tokens.access_token);
 
     await logService.info(

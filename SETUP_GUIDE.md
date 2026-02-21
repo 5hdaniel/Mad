@@ -204,9 +204,8 @@ The Mad application uses:
 3. Fill in all your credentials:
 
 ```bash
-# Google OAuth
+# Google OAuth (PKCE flow — no client secret needed, BACKLOG-733)
 GOOGLE_CLIENT_ID=xxxxx.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=GOCSPX-xxxxx
 
 # Microsoft OAuth
 MICROSOFT_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx

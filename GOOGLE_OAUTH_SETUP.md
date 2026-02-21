@@ -215,13 +215,13 @@ https://www.googleapis.com/auth/gmail.readonly
 
 ### Issue 4: "Invalid client" error
 
-**Cause**: Client ID or secret is incorrect
+**Cause**: Client ID is incorrect
 
 **Solution**:
 1. Verify credentials in `.env.development`:
    ```bash
    GOOGLE_CLIENT_ID=892134553674-0vc87dp5oseka55i7rgi37oo5phmfjem.apps.googleusercontent.com
-   GOOGLE_CLIENT_SECRET=GOCSPX-xxxxx
+   # Note: GOOGLE_CLIENT_SECRET is no longer needed (PKCE flow, BACKLOG-733)
    ```
 2. Copy exact values from Google Cloud Console → Credentials
 3. Ensure no extra spaces or line breaks
@@ -282,7 +282,7 @@ Only request the scopes you actually need:
 ```bash
 # Never commit these to git
 GOOGLE_CLIENT_ID=xxxxx
-GOOGLE_CLIENT_SECRET=xxxxx
+# Note: GOOGLE_CLIENT_SECRET is no longer needed (PKCE flow, BACKLOG-733)
 
 # Ensure .env.development is in .gitignore
 ```

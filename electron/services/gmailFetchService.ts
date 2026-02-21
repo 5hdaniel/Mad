@@ -144,10 +144,12 @@ class GmailFetchService {
       const accessToken = tokenRecord.access_token || "";
       const refreshToken = tokenRecord.refresh_token || null;
 
-      // Initialize OAuth2 client
+      // Initialize OAuth2 client (no client_secret needed — PKCE flow, BACKLOG-733)
+      // OAuth2Client is only used here to set credentials for Gmail API calls,
+      // not for token exchange. Token refresh is handled by googleAuthService.
       const oauth2Client = new google.auth.OAuth2(
         process.env.GOOGLE_CLIENT_ID,
-        process.env.GOOGLE_CLIENT_SECRET,
+        undefined,
         process.env.GOOGLE_REDIRECT_URI,
       );
 
