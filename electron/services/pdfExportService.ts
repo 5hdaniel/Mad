@@ -3,55 +3,9 @@ import path from "path";
 import fs from "fs/promises";
 import { Transaction, Communication } from "../types/models";
 import { isEmailMessage, isTextMessage } from "../utils/channelHelpers";
+import { escapeHtml, formatCurrency, formatDate, formatDateTime, getContactNamesByPhones } from "../utils/exportUtils";
 import logService from "./logService";
-import { dbAll } from "./db/core/dbConnection";
 import { normalizePhone as sharedNormalizePhone } from "./contactResolutionService";
-
-/**
- * Look up contact names for phone numbers
- */
-function getContactNamesByPhones(phones: string[]): Record<string, string> {
-  if (phones.length === 0) return {};
-
-  try {
-    // Normalize phones — email-safe (emails kept as-is, phones to last 10 digits)
-    const normalizedPhones = phones.map(p => sharedNormalizePhone(p));
-
-    // Query contact_phones to find names
-    const placeholders = normalizedPhones.map(() => '?').join(',');
-    const sql = `
-      SELECT
-        cp.phone_e164,
-        cp.phone_display,
-        c.display_name
-      FROM contact_phones cp
-      JOIN contacts c ON cp.contact_id = c.id
-      WHERE SUBSTR(REPLACE(cp.phone_e164, '+', ''), -10) IN (${placeholders})
-         OR SUBSTR(REPLACE(cp.phone_display, '-', ''), -10) IN (${placeholders})
-    `;
-
-    const results = dbAll<{ phone_e164: string; phone_display: string; display_name: string }>(
-      sql,
-      [...normalizedPhones, ...normalizedPhones]
-    );
-
-    const nameMap: Record<string, string> = {};
-    for (const row of results) {
-      // Map both original and normalized forms
-      const e164Normalized = sharedNormalizePhone(row.phone_e164);
-      const displayNormalized = sharedNormalizePhone(row.phone_display);
-      nameMap[e164Normalized] = row.display_name;
-      nameMap[displayNormalized] = row.display_name;
-      nameMap[row.phone_e164] = row.display_name;
-      nameMap[row.phone_display] = row.display_name;
-    }
-
-    return nameMap;
-  } catch (error) {
-    logService.warn("[PDF Export] Failed to look up contact names", "PDFExport", { error });
-    return {};
-  }
-}
 
 /**
  * Format phone number or resolve to contact name
@@ -172,39 +126,6 @@ class PDFExportService {
     transaction: Transaction,
     communications: Communication[],
   ): string {
-    const formatCurrency = (amount?: number | null): string => {
-      if (!amount) return "N/A";
-      return new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-        minimumFractionDigits: 0,
-      }).format(amount);
-    };
-
-    const formatDate = (dateString?: string | Date | null): string => {
-      if (!dateString) return "N/A";
-      const date =
-        typeof dateString === "string" ? new Date(dateString) : dateString;
-      return date.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
-    };
-
-    const formatDateTime = (dateString: string | Date): string => {
-      if (!dateString) return "N/A";
-      const date =
-        typeof dateString === "string" ? new Date(dateString) : dateString;
-      return date.toLocaleString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    };
-
     return `
 <!DOCTYPE html>
 <html>
@@ -584,17 +505,6 @@ class PDFExportService {
       .filter((s): s is string => !!s && (s.startsWith('+') || /^\d{7,}$/.test(s.replace(/\D/g, ''))));
     const phoneNameMap = getContactNamesByPhones(textPhones);
 
-    // Helper to escape HTML
-    const escapeHtml = (str: string | null | undefined): string => {
-      if (!str) return '';
-      return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    };
-
     // Helper to sanitize HTML for PDF display
     // Removes dangerous elements while preserving formatting
     const sanitizeHtml = (html: string | null | undefined): string => {
@@ -782,8 +692,8 @@ class PDFExportService {
         const hasContent = comm.body_text || comm.body_plain || (comm as { body?: string }).body;
         const anchorId = 'email-' + idx;
         html += '<div class="communication">';
-        html += '<div class="subject">' + (escapeHtml(comm.subject) || '(No Subject)') + '</div>';
-        html += '<div class="from">From: ' + (escapeHtml(comm.sender) || 'Unknown') + '</div>';
+        html += '<div class="subject">' + (escapeHtml(comm.subject || '') || '(No Subject)') + '</div>';
+        html += '<div class="from">From: ' + (escapeHtml(comm.sender || '') || 'Unknown') + '</div>';
         html += '<div class="meta">';
         html += '<span>' + formatDateTime(comm.sent_at as string) + '</span>';
         if (hasContent) {
@@ -888,8 +798,8 @@ class PDFExportService {
         html += '<a name="email-' + idx + '"></a>';
         html += '<div class="header-row">';
         html += '<div>';
-        html += '<div class="subject-line">' + (escapeHtml(comm.subject) || '(No Subject)') + '</div>';
-        html += '<div class="meta-info">From: ' + (escapeHtml(comm.sender) || 'Unknown') + '</div>';
+        html += '<div class="subject-line">' + (escapeHtml(comm.subject || '') || '(No Subject)') + '</div>';
+        html += '<div class="meta-info">From: ' + (escapeHtml(comm.sender || '') || 'Unknown') + '</div>';
         html += '<div class="meta-info">' + formatDateTime(comm.sent_at as string) + '</div>';
         html += '</div>';
         html += '<span class="msg-id">Email #' + (idx + 1) + '</span>';
