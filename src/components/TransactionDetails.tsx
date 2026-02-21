@@ -154,8 +154,15 @@ function TransactionDetails({
     messages: textMessages,
     loading: messagesLoading,
     error: messagesError,
-    refresh: refreshMessages,
   } = useTransactionMessages(transaction, communications);
+
+  // Refresh messages by reloading text communications from the parent state.
+  // This ensures derivedMessages (from useTransactionMessages) updates correctly,
+  // unlike the local refresh which updates fetchedMessages but gets overridden
+  // by the non-null derivedMessages. (TASK-2023)
+  const refreshMessages = useCallback(async () => {
+    await loadCommunications("text");
+  }, [loadCommunications]);
 
   // Attachments hook — uses pre-loaded communications to avoid duplicate getDetails call
   const {
