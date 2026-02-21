@@ -1,7 +1,8 @@
 # SPRINT-089: Security & Build Integrity
 
 **Created:** 2026-02-20
-**Status:** In Progress
+**Status:** Completed
+**Completed:** 2026-02-21
 **Base:** `develop`
 
 ---
@@ -12,9 +13,9 @@ Address security vulnerabilities and build integrity issues deferred from SPRINT
 
 ## Sprint Narrative
 
-This sprint combines security/build hardening deferred from SPRINT-087's due diligence audit with user-reported bugs and message system improvements. Phase 1 and Phase 2 address build security (source map leakage) and dependency security (imessage-parser vulnerability chain). Phase 3 was an infrastructure-only fix (Google Places API billing). Phase 4 addresses a UI reactivity bug in the Messages tab. Phase 5 unifies the channel/communication_type naming inconsistency across the codebase. Phase 6 merges duplicate 1:1 message threads from the same contact (combining BACKLOG-542 and BACKLOG-748). Phase 7 fixes group chat participant resolution where missing participants and wrong sender attribution occur due to incomplete handle extraction and phone-only contact lookup.
+This sprint combines security/build hardening deferred from SPRINT-087's due diligence audit with user-reported bugs and message system improvements. Phase 1 and Phase 2 address build security (source map leakage) and dependency security (imessage-parser vulnerability chain). Phase 3 was an infrastructure-only fix (Google Places API billing). Phase 4 addresses a UI reactivity bug in the Messages tab. Phase 5 unifies the channel/communication_type naming inconsistency across the codebase. Phase 6 merges duplicate 1:1 message threads from the same contact (combining BACKLOG-542 and BACKLOG-748). Phase 7 fixes group chat participant resolution where missing participants and wrong sender attribution occur due to incomplete handle extraction and phone-only contact lookup. Phase 8 consolidates duplicate contact resolution methods across renderer and export services, and fixes a normalizePhone bug that caused email handles to be stripped to empty strings in exports.
 
-Phases 1-6 are completed. Phase 7 is in progress.
+All 8 phases are completed. Sprint closed 2026-02-21.
 
 ---
 
@@ -29,9 +30,10 @@ Phases 1-6 are completed. Phase 7 is in progress.
 | BACKLOG-752 | Messages tab doesn't update after linking | TASK-2023 | 4 | ~40K | - | Completed (PR #903 merged) |
 | BACKLOG-754 | Unify channel/communication_type naming | TASK-2024 | 5 | ~30K | - | Completed (PR #904 merged) |
 | BACKLOG-542 + BACKLOG-748 | Merge duplicate 1:1 message threads | TASK-2025 | 6 | ~50K | - | Completed (PR #905 merged) |
-| BACKLOG-755 | Extract ContactResolutionService + fix group chat participants | TASK-2026 | 7 | ~80K | - | In Progress |
+| BACKLOG-755 | Extract ContactResolutionService + fix group chat participants | TASK-2026 | 7 | ~80K | - | Completed (PR #906 merged) |
+| BACKLOG-755, BACKLOG-756 | Consolidate contact resolution + fix normalizePhone export bug | TASK-2027 | 8 | ~50K | - | Completed (PR #907 merged) |
 
-**Total Estimated Tokens:** ~260K (engineering) + ~15K (SR review Phases 1-2) + ~20K (SR review Phases 4-7) = ~295K
+**Total Estimated Tokens:** ~310K (engineering) + ~15K (SR review Phases 1-2) + ~25K (SR review Phases 4-8) = ~350K
 
 ---
 
@@ -125,7 +127,7 @@ Phase 5: Refactor -- Channel/Communication Type Unification (depends on Phase 4 
 **Branch:** `fix/task-2024-unify-channel-naming`
 **Task file:** `.claude/plans/tasks/TASK-2024-unify-channel-naming.md`
 
-### Phase 6: Merge Duplicate Message Threads (In Progress)
+### Phase 6: Merge Duplicate Message Threads (Completed)
 
 ```
 Phase 6: Feature -- Merge Duplicate 1:1 Threads (depends on Phase 5 merged)
@@ -169,17 +171,31 @@ Phase 7: Bug Fix -- Group Chat Participants (depends on Phase 5 TASK-2024 merged
 +-- Manual test: group chat shows all participants; correct sender attribution
 ```
 
-**Status:** In Progress. Branch created from develop (after Phase 6 PR #905 merged).
+**Status:** Completed. PR #906 merged.
 **Branch:** `fix/task-2026-group-chat-participants`
 **Task file:** `.claude/plans/tasks/TASK-2026-fix-group-chat-participants.md`
 
-**Files to modify:**
-- `src/components/transactionDetailsModule/components/TransactionMessagesTab.tsx` - extractAllPhones()
-- `electron/services/db/contactDbService.ts` - getContactNamesByPhones()
-- `src/components/transactionDetailsModule/components/MessageThreadCard.tsx` - getSenderPhone()
-- `src/components/transactionDetailsModule/components/modals/ConversationViewModal.tsx` - getSenderPhone()
-
 **Why depends on Phase 5:** TASK-2026 should use the `isTextMessage()` helper introduced in TASK-2024. Both TASK-2025 (Phase 6) and TASK-2026 touch `TransactionMessagesTab.tsx`, so Phase 7 runs after Phase 6 to avoid merge conflicts.
+
+### Phase 8: Consolidate Contact Resolution & Fix normalizePhone Export Bug (Completed)
+
+```
+Phase 8: Refactor + Bug Fix -- Contact Resolution Consolidation (depends on Phase 7 TASK-2026 merged)
++-- TASK-2027: Consolidate duplicate contact resolution methods + fix normalizePhone export bug (BACKLOG-755, BACKLOG-756)
+|   Phase 1: Extract renderer-side phone normalization utilities into shared module
+|   Phase 2: Delegate export service private methods to shared contactResolutionService
+|   Phase 3: Fix normalizePhone() email handle bug in shared service + all 11 vulnerable call sites
+|
++-- CI gate: type-check, lint, test pass
++-- SR review: PR #907
++-- Manual test: export merges phone + email threads for same contact
+```
+
+**Status:** Completed. PR #907 merged.
+**Branch:** `fix/task-2027-consolidate-contact-resolution`
+**Task file:** `.claude/plans/tasks/TASK-2027-consolidate-contact-resolution.md`
+
+**Why depends on Phase 7:** TASK-2027 delegates export service methods to the shared `contactResolutionService.ts` created in TASK-2026. Must be merged first.
 
 ---
 
@@ -215,10 +231,14 @@ TASK-2025 (merge dup threads) -------> Branch, implement, PR, review, merge
                                          |
                                          v
 Phase 7:
-TASK-2026 (group chat participants) -> Branch, implement, PR, review, merge
+TASK-2026 (group chat participants) -> PR #906 review + merge  [DONE]
                                          |
                                          v
-Sprint Complete
+Phase 8:
+TASK-2027 (consolidate contact res) -> PR #907 review + merge  [DONE]
+                                         |
+                                         v
+Sprint Complete                                                 [DONE]
 ```
 
 **Execution Order:**
@@ -232,6 +252,7 @@ Sprint Complete
 | 5 | TASK-2024 (channel naming unify) | Phase 4 PR #903 merged | No |
 | 6 | TASK-2025 (merge dup threads) | Phase 5 TASK-2024 merged | No |
 | 7 | TASK-2026 (group chat participants) | Phase 6 TASK-2025 merged | No |
+| 8 | TASK-2027 (consolidate contact res) | Phase 7 TASK-2026 merged | No |
 
 ---
 
@@ -246,9 +267,10 @@ Sprint Complete
 | TASK-2023 | `fix/task-2023-messages-tab-refresh` | develop | develop | #903 | Merged |
 | TASK-2024 | `fix/task-2024-unify-channel-naming` | develop | develop | #904 | Merged |
 | TASK-2025 | `feature/task-2025-merge-duplicate-threads` | develop | develop | #905 | Merged |
-| TASK-2026 | `fix/task-2026-group-chat-participants` | develop | develop | TBD | Pending |
+| TASK-2026 | `fix/task-2026-group-chat-participants` | develop | develop | #906 | Merged |
+| TASK-2027 | `fix/task-2027-consolidate-contact-resolution` | develop | develop | #907 | Merged |
 
-**Merge order:** TASK-2018 -> TASK-2019 -> TASK-2023 -> TASK-2024 -> TASK-2025 -> TASK-2026 (sequential).
+**Merge order:** TASK-2018 -> TASK-2019 -> TASK-2023 -> TASK-2024 -> TASK-2025 -> TASK-2026 -> TASK-2027 (sequential).
 
 ---
 
@@ -300,6 +322,7 @@ PM updates status at each transition across ALL three locations:
 | TASK-2024 | Unit tests for isTextMessage/isEmailMessage helpers | N/A | Messages display correctly; export categorizes correctly |
 | TASK-2025 | Unit tests for mergeThreadsByContact utility | N/A | Same contact with multiple handles shows as one thread |
 | TASK-2026 | Unit tests for extractAllHandles and email lookup fallback | N/A | Group chat shows all participants; correct sender attribution |
+| TASK-2027 | 7 unit tests for normalizePhone (email handles, edge cases) | N/A | Export merges phone + email threads; no duplicate PDFs |
 
 ### CI Gates
 
@@ -321,9 +344,10 @@ PM updates status at each transition across ALL three locations:
 | TASK-2024 | refactor | ~30K | x1.0 | ~30K | ~5K |
 | TASK-2025 | feature (display-layer) | ~50K | x1.0 | ~50K | ~5K |
 | TASK-2026 | UI bug fix | ~40K | x1.0 | ~40K | ~5K |
-| **Totals** | | | | **~260K** | **~30K** |
+| TASK-2027 | refactor + bug fix | ~50K | x1.0 | ~50K | ~5K |
+| **Totals** | | | | **~310K** | **~35K** |
 
-**Grand total: ~290K estimated billable tokens.**
+**Grand total: ~345K estimated billable tokens.**
 
 Note: Minimum ~50K estimate per agent task (lesson from SPRINT-088 where small estimates were 10-17x off due to agent overhead).
 
@@ -347,12 +371,15 @@ SPRINT-087 (Repo Polish for Due Diligence) deferred these items:
 
 ### Active Worktrees
 
+All worktrees removed. Sprint complete.
+
 | Task | Worktree Path |
 |------|---------------|
 | TASK-2018 | Removed (PR #900 merged) |
 | TASK-2019 | Removed (PR #901 merged) |
 | TASK-2020 | Removed (PR #902 merged) |
 | TASK-2023 | Removed (PR #903 merged) |
-| TASK-2024 | TBD (will create when assigned) |
-| TASK-2025 | TBD (will create when assigned) |
-| TASK-2026 | TBD (will create when assigned) |
+| TASK-2024 | Removed (PR #904 merged) |
+| TASK-2025 | Removed (PR #905 merged) |
+| TASK-2026 | Removed (PR #906 merged) |
+| TASK-2027 | Removed (PR #907 merged) |
