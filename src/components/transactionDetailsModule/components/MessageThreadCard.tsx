@@ -7,6 +7,7 @@ import React, { useState } from "react";
 import type { Communication, Message } from "../types";
 import { ConversationViewModal } from "./modals";
 import { normalizePhoneForLookup, getSenderPhone } from "../../../utils/phoneNormalization";
+import { getContactAvatarInitial } from "../../../utils/avatarUtils";
 
 /**
  * Union type for messages - can be from messages table or communications table
@@ -30,18 +31,6 @@ export interface MessageThreadCardProps {
   auditStartDate?: Date | string | null;
   /** Audit period end date for filtering (TASK-1157) */
   auditEndDate?: Date | string | null;
-}
-
-/**
- * Get initials for avatar display.
- * Uses first character of name or '#' for phone numbers.
- */
-function getAvatarInitial(contactName?: string, phoneNumber?: string): string {
-  if (contactName && contactName.trim().length > 0) {
-    return contactName.trim().charAt(0).toUpperCase();
-  }
-  // If phone number, just show hash
-  return "#";
 }
 
 /**
@@ -200,7 +189,7 @@ export function MessageThreadCard({
   // Detect group chat (using contactNames to resolve duplicates)
   const participants = getThreadParticipants(messages);
   const isGroup = isGroupChat(messages, contactNames);
-  const avatarInitial = getAvatarInitial(contactName, phoneNumber);
+  const avatarInitial = getContactAvatarInitial(contactName, phoneNumber);
 
   // Get date range for the conversation
   const getDateRange = (): string => {

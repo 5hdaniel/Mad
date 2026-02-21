@@ -16,26 +16,8 @@ import { AttachMessagesModal, UnlinkMessageModal } from "./modals";
 import { parseDateSafe } from "../../../utils/dateFormatters";
 import { extractAllHandles } from "../../../utils/phoneNormalization";
 import { mergeThreadsByContact, type MergedThreadEntry } from "../../../utils/threadMergeUtils";
+import { formatDateRangeLabel } from "../../../utils/dateRangeUtils";
 import logger from '../../../utils/logger';
-
-/**
- * Format a date range for display in the toggle label
- * Handles partial dates (only start, only end, or both)
- * BACKLOG-393: Include year in date format for clarity
- */
-function formatDateRangeLabel(startDate: Date | null, endDate: Date | null): string {
-  const formatDate = (d: Date) =>
-    d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-
-  if (startDate && endDate) {
-    return `${formatDate(startDate)} - ${formatDate(endDate)}`;
-  } else if (startDate) {
-    return `${formatDate(startDate)} - Ongoing`;
-  } else if (endDate) {
-    return `Through ${formatDate(endDate)}`;
-  }
-  return "";
-}
 
 /**
  * Check if a message falls within the audit date range
