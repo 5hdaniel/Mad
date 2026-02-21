@@ -14,6 +14,7 @@ import {
 } from "./MessageThreadCard";
 import { AttachMessagesModal, UnlinkMessageModal } from "./modals";
 import { parseDateSafe } from "../../../utils/dateFormatters";
+import { mergeThreadsByContact, type MergedThreadEntry } from "../../../utils/threadMergeUtils";
 import logger from '../../../utils/logger';
 
 /**
@@ -211,16 +212,28 @@ export function TransactionMessagesTab({
   }, [onMessagesChanged, onShowSuccess]);
 
   // Handle unlink button click on a thread
+  // TASK-2025: Updated to accept originalThreadIds for merged threads
   const handleUnlinkClick = useCallback(
-    (threadId: string) => {
-      // Find thread info for the confirmation modal
-      const threads = groupMessagesByThread(messages);
-      const threadMessages = threads.get(threadId);
-      if (threadMessages) {
+    (threadId: string, originalThreadIds?: string[]) => {
+      // For merged threads, collect all messages from all original thread IDs
+      const rawThreads = groupMessagesByThread(messages);
+      const idsToCollect = originalThreadIds && originalThreadIds.length > 1
+        ? originalThreadIds
+        : [threadId];
+
+      const allMessages: MessageLike[] = [];
+      for (const id of idsToCollect) {
+        const threadMessages = rawThreads.get(id);
+        if (threadMessages) {
+          allMessages.push(...threadMessages);
+        }
+      }
+
+      if (allMessages.length > 0) {
         setUnlinkTarget({
-          threadId,
-          phoneNumber: extractPhoneFromThread(threadMessages),
-          messageCount: threadMessages.length,
+          threadId, // Use the display key for lookup
+          phoneNumber: extractPhoneFromThread(allMessages),
+          messageCount: allMessages.length,
         });
       }
     },
@@ -228,19 +241,34 @@ export function TransactionMessagesTab({
   );
 
   // Handle unlink confirmation
+  // TASK-2025: Updated to handle merged threads (collect messages from all original thread IDs)
   const handleUnlinkConfirm = useCallback(async () => {
     if (!unlinkTarget || !transactionId) return;
 
     setIsUnlinking(true);
     try {
-      // Get all message IDs for this thread
-      const threads = groupMessagesByThread(messages);
-      const threadMessages = threads.get(unlinkTarget.threadId);
-      if (!threadMessages) {
+      // Get all message IDs for this thread (or merged group of threads)
+      const rawThreads = groupMessagesByThread(messages);
+
+      // Find the merged entry to get all original thread IDs
+      const mergedEntry = filteredThreads.find(([key]) => key === unlinkTarget.threadId);
+      const idsToCollect = mergedEntry && mergedEntry[2].length > 1
+        ? mergedEntry[2]
+        : [unlinkTarget.threadId];
+
+      const allMessages: MessageLike[] = [];
+      for (const id of idsToCollect) {
+        const threadMessages = rawThreads.get(id);
+        if (threadMessages) {
+          allMessages.push(...threadMessages);
+        }
+      }
+
+      if (allMessages.length === 0) {
         throw new Error("Thread not found");
       }
 
-      const messageIds = threadMessages.map((m) => m.id);
+      const messageIds = allMessages.map((m) => m.id);
       // TASK-1116: Pass transactionId for thread-based unlinking
       const result = await window.api.transactions.unlinkMessages(messageIds, transactionId);
 
@@ -274,30 +302,38 @@ export function TransactionMessagesTab({
   const threads = groupMessagesByThread(messages);
   const sortedThreads = sortThreadsByRecent(threads);
 
+  // TASK-2025: Merge threads from the same contact (display-layer only)
+  // This combines SMS, iMessage, and iCloud email threads into one per contact.
+  const mergedThreads: MergedThreadEntry[] = useMemo(
+    () => mergeThreadsByContact(sortedThreads, contactNames),
+    [sortedThreads, contactNames],
+  );
+
   // BACKLOG-357: Filter threads and messages by audit date range
+  // TASK-2025: Uses mergedThreads (contact-merged) instead of raw sortedThreads
   const { filteredThreads, filteredMessageCount, totalMessageCount, filteredConversationCount, totalConversationCount } = useMemo(() => {
     if (!showAuditPeriodOnly || !hasAuditDates) {
       return {
-        filteredThreads: sortedThreads,
+        filteredThreads: mergedThreads,
         filteredMessageCount: messages.length,
         totalMessageCount: messages.length,
-        filteredConversationCount: sortedThreads.length,
-        totalConversationCount: sortedThreads.length,
+        filteredConversationCount: mergedThreads.length,
+        totalConversationCount: mergedThreads.length,
       };
     }
 
     // Filter threads: keep only threads that have at least one message in audit period
     // Also filter messages within each thread
-    const filtered: [string, MessageLike[]][] = [];
+    const filtered: MergedThreadEntry[] = [];
     let msgCount = 0;
 
-    for (const [threadId, threadMessages] of sortedThreads) {
+    for (const [threadId, threadMessages, originalIds] of mergedThreads) {
       const messagesInPeriod = threadMessages.filter((msg) =>
         isMessageInAuditPeriod(msg, parsedStartDate, parsedEndDate)
       );
 
       if (messagesInPeriod.length > 0) {
-        filtered.push([threadId, messagesInPeriod]);
+        filtered.push([threadId, messagesInPeriod, originalIds]);
         msgCount += messagesInPeriod.length;
       }
     }
@@ -307,9 +343,9 @@ export function TransactionMessagesTab({
       filteredMessageCount: msgCount,
       totalMessageCount: messages.length,
       filteredConversationCount: filtered.length,
-      totalConversationCount: sortedThreads.length,
+      totalConversationCount: mergedThreads.length,
     };
-  }, [sortedThreads, messages.length, showAuditPeriodOnly, hasAuditDates, parsedStartDate, parsedEndDate]);
+  }, [mergedThreads, messages.length, showAuditPeriodOnly, hasAuditDates, parsedStartDate, parsedEndDate]);
 
   // Loading state (placed after hooks to comply with Rules of Hooks)
   if (loading) {
@@ -551,7 +587,7 @@ export function TransactionMessagesTab({
 
       {/* Thread list */}
       <div className="space-y-4" data-testid="message-thread-list">
-        {filteredThreads.map(([threadId, threadMessages]) => {
+        {filteredThreads.map(([threadId, threadMessages, originalThreadIds]) => {
           const phoneNumber = extractPhoneFromThread(threadMessages);
           // Look up contact name for thread header
           const normalized = phoneNumber.replace(/\D/g, '').slice(-10);
@@ -565,7 +601,9 @@ export function TransactionMessagesTab({
               phoneNumber={phoneNumber}
               contactName={contactName}
               contactNames={contactNames}
-              onUnlink={userId && transactionId ? handleUnlinkClick : undefined}
+              onUnlink={userId && transactionId
+                ? (id: string) => handleUnlinkClick(id, originalThreadIds)
+                : undefined}
               auditStartDate={auditStartDate}
               auditEndDate={auditEndDate}
             />
