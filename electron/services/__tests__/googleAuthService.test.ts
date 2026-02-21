@@ -4,15 +4,16 @@
  *
  * NOTE: Session-only OAuth - tokens stored directly in encrypted database,
  * no separate tokenEncryptionService encryption needed
+ *
+ * BACKLOG-733: Updated to reflect PKCE migration (no googleapis OAuth2Client)
  */
 
 import googleAuthService from "../googleAuthService";
 import databaseService from "../databaseService";
-import { google } from "googleapis";
 
 // Mock dependencies
 jest.mock("../databaseService");
-jest.mock("googleapis");
+jest.mock("axios");
 jest.mock("../logService", () => ({
   __esModule: true,
   default: {
@@ -22,8 +23,6 @@ jest.mock("../logService", () => ({
     error: jest.fn(),
   },
 }));
-
-const mockGoogle = google as jest.Mocked<typeof google>;
 
 const mockDatabaseService = databaseService as jest.Mocked<
   typeof databaseService
