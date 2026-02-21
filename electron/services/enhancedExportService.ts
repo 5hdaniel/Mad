@@ -4,6 +4,7 @@ import { app } from "electron";
 import folderExportService from "./folderExportService";
 import logService from "./logService";
 import { Transaction, Communication } from "../types/models";
+import { isEmailMessage, isTextMessage } from "../utils/channelHelpers";
 
 /**
  * Enhanced Export Service
@@ -172,11 +173,11 @@ class EnhancedExportService {
     }
 
     if (contentType === "email") {
-      return communications.filter((c) => c.communication_type === "email");
+      return communications.filter((c) => isEmailMessage(c));
     }
 
     if (contentType === "text") {
-      return communications.filter((c) => c.communication_type === "text");
+      return communications.filter((c) => isTextMessage(c));
     }
 
     return communications;
@@ -473,7 +474,7 @@ class EnhancedExportService {
 
     // Export emails as .eml files
     const emails = communications.filter(
-      (c) => c.communication_type === "email",
+      (c) => isEmailMessage(c),
     );
     for (let i = 0; i < emails.length; i++) {
       const email = emails[i];
@@ -489,7 +490,7 @@ class EnhancedExportService {
     }
 
     // Export texts as .txt files
-    const texts = communications.filter((c) => c.communication_type === "text");
+    const texts = communications.filter((c) => isTextMessage(c));
     for (let i = 0; i < texts.length; i++) {
       const text = texts[i];
       const txtContent = this._createTextContent(text);
@@ -605,12 +606,12 @@ class EnhancedExportService {
     lines.push(`Total Communications Exported: ${communications.length}`);
     lines.push(
       `  - Emails: ${
-        communications.filter((c) => c.communication_type === "email").length
+        communications.filter((c) => isEmailMessage(c)).length
       }`,
     );
     lines.push(
       `  - Texts: ${
-        communications.filter((c) => c.communication_type === "text").length
+        communications.filter((c) => isTextMessage(c)).length
       }`,
     );
     lines.push("");

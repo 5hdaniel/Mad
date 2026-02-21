@@ -6,6 +6,7 @@
  */
 import React, { useState } from "react";
 import type { Communication } from "../types";
+import { isEmailMessage } from "@/utils/channelHelpers";
 import { EmailThreadViewModal } from "./modals";
 
 /**
@@ -375,9 +376,8 @@ export function groupEmailsByThread(
   const threads = new Map<string, Communication[]>();
 
   emails.forEach((email) => {
-    // Only process emails (not texts)
-    const type = email.communication_type || email.channel;
-    if (type && type !== "email") return;
+    // Only process emails (not texts); untyped records are treated as emails
+    if (!isEmailMessage(email) && (email.channel || email.communication_type)) return;
 
     const threadKey = getEmailThreadKey(email);
     const thread = threads.get(threadKey) || [];
@@ -456,11 +456,10 @@ export function sortEmailThreadsByRecent(threads: EmailThread[]): EmailThread[] 
  * This is the main entry point for email thread grouping.
  */
 export function processEmailThreads(communications: Communication[]): EmailThread[] {
-  // Filter to only emails
-  const emails = communications.filter(c => {
-    const type = c.communication_type || c.channel;
-    return !type || type === "email";
-  });
+  // Filter to only emails (untyped records default to email for backward compatibility)
+  const emails = communications.filter(c =>
+    isEmailMessage(c) || (!c.channel && !c.communication_type)
+  );
 
   // Group into threads
   const grouped = groupEmailsByThread(emails);

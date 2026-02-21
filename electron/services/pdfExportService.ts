@@ -2,6 +2,7 @@ import { BrowserWindow, app } from "electron";
 import path from "path";
 import fs from "fs/promises";
 import { Transaction, Communication } from "../types/models";
+import { isEmailMessage, isTextMessage } from "../utils/channelHelpers";
 import logService from "./logService";
 import { dbAll } from "./db/core/dbConnection";
 
@@ -566,16 +567,14 @@ class PDFExportService {
     communications: Communication[],
     formatDateTime: (dateString: string | Date) => string
   ): string {
-    // Split communications by type
+    // Split communications by type (with subject-based fallback for untyped records)
     const emails = communications.filter(c =>
-      c.communication_type === 'email' ||
-      (!c.communication_type && c.subject && c.subject.length > 0)
+      isEmailMessage(c) ||
+      (!c.channel && !c.communication_type && c.subject && c.subject.length > 0)
     );
     const texts = communications.filter(c =>
-      c.communication_type === 'sms' ||
-      c.communication_type === 'imessage' ||
-      c.communication_type === 'text' ||
-      (!c.communication_type && (!c.subject || c.subject.length === 0))
+      isTextMessage(c) ||
+      (!c.channel && !c.communication_type && (!c.subject || c.subject.length === 0))
     );
 
     // Look up contact names for text message phone numbers

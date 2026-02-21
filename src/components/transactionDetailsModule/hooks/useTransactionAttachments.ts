@@ -4,6 +4,7 @@
  */
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { Transaction, Communication } from "@/types";
+import { isEmailMessage } from "@/utils/channelHelpers";
 import logger from '../../../utils/logger';
 
 /**
@@ -109,7 +110,7 @@ export function useTransactionAttachments(
     const emailAttachments: TransactionAttachment[] = communications
       .filter(
         (comm: Communication) =>
-          (comm.channel === "email" || comm.communication_type === "email") && comm.has_attachments
+          isEmailMessage(comm) && comm.has_attachments
       )
       .flatMap((email: Communication) => {
         const metadata = parseAttachmentMetadata(email.attachment_metadata);
@@ -152,7 +153,7 @@ export function useTransactionAttachments(
         const emailAttachments: TransactionAttachment[] = allCommunications
           .filter(
             (comm: Communication) =>
-              comm.channel === "email" && comm.has_attachments
+              isEmailMessage(comm) && comm.has_attachments
           )
           .flatMap((email: Communication) => {
             const metadata = parseAttachmentMetadata(email.attachment_metadata);

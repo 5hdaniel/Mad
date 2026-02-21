@@ -5,6 +5,7 @@
  */
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { Transaction, Communication } from "@/types";
+import { isTextMessage } from "@/utils/channelHelpers";
 import logger from '../../../utils/logger';
 
 interface UseTransactionMessagesResult {
@@ -34,13 +35,7 @@ export function useTransactionMessages(
   // If communications are provided, filter locally (no IPC call)
   const derivedMessages = useMemo(() => {
     if (!communications) return null;
-    return communications.filter(
-      (comm: Communication) =>
-        comm.channel === "sms" ||
-        comm.channel === "imessage" ||
-        comm.communication_type === "text" ||
-        comm.communication_type === "imessage"
-    );
+    return communications.filter((comm: Communication) => isTextMessage(comm));
   }, [communications]);
 
   // Fallback state for when communications aren't provided or for refresh
@@ -63,11 +58,7 @@ export function useTransactionMessages(
           result.transaction.communications || [];
 
         const textMessages = allCommunications.filter(
-          (comm: Communication) =>
-            comm.channel === "sms" ||
-            comm.channel === "imessage" ||
-            comm.communication_type === "text" ||
-            comm.communication_type === "imessage"
+          (comm: Communication) => isTextMessage(comm)
         );
 
         setFetchedMessages(textMessages);
