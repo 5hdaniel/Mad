@@ -95,9 +95,8 @@ export function useTransactionDetails(
         // Merge with existing communications (don't overwrite other channel)
         setCommunications(prev => {
           const newComms: Communication[] = result.transaction?.communications || [];
-          const newIds = new Set(newComms.map((c: Communication) => c.id));
-          // Keep existing comms that aren't in the new result (different channel)
-          const kept = prev.filter((c: Communication) => !newIds.has(c.id));
+          // Keep only comms from the OTHER channel; replace the fetched channel entirely
+          const kept = prev.filter((c: Communication) => c.channel !== channelFilter);
           return [...kept, ...newComms];
         });
         setContactAssignments(result.transaction.contact_assignments || []);
