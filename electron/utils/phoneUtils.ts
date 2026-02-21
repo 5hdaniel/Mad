@@ -12,6 +12,7 @@ import { REGEX_PATTERNS } from "../constants";
  */
 export function normalizePhoneNumber(phone: string | null | undefined): string {
   if (!phone) return "";
+  if (phone.includes("@")) return phone.toLowerCase();
   return phone.replace(REGEX_PATTERNS.PHONE_NORMALIZE, "");
 }
 

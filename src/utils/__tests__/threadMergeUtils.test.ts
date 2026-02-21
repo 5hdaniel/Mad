@@ -344,6 +344,76 @@ describe("mergeThreadsByContact", () => {
       expect(result[0][2]).toEqual(["macos-chat-1"]); // Only one original ID
     });
 
+    it("should correctly handle email-handle threads without contact names", () => {
+      // With the bug, normalizePhone("madison@icloud.com") returns "" (empty)
+      // which would cause all email-handle threads to merge incorrectly.
+      // With the fix, email handles are preserved as-is (lowercased).
+      const emailThread1 = [
+        createMessage({
+          id: "email-1",
+          thread_id: "macos-chat-1",
+          sent_at: "2024-01-15T10:00:00Z",
+          direction: "inbound",
+          participants: JSON.stringify({ from: "madison@icloud.com", to: ["me"] }),
+        }),
+      ];
+
+      const emailThread2 = [
+        createMessage({
+          id: "email-2",
+          thread_id: "macos-chat-2",
+          sent_at: "2024-01-16T10:00:00Z",
+          direction: "inbound",
+          participants: JSON.stringify({ from: "jane@gmail.com", to: ["me"] }),
+        }),
+      ];
+
+      const threads: [string, MessageLike[]][] = [
+        ["macos-chat-1", emailThread1],
+        ["macos-chat-2", emailThread2],
+      ];
+
+      // No contact names -- relies on normalizePhone for merge key
+      const result = mergeThreadsByContact(threads, {});
+
+      // Should remain as 2 separate threads (different email handles)
+      expect(result).toHaveLength(2);
+    });
+
+    it("should merge email-handle threads from the same email (case-insensitive)", () => {
+      const emailThread1 = [
+        createMessage({
+          id: "email-1",
+          thread_id: "macos-chat-1",
+          sent_at: "2024-01-15T10:00:00Z",
+          direction: "inbound",
+          participants: JSON.stringify({ from: "Madison@iCloud.com", to: ["me"] }),
+        }),
+      ];
+
+      const emailThread2 = [
+        createMessage({
+          id: "email-2",
+          thread_id: "macos-chat-2",
+          sent_at: "2024-01-16T10:00:00Z",
+          direction: "inbound",
+          participants: JSON.stringify({ from: "madison@icloud.com", to: ["me"] }),
+        }),
+      ];
+
+      const threads: [string, MessageLike[]][] = [
+        ["macos-chat-1", emailThread1],
+        ["macos-chat-2", emailThread2],
+      ];
+
+      // No contact names -- should merge via handle: key (lowercased email)
+      const result = mergeThreadsByContact(threads, {});
+
+      // Should merge into 1 thread (same email after lowercasing)
+      expect(result).toHaveLength(1);
+      expect(result[0][1]).toHaveLength(2);
+    });
+
     it("should handle messages without participants gracefully", () => {
       const messages = [
         createMessage({

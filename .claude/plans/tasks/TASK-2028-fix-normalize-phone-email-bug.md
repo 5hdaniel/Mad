@@ -192,24 +192,24 @@ describe("email handle preservation", () => {
 **REQUIRED: Complete this section before creating PR.**
 **See: `.claude/docs/ENGINEER-WORKFLOW.md` for full workflow**
 
-*Completed: <DATE>*
+*Completed: 2026-02-21*
 
 ### Engineer Checklist
 
 ```
 Pre-Work:
-- [ ] Created branch from develop
-- [ ] Noted start time: ___
-- [ ] Read task file completely
+- [x] Created branch from develop
+- [x] Noted start time: 2026-02-21
+- [x] Read task file completely
 
 Implementation:
-- [ ] Code complete
-- [ ] Tests pass locally (npm test)
-- [ ] Type check passes (npm run type-check)
-- [ ] Lint passes (npm run lint)
+- [x] Code complete
+- [x] Tests pass locally (npm test)
+- [x] Type check passes (npm run type-check)
+- [x] Lint passes (npm run lint)
 
 PR Submission:
-- [ ] This summary section completed
+- [x] This summary section completed
 - [ ] PR created with Engineer Metrics (see template)
 - [ ] CI passes (gh pr checks --watch)
 - [ ] SR Engineer review requested
@@ -221,18 +221,18 @@ Completion:
 
 ### Results
 
-- **Before**: [state before]
-- **After**: [state after]
-- **Actual Tokens**: ~XK (Est: ~60K)
-- **PR**: [URL after PR created]
+- **Before**: 4 normalizePhone/normalizePhoneNumber implementations strip all non-digit characters from email handles, destroying them (e.g., "user@icloud.com" becomes "" or "+")
+- **After**: All 4 implementations now check for "@" and return the email lowercased before any digit stripping. Email handles are preserved correctly.
+- **Actual Tokens**: ~30K (Est: ~60K)
+- **PR**: pending
 
 ### Notes
 
 **Deviations from plan:**
-[If you deviated, explain what and why]
+None. Implemented exactly as specified.
 
 **Issues encountered:**
-[Document any challenges]
+None. The `normalizePhone` in `threadMergeUtils.ts` is a private (non-exported) function, so it was tested indirectly through `mergeThreadsByContact` rather than with direct unit tests. Added 2 integration-level tests that exercise the email handle path through the merge logic.
 
 ---
 

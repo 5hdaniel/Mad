@@ -17,6 +17,9 @@
  * normalizePhoneNumber('5551234567')      // '+15551234567'
  */
 export function normalizePhoneNumber(phone: string): string {
+  // Preserve email handles (e.g., iMessage email addresses)
+  if (phone.includes("@")) return phone.toLowerCase();
+
   // Remove all non-digit characters
   let digits = phone.replace(/\D/g, "");
 
