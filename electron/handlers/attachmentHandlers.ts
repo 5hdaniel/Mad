@@ -10,6 +10,7 @@ import type { IpcMainInvokeEvent } from "electron";
 import path from "path";
 import fs from "fs";
 import logService from "../services/logService";
+import auditService from "../services/auditService";
 import emailAttachmentService from "../services/emailAttachmentService";
 import databaseService from "../services/databaseService";
 import gmailFetchService from "../services/gmailFetchService";
@@ -253,6 +254,20 @@ export function registerAttachmentHandlers(
         };
       }
 
+      // Audit log attachment open
+      try {
+        await auditService.log({
+          userId: "system",
+          action: "DATA_ACCESS",
+          resourceType: "COMMUNICATION",
+          resourceId: path.basename(normalizedPath),
+          success: true,
+          metadata: { operation: "attachment_open", fileName: path.basename(normalizedPath) },
+        });
+      } catch (auditError) {
+        logService.warn("[Audit] Failed to log attachment open", "Transactions", { auditError });
+      }
+
       return { success: true };
     }, { module: "Transactions" }),
   );
@@ -281,6 +296,20 @@ export function registerAttachmentHandlers(
       const buffer = fs.readFileSync(normalizedPath);
       const base64 = buffer.toString("base64");
       const dataUrl = `data:${mimeType || "application/octet-stream"};base64,${base64}`;
+
+      // Audit log attachment data access
+      try {
+        await auditService.log({
+          userId: "system",
+          action: "DATA_ACCESS",
+          resourceType: "COMMUNICATION",
+          resourceId: path.basename(normalizedPath),
+          success: true,
+          metadata: { operation: "attachment_get_data", fileName: path.basename(normalizedPath), mimeType },
+        });
+      } catch (auditError) {
+        logService.warn("[Audit] Failed to log attachment data access", "Transactions", { auditError });
+      }
 
       return {
         success: true,
