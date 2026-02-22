@@ -7,6 +7,7 @@
 
 import { ipcMain, BrowserWindow } from "electron";
 import log from "electron-log";
+import { redactId } from "./utils/redactSensitive";
 import {
   SyncOrchestrator,
   syncOrchestrator,
@@ -50,7 +51,7 @@ async function getCurrentUserIdForSync(): Promise<string | null> {
   try {
     const session = await sessionService.loadSession();
     if (session?.user?.id) {
-      log.info("[SyncHandlers] Loaded user ID from session file", { userId: session.user.id });
+      log.info("[SyncHandlers] Loaded user ID from session file", { userId: redactId(session.user.id) });
       // Also update currentUserId for future calls
       currentUserId = session.user.id;
       return session.user.id;
@@ -117,7 +118,7 @@ export function registerSyncHandlers(mainWindow: BrowserWindow, userId?: string)
       if (!syncSessionUserId) {
         log.warn("[SyncHandlers] No user ID available at sync start - data will not be persisted");
       } else {
-        log.info("[SyncHandlers] User ID captured for sync persistence", { userId: syncSessionUserId });
+        log.info("[SyncHandlers] User ID captured for sync persistence", { userId: syncSessionUserId ? redactId(syncSessionUserId) : "none" });
       }
 
       // Check if sync is stuck and force reset if needed
@@ -183,7 +184,7 @@ export function registerSyncHandlers(mainWindow: BrowserWindow, userId?: string)
       if (!syncSessionUserId) {
         log.warn("[SyncHandlers] No user ID available at sync start - data will not be persisted");
       } else {
-        log.info("[SyncHandlers] User ID captured for sync persistence", { userId: syncSessionUserId });
+        log.info("[SyncHandlers] User ID captured for sync persistence", { userId: syncSessionUserId ? redactId(syncSessionUserId) : "none" });
       }
 
       // Check if sync is stuck and force reset if needed
@@ -326,7 +327,7 @@ function setupEventForwarding(): void {
 
     // Persist to database if we have a user ID
     if (userIdForPersistence && result.success) {
-      log.info("[SyncHandlers] Starting database persistence for user", { userId: userIdForPersistence });
+      log.info("[SyncHandlers] Starting database persistence for user", { userId: redactId(userIdForPersistence) });
       sendToRenderer("sync:progress", {
         phase: "storing",
         percent: 0,
