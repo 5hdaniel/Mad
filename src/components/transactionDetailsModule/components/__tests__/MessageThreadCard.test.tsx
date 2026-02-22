@@ -929,27 +929,67 @@ describe("sortThreadsByRecent", () => {
     expect(sorted[2][0]).toBe("thread-old");
   });
 
-  it("should use last message in thread for sorting", () => {
+  it("should use first message (newest) in thread for sorting", () => {
+    // Messages within threads are sorted newest-first by groupMessagesByThread,
+    // so msgs[0] is the newest message in each thread.
     const threads = new Map<string, Communication[]>([
       [
         "thread-A",
         [
-          createMockMessage({ id: "a1", sent_at: "2024-01-15T10:00:00Z" }),
+          // Newest first (sorted by groupMessagesByThread)
           createMockMessage({ id: "a2", sent_at: "2024-01-15T11:00:00Z" }),
+          createMockMessage({ id: "a1", sent_at: "2024-01-15T10:00:00Z" }),
         ],
       ],
       [
         "thread-B",
         [
-          createMockMessage({ id: "b1", sent_at: "2024-01-15T09:00:00Z" }),
+          // Newest first (sorted by groupMessagesByThread)
           createMockMessage({ id: "b2", sent_at: "2024-01-15T12:00:00Z" }),
+          createMockMessage({ id: "b1", sent_at: "2024-01-15T09:00:00Z" }),
         ],
       ],
     ]);
 
     const sorted = sortThreadsByRecent(threads);
 
-    // thread-B has the most recent last message (12:00)
+    // thread-B has the most recent message (12:00 at index 0)
+    expect(sorted[0][0]).toBe("thread-B");
+    expect(sorted[1][0]).toBe("thread-A");
+  });
+
+  it("should sort by newest message, not oldest (BACKLOG-175 regression)", () => {
+    // This test catches the specific bug: if sortThreadsByRecent used
+    // msgs[msgs.length - 1] (oldest) instead of msgs[0] (newest),
+    // the sort order would be wrong.
+    //
+    // Thread A: oldest=Jan 14, newest=Jan 16
+    // Thread B: oldest=Jan 13, newest=Jan 17
+    //
+    // Correct (by newest): B first (Jan 17 > Jan 16)
+    // Buggy (by oldest):   A first (Jan 14 > Jan 13)
+    const threads = new Map<string, Communication[]>([
+      [
+        "thread-A",
+        [
+          // Newest first
+          createMockMessage({ id: "a-new", sent_at: "2024-01-16T10:00:00Z" }),
+          createMockMessage({ id: "a-old", sent_at: "2024-01-14T10:00:00Z" }),
+        ],
+      ],
+      [
+        "thread-B",
+        [
+          // Newest first
+          createMockMessage({ id: "b-new", sent_at: "2024-01-17T10:00:00Z" }),
+          createMockMessage({ id: "b-old", sent_at: "2024-01-13T10:00:00Z" }),
+        ],
+      ],
+    ]);
+
+    const sorted = sortThreadsByRecent(threads);
+
+    // Thread B should be first because its newest message (Jan 17) is more recent
     expect(sorted[0][0]).toBe("thread-B");
     expect(sorted[1][0]).toBe("thread-A");
   });

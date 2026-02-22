@@ -507,10 +507,10 @@ export function sortThreadsByRecent(
   threads: Map<string, MessageLike[]>
 ): [string, MessageLike[]][] {
   return Array.from(threads.entries()).sort(([, msgsA], [, msgsB]) => {
-    const lastA = msgsA[msgsA.length - 1];
-    const lastB = msgsB[msgsB.length - 1];
-    const dateA = new Date(lastA?.sent_at || lastA?.received_at || 0).getTime();
-    const dateB = new Date(lastB?.sent_at || lastB?.received_at || 0).getTime();
+    const newestA = msgsA[0];
+    const newestB = msgsB[0];
+    const dateA = new Date(newestA?.sent_at || newestA?.received_at || 0).getTime();
+    const dateB = new Date(newestB?.sent_at || newestB?.received_at || 0).getTime();
     return dateB - dateA; // Descending order (newest first)
   });
 }
