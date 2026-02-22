@@ -6,6 +6,7 @@
  */
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import * as Sentry from "@sentry/electron/main";
 import { User, SubscriptionTier, Subscription } from "../types/models";
 import type { AuditLogEntry } from "./auditService";
 import logService from "./logService";
@@ -211,6 +212,9 @@ class SupabaseService {
         "Supabase",
         { error: error instanceof Error ? error.message : "Unknown error" }
       );
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "signInWithIdToken" },
+      });
       return null;
     }
   }
@@ -236,6 +240,9 @@ class SupabaseService {
       this.authSession = null;
       logService.warn("[Supabase] signOut exception", "Supabase", {
         error: error instanceof Error ? error.message : "Unknown error",
+      });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "signOut" },
       });
     }
   }
@@ -271,6 +278,9 @@ class SupabaseService {
     } catch (error) {
       logService.warn("[Supabase] Failed to get session from SDK", "Supabase", {
         error: error instanceof Error ? error.message : String(error)
+      });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "getAuthSession" },
       });
     }
 
@@ -333,6 +343,9 @@ class SupabaseService {
       };
     } catch (err) {
       logService.error("[Supabase] Error checking org membership", "SupabaseService", { err });
+      Sentry.captureException(err, {
+        tags: { service: "supabase-service", operation: "getActiveOrganizationMembership" },
+      });
       return null;
     }
   }
@@ -487,6 +500,9 @@ class SupabaseService {
       return result;
     } catch (error) {
       logService.error("[Supabase] Failed to sync user:", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "syncUser" },
+      });
       throw error;
     }
   }
@@ -576,6 +592,9 @@ class SupabaseService {
       return newUser as User;
     } catch (error) {
       logService.error("[Supabase] User migration failed", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "_migrateUserToAuthId" },
+      });
       throw error;
     }
   }
@@ -599,6 +618,9 @@ class SupabaseService {
       return data as User;
     } catch (error) {
       logService.error("[Supabase] Failed to get user:", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "getUserById" },
+      });
       throw error;
     }
   }
@@ -635,6 +657,9 @@ class SupabaseService {
       return data as User;
     } catch (error) {
       logService.error("[Supabase] Failed to sync terms acceptance:", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "syncTermsAcceptance" },
+      });
       throw error;
     }
   }
@@ -667,6 +692,9 @@ class SupabaseService {
         "Supabase",
         { error }
       );
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "completeEmailOnboarding" },
+      });
       throw error;
     }
   }
@@ -717,6 +745,9 @@ class SupabaseService {
       return subscription;
     } catch (error) {
       logService.error("[Supabase] Failed to validate subscription:", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "validateSubscription" },
+      });
       throw error;
     }
   }
@@ -793,6 +824,9 @@ class SupabaseService {
       }
     } catch (error) {
       logService.error("[Supabase] Failed to register device:", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "registerDevice" },
+      });
       throw error;
     }
   }
@@ -841,6 +875,9 @@ class SupabaseService {
       };
     } catch (error) {
       logService.error("[Supabase] Failed to check device limit:", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "checkDeviceLimit" },
+      });
       // If error, allow access (fail open)
       return { allowed: true, current: 0, max: 2 };
     }
@@ -880,6 +917,9 @@ class SupabaseService {
     } catch (error) {
       // Don't throw - analytics failures shouldn't break the app
       logService.error("[Supabase] Failed to track event:", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "trackEvent" },
+      });
     }
   }
 
@@ -914,6 +954,9 @@ class SupabaseService {
     } catch (error) {
       // Don't throw - tracking failures shouldn't break the app
       logService.error("[Supabase] Failed to track API usage:", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "trackApiUsage" },
+      });
     }
   }
 
@@ -959,6 +1002,9 @@ class SupabaseService {
       };
     } catch (error) {
       logService.error("[Supabase] Failed to check API limit:", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "checkApiLimit" },
+      });
       // If error, allow access (fail open)
       return { allowed: true, current: 0, limit: 100, remaining: 100 };
     }
@@ -990,6 +1036,9 @@ class SupabaseService {
       logService.info("[Supabase] Preferences synced", "Supabase");
     } catch (error) {
       logService.error("[Supabase] Failed to sync preferences:", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "syncPreferences" },
+      });
       throw error;
     }
   }
@@ -1047,6 +1096,10 @@ class SupabaseService {
         "Supabase",
         { error }
       );
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "callEdgeFunction" },
+        extra: { functionName },
+      });
       throw error;
     }
   }
@@ -1093,6 +1146,9 @@ class SupabaseService {
       logService.info(`[Supabase] Synced ${entries.length} audit logs to cloud`, "Supabase");
     } catch (error) {
       logService.error("[Supabase] Failed to sync audit logs:", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "batchInsertAuditLogs" },
+      });
       throw error;
     }
   }
@@ -1171,6 +1227,9 @@ class SupabaseService {
       }));
     } catch (error) {
       logService.error("[Supabase] Failed to get audit logs:", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "getAuditLogs" },
+      });
       throw error;
     }
   }

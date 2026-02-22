@@ -8,6 +8,7 @@ import { ipcMain, IpcMainInvokeEvent, BrowserWindow } from "electron";
 import os from "os";
 import crypto from "crypto";
 import { app } from "electron";
+import * as Sentry from "@sentry/electron/main";
 import type {
   User,
   Subscription,
@@ -201,6 +202,9 @@ export async function handleCompletePendingLogin(
                   : "Unknown error",
             }
           );
+          Sentry.captureException(syncError, {
+            tags: { service: "shared-auth-handlers", operation: "completePendingLogin.syncTerms" },
+          });
         }
       }
     }
@@ -293,6 +297,9 @@ export async function handleCompletePendingLogin(
     await logService.error("Failed to complete pending login", "AuthHandlers", {
       error: error instanceof Error ? error.message : "Unknown error",
     });
+    Sentry.captureException(error, {
+      tags: { service: "shared-auth-handlers", operation: "completePendingLogin" },
+    });
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
@@ -368,6 +375,9 @@ export async function handleSavePendingMailboxTokens(
       "AuthHandlers",
       { error: error instanceof Error ? error.message : "Unknown error" }
     );
+    Sentry.captureException(error, {
+      tags: { service: "shared-auth-handlers", operation: "savePendingMailboxTokens" },
+    });
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
@@ -435,6 +445,9 @@ export async function handleDisconnectMailbox(
         error: error instanceof Error ? error.message : "Unknown error",
       }
     );
+    Sentry.captureException(error, {
+      tags: { service: "shared-auth-handlers", operation: "disconnectMailbox" },
+    });
 
     // Use original userId for error logging since validatedUserId may not exist
     await auditService.log({

@@ -6,6 +6,7 @@
 import databaseService from "./databaseService";
 import googleAuthService from "./googleAuthService";
 import microsoftAuthService from "./microsoftAuthService";
+import * as Sentry from "@sentry/electron/main";
 import logService from "./logService";
 import { OAuthToken } from "../types/models";
 
@@ -142,6 +143,9 @@ class ConnectionStatusService {
             "ConnectionStatus",
             { error: refreshError },
           );
+          Sentry.captureException(refreshError, {
+            tags: { service: "connection-status", operation: "checkGoogleConnection.refresh" },
+          });
         }
 
         // Refresh failed, mark as expired but preserve email for UI
@@ -174,6 +178,9 @@ class ConnectionStatusService {
         "ConnectionStatus",
         { error },
       );
+      Sentry.captureException(error, {
+        tags: { service: "connection-status", operation: "checkGoogleConnection" },
+      });
 
       this.connectionStatus.google = {
         connected: false,
@@ -258,6 +265,9 @@ class ConnectionStatusService {
             "ConnectionStatus",
             { error: refreshError },
           );
+          Sentry.captureException(refreshError, {
+            tags: { service: "connection-status", operation: "checkMicrosoftConnection.refresh" },
+          });
         }
 
         // Refresh failed, mark as expired but preserve email for UI
@@ -290,6 +300,9 @@ class ConnectionStatusService {
         "ConnectionStatus",
         { error },
       );
+      Sentry.captureException(error, {
+        tags: { service: "connection-status", operation: "checkMicrosoftConnection" },
+      });
 
       this.connectionStatus.microsoft = {
         connected: false,

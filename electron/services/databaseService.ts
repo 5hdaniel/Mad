@@ -22,6 +22,7 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import { app } from "electron";
+import * as Sentry from "@sentry/electron/main";
 import logService from "./logService";
 import {
   setDb,
@@ -139,6 +140,9 @@ class DatabaseService implements IDatabaseService {
       await logService.error("Failed to initialize database", "DatabaseService", {
         error: error instanceof Error ? error.message : String(error),
       });
+      Sentry.captureException(error, {
+        tags: { service: "database-service", operation: "initialize" },
+      });
       throw error;
     }
   }
@@ -255,6 +259,9 @@ class DatabaseService implements IDatabaseService {
       await logService.error("Database encryption migration failed", "DatabaseService", {
         error: error instanceof Error ? error.message : String(error),
       });
+      Sentry.captureException(error, {
+        tags: { service: "database-service", operation: "_migrateToEncryptedDatabase" },
+      });
 
       if (fs.existsSync(backupPath)) {
         if (fs.existsSync(unencryptedPath)) fs.unlinkSync(unencryptedPath);
@@ -316,6 +323,9 @@ class DatabaseService implements IDatabaseService {
         await logService.info(`Pre-migration backup created: ${backupPath}`, "DatabaseService");
       } catch (backupError) {
         await logService.warn("Pre-migration backup failed", "DatabaseService", { error: backupError instanceof Error ? backupError.message : String(backupError) });
+        Sentry.captureException(backupError, {
+          tags: { service: "database-service", operation: "runMigrations.backup" },
+        });
       }
     }
 
@@ -328,6 +338,9 @@ class DatabaseService implements IDatabaseService {
     } catch (error) {
       await logService.error("Failed to run migrations", "DatabaseService", {
         error: error instanceof Error ? error.message : String(error),
+      });
+      Sentry.captureException(error, {
+        tags: { service: "database-service", operation: "runMigrations" },
       });
       throw error;
     }
@@ -1559,6 +1572,9 @@ class DatabaseService implements IDatabaseService {
       await logService.error("Failed to re-key database", "DatabaseService", {
         error: error instanceof Error ? error.message : String(error),
       });
+      Sentry.captureException(error, {
+        tags: { service: "database-service", operation: "rekeyDatabase" },
+      });
       throw error;
     }
   }
@@ -1651,6 +1667,9 @@ class DatabaseService implements IDatabaseService {
         error: errorMessage,
         indexesRebuilt,
         durationMs,
+      });
+      Sentry.captureException(error, {
+        tags: { service: "database-service", operation: "reindexDatabase" },
       });
 
       return {

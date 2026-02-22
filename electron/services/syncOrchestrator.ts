@@ -14,6 +14,7 @@
 
 import { EventEmitter } from "events";
 import log from "electron-log";
+import * as Sentry from "@sentry/electron/main";
 import checkDiskSpace from "check-disk-space";
 import { app } from "electron";
 import path from "path";
@@ -563,6 +564,9 @@ export class SyncOrchestrator extends EventEmitter {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       log.error("[SyncOrchestrator] Sync failed", { error: errorMessage });
+      Sentry.captureException(error, {
+        tags: { service: "sync-orchestrator", operation: "sync" },
+      });
 
       // Cleanup on error
       try {
@@ -619,6 +623,9 @@ export class SyncOrchestrator extends EventEmitter {
     } catch (error) {
       log.warn("[SyncOrchestrator] Backup cleanup failed", {
         error: error instanceof Error ? error.message : String(error),
+      });
+      Sentry.captureException(error, {
+        tags: { service: "sync-orchestrator", operation: "cleanupBackup" },
       });
     }
   }
@@ -691,6 +698,9 @@ export class SyncOrchestrator extends EventEmitter {
         "[SyncOrchestrator] Error checking if backup should be processed:",
         error
       );
+      Sentry.captureException(error, {
+        tags: { service: "sync-orchestrator", operation: "shouldProcessBackup" },
+      });
       // On error, process anyway to be safe
       return true;
     }
@@ -866,6 +876,9 @@ export class SyncOrchestrator extends EventEmitter {
       };
     } catch (err) {
       log.error("[SyncOrchestrator] Failed to check disk space:", err);
+      Sentry.captureException(err, {
+        tags: { service: "sync-orchestrator", operation: "checkAvailableDiskSpace" },
+      });
       // If we can't check, assume we have enough space and let backup fail naturally if not
       return {
         hasEnoughSpace: true,
@@ -1123,6 +1136,9 @@ export class SyncOrchestrator extends EventEmitter {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       log.error("[SyncOrchestrator] Processing failed", { error: errorMessage });
+      Sentry.captureException(error, {
+        tags: { service: "sync-orchestrator", operation: "processExistingBackup" },
+      });
 
       try {
         this.messagesParser.close();

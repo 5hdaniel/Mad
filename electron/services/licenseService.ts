@@ -8,6 +8,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { app } from "electron";
+import * as Sentry from "@sentry/electron/main";
 import supabaseService from "./supabaseService";
 import logService from "./logService";
 import type {
@@ -63,6 +64,9 @@ export async function validateLicense(
       "LicenseService",
       { error: error instanceof Error ? error.message : "Unknown error" }
     );
+    Sentry.captureException(error, {
+      tags: { service: "license-service", operation: "validateLicense" },
+    });
 
     // Check for cached license (offline mode)
     const cached = await getCachedLicense(userId);
@@ -242,6 +246,9 @@ export async function createUserLicense(
     logService.error("[License] Failed to create license", "LicenseService", {
       error: error instanceof Error ? error.message : "Unknown error",
     });
+    Sentry.captureException(error, {
+      tags: { service: "license-service", operation: "createUserLicense" },
+    });
     throw error;
   }
 }
@@ -276,6 +283,9 @@ export async function incrementTransactionCount(
       "LicenseService",
       { error: error instanceof Error ? error.message : "Unknown error" }
     );
+    Sentry.captureException(error, {
+      tags: { service: "license-service", operation: "incrementTransactionCount" },
+    });
     throw error;
   }
 }
@@ -305,6 +315,9 @@ async function cacheLicenseStatus(
   } catch (error) {
     logService.warn("[License] Failed to cache license status", "LicenseService", {
       error: error instanceof Error ? error.message : "Unknown error",
+    });
+    Sentry.captureException(error, {
+      tags: { service: "license-service", operation: "cacheLicenseStatus" },
     });
   }
 }

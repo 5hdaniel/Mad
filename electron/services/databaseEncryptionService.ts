@@ -8,6 +8,7 @@ import { safeStorage, app } from "electron";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import * as Sentry from "@sentry/electron/main";
 import logService from "./logService";
 
 /**
@@ -56,6 +57,9 @@ class DatabaseEncryptionService {
         "DatabaseEncryptionService",
         { error: error instanceof Error ? error.message : String(error) },
       );
+      Sentry.captureException(error, {
+        tags: { service: "database-encryption", operation: "initialize" },
+      });
       throw error;
     }
   }
@@ -73,6 +77,9 @@ class DatabaseEncryptionService {
         "DatabaseEncryptionService",
         { error: error instanceof Error ? error.message : String(error) },
       );
+      Sentry.captureException(error, {
+        tags: { service: "database-encryption", operation: "isEncryptionAvailable" },
+      });
       return false;
     }
   }
@@ -136,6 +143,9 @@ class DatabaseEncryptionService {
         "DatabaseEncryptionService",
         { error: error instanceof Error ? error.message : String(error) },
       );
+      Sentry.captureException(error, {
+        tags: { service: "database-encryption", operation: "generateNewKey" },
+      });
       throw error;
     }
   }
@@ -182,6 +192,9 @@ class DatabaseEncryptionService {
         "DatabaseEncryptionService",
         { error: error instanceof Error ? error.message : String(error) },
       );
+      Sentry.captureException(error, {
+        tags: { service: "database-encryption", operation: "getKeyFromStore" },
+      });
       return null;
     }
   }
@@ -232,6 +245,9 @@ class DatabaseEncryptionService {
         "DatabaseEncryptionService",
         { error: error instanceof Error ? error.message : String(error) },
       );
+      Sentry.captureException(error, {
+        tags: { service: "database-encryption", operation: "saveKeyToStore" },
+      });
       throw error;
     }
   }
@@ -270,6 +286,9 @@ class DatabaseEncryptionService {
           error: error instanceof Error ? error.message : String(error),
         },
       );
+      Sentry.captureException(error, {
+        tags: { service: "database-encryption", operation: "isDatabaseEncrypted" },
+      });
       return false;
     }
   }
@@ -370,6 +389,9 @@ class DatabaseEncryptionService {
         "DatabaseEncryptionService",
         { error: error instanceof Error ? error.message : String(error) },
       );
+      Sentry.captureException(error, {
+        tags: { service: "database-encryption", operation: "getKeyMetadata" },
+      });
       return null;
     }
   }

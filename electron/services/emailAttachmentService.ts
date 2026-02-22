@@ -21,6 +21,7 @@ import path from "path";
 import fs from "fs/promises";
 import crypto from "crypto";
 import { app } from "electron";
+import * as Sentry from "@sentry/electron/main";
 import databaseService from "./databaseService";
 import gmailFetchService from "./gmailFetchService";
 import outlookFetchService from "./outlookFetchService";
@@ -201,6 +202,9 @@ class EmailAttachmentService {
           EmailAttachmentService.SERVICE_NAME,
           { error: errorMsg, emailId }
         );
+        Sentry.captureException(error, {
+          tags: { service: "email-attachment", operation: "downloadEmailAttachments" },
+        });
         result.errors++;
         result.details.push({
           filename: attachment.filename,
@@ -355,6 +359,9 @@ class EmailAttachmentService {
         EmailAttachmentService.SERVICE_NAME,
         { error }
       );
+      Sentry.captureException(error, {
+        tags: { service: "email-attachment", operation: "loadExistingHashes" },
+      });
     }
 
     return existingHashes;
@@ -458,6 +465,9 @@ class EmailAttachmentService {
         EmailAttachmentService.SERVICE_NAME,
         { error }
       );
+      Sentry.captureException(error, {
+        tags: { service: "email-attachment", operation: "getAttachmentsForEmail" },
+      });
       return [];
     }
   }

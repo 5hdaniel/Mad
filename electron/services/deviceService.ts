@@ -6,6 +6,7 @@
  */
 
 import supabaseService from "./supabaseService";
+import * as Sentry from "@sentry/electron/main";
 import { machineIdSync } from "node-machine-id";
 import { hostname, platform, release } from "os";
 import logService from "./logService";
@@ -130,6 +131,9 @@ export async function registerDevice(
     logService.error("[Device] Failed to register device", "DeviceService", {
       error: errorMessage,
     });
+    Sentry.captureException(error, {
+      tags: { service: "device-service", operation: "registerDevice" },
+    });
 
     if (errorMessage.includes("Device limit")) {
       return {
@@ -165,6 +169,9 @@ export async function updateDeviceHeartbeat(userId: string): Promise<void> {
     logService.warn("[Device] Failed to update heartbeat", "DeviceService", {
       error: error instanceof Error ? error.message : "Unknown error",
     });
+    Sentry.captureException(error, {
+      tags: { service: "device-service", operation: "updateDeviceHeartbeat" },
+    });
   }
 }
 
@@ -189,6 +196,9 @@ export async function getUserDevices(userId: string): Promise<Device[]> {
   } catch (error) {
     logService.error("[Device] Failed to get user devices", "DeviceService", {
       error: error instanceof Error ? error.message : "Unknown error",
+    });
+    Sentry.captureException(error, {
+      tags: { service: "device-service", operation: "getUserDevices" },
     });
     throw error;
   }
@@ -222,6 +232,9 @@ export async function deactivateDevice(
     logService.error("[Device] Failed to deactivate device", "DeviceService", {
       error: error instanceof Error ? error.message : "Unknown error",
     });
+    Sentry.captureException(error, {
+      tags: { service: "device-service", operation: "deactivateDevice" },
+    });
     throw error;
   }
 }
@@ -253,6 +266,9 @@ export async function deleteDevice(
   } catch (error) {
     logService.error("[Device] Failed to delete device", "DeviceService", {
       error: error instanceof Error ? error.message : "Unknown error",
+    });
+    Sentry.captureException(error, {
+      tags: { service: "device-service", operation: "deleteDevice" },
     });
     throw error;
   }
@@ -290,6 +306,9 @@ export async function isDeviceRegistered(userId: string): Promise<boolean> {
       "DeviceService",
       { error: error instanceof Error ? error.message : "Unknown error" }
     );
+    Sentry.captureException(error, {
+      tags: { service: "device-service", operation: "isDeviceRegistered" },
+    });
     return false;
   }
 }

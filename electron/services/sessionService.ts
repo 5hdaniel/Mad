@@ -1,6 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { app, safeStorage } from "electron";
+import * as Sentry from "@sentry/electron/main";
 import type { User, OAuthProvider, Subscription } from "../types/models";
 import logService from "./logService";
 
@@ -199,6 +200,9 @@ class SessionService {
       await logService.error("Error saving session", "SessionService", {
         error: error instanceof Error ? error.message : "Unknown error",
       });
+      Sentry.captureException(error, {
+        tags: { service: "session-service", operation: "saveSession" },
+      });
       return false;
     }
   }
@@ -250,6 +254,9 @@ class SessionService {
       await logService.error("Error loading session", "SessionService", {
         error: error instanceof Error ? error.message : "Unknown error",
       });
+      Sentry.captureException(error, {
+        tags: { service: "session-service", operation: "loadSession" },
+      });
       return null;
     }
   }
@@ -269,6 +276,9 @@ class SessionService {
       }
       await logService.error("Error clearing session", "SessionService", {
         error: error instanceof Error ? error.message : "Unknown error",
+      });
+      Sentry.captureException(error, {
+        tags: { service: "session-service", operation: "clearSession" },
       });
       return false;
     }
@@ -305,6 +315,9 @@ class SessionService {
     } catch (error) {
       await logService.error("Error updating session", "SessionService", {
         error: error instanceof Error ? error.message : "Unknown error",
+      });
+      Sentry.captureException(error, {
+        tags: { service: "session-service", operation: "updateSession" },
       });
       return false;
     }

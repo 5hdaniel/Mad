@@ -4,6 +4,7 @@
  */
 
 import { ipcMain, IpcMainInvokeEvent, shell } from "electron";
+import * as Sentry from "@sentry/electron/main";
 import type { User } from "../types/models";
 
 // Import services
@@ -158,6 +159,9 @@ async function syncTermsFromCloudToLocal(
       "SessionHandlers",
       { error: syncError instanceof Error ? syncError.message : "Unknown error" }
     );
+    Sentry.captureException(syncError, {
+      tags: { service: "session-handlers", operation: "syncTermsFromCloudToLocal" },
+    });
   }
 
   return localUser;
@@ -233,6 +237,9 @@ async function handleLogout(
     await logService.error("Logout failed", "AuthHandlers", {
       error: error instanceof Error ? error.message : "Unknown error",
     });
+    Sentry.captureException(error, {
+      tags: { service: "session-handlers", operation: "handleLogout" },
+    });
     if (error instanceof ValidationError) {
       return {
         success: false,
@@ -281,12 +288,18 @@ async function handleAcceptTerms(
             syncError instanceof Error ? syncError.message : "Unknown error",
         }
       );
+      Sentry.captureException(syncError, {
+        tags: { service: "session-handlers", operation: "handleAcceptTerms.syncToSupabase" },
+      });
     }
 
     return { success: true, user: updatedUser };
   } catch (error) {
     await logService.error("Accept terms failed", "AuthHandlers", {
       error: error instanceof Error ? error.message : "Unknown error",
+    });
+    Sentry.captureException(error, {
+      tags: { service: "session-handlers", operation: "handleAcceptTerms" },
     });
     if (error instanceof ValidationError) {
       return {
@@ -339,6 +352,9 @@ async function handleAcceptTermsToSupabase(
         hint: error?.hint,
       }
     );
+    Sentry.captureException(error, {
+      tags: { service: "session-handlers", operation: "handleAcceptTermsToSupabase" },
+    });
     if (error instanceof ValidationError) {
       return {
         success: false,
@@ -379,6 +395,9 @@ async function handleCompleteEmailOnboarding(
             syncError instanceof Error ? syncError.message : "Unknown error",
         }
       );
+      Sentry.captureException(syncError, {
+        tags: { service: "session-handlers", operation: "handleCompleteEmailOnboarding.syncToSupabase" },
+      });
     }
 
     return { success: true };
@@ -388,6 +407,9 @@ async function handleCompleteEmailOnboarding(
       "AuthHandlers",
       { error: error instanceof Error ? error.message : "Unknown error" }
     );
+    Sentry.captureException(error, {
+      tags: { service: "session-handlers", operation: "handleCompleteEmailOnboarding" },
+    });
     if (error instanceof ValidationError) {
       return {
         success: false,
@@ -473,6 +495,9 @@ async function handleCheckEmailOnboarding(
       "AuthHandlers",
       { error: error instanceof Error ? error.message : "Unknown error" }
     );
+    Sentry.captureException(error, {
+      tags: { service: "session-handlers", operation: "handleCheckEmailOnboarding" },
+    });
     if (error instanceof ValidationError) {
       return {
         success: false,
@@ -533,6 +558,9 @@ async function handleValidateSession(
   } catch (error) {
     await logService.error("Session validation failed", "AuthHandlers", {
       error: error instanceof Error ? error.message : "Unknown error",
+    });
+    Sentry.captureException(error, {
+      tags: { service: "session-handlers", operation: "handleValidateSession" },
     });
     if (error instanceof ValidationError) {
       return {
@@ -737,6 +765,9 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
           "SessionHandlers",
           { error: restoreError instanceof Error ? restoreError.message : "Unknown" }
         );
+        Sentry.captureException(restoreError, {
+          tags: { service: "session-handlers", operation: "handleGetCurrentUser.restoreSupabaseSession" },
+        });
       }
     }
 
@@ -840,6 +871,9 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
             error: createError instanceof Error ? createError.message : "Unknown error",
           }
         );
+        Sentry.captureException(createError, {
+          tags: { service: "session-handlers", operation: "handleGetCurrentUser.createLocalUser" },
+        });
       }
     } else if (freshUser && !freshUser.terms_accepted_at && cloudUser?.terms_accepted_at) {
       // TASK-1809: Existing local user missing terms, but cloud has them
@@ -886,6 +920,9 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
     await logService.error("Get current user failed", "AuthHandlers", {
       error: error instanceof Error ? error.message : "Unknown error",
     });
+    Sentry.captureException(error, {
+      tags: { service: "session-handlers", operation: "handleGetCurrentUser" },
+    });
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
@@ -911,6 +948,9 @@ async function handleForceLogout(): Promise<AuthResponse> {
       await logService.warn("Supabase signOut failed during force logout", "AuthHandlers", {
         error: supabaseError instanceof Error ? supabaseError.message : "Unknown error",
       });
+      Sentry.captureException(supabaseError, {
+        tags: { service: "session-handlers", operation: "handleForceLogout.supabaseSignOut" },
+      });
       // Continue - local cleanup is still important
     }
 
@@ -920,6 +960,9 @@ async function handleForceLogout(): Promise<AuthResponse> {
     } catch (sessionError) {
       await logService.warn("Session file clear failed during force logout", "AuthHandlers", {
         error: sessionError instanceof Error ? sessionError.message : "Unknown error",
+      });
+      Sentry.captureException(sessionError, {
+        tags: { service: "session-handlers", operation: "handleForceLogout.clearSessionFile" },
       });
     }
 
@@ -932,6 +975,9 @@ async function handleForceLogout(): Promise<AuthResponse> {
       await logService.warn("Database session clear failed during force logout", "AuthHandlers", {
         error: dbError instanceof Error ? dbError.message : "Unknown error",
       });
+      Sentry.captureException(dbError, {
+        tags: { service: "session-handlers", operation: "handleForceLogout.clearDbSessions" },
+      });
     }
 
     // 4. Clear sync user ID
@@ -942,6 +988,9 @@ async function handleForceLogout(): Promise<AuthResponse> {
   } catch (error) {
     await logService.error("Force logout failed", "AuthHandlers", {
       error: error instanceof Error ? error.message : "Unknown error",
+    });
+    Sentry.captureException(error, {
+      tags: { service: "session-handlers", operation: "handleForceLogout" },
     });
     return {
       success: false,
@@ -971,6 +1020,9 @@ async function handleOpenAuthInBrowser(): Promise<{ success: boolean; error?: st
   } catch (error) {
     await logService.error("Failed to open auth in browser", "AuthHandlers", {
       error: error instanceof Error ? error.message : "Unknown error",
+    });
+    Sentry.captureException(error, {
+      tags: { service: "session-handlers", operation: "handleOpenAuthInBrowser" },
     });
     return {
       success: false,
