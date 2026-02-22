@@ -8,6 +8,7 @@ import type { IpcMainInvokeEvent } from "electron";
 import databaseService from "../services/databaseService";
 import supabaseService from "../services/supabaseService";
 import logService from "../services/logService";
+import auditService from "../services/auditService";
 import { wrapHandler } from "../utils/wrapHandler";
 import {
   ValidationError,
@@ -98,6 +99,20 @@ export function registerUserSettingsHandlers(): void {
         `Updated phone type for user ${validatedUserId} to ${phoneType}`,
         "Settings",
       );
+
+      // Audit log settings change
+      try {
+        await auditService.log({
+          userId: validatedUserId!,
+          action: "SETTINGS_CHANGE",
+          resourceType: "SETTINGS",
+          resourceId: validatedUserId!,
+          success: true,
+          metadata: { setting: "mobile_phone_type", value: phoneType },
+        });
+      } catch (auditError) {
+        logService.warn("[Audit] Failed to log settings change", "Settings", { auditError });
+      }
 
       return { success: true };
     }, { module: "Settings" }),
@@ -192,6 +207,20 @@ export function registerUserSettingsHandlers(): void {
         "Settings",
         { userId: validatedUserId?.substring(0, 8) + "..." },
       );
+
+      // Audit log cloud settings change
+      try {
+        await auditService.log({
+          userId: validatedUserId!,
+          action: "SETTINGS_CHANGE",
+          resourceType: "SETTINGS",
+          resourceId: validatedUserId!,
+          success: true,
+          metadata: { setting: "mobile_phone_type_cloud", value: phoneType },
+        });
+      } catch (auditError) {
+        logService.warn("[Audit] Failed to log cloud settings change", "Settings", { auditError });
+      }
 
       return { success: true };
     }, { module: "Settings" }),
