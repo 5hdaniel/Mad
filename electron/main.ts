@@ -7,6 +7,7 @@ import {
 } from "electron";
 import path from "path";
 import log from "electron-log";
+import { redactEmail, redactId } from "./utils/redactSensitive";
 
 // ==========================================
 // DEEP LINK PROTOCOL REGISTRATION (TASK-1500)
@@ -169,7 +170,7 @@ let pendingDeepLinkUser: PendingDeepLinkUser | null = null;
  */
 export function setPendingDeepLinkUser(data: PendingDeepLinkUser): void {
   pendingDeepLinkUser = data;
-  log.info("[DeepLink] Stored pending user for later creation:", data.supabaseId);
+  log.info("[DeepLink] Stored pending user for later creation:", redactId(data.supabaseId));
 }
 
 /**
@@ -220,25 +221,25 @@ async function syncDeepLinkUserToLocalDb(userData: PendingDeepLinkUser): Promise
         trial_ends_at: userData.trialEndsAt,
         is_active: true,
       });
-      log.info("[DeepLink] Created local SQLite user for:", userData.supabaseId);
+      log.info("[DeepLink] Created local SQLite user for:", redactId(userData.supabaseId));
     } else if (localUser.id !== userData.supabaseId) {
       // BACKLOG-600: Local user exists with different ID than Supabase auth.uid()
       // This happens for users created before TASK-1507G (user ID unification)
       // Migrate the local user to use the Supabase ID for FK constraint compatibility
       log.info("[DeepLink] Migrating local user ID to match Supabase", {
-        oldId: localUser.id.substring(0, 8) + "...",
-        newId: userData.supabaseId.substring(0, 8) + "...",
-        email: userData.email,
+        oldId: redactId(localUser.id),
+        newId: redactId(userData.supabaseId),
+        email: redactEmail(userData.email),
       });
       try {
         await databaseService.migrateUserIdForUnification(localUser.id, userData.supabaseId);
-        log.info("[DeepLink] Local user ID migrated successfully to:", userData.supabaseId);
+        log.info("[DeepLink] Local user ID migrated successfully to:", redactId(userData.supabaseId));
       } catch (migrationError) {
         log.error("[DeepLink] Failed to migrate local user ID:", migrationError);
         // Don't throw - auth should continue, but Supabase operations may fail
       }
     } else {
-      log.info("[DeepLink] Local user already exists with correct ID for:", userData.email);
+      log.info("[DeepLink] Local user already exists with correct ID for:", redactEmail(userData.email));
     }
   } catch (error) {
     log.error("[DeepLink] Failed to create local user:", error);
@@ -331,21 +332,21 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
       }
 
       const user = sessionData.user;
-      log.info("[DeepLink] Session established for user:", user.id);
+      log.info("[DeepLink] Session established for user:", redactId(user.id));
 
       // TASK-1507: Step 2 - Validate license
-      log.info("[DeepLink] Validating license for user:", user.id);
+      log.info("[DeepLink] Validating license for user:", redactId(user.id));
       let licenseStatus = await validateLicense(user.id);
 
       // TASK-1507: Step 3 - Create trial license if needed
       if (licenseStatus.blockReason === "no_license") {
-        log.info("[DeepLink] Creating trial license for new user:", user.id);
+        log.info("[DeepLink] Creating trial license for new user:", redactId(user.id));
         licenseStatus = await createUserLicense(user.id);
       }
 
       // TASK-1507: Step 4 - Check if license blocks access (expired/suspended)
       if (!licenseStatus.isValid && licenseStatus.blockReason !== "no_license") {
-        log.warn("[DeepLink] License blocked for user:", user.id, "reason:", licenseStatus.blockReason);
+        log.warn("[DeepLink] License blocked for user:", redactId(user.id), "reason:", licenseStatus.blockReason);
         sendToRenderer("auth:deep-link-license-blocked", {
           accessToken,
           refreshToken,
@@ -358,11 +359,11 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
       }
 
       // TASK-1507: Step 5 - Register device
-      log.info("[DeepLink] Registering device for user:", user.id);
+      log.info("[DeepLink] Registering device for user:", redactId(user.id));
       const deviceResult = await registerDevice(user.id);
 
       if (!deviceResult.success && deviceResult.error === "device_limit_reached") {
-        log.warn("[DeepLink] Device limit reached for user:", user.id);
+        log.warn("[DeepLink] Device limit reached for user:", redactId(user.id));
         sendToRenderer("auth:deep-link-device-limit", {
           accessToken,
           refreshToken,
@@ -422,7 +423,7 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
         localUser = await databaseService.getUserByEmail(userEmail);
         if (localUser) {
           localUserId = localUser.id;
-          log.info("[DeepLink] Using local user ID:", localUserId);
+          log.info("[DeepLink] Using local user ID:", redactId(localUserId));
 
           // Save session to disk for persistence across app restarts
           try {
@@ -500,7 +501,7 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
       // TASK-1507: Step 6 - Success! Send all data to renderer
       // TASK-1507F: Use local user ID instead of Supabase UUID for FK constraint compatibility
       // BACKLOG-546: Include isNewUser based on terms acceptance, not transaction count
-      log.info("[DeepLink] Auth complete, sending success event for user:", localUserId);
+      log.info("[DeepLink] Auth complete, sending success event for user:", redactId(localUserId));
       sendToRenderer("auth:deep-link-callback", {
         accessToken,
         refreshToken,
