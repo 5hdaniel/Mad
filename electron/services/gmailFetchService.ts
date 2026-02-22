@@ -526,6 +526,281 @@ class GmailFetchService {
   }
 
   /**
+   * System labels to exclude from folder discovery (TASK-2046)
+   * These are internal Gmail labels that should not be synced.
+   */
+  private static readonly EXCLUDED_LABEL_IDS = [
+    "SPAM",
+    "TRASH",
+    "DRAFT",
+    "UNREAD",
+    "STARRED",
+    "IMPORTANT",
+  ];
+
+  /**
+   * Prefixes to exclude from folder discovery (TASK-2046)
+   * Category labels are Gmail's automatic sorting tabs.
+   */
+  private static readonly EXCLUDED_LABEL_PREFIXES = ["CATEGORY_"];
+
+  /**
+   * Discover all syncable Gmail labels (TASK-2046)
+   *
+   * Uses the Gmail Labels API to list all labels, then filters out
+   * system labels (SPAM, TRASH, DRAFT, etc.) and category labels.
+   *
+   * @returns Array of syncable labels with id and name
+   */
+  async discoverLabels(): Promise<Array<{ id: string; name: string }>> {
+    try {
+      if (!this.gmail) {
+        throw new Error("Gmail API not initialized. Call initialize() first.");
+      }
+
+      const response = await this._throttledCall(() =>
+        this.gmail!.users.labels.list({ userId: "me" })
+      );
+
+      const allLabels = response.data.labels || [];
+
+      const syncableLabels = allLabels.filter((label) => {
+        if (!label.id) return false;
+        if (
+          GmailFetchService.EXCLUDED_LABEL_IDS.includes(label.id)
+        )
+          return false;
+        if (
+          GmailFetchService.EXCLUDED_LABEL_PREFIXES.some((p) =>
+            label.id!.startsWith(p)
+          )
+        )
+          return false;
+        return true;
+      });
+
+      logService.info(
+        `Discovered ${syncableLabels.length} syncable labels (from ${allLabels.length} total)`,
+        "GmailFetch"
+      );
+
+      return syncableLabels.map((label) => ({
+        id: label.id!,
+        name: label.name || label.id!,
+      }));
+    } catch (error) {
+      logService.error("Failed to discover labels", "GmailFetch", { error });
+      Sentry.captureException(error, {
+        tags: { service: "gmail-fetch", operation: "discoverLabels" },
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Search emails from a specific label (TASK-2046)
+   *
+   * Fetches messages from a single label using the labelIds filter.
+   * Uses existing message list/fetch logic with rate limiting.
+   *
+   * @param labelId - The Gmail label ID to fetch from
+   * @param options - Search options (after, maxResults, onProgress)
+   * @returns Array of parsed emails from the label
+   */
+  async searchEmailsByLabel(
+    labelId: string,
+    options: {
+      after?: Date | null;
+      maxResults?: number;
+      onProgress?: (progress: FetchProgress & { label?: string }) => void;
+    } = {}
+  ): Promise<ParsedEmail[]> {
+    try {
+      if (!this.gmail) {
+        throw new Error("Gmail API not initialized. Call initialize() first.");
+      }
+
+      const { after = null, maxResults = 500, onProgress } = options;
+
+      // Build query string for date filter only
+      let searchQuery = "";
+      if (after) {
+        const afterDate = Math.floor(after.getTime() / 1000);
+        searchQuery = `after:${afterDate}`;
+      }
+
+      logService.debug(
+        `Fetching messages for label ${labelId}`,
+        "GmailFetch",
+        { query: searchQuery }
+      );
+
+      const allMessages: gmail_v1.Schema$Message[] = [];
+      let nextPageToken: string | undefined = undefined;
+      let pageCount = 0;
+
+      do {
+        pageCount++;
+        const response: { data: gmail_v1.Schema$ListMessagesResponse } =
+          await this._throttledCall(() =>
+            this.gmail!.users.messages.list({
+              userId: "me",
+              labelIds: [labelId],
+              q: searchQuery.trim() || undefined,
+              maxResults: Math.min(100, maxResults - allMessages.length),
+              pageToken: nextPageToken,
+            })
+          );
+
+        const messages = response.data.messages || [];
+        allMessages.push(...messages);
+        nextPageToken = response.data.nextPageToken ?? undefined;
+
+        if (allMessages.length >= maxResults || !nextPageToken) {
+          break;
+        }
+      } while (nextPageToken);
+
+      logService.debug(
+        `Label ${labelId}: found ${allMessages.length} message IDs`,
+        "GmailFetch"
+      );
+
+      // Fetch full message details in batches
+      const fullMessages: ParsedEmail[] = [];
+      const batchSize = 10;
+      for (let i = 0; i < allMessages.length; i += batchSize) {
+        const batch = allMessages.slice(i, i + batchSize);
+        const batchResults = await Promise.all(
+          batch
+            .filter((msg) => msg.id)
+            .map((msg) => this.getEmailById(msg.id as string))
+        );
+        fullMessages.push(...batchResults);
+
+        if (onProgress) {
+          const percentage = Math.round(
+            (fullMessages.length / allMessages.length) * 100
+          );
+          onProgress({
+            fetched: fullMessages.length,
+            total: allMessages.length,
+            percentage,
+            hasEstimate: true,
+            label: labelId,
+          });
+        }
+      }
+
+      return fullMessages;
+    } catch (error) {
+      logService.error(
+        `Failed to fetch emails for label ${labelId}`,
+        "GmailFetch",
+        { error }
+      );
+      Sentry.captureException(error, {
+        tags: { service: "gmail-fetch", operation: "searchEmailsByLabel" },
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Discover all labels and fetch emails from each (TASK-2046)
+   *
+   * Orchestrates label discovery and multi-label fetch. Deduplicates
+   * emails that appear under multiple labels (same email can have
+   * multiple Gmail labels). Handles per-label errors gracefully.
+   *
+   * @param options - Search options applied to each label
+   * @returns Deduplicated array of parsed emails from all labels
+   */
+  async searchAllLabels(
+    options: {
+      after?: Date | null;
+      maxResults?: number;
+      onProgress?: (progress: FetchProgress & { label?: string; currentLabel?: string }) => void;
+    } = {}
+  ): Promise<ParsedEmail[]> {
+    try {
+      if (!this.gmail) {
+        throw new Error("Gmail API not initialized. Call initialize() first.");
+      }
+
+      const labels = await this.discoverLabels();
+      logService.info(
+        `Starting multi-label fetch across ${labels.length} labels`,
+        "GmailFetch"
+      );
+
+      const seenMessageIds = new Set<string>();
+      const allEmails: ParsedEmail[] = [];
+
+      for (const label of labels) {
+        try {
+          const emails = await this.searchEmailsByLabel(label.id, {
+            after: options.after,
+            maxResults: options.maxResults,
+            onProgress: options.onProgress
+              ? (progress) => {
+                  options.onProgress!({
+                    ...progress,
+                    currentLabel: label.name,
+                  });
+                }
+              : undefined,
+          });
+
+          // Deduplicate by message ID (same email can appear in multiple labels)
+          let newCount = 0;
+          for (const email of emails) {
+            if (!seenMessageIds.has(email.id)) {
+              seenMessageIds.add(email.id);
+              allEmails.push(email);
+              newCount++;
+            }
+          }
+
+          logService.debug(
+            `Label "${label.name}": ${emails.length} messages, ${newCount} new`,
+            "GmailFetch"
+          );
+        } catch (labelError) {
+          // Per-label error isolation: skip this label, continue with others
+          logService.warn(
+            `Failed to fetch emails for label "${label.name}" (${label.id}), skipping`,
+            "GmailFetch",
+            {
+              error:
+                labelError instanceof Error
+                  ? labelError.message
+                  : "Unknown error",
+            }
+          );
+        }
+      }
+
+      logService.info(
+        `Multi-label fetch complete: ${allEmails.length} unique emails from ${labels.length} labels`,
+        "GmailFetch"
+      );
+
+      return allEmails;
+    } catch (error) {
+      logService.error(
+        "Failed to search all labels",
+        "GmailFetch",
+        { error }
+      );
+      Sentry.captureException(error, {
+        tags: { service: "gmail-fetch", operation: "searchAllLabels" },
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Check emails for duplicates and populate duplicateOf field (TASK-919)
    *
    * Uses EmailDeduplicationService to detect duplicates by:
