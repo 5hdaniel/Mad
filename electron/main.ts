@@ -882,8 +882,7 @@ app.whenReady().then(async () => {
       log.info("[DeepLink] Cold start with URL (Windows):", redactDeepLinkUrl(deepLinkUrl));
       // Wait for window to be ready before processing
       mainWindow?.webContents.once("did-finish-load", () => {
-        // Small delay to ensure renderer is fully initialized
-        setTimeout(() => handleDeepLinkCallback(deepLinkUrl), 100);
+          handleDeepLinkCallback(deepLinkUrl);
       });
     }
   }
