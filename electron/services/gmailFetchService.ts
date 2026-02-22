@@ -1,4 +1,5 @@
 import { google, gmail_v1, Auth } from "googleapis";
+import * as Sentry from "@sentry/electron/main";
 import databaseService from "./databaseService";
 import logService from "./logService";
 import { OAuthToken } from "../types/models";
@@ -186,6 +187,9 @@ class GmailFetchService {
       return true;
     } catch (error) {
       logService.error("Initialization failed", "GmailFetch", { error });
+      Sentry.captureException(error, {
+        tags: { service: "gmail-fetch", operation: "initialize" },
+      });
       throw error;
     }
   }
@@ -324,6 +328,9 @@ class GmailFetchService {
       return fullMessages;
     } catch (error) {
       logService.error("Search emails failed", "GmailFetch", { error });
+      Sentry.captureException(error, {
+        tags: { service: "gmail-fetch", operation: "searchEmails" },
+      });
       throw error;
     }
   }
@@ -352,6 +359,9 @@ class GmailFetchService {
     } catch (error) {
       logService.error(`Failed to get message ${messageId}`, "GmailFetch", {
         error,
+      });
+      Sentry.captureException(error, {
+        tags: { service: "gmail-fetch", operation: "getEmailById" },
       });
       throw error;
     }
@@ -482,6 +492,9 @@ class GmailFetchService {
       return Buffer.from(response.data.data || "", "base64");
     } catch (error) {
       logService.error("Failed to get attachment", "GmailFetch", { error });
+      Sentry.captureException(error, {
+        tags: { service: "gmail-fetch", operation: "getAttachment" },
+      });
       throw error;
     }
   }
@@ -505,6 +518,9 @@ class GmailFetchService {
       return response.data.emailAddress || "";
     } catch (error) {
       logService.error("Failed to get user email", "GmailFetch", { error });
+      Sentry.captureException(error, {
+        tags: { service: "gmail-fetch", operation: "getUserEmail" },
+      });
       throw error;
     }
   }
@@ -563,6 +579,9 @@ class GmailFetchService {
       return enrichedEmails;
     } catch (error) {
       logService.error("Failed to check duplicates", "GmailFetch", { error });
+      Sentry.captureException(error, {
+        tags: { service: "gmail-fetch", operation: "checkDuplicates" },
+      });
       // Return original emails without duplicate info on error
       return emails;
     }

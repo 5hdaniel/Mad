@@ -15,6 +15,7 @@
 
 import { BrowserWindow } from "electron";
 import { RealtimeChannel } from "@supabase/supabase-js";
+import * as Sentry from "@sentry/electron/main";
 import supabaseService from "./supabaseService";
 import databaseService from "./databaseService";
 import logService from "./logService";
@@ -152,6 +153,9 @@ class SubmissionSyncService {
         `[SyncService] Failed to start realtime subscription: ${error instanceof Error ? error.message : "Unknown error"}`,
         "SubmissionSyncService"
       );
+      Sentry.captureException(error, {
+        tags: { service: "submission-sync", operation: "startRealtimeSubscription" },
+      });
     }
   }
 
@@ -171,6 +175,9 @@ class SubmissionSyncService {
           `[SyncService] Error stopping realtime subscription: ${error instanceof Error ? error.message : "Unknown error"}`,
           "SubmissionSyncService"
         );
+        Sentry.captureException(error, {
+          tags: { service: "submission-sync", operation: "stopRealtimeSubscription" },
+        });
       }
     }
   }
@@ -251,6 +258,9 @@ class SubmissionSyncService {
         `[SyncService] Failed to handle realtime update: ${error instanceof Error ? error.message : "Unknown error"}`,
         "SubmissionSyncService"
       );
+      Sentry.captureException(error, {
+        tags: { service: "submission-sync", operation: "handleRealtimeUpdate" },
+      });
     }
   }
 
@@ -294,6 +304,9 @@ class SubmissionSyncService {
           `[SyncService] Sync failed: ${error instanceof Error ? error.message : "Unknown error"}`,
           "SubmissionSyncService"
         );
+        Sentry.captureException(error, {
+          tags: { service: "submission-sync", operation: "periodicSync" },
+        });
       }
     }, this.syncIntervalMs);
 
@@ -311,6 +324,9 @@ class SubmissionSyncService {
         `[SyncService] Initial sync failed: ${error instanceof Error ? error.message : "Unknown error"}`,
         "SubmissionSyncService"
       );
+      Sentry.captureException(error, {
+        tags: { service: "submission-sync", operation: "initialSync" },
+      });
     });
   }
 
@@ -451,6 +467,9 @@ class SubmissionSyncService {
         `[SyncService] Sync error: ${error instanceof Error ? error.message : "Unknown error"}`,
         "SubmissionSyncService"
       );
+      Sentry.captureException(error, {
+        tags: { service: "submission-sync", operation: "syncAllSubmissions" },
+      });
       throw error;
     }
   }
@@ -515,6 +534,9 @@ class SubmissionSyncService {
         `[SyncService] Failed to sync single submission: ${error instanceof Error ? error.message : "Unknown error"}`,
         "SubmissionSyncService"
       );
+      Sentry.captureException(error, {
+        tags: { service: "submission-sync", operation: "syncSubmission" },
+      });
       return false;
     }
   }
@@ -575,6 +597,9 @@ class SubmissionSyncService {
         `[SyncService] Failed to fetch cloud statuses: ${error instanceof Error ? error.message : "Unknown error"}`,
         "SubmissionSyncService"
       );
+      Sentry.captureException(error, {
+        tags: { service: "submission-sync", operation: "fetchCloudStatuses" },
+      });
       return null;
     }
   }

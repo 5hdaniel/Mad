@@ -1,4 +1,5 @@
 import axios, { AxiosRequestConfig } from "axios";
+import * as Sentry from "@sentry/electron/main";
 import databaseService from "./databaseService";
 import logService from "./logService";
 import microsoftAuthService from "./microsoftAuthService";
@@ -238,6 +239,9 @@ class OutlookFetchService {
       return true;
     } catch (error) {
       logService.error("Initialization failed", "OutlookFetch", { error });
+      Sentry.captureException(error, {
+        tags: { service: "outlook-fetch", operation: "initialize" },
+      });
       throw error;
     }
   }
@@ -323,6 +327,9 @@ class OutlookFetchService {
             } catch (refreshError) {
               logService.error("Token refresh failed", "OutlookFetch", {
                 error: refreshError,
+              });
+              Sentry.captureException(refreshError, {
+                tags: { service: "outlook-fetch", operation: "_graphRequest.tokenRefresh" },
               });
               throw new Error(
                 "Microsoft access token expired and refresh failed. Please reconnect Outlook.",
@@ -525,6 +532,9 @@ class OutlookFetchService {
       return parsed;
     } catch (error) {
       logService.error("Search emails failed", "OutlookFetch", { error });
+      Sentry.captureException(error, {
+        tags: { service: "outlook-fetch", operation: "searchEmails" },
+      });
       throw error;
     }
   }
@@ -578,6 +588,9 @@ class OutlookFetchService {
           "OutlookFetch",
           { error: searchError instanceof Error ? searchError.message : "Unknown" },
         );
+        Sentry.captureException(searchError, {
+          tags: { service: "outlook-fetch", operation: "searchSentEmailsToContacts" },
+        });
       }
     }
 
@@ -614,6 +627,9 @@ class OutlookFetchService {
     } catch (error) {
       logService.error(`Failed to get message ${messageId}`, "OutlookFetch", {
         error,
+      });
+      Sentry.captureException(error, {
+        tags: { service: "outlook-fetch", operation: "getEmailById" },
       });
       throw error;
     }
@@ -705,6 +721,9 @@ class OutlookFetchService {
       return data.value || [];
     } catch (error) {
       logService.error("Failed to get attachments", "OutlookFetch", { error });
+      Sentry.captureException(error, {
+        tags: { service: "outlook-fetch", operation: "getAttachments" },
+      });
       throw error;
     }
   }
@@ -731,6 +750,9 @@ class OutlookFetchService {
       throw new Error("No attachment data found");
     } catch (error) {
       logService.error("Failed to get attachment", "OutlookFetch", { error });
+      Sentry.captureException(error, {
+        tags: { service: "outlook-fetch", operation: "getAttachment" },
+      });
       throw error;
     }
   }
@@ -748,6 +770,9 @@ class OutlookFetchService {
       return data.mail || data.userPrincipalName || "";
     } catch (error) {
       logService.error("Failed to get user email", "OutlookFetch", { error });
+      Sentry.captureException(error, {
+        tags: { service: "outlook-fetch", operation: "getUserEmail" },
+      });
       throw error;
     }
   }
@@ -763,6 +788,9 @@ class OutlookFetchService {
       return data.value || [];
     } catch (error) {
       logService.error("Failed to get folders", "OutlookFetch", { error });
+      Sentry.captureException(error, {
+        tags: { service: "outlook-fetch", operation: "getFolders" },
+      });
       throw error;
     }
   }
@@ -821,6 +849,9 @@ class OutlookFetchService {
       return enrichedEmails;
     } catch (error) {
       logService.error("Failed to check duplicates", "OutlookFetch", { error });
+      Sentry.captureException(error, {
+        tags: { service: "outlook-fetch", operation: "checkDuplicates" },
+      });
       // Return original emails without duplicate info on error
       return emails;
     }
@@ -945,6 +976,9 @@ class OutlookFetchService {
       }
 
       logService.error("Failed to fetch contacts", "OutlookFetch", { error });
+      Sentry.captureException(error, {
+        tags: { service: "outlook-fetch", operation: "fetchContacts" },
+      });
       throw error;
     }
   }
