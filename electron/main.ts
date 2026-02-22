@@ -583,7 +583,8 @@ app.on("second-instance", (_event, commandLine) => {
 
 /**
  * Configure Content Security Policy for the application
- * This prevents the "unsafe-eval" security warning
+ * This prevents the "unsafe-eval" security warning and restricts connections
+ * to known, trusted domains only.
  *
  * Development vs Production CSP differences:
  * - script-src: Dev uses 'unsafe-inline' for Vite HMR (Hot Module Replacement).
@@ -591,11 +592,30 @@ app.on("second-instance", (_event, commandLine) => {
  *   See: https://vitejs.dev/guide/features.html#content-security-policy
  * - style-src: Both use 'unsafe-inline' for CSS-in-JS and dynamic styling.
  * - connect-src: Dev allows localhost:5173 (Vite dev server) + ws:// for HMR websocket.
- *   Production only allows HTTPS connections.
+ *   Both dev and production restrict connections to specific whitelisted domains.
+ *
+ * Whitelisted external domains (connect-src):
+ * - *.supabase.co           -- Supabase backend (auth, database, edge functions)
+ * - graph.microsoft.com     -- Microsoft Graph API (Outlook mail/contacts)
+ * - login.microsoftonline.com -- Microsoft OAuth2 authentication
+ * - accounts.google.com     -- Google OAuth2 authentication
+ * - *.googleapis.com        -- Google APIs (Gmail, userinfo, token, Maps)
+ * - www.apple.com           -- Apple iTunes driver downloads (Windows only)
  */
 function setupContentSecurityPolicy(): void {
   const isDevelopment =
     process.env.NODE_ENV === "development" || !app.isPackaged;
+
+  // Whitelisted external domains the app connects to.
+  // Adding a new API integration? Add its domain here or requests will be blocked by CSP.
+  const allowedConnectDomains = [
+    "https://*.supabase.co", // Supabase backend (URL from SUPABASE_URL env var)
+    "https://graph.microsoft.com", // Microsoft Graph API (mail, contacts)
+    "https://login.microsoftonline.com", // Microsoft OAuth2 (all tenants)
+    "https://accounts.google.com", // Google OAuth2 authentication
+    "https://*.googleapis.com", // Google APIs (oauth2, www, maps)
+    "https://www.apple.com", // Apple iTunes driver download (Windows)
+  ].join(" ");
 
   // Log CSP mode on startup for debugging
   if (isDevelopment) {
@@ -605,7 +625,7 @@ function setupContentSecurityPolicy(): void {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     // Configure CSP based on environment
     // Development: Allow localhost dev server and inline styles for HMR
-    // Production: Strict CSP without unsafe-eval
+    // Production: Strict CSP without unsafe-eval, connections restricted to whitelist
     const cspDirectives = isDevelopment
       ? [
           "default-src 'self'",
@@ -617,9 +637,9 @@ function setupContentSecurityPolicy(): void {
           "style-src 'self' 'unsafe-inline'",
           "img-src 'self' data: cid: https:",
           "font-src 'self' data:",
-          // Tightened: Specific port 5173 instead of wildcard localhost:*
+          // Tightened: Specific port 5173 for Vite dev server + whitelisted external domains
           // Port 5173 is Vite's default dev server port (see vite.config.js and package.json)
-          "connect-src 'self' http://localhost:5173 ws://localhost:5173 https:",
+          `connect-src 'self' http://localhost:5173 ws://localhost:5173 ${allowedConnectDomains}`,
           "media-src 'self'",
           "object-src 'none'",
           "base-uri 'self'",
@@ -635,7 +655,8 @@ function setupContentSecurityPolicy(): void {
           "style-src 'self' 'unsafe-inline'",
           "img-src 'self' data: cid: https:",
           "font-src 'self' data:",
-          "connect-src 'self' https:",
+          // Tightened: Only whitelisted external domains (no https: wildcard)
+          `connect-src 'self' ${allowedConnectDomains}`,
           "media-src 'self'",
           "object-src 'none'",
           "base-uri 'self'",
