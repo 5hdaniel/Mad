@@ -128,6 +128,7 @@ import {
   registerUpdaterHandlers,
   registerErrorLoggingHandlers,
   registerResetHandlers,
+  registerBackupRestoreHandlers,
   registerCcpaHandlers,
 } from "./handlers";
 
@@ -998,6 +999,7 @@ app.whenReady().then(async () => {
   registerUpdaterHandlers(mainWindow!);
   registerErrorLoggingHandlers();
   registerResetHandlers();
+  registerBackupRestoreHandlers();
   registerCcpaHandlers();
 
   // DEV-ONLY: Manual deep link handler for testing when protocol handler fails

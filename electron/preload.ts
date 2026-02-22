@@ -53,6 +53,7 @@ import {
   licenseBridge,
   errorLoggingBridge,
   resetBridge,
+  databaseBackupBridge,
   privacyBridge,
 } from "./preload/index";
 
@@ -124,6 +125,9 @@ contextBridge.exposeInMainWorld("api", {
 
   // App reset (TASK-1802: self-healing feature)
   app: resetBridge,
+
+  // Database backup & restore (TASK-2052)
+  databaseBackup: databaseBackupBridge,
 
   // Privacy / CCPA data export (TASK-2053)
   privacy: privacyBridge,

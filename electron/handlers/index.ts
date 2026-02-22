@@ -36,6 +36,9 @@ export { registerErrorLoggingHandlers } from "./errorLoggingHandlers";
 // Reset handlers (TASK-1802)
 export { registerResetHandlers } from "./resetHandlers";
 
+// Backup/Restore handlers (TASK-2052)
+export { registerBackupRestoreHandlers } from "./backupRestoreHandlers";
+
 // CCPA data export handlers (TASK-2053)
 export { registerCcpaHandlers } from "./ccpaHandlers";
 
