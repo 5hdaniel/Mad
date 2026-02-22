@@ -8,9 +8,20 @@
  * to show the keychain explanation screen before completing the login.
  */
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import type { User, Subscription } from "../../electron/types/models";
 import logger from '../utils/logger';
+
+// TASK-2044: Login retry configuration
+const LOGIN_RETRY_CONFIG = {
+  maxRetries: 3,
+  baseDelayMs: 1000,
+  maxDelayMs: 10000,
+  /** Timeout for waiting for deep link callback (ms) */
+  callbackTimeoutMs: 60000,
+  /** Error codes from deep link that should NOT trigger retry */
+  nonRetryableCodes: ["MISSING_TOKENS", "INVALID_TOKENS", "INVALID_URL"],
+} as const;
 
 // Type for pending OAuth data
 export interface PendingOAuthData {
@@ -92,6 +103,48 @@ const Login = ({
   // TASK-1507: Track when browser auth is in progress
   const [browserAuthInProgress, setBrowserAuthInProgress] = useState(false);
 
+  // TASK-2044: Retry state for browser auth
+  const [retryAttempt, setRetryAttempt] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [retriesExhausted, setRetriesExhausted] = useState(false);
+  const callbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ==========================================
+  // TASK-2044: Retry timer cleanup
+  // ==========================================
+
+  /**
+   * Clear all retry-related timers to prevent duplicate sessions
+   */
+  const clearRetryTimers = useCallback(() => {
+    if (callbackTimeoutRef.current) {
+      clearTimeout(callbackTimeoutRef.current);
+      callbackTimeoutRef.current = null;
+    }
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+  }, []);
+
+  /**
+   * Reset all retry state back to initial values
+   */
+  const resetRetryState = useCallback(() => {
+    clearRetryTimers();
+    setRetryAttempt(0);
+    setIsRetrying(false);
+    setRetriesExhausted(false);
+  }, [clearRetryTimers]);
+
+  // Clean up timers on unmount
+  useEffect(() => {
+    return () => {
+      clearRetryTimers();
+    };
+  }, [clearRetryTimers]);
+
   // ==========================================
   // TASK-1507: Deep Link Event Handlers
   // ==========================================
@@ -102,26 +155,95 @@ const Login = ({
    */
   const handleDeepLinkSuccess = useCallback((data: DeepLinkAuthData) => {
     logger.debug("[Login] Deep link auth success:", data.userId);
+    clearRetryTimers();
     setBrowserAuthInProgress(false);
     setLoading(false);
     setProvider(null);
+    resetRetryState();
 
     if (onDeepLinkAuthSuccess) {
       onDeepLinkAuthSuccess(data);
     }
-  }, [onDeepLinkAuthSuccess]);
+  }, [onDeepLinkAuthSuccess, clearRetryTimers, resetRetryState]);
 
   /**
    * Handle deep link auth error
+   * TASK-2044: Enhanced with auto-retry for retryable errors
    * Called when browser OAuth fails or returns invalid tokens
    */
   const handleDeepLinkError = useCallback((data: { error: string; code: string }) => {
-    logger.error("[Login] Deep link auth error:", data);
-    setBrowserAuthInProgress(false);
-    setLoading(false);
-    setProvider(null);
-    setError(data.error || "Browser authentication failed");
-  }, []);
+    logger.error(`[Login] Deep link auth error (attempt ${retryAttempt + 1}):`, data);
+    clearRetryTimers();
+
+    // Check if this is a non-retryable error
+    const isNonRetryable = LOGIN_RETRY_CONFIG.nonRetryableCodes.includes(
+      data.code as typeof LOGIN_RETRY_CONFIG.nonRetryableCodes[number]
+    );
+
+    if (isNonRetryable || retryAttempt >= LOGIN_RETRY_CONFIG.maxRetries) {
+      // Non-retryable error or max retries reached: show error + "Try again" button
+      logger.warn(
+        `[Login] ${isNonRetryable ? "Non-retryable error" : "Max retries reached"} -- stopping auto-retry`
+      );
+      setBrowserAuthInProgress(false);
+      setLoading(false);
+      setIsRetrying(false);
+      if (!isNonRetryable) {
+        setRetriesExhausted(true);
+      }
+      setError(
+        isNonRetryable
+          ? data.error || "Browser authentication failed"
+          : "Login failed after multiple attempts. Please check your connection and try again."
+      );
+      return;
+    }
+
+    // Retryable error: auto-retry with exponential backoff
+    const nextAttempt = retryAttempt + 1;
+    const delay = Math.min(
+      LOGIN_RETRY_CONFIG.baseDelayMs * Math.pow(2, retryAttempt),
+      LOGIN_RETRY_CONFIG.maxDelayMs
+    );
+
+    logger.info(
+      `[Login] Retrying browser auth (attempt ${nextAttempt + 1}/${LOGIN_RETRY_CONFIG.maxRetries + 1}) in ${delay}ms`
+    );
+
+    setRetryAttempt(nextAttempt);
+    setIsRetrying(true);
+    setError(null);
+
+    // Schedule retry after backoff delay
+    retryTimeoutRef.current = setTimeout(async () => {
+      try {
+        const result = await window.api.auth.openAuthInBrowser();
+        if (!result.success) {
+          // If opening browser itself fails, treat as exhausted
+          setIsRetrying(false);
+          setBrowserAuthInProgress(false);
+          setLoading(false);
+          setRetriesExhausted(true);
+          setError(result.error || "Failed to open browser for authentication");
+        } else {
+          // Browser opened, start callback timeout for this retry attempt
+          setIsRetrying(false);
+          callbackTimeoutRef.current = setTimeout(() => {
+            logger.warn(`[Login] Deep link callback timeout on retry attempt ${nextAttempt + 1}`);
+            // Trigger the error handler again (which may retry or give up)
+            handleDeepLinkError({ error: "Authentication timed out", code: "UNKNOWN_ERROR" });
+          }, LOGIN_RETRY_CONFIG.callbackTimeoutMs);
+        }
+      } catch (err) {
+        logger.error("[Login] Retry browser open failed:", err);
+        setIsRetrying(false);
+        setBrowserAuthInProgress(false);
+        setLoading(false);
+        setRetriesExhausted(true);
+        setError("Failed to retry authentication");
+      }
+    }, delay);
+  }, [retryAttempt, clearRetryTimers]);
 
   /**
    * Handle license blocked event
@@ -133,6 +255,8 @@ const Login = ({
     licenseStatus: unknown;
   }) => {
     logger.warn("[Login] License blocked:", data.blockReason);
+    clearRetryTimers();
+    resetRetryState();
     setBrowserAuthInProgress(false);
     setLoading(false);
     setProvider(null);
@@ -143,7 +267,7 @@ const Login = ({
       // Default handling if no callback provided
       setError(`Your license is ${data.blockReason}. Please contact support.`);
     }
-  }, [onLicenseBlocked]);
+  }, [onLicenseBlocked, clearRetryTimers, resetRetryState]);
 
   /**
    * Handle device limit reached event
@@ -157,6 +281,8 @@ const Login = ({
     };
   }) => {
     logger.warn("[Login] Device limit reached");
+    clearRetryTimers();
+    resetRetryState();
     setBrowserAuthInProgress(false);
     setLoading(false);
     setProvider(null);
@@ -171,7 +297,7 @@ const Login = ({
       // Default handling if no callback provided
       setError(`Device limit reached (${data.licenseStatus.deviceCount}/${data.licenseStatus.deviceLimit}). Please deactivate a device first.`);
     }
-  }, [onDeviceLimitReached]);
+  }, [onDeviceLimitReached, clearRetryTimers, resetRetryState]);
 
   /**
    * Set up deep link event listeners
@@ -208,11 +334,15 @@ const Login = ({
    * TASK-1507: Opens Supabase auth in default browser, returns via deep link
    */
   const handleBrowserLogin = async () => {
+    // TASK-2044: Clear any previous retry timers before starting fresh
+    clearRetryTimers();
+
     setLoading(true);
     setError(null);
     setProvider("browser");
     setBrowserAuthInProgress(true);
     setPopupCancelled(false);
+    setRetriesExhausted(false);
 
     try {
       const result = await window.api.auth.openAuthInBrowser();
@@ -222,9 +352,13 @@ const Login = ({
         setLoading(false);
         setProvider(null);
         setBrowserAuthInProgress(false);
+      } else {
+        // TASK-2044: Start callback timeout -- if deep link never fires, trigger retry
+        callbackTimeoutRef.current = setTimeout(() => {
+          logger.warn("[Login] Deep link callback timeout -- triggering retry logic");
+          handleDeepLinkError({ error: "Authentication timed out", code: "UNKNOWN_ERROR" });
+        }, LOGIN_RETRY_CONFIG.callbackTimeoutMs);
       }
-      // If success, we wait for deep link callback event
-      // Loading state will be cleared by the event handler
     } catch (err) {
       logger.error("Browser login error:", err);
       const errorMessage =
@@ -493,9 +627,24 @@ const Login = ({
   };
 
   /**
+   * TASK-2044: Fresh retry -- resets all retry state and starts a brand new login attempt
+   * This is called by the "Try again" button after all retries are exhausted.
+   */
+  const handleTryAgain = () => {
+    clearRetryTimers();
+    resetRetryState();
+    setError(null);
+    // Start a completely fresh login flow
+    handleBrowserLogin();
+  };
+
+  /**
    * Cancel login flow
+   * TASK-2044: Also clears retry state and timers
    */
   const handleCancel = () => {
+    clearRetryTimers();
+    resetRetryState();
     setLoading(false);
     setAuthUrl(null);
     setAuthCode("");
@@ -514,10 +663,18 @@ const Login = ({
           <p className="text-gray-600">Real Estate Compliance Made Simple</p>
         </div>
 
-        {/* Error Message */}
+        {/* Error Message -- TASK-2044: includes "Try again" button when retries exhausted */}
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
             <p className="text-sm text-red-800">{error}</p>
+            {retriesExhausted && (
+              <button
+                onClick={handleTryAgain}
+                className="mt-3 w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Try Again
+              </button>
+            )}
           </div>
         )}
 
@@ -687,17 +844,23 @@ const Login = ({
           </div>
         )}
 
-        {/* Browser Authentication in Progress (TASK-1507) */}
+        {/* Browser Authentication in Progress (TASK-1507, enhanced TASK-2044) */}
         {provider === "browser" && browserAuthInProgress && (
           <div className="mb-6">
             <div className="p-6 bg-gradient-to-br from-green-50 to-teal-50 border-2 border-green-200 rounded-lg text-center">
               <div className="flex flex-col items-center">
                 <div className="w-12 h-12 border-4 border-green-600 border-t-transparent rounded-full animate-spin mb-4"></div>
                 <p className="text-sm text-green-900 font-semibold mb-2">
-                  Authenticating in Browser...
+                  {isRetrying
+                    ? `Retrying (attempt ${retryAttempt + 1}/${LOGIN_RETRY_CONFIG.maxRetries + 1})...`
+                    : retryAttempt > 0
+                      ? `Authenticating in Browser (attempt ${retryAttempt + 1}/${LOGIN_RETRY_CONFIG.maxRetries + 1})...`
+                      : "Authenticating in Browser..."}
                 </p>
                 <p className="text-xs text-green-700 mb-4">
-                  Complete sign-in in your default browser. The app will update automatically when finished.
+                  {isRetrying
+                    ? "Reconnecting... Please wait."
+                    : "Complete sign-in in your default browser. The app will update automatically when finished."}
                 </p>
                 <button
                   onClick={handleCancel}
