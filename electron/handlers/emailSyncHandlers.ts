@@ -32,6 +32,8 @@ import {
   sanitizeObject,
 } from "../utils/validation";
 import { rateLimiters } from "../utils/rateLimit";
+import { isNetworkError } from "../utils/networkErrors";
+import { retryOnNetwork, networkResilienceService } from "../services/networkResilience";
 
 interface ScanOptions {
   onProgress?: (progress: unknown) => void;
@@ -263,76 +265,82 @@ export function registerEmailSyncHandlers(
         provider: "gmail" | "outlook";
       }> = [];
 
-      // Fetch from Gmail if authenticated
+      // Fetch from Gmail if authenticated (TASK-2049: with network retry)
       if (googleToken) {
         try {
-          const isReady = await gmailFetchService.initialize(validatedUserId);
-          if (isReady) {
-            const gmailEmails = await gmailFetchService.searchEmails(searchParams);
-            emails = gmailEmails.map((email: { id: string; subject: string | null; from: string | null; date: Date; bodyPlain: string; snippet: string; threadId: string; hasAttachments: boolean }) => ({
-              id: `gmail:${email.id}`,
-              subject: email.subject,
-              sender: email.from,
-              sent_at: email.date ? new Date(email.date).toISOString() : null,
-              // TASK-1998: prefer snippet (always populated by Gmail API), fall back to bodyPlain
-              body_preview: (email.snippet || email.bodyPlain?.substring(0, 200)) || null,
-              email_thread_id: email.threadId || null,
-              has_attachments: email.hasAttachments || false,
-              provider: "gmail" as const,
-            }));
-            logService.info(`Fetched ${emails.length} emails from Gmail`, "Transactions");
-          }
+          await retryOnNetwork(async () => {
+            const isReady = await gmailFetchService.initialize(validatedUserId);
+            if (isReady) {
+              const gmailEmails = await gmailFetchService.searchEmails(searchParams);
+              emails = gmailEmails.map((email: { id: string; subject: string | null; from: string | null; date: Date; bodyPlain: string; snippet: string; threadId: string; hasAttachments: boolean }) => ({
+                id: `gmail:${email.id}`,
+                subject: email.subject,
+                sender: email.from,
+                sent_at: email.date ? new Date(email.date).toISOString() : null,
+                // TASK-1998: prefer snippet (always populated by Gmail API), fall back to bodyPlain
+                body_preview: (email.snippet || email.bodyPlain?.substring(0, 200)) || null,
+                email_thread_id: email.threadId || null,
+                has_attachments: email.hasAttachments || false,
+                provider: "gmail" as const,
+              }));
+              logService.info(`Fetched ${emails.length} emails from Gmail`, "Transactions");
+            }
+          }, undefined, "GmailSearch");
         } catch (gmailError) {
           logService.warn("Failed to fetch from Gmail", "Transactions", {
             error: gmailError instanceof Error ? gmailError.message : "Unknown",
+            isNetworkError: isNetworkError(gmailError),
           });
         }
       }
 
-      // Fetch from Outlook if authenticated (and no Gmail emails)
+      // Fetch from Outlook if authenticated (and no Gmail emails) (TASK-2049: with network retry)
       if (microsoftToken && emails.length === 0) {
         try {
-          const isReady = await outlookFetchService.initialize(validatedUserId);
-          if (isReady) {
-            const outlookEmails = await outlookFetchService.searchEmails(searchParams);
+          await retryOnNetwork(async () => {
+            const isReady = await outlookFetchService.initialize(validatedUserId);
+            if (isReady) {
+              const outlookEmails = await outlookFetchService.searchEmails(searchParams);
 
-            // Also search sent items for emails TO contacts (bidirectional)
-            // Use searchParams.contactEmails (resolved from query) not the full transaction contactEmails
-            let sentEmails: typeof outlookEmails = [];
-            const sentSearchEmails = searchParams.contactEmails || [];
-            if (sentSearchEmails.length > 0) {
-              try {
-                sentEmails = await outlookFetchService.searchSentEmailsToContacts(
-                  sentSearchEmails, Math.min(50, effectiveMaxResults),
-                );
-              } catch { /* logged inside the method */ }
+              // Also search sent items for emails TO contacts (bidirectional)
+              // Use searchParams.contactEmails (resolved from query) not the full transaction contactEmails
+              let sentEmails: typeof outlookEmails = [];
+              const sentSearchEmails = searchParams.contactEmails || [];
+              if (sentSearchEmails.length > 0) {
+                try {
+                  sentEmails = await outlookFetchService.searchSentEmailsToContacts(
+                    sentSearchEmails, Math.min(50, effectiveMaxResults),
+                  );
+                } catch { /* logged inside the method */ }
+              }
+
+              // Merge and dedup
+              const allOutlook = [...outlookEmails, ...sentEmails];
+              const seenIds = new Set<string>();
+              const dedupedOutlook = allOutlook.filter(e => {
+                if (seenIds.has(e.id)) return false;
+                seenIds.add(e.id);
+                return true;
+              });
+
+              emails = dedupedOutlook.map((email: { id: string; subject: string | null; from: string | null; date: Date; bodyPlain: string; snippet: string; threadId: string; hasAttachments: boolean }) => ({
+                id: `outlook:${email.id}`,
+                subject: email.subject,
+                sender: email.from,
+                sent_at: email.date ? new Date(email.date).toISOString() : null,
+                // TASK-1998: prefer snippet (bodyPreview from Graph API), fall back to bodyPlain
+                body_preview: (email.snippet || email.bodyPlain?.substring(0, 200)) || null,
+                email_thread_id: email.threadId || null,
+                has_attachments: email.hasAttachments || false,
+                provider: "outlook" as const,
+              }));
+              logService.info(`Fetched ${outlookEmails.length} inbox + ${sentEmails.length} sent = ${emails.length} unique from Outlook`, "Transactions");
             }
-
-            // Merge and dedup
-            const allOutlook = [...outlookEmails, ...sentEmails];
-            const seenIds = new Set<string>();
-            const dedupedOutlook = allOutlook.filter(e => {
-              if (seenIds.has(e.id)) return false;
-              seenIds.add(e.id);
-              return true;
-            });
-
-            emails = dedupedOutlook.map((email: { id: string; subject: string | null; from: string | null; date: Date; bodyPlain: string; snippet: string; threadId: string; hasAttachments: boolean }) => ({
-              id: `outlook:${email.id}`,
-              subject: email.subject,
-              sender: email.from,
-              sent_at: email.date ? new Date(email.date).toISOString() : null,
-              // TASK-1998: prefer snippet (bodyPreview from Graph API), fall back to bodyPlain
-              body_preview: (email.snippet || email.bodyPlain?.substring(0, 200)) || null,
-              email_thread_id: email.threadId || null,
-              has_attachments: email.hasAttachments || false,
-              provider: "outlook" as const,
-            }));
-            logService.info(`Fetched ${outlookEmails.length} inbox + ${sentEmails.length} sent = ${emails.length} unique from Outlook`, "Transactions");
-          }
+          }, undefined, "OutlookSearch");
         } catch (outlookError) {
           logService.warn("Failed to fetch from Outlook", "Transactions", {
             error: outlookError instanceof Error ? outlookError.message : "Unknown",
+            isNetworkError: isNetworkError(outlookError),
           });
         }
       }
@@ -989,202 +997,248 @@ export function registerEmailSyncHandlers(
       // Step 1: Fetch emails from provider and store locally
       // The auto-link searches the local emails table, so we need to ensure
       // relevant emails are downloaded first.
+      // TASK-2049: Wrapped with network resilience -- partial save on disconnect,
+      // retry with exponential backoff, auto-retry on reconnect
       let emailsFetched = 0;
       let emailsStored = 0;
+      let networkErrorOccurred = false;
+      let networkErrorMessage = "";
 
-      // Try Outlook
+      // Try Outlook (TASK-2049: with network resilience)
       try {
-        const outlookReady = await outlookFetchService.initialize(userId);
-        if (outlookReady) {
-          const outlookEmails = await outlookFetchService.searchEmails({
-            contactEmails,
-            maxResults: 200,
-          });
-          // Also search sent items for emails TO the contact
-          const sentEmails = await outlookFetchService.searchSentEmailsToContacts(
-            contactEmails,
-            50,
-          );
-
-          // TASK-2046: Also fetch from all folders (custom folders, archives, etc.)
-          let allFolderEmails: typeof outlookEmails = [];
-          try {
-            allFolderEmails = await outlookFetchService.searchAllFolders({
+        await retryOnNetwork(async () => {
+          const outlookReady = await outlookFetchService.initialize(userId);
+          if (outlookReady) {
+            const outlookEmails = await outlookFetchService.searchEmails({
+              contactEmails,
               maxResults: 200,
             });
-            logService.info(`Fetched ${allFolderEmails.length} emails from all Outlook folders`, "Transactions");
-          } catch (folderError) {
-            logService.warn("Failed to fetch from all Outlook folders, continuing with inbox/sent only", "Transactions", {
-              error: folderError instanceof Error ? folderError.message : "Unknown",
-            });
-          }
+            // Also search sent items for emails TO the contact
+            const sentEmails = await outlookFetchService.searchSentEmailsToContacts(
+              contactEmails,
+              50,
+            );
 
-          const allOutlookEmails = [...outlookEmails, ...sentEmails, ...allFolderEmails];
-
-          // Dedup by ID
-          const seenIds = new Set<string>();
-          const dedupedEmails = allOutlookEmails.filter((e) => {
-            if (seenIds.has(e.id)) return false;
-            seenIds.add(e.id);
-            return true;
-          });
-
-          emailsFetched += dedupedEmails.length;
-          logService.info(`Fetched ${outlookEmails.length} inbox + ${sentEmails.length} sent + ${allFolderEmails.length} all-folders = ${dedupedEmails.length} unique from Outlook`, "Transactions");
-
-          for (const email of dedupedEmails) {
+            // TASK-2046: Also fetch from all folders (custom folders, archives, etc.)
+            let allFolderEmails: typeof outlookEmails = [];
             try {
-              let emailRecord = await getEmailByExternalId(userId, email.id);
-              if (!emailRecord) {
-                emailRecord = await createEmail({
-                  user_id: userId,
-                  external_id: email.id,
-                  source: "outlook",
-                  thread_id: email.threadId,
-                  sender: email.from ?? undefined,
-                  recipients: email.to ?? undefined,
-                  cc: email.cc ?? undefined,
-                  subject: email.subject ?? undefined,
-                  body_html: email.body,
-                  body_plain: email.bodyPlain,
-                  sent_at: email.date ? new Date(email.date).toISOString() : undefined,
-                  has_attachments: email.hasAttachments || false,
-                  attachment_count: email.attachmentCount || 0,
-                });
-                emailsStored++;
+              allFolderEmails = await outlookFetchService.searchAllFolders({
+                maxResults: 200,
+              });
+              logService.info(`Fetched ${allFolderEmails.length} emails from all Outlook folders`, "Transactions");
+            } catch (folderError) {
+              // TASK-2049: If folder fetch fails due to network, let it bubble up for retry
+              if (isNetworkError(folderError)) throw folderError;
+              logService.warn("Failed to fetch from all Outlook folders, continuing with inbox/sent only", "Transactions", {
+                error: folderError instanceof Error ? folderError.message : "Unknown",
+              });
+            }
 
-                // Download attachments if present (fetch metadata from Graph API)
-                if (email.hasAttachments && emailRecord) {
-                  try {
-                    const graphAttachments = await outlookFetchService.getAttachments(email.id);
-                    if (graphAttachments.length > 0) {
+            const allOutlookEmails = [...outlookEmails, ...sentEmails, ...allFolderEmails];
+
+            // Dedup by ID
+            const seenIds = new Set<string>();
+            const dedupedEmails = allOutlookEmails.filter((e) => {
+              if (seenIds.has(e.id)) return false;
+              seenIds.add(e.id);
+              return true;
+            });
+
+            emailsFetched += dedupedEmails.length;
+            logService.info(`Fetched ${outlookEmails.length} inbox + ${sentEmails.length} sent + ${allFolderEmails.length} all-folders = ${dedupedEmails.length} unique from Outlook`, "Transactions");
+
+            // TASK-2049: Store emails individually -- each saved email is preserved
+            // even if a subsequent save or fetch fails due to network disconnect
+            for (const email of dedupedEmails) {
+              try {
+                let emailRecord = await getEmailByExternalId(userId, email.id);
+                if (!emailRecord) {
+                  emailRecord = await createEmail({
+                    user_id: userId,
+                    external_id: email.id,
+                    source: "outlook",
+                    thread_id: email.threadId,
+                    sender: email.from ?? undefined,
+                    recipients: email.to ?? undefined,
+                    cc: email.cc ?? undefined,
+                    subject: email.subject ?? undefined,
+                    body_html: email.body,
+                    body_plain: email.bodyPlain,
+                    sent_at: email.date ? new Date(email.date).toISOString() : undefined,
+                    has_attachments: email.hasAttachments || false,
+                    attachment_count: email.attachmentCount || 0,
+                  });
+                  emailsStored++;
+
+                  // Download attachments if present (fetch metadata from Graph API)
+                  if (email.hasAttachments && emailRecord) {
+                    try {
+                      const graphAttachments = await outlookFetchService.getAttachments(email.id);
+                      if (graphAttachments.length > 0) {
+                        await emailAttachmentService.downloadEmailAttachments(
+                          userId,
+                          emailRecord.id,
+                          email.id,
+                          "outlook",
+                          graphAttachments.map((att: { id: string; name: string; contentType: string; size: number }) => ({
+                            filename: att.name || "attachment",
+                            mimeType: att.contentType || "application/octet-stream",
+                            size: att.size || 0,
+                            attachmentId: att.id,
+                          })),
+                        );
+                      }
+                    } catch (attError) {
+                      // Attachment download failure is non-blocking for email save
+                      if (!isNetworkError(attError)) {
+                        logService.warn("Failed to download Outlook attachments during sync", "Transactions", {
+                          emailId: emailRecord.id,
+                          error: attError instanceof Error ? attError.message : "Unknown",
+                        });
+                      }
+                      // Network errors on attachment download are non-fatal; email is already saved
+                    }
+                  }
+                }
+              } catch (emailError) {
+                logService.warn("Failed to store Outlook email", "Transactions", {
+                  error: emailError instanceof Error ? emailError.message : "Unknown",
+                });
+              }
+            }
+          }
+        }, undefined, "OutlookSync");
+      } catch (outlookError) {
+        if (isNetworkError(outlookError)) {
+          // TASK-2049: Network error after all retries exhausted
+          networkErrorOccurred = true;
+          networkErrorMessage = "Network disconnected during Outlook sync. Emails saved so far will be preserved.";
+          networkResilienceService.recordPartialSync(userId, "outlook", emailsStored);
+          logService.warn("Outlook sync failed due to network disconnect after retries", "Transactions", {
+            emailsStoredBeforeFailure: emailsStored,
+            error: outlookError instanceof Error ? outlookError.message : "Unknown",
+          });
+        } else {
+          logService.warn("Outlook fetch failed, falling back to local search", "Transactions", {
+            error: outlookError instanceof Error ? outlookError.message : "Unknown",
+          });
+        }
+      }
+
+      // Try Gmail (bidirectional: from + to contacts) (TASK-2049: with network resilience)
+      try {
+        await retryOnNetwork(async () => {
+          const gmailReady = await gmailFetchService.initialize(userId);
+          if (gmailReady) {
+            // Build explicit bidirectional query (from + to) instead of from-only contactEmails
+            const gmailSearchOptions: { query?: string; maxResults: number; contactEmails?: string[] } = {
+              maxResults: 200,
+            };
+            if (contactEmails.length > 0) {
+              // Use contactEmails param -- gmailFetchService.searchEmails now builds bidirectional filter
+              gmailSearchOptions.contactEmails = contactEmails;
+            }
+            const gmailEmails = await gmailFetchService.searchEmails(gmailSearchOptions);
+
+            // TASK-2046: Also fetch from all labels (custom labels, archives, etc.)
+            let allLabelEmails: typeof gmailEmails = [];
+            try {
+              allLabelEmails = await gmailFetchService.searchAllLabels({
+                maxResults: 200,
+              });
+              logService.info(`Fetched ${allLabelEmails.length} emails from all Gmail labels`, "Transactions");
+            } catch (labelError) {
+              // TASK-2049: If label fetch fails due to network, let it bubble up for retry
+              if (isNetworkError(labelError)) throw labelError;
+              logService.warn("Failed to fetch from all Gmail labels, continuing with default search only", "Transactions", {
+                error: labelError instanceof Error ? labelError.message : "Unknown",
+              });
+            }
+
+            // Dedup by ID across contact search and label fetch
+            const seenGmailIds = new Set<string>();
+            const dedupedGmailEmails = [...gmailEmails, ...allLabelEmails].filter((e) => {
+              if (seenGmailIds.has(e.id)) return false;
+              seenGmailIds.add(e.id);
+              return true;
+            });
+
+            emailsFetched += dedupedGmailEmails.length;
+            logService.info(`Fetched ${gmailEmails.length} contact-search + ${allLabelEmails.length} all-labels = ${dedupedGmailEmails.length} unique from Gmail`, "Transactions");
+
+            // TASK-2049: Store emails individually -- each saved email is preserved
+            // even if a subsequent save or fetch fails due to network disconnect
+            for (const email of dedupedGmailEmails) {
+              try {
+                let emailRecord = await getEmailByExternalId(userId, email.id);
+                if (!emailRecord) {
+                  emailRecord = await createEmail({
+                    user_id: userId,
+                    external_id: email.id,
+                    source: "gmail",
+                    thread_id: email.threadId,
+                    sender: email.from ?? undefined,
+                    recipients: email.to ?? undefined,
+                    cc: email.cc ?? undefined,
+                    subject: email.subject ?? undefined,
+                    body_html: email.body,
+                    body_plain: email.bodyPlain,
+                    sent_at: email.date ? new Date(email.date).toISOString() : undefined,
+                    has_attachments: email.hasAttachments || false,
+                    attachment_count: email.attachmentCount || 0,
+                  });
+                  emailsStored++;
+
+                  // Download attachments if present (Gmail searchEmails includes attachment metadata)
+                  if (email.hasAttachments && email.attachments && email.attachments.length > 0 && emailRecord) {
+                    try {
                       await emailAttachmentService.downloadEmailAttachments(
                         userId,
                         emailRecord.id,
                         email.id,
-                        "outlook",
-                        graphAttachments.map((att: { id: string; name: string; contentType: string; size: number }) => ({
-                          filename: att.name || "attachment",
-                          mimeType: att.contentType || "application/octet-stream",
+                        "gmail",
+                        email.attachments.map((att: { filename?: string; name?: string; mimeType?: string; contentType?: string; size?: number; attachmentId?: string; id?: string }) => ({
+                          filename: att.filename || att.name || "attachment",
+                          mimeType: att.mimeType || att.contentType || "application/octet-stream",
                           size: att.size || 0,
-                          attachmentId: att.id,
+                          attachmentId: att.attachmentId || att.id || "",
                         })),
                       );
+                    } catch (attError) {
+                      // Attachment download failure is non-blocking for email save
+                      if (!isNetworkError(attError)) {
+                        logService.warn("Failed to download Gmail attachments during sync", "Transactions", {
+                          emailId: emailRecord.id,
+                          error: attError instanceof Error ? attError.message : "Unknown",
+                        });
+                      }
+                      // Network errors on attachment download are non-fatal; email is already saved
                     }
-                  } catch (attError) {
-                    logService.warn("Failed to download Outlook attachments during sync", "Transactions", {
-                      emailId: emailRecord.id,
-                      error: attError instanceof Error ? attError.message : "Unknown",
-                    });
                   }
                 }
-              }
-            } catch (emailError) {
-              logService.warn("Failed to store Outlook email", "Transactions", {
-                error: emailError instanceof Error ? emailError.message : "Unknown",
-              });
-            }
-          }
-        }
-      } catch (outlookError) {
-        logService.warn("Outlook fetch failed, falling back to local search", "Transactions", {
-          error: outlookError instanceof Error ? outlookError.message : "Unknown",
-        });
-      }
-
-      // Try Gmail (bidirectional: from + to contacts)
-      try {
-        const gmailReady = await gmailFetchService.initialize(userId);
-        if (gmailReady) {
-          // Build explicit bidirectional query (from + to) instead of from-only contactEmails
-          const gmailSearchOptions: { query?: string; maxResults: number; contactEmails?: string[] } = {
-            maxResults: 200,
-          };
-          if (contactEmails.length > 0) {
-            // Use contactEmails param -- gmailFetchService.searchEmails now builds bidirectional filter
-            gmailSearchOptions.contactEmails = contactEmails;
-          }
-          const gmailEmails = await gmailFetchService.searchEmails(gmailSearchOptions);
-
-          // TASK-2046: Also fetch from all labels (custom labels, archives, etc.)
-          let allLabelEmails: typeof gmailEmails = [];
-          try {
-            allLabelEmails = await gmailFetchService.searchAllLabels({
-              maxResults: 200,
-            });
-            logService.info(`Fetched ${allLabelEmails.length} emails from all Gmail labels`, "Transactions");
-          } catch (labelError) {
-            logService.warn("Failed to fetch from all Gmail labels, continuing with default search only", "Transactions", {
-              error: labelError instanceof Error ? labelError.message : "Unknown",
-            });
-          }
-
-          // Dedup by ID across contact search and label fetch
-          const seenGmailIds = new Set<string>();
-          const dedupedGmailEmails = [...gmailEmails, ...allLabelEmails].filter((e) => {
-            if (seenGmailIds.has(e.id)) return false;
-            seenGmailIds.add(e.id);
-            return true;
-          });
-
-          emailsFetched += dedupedGmailEmails.length;
-          logService.info(`Fetched ${gmailEmails.length} contact-search + ${allLabelEmails.length} all-labels = ${dedupedGmailEmails.length} unique from Gmail`, "Transactions");
-
-          for (const email of dedupedGmailEmails) {
-            try {
-              let emailRecord = await getEmailByExternalId(userId, email.id);
-              if (!emailRecord) {
-                emailRecord = await createEmail({
-                  user_id: userId,
-                  external_id: email.id,
-                  source: "gmail",
-                  thread_id: email.threadId,
-                  sender: email.from ?? undefined,
-                  recipients: email.to ?? undefined,
-                  cc: email.cc ?? undefined,
-                  subject: email.subject ?? undefined,
-                  body_html: email.body,
-                  body_plain: email.bodyPlain,
-                  sent_at: email.date ? new Date(email.date).toISOString() : undefined,
-                  has_attachments: email.hasAttachments || false,
-                  attachment_count: email.attachmentCount || 0,
+              } catch (emailError) {
+                logService.warn("Failed to store Gmail email", "Transactions", {
+                  error: emailError instanceof Error ? emailError.message : "Unknown",
                 });
-                emailsStored++;
-
-                // Download attachments if present (Gmail searchEmails includes attachment metadata)
-                if (email.hasAttachments && email.attachments && email.attachments.length > 0 && emailRecord) {
-                  try {
-                    await emailAttachmentService.downloadEmailAttachments(
-                      userId,
-                      emailRecord.id,
-                      email.id,
-                      "gmail",
-                      email.attachments.map((att: { filename?: string; name?: string; mimeType?: string; contentType?: string; size?: number; attachmentId?: string; id?: string }) => ({
-                        filename: att.filename || att.name || "attachment",
-                        mimeType: att.mimeType || att.contentType || "application/octet-stream",
-                        size: att.size || 0,
-                        attachmentId: att.attachmentId || att.id || "",
-                      })),
-                    );
-                  } catch (attError) {
-                    logService.warn("Failed to download Gmail attachments during sync", "Transactions", {
-                      emailId: emailRecord.id,
-                      error: attError instanceof Error ? attError.message : "Unknown",
-                    });
-                  }
-                }
               }
-            } catch (emailError) {
-              logService.warn("Failed to store Gmail email", "Transactions", {
-                error: emailError instanceof Error ? emailError.message : "Unknown",
-              });
             }
           }
-        }
+        }, undefined, "GmailSync");
       } catch (gmailError) {
-        logService.warn("Gmail fetch failed, falling back to local search", "Transactions", {
-          error: gmailError instanceof Error ? gmailError.message : "Unknown",
-        });
+        if (isNetworkError(gmailError)) {
+          // TASK-2049: Network error after all retries exhausted
+          networkErrorOccurred = true;
+          networkErrorMessage = "Network disconnected during Gmail sync. Emails saved so far will be preserved.";
+          networkResilienceService.recordPartialSync(userId, "gmail", emailsStored);
+          logService.warn("Gmail sync failed due to network disconnect after retries", "Transactions", {
+            emailsStoredBeforeFailure: emailsStored,
+            error: gmailError instanceof Error ? gmailError.message : "Unknown",
+          });
+        } else {
+          logService.warn("Gmail fetch failed, falling back to local search", "Transactions", {
+            error: gmailError instanceof Error ? gmailError.message : "Unknown",
+          });
+        }
       }
 
       logService.info(`Email fetch complete: ${emailsFetched} fetched, ${emailsStored} new stored`, "Transactions");
@@ -1229,7 +1283,23 @@ export function registerEmailSyncHandlers(
         totalAlreadyLinked,
         totalErrors,
         attachmentsBackfilled: backfillResult.downloaded,
+        networkErrorOccurred,
       });
+
+      // TASK-2049: Return partial success when network error occurred but some emails were saved
+      if (networkErrorOccurred) {
+        return {
+          success: false,
+          error: networkErrorMessage || "Network disconnected during email sync. Already-fetched emails have been saved.",
+          partialSync: true,
+          emailsFetched,
+          emailsStored,
+          totalEmailsLinked,
+          totalMessagesLinked,
+          totalAlreadyLinked,
+          totalErrors,
+        };
+      }
 
       return {
         success: true,
