@@ -109,6 +109,37 @@ export interface RawMacAttachment {
 }
 
 // ============================================
+// CHUNKED PROCESSING TYPES (TASK-2047)
+// ============================================
+
+/**
+ * Options for chunked message processing (TASK-2047)
+ * Controls batch size, progress reporting, and cancellation
+ */
+export interface ChunkedProcessingOptions {
+  /** Number of items to process per batch before yielding to event loop (default: 500) */
+  batchSize?: number;
+  /** Progress callback: (currentBatch, totalBatches) */
+  onProgress?: (current: number, total: number) => void;
+  /** AbortSignal for clean cancellation */
+  abortSignal?: AbortSignal;
+}
+
+/**
+ * Result from chunked processing (TASK-2047)
+ */
+export interface ChunkedProcessingResult<T> {
+  /** All processed results */
+  results: T[];
+  /** Whether processing was cancelled before completion */
+  wasCancelled: boolean;
+  /** Number of batches processed */
+  batchesProcessed: number;
+  /** Total number of batches */
+  totalBatches: number;
+}
+
+// ============================================
 // CONSTANTS
 // ============================================
 
@@ -120,6 +151,10 @@ export const BATCH_SIZE = 100; // Messages per batch - small batches yield frequ
 export const DELETE_BATCH_SIZE = 5000; // Messages per delete batch (larger for efficiency)
 export const YIELD_INTERVAL = 1; // Yield every batch for UI responsiveness
 export const MIN_QUERY_BATCH_SIZE = 10000; // Minimum query batch size
+
+// TASK-2047: Chunked processing constants
+export const TEXT_EXTRACTION_YIELD_INTERVAL = 50; // Yield to event loop every N message text extractions
+export const PROGRESS_REPORT_INTERVAL = 10; // Report progress every N batches during import phase
 
 // Attachment constants (TASK-1012, expanded TASK-1122 to include videos)
 export const SUPPORTED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".heic", ".webp", ".bmp", ".tiff", ".tif"];

@@ -9,6 +9,11 @@ import path from "path";
 import fs from "fs";
 import cliProgress from "cli-progress";
 
+import type {
+  ChunkedProcessingOptions,
+  ChunkedProcessingResult,
+} from "./types";
+
 import {
   MAX_GUID_LENGTH,
   ALL_SUPPORTED_EXTENSIONS,
@@ -154,4 +159,64 @@ export function getMimeTypeFromFilename(filename: string): string {
 export async function generateContentHash(filePath: string): Promise<string> {
   const fileBuffer = await fs.promises.readFile(filePath);
   return crypto.createHash("sha256").update(fileBuffer).digest("hex");
+}
+
+/**
+ * Process items in chunks, yielding to the event loop between batches
+ * so the UI thread stays responsive during large imports. (TASK-2047)
+ *
+ * This is the core non-blocking processing primitive. It takes an array of items,
+ * processes them in configurable batch sizes, and yields to the event loop between
+ * each batch via setImmediate. This prevents the main Electron thread from freezing
+ * during imports of 10K+ messages.
+ *
+ * @param items - Array of items to process
+ * @param processBatch - Async function to process a batch of items, returns results
+ * @param options - Chunked processing options (batchSize, onProgress, abortSignal)
+ * @returns ChunkedProcessingResult with all results and cancellation status
+ */
+export async function processItemsInChunks<TInput, TOutput>(
+  items: TInput[],
+  processBatch: (batch: TInput[]) => Promise<TOutput[]>,
+  options: ChunkedProcessingOptions = {},
+): Promise<ChunkedProcessingResult<TOutput>> {
+  const batchSize = options.batchSize ?? 500;
+  const results: TOutput[] = [];
+  const totalBatches = Math.ceil(items.length / batchSize);
+  let batchesProcessed = 0;
+
+  for (let i = 0; i < items.length; i += batchSize) {
+    // Check for cancellation via AbortSignal
+    if (options.abortSignal?.aborted) {
+      return {
+        results,
+        wasCancelled: true,
+        batchesProcessed,
+        totalBatches,
+      };
+    }
+
+    const batch = items.slice(i, i + batchSize);
+    const processed = await processBatch(batch);
+
+    // Use push loop instead of spread to avoid stack overflow with large result sets
+    for (let j = 0; j < processed.length; j++) {
+      results.push(processed[j]);
+    }
+
+    batchesProcessed++;
+
+    // Yield to event loop -- allows UI to update and prevents freeze
+    await yieldToEventLoop();
+
+    // Emit progress
+    options.onProgress?.(batchesProcessed, totalBatches);
+  }
+
+  return {
+    results,
+    wasCancelled: false,
+    batchesProcessed,
+    totalBatches,
+  };
 }
