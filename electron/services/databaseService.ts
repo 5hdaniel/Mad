@@ -80,6 +80,21 @@ export type {
 } from "./db/transactionContactDbService";
 export type { ContactWithActivity, TransactionWithRoles } from "./db/contactDbService";
 
+/** Result of a dry-run migration check */
+export interface MigrationPlan {
+  currentVersion: number;
+  targetVersion: number;
+  pendingMigrations: { version: number; description: string }[];
+  wouldRunCount: number;
+}
+
+/** Internal migration definition */
+interface MigrationEntry {
+  version: number;
+  description: string;
+  migrate: (d: DatabaseType) => void;
+}
+
 /**
  * DatabaseService - Facade for all database operations
  *
@@ -366,19 +381,83 @@ class DatabaseService implements IDatabaseService {
     }
   }
 
-  /**
-   * Version-based migration runner.
-   *
-   * Reads current schema version, then runs any migrations with version > current.
-   * After each migration, the version is bumped in the schema_version table.
-   *
-   * Baseline = 29 (schema.sql contains everything through migration 28).
-   * Future migrations add entries to the `migrations` array below.
-   */
-  private async _runVersionedMigrations(): Promise<void> {
-    const db = this._ensureDb();
+  /** Baseline version -- schema.sql contains everything through migration 28 */
+  static readonly BASELINE_VERSION = 29;
 
-    // Ensure schema_version table exists (may be missing on very old DBs)
+  /**
+   * Registered migrations. Only add new entries at the end.
+   * Baseline = 29. Versions start at 30.
+   */
+  static readonly MIGRATIONS: MigrationEntry[] = [
+    {
+      version: 30,
+      description: "Fix transaction_summary view to count from transaction_contacts instead of deprecated transaction_participants",
+      migrate: (d) => {
+        d.exec(`
+          DROP VIEW IF EXISTS transaction_summary;
+          CREATE VIEW IF NOT EXISTS transaction_summary AS
+          SELECT
+            t.id,
+            t.user_id,
+            t.property_address,
+            t.transaction_type,
+            t.status,
+            t.stage,
+            t.started_at,
+            t.closed_at,
+            t.message_count,
+            t.attachment_count,
+            t.confidence_score,
+            (SELECT COUNT(*) FROM transaction_contacts tc WHERE tc.transaction_id = t.id) as participant_count,
+            (SELECT COUNT(*) FROM audit_packages ap WHERE ap.transaction_id = t.id) as audit_count
+          FROM transactions t;
+        `);
+      },
+    },
+  ];
+
+  // ---- Migration validation helpers (static for testability) ----
+
+  /**
+   * Detect duplicate version numbers in migration list.
+   * Throws with a clear message listing the duplicates.
+   */
+  static validateNoDuplicateVersions(migrations: MigrationEntry[]): void {
+    const seen = new Set<number>();
+    const duplicates: number[] = [];
+    for (const m of migrations) {
+      if (seen.has(m.version)) {
+        duplicates.push(m.version);
+      }
+      seen.add(m.version);
+    }
+    if (duplicates.length > 0) {
+      throw new Error(
+        `Duplicate migration versions detected: ${[...new Set(duplicates)].join(", ")}`
+      );
+    }
+  }
+
+  /**
+   * Detect gaps in migration version sequence starting from the first version.
+   * Throws if versions are not consecutive (e.g. 30, 32 missing 31).
+   */
+  static validateNoVersionGaps(migrations: MigrationEntry[]): void {
+    if (migrations.length === 0) return;
+    const versions = migrations.map((m) => m.version).sort((a, b) => a - b);
+    for (let i = 1; i < versions.length; i++) {
+      if (versions[i] !== versions[i - 1] + 1) {
+        const gap = `Missing migration version ${versions[i - 1] + 1} (found ${versions[i - 1]} -> ${versions[i]})`;
+        throw new Error(`Migration sequence error: ${gap}`);
+      }
+    }
+  }
+
+  /**
+   * Ensure the schema_version table exists and has the migrated_at column.
+   * Adds the column if it is missing (backwards-compatible upgrade).
+   */
+  _ensureSchemaVersionTable(db: DatabaseType): void {
     const schemaVersionExists = db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
     ).get();
@@ -388,82 +467,129 @@ class DatabaseService implements IDatabaseService {
         CREATE TABLE IF NOT EXISTS schema_version (
           id INTEGER PRIMARY KEY CHECK (id = 1),
           version INTEGER NOT NULL DEFAULT 1,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          migrated_at TEXT DEFAULT (datetime('now'))
         );
-        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 29);
+        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, ${DatabaseService.BASELINE_VERSION});
       `);
+    } else {
+      // Add migrated_at column if missing (backwards-compatible)
+      const columns = db.prepare("PRAGMA table_info(schema_version)").all() as Array<{ name: string }>;
+      const hasMigratedAt = columns.some((c) => c.name === "migrated_at");
+      if (!hasMigratedAt) {
+        db.exec("ALTER TABLE schema_version ADD COLUMN migrated_at TEXT");
+      }
     }
+  }
+
+  /**
+   * Version-based migration runner.
+   *
+   * Reads current schema version, then runs any migrations with version > current.
+   * After each migration, the version is bumped in the schema_version table.
+   *
+   * Baseline = 29 (schema.sql contains everything through migration 28).
+   * Future migrations add entries to the static MIGRATIONS array above.
+   *
+   * @param dryRun  When true, returns the migration plan without executing anything.
+   */
+  async _runVersionedMigrations(dryRun: boolean = false): Promise<MigrationPlan | void> {
+    const db = this._ensureDb();
+    const migrations = DatabaseService.MIGRATIONS;
+
+    // --- Structural validation (always runs, even in dry-run) ---
+    DatabaseService.validateNoDuplicateVersions(migrations);
+    DatabaseService.validateNoVersionGaps(migrations);
+
+    // --- Schema version table ---
+    this._ensureSchemaVersionTable(db);
 
     const currentVersion = (
       db.prepare("SELECT version FROM schema_version WHERE id = 1").get() as
         { version: number } | undefined
     )?.version || 0;
 
-    // -------------------------------------------------------
-    // Future migrations go here. Example:
-    //
-    // { version: 30, description: "Add new_column to some_table",
-    //   migrate: (d) => { d.exec("ALTER TABLE some_table ADD COLUMN new_column TEXT"); } },
-    // -------------------------------------------------------
-    const migrations: {
-      version: number;
-      description: string;
-      migrate: (d: DatabaseType) => void;
-    }[] = [
-      // Baseline = 29. Add new migrations below.
-      {
-        version: 30,
-        description: "Fix transaction_summary view to count from transaction_contacts instead of deprecated transaction_participants",
-        migrate: (d) => {
-          d.exec(`
-            DROP VIEW IF EXISTS transaction_summary;
-            CREATE VIEW IF NOT EXISTS transaction_summary AS
-            SELECT
-              t.id,
-              t.user_id,
-              t.property_address,
-              t.transaction_type,
-              t.status,
-              t.stage,
-              t.started_at,
-              t.closed_at,
-              t.message_count,
-              t.attachment_count,
-              t.confidence_score,
-              (SELECT COUNT(*) FROM transaction_contacts tc WHERE tc.transaction_id = t.id) as participant_count,
-              (SELECT COUNT(*) FROM audit_packages ap WHERE ap.transaction_id = t.id) as audit_count
-            FROM transactions t;
-          `);
-        },
-      },
-    ];
+    if (currentVersion > 0 && currentVersion < DatabaseService.BASELINE_VERSION) {
+      await logService.warn(
+        `DB version ${currentVersion} is below baseline ${DatabaseService.BASELINE_VERSION}. Schema.sql should handle this.`,
+        "DatabaseService"
+      );
+    }
 
-    for (const m of migrations) {
-      if (m.version > currentVersion) {
-        await logService.info(
-          `Running migration ${m.version}: ${m.description}`,
+    // Filter to only pending migrations
+    const pendingMigrations = migrations.filter((m) => m.version > currentVersion);
+    const targetVersion = pendingMigrations.length > 0
+      ? pendingMigrations[pendingMigrations.length - 1].version
+      : currentVersion;
+
+    // --- Dry-run mode: return plan without executing ---
+    if (dryRun) {
+      return {
+        currentVersion,
+        targetVersion,
+        pendingMigrations: pendingMigrations.map((m) => ({
+          version: m.version,
+          description: m.description,
+        })),
+        wouldRunCount: pendingMigrations.length,
+      };
+    }
+
+    // --- Backup verification (only when there are pending migrations) ---
+    if (pendingMigrations.length > 0 && this.dbPath && fs.existsSync(this.dbPath)) {
+      const dbDir = path.dirname(this.dbPath);
+      const dbName = path.basename(this.dbPath, ".db");
+      const backupFiles = fs.existsSync(dbDir)
+        ? fs.readdirSync(dbDir).filter((f) => f.startsWith(`${dbName}-backup-`) && f.endsWith(".db"))
+        : [];
+
+      if (backupFiles.length === 0) {
+        await logService.error(
+          "No pre-migration backup found. Refusing to run migrations.",
           "DatabaseService"
         );
+        throw new Error("Pre-migration backup required but not found");
+      }
+    }
+
+    // --- Execute pending migrations ---
+    for (const m of pendingMigrations) {
+      await logService.info(
+        `Running migration ${m.version}: ${m.description}`,
+        "DatabaseService"
+      );
+      try {
         // Wrap migration + version bump in a transaction so partial failures
         // don't leave the DB in a half-migrated state (SR review gap #1)
         const runInTransaction = db.transaction(() => {
           m.migrate(db);
-          db.exec(
-            `UPDATE schema_version SET version = ${m.version}, updated_at = CURRENT_TIMESTAMP WHERE id = 1`
-          );
+          db.prepare(
+            "UPDATE schema_version SET version = ?, updated_at = CURRENT_TIMESTAMP, migrated_at = datetime('now') WHERE id = 1"
+          ).run(m.version);
         });
         runInTransaction();
         await logService.info(
-          `Migration ${m.version} complete: ${m.description}`,
+          `Migration ${m.version} completed: ${m.description}`,
           "DatabaseService"
+        );
+      } catch (error) {
+        await logService.error(
+          `Migration ${m.version} FAILED: ${m.description}`,
+          "DatabaseService",
+          { error: error instanceof Error ? error.message : String(error) }
+        );
+        // Transaction auto-rolled back by better-sqlite3, DB stays at previous version
+        throw new Error(
+          `Migration ${m.version} (${m.description}) failed: ${error instanceof Error ? error.message : String(error)}. ` +
+          `Database remains at version ${m.version - 1}. Pre-migration backup available.`
         );
       }
     }
 
-    // Ensure version is at least 29 (the consolidated baseline)
-    if (currentVersion < 29) {
+    // Ensure version is at least baseline (the consolidated baseline)
+    if (currentVersion < DatabaseService.BASELINE_VERSION) {
       db.exec(
-        "UPDATE schema_version SET version = 29, updated_at = CURRENT_TIMESTAMP WHERE id = 1"
+        `UPDATE schema_version SET version = ${DatabaseService.BASELINE_VERSION}, updated_at = CURRENT_TIMESTAMP WHERE id = 1`
       );
     }
 
