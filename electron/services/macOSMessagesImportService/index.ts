@@ -10,4 +10,7 @@ export type {
   MacOSImportResult,
   ImportProgressCallback,
   MessageAttachment,
+  ChunkedProcessingOptions,
+  ChunkedProcessingResult,
 } from "./types";
+export { processItemsInChunks } from "./importHelpers";

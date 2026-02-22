@@ -52,6 +52,8 @@ import {
   YIELD_INTERVAL,
   MAX_ATTACHMENT_SIZE,
   ATTACHMENTS_DIR,
+  TEXT_EXTRACTION_YIELD_INTERVAL,
+  PROGRESS_REPORT_INTERVAL,
 } from "./types";
 
 import {
@@ -78,6 +80,8 @@ class MacOSMessagesImportService {
   private importStartedAt: number | null = null;
   /** Flag to signal that current import should be cancelled */
   private cancelCurrentImport = false;
+  /** TASK-2047: AbortController for clean cancellation via AbortSignal */
+  private abortController: AbortController | null = null;
   /** Flag to indicate force reimport is in progress (blocks all other imports) */
   private forceReimportInProgress = false;
   /** Max import duration before auto-reset (10 minutes) */
@@ -163,6 +167,8 @@ class MacOSMessagesImportService {
 
     this.isImporting = true;
     this.importStartedAt = Date.now();
+    // TASK-2047: Create AbortController for clean cancellation
+    this.abortController = new AbortController();
     if (forceReimport) {
       this.forceReimportInProgress = true;
     }
@@ -172,6 +178,7 @@ class MacOSMessagesImportService {
     } finally {
       this.isImporting = false;
       this.importStartedAt = null;
+      this.abortController = null;
       if (forceReimport) {
         this.forceReimportInProgress = false;
       }
@@ -191,8 +198,9 @@ class MacOSMessagesImportService {
   }
 
   /**
-   * Request cancellation of the current import (TASK-1710)
-   * The import will stop at the next batch boundary, preserving partial data
+   * Request cancellation of the current import (TASK-1710, TASK-2047)
+   * The import will stop at the next batch boundary, preserving partial data.
+   * Uses both the legacy flag and AbortController signal for cancellation.
    */
   requestCancellation(): void {
     if (this.isImporting) {
@@ -201,6 +209,8 @@ class MacOSMessagesImportService {
         MacOSMessagesImportService.SERVICE_NAME
       );
       this.cancelCurrentImport = true;
+      // TASK-2047: Also abort via AbortController for processItemsInChunks support
+      this.abortController?.abort();
     }
   }
 
@@ -407,8 +417,8 @@ class MacOSMessagesImportService {
         queryProgressBar.start(totalMessageCount, 0);
 
         while (fetchedCount < totalMessageCount) {
-          // Check for cancellation
-          if (this.cancelCurrentImport) {
+          // Check for cancellation (legacy flag and AbortSignal)
+          if (this.cancelCurrentImport || this.abortController?.signal.aborted) {
             queryProgressBar.stop();
             logService.warn(
               `Import cancelled during query phase at ${fetchedCount}/${totalMessageCount}`,
@@ -665,8 +675,8 @@ class MacOSMessagesImportService {
     msgProgressBar.start(messages.length, 0);
 
     for (let batchNum = 0; batchNum < totalBatches; batchNum++) {
-      // Check for cancellation at start of each batch
-      if (this.cancelCurrentImport) {
+      // Check for cancellation at start of each batch (legacy flag and AbortSignal)
+      if (this.cancelCurrentImport || this.abortController?.signal.aborted) {
         msgProgressBar.stop();
         logService.warn(
           `Import cancelled at batch ${batchNum}/${totalBatches}`,
@@ -683,7 +693,10 @@ class MacOSMessagesImportService {
       // This must be done BEFORE the transaction since getMessageText is async
       // TASK-PERF: Wrap each message parsing in try-catch to prevent stack overflow
       // from a single malformed message killing the entire import
+      // TASK-2047: Yield to event loop every TEXT_EXTRACTION_YIELD_INTERVAL messages
+      // to prevent UI freezes during text extraction of large batches
       const messageTexts = new Map<string, string>();
+      let extractionCount = 0;
       for (const msg of batch) {
         if (msg.guid && isValidGuid(msg.guid) && !existingIds.has(msg.guid)) {
           try {
@@ -708,6 +721,13 @@ class MacOSMessagesImportService {
             );
             // Use empty string - the message will be skipped later due to content filter
             messageTexts.set(msg.guid, "[Unable to parse message]");
+          }
+
+          // TASK-2047: Yield to event loop periodically during text extraction
+          // to prevent UI freeze when processing batches with many messages
+          extractionCount++;
+          if (extractionCount % TEXT_EXTRACTION_YIELD_INTERVAL === 0) {
+            await yieldToEventLoop();
           }
         }
       }
@@ -870,8 +890,9 @@ class MacOSMessagesImportService {
       // Update progress bar
       msgProgressBar.update(end);
 
-      // Report progress to UI - throttle to every 100 batches to reduce IPC overhead
-      if (batchNum % 100 === 0 || batchNum === totalBatches - 1) {
+      // TASK-2047: Report progress to UI more frequently for responsive feedback
+      // Changed from every 100 batches to every PROGRESS_REPORT_INTERVAL batches
+      if (batchNum % PROGRESS_REPORT_INTERVAL === 0 || batchNum === totalBatches - 1) {
         onProgress?.({
           phase: "importing",
           current: end,
@@ -990,8 +1011,8 @@ class MacOSMessagesImportService {
     let processed = 0;
 
     for (const attachment of attachments) {
-      // Check for cancellation
-      if (this.cancelCurrentImport) {
+      // Check for cancellation (legacy flag and AbortSignal)
+      if (this.cancelCurrentImport || this.abortController?.signal.aborted) {
         attachProgressBar.stop();
         logService.warn(
           `Attachment import cancelled at ${processed}/${totalAttachments}`,
