@@ -54,6 +54,7 @@ import {
   errorLoggingBridge,
   resetBridge,
   databaseBackupBridge,
+  privacyBridge,
 } from "./preload/index";
 
 // Expose protected methods that allow the renderer process to use
@@ -127,4 +128,7 @@ contextBridge.exposeInMainWorld("api", {
 
   // Database backup & restore (TASK-2052)
   databaseBackup: databaseBackupBridge,
+
+  // Privacy / CCPA data export (TASK-2053)
+  privacy: privacyBridge,
 });

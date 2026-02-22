@@ -1957,6 +1957,21 @@ interface MainAPI {
     }>;
   };
 
+  // Privacy / CCPA data export (TASK-2053)
+  privacy: {
+    /** Export all personal data as a JSON file (CCPA compliance) */
+    exportData: (userId: string) => Promise<{
+      success: boolean;
+      filePath?: string;
+      error?: string;
+    }>;
+    /** Listen for export progress updates */
+    onExportProgress: (callback: (progress: {
+      category: string;
+      progress: number;
+    }) => void) => () => void;
+  };
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any; // Allow other properties for backwards compatibility
 }

@@ -88,6 +88,7 @@ const SETTINGS_TABS = [
   { id: "settings-export", label: "Export" },
   { id: "settings-ai", label: "AI" },
   { id: "settings-data", label: "Data" },
+  { id: "settings-privacy", label: "Privacy" },
   { id: "settings-about", label: "About" },
 ];
 
@@ -156,6 +157,15 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
 
   // TASK-2045: Sign out all devices state
   const [signingOutAllDevices, setSigningOutAllDevices] = useState<boolean>(false);
+
+  // TASK-2053: CCPA data export state
+  const [exporting, setExporting] = useState<boolean>(false);
+  const [exportProgress, setExportProgress] = useState<number>(0);
+  const [exportCategory, setExportCategory] = useState<string>("");
+  const [exportResult, setExportResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
 
   // Database maintenance state
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'up-to-date' | 'available' | 'error'>('idle');
@@ -653,6 +663,54 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
       notify.error("Failed to sign out of all devices. Please try again.");
     } finally {
       setSigningOutAllDevices(false);
+    }
+  };
+
+  // TASK-2053: Handle CCPA data export
+  const handleExportData = async (): Promise<void> => {
+    setExporting(true);
+    setExportProgress(0);
+    setExportCategory("");
+    setExportResult(null);
+
+    // Listen for progress updates
+    const cleanup = window.api.privacy?.onExportProgress?.(
+      (progress: { category: string; progress: number }) => {
+        setExportProgress(progress.progress);
+        setExportCategory(progress.category);
+      },
+    );
+
+    try {
+      const result = await window.api.privacy.exportData(userId);
+      if (result.success) {
+        setExportResult({
+          success: true,
+          message: "Data exported successfully",
+        });
+        notify.success("Your data has been exported successfully.");
+      } else if (result.error === "Export cancelled by user") {
+        // User cancelled - no error message needed
+        setExportResult(null);
+      } else {
+        setExportResult({
+          success: false,
+          message: result.error || "Export failed",
+        });
+        notify.error("Failed to export data: " + (result.error || "Unknown error"));
+      }
+    } catch (error) {
+      logger.error("Failed to export data:", error);
+      setExportResult({
+        success: false,
+        message: "An unexpected error occurred during export",
+      });
+      notify.error("An unexpected error occurred during export.");
+    } finally {
+      setExporting(false);
+      setExportProgress(0);
+      setExportCategory("");
+      if (cleanup) cleanup();
     }
   };
 
@@ -1516,6 +1574,61 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                       />
                     </svg>
                   </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Privacy - CCPA Data Export (TASK-2053) */}
+            <div id="settings-privacy" className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Privacy
+              </h3>
+              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <h4 className="text-sm font-medium text-gray-900 mb-2">
+                  Export Your Data (CCPA)
+                </h4>
+                <p className="text-xs text-gray-600 mb-3">
+                  You have the right to know what personal data is stored in this
+                  application. Click below to export all your data as a JSON file.
+                </p>
+                <p className="text-xs text-gray-500 mb-4">
+                  Data included: profile, transactions, contacts, messages, emails,
+                  preferences, and activity logs. OAuth token values are excluded
+                  for security.
+                </p>
+                {/* Progress indicator */}
+                {exporting && (
+                  <div className="mb-3">
+                    <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                      <span>
+                        Exporting{exportCategory ? `: ${exportCategory}` : "..."}
+                      </span>
+                      <span>{exportProgress}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                      <div
+                        className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
+                        style={{ width: `${exportProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+                {/* Result message */}
+                {exportResult && (
+                  <p
+                    className={`text-xs mb-3 ${
+                      exportResult.success ? "text-green-600" : "text-red-600"
+                    }`}
+                  >
+                    {exportResult.message}
+                  </p>
+                )}
+                <button
+                  onClick={handleExportData}
+                  disabled={exporting}
+                  className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {exporting ? "Exporting..." : "Export My Data"}
                 </button>
               </div>
             </div>
