@@ -198,13 +198,13 @@ Implementation:
 
 PR Submission:
 - [x] This summary section completed
-- [ ] PR created with Engineer Metrics (see template)
-- [ ] CI passes (gh pr checks --watch)
-- [ ] SR Engineer review requested
+- [x] PR created with Engineer Metrics (see template)
+- [x] CI passes (gh pr checks --watch)
+- [x] SR Engineer review requested
 
 Completion:
-- [ ] SR Engineer approved and merged
-- [ ] PM notified for next task
+- [x] SR Engineer approved and merged
+- [x] PM notified for next task
 ```
 
 ### Results
@@ -212,7 +212,7 @@ Completion:
 - **Before**: 4 groups of duplicated utility functions across pdfExportService.ts and folderExportService.ts (escapeHtml x2, formatCurrency x2, formatDate x2, getContactNamesByPhones x2)
 - **After**: All 4 groups extracted to electron/utils/exportUtils.ts; both services import from shared module
 - **Actual Tokens**: ~15K (Est: ~60K)
-- **PR**: [URL after PR created]
+- **PR**: #911, merged 2026-02-21
 
 ### Notes
 

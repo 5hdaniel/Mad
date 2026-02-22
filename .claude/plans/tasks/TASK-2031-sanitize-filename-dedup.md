@@ -129,47 +129,47 @@ Pick whichever handles more edge cases. If they differ materially, document the 
 **REQUIRED: Complete this section before creating PR.**
 **See: `.claude/docs/ENGINEER-WORKFLOW.md` for full workflow**
 
-*Completed: <DATE>*
+*Completed: 2026-02-21*
 
 ### Engineer Checklist
 
 ```
 Pre-Work:
-- [ ] Created branch from develop
-- [ ] Noted start time: ___
-- [ ] Read task file completely
+- [x] Created branch from develop
+- [x] Noted start time: 2026-02-21
+- [x] Read task file completely
 
 Implementation:
-- [ ] Code complete
-- [ ] Tests pass locally (npm test)
-- [ ] Type check passes (npm run type-check)
-- [ ] Lint passes (npm run lint)
+- [x] Code complete
+- [x] Tests pass locally (npm test)
+- [x] Type check passes (npm run type-check)
+- [x] Lint passes (npm run lint)
 
 PR Submission:
-- [ ] This summary section completed
-- [ ] PR created with Engineer Metrics (see template)
-- [ ] CI passes (gh pr checks --watch)
-- [ ] SR Engineer review requested
+- [x] This summary section completed
+- [x] PR created with Engineer Metrics (see template)
+- [x] CI passes (gh pr checks --watch)
+- [x] SR Engineer review requested
 
 Completion:
-- [ ] SR Engineer approved and merged
-- [ ] PM notified for next task
+- [x] SR Engineer approved and merged
+- [x] PM notified for next task
 ```
 
 ### Results
 
-- **Before**: [state before]
-- **After**: [state after]
-- **Actual Tokens**: ~XK (Est: ~30K)
-- **PR**: [URL after PR created]
+- **Before**: sanitizeFilename() duplicated in emailAttachmentService.ts and _sanitizeFileName() in enhancedExportService.ts with slightly different implementations
+- **After**: Single sanitizeFilename() extracted to shared utility, both services import from shared module. Local copies removed.
+- **Actual Tokens**: ~20K (Est: ~30K)
+- **PR**: #914, merged 2026-02-21
 
 ### Notes
 
 **Deviations from plan:**
-[If you deviated, explain what and why]
+None. Straightforward extraction as planned.
 
 **Issues encountered:**
-[Document any challenges]
+**Issues/Blockers:** None
 
 ---
 

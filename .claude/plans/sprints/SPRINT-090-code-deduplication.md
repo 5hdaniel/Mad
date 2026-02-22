@@ -1,7 +1,8 @@
 # SPRINT-090: Code Deduplication & Consolidation
 
 **Created:** 2026-02-21
-**Status:** Planning
+**Status:** Completed
+**Completed:** 2026-02-21
 **Base:** `develop`
 **Deadline:** Monday 2026-02-23 (Phase 1 CRITICAL)
 
@@ -21,15 +22,16 @@ Beyond the critical phone normalization fix, SPRINT-089 closure identified 9 cos
 
 ## In-Scope
 
-| ID | Title | Task | Phase | Est Tokens | Actual Tokens | Status |
-|----|-------|------|-------|-----------|---------------|--------|
-| BACKLOG-756 | Fix normalizePhone email bug in 4 remaining implementations | TASK-2028 | 1 | ~60K | - | Pending |
-| BACKLOG-757, 762, 763, 764, 765 | Renderer-side utility deduplication | TASK-2029 | 2a | ~60K | - | Pending |
-| BACKLOG-758, 759, 760, 761 | Export service utility deduplication | TASK-2030 | 2b | ~60K | - | Pending |
-| BACKLOG-766 | sanitizeFilename() dedup (emailAttachmentService + enhancedExportService) | TASK-2031 | 3a | ~30K | - | Pending |
-| BACKLOG-767 | Investigate and split oversized service files | TASK-2032 | 3b | ~80K | - | Pending |
+| ID | Title | Task | Phase | Est Tokens | Actual Tokens | PR | Merged | Status |
+|----|-------|------|-------|-----------|---------------|-----|--------|--------|
+| BACKLOG-756 | Fix normalizePhone email bug in 4 remaining implementations | TASK-2028 | 1 | ~60K | ~30K | #910 | 2026-02-21 | Completed |
+| BACKLOG-757, 762, 763, 764, 765 | Renderer-side utility deduplication | TASK-2029 | 2a | ~60K | ~40K | #912 | 2026-02-21 | Completed |
+| BACKLOG-758, 759, 760, 761 | Export service utility deduplication | TASK-2030 | 2b | ~60K | ~15K | #911 | 2026-02-21 | Completed |
+| BACKLOG-766 | sanitizeFilename() dedup (emailAttachmentService + enhancedExportService) | TASK-2031 | 3a | ~30K | ~20K | #914 | 2026-02-21 | Completed |
+| BACKLOG-767 | Investigate and split oversized service files | TASK-2032 | 3b | ~80K | ~80K | #915 | 2026-02-21 | Completed |
 
 **Total Estimated Tokens:** ~290K (engineering) + ~50K (SR review) = ~340K
+**Total Actual Tokens:** ~185K (engineering)
 
 ---
 
@@ -226,11 +228,11 @@ Sprint Complete
 
 | Task | Branch Name | Base | Target | PR | Status |
 |------|-------------|------|--------|-----|--------|
-| TASK-2028 | `fix/task-2028-normalize-phone-email-bug` | develop | develop | - | Pending |
-| TASK-2029 | `refactor/task-2029-renderer-dedup` | develop | develop | - | Pending |
-| TASK-2030 | `refactor/task-2030-export-dedup` | develop | develop | - | Pending |
-| TASK-2031 | `refactor/task-2031-sanitize-filename-dedup` | develop | develop | - | Pending |
-| TASK-2032 | `refactor/task-2032-split-oversized-services` | develop | develop | - | Pending |
+| TASK-2028 | `fix/task-2028-normalize-phone-email-bug` | develop | develop | #910 | Merged 2026-02-21 |
+| TASK-2029 | `refactor/task-2029-renderer-dedup` | develop | develop | #912 | Merged 2026-02-21 |
+| TASK-2030 | `refactor/task-2030-export-dedup` | develop | develop | #911 | Merged 2026-02-21 |
+| TASK-2031 | `refactor/task-2031-sanitize-filename-dedup` | develop | develop | #914 | Merged 2026-02-21 |
+| TASK-2032 | `refactor/task-2032-split-oversized-services` | develop | develop | #915 | Merged 2026-02-21 |
 
 **Merge order:** TASK-2028 first (CRITICAL), then TASK-2029 and TASK-2030 in any order (parallel-safe), then TASK-2031, then TASK-2032.
 
@@ -266,10 +268,10 @@ Sprint Complete
 
 ### CI Gates
 
-- [ ] `npm run type-check` passes
-- [ ] `npm run lint` passes
-- [ ] `npm test` passes
-- [ ] No regressions in existing tests
+- [x] `npm run type-check` passes
+- [x] `npm run lint` passes
+- [x] `npm test` passes
+- [x] No regressions in existing tests
 
 ---
 
@@ -333,3 +335,33 @@ Two additional consolidation items identified during sprint planning:
 | BACKLOG-738 | Split oversized service files -- overlaps with TASK-2032 |
 | BACKLOG-497 | SQLite worker thread -- may subsume databaseService refactor |
 | BACKLOG-193 | Refactor databaseService.ts -- may be deferred in favor of BACKLOG-497 |
+
+---
+
+## Sprint Completion Summary
+
+**All 5 tasks completed and merged on 2026-02-21.**
+
+### Accomplishments
+
+1. **Phase 1 -- Critical Bug Fix (TASK-2028, PR #910):** Fixed normalizePhone email-destroying bug across 5 files (4 planned + 1 discovered in AttachMessagesModal). Email handles like `user@icloud.com` are now preserved correctly in all normalizePhone implementations. Auto-linking with email-handle contacts works correctly.
+
+2. **Phase 2a -- Renderer Dedup (TASK-2029, PR #912):** Extracted 19 duplicated utility functions from 10+ renderer components into 5 shared modules: `formatUtils.ts`, `dateRangeUtils.ts`, `emailParticipantUtils.ts`, `messageFormatUtils.ts`, `avatarUtils.ts`.
+
+3. **Phase 2b -- Export Dedup (TASK-2030, PR #911):** Extracted 4 groups of duplicated utilities (escapeHtml, formatCurrency, formatDate/formatDateTime, getContactNamesByPhones) from pdfExportService and folderExportService into shared `exportUtils.ts`.
+
+4. **Phase 3a -- Filename Sanitization (TASK-2031, PR #914):** Unified `sanitizeFilename()` and `_sanitizeFileName()` from emailAttachmentService and enhancedExportService into shared utility.
+
+5. **Phase 3b -- Service Splits (TASK-2032, PR #915):** Investigated 5 oversized services; split 3 (folderExportService, transactionService, macOSMessagesImportService) into focused sub-modules with backward-compatible index.ts re-exports. Skipped contactDbService (already 494 lines) and databaseService (thin facade, 52 consumers, deferred to BACKLOG-497).
+
+### Key Metrics
+
+| Metric | Value |
+|--------|-------|
+| Tasks Completed | 5/5 |
+| PRs Merged | 5 (#910, #911, #912, #914, #915) |
+| Estimated Engineering Tokens | ~290K |
+| Actual Engineering Tokens | ~185K |
+| Variance | -36% (under budget) |
+| Backlog Items Closed | 16 (BACKLOG-350, 738, 756-767) |
+| Completion Date | 2026-02-21 (2 days ahead of deadline) |

@@ -161,47 +161,47 @@ Pick the version that handles the most edge cases. Document which version was ch
 **REQUIRED: Complete this section before creating PR.**
 **See: `.claude/docs/ENGINEER-WORKFLOW.md` for full workflow**
 
-*Completed: <DATE>*
+*Completed: 2026-02-21*
 
 ### Engineer Checklist
 
 ```
 Pre-Work:
-- [ ] Created branch from develop
-- [ ] Noted start time: ___
-- [ ] Read task file completely
+- [x] Created branch from develop
+- [x] Noted start time: 2026-02-21
+- [x] Read task file completely
 
 Implementation:
-- [ ] Code complete
-- [ ] Tests pass locally (npm test)
-- [ ] Type check passes (npm run type-check)
-- [ ] Lint passes (npm run lint)
+- [x] Code complete
+- [x] Tests pass locally (npm test)
+- [x] Type check passes (npm run type-check)
+- [x] Lint passes (npm run lint)
 
 PR Submission:
-- [ ] This summary section completed
-- [ ] PR created with Engineer Metrics (see template)
-- [ ] CI passes (gh pr checks --watch)
-- [ ] SR Engineer review requested
+- [x] This summary section completed
+- [x] PR created with Engineer Metrics (see template)
+- [x] CI passes (gh pr checks --watch)
+- [x] SR Engineer review requested
 
 Completion:
-- [ ] SR Engineer approved and merged
-- [ ] PM notified for next task
+- [x] SR Engineer approved and merged
+- [x] PM notified for next task
 ```
 
 ### Results
 
-- **Before**: [state before]
-- **After**: [state after]
-- **Actual Tokens**: ~XK (Est: ~60K)
-- **PR**: [URL after PR created]
+- **Before**: 19 duplicated utility functions across 10+ renderer components (formatFileSize x4, formatDateRangeLabel x2, formatDateRange x2, filterSelfFromParticipants x2, formatParticipants x2, isEmptyOrReplacementChar x2, formatMessageTime x2, getAvatarInitial x3)
+- **After**: All 19 duplications consolidated into 5 shared utility modules under src/utils/ (formatUtils.ts, dateRangeUtils.ts, emailParticipantUtils.ts, messageFormatUtils.ts, avatarUtils.ts). All consuming components updated to import from shared modules.
+- **Actual Tokens**: ~40K (Est: ~60K)
+- **PR**: #912, merged 2026-02-21
 
 ### Notes
 
 **Deviations from plan:**
-[If you deviated, explain what and why]
+None significant. All 5 utility groups extracted as planned.
 
 **Issues encountered:**
-[Document any challenges]
+**Issues/Blockers:** None
 
 ---
 
