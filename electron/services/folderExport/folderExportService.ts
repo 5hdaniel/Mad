@@ -55,6 +55,8 @@ import {
   getAttachmentsForMessage,
   getAttachmentsForEmail,
   sanitizeFileName,
+  exportEmailAttachmentsToThreadDirs,
+  type AttachmentExportResult,
 } from "./attachmentHelpers";
 
 export interface FolderExportOptions {
@@ -90,6 +92,21 @@ interface AttachmentManifest {
   propertyAddress: string;
   exportDate: string;
   attachments: AttachmentManifestEntry[];
+  /** TASK-2050: Summary of email attachments exported to thread directories */
+  emailAttachments?: {
+    totalCount: number;
+    exportedCount: number;
+    skippedCount: number;
+    totalSizeBytes: number;
+    items: Array<{
+      emailId: string;
+      filename: string;
+      contentType: string;
+      sizeBytes: number;
+      exportPath: string;
+    }>;
+    errors: string[];
+  };
 }
 
 class FolderExportService {
@@ -218,6 +235,23 @@ class FolderExportService {
         }
       }
 
+      // TASK-2050: Export email attachments into per-thread subdirectories
+      // This runs after email PDFs are exported, adding attachments/ subdirs alongside the PDFs
+      let emailAttachmentResult: AttachmentExportResult | undefined;
+      if (includeEmails && emails.length > 0) {
+        emailAttachmentResult = await exportEmailAttachmentsToThreadDirs(
+          emails,
+          emailsPath,
+        );
+        if (emailAttachmentResult.exported > 0 || emailAttachmentResult.skipped > 0) {
+          logService.info("[Folder Export] Email attachments phase complete", "FolderExport", {
+            exported: emailAttachmentResult.exported,
+            skipped: emailAttachmentResult.skipped,
+            totalSizeMB: (emailAttachmentResult.totalSizeBytes / 1024 / 1024).toFixed(1),
+          });
+        }
+      }
+
       // Export text conversations
       if (includeTexts && texts.length > 0) {
         onProgress?.({
@@ -247,7 +281,7 @@ class FolderExportService {
         });
 
         const allCommunications = [...emails, ...texts];
-        await this.exportAttachments(transaction, allCommunications, attachmentsPath);
+        await this.exportAttachments(transaction, allCommunications, attachmentsPath, emailAttachmentResult);
 
         onProgress?.({
           stage: "attachments",
@@ -435,11 +469,13 @@ class FolderExportService {
 
   /**
    * Export attachments and create manifest
+   * TASK-2050: Updated to include email attachment metadata in manifest
    */
   private async exportAttachments(
     transaction: Transaction,
     communications: Communication[],
-    outputPath: string
+    outputPath: string,
+    emailAttachmentResult?: AttachmentExportResult
   ): Promise<void> {
     const manifest: AttachmentManifest = {
       transactionId: transaction.id,
@@ -707,6 +743,26 @@ class FolderExportService {
       }
     }
 
+    // TASK-2050: Include email attachment metadata in manifest
+    if (emailAttachmentResult) {
+      manifest.emailAttachments = {
+        totalCount: emailAttachmentResult.exported + emailAttachmentResult.skipped,
+        exportedCount: emailAttachmentResult.exported,
+        skippedCount: emailAttachmentResult.skipped,
+        totalSizeBytes: emailAttachmentResult.totalSizeBytes,
+        items: emailAttachmentResult.items
+          .filter((item) => item.status === "exported")
+          .map((item) => ({
+            emailId: item.emailId,
+            filename: item.filename,
+            contentType: item.contentType,
+            sizeBytes: item.sizeBytes,
+            exportPath: item.exportPath,
+          })),
+        errors: emailAttachmentResult.errors,
+      };
+    }
+
     // Write manifest
     await fs.writeFile(
       path.join(outputPath, "manifest.json"),
@@ -719,6 +775,7 @@ class FolderExportService {
       exported: manifest.attachments.filter((a) => a.status === "exported").length,
       notFound: manifest.attachments.filter((a) => a.status === "file_not_found").length,
       failed: manifest.attachments.filter((a) => a.status === "copy_failed").length,
+      emailAttachmentsExported: emailAttachmentResult?.exported ?? 0,
     });
   }
 
