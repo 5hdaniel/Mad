@@ -226,6 +226,29 @@ class SupabaseService {
   }
 
   /**
+   * TASK-2045: Sign out from all devices (global session invalidation)
+   * Calls Supabase with scope: 'global' to invalidate all active sessions.
+   * Must be called BEFORE clearing the local session (needs active token).
+   * @returns Success status and optional error message
+   */
+  async signOutGlobal(): Promise<{ success: boolean; error?: string }> {
+    const client = this._ensureClient();
+
+    try {
+      const { error } = await client.auth.signOut({ scope: 'global' });
+      if (error) throw error;
+      logService.info("[Supabase] Global sign-out successful", "SupabaseService");
+      return { success: true };
+    } catch (error) {
+      logService.error("[Supabase] Global sign-out failed", "SupabaseService", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "signOutGlobal" },
+      });
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  /**
    * Sign out from Supabase Auth
    * Clears the auth session (service key still works for admin operations)
    */

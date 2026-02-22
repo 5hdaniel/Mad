@@ -699,6 +699,8 @@ export interface WindowApi {
      * Used for deep-link authentication flow
      */
     openAuthInBrowser: () => Promise<{ success: boolean; error?: string }>;
+    // TASK-2045: Sign out of all devices (global session invalidation)
+    signOutAllDevices: () => Promise<{ success: boolean; error?: string }>;
   };
 
   // System methods

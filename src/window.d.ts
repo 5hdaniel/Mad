@@ -479,6 +479,8 @@ interface MainAPI {
      * Used for deep-link authentication flow
      */
     openAuthInBrowser: () => Promise<{ success: boolean; error?: string }>;
+    // TASK-2045: Sign out of all devices (global session invalidation)
+    signOutAllDevices: () => Promise<{ success: boolean; error?: string }>;
   };
   system: {
     // Platform detection (migrated from window.electron.platform)

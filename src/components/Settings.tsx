@@ -153,6 +153,9 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
     }
   }, []);
 
+  // TASK-2045: Sign out all devices state
+  const [signingOutAllDevices, setSigningOutAllDevices] = useState<boolean>(false);
+
   // Database maintenance state
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'up-to-date' | 'available' | 'error'>('idle');
   const [updateVersion, setUpdateVersion] = useState<string>('');
@@ -598,6 +601,28 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
     e: React.ChangeEvent<HTMLSelectElement>,
   ): void => {
     handleExportFormatChange(e.target.value);
+  };
+
+  // TASK-2045: Handle sign out of all devices
+  const handleSignOutAllDevices = async (): Promise<void> => {
+    const confirmed = window.confirm(
+      "This will sign you out of all devices, including this one. You will need to log in again.\n\nContinue?"
+    );
+    if (!confirmed) return;
+
+    setSigningOutAllDevices(true);
+    try {
+      const result = await window.api.auth.signOutAllDevices();
+      if (!result.success) {
+        notify.error("Failed to sign out of all devices: " + (result.error || "Unknown error"));
+      }
+      // On success, the app will redirect to login (session cleared by the handler)
+    } catch (error) {
+      logger.error("Failed to sign out of all devices:", error);
+      notify.error("Failed to sign out of all devices. Please try again.");
+    } finally {
+      setSigningOutAllDevices(false);
+    }
   };
 
   const handleReindexDatabase = async (): Promise<void> => {
@@ -1211,6 +1236,27 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                 Data & Privacy
               </h3>
               <div className="space-y-3">
+                {/* TASK-2045: Sign out all devices */}
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <h4 className="text-sm font-medium text-gray-900">
+                        Sign Out All Devices
+                      </h4>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Sign out of all active sessions across all your devices
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleSignOutAllDevices}
+                      disabled={signingOutAllDevices}
+                      className="ml-4 px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded border border-red-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {signingOutAllDevices ? "Signing out..." : "Sign Out All Devices"}
+                    </button>
+                  </div>
+                </div>
+
                 {/* Reindex Database - Database maintenance for performance */}
                 <button
                   onClick={handleReindexDatabase}

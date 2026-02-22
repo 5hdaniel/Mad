@@ -82,6 +82,15 @@ export const authBridge = {
   forceLogout: () => ipcRenderer.invoke("auth:force-logout"),
 
   /**
+   * TASK-2045: Sign out of all devices (global session invalidation)
+   * Invalidates all active Supabase sessions across all devices,
+   * then clears the local session. User will need to log in again.
+   * @returns Sign-out result
+   */
+  signOutAllDevices: (): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke("session:sign-out-all-devices"),
+
+  /**
    * Validates an existing session token
    * @param sessionToken - Session token to validate
    * @returns Validation result

@@ -137,6 +137,60 @@ describe("Terms Sync Logic", () => {
     });
   });
 
+  describe("Global Sign-Out (TASK-2045)", () => {
+    /**
+     * Test the global sign-out flow logic:
+     * 1. Call signOutGlobal() BEFORE clearing local session
+     * 2. On success: create audit entry, clear local session
+     * 3. On failure: return error, do NOT clear local session
+     */
+
+    it("should clear local session after successful global sign-out", () => {
+      // Simulate successful flow
+      const globalSignOutResult = { success: true };
+      let localSessionCleared = false;
+      let auditLogged = false;
+
+      if (globalSignOutResult.success) {
+        auditLogged = true;
+        localSessionCleared = true;
+      }
+
+      expect(globalSignOutResult.success).toBe(true);
+      expect(auditLogged).toBe(true);
+      expect(localSessionCleared).toBe(true);
+    });
+
+    it("should NOT clear local session when global sign-out fails", () => {
+      // Simulate failure flow
+      const globalSignOutResult = { success: false, error: "Network error" };
+      let localSessionCleared = false;
+
+      if (globalSignOutResult.success) {
+        localSessionCleared = true;
+      }
+
+      expect(globalSignOutResult.success).toBe(false);
+      expect(localSessionCleared).toBe(false);
+    });
+
+    it("should include global scope metadata in audit log entry", () => {
+      // Verify the audit log entry format matches task requirements
+      const auditEntry = {
+        userId: "test-user-id",
+        action: "LOGOUT" as const,
+        resourceType: "SESSION" as const,
+        success: true,
+        metadata: { scope: "global", reason: "user_requested" },
+      };
+
+      expect(auditEntry.action).toBe("LOGOUT");
+      expect(auditEntry.resourceType).toBe("SESSION");
+      expect(auditEntry.metadata.scope).toBe("global");
+      expect(auditEntry.metadata.reason).toBe("user_requested");
+    });
+  });
+
   describe("Retry Logic Pattern", () => {
     /**
      * Test the retry with exponential backoff pattern

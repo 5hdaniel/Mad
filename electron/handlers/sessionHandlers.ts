@@ -1000,6 +1000,85 @@ async function handleForceLogout(): Promise<AuthResponse> {
 }
 
 /**
+ * TASK-2045: Sign out of all devices (global session invalidation)
+ * Calls Supabase global sign-out, logs audit entry, then cleans up local session.
+ * Global sign-out is called BEFORE local cleanup because it needs the active token.
+ */
+async function handleSignOutAllDevices(): Promise<AuthResponse> {
+  try {
+    // 1. Call global sign-out while we still have an active token
+    const result = await supabaseService.signOutGlobal();
+
+    if (!result.success) {
+      await logService.error(
+        "Global sign-out failed",
+        "SessionHandlers",
+        { error: result.error }
+      );
+      return { success: false, error: result.error || "Failed to sign out of all devices" };
+    }
+
+    // 2. Log audit entry for global sign-out
+    const userId = supabaseService.getAuthUserId() || "unknown";
+    try {
+      await auditService.log({
+        userId,
+        action: "LOGOUT",
+        resourceType: "SESSION",
+        success: true,
+        metadata: { scope: "global", reason: "user_requested" },
+      });
+    } catch (auditError) {
+      // Non-blocking: don't fail the sign-out if audit logging fails
+      await logService.warn(
+        "Audit log failed during global sign-out",
+        "SessionHandlers",
+        { error: auditError instanceof Error ? auditError.message : "Unknown error" }
+      );
+    }
+
+    // 3. Clean up local session (same as force logout flow)
+    try {
+      await sessionService.clearSession();
+    } catch (sessionError) {
+      await logService.warn(
+        "Session file clear failed during global sign-out",
+        "SessionHandlers",
+        { error: sessionError instanceof Error ? sessionError.message : "Unknown error" }
+      );
+    }
+
+    try {
+      if (databaseService.isInitialized()) {
+        await databaseService.clearAllSessions();
+      }
+    } catch (dbError) {
+      await logService.warn(
+        "Database session clear failed during global sign-out",
+        "SessionHandlers",
+        { error: dbError instanceof Error ? dbError.message : "Unknown error" }
+      );
+    }
+
+    setSyncUserId(null);
+
+    await logService.info("Global sign-out completed successfully", "SessionHandlers");
+    return { success: true };
+  } catch (error) {
+    await logService.error("Global sign-out failed", "SessionHandlers", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    Sentry.captureException(error, {
+      tags: { service: "session-handlers", operation: "handleSignOutAllDevices" },
+    });
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to sign out of all devices",
+    };
+  }
+}
+
+/**
  * Open broker portal auth page in the default browser
  * TASK-1507: Used for deep-link authentication flow
  * TASK-1510: Redirects to broker portal for provider selection (Google/Microsoft)
@@ -1037,6 +1116,8 @@ async function handleOpenAuthInBrowser(): Promise<{ success: boolean; error?: st
 export function registerSessionHandlers(): void {
   ipcMain.handle("auth:logout", handleLogout);
   ipcMain.handle("auth:force-logout", handleForceLogout);
+  // TASK-2045: Global sign-out (all devices)
+  ipcMain.handle("session:sign-out-all-devices", handleSignOutAllDevices);
   ipcMain.handle("auth:accept-terms", handleAcceptTerms);
   ipcMain.handle("auth:accept-terms-to-supabase", handleAcceptTermsToSupabase);
   ipcMain.handle("auth:complete-email-onboarding", handleCompleteEmailOnboarding);

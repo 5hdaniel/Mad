@@ -221,6 +221,43 @@ describe("SupabaseService", () => {
     });
   });
 
+  describe("Global Sign-Out (TASK-2045)", () => {
+    beforeEach(() => {
+      supabaseService.initialize();
+    });
+
+    it("should call Supabase signOut with scope: global", async () => {
+      mockSupabaseClient.auth.signOut.mockResolvedValueOnce({ error: null });
+
+      const result = await supabaseService.signOutGlobal();
+
+      expect(result.success).toBe(true);
+      expect(mockSupabaseClient.auth.signOut).toHaveBeenCalledWith({ scope: "global" });
+    });
+
+    it("should return error when global sign-out fails", async () => {
+      mockSupabaseClient.auth.signOut.mockResolvedValueOnce({
+        error: { message: "Session expired" },
+      });
+
+      const result = await supabaseService.signOutGlobal();
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Session expired");
+    });
+
+    it("should handle exceptions during global sign-out", async () => {
+      mockSupabaseClient.auth.signOut.mockRejectedValueOnce(
+        new Error("Network unavailable")
+      );
+
+      const result = await supabaseService.signOutGlobal();
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Network unavailable");
+    });
+  });
+
   describe("User Operations", () => {
     beforeEach(() => {
       supabaseService.initialize();
