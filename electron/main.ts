@@ -4,6 +4,8 @@ import {
   dialog,
   session,
   ipcMain,
+  protocol,
+  net,
 } from "electron";
 import path from "path";
 import log from "electron-log";
@@ -25,6 +27,25 @@ if (process.defaultApp) {
   // In production, electron-builder handles registration via package.json protocols config
   app.setAsDefaultProtocolClient('magicaudit');
 }
+
+// ==========================================
+// CUSTOM APP PROTOCOL REGISTRATION (TASK-2051)
+// ==========================================
+// Register custom app:// protocol scheme for production content loading.
+// This MUST be called before app.whenReady() per Electron docs.
+// Enables disabling GrantFileProtocolExtraPrivileges fuse for security hardening.
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'app',
+    privileges: {
+      standard: true,      // Enables relative URL resolution (href="./style.css")
+      secure: true,        // Treated as secure context (like https://)
+      supportFetchAPI: true,
+      corsEnabled: false,
+      stream: true,
+    },
+  },
+]);
 
 // ==========================================
 // SINGLE INSTANCE LOCK (TASK-1500)
@@ -759,7 +780,9 @@ function createWindow(): void {
     mainWindow.loadURL(DEV_SERVER_URL);
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
+    // TASK-2051: Use custom app:// protocol instead of file:// for security hardening.
+    // This allows GrantFileProtocolExtraPrivileges fuse to be disabled.
+    mainWindow.loadURL('app://./index.html');
 
     // Check for updates after window loads (only in production)
     setTimeout(() => {
@@ -811,6 +834,37 @@ app.whenReady().then(async () => {
       mainWindow.webContents.send("update-downloaded", info);
     }
   });
+
+  // ==========================================
+  // CUSTOM APP PROTOCOL HANDLER (TASK-2051)
+  // ==========================================
+  // Register the app:// protocol handler to serve renderer content from dist/.
+  // This replaces file:// protocol usage, allowing GrantFileProtocolExtraPrivileges
+  // fuse to be disabled for security hardening.
+  // Only needed in production -- dev mode uses Vite dev server (http://localhost:5173).
+  if (app.isPackaged) {
+    protocol.handle('app', (request) => {
+      const url = new URL(request.url);
+      // Decode URI-encoded characters in the pathname (e.g., %20 -> space)
+      let pathname = decodeURIComponent(url.pathname);
+      // Remove leading slash on Windows paths (app://./file -> /file -> file)
+      if (process.platform === 'win32' && pathname.startsWith('/')) {
+        pathname = pathname.slice(1);
+      }
+      // Resolve the file path relative to the dist/ directory
+      // path.normalize prevents path traversal (../../etc/passwd -> etc/passwd)
+      const normalizedPath = path.normalize(pathname);
+      const distDir = path.join(__dirname, '..', 'dist');
+      const filePath = path.join(distDir, normalizedPath);
+      // Security: Ensure the resolved path is within the dist/ directory
+      if (!filePath.startsWith(distDir)) {
+        log.warn('[Protocol] Blocked path traversal attempt:', request.url);
+        return new Response('Forbidden', { status: 403 });
+      }
+      return net.fetch(`file://${filePath}`);
+    });
+    log.info('[Protocol] app:// protocol handler registered for production');
+  }
 
   // Set up Content Security Policy
   setupContentSecurityPolicy();
