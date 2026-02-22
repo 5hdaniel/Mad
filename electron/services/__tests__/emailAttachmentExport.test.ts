@@ -38,8 +38,11 @@ jest.mock("electron", () => ({
 let existingPaths = new Set<string>();
 
 // Mock fs (sync) for existsSync used by resolveFilenameConflict
+// Normalize path separators for cross-platform compatibility (Windows uses backslashes)
+const normalizePath = (p: string) => p.replace(/\\/g, "/");
+const mockExistsSync = jest.fn((p: string) => existingPaths.has(normalizePath(p)));
 jest.mock("fs", () => ({
-  existsSync: jest.fn((p: string) => existingPaths.has(p)),
+  existsSync: mockExistsSync,
 }));
 
 // Track copied files and created directories
@@ -138,6 +141,9 @@ describe("TASK-2050: Email Attachment Export", () => {
     createdDirs.length = 0;
     accessiblePaths = new Set();
     mockAttachmentRows = [];
+
+    // Re-set fs (sync) mock after clearAllMocks (normalize for Windows backslashes)
+    mockExistsSync.mockImplementation((p: string) => existingPaths.has(normalizePath(p)));
 
     // Re-set database mock chain after clearAllMocks
     mockAll.mockImplementation(() => mockAttachmentRows);
