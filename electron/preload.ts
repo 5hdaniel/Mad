@@ -53,6 +53,7 @@ import {
   licenseBridge,
   errorLoggingBridge,
   resetBridge,
+  privacyBridge,
 } from "./preload/index";
 
 // Expose protected methods that allow the renderer process to use
@@ -123,4 +124,7 @@ contextBridge.exposeInMainWorld("api", {
 
   // App reset (TASK-1802: self-healing feature)
   app: resetBridge,
+
+  // Privacy / CCPA data export (TASK-2053)
+  privacy: privacyBridge,
 });
