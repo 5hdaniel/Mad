@@ -13,6 +13,7 @@ import {
   useEmailConnectionListener,
 } from "@/utils/emailConnectionEvents";
 import logger from '../utils/logger';
+import { formatFileSize } from '../utils/formatUtils';
 
 interface ConnectionError {
   type: string;
@@ -165,6 +166,18 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
     message: string;
   } | null>(null);
 
+  // TASK-2052: Database backup/restore state
+  const [backingUp, setBackingUp] = useState<boolean>(false);
+  const [restoring, setRestoring] = useState<boolean>(false);
+  const [backupResult, setBackupResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
+  const [dbInfo, setDbInfo] = useState<{
+    fileSize: number;
+    lastModified: string;
+  } | null>(null);
+
   // Load connection status and preferences on mount, with periodic refresh
   useEffect(() => {
     if (userId) {
@@ -179,6 +192,24 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
       return () => clearInterval(refreshInterval);
     }
   }, [userId]);
+
+  // TASK-2052: Load database info for backup/restore section
+  useEffect(() => {
+    const loadDbInfo = async () => {
+      try {
+        const result = await window.api.databaseBackup.getInfo();
+        if (result.success && result.info) {
+          setDbInfo({
+            fileSize: result.info.fileSize,
+            lastModified: result.info.lastModified,
+          });
+        }
+      } catch (err) {
+        logger.error("Failed to load database info:", err);
+      }
+    };
+    loadDbInfo();
+  }, []);
 
   // TASK-1730: Listen for email connection events from other components (e.g., onboarding flow)
   // This ensures Settings UI updates immediately when email is connected elsewhere
@@ -657,6 +688,90 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
       });
     } finally {
       setReindexing(false);
+    }
+  };
+
+  // TASK-2052: Backup database handler
+  const handleBackupDatabase = async (): Promise<void> => {
+    setBackingUp(true);
+    setBackupResult(null);
+    try {
+      const result = await window.api.databaseBackup.backup();
+      if (result.cancelled) {
+        // User cancelled the dialog, no feedback needed
+        return;
+      }
+      if (result.success) {
+        const sizeStr = result.fileSize
+          ? formatFileSize(result.fileSize)
+          : "unknown size";
+        setBackupResult({
+          success: true,
+          message: `Backup created successfully (${sizeStr})`,
+        });
+        notify.success("Database backup created successfully");
+      } else {
+        setBackupResult({
+          success: false,
+          message: result.error || "Failed to create backup",
+        });
+        notify.error(result.error || "Failed to create backup");
+      }
+    } catch (error) {
+      logger.error("Failed to backup database:", error);
+      setBackupResult({
+        success: false,
+        message: "An unexpected error occurred during backup",
+      });
+      notify.error("An unexpected error occurred during backup");
+    } finally {
+      setBackingUp(false);
+    }
+  };
+
+  // TASK-2052: Restore database handler
+  const handleRestoreDatabase = async (): Promise<void> => {
+    setRestoring(true);
+    setBackupResult(null);
+    try {
+      const result = await window.api.databaseBackup.restore();
+      if (result.cancelled) {
+        // User cancelled the dialog or confirmation, no feedback needed
+        return;
+      }
+      if (result.success) {
+        setBackupResult({
+          success: true,
+          message: "Database restored successfully",
+        });
+        notify.success("Database restored successfully");
+        // Refresh database info after restore
+        const infoResult = await window.api.databaseBackup.getInfo();
+        if (infoResult.success && infoResult.info) {
+          setDbInfo({
+            fileSize: infoResult.info.fileSize,
+            lastModified: infoResult.info.lastModified,
+          });
+        }
+      } else {
+        setBackupResult({
+          success: false,
+          message: result.error || "Failed to restore database",
+        });
+        notify.error(result.error || "Failed to restore database");
+        if (result.requiresRestart) {
+          notify.error("The app may need to be restarted.");
+        }
+      }
+    } catch (error) {
+      logger.error("Failed to restore database:", error);
+      setBackupResult({
+        success: false,
+        message: "An unexpected error occurred during restore",
+      });
+      notify.error("An unexpected error occurred during restore");
+    } finally {
+      setRestoring(false);
     }
   };
 
@@ -1321,6 +1436,57 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                     )}
                   </div>
                 </button>
+
+                {/* TASK-2052: Database Backup & Restore */}
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <h4 className="text-sm font-medium text-gray-900 mb-1">
+                    Database Backup & Restore
+                  </h4>
+                  <p className="text-xs text-gray-600 mb-2">
+                    Your database is encrypted and stored locally. Backups can be
+                    used to recover data if something goes wrong.
+                  </p>
+                  {dbInfo && (
+                    <div className="text-xs text-gray-500 mb-3 space-y-0.5">
+                      <p>Database size: {formatFileSize(dbInfo.fileSize)}</p>
+                      <p>
+                        Last modified:{" "}
+                        {new Date(dbInfo.lastModified).toLocaleString()}
+                      </p>
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleBackupDatabase}
+                      disabled={backingUp || restoring}
+                      className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {backingUp ? "Backing up..." : "Backup Database"}
+                    </button>
+                    <button
+                      onClick={handleRestoreDatabase}
+                      disabled={backingUp || restoring}
+                      className="px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded border border-amber-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {restoring ? "Restoring..." : "Restore from Backup"}
+                    </button>
+                  </div>
+                  {backupResult && (
+                    <p
+                      className={`text-xs mt-2 ${
+                        backupResult.success
+                          ? "text-green-600"
+                          : "text-red-600"
+                      }`}
+                    >
+                      {backupResult.message}
+                    </p>
+                  )}
+                  <p className="text-xs text-gray-400 mt-2">
+                    Backups are encrypted with your machine&apos;s keychain.
+                    They can only be restored on this machine.
+                  </p>
+                </div>
 
                 {/* TODO: Implement data clearing with confirmation dialog */}
                 <button

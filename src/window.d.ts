@@ -1928,6 +1928,35 @@ interface MainAPI {
     deviceHeartbeat: (userId: string) => Promise<void>;
   };
 
+  // Database Backup & Restore API (TASK-2052)
+  databaseBackup: {
+    /** Create a backup of the local SQLite database (opens save dialog) */
+    backup: () => Promise<{
+      success: boolean;
+      cancelled?: boolean;
+      filePath?: string;
+      fileSize?: number;
+      error?: string;
+    }>;
+    /** Restore database from a backup file (opens file picker + confirmation) */
+    restore: () => Promise<{
+      success: boolean;
+      cancelled?: boolean;
+      error?: string;
+      requiresRestart?: boolean;
+    }>;
+    /** Get database file info (size, last modified date) */
+    getInfo: () => Promise<{
+      success: boolean;
+      info?: {
+        filePath: string;
+        fileSize: number;
+        lastModified: string;
+      } | null;
+      error?: string;
+    }>;
+  };
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any; // Allow other properties for backwards compatibility
 }
