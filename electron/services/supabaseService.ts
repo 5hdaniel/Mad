@@ -92,6 +92,8 @@ class SupabaseService {
   private initialized = false;
   /** BACKLOG-390: Store Supabase Auth session for RLS-enabled queries */
   private authSession: SupabaseAuthSession | null = null;
+  /** TASK-2040: Auth state change subscription for cleanup on logout/quit */
+  private authSubscription: { unsubscribe: () => void } | null = null;
 
   /**
    * Initialize Supabase client
@@ -126,10 +128,14 @@ class SupabaseService {
 
     this.client = createClient(supabaseUrl, supabaseKey, {
       auth: {
-        autoRefreshToken: false,
+        autoRefreshToken: true,
         persistSession: false,
       },
     });
+
+    // TASK-2040: Listen for auth state changes to keep local session cache
+    // in sync when the SDK auto-refreshes the token
+    this._setupAuthStateListener();
 
     this.initialized = true;
     logService.debug("[Supabase] Initialized successfully", "Supabase");
@@ -238,6 +244,9 @@ class SupabaseService {
         error: error instanceof Error ? error.message : "Unknown error",
       });
     }
+    // TASK-2040: Note -- we do NOT unsubscribe the auth listener here.
+    // The listener must remain active to detect future sign-in events.
+    // It is cleaned up via destroy() on app quit.
   }
 
   /**
@@ -335,6 +344,59 @@ class SupabaseService {
       logService.error("[Supabase] Error checking org membership", "SupabaseService", { err });
       return null;
     }
+  }
+
+  /**
+   * TASK-2040: Set up auth state change listener.
+   * Keeps the local authSession cache in sync when the Supabase SDK
+   * auto-refreshes the access token (which happens proactively before
+   * the 1-hour JWT expiry).
+   * @private
+   */
+  private _setupAuthStateListener(): void {
+    if (!this.client) return;
+
+    const { data } = this.client.auth.onAuthStateChange((event, session) => {
+      if (event === "TOKEN_REFRESHED" && session) {
+        this.authSession = {
+          userId: session.user.id,
+          accessToken: session.access_token,
+          refreshToken: session.refresh_token,
+          expiresAt: session.expires_at
+            ? new Date(session.expires_at * 1000)
+            : undefined,
+        };
+        logService.info(
+          "[Supabase] Token auto-refreshed successfully",
+          "SupabaseService",
+          { userId: session.user.id }
+        );
+      } else if (event === "SIGNED_OUT") {
+        this.authSession = null;
+        logService.info(
+          "[Supabase] Auth state: signed out",
+          "SupabaseService"
+        );
+      }
+    });
+
+    this.authSubscription = data.subscription;
+  }
+
+  /**
+   * TASK-2040: Clean up auth state listener and resources.
+   * Must be called on app quit to prevent memory leaks.
+   */
+  destroy(): void {
+    if (this.authSubscription) {
+      this.authSubscription.unsubscribe();
+      this.authSubscription = null;
+      logService.debug(
+        "[Supabase] Auth state listener unsubscribed",
+        "SupabaseService"
+      );
+    }
+    this.authSession = null;
   }
 
   /**
