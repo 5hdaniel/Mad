@@ -134,7 +134,7 @@ export function NetworkProvider({ children }: NetworkProviderProps) {
       __testOffline?: (offline: boolean) => void;
       __testCrash?: () => void;
     };
-    if (process.env.NODE_ENV === "development" || !win.isPackaged) {
+    if (process.env.NODE_ENV === "development") {
       win.__testOffline = forceOffline;
       win.__testCrash = () => setShouldCrash(true);
       // Dev helpers available: window.__testOffline(true/false), window.__testCrash()

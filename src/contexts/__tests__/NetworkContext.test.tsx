@@ -217,6 +217,48 @@ describe("NetworkContext", () => {
     });
   });
 
+  describe("dev-only test utilities", () => {
+    it("should not expose __testCrash or __testOffline when NODE_ENV is not development", () => {
+      // In test environment, NODE_ENV is "test", not "development"
+      // so the dev guard should prevent these from being set
+      render(
+        <NetworkProvider>
+          <TestNetworkConsumer />
+        </NetworkProvider>,
+      );
+
+      const win = window as Window & {
+        __testCrash?: () => void;
+        __testOffline?: (offline: boolean) => void;
+      };
+      expect(win.__testCrash).toBeUndefined();
+      expect(win.__testOffline).toBeUndefined();
+    });
+
+    it("should expose __testCrash and __testOffline when NODE_ENV is development", () => {
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = "development";
+
+      render(
+        <NetworkProvider>
+          <TestNetworkConsumer />
+        </NetworkProvider>,
+      );
+
+      const win = window as Window & {
+        __testCrash?: () => void;
+        __testOffline?: (offline: boolean) => void;
+      };
+      expect(win.__testCrash).toBeDefined();
+      expect(win.__testOffline).toBeDefined();
+
+      // Cleanup
+      delete win.__testCrash;
+      delete win.__testOffline;
+      process.env.NODE_ENV = originalEnv;
+    });
+  });
+
   describe("useNetwork hook", () => {
     it("should throw error when used outside NetworkProvider", () => {
       // Suppress console.error for this test
