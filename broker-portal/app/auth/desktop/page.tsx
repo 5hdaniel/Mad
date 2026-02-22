@@ -46,6 +46,11 @@ function DesktopLoginForm() {
     setLoading(provider);
     setError(null);
 
+    // Clear any stale session before starting fresh OAuth flow.
+    // This prevents issues when "Sign Out All Devices" invalidated the session
+    // but the browser still has cached cookies from the old session.
+    await supabase.auth.signOut();
+
     const { error: authError } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
