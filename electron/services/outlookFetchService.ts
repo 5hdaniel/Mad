@@ -796,6 +796,320 @@ class OutlookFetchService {
   }
 
   /**
+   * Well-known folder display names to exclude from sync (TASK-2046)
+   * Compared case-insensitively against folder displayName.
+   */
+  private static readonly EXCLUDED_FOLDER_NAMES = [
+    "junkemail",
+    "junk email",
+    "deleteditems",
+    "deleted items",
+    "drafts",
+    "outbox",
+    "conflicts",
+    "sync issues",
+    "conversation history",
+  ];
+
+  /**
+   * Well-known folder IDs to exclude from sync (TASK-2046)
+   * Graph API also provides well-known folder names that can be used as IDs.
+   */
+  private static readonly EXCLUDED_WELL_KNOWN_IDS = [
+    "junkemail",
+    "deleteditems",
+    "drafts",
+    "outbox",
+  ];
+
+  /**
+   * Discover all syncable mail folders including child folders (TASK-2046)
+   *
+   * Uses the Graph API mailFolders endpoint and recursively discovers
+   * child folders. Filters out excluded system folders.
+   *
+   * @param parentId - Optional parent folder ID for recursive discovery
+   * @param maxDepth - Maximum recursion depth (default 5)
+   * @returns Array of syncable folders with id and displayName
+   */
+  async discoverFolders(
+    parentId?: string,
+    maxDepth: number = 5
+  ): Promise<Array<{ id: string; displayName: string; parentFolderId?: string }>> {
+    try {
+      if (!this.accessToken) {
+        throw new Error("Outlook API not initialized. Call initialize() first.");
+      }
+
+      if (maxDepth <= 0) {
+        logService.debug("Max folder depth reached, stopping recursion", "OutlookFetch");
+        return [];
+      }
+
+      const endpoint = parentId
+        ? `/me/mailFolders/${parentId}/childFolders?$select=id,displayName,parentFolderId,childFolderCount`
+        : `/me/mailFolders?$select=id,displayName,parentFolderId,childFolderCount&$top=100`;
+
+      const data = await this._graphRequest<GraphApiResponse<{
+        id: string;
+        displayName: string;
+        parentFolderId?: string;
+        childFolderCount?: number;
+      }>>(endpoint);
+
+      const folders = data.value || [];
+      const allFolders: Array<{ id: string; displayName: string; parentFolderId?: string }> = [];
+
+      for (const folder of folders) {
+        // Filter out excluded folders by display name
+        const normalizedName = (folder.displayName || "").toLowerCase();
+        if (OutlookFetchService.EXCLUDED_FOLDER_NAMES.includes(normalizedName)) {
+          logService.debug(
+            `Excluding folder: "${folder.displayName}"`,
+            "OutlookFetch"
+          );
+          continue;
+        }
+
+        // Also check well-known IDs
+        const normalizedId = (folder.id || "").toLowerCase();
+        if (
+          OutlookFetchService.EXCLUDED_WELL_KNOWN_IDS.some(
+            (id) => normalizedId === id
+          )
+        ) {
+          continue;
+        }
+
+        allFolders.push({
+          id: folder.id,
+          displayName: folder.displayName,
+          parentFolderId: folder.parentFolderId,
+        });
+
+        // Recurse into child folders if any
+        if (folder.childFolderCount && folder.childFolderCount > 0) {
+          try {
+            const childFolders = await this.discoverFolders(
+              folder.id,
+              maxDepth - 1
+            );
+            allFolders.push(...childFolders);
+          } catch (childError) {
+            logService.warn(
+              `Failed to discover child folders for "${folder.displayName}"`,
+              "OutlookFetch",
+              {
+                error:
+                  childError instanceof Error
+                    ? childError.message
+                    : "Unknown error",
+              }
+            );
+          }
+        }
+      }
+
+      if (!parentId) {
+        logService.info(
+          `Discovered ${allFolders.length} syncable folders (from ${folders.length} top-level)`,
+          "OutlookFetch"
+        );
+      }
+
+      return allFolders;
+    } catch (error) {
+      logService.error("Failed to discover folders", "OutlookFetch", { error });
+      Sentry.captureException(error, {
+        tags: { service: "outlook-fetch", operation: "discoverFolders" },
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Search emails from a specific mail folder (TASK-2046)
+   *
+   * Fetches messages from a single folder using the mailFolders/{id}/messages endpoint.
+   *
+   * @param folderId - The Outlook folder ID to fetch from
+   * @param options - Search options (after, maxResults, onProgress)
+   * @returns Array of parsed emails from the folder
+   */
+  async searchEmailsByFolder(
+    folderId: string,
+    options: {
+      after?: Date | null;
+      maxResults?: number;
+      onProgress?: (progress: FetchProgress & { folder?: string }) => void;
+    } = {}
+  ): Promise<ParsedEmail[]> {
+    try {
+      if (!this.accessToken) {
+        throw new Error("Outlook API not initialized. Call initialize() first.");
+      }
+
+      const { after = null, maxResults = 200, onProgress } = options;
+
+      const selectFields =
+        "$select=id,subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,sentDateTime,hasAttachments,body,bodyPreview,conversationId,inferenceClassification,parentFolderId,internetMessageId,internetMessageHeaders";
+
+      const filters: string[] = [];
+      if (after) {
+        filters.push(`receivedDateTime ge ${after.toISOString()}`);
+      }
+      const filterString =
+        filters.length > 0 ? `$filter=${filters.join(" and ")}` : "";
+      const orderBy = "$orderby=receivedDateTime desc";
+
+      const allMessages: GraphMessage[] = [];
+      let skip = 0;
+      let pageCount = 0;
+      const pageSize = 100;
+
+      do {
+        pageCount++;
+        const top = `$top=${pageSize}`;
+        const skipParam = skip > 0 ? `$skip=${skip}` : "";
+
+        const queryParams = [selectFields, orderBy, top, skipParam, filterString]
+          .filter(Boolean)
+          .join("&");
+
+        const data = await this._graphRequest<GraphApiResponse<GraphMessage>>(
+          `/me/mailFolders/${folderId}/messages?${queryParams}`
+        );
+        const messages = data.value || [];
+
+        allMessages.push(...messages);
+        skip += pageSize;
+
+        if (onProgress) {
+          onProgress({
+            fetched: allMessages.length,
+            total: allMessages.length,
+            percentage: 0,
+            hasEstimate: false,
+            folder: folderId,
+          });
+        }
+
+        if (messages.length < pageSize) break;
+        if (allMessages.length >= maxResults) break;
+      } while (true);
+
+      const messagesToParse = maxResults
+        ? allMessages.slice(0, maxResults)
+        : allMessages;
+
+      return messagesToParse.map((msg) => this._parseMessage(msg));
+    } catch (error) {
+      logService.error(
+        `Failed to fetch emails for folder ${folderId}`,
+        "OutlookFetch",
+        { error }
+      );
+      Sentry.captureException(error, {
+        tags: { service: "outlook-fetch", operation: "searchEmailsByFolder" },
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Discover all folders and fetch emails from each (TASK-2046)
+   *
+   * Orchestrates folder discovery and multi-folder fetch. Deduplicates
+   * emails by message ID. Handles per-folder errors gracefully.
+   *
+   * @param options - Search options applied to each folder
+   * @returns Deduplicated array of parsed emails from all folders
+   */
+  async searchAllFolders(
+    options: {
+      after?: Date | null;
+      maxResults?: number;
+      onProgress?: (progress: FetchProgress & { folder?: string; currentFolder?: string }) => void;
+    } = {}
+  ): Promise<ParsedEmail[]> {
+    try {
+      if (!this.accessToken) {
+        throw new Error("Outlook API not initialized. Call initialize() first.");
+      }
+
+      const folders = await this.discoverFolders();
+      logService.info(
+        `Starting multi-folder fetch across ${folders.length} folders`,
+        "OutlookFetch"
+      );
+
+      const seenMessageIds = new Set<string>();
+      const allEmails: ParsedEmail[] = [];
+
+      for (const folder of folders) {
+        try {
+          const emails = await this.searchEmailsByFolder(folder.id, {
+            after: options.after,
+            maxResults: options.maxResults,
+            onProgress: options.onProgress
+              ? (progress) => {
+                  options.onProgress!({
+                    ...progress,
+                    currentFolder: folder.displayName,
+                  });
+                }
+              : undefined,
+          });
+
+          // Deduplicate by message ID
+          let newCount = 0;
+          for (const email of emails) {
+            if (!seenMessageIds.has(email.id)) {
+              seenMessageIds.add(email.id);
+              allEmails.push(email);
+              newCount++;
+            }
+          }
+
+          logService.debug(
+            `Folder "${folder.displayName}": ${emails.length} messages, ${newCount} new`,
+            "OutlookFetch"
+          );
+        } catch (folderError) {
+          // Per-folder error isolation: skip this folder, continue with others
+          logService.warn(
+            `Failed to fetch emails for folder "${folder.displayName}" (${folder.id}), skipping`,
+            "OutlookFetch",
+            {
+              error:
+                folderError instanceof Error
+                  ? folderError.message
+                  : "Unknown error",
+            }
+          );
+        }
+      }
+
+      logService.info(
+        `Multi-folder fetch complete: ${allEmails.length} unique emails from ${folders.length} folders`,
+        "OutlookFetch"
+      );
+
+      return allEmails;
+    } catch (error) {
+      logService.error(
+        "Failed to search all folders",
+        "OutlookFetch",
+        { error }
+      );
+      Sentry.captureException(error, {
+        tags: { service: "outlook-fetch", operation: "searchAllFolders" },
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Check emails for duplicates and populate duplicateOf field (TASK-919)
    *
    * Uses EmailDeduplicationService to detect duplicates by:

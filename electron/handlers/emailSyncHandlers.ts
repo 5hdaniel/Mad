@@ -1005,7 +1005,21 @@ export function registerEmailSyncHandlers(
             contactEmails,
             50,
           );
-          const allOutlookEmails = [...outlookEmails, ...sentEmails];
+
+          // TASK-2046: Also fetch from all folders (custom folders, archives, etc.)
+          let allFolderEmails: typeof outlookEmails = [];
+          try {
+            allFolderEmails = await outlookFetchService.searchAllFolders({
+              maxResults: 200,
+            });
+            logService.info(`Fetched ${allFolderEmails.length} emails from all Outlook folders`, "Transactions");
+          } catch (folderError) {
+            logService.warn("Failed to fetch from all Outlook folders, continuing with inbox/sent only", "Transactions", {
+              error: folderError instanceof Error ? folderError.message : "Unknown",
+            });
+          }
+
+          const allOutlookEmails = [...outlookEmails, ...sentEmails, ...allFolderEmails];
 
           // Dedup by ID
           const seenIds = new Set<string>();
@@ -1016,7 +1030,7 @@ export function registerEmailSyncHandlers(
           });
 
           emailsFetched += dedupedEmails.length;
-          logService.info(`Fetched ${outlookEmails.length} inbox + ${sentEmails.length} sent = ${dedupedEmails.length} unique from Outlook`, "Transactions");
+          logService.info(`Fetched ${outlookEmails.length} inbox + ${sentEmails.length} sent + ${allFolderEmails.length} all-folders = ${dedupedEmails.length} unique from Outlook`, "Transactions");
 
           for (const email of dedupedEmails) {
             try {
@@ -1091,10 +1105,32 @@ export function registerEmailSyncHandlers(
             gmailSearchOptions.contactEmails = contactEmails;
           }
           const gmailEmails = await gmailFetchService.searchEmails(gmailSearchOptions);
-          emailsFetched += gmailEmails.length;
-          logService.info(`Fetched ${gmailEmails.length} emails from Gmail (bidirectional)`, "Transactions");
 
-          for (const email of gmailEmails) {
+          // TASK-2046: Also fetch from all labels (custom labels, archives, etc.)
+          let allLabelEmails: typeof gmailEmails = [];
+          try {
+            allLabelEmails = await gmailFetchService.searchAllLabels({
+              maxResults: 200,
+            });
+            logService.info(`Fetched ${allLabelEmails.length} emails from all Gmail labels`, "Transactions");
+          } catch (labelError) {
+            logService.warn("Failed to fetch from all Gmail labels, continuing with default search only", "Transactions", {
+              error: labelError instanceof Error ? labelError.message : "Unknown",
+            });
+          }
+
+          // Dedup by ID across contact search and label fetch
+          const seenGmailIds = new Set<string>();
+          const dedupedGmailEmails = [...gmailEmails, ...allLabelEmails].filter((e) => {
+            if (seenGmailIds.has(e.id)) return false;
+            seenGmailIds.add(e.id);
+            return true;
+          });
+
+          emailsFetched += dedupedGmailEmails.length;
+          logService.info(`Fetched ${gmailEmails.length} contact-search + ${allLabelEmails.length} all-labels = ${dedupedGmailEmails.length} unique from Gmail`, "Transactions");
+
+          for (const email of dedupedGmailEmails) {
             try {
               let emailRecord = await getEmailByExternalId(userId, email.id);
               if (!emailRecord) {
