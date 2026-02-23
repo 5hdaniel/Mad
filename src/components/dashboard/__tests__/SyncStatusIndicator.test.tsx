@@ -329,7 +329,7 @@ describe("SyncStatusIndicator", () => {
       expect(screen.queryByText("Review Now")).not.toBeInTheDocument();
     });
 
-    it("should NOT auto-dismiss completion (requires manual dismiss)", () => {
+    it("should auto-dismiss completion after 3 seconds", () => {
       mockUseLicense.mockReturnValue({
         hasAIAddon: false,
         licenseType: "individual",
@@ -349,13 +349,119 @@ describe("SyncStatusIndicator", () => {
 
       expect(screen.getByTestId("sync-status-complete")).toBeInTheDocument();
 
-      // Fast-forward well past old auto-dismiss timeout
+      // Advance 2.9s - should still be visible
       act(() => {
-        jest.advanceTimersByTime(30000);
+        jest.advanceTimersByTime(2900);
       });
-
-      // Completion should STILL be visible (no auto-dismiss)
       expect(screen.getByTestId("sync-status-complete")).toBeInTheDocument();
+
+      // Advance past 3s total - should auto-dismiss
+      act(() => {
+        jest.advanceTimersByTime(200);
+      });
+      expect(screen.queryByTestId("sync-status-complete")).not.toBeInTheDocument();
+    });
+
+    it("should allow manual dismiss during auto-dismiss window", () => {
+      mockUseLicense.mockReturnValue({
+        hasAIAddon: false,
+        licenseType: "individual",
+        isLoading: false,
+      });
+      // Start with running state
+      const runningQueue = [
+        createSyncItem('contacts', 'running', 50),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(runningQueue, true, 50));
+
+      const { rerender } = render(<SyncStatusIndicator />);
+
+      // Transition to not syncing
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState([], false, 0));
+      rerender(<SyncStatusIndicator />);
+
+      expect(screen.getByTestId("sync-status-complete")).toBeInTheDocument();
+
+      // Manually dismiss before the 3s timer fires
+      act(() => {
+        jest.advanceTimersByTime(1000);
+      });
+      fireEvent.click(screen.getByLabelText("Dismiss notification"));
+
+      // Should be dismissed immediately
+      expect(screen.queryByTestId("sync-status-complete")).not.toBeInTheDocument();
+    });
+
+    it("should cancel auto-dismiss when new sync starts during completion window", () => {
+      mockUseLicense.mockReturnValue({
+        hasAIAddon: false,
+        licenseType: "individual",
+        isLoading: false,
+      });
+      // Start with running state
+      const runningQueue = [
+        createSyncItem('contacts', 'running', 50),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(runningQueue, true, 50));
+
+      const { rerender } = render(<SyncStatusIndicator />);
+
+      // Transition to not syncing (completion shown)
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState([], false, 0));
+      rerender(<SyncStatusIndicator />);
+
+      expect(screen.getByTestId("sync-status-complete")).toBeInTheDocument();
+
+      // New sync starts within the 3s window
+      act(() => {
+        jest.advanceTimersByTime(1000);
+      });
+      const newRunningQueue = [
+        createSyncItem('messages', 'running', 20),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(newRunningQueue, true, 20));
+      rerender(<SyncStatusIndicator />);
+
+      // Completion should be replaced by sync progress
+      expect(screen.queryByTestId("sync-status-complete")).not.toBeInTheDocument();
+      expect(screen.getByTestId("sync-status-indicator")).toBeInTheDocument();
+
+      // After the original 3s passes, nothing bad happens (timer was cancelled)
+      act(() => {
+        jest.advanceTimersByTime(3000);
+      });
+      // Still showing sync progress
+      expect(screen.getByTestId("sync-status-indicator")).toBeInTheDocument();
+    });
+
+    it("should clean up auto-dismiss timer on unmount", () => {
+      mockUseLicense.mockReturnValue({
+        hasAIAddon: false,
+        licenseType: "individual",
+        isLoading: false,
+      });
+      // Start with running state
+      const runningQueue = [
+        createSyncItem('contacts', 'running', 50),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(runningQueue, true, 50));
+
+      const { rerender, unmount } = render(<SyncStatusIndicator />);
+
+      // Transition to not syncing (starts auto-dismiss timer)
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState([], false, 0));
+      rerender(<SyncStatusIndicator />);
+
+      expect(screen.getByTestId("sync-status-complete")).toBeInTheDocument();
+
+      // Unmount before timer fires
+      unmount();
+
+      // Advance past 3s - should not throw or cause state update on unmounted component
+      act(() => {
+        jest.advanceTimersByTime(5000);
+      });
+      // No error means cleanup worked
     });
 
     it("should allow manual dismiss of completion message", () => {
