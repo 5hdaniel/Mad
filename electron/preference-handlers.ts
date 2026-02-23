@@ -8,6 +8,7 @@ import type { IpcMainInvokeEvent } from "electron";
 import supabaseService from "./services/supabaseService";
 import logService from "./services/logService";
 import updateService from "./services/updateService";
+import failureLogService from "./services/failureLogService";
 
 // Import validation utilities
 import {
@@ -173,6 +174,13 @@ export function registerPreferenceHandlers(): void {
         };
       } catch (error) {
         logService.error("[Preferences] Failed to update preferences:", "Preferences", { error });
+        // TASK-2058: Log failure for offline diagnostics (skip validation errors)
+        if (!(error instanceof ValidationError)) {
+          failureLogService.logFailure(
+            "preferences_sync",
+            error instanceof Error ? error.message : "Unknown error"
+          );
+        }
         if (error instanceof ValidationError) {
           return {
             success: false,

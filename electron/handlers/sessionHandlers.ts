@@ -15,6 +15,7 @@ import sessionSecurityService from "../services/sessionSecurityService";
 import auditService from "../services/auditService";
 import logService from "../services/logService";
 import { setSyncUserId } from "../sync-handlers";
+import failureLogService from "../services/failureLogService";
 
 // Import validation utilities
 import { ValidationError, validateUserId, validateSessionToken } from "../utils/validation";
@@ -1071,6 +1072,11 @@ async function handleSignOutAllDevices(): Promise<AuthResponse> {
     Sentry.captureException(error, {
       tags: { service: "session-handlers", operation: "handleSignOutAllDevices" },
     });
+    // TASK-2058: Log failure for offline diagnostics
+    failureLogService.logFailure(
+      "sign_out_all_devices",
+      error instanceof Error ? error.message : "Failed to sign out of all devices"
+    );
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to sign out of all devices",

@@ -2227,6 +2227,43 @@ export interface WindowApi {
       progress: number;
     }) => void) => () => void;
   };
+
+  // ==========================================
+  // FAILURE LOG FOR OFFLINE DIAGNOSTICS (TASK-2058)
+  // ==========================================
+
+  /** Failure Log API for offline diagnostics */
+  failureLog: {
+    /** Get recent failure log entries */
+    getRecent: (limit?: number) => Promise<{
+      success: boolean;
+      entries: Array<{
+        id: number;
+        timestamp: string;
+        operation: string;
+        error_message: string;
+        metadata: string | null;
+        acknowledged: number;
+      }>;
+      error?: string;
+    }>;
+    /** Get count of unacknowledged failures */
+    getCount: () => Promise<{
+      success: boolean;
+      count: number;
+      error?: string;
+    }>;
+    /** Mark all failures as acknowledged */
+    acknowledgeAll: () => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    /** Clear entire failure log */
+    clear: () => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+  };
 }
 
 // Augment Window interface

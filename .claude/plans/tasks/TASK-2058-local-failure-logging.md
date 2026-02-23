@@ -253,24 +253,24 @@ useEffect(() => {
 **REQUIRED: Complete this section before creating PR.**
 **See: `.claude/docs/ENGINEER-WORKFLOW.md` for full workflow**
 
-*Completed: <DATE>*
+*Completed: 2026-02-22*
 
 ### Engineer Checklist
 
 ```
 Pre-Work:
-- [ ] Created branch from develop
-- [ ] Noted start time: ___
-- [ ] Read task file completely
+- [x] Created branch from develop
+- [x] Noted start time: session start
+- [x] Read task file completely
 
 Implementation:
-- [ ] Code complete
-- [ ] Tests pass locally (npm test)
-- [ ] Type check passes (npm run type-check)
-- [ ] Lint passes (npm run lint)
+- [x] Code complete
+- [x] Tests pass locally (npm test)
+- [x] Type check passes (npm run type-check)
+- [x] Lint passes (npm run lint)
 
 PR Submission:
-- [ ] This summary section completed
+- [x] This summary section completed
 - [ ] PR created with Engineer Metrics (see template)
 - [ ] CI passes (gh pr checks --watch)
 - [ ] SR Engineer review requested
@@ -282,18 +282,50 @@ Completion:
 
 ### Results
 
-- **Before**: [state before]
-- **After**: [state after]
+- **Before**: Network operation failures were invisible to users -- errors appeared briefly or only in console/Sentry. No local persistence of failures during offline periods.
+- **After**: All network operation failures are logged to local SQLite. Reconnection summary notification appears on dashboard. Diagnostic Log section in Settings shows recent failures with human-readable operation labels. Retention policy prunes entries >30 days or >500.
 - **Actual Tokens**: ~XK (Est: 35K)
 - **PR**: [URL after PR created]
+
+### What Was Implemented
+
+1. **FailureLogService** (`electron/services/failureLogService.ts`) -- Core service with logFailure, getRecentFailures, getFailuresSince, getFailureCount, acknowledgeAll, clearLog, pruneOldEntries, initialize methods. Uses dbRun/dbAll/dbGet/dbExec from dbConnection module. Singleton export pattern.
+
+2. **Database Migration** (version 31 in `electron/services/databaseService.ts`) -- Creates `failure_log` table with indexes on timestamp and acknowledged columns.
+
+3. **IPC Handlers** (`electron/handlers/failureLogHandlers.ts`) -- 4 channels: `failure-log:get-recent`, `failure-log:get-count`, `failure-log:acknowledge-all`, `failure-log:clear`.
+
+4. **Preload Bridge** (`electron/preload/failureLogBridge.ts`) -- Exposes ipcRenderer.invoke calls for the 4 failure log channels.
+
+5. **Type Definitions** -- Added `failureLog` to both `MainAPI` in `src/window.d.ts` and `WindowApi` in `electron/types/ipc.ts` (dual type system).
+
+6. **Network Error Integration** -- Added `failureLogService.logFailure()` to 5 network error catch blocks:
+   - Outlook contacts sync (`electron/contact-handlers.ts`)
+   - Gmail email fetch (`electron/handlers/emailSyncHandlers.ts`)
+   - Outlook email fetch (`electron/handlers/emailSyncHandlers.ts`)
+   - Preferences sync (`electron/preference-handlers.ts`)
+   - Update checker (`electron/handlers/updaterHandlers.ts`)
+   - Sign Out All Devices (`electron/handlers/sessionHandlers.ts`)
+
+7. **Reconnection Summary Hook** (`src/hooks/useReconnectionSummary.ts`) -- Monitors online/offline transitions, queries unacknowledged failure count on reconnection, shows warning notification, marks as acknowledged.
+
+8. **Settings UI** -- Added "Diagnostic Log" section in Settings Data & Privacy area with scrollable list of entries, operation labels, clear button.
+
+9. **Retention Policy** -- Prunes entries >30 days and caps at 500 entries on service initialization.
+
+10. **Unit Tests** -- 15 new tests:
+    - `electron/__tests__/failure-log-handlers.test.ts` (11 tests)
+    - `src/hooks/__tests__/useReconnectionSummary.test.ts` (4 tests)
 
 ### Notes
 
 **Deviations from plan:**
-[If you deviated, explain what and why]
+- Migration file was not created as a separate SQL file. Instead, it was added inline in the MIGRATIONS array in `databaseService.ts`, following the existing pattern for versioned migrations (versions 30+).
+- The task mentioned creating `electron/database/migrations/XXXX-add-failure-log-table.sql` but the project uses inline migrations in `databaseService.ts`.
 
 **Issues encountered:**
-[Document any challenges]
+1. **Dual type system** -- `window.api` is typed by both `MainAPI` in `src/window.d.ts` AND `WindowApi` in `electron/types/ipc.ts`. Adding `failureLog` to only `MainAPI` caused 4 TypeScript errors. Root cause: `WindowApi` in `electron/types/ipc.ts` declares `api: WindowApi` in its global augmentation, which overrides the `MainAPI` declaration. Fixed by adding `failureLog` to both interfaces.
+2. **Pre-existing test failures** -- 2 tests in `transaction-handlers.integration.test.ts` fail on develop (unrelated to this change). Confirmed by running the same test against develop branch.
 
 ---
 

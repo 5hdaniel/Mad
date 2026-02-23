@@ -9,6 +9,7 @@ import { autoUpdater } from "electron-updater";
 import log from "electron-log";
 import * as Sentry from "@sentry/electron/main";
 import logService from "../services/logService";
+import failureLogService from "../services/failureLogService";
 
 // Track registration to prevent duplicate handlers
 let handlersRegistered = false;
@@ -52,6 +53,11 @@ export function registerUpdaterHandlers(mainWindow: BrowserWindow): void {
     } catch (error) {
       log.warn("Manual update check failed:", error);
       Sentry.captureException(error, { tags: { component: "auto-updater", trigger: "manual-check" } });
+      // TASK-2058: Log failure for offline diagnostics
+      failureLogService.logFailure(
+        "check_for_updates",
+        error instanceof Error ? error.message : "Check failed"
+      );
       return {
         updateAvailable: false,
         currentVersion: app.getVersion(),

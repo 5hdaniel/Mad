@@ -7,6 +7,7 @@ import { ipcMain, BrowserWindow } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import { randomUUID } from "crypto";
 import databaseService, { TransactionWithRoles as DbTransactionWithRoles } from "./services/databaseService";
+import failureLogService from "./services/failureLogService";
 import {
   getContactEmailEntries,
   getContactPhoneEntries,
@@ -1687,6 +1688,11 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         logService.error("[Main] Outlook contacts sync failed", "Contacts", {
           error: error instanceof Error ? error.message : "Unknown error",
         });
+        // TASK-2058: Log failure for offline diagnostics
+        failureLogService.logFailure(
+          "outlook_contacts_sync",
+          error instanceof Error ? error.message : "Unknown error"
+        );
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",

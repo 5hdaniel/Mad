@@ -1972,6 +1972,39 @@ interface MainAPI {
     }) => void) => () => void;
   };
 
+  // Failure Log for offline diagnostics (TASK-2058)
+  failureLog: {
+    /** Get recent failure log entries */
+    getRecent: (limit?: number) => Promise<{
+      success: boolean;
+      entries: Array<{
+        id: number;
+        timestamp: string;
+        operation: string;
+        error_message: string;
+        metadata: string | null;
+        acknowledged: number;
+      }>;
+      error?: string;
+    }>;
+    /** Get count of unacknowledged failures */
+    getCount: () => Promise<{
+      success: boolean;
+      count: number;
+      error?: string;
+    }>;
+    /** Mark all failures as acknowledged */
+    acknowledgeAll: () => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    /** Clear entire failure log */
+    clear: () => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+  };
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any; // Allow other properties for backwards compatibility
 }

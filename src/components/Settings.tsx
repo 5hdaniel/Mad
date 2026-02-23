@@ -82,6 +82,17 @@ interface ConnectionResult {
   success: boolean;
 }
 
+// TASK-2058: Human-readable labels for failure log operations
+const OPERATION_LABELS: Record<string, string> = {
+  outlook_contacts_sync: "Outlook Contacts Sync",
+  gmail_email_fetch: "Gmail Email Fetch",
+  outlook_email_fetch: "Outlook Email Fetch",
+  preferences_sync: "Preferences Sync",
+  sign_out_all_devices: "Sign Out All Devices",
+  check_for_updates: "Check for Updates",
+  session_sync: "Session Sync",
+};
+
 const SETTINGS_TABS = [
   { id: "settings-general", label: "General" },
   { id: "settings-email", label: "Email" },
@@ -193,6 +204,17 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
     lastModified: string;
   } | null>(null);
 
+  // TASK-2058: Failure log state
+  const [failureLogEntries, setFailureLogEntries] = useState<Array<{
+    id: number;
+    timestamp: string;
+    operation: string;
+    error_message: string;
+    metadata: string | null;
+    acknowledged: number;
+  }>>([]);
+  const [failureLogLoading, setFailureLogLoading] = useState<boolean>(false);
+
   // Load connection status and preferences on mount, with periodic refresh
   useEffect(() => {
     if (userId) {
@@ -207,6 +229,38 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
       return () => clearInterval(refreshInterval);
     }
   }, [userId]);
+
+  // TASK-2058: Load failure log entries
+  const loadFailureLog = useCallback(async () => {
+    setFailureLogLoading(true);
+    try {
+      const result = await window.api.failureLog?.getRecent(50);
+      if (result?.success) {
+        setFailureLogEntries(result.entries);
+      }
+    } catch (err) {
+      logger.error("Failed to load failure log:", err);
+    } finally {
+      setFailureLogLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadFailureLog();
+  }, [loadFailureLog]);
+
+  const handleClearFailureLog = async (): Promise<void> => {
+    try {
+      const result = await window.api.failureLog?.clear();
+      if (result?.success) {
+        setFailureLogEntries([]);
+        notify.success("Diagnostic log cleared.");
+      }
+    } catch (err) {
+      logger.error("Failed to clear failure log:", err);
+      notify.error("Failed to clear diagnostic log.");
+    }
+  };
 
   // TASK-2052: Load database info for backup/restore section
   useEffect(() => {
@@ -1569,6 +1623,54 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                     Backups are encrypted with your machine&apos;s keychain.
                     They can only be restored on this machine.
                   </p>
+                </div>
+
+                {/* TASK-2058: Diagnostic Log for offline failure tracking */}
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-900">
+                        Diagnostic Log
+                      </h4>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Recent network operation failures (for support diagnostics)
+                      </p>
+                    </div>
+                    {failureLogEntries.length > 0 && (
+                      <button
+                        onClick={handleClearFailureLog}
+                        className="px-2 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded border border-red-200 transition-colors"
+                      >
+                        Clear Log
+                      </button>
+                    )}
+                  </div>
+                  {failureLogLoading ? (
+                    <p className="text-xs text-gray-500">Loading...</p>
+                  ) : failureLogEntries.length === 0 ? (
+                    <p className="text-xs text-gray-400 italic">No failures recorded.</p>
+                  ) : (
+                    <div className="max-h-48 overflow-y-auto space-y-2 mt-2">
+                      {failureLogEntries.map((entry) => (
+                        <div
+                          key={entry.id}
+                          className="p-2 bg-white rounded border border-gray-100 text-xs"
+                        >
+                          <div className="flex items-center justify-between mb-0.5">
+                            <span className="font-medium text-gray-800">
+                              {OPERATION_LABELS[entry.operation] || entry.operation}
+                            </span>
+                            <span className="text-gray-400 text-[10px]">
+                              {new Date(entry.timestamp + "Z").toLocaleString()}
+                            </span>
+                          </div>
+                          <p className="text-gray-600 break-words">
+                            {entry.error_message}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* CCPA Data Export (TASK-2053) - moved from Privacy tab */}
