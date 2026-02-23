@@ -93,6 +93,33 @@ const OPERATION_LABELS: Record<string, string> = {
   session_sync: "Session Sync",
 };
 
+/**
+ * TASK-2062: Format a timestamp into a human-readable relative time string.
+ * E.g., "Just now", "2 minutes ago", "3 hours ago", "Yesterday", etc.
+ */
+function formatRelativeTime(isoDate: string): string {
+  const now = Date.now();
+  const then = new Date(isoDate).getTime();
+  const diffMs = now - then;
+
+  if (diffMs < 0 || isNaN(diffMs)) return "Just now";
+
+  const seconds = Math.floor(diffMs / 1000);
+  if (seconds < 60) return "Just now";
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "Yesterday";
+  if (days < 30) return `${days} days ago`;
+
+  return new Date(isoDate).toLocaleDateString();
+}
+
 const SETTINGS_TABS = [
   { id: "settings-general", label: "General" },
   { id: "settings-email", label: "Email" },
@@ -215,6 +242,17 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
   }>>([]);
   const [failureLogLoading, setFailureLogLoading] = useState<boolean>(false);
 
+  // TASK-2062: Active sessions/devices state
+  const [activeDevices, setActiveDevices] = useState<Array<{
+    device_id: string;
+    device_name: string;
+    os: string;
+    platform: string;
+    last_seen_at: string;
+    isCurrentDevice: boolean;
+  }>>([]);
+  const [devicesLoading, setDevicesLoading] = useState<boolean>(false);
+
   // Load connection status and preferences on mount, with periodic refresh
   useEffect(() => {
     if (userId) {
@@ -248,6 +286,26 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
   useEffect(() => {
     loadFailureLog();
   }, [loadFailureLog]);
+
+  // TASK-2062: Load active devices for session management
+  const loadActiveDevices = useCallback(async () => {
+    if (!userId || !isOnline) return;
+    setDevicesLoading(true);
+    try {
+      const result = await window.api.auth.getActiveDevices(userId);
+      if (result?.success && result.devices) {
+        setActiveDevices(result.devices);
+      }
+    } catch (err) {
+      logger.error("Failed to load active devices:", err);
+    } finally {
+      setDevicesLoading(false);
+    }
+  }, [userId, isOnline]);
+
+  useEffect(() => {
+    loadActiveDevices();
+  }, [loadActiveDevices]);
 
   const handleClearFailureLog = async (): Promise<void> => {
     try {
@@ -1499,6 +1557,82 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                       {signingOutAllDevices ? "Signing out..." : "Sign Out All Devices"}
                     </button>
                   </div>
+                </div>
+
+                {/* TASK-2062: Active Sessions */}
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-900">
+                        Active Sessions
+                      </h4>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Devices where your account is currently logged in
+                      </p>
+                    </div>
+                    <button
+                      onClick={loadActiveDevices}
+                      disabled={devicesLoading || !isOnline}
+                      title={!isOnline ? "You are offline" : "Refresh device list"}
+                      className="px-2 py-1 text-xs font-medium text-gray-600 bg-white hover:bg-gray-100 rounded border border-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {devicesLoading ? "Loading..." : "Refresh"}
+                    </button>
+                  </div>
+                  {devicesLoading && activeDevices.length === 0 ? (
+                    <p className="text-xs text-gray-500">Loading devices...</p>
+                  ) : activeDevices.length === 0 ? (
+                    <p className="text-xs text-gray-400 italic">
+                      {isOnline ? "No active sessions found." : "Go online to view active sessions."}
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {activeDevices.map((device) => (
+                        <div
+                          key={device.device_id}
+                          className={`p-3 rounded border text-xs ${
+                            device.isCurrentDevice
+                              ? "bg-blue-50 border-blue-200"
+                              : "bg-white border-gray-100"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              {/* Device icon */}
+                              <svg
+                                className="w-4 h-4 text-gray-400 flex-shrink-0"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                                />
+                              </svg>
+                              <span className="font-medium text-gray-800">
+                                {device.device_name || "Unknown device"}
+                              </span>
+                              {device.isCurrentDevice && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">
+                                  This device
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="mt-1 flex items-center gap-3 text-gray-500 ml-6">
+                            <span>{device.os || device.platform}</span>
+                            <span className="text-gray-300">|</span>
+                            <span>
+                              {formatRelativeTime(device.last_seen_at)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

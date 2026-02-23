@@ -481,6 +481,31 @@ interface MainAPI {
     openAuthInBrowser: () => Promise<{ success: boolean; error?: string }>;
     // TASK-2045: Sign out of all devices (global session invalidation)
     signOutAllDevices: () => Promise<{ success: boolean; error?: string }>;
+
+    // TASK-2062: Remote session validation
+    /**
+     * Validate remote session by checking Supabase auth.getUser().
+     * Returns { valid: false } if the session has been invalidated remotely.
+     */
+    validateRemoteSession: () => Promise<{ valid: boolean }>;
+
+    // TASK-2062: Active devices list
+    /**
+     * Get active devices for the current user.
+     * Returns list of devices with isCurrentDevice flag.
+     */
+    getActiveDevices: (userId: string) => Promise<{
+      success: boolean;
+      devices?: Array<{
+        device_id: string;
+        device_name: string;
+        os: string;
+        platform: string;
+        last_seen_at: string;
+        isCurrentDevice: boolean;
+      }>;
+      error?: string;
+    }>;
   };
   system: {
     // Platform detection (migrated from window.electron.platform)

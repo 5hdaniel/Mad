@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { getConsentStatus, getRetentionPolicy, updateRetentionPolicy, getJitStatus, updateJitStatus } from '@/lib/actions/scim';
+import { SignOutAllButton } from '@/components/SignOutAllButton';
+import { ActiveSessionsList } from '@/components/ActiveSessionsList';
 
 interface ConsentInfo {
   organizationId: string;
@@ -261,6 +263,30 @@ export default function SettingsPage() {
           <p className="mt-3 text-xs text-gray-400">
             Team members will see this setting locked in their desktop app and cannot change it.
           </p>
+        </div>
+      </div>
+
+      {/* TASK-2062: Session Management */}
+      <div className="bg-white shadow rounded-lg">
+        <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
+          <h2 className="text-lg font-medium text-gray-900">
+            Session Management
+          </h2>
+          <p className="mt-1 text-sm text-gray-500">
+            View active sessions and manage device access
+          </p>
+        </div>
+        <div className="px-4 py-4 sm:px-6 space-y-4">
+          {/* Active Sessions */}
+          <ActiveSessionsList />
+
+          {/* Sign Out All Devices */}
+          <div className="pt-4 border-t border-gray-200">
+            <p className="text-sm text-gray-700 mb-3">
+              Sign out of all devices, including desktop apps and other browser sessions.
+            </p>
+            <SignOutAllButton />
+          </div>
         </div>
       </div>
 
