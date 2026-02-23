@@ -343,7 +343,7 @@ Completion:
 - **Before**: Desktop app had no remote session invalidation detection; broker portal had no "Sign Out All Devices"; neither platform showed active sessions list
 - **After**: Desktop polls session validity every 60s and auto-logs out on invalidation; broker portal has Sign Out All Devices with confirmation; both platforms show active sessions with device info and "current" indicators
 - **Actual Tokens**: Est: 80K
-- **PR**: [URL after PR created]
+- **PR**: https://github.com/5hdaniel/Mad/pull/957
 
 ### What was implemented
 
