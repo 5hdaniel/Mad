@@ -311,25 +311,25 @@ useEffect(() => {
 **REQUIRED: Complete this section before creating PR.**
 **See: `.claude/docs/ENGINEER-WORKFLOW.md` for full workflow**
 
-*Completed: <DATE>*
+*Completed: 2026-02-23*
 
 ### Engineer Checklist
 
 ```
 Pre-Work:
-- [ ] Created branch from develop
-- [ ] Noted start time: ___
-- [ ] Read task file completely
+- [x] Created branch from develop
+- [x] Noted start time: 2026-02-23
+- [x] Read task file completely
 
 Implementation:
-- [ ] Code complete
-- [ ] Tests pass locally (npm test)
-- [ ] Type check passes (npm run type-check)
-- [ ] Lint passes (npm run lint)
+- [x] Code complete
+- [x] Tests pass locally (npm test) - 1577 passing, 2 pre-existing failures in transaction-handlers.integration
+- [x] Type check passes (npm run type-check) - 0 errors
+- [x] Lint passes (npm run lint) - 0 errors
 
 PR Submission:
-- [ ] This summary section completed
-- [ ] PR created with Engineer Metrics (see template)
+- [x] This summary section completed
+- [x] PR created with Engineer Metrics (see template)
 - [ ] CI passes (gh pr checks --watch)
 - [ ] SR Engineer review requested
 
@@ -340,18 +340,68 @@ Completion:
 
 ### Results
 
-- **Before**: [state before]
-- **After**: [state after]
-- **Actual Tokens**: ~XK (Est: 80K)
-- **PR**: [URL after PR created]
+- **Before**: Desktop app had no remote session invalidation detection; broker portal had no "Sign Out All Devices"; neither platform showed active sessions list
+- **After**: Desktop polls session validity every 60s and auto-logs out on invalidation; broker portal has Sign Out All Devices with confirmation; both platforms show active sessions with device info and "current" indicators
+- **Actual Tokens**: Est: 80K
+- **PR**: https://github.com/5hdaniel/Mad/pull/957
+
+### What was implemented
+
+**Desktop (Electron + React):**
+1. `session:validate-remote` IPC handler - Calls `supabase.auth.getUser()`, returns `{valid: false}` on auth error, `{valid: true}` on network error (safe default)
+2. `session:get-active-devices` IPC handler - Queries devices table, adds `isCurrentDevice` flag using `getDeviceId()`
+3. `useSessionValidator` hook - Polls every 60s, only when authenticated + online + visible. Shows alert on invalidation then calls `handleLogout`
+4. Active Sessions section in Settings (Security tab) - Shows device list with name, OS, relative time, "This device" badge, refresh button
+
+**Broker Portal (Next.js):**
+1. `signOutAllDevices` server action - Calls `supabase.auth.signOut({ scope: 'global' })` then redirects to `/login`
+2. `getActiveDevices` server action - Queries devices table for current user's active devices
+3. `SignOutAllButton` component - Two-state UI (button -> confirmation dialog) with red destructive styling
+4. `ActiveSessionsList` component - Shows "Web Portal (this browser)" as current session + desktop devices from Supabase
+5. Session Management card in settings page
+
+**Tests:**
+- 9 unit tests for `session:validate-remote` and `session:get-active-devices` handlers (all passing)
+
+### Files Created (6)
+- `src/hooks/useSessionValidator.ts`
+- `broker-portal/lib/actions/signOutAllDevices.ts`
+- `broker-portal/lib/actions/getActiveDevices.ts`
+- `broker-portal/components/SignOutAllButton.tsx`
+- `broker-portal/components/ActiveSessionsList.tsx`
+- `electron/__tests__/session-handlers-2062.test.ts`
+
+### Files Modified (7)
+- `electron/handlers/sessionHandlers.ts` - Added 2 IPC handlers + registration
+- `electron/preload/authBridge.ts` - Added 2 bridge methods
+- `electron/types/ipc.ts` - Added type definitions to WindowApi.auth
+- `src/window.d.ts` - Added type definitions to MainAPI.auth
+- `src/appCore/AppShell.tsx` - Mounted useSessionValidator hook
+- `src/components/Settings.tsx` - Added Active Sessions UI in Security tab
+- `broker-portal/app/dashboard/settings/page.tsx` - Added Session Management section
 
 ### Notes
 
 **Deviations from plan:**
-[If you deviated, explain what and why]
+1. Task suggested `window.api.session.validateRemote()` but implemented as `window.api.auth.validateRemoteSession()` to keep session-related methods grouped in the existing `auth` bridge section rather than creating a new `session` namespace
+2. Mounted `useSessionValidator` in `AppShell.tsx` instead of `Dashboard.tsx` or `App.tsx` because AppShell has direct access to both `isAuthenticated` and `handleLogout`
+3. Used `window.alert()` for the invalidation message instead of a custom modal - simpler, blocks user interaction, sufficient for this use case
+4. Both `window.d.ts` (MainAPI) and `electron/types/ipc.ts` (WindowApi) needed updates due to duplicate global Window type declarations
 
 **Issues encountered:**
-[Document any challenges]
+
+### Issue #1: Dual Window type declarations
+- **When:** Implementation, type-check step
+- **What happened:** TypeScript reported `validateRemoteSession` and `getActiveDevices` don't exist on auth type, despite adding them to `src/window.d.ts` (MainAPI interface)
+- **Root cause:** `electron/types/ipc.ts` has a separate `WindowApi` interface that ALSO declares `window.api` via `declare global { interface Window { api: WindowApi } }`. Both files augment the Window global, but `WindowApi.auth` didn't have the new methods.
+- **Resolution:** Added the new type definitions to BOTH `src/window.d.ts` (MainAPI.auth) and `electron/types/ipc.ts` (WindowApi.auth)
+- **Time spent:** ~15 minutes debugging
+
+### Issue #2: Context compaction mid-implementation
+- **When:** Implementation phase
+- **What happened:** Session ran out of context and was compacted. Had to re-read files and verify state of all changes.
+- **Resolution:** Successfully continued after compaction by verifying git status and re-reading modified files
+- **Time spent:** ~5 minutes
 
 ---
 

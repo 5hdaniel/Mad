@@ -209,4 +209,35 @@ export const authBridge = {
    */
   openAuthInBrowser: (): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke("auth:open-in-browser"),
+
+  // ==========================================
+  // SESSION MANAGEMENT (TASK-2062)
+  // ==========================================
+
+  /**
+   * Validate remote session by checking Supabase auth.getUser().
+   * Returns { valid: false } if the session has been invalidated remotely.
+   * Returns { valid: true } on network errors to avoid false logouts.
+   */
+  validateRemoteSession: (): Promise<{ valid: boolean }> =>
+    ipcRenderer.invoke("session:validate-remote"),
+
+  /**
+   * Get active devices for the current user.
+   * Returns list of devices with device name, OS, last active time,
+   * and whether each device is the current one.
+   * @param userId - User ID to get devices for
+   */
+  getActiveDevices: (userId: string): Promise<{
+    success: boolean;
+    devices?: Array<{
+      device_id: string;
+      device_name: string;
+      os: string;
+      platform: string;
+      last_seen_at: string;
+      isCurrentDevice: boolean;
+    }>;
+    error?: string;
+  }> => ipcRenderer.invoke("session:get-active-devices", userId),
 };

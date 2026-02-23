@@ -16,6 +16,7 @@ import auditService from "../services/auditService";
 import logService from "../services/logService";
 import { setSyncUserId } from "../sync-handlers";
 import failureLogService from "../services/failureLogService";
+import { getDeviceId } from "../services/deviceService";
 
 // Import validation utilities
 import { ValidationError, validateUserId, validateSessionToken } from "../utils/validation";
@@ -1117,6 +1118,109 @@ async function handleOpenAuthInBrowser(): Promise<{ success: boolean; error?: st
 }
 
 /**
+ * TASK-2062: Validate remote session by checking Supabase auth.
+ * Used by the renderer to poll whether the session is still valid
+ * (detects remote invalidation from "Sign Out All Devices").
+ * Returns { valid: true } on network errors to avoid false logouts.
+ */
+async function handleValidateRemoteSession(): Promise<{ valid: boolean }> {
+  try {
+    const client = supabaseService.getClient();
+    const { data, error } = await client.auth.getUser();
+    if (error || !data.user) {
+      await logService.info(
+        "[SessionValidator] Remote session invalid",
+        "SessionHandlers",
+        { error: error?.message }
+      );
+      return { valid: false };
+    }
+    return { valid: true };
+  } catch (error) {
+    // Network error -- assume valid (don't logout on network issues)
+    await logService.debug(
+      "[SessionValidator] Network error during remote validation, assuming valid",
+      "SessionHandlers",
+      { error: error instanceof Error ? error.message : "Unknown error" }
+    );
+    return { valid: true };
+  }
+}
+
+/**
+ * TASK-2062: Get active devices for the current user.
+ * Returns list of devices with isCurrentDevice flag.
+ */
+async function handleGetActiveDevices(
+  _event: IpcMainInvokeEvent,
+  userId: string
+): Promise<{
+  success: boolean;
+  devices?: Array<{
+    device_id: string;
+    device_name: string;
+    os: string;
+    platform: string;
+    last_seen_at: string;
+    isCurrentDevice: boolean;
+  }>;
+  error?: string;
+}> {
+  try {
+    const validatedUserId = validateUserId(userId)!;
+    const client = supabaseService.getClient();
+
+    const { data, error } = await client
+      .from("devices")
+      .select("device_id, device_name, os, platform, last_seen_at")
+      .eq("user_id", validatedUserId)
+      .eq("is_active", true)
+      .order("last_seen_at", { ascending: false });
+
+    if (error) {
+      await logService.error(
+        "[SessionValidator] Failed to get active devices",
+        "SessionHandlers",
+        { error: error.message }
+      );
+      return { success: false, error: error.message };
+    }
+
+    const currentDeviceId = getDeviceId();
+    const devices = (data || []).map(
+      (d: {
+        device_id: string;
+        device_name: string;
+        os: string;
+        platform: string;
+        last_seen_at: string;
+      }) => ({
+        ...d,
+        isCurrentDevice: d.device_id === currentDeviceId,
+      })
+    );
+
+    return { success: true, devices };
+  } catch (error) {
+    await logService.error(
+      "[SessionValidator] Error getting active devices",
+      "SessionHandlers",
+      { error: error instanceof Error ? error.message : "Unknown error" }
+    );
+    Sentry.captureException(error, {
+      tags: { service: "session-handlers", operation: "handleGetActiveDevices" },
+    });
+    if (error instanceof ValidationError) {
+      return { success: false, error: `Validation error: ${error.message}` };
+    }
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+/**
  * Register all session handlers
  */
 export function registerSessionHandlers(): void {
@@ -1132,4 +1236,8 @@ export function registerSessionHandlers(): void {
   ipcMain.handle("auth:get-current-user", handleGetCurrentUser);
   // TASK-1507: Open browser for Supabase OAuth with deep-link callback
   ipcMain.handle("auth:open-in-browser", handleOpenAuthInBrowser);
+  // TASK-2062: Remote session validation (polls Supabase auth.getUser)
+  ipcMain.handle("session:validate-remote", handleValidateRemoteSession);
+  // TASK-2062: Active devices list for session management UI
+  ipcMain.handle("session:get-active-devices", handleGetActiveDevices);
 }
