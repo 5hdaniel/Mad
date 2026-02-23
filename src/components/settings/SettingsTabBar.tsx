@@ -13,8 +13,8 @@ interface SettingsTabBarProps {
 
 export function SettingsTabBar({ tabs, activeTabId, onTabClick }: SettingsTabBarProps) {
   return (
-    <div className="sticky top-0 z-10 bg-white border-b border-gray-200 -mx-6 px-6 overflow-x-auto">
-      <div className="flex gap-1" role="tablist">
+    <div className="sticky top-0 z-10 bg-white border-b border-gray-200 -mx-6 px-6 overflow-x-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+      <div className="flex gap-1 justify-center" role="tablist">
         {tabs.map((tab) => (
           <button
             key={tab.id}

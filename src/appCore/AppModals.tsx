@@ -87,6 +87,7 @@ export function AppModals({ app }: AppModalsProps) {
         <Settings
           userId={currentUser.id}
           onClose={closeSettings}
+          onLogout={handleLogout}
           onEmailConnected={handleEmailConnectedFromSettings}
           onEmailDisconnected={handleEmailDisconnectedFromSettings}
         />
