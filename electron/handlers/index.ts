@@ -42,6 +42,9 @@ export { registerBackupRestoreHandlers } from "./backupRestoreHandlers";
 // CCPA data export handlers (TASK-2053)
 export { registerCcpaHandlers } from "./ccpaHandlers";
 
+// Failure log handlers (TASK-2058)
+export { registerFailureLogHandlers } from "./failureLogHandlers";
+
 // Shared auth handlers
 export {
   registerSharedAuthHandlers,

@@ -55,6 +55,7 @@ import {
   resetBridge,
   databaseBackupBridge,
   privacyBridge,
+  failureLogBridge,
 } from "./preload/index";
 
 // Expose protected methods that allow the renderer process to use
@@ -131,4 +132,7 @@ contextBridge.exposeInMainWorld("api", {
 
   // Privacy / CCPA data export (TASK-2053)
   privacy: privacyBridge,
+
+  // Failure log for offline diagnostics (TASK-2058)
+  failureLog: failureLogBridge,
 });

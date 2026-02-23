@@ -199,7 +199,7 @@ describe("DatabaseService Migration Auto-Restore (TASK-2057)", () => {
         };
       }
       if (sql.includes("SELECT version FROM schema_version")) {
-        return { get: jest.fn().mockReturnValue({ version: 30 }) };
+        return { get: jest.fn().mockReturnValue({ version: 31 }) };
       }
       return { get: jest.fn(), all: jest.fn().mockReturnValue([]), run: jest.fn() };
     });

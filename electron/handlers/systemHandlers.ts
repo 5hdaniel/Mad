@@ -24,6 +24,7 @@ import { getAndClearPendingDeepLinkUser } from "../main";
 import { initializePool } from "../workers/contactWorkerPool";
 import { getDbPath, getEncryptionKey } from "../services/db/core/dbConnection";
 import logService from "../services/logService";
+import failureLogService from "../services/failureLogService";
 import { wrapHandler } from "../utils/wrapHandler";
 import {
   ValidationError,
@@ -551,6 +552,11 @@ export function registerSystemHandlers(): void {
             logService.warn("Failed to initialize contact worker pool: " + (err instanceof Error ? err.message : String(err)), "System");
           });
         }
+
+        // TASK-2058: Initialize failure log service (create table + prune)
+        failureLogService.initialize().catch((err) => {
+          logService.warn("Failed to initialize failure log service: " + (err instanceof Error ? err.message : String(err)), "System");
+        });
 
         return { success: true };
       } catch (error) {

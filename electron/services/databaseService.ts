@@ -594,6 +594,24 @@ class DatabaseService implements IDatabaseService {
         `);
       },
     },
+    {
+      version: 31,
+      description: "Add failure_log table for offline diagnostics (TASK-2058)",
+      migrate: (d) => {
+        d.exec(`
+          CREATE TABLE IF NOT EXISTS failure_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+            operation TEXT NOT NULL,
+            error_message TEXT NOT NULL,
+            metadata TEXT,
+            acknowledged INTEGER NOT NULL DEFAULT 0
+          );
+          CREATE INDEX IF NOT EXISTS idx_failure_log_timestamp ON failure_log(timestamp);
+          CREATE INDEX IF NOT EXISTS idx_failure_log_acknowledged ON failure_log(acknowledged);
+        `);
+      },
+    },
   ];
 
   // ---- Migration validation helpers (static for testability) ----

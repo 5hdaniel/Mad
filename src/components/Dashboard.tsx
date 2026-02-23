@@ -14,6 +14,7 @@ import {
   JOYRIDE_LOCALE,
 } from "../config/tourSteps";
 import type { Transaction } from "../types";
+import { useReconnectionSummary } from "../hooks/useReconnectionSummary";
 
 interface DashboardActionProps {
   onAuditNew: () => void;
@@ -56,6 +57,9 @@ function Dashboard({
   onOpenSettings,
   user,
 }: DashboardActionProps) {
+  // TASK-2058: Show reconnection summary when coming back online with failures
+  useReconnectionSummary();
+
   // State for the Start New Audit modal
   const [showStartNewAuditModal, setShowStartNewAuditModal] = useState(false);
 

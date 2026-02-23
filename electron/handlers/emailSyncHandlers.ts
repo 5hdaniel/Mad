@@ -21,6 +21,7 @@ import {
 import databaseService from "../services/databaseService";
 import gmailFetchService from "../services/gmailFetchService";
 import outlookFetchService from "../services/outlookFetchService";
+import failureLogService from "../services/failureLogService";
 import emailAttachmentService from "../services/emailAttachmentService";
 import { backfillMissingAttachments } from "./attachmentHandlers";
 import { wrapHandler } from "../utils/wrapHandler";
@@ -1123,6 +1124,12 @@ export function registerEmailSyncHandlers(
             error: outlookError instanceof Error ? outlookError.message : "Unknown",
           });
         }
+        // TASK-2058: Log failure for offline diagnostics
+        failureLogService.logFailure(
+          "outlook_email_fetch",
+          outlookError instanceof Error ? outlookError.message : "Unknown error",
+          { emailsStoredBeforeFailure: emailsStored }
+        );
       }
 
       // Try Gmail (bidirectional: from + to contacts) (TASK-2049: with network resilience)
@@ -1239,6 +1246,12 @@ export function registerEmailSyncHandlers(
             error: gmailError instanceof Error ? gmailError.message : "Unknown",
           });
         }
+        // TASK-2058: Log failure for offline diagnostics
+        failureLogService.logFailure(
+          "gmail_email_fetch",
+          gmailError instanceof Error ? gmailError.message : "Unknown error",
+          { emailsStoredBeforeFailure: emailsStored }
+        );
       }
 
       logService.info(`Email fetch complete: ${emailsFetched} fetched, ${emailsStored} new stored`, "Transactions");
