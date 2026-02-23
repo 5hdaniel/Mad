@@ -25,6 +25,20 @@ jest.mock("../../hooks/useSyncOrchestrator", () => ({
   }),
 }));
 
+// Mock useNetwork (TASK-2056: added useNetwork to ContactsImportSettings)
+jest.mock("../../contexts/NetworkContext", () => ({
+  useNetwork: () => ({
+    isOnline: true,
+    isChecking: false,
+    lastOnlineAt: null,
+    lastOfflineAt: null,
+    connectionError: null,
+    checkConnection: jest.fn(),
+    clearError: jest.fn(),
+    setConnectionError: jest.fn(),
+  }),
+}));
+
 // Store original window.api
 const originalApi = window.api;
 
