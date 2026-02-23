@@ -335,8 +335,8 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
         if (oauthError) {
           // OAuth provider explicitly returned an error
           Sentry.captureException(new Error(`Deep link auth: OAuth error (${oauthError})`), {
-            tags: { component: "deep-link", action: "auth-callback", oauthError },
-            extra: { code: "OAUTH_ERROR", oauthError, oauthErrorDescription, url: redactDeepLinkUrl(url) },
+            tags: { component: "deep-link", action: "auth-callback", error_code: "OAUTH_ERROR", oauthError, oauth_reason: oauthErrorDescription || "none" },
+            extra: { callback_path: redactDeepLinkUrl(url) },
           });
           sendToRenderer("auth:deep-link-error", {
             error: oauthErrorDescription || `OAuth error: ${oauthError}`,
@@ -346,8 +346,8 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
           // No OAuth error but tokens missing — could be corrupted URL or incomplete redirect
           const isOnline = net.isOnline();
           Sentry.captureException(new Error(`Deep link auth: missing tokens${!isOnline ? " (device offline)" : ""}`), {
-            tags: { component: "deep-link", action: "auth-callback", networkOnline: isOnline },
-            extra: { code: "MISSING_TOKENS", networkOnline: isOnline, url: redactDeepLinkUrl(url) },
+            tags: { component: "deep-link", action: "auth-callback", error_code: "MISSING_TOKENS", networkOnline: isOnline },
+            extra: { callback_path: redactDeepLinkUrl(url) },
           });
           sendToRenderer("auth:deep-link-error", {
             error: !isOnline ? "Authentication failed — you appear to be offline" : "Missing tokens in callback URL",
@@ -370,8 +370,8 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
       if (sessionError || !sessionData?.user) {
         log.error("[DeepLink] Failed to set session:", sessionError);
         Sentry.captureException(sessionError || new Error("Deep link auth: session data missing user"), {
-          tags: { component: "deep-link", action: "auth-callback", networkOnline: net.isOnline() },
-          extra: { code: "INVALID_TOKENS", networkOnline: net.isOnline(), errorMessage: sessionError?.message },
+          tags: { component: "deep-link", action: "auth-callback", error_code: "INVALID_TOKENS", networkOnline: net.isOnline(), session_failure: sessionError?.message || "no user data" },
+          extra: { callback_path: redactDeepLinkUrl(url) },
         });
         sendToRenderer("auth:deep-link-error", {
           error: "Invalid authentication tokens",
