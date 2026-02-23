@@ -15,6 +15,7 @@ import {
   createThreadCommunicationReference,
   isThreadLinkedToTransaction,
 } from "./db/communicationDbService";
+import { computeTransactionDateRange } from "../utils/emailDateRange";
 
 
 // ============================================
@@ -63,20 +64,14 @@ interface ContactInfo {
 }
 
 /**
- * Transaction date range info
+ * Transaction info needed for auto-linking (dates + user ID)
  */
-interface TransactionDateRange {
-  startDate: string | null;
-  endDate: string | null;
+interface TransactionInfo {
   userId: string;
+  started_at: string | null;
+  created_at: string | null;
+  closed_at: string | null;
 }
-
-// ============================================
-// CONSTANTS
-// ============================================
-
-const DEFAULT_LOOKBACK_MONTHS = 6;
-const DEFAULT_BUFFER_DAYS = 30; // Buffer after closing date
 
 // ============================================
 // HELPER FUNCTIONS
@@ -120,16 +115,17 @@ async function getContactInfo(contactId: string): Promise<ContactInfo | null> {
 }
 
 /**
- * Get transaction date range for filtering communications
- * Falls back to 6 months lookback if no dates are set
+ * Get transaction info (dates + user ID) for auto-linking.
+ * TASK-2068: Date-range computation is now delegated to computeTransactionDateRange().
  */
-async function getTransactionDateRange(
+async function getTransactionInfo(
   transactionId: string
-): Promise<TransactionDateRange | null> {
+): Promise<TransactionInfo | null> {
   const sql = `
     SELECT
       user_id,
       started_at,
+      created_at,
       closed_at
     FROM transactions
     WHERE id = ?
@@ -138,6 +134,7 @@ async function getTransactionDateRange(
   const transaction = dbGet<{
     user_id: string;
     started_at: string | null;
+    created_at: string | null;
     closed_at: string | null;
   }>(sql, [transactionId]);
 
@@ -145,32 +142,12 @@ async function getTransactionDateRange(
     return null;
   }
 
-  const startDate = transaction.started_at;
-
-  // Use the latest available date as end, with buffer
-  let endDate: string | null = null;
-  if (transaction.closed_at) {
-    // Add buffer days after closing
-    const closeDateTime = new Date(transaction.closed_at);
-    closeDateTime.setDate(closeDateTime.getDate() + DEFAULT_BUFFER_DAYS);
-    endDate = closeDateTime.toISOString();
-  }
-
   return {
-    startDate,
-    endDate,
     userId: transaction.user_id,
+    started_at: transaction.started_at,
+    created_at: transaction.created_at,
+    closed_at: transaction.closed_at,
   };
-}
-
-/**
- * Calculate default date range (6 months lookback)
- */
-function getDefaultDateRange(): { start: Date; end: Date } {
-  const end = new Date();
-  const start = new Date();
-  start.setMonth(start.getMonth() - DEFAULT_LOOKBACK_MONTHS);
-  return { start, end };
 }
 
 /**
@@ -451,8 +428,8 @@ export async function autoLinkCommunicationsForContact(
       return result;
     }
 
-    // 2. Get transaction info and date range
-    const transactionInfo = await getTransactionDateRange(transactionId);
+    // 2. Get transaction info
+    const transactionInfo = await getTransactionInfo(transactionId);
 
     if (!transactionInfo) {
       await logService.warn(
@@ -465,21 +442,14 @@ export async function autoLinkCommunicationsForContact(
     const { userId } = transactionInfo;
 
     // 3. Determine date range for filtering
-    let dateRange: { start: Date; end: Date };
-
-    if (options.dateRange) {
-      // Use provided date range
-      dateRange = options.dateRange;
-    } else {
-      // Use transaction dates — started_at is required by the UI
-      const start = transactionInfo.startDate
-        ? new Date(transactionInfo.startDate)
-        : getDefaultDateRange().start; // Safety fallback for legacy data
-      const end = transactionInfo.endDate
-        ? new Date(new Date(transactionInfo.endDate).getTime() + DEFAULT_BUFFER_DAYS * 86400000)
-        : new Date();
-      dateRange = { start, end };
-    }
+    // TASK-2068: Use canonical computeTransactionDateRange for date logic
+    const dateRange: { start: Date; end: Date } = options.dateRange
+      ? options.dateRange
+      : computeTransactionDateRange({
+          started_at: transactionInfo.started_at,
+          created_at: transactionInfo.created_at,
+          closed_at: transactionInfo.closed_at,
+        });
 
     await logService.info(
       `Auto-linking communications for contact ${contactId} to transaction ${transactionId}`,

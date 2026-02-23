@@ -1,0 +1,87 @@
+/**
+ * TASK-2068: Canonical date-range calculation for email/communication fetching.
+ *
+ * Replaces 3 separate implementations:
+ * 1. computeEmailFetchSinceDate() in emailSyncHandlers.ts
+ * 2. getTransactionDateRange() + getDefaultDateRange() in autoLinkService.ts
+ * 3. DEFAULT_LOOKBACK_MONTHS constant in autoLinkService.ts
+ *
+ * Unifies the logic so all callers use the same date-range computation.
+ */
+
+/** Buffer days added after closed_at date to catch post-closing communications */
+export const DEFAULT_BUFFER_DAYS = 30;
+
+/** Fallback lookback period when no transaction dates are available */
+const FALLBACK_YEARS = 2;
+
+/**
+ * Compute the date range for fetching emails/communications related to a transaction.
+ *
+ * Start date priority:
+ *   1. started_at (when the transaction formally started)
+ *   2. created_at (when it was created in the system)
+ *   3. Fallback: 2 years ago
+ *
+ * End date:
+ *   - closed_at + 30-day buffer (to catch post-closing communications)
+ *   - Or today if closed_at is not set
+ *
+ * @param params - Transaction date fields (all optional)
+ * @returns Object with start and end Date
+ */
+export function computeTransactionDateRange(params: {
+  started_at?: Date | string | null;
+  created_at?: Date | string | null;
+  closed_at?: Date | string | null;
+}): { start: Date; end: Date } {
+  // --- Start date ---
+  let start: Date | null = null;
+
+  // Try started_at first (most meaningful for audit period)
+  if (params.started_at) {
+    const d = new Date(params.started_at);
+    if (!isNaN(d.getTime())) start = d;
+  }
+
+  // Fall back to created_at
+  if (!start && params.created_at) {
+    const d = new Date(params.created_at);
+    if (!isNaN(d.getTime())) start = d;
+  }
+
+  // Last resort: 2 years ago
+  if (!start) {
+    start = new Date();
+    start.setFullYear(start.getFullYear() - FALLBACK_YEARS);
+  }
+
+  // --- End date ---
+  let end: Date = new Date(); // default: today
+
+  if (params.closed_at) {
+    const d = new Date(params.closed_at);
+    if (!isNaN(d.getTime())) {
+      d.setDate(d.getDate() + DEFAULT_BUFFER_DAYS);
+      end = d;
+    }
+  }
+
+  return { start, end };
+}
+
+/**
+ * Backwards-compatible wrapper that returns only the start date.
+ *
+ * This is a thin re-export so existing callers of the old
+ * `computeEmailFetchSinceDate()` in emailSyncHandlers.ts continue to work
+ * without changing their call sites (they only need the start date).
+ *
+ * @deprecated Prefer computeTransactionDateRange() for new code.
+ */
+export function computeEmailFetchSinceDate(transactionDetails: {
+  started_at?: Date | string;
+  created_at?: Date | string;
+}): Date {
+  return computeTransactionDateRange(transactionDetails).start;
+}

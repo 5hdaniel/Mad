@@ -36,6 +36,7 @@ import {
 import { rateLimiters } from "../utils/rateLimit";
 import { isNetworkError } from "../utils/networkErrors";
 import { retryOnNetwork, networkResilienceService } from "../services/networkResilience";
+import { computeTransactionDateRange } from "../utils/emailDateRange";
 
 interface ScanOptions {
   onProgress?: (progress: unknown) => void;
@@ -50,39 +51,9 @@ export const EMAIL_FETCH_SAFETY_CAP = 2000;
 // TASK-2060: Safety cap for sent items (per-contact email search)
 export const SENT_ITEMS_SAFETY_CAP = 200;
 
-/**
- * TASK-2060: Compute the "since" date for email fetching based on transaction audit period.
- *
- * Uses the earliest meaningful date from the transaction:
- * 1. started_at (when the transaction formally started)
- * 2. created_at (when it was created in the system)
- *
- * Falls back to 2 years ago if neither date is available.
- *
- * @param transactionDetails - Transaction details with date fields
- * @returns Date object representing the earliest date to fetch emails from
- */
-export function computeEmailFetchSinceDate(transactionDetails: {
-  started_at?: Date | string;
-  created_at?: Date | string;
-}): Date {
-  // Try started_at first (most meaningful for audit period)
-  if (transactionDetails.started_at) {
-    const d = new Date(transactionDetails.started_at);
-    if (!isNaN(d.getTime())) return d;
-  }
-
-  // Fall back to created_at
-  if (transactionDetails.created_at) {
-    const d = new Date(transactionDetails.created_at);
-    if (!isNaN(d.getTime())) return d;
-  }
-
-  // Last resort: 2 years ago
-  const fallback = new Date();
-  fallback.setFullYear(fallback.getFullYear() - 2);
-  return fallback;
-}
+// TASK-2068: Re-export from canonical utility for backwards compatibility.
+// The implementation now lives in electron/utils/emailDateRange.ts.
+export { computeEmailFetchSinceDate } from "../utils/emailDateRange";
 
 /**
  * TASK-2060: Shared helper for fetching emails from a provider, storing them locally,
@@ -1217,9 +1188,9 @@ export function registerEmailSyncHandlers(
       let networkErrorOccurred = false;
       let networkErrorMessage = "";
 
-      // TASK-2060: Compute date range for email fetching based on transaction audit period.
-      // This replaces the hardcoded maxResults:200 cap that silently dropped older emails.
-      const emailFetchSinceDate = computeEmailFetchSinceDate(transactionDetails);
+      // TASK-2060/2068: Compute date range for email fetching based on transaction audit period.
+      // Uses canonical computeTransactionDateRange from electron/utils/emailDateRange.ts.
+      const emailFetchSinceDate = computeTransactionDateRange(transactionDetails).start;
       logService.info(`Email fetch date range: since ${emailFetchSinceDate.toISOString()}`, "Transactions", {
         transactionId: validatedTransactionId,
         sinceDate: emailFetchSinceDate.toISOString(),
