@@ -1385,6 +1385,7 @@ interface MainAPI {
       totalErrors?: number;
       error?: string;
       message?: string;
+      rateLimited?: boolean;
     }>;
     /**
      * Re-syncs auto-link communications for all contacts on a transaction.

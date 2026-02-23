@@ -35,6 +35,8 @@ interface TransactionDetailsTabProps {
   onSyncCommunications?: () => Promise<void>;
   /** Whether sync is in progress */
   syncingCommunications?: boolean;
+  /** Whether a global sync (from dashboard) is in progress */
+  globalSyncRunning?: boolean;
 }
 
 // Helper function to format date in readable format
@@ -77,7 +79,13 @@ export function TransactionDetailsTab({
   onAcceptAll,
   onSyncCommunications,
   syncingCommunications = false,
+  globalSyncRunning = false,
 }: TransactionDetailsTabProps): React.ReactElement {
+  // Disable sync when already syncing or when a global dashboard sync is running
+  const syncDisabled = syncingCommunications || globalSyncRunning;
+  const syncTooltip = globalSyncRunning
+    ? "A sync is already in progress from the dashboard"
+    : undefined;
   // Contact preview state for viewing details when clicking a contact card
   const [previewContact, setPreviewContact] = useState<ExtendedContact | null>(null);
   // Contact edit form state
@@ -340,9 +348,9 @@ export function TransactionDetailsTab({
             {onSyncCommunications && contactAssignments.length > 0 && (
               <button
                 onClick={onSyncCommunications}
-                disabled={syncingCommunications}
+                disabled={syncDisabled}
                 className="flex items-center gap-2 p-1.5 sm:px-3 sm:py-1.5 text-sm font-medium text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Sync Communications"
+                title={syncTooltip || "Sync Communications"}
               >
                 {syncingCommunications ? (
                   <>
