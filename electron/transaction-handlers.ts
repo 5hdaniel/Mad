@@ -8,6 +8,8 @@ import type { BrowserWindow } from "electron";
 import { registerTransactionCrudHandlers } from "./handlers/transactionCrudHandlers";
 import { registerTransactionExportHandlers, cleanupTransactionHandlers } from "./handlers/transactionExportHandlers";
 import { registerEmailSyncHandlers } from "./handlers/emailSyncHandlers";
+import { registerEmailLinkingHandlers } from "./handlers/emailLinkingHandlers";
+import { registerEmailAutoLinkHandlers } from "./handlers/emailAutoLinkHandlers";
 import { registerAttachmentHandlers } from "./handlers/attachmentHandlers";
 
 /**
@@ -20,6 +22,8 @@ export function registerTransactionHandlers(
   registerTransactionCrudHandlers(mainWindow);
   registerTransactionExportHandlers(mainWindow);
   registerEmailSyncHandlers(mainWindow);
+  registerEmailLinkingHandlers();
+  registerEmailAutoLinkHandlers();
   registerAttachmentHandlers(mainWindow);
 }
 
