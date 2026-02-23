@@ -48,23 +48,13 @@ export function OfflineBanner({
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onRetry}
-            disabled={isChecking}
-            className="px-3 py-1.5 text-xs font-medium text-yellow-800 bg-yellow-200 hover:bg-yellow-300 rounded-md transition-colors disabled:opacity-50"
-          >
-            {isChecking ? "Checking..." : "Retry"}
-          </button>
-          <button
-            onClick={() =>
-              window.api?.system?.contactSupport?.("Network connection issue")
-            }
-            className="px-3 py-1.5 text-xs font-medium text-yellow-800 hover:text-yellow-900 transition-colors"
-          >
-            Get Help
-          </button>
-        </div>
+        <button
+          onClick={onRetry}
+          disabled={isChecking}
+          className="px-3 py-1.5 text-xs font-medium text-yellow-800 bg-yellow-200 hover:bg-yellow-300 rounded-md transition-colors disabled:opacity-50"
+        >
+          {isChecking ? "Checking..." : "Retry"}
+        </button>
       </div>
     </div>
   );
