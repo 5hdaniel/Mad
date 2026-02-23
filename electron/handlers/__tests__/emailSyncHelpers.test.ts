@@ -8,6 +8,9 @@
  * electron/utils/emailDateRange.ts. Canonical tests live in
  * electron/utils/__tests__/emailDateRange.test.ts.
  * This file verifies the re-export still works from emailSyncHandlers.
+ *
+ * TASK-2066: Constants moved to electron/services/emailSyncService.ts.
+ * Re-exported from emailSyncHandlers for backwards compatibility.
  */
 
 import {
