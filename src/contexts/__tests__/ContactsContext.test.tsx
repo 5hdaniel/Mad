@@ -6,6 +6,19 @@ import React from "react";
 import { render, screen, waitFor, act } from "@testing-library/react";
 import { ContactsProvider, useContacts } from "../ContactsContext";
 
+jest.mock("../NetworkContext", () => ({
+  useNetwork: () => ({
+    isOnline: true,
+    isChecking: false,
+    lastOnlineAt: null,
+    lastOfflineAt: null,
+    connectionError: null,
+    checkConnection: jest.fn(),
+    clearError: jest.fn(),
+    setConnectionError: jest.fn(),
+  }),
+}));
+
 // Mock window.api
 const mockGetAll = jest.fn();
 const mockGetSortedByActivity = jest.fn();

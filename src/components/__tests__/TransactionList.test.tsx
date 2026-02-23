@@ -34,6 +34,19 @@ jest.mock("../../contexts/LicenseContext", () => ({
   }),
 }));
 
+jest.mock("../../contexts/NetworkContext", () => ({
+  useNetwork: () => ({
+    isOnline: true,
+    isChecking: false,
+    lastOnlineAt: null,
+    lastOfflineAt: null,
+    connectionError: null,
+    checkConnection: jest.fn(),
+    clearError: jest.fn(),
+    setConnectionError: jest.fn(),
+  }),
+}));
+
 describe("TransactionList", () => {
   const mockUserId = "user-123";
   const mockProvider = "google";
