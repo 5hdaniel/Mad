@@ -137,9 +137,7 @@ describe("SqliteBackupService", () => {
   });
 
   describe("backupDatabase", () => {
-    it("should call db.backup with the destination path", async () => {
-      const mockBackup = jest.fn().mockResolvedValue(undefined);
-      mockGetRawDatabase.mockReturnValue({ backup: mockBackup });
+    it("should copy database file to the destination path", async () => {
       mockStatSync.mockReturnValue({ size: 1024 });
 
       const result = await backupDatabase("/tmp/backup.db");
@@ -147,7 +145,10 @@ describe("SqliteBackupService", () => {
       expect(result.success).toBe(true);
       expect(result.filePath).toBe("/tmp/backup.db");
       expect(result.fileSize).toBe(1024);
-      expect(mockBackup).toHaveBeenCalledWith("/tmp/backup.db");
+      expect(mockCopyFileSync).toHaveBeenCalledWith(
+        "/mock/userData/mad.db",
+        "/tmp/backup.db"
+      );
     });
 
     it("should return error when database is not initialized", async () => {
@@ -166,9 +167,10 @@ describe("SqliteBackupService", () => {
       expect(result.error).toContain("same file");
     });
 
-    it("should handle backup API errors gracefully", async () => {
-      const mockBackup = jest.fn().mockRejectedValue(new Error("Disk full"));
-      mockGetRawDatabase.mockReturnValue({ backup: mockBackup });
+    it("should handle file copy errors gracefully", async () => {
+      mockCopyFileSync.mockImplementation(() => {
+        throw new Error("Disk full");
+      });
 
       const result = await backupDatabase("/tmp/backup.db");
 
