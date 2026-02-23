@@ -1145,19 +1145,6 @@ export function registerEmailSyncHandlers(
           },
         });
       } catch (outlookError) {
-        Sentry.captureException(outlookError, {
-          tags: {
-            syncType: 'emails',
-            provider: 'outlook',
-            operation: 'sync-and-fetch-emails',
-          },
-          extra: {
-            transactionId: validatedTransactionId,
-            contactEmailCount: contactEmails.length,
-            emailsStoredBeforeFailure: emailsStored,
-            isNetworkError: isNetworkError(outlookError),
-          },
-        });
         if (isNetworkError(outlookError)) {
           // TASK-2049: Network error after all retries exhausted
           networkErrorOccurred = true;
@@ -1304,19 +1291,6 @@ export function registerEmailSyncHandlers(
           },
         });
       } catch (gmailError) {
-        Sentry.captureException(gmailError, {
-          tags: {
-            syncType: 'emails',
-            provider: 'gmail',
-            operation: 'sync-and-fetch-emails',
-          },
-          extra: {
-            transactionId: validatedTransactionId,
-            contactEmailCount: contactEmails.length,
-            emailsStoredBeforeFailure: emailsStored,
-            isNetworkError: isNetworkError(gmailError),
-          },
-        });
         if (isNetworkError(gmailError)) {
           // TASK-2049: Network error after all retries exhausted
           networkErrorOccurred = true;

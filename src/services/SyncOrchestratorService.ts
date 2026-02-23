@@ -137,18 +137,6 @@ class SyncOrchestratorServiceClass {
             throw new Error(result.error || 'Contacts sync failed');
           }
           logger.info('[SyncOrchestrator] macOS Contacts sync complete');
-        } catch (macContactsError) {
-          Sentry.captureException(macContactsError, {
-            tags: {
-              syncType: 'contacts',
-              provider: 'macos',
-              operation: 'contacts-sync',
-            },
-            extra: {
-              userId: userId.substring(0, 8) + '...',
-            },
-          });
-          throw macContactsError;
         } finally {
           cleanup();
         }
@@ -457,16 +445,6 @@ class SyncOrchestratorServiceClass {
 
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
         logger.error(`[SyncOrchestrator] ${type} sync failed:`, error);
-        Sentry.captureException(error, {
-          tags: {
-            syncType: type,
-            operation: 'sync-orchestrator',
-          },
-          extra: {
-            userId: userId.substring(0, 8) + '...',
-            queue: validTypes,
-          },
-        });
         this.updateQueueItem(type, { status: 'error', error: errorMsg });
       }
 

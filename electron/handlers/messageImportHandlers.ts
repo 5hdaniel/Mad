@@ -245,18 +245,6 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
           `macOS Messages import error: ${errorMessage}`,
           "MessageImportHandlers"
         );
-        Sentry.captureException(error, {
-          tags: {
-            syncType: 'messages',
-            provider: 'macos',
-            operation: 'messages-import',
-          },
-          extra: {
-            userId: validUserId.substring(0, 8) + '...',
-            forceReimport,
-          },
-        });
-
         return {
           success: false,
           messagesImported: 0,
