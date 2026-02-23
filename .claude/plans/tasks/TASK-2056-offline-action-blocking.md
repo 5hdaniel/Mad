@@ -66,7 +66,7 @@ The app already has:
 
 #### Part 1: UI -- Disable buttons when offline
 
-1. **Dashboard sync button** -- Disable with tooltip "You are offline" when `isOnline` is false.
+1. **Dashboard sync button** -- Disable with tooltip "You are offline" when `isOnline` is false. **Note:** The sync trigger in `Dashboard.tsx` is passed as an `onTriggerRefresh` prop. Trace where this prop originates to determine whether the disable logic belongs in Dashboard.tsx or the parent component that provides the callback.
 2. **Check for Updates** (Settings) -- Disable with tooltip.
 3. **Sign Out All Devices** (Settings) -- Disable with tooltip.
 4. **Outlook Import/Sync** (Settings or wherever triggered) -- Disable with tooltip.
@@ -115,6 +115,7 @@ try {
 - [ ] All modified network calls have a 15-second timeout (no hanging for 60+ seconds)
 - [ ] Timeout errors produce a clear error message (not "fetch failed" or DNS error)
 - [ ] When device goes back online, buttons re-enable automatically (NetworkContext handles this)
+- [ ] Local-only operations (viewing transactions, reading audit data, browsing contacts) remain fully functional when offline
 - [ ] No regressions in existing offline banner behavior
 - [ ] `npm test` passes
 - [ ] `npm run type-check` passes

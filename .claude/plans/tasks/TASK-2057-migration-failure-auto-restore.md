@@ -70,10 +70,11 @@ What is MISSING:
 3. **Auto-restore backup** -- If migration fails and backup is verified:
    - Close the current (corrupted) database connection
    - Copy the backup file over the main database file
-   - Re-open the database connection
+   - Re-open the database connection with the same encryption params
+   - **Update shared references:** Call `setDb(newDb)`, `setDbPath(dbPath)`, and `setEncryptionKey(key)` on the `dbConnection` module so all sub-services get the new connection
    - Log the restore action
 
-4. **Show user dialog** -- Use Electron's `dialog.showMessageBox` to inform the user:
+4. **Show user dialog** -- Use Electron's `dialog.showMessageBox` to inform the user. **Important:** `dialog.showMessageBox` requires the app to be ready. Verify `app.isReady()` before calling, or defer with `await app.whenReady()` if `initializeDatabase()` runs before app readiness:
    - **If restore succeeded:** "A database update failed, but your data has been restored to the previous version. The app will continue with your existing data. Please contact support if this happens again."
    - **If restore failed (no valid backup):** "A database update failed and could not be automatically fixed. Please contact support. Your data may need manual recovery." Then allow the app to continue if possible (do not force-quit).
 
@@ -98,6 +99,7 @@ What is MISSING:
 - [ ] User sees a dialog explaining what happened (restore success or failure)
 - [ ] Sentry receives the migration error with auto_restore tags
 - [ ] App continues running on restored (old-schema) database after successful restore
+- [ ] After auto-restore, database CRUD operations function correctly (e.g., getUserById returns valid data on the restored connection)
 - [ ] First-run with no backup: migration failure shows error dialog, no crash
 - [ ] Corrupt backup: migration failure shows error dialog, does not attempt restore from corrupt file
 - [ ] No regression in normal migration flow (happy path unchanged)
@@ -156,10 +158,14 @@ try {
 
 ### Backup integrity check
 
+**CRITICAL:** The backup is encrypted with the same key as the main DB. You MUST open it with encryption params or `integrity_check` will always fail on production databases.
+
 ```typescript
-private _verifyBackupIntegrity(backupPath: string): boolean {
+private _verifyBackupIntegrity(backupPath: string, encryptionKey: string): boolean {
   try {
-    const testDb = new Database(backupPath, { /* same encryption options */ });
+    const testDb = new Database(backupPath);
+    testDb.pragma(`key = '${encryptionKey}'`);
+    testDb.pragma('cipher_compatibility = 4');
     const result = testDb.pragma('integrity_check');
     testDb.close();
     return result[0]?.integrity_check === 'ok';
