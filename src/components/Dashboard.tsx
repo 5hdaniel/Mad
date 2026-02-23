@@ -8,7 +8,6 @@ import StartNewAuditModal from "./StartNewAuditModal";
 import { LicenseGate } from "./common/LicenseGate";
 import { AlertBanner, AlertIcons } from "./common/AlertBanner";
 import { useLicense } from "../contexts/LicenseContext";
-import { useNetwork } from "../contexts/NetworkContext";
 import {
   getDashboardTourSteps,
   JOYRIDE_STYLES,
@@ -62,9 +61,6 @@ function Dashboard({
 
   // Get sync state from SyncOrchestrator (single source of truth for sync status)
   const { isRunning: isAnySyncing } = useSyncOrchestrator();
-
-  // TASK-2056: Network status for disabling network-dependent actions
-  const { isOnline } = useNetwork();
 
   // Initialize the onboarding tour for first-time users
   const { runTour, handleJoyrideCallback } = useTour(
