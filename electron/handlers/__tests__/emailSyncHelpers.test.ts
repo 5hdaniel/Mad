@@ -3,6 +3,11 @@
  *
  * Tests the date-range computation logic that replaces the hardcoded
  * maxResults:200 cap with transaction-aware date filtering.
+ *
+ * TASK-2068: computeEmailFetchSinceDate is now a re-export from
+ * electron/utils/emailDateRange.ts. Canonical tests live in
+ * electron/utils/__tests__/emailDateRange.test.ts.
+ * This file verifies the re-export still works from emailSyncHandlers.
  */
 
 import {
