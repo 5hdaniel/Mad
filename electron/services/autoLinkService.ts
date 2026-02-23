@@ -34,8 +34,6 @@ export interface AutoLinkOptions {
     start: Date;
     end: Date;
   };
-  /** Maximum number of communications to link (default: 100) */
-  limit?: number;
 }
 
 /**
@@ -79,7 +77,6 @@ interface TransactionDateRange {
 
 const DEFAULT_LOOKBACK_MONTHS = 6;
 const DEFAULT_BUFFER_DAYS = 30; // Buffer after closing date
-const DEFAULT_LIMIT = 100;
 
 // ============================================
 // HELPER FUNCTIONS
@@ -184,7 +181,7 @@ function getDefaultDateRange(): { start: Date; end: Date } {
  *
  * This function finds communications that:
  * 1. Belong to this user
- * 2. Are emails (communication_type = 'email')
+ * 2. Are emails (have email_id set)
  * 3. Are NOT already linked to this transaction
  * 4. Match the contact's email addresses (sender or recipients)
  * 5. Fall within the date range
@@ -194,8 +191,7 @@ async function findEmailsByContactEmails(
   userId: string,
   emails: string[],
   transactionId: string,
-  dateRange: { start: Date; end: Date },
-  limit: number
+  dateRange: { start: Date; end: Date }
 ): Promise<string[]> {
   if (emails.length === 0) {
     return [];
@@ -238,9 +234,9 @@ async function findEmailsByContactEmails(
   // Add date range
   params.push(dateRange.start.toISOString());
   params.push(dateRange.end.toISOString());
-  params.push(limit);
 
   // BACKLOG-506: Query emails table for content, check if already linked via communications
+  // No LIMIT — local SQLite queries are fast and we want to link all matching emails
   const sql = `
     SELECT e.id
     FROM emails e
@@ -251,7 +247,6 @@ async function findEmailsByContactEmails(
       AND e.sent_at >= ?
       AND e.sent_at <= ?
     ORDER BY e.sent_at DESC
-    LIMIT ?
   `;
 
   // Reorder params: transactionId for JOIN, userId for WHERE, then email patterns, then date range
@@ -261,7 +256,6 @@ async function findEmailsByContactEmails(
   }
   reorderedParams.push(dateRange.start.toISOString());
   reorderedParams.push(dateRange.end.toISOString());
-  reorderedParams.push(limit);
 
   const results = dbAll<{ id: string }>(sql, reorderedParams);
   return results.map((r) => r.id);
@@ -287,8 +281,7 @@ async function findMessagesByContactPhones(
   userId: string,
   phoneNumbers: string[],
   transactionId: string,
-  dateRange: { start: Date; end: Date },
-  limit: number
+  dateRange: { start: Date; end: Date }
 ): Promise<MessageWithThread[]> {
   if (phoneNumbers.length === 0) {
     return [];
@@ -315,10 +308,9 @@ async function findMessagesByContactPhones(
   // Add date range
   params.push(dateRange.start.toISOString());
   params.push(dateRange.end.toISOString());
-  params.push(limit);
 
   // TASK-1115: Select DISTINCT threads to avoid missing threads due to LIMIT
-  // Previously we limited messages which could miss threads if group chats filled the limit
+  // No LIMIT — local SQLite queries are fast and we want to link all matching threads
   const sql = `
     SELECT DISTINCT m.thread_id, MIN(m.id) as id
     FROM messages m
@@ -338,7 +330,6 @@ async function findMessagesByContactPhones(
       AND m.sent_at <= ?
     GROUP BY m.thread_id
     ORDER BY MAX(m.sent_at) DESC
-    LIMIT ?
   `;
 
   const results = dbAll<MessageWithThread>(sql, params);
@@ -393,8 +384,8 @@ async function linkEmailToTransaction(
   // Create a new communication record linking this email to the transaction
   const { v4: uuidv4 } = await import("uuid");
   const insertSql = `
-    INSERT INTO communications (id, user_id, transaction_id, email_id, communication_type, link_source, link_confidence, linked_at)
-    VALUES (?, ?, ?, ?, 'email', ?, ?, CURRENT_TIMESTAMP)
+    INSERT INTO communications (id, user_id, transaction_id, email_id, link_source, link_confidence, linked_at)
+    VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
   `;
   dbRun(insertSql, [
     uuidv4(),
@@ -428,7 +419,7 @@ async function linkEmailToTransaction(
 export async function autoLinkCommunicationsForContact(
   options: AutoLinkOptions
 ): Promise<AutoLinkResult> {
-  const { contactId, transactionId, limit = DEFAULT_LIMIT } = options;
+  const { contactId, transactionId } = options;
 
   const result: AutoLinkResult = {
     emailsLinked: 0,
@@ -479,19 +470,15 @@ export async function autoLinkCommunicationsForContact(
     if (options.dateRange) {
       // Use provided date range
       dateRange = options.dateRange;
-    } else if (transactionInfo.startDate || transactionInfo.endDate) {
-      // Use transaction dates
-      dateRange = {
-        start: transactionInfo.startDate
-          ? new Date(transactionInfo.startDate)
-          : getDefaultDateRange().start,
-        end: transactionInfo.endDate
-          ? new Date(transactionInfo.endDate)
-          : new Date(),
-      };
     } else {
-      // Fall back to default 6-month lookback
-      dateRange = getDefaultDateRange();
+      // Use transaction dates — started_at is required by the UI
+      const start = transactionInfo.startDate
+        ? new Date(transactionInfo.startDate)
+        : getDefaultDateRange().start; // Safety fallback for legacy data
+      const end = transactionInfo.endDate
+        ? new Date(new Date(transactionInfo.endDate).getTime() + DEFAULT_BUFFER_DAYS * 86400000)
+        : new Date();
+      dateRange = { start, end };
     }
 
     await logService.info(
@@ -512,8 +499,7 @@ export async function autoLinkCommunicationsForContact(
       userId,
       contactInfo.emails,
       transactionId,
-      dateRange,
-      limit
+      dateRange
     );
 
     await logService.debug(
@@ -532,8 +518,7 @@ export async function autoLinkCommunicationsForContact(
         userId,
         contactInfo.phoneNumbers,
         transactionId,
-        dateRange,
-        limit
+        dateRange
       );
 
       await logService.debug(
