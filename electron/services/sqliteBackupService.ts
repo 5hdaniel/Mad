@@ -88,15 +88,15 @@ export async function backupDatabase(
       };
     }
 
-    const db = databaseService.getRawDatabase();
-
     await logService.info(
       `Starting database backup to: ${destinationPath}`,
       "SqliteBackupService"
     );
 
-    // Use SQLite backup API (safe for concurrent access)
-    await db.backup(destinationPath);
+    // Use fs.copyFileSync for encrypted databases -- SQLite backup API
+    // creates an unencrypted destination which is incompatible with SQLCipher.
+    // This matches the approach used by databaseService pre-migration backups.
+    fs.copyFileSync(dbPath, destinationPath);
 
     // Get backup file size
     const stats = fs.statSync(destinationPath);
