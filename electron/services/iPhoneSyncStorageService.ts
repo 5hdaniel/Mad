@@ -19,7 +19,7 @@ import { detectMessageType } from "../utils/messageTypeDetector";
 import { isContactSourceEnabled } from "../utils/preferenceHelper";
 import type { iOSMessage, iOSConversation, iOSAttachment } from "../types/iosMessages";
 import type { iOSContact } from "../types/iosContacts";
-import type { SyncResult } from "./syncOrchestrator";
+import type { SyncResult } from "./deviceSyncOrchestrator";
 
 // Attachment storage constants
 const ATTACHMENTS_DIR = "message-attachments";

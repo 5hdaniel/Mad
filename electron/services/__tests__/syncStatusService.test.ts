@@ -59,7 +59,7 @@ jest.mock("child_process", () => ({
   spawn: jest.fn(),
 }));
 
-// Mock check-disk-space (used by syncOrchestrator)
+// Mock check-disk-space (used by deviceSyncOrchestrator)
 jest.mock("check-disk-space", () => ({
   default: jest.fn().mockResolvedValue({ free: 10 * 1024 * 1024 * 1024 }),
 }));
@@ -77,14 +77,14 @@ jest.mock("../backupService", () => ({
   },
 }));
 
-// Mock syncOrchestrator with controllable status
+// Mock deviceSyncOrchestrator with controllable status
 const mockOrchestratorStatus = {
   isRunning: false,
   phase: "idle" as const,
 };
 
-jest.mock("../syncOrchestrator", () => ({
-  syncOrchestrator: {
+jest.mock("../deviceSyncOrchestrator", () => ({
+  deviceSyncOrchestrator: {
     getStatus: jest.fn(() => mockOrchestratorStatus),
   },
 }));
@@ -92,7 +92,7 @@ jest.mock("../syncOrchestrator", () => ({
 // Import after mocks are set up
 import { syncStatusService } from "../syncStatusService";
 import { backupService } from "../backupService";
-import { syncOrchestrator } from "../syncOrchestrator";
+import { deviceSyncOrchestrator } from "../deviceSyncOrchestrator";
 
 describe("SyncStatusService", () => {
   beforeEach(() => {
@@ -195,7 +195,7 @@ describe("SyncStatusService", () => {
       syncStatusService.getStatus();
 
       expect(backupService.getStatus).toHaveBeenCalled();
-      expect(syncOrchestrator.getStatus).toHaveBeenCalled();
+      expect(deviceSyncOrchestrator.getStatus).toHaveBeenCalled();
     });
   });
 });

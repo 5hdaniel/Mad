@@ -115,7 +115,7 @@ export interface ProcessBackupOptions {
 }
 
 /**
- * SyncOrchestrator - Main integration service for iPhone sync on Windows
+ * DeviceSyncOrchestrator - Main integration service for iPhone sync on Windows
  *
  * Events:
  * - 'progress': SyncProgress - Progress updates during sync
@@ -128,12 +128,12 @@ export interface ProcessBackupOptions {
  *
  * @example
  * ```typescript
- * const orchestrator = new SyncOrchestrator();
+ * const orchestrator = new DeviceSyncOrchestrator();
  * orchestrator.on('progress', (progress) => console.log(progress));
  * const result = await orchestrator.sync({ udid: '...' });
  * ```
  */
-export class SyncOrchestrator extends EventEmitter {
+export class DeviceSyncOrchestrator extends EventEmitter {
   private deviceService: DeviceDetectionService;
   private backupService: BackupService;
   private decryptionService: BackupDecryptionService;
@@ -199,12 +199,12 @@ export class SyncOrchestrator extends EventEmitter {
 
     // Forward passcode waiting events (user needs to enter passcode on iPhone)
     this.backupService.on("waiting-for-passcode", () => {
-      log.info("[SyncOrchestrator] Waiting for user to enter passcode on iPhone");
+      log.info("[DeviceSyncOrchestrator] Waiting for user to enter passcode on iPhone");
       this.emit("waiting-for-passcode");
     });
 
     this.backupService.on("passcode-entered", () => {
-      log.info("[SyncOrchestrator] User entered passcode, backup starting");
+      log.info("[DeviceSyncOrchestrator] User entered passcode, backup starting");
       this.emit("passcode-entered");
     });
 
@@ -231,7 +231,7 @@ export class SyncOrchestrator extends EventEmitter {
     this.startTime = Date.now();
     this.estimatedBackupSize = 0;
 
-    log.info("[SyncOrchestrator] Starting sync", { udid: options.udid });
+    log.info("[DeviceSyncOrchestrator] Starting sync", { udid: options.udid });
 
     try {
       // Step 0: Check for existing/interrupted backups
@@ -251,7 +251,7 @@ export class SyncOrchestrator extends EventEmitter {
         const sizeGB = (backupStatus.sizeBytes / 1024 / 1024 / 1024).toFixed(1);
 
         if (backupStatus.isCorrupted) {
-          log.warn("[SyncOrchestrator] Previous backup was interrupted, will attempt to resume");
+          log.warn("[DeviceSyncOrchestrator] Previous backup was interrupted, will attempt to resume");
           this.emitProgress({
             phase: "backup",
             phaseProgress: 0,
@@ -261,7 +261,7 @@ export class SyncOrchestrator extends EventEmitter {
         } else if (backupStatus.isComplete) {
           const lastSync = backupStatus.lastModified;
           const timeSinceLastSync = lastSync ? Math.round((Date.now() - lastSync.getTime()) / 1000 / 60) : null;
-          log.info(`[SyncOrchestrator] Previous backup exists (${sizeGB} GB), last modified ${timeSinceLastSync} minutes ago`);
+          log.info(`[DeviceSyncOrchestrator] Previous backup exists (${sizeGB} GB), last modified ${timeSinceLastSync} minutes ago`);
 
           // Format time since last sync for user
           let timeAgoStr = "";
@@ -309,10 +309,10 @@ export class SyncOrchestrator extends EventEmitter {
         // Otherwise fall back to the storage-based estimate (less accurate)
         if (existingBackupSize > 0) {
           this.estimatedBackupSize = existingBackupSize;
-          log.info(`[SyncOrchestrator] Using existing backup size for estimate: ${Math.round(this.estimatedBackupSize / 1024 / 1024 / 1024)} GB`);
+          log.info(`[DeviceSyncOrchestrator] Using existing backup size for estimate: ${Math.round(this.estimatedBackupSize / 1024 / 1024 / 1024)} GB`);
         } else {
           this.estimatedBackupSize = storageInfo.estimatedBackupSize;
-          log.info(`[SyncOrchestrator] Estimated backup size from storage: ${Math.round(this.estimatedBackupSize / 1024 / 1024)} MB (used space: ${Math.round(storageInfo.usedSpace / 1024 / 1024 / 1024)} GB)`);
+          log.info(`[DeviceSyncOrchestrator] Estimated backup size from storage: ${Math.round(this.estimatedBackupSize / 1024 / 1024)} MB (used space: ${Math.round(storageInfo.usedSpace / 1024 / 1024 / 1024)} GB)`);
         }
 
         this.emitProgress({
@@ -337,7 +337,7 @@ export class SyncOrchestrator extends EventEmitter {
           );
         }
 
-        log.info(`[SyncOrchestrator] Disk space check passed: ${Math.round(diskSpaceCheck.availableSpace / 1024 / 1024 / 1024)} GB available`);
+        log.info(`[DeviceSyncOrchestrator] Disk space check passed: ${Math.round(diskSpaceCheck.availableSpace / 1024 / 1024 / 1024)} GB available`);
 
         this.emitProgress({
           phase: "backup",
@@ -347,7 +347,7 @@ export class SyncOrchestrator extends EventEmitter {
           estimatedTotalBytes: this.estimatedBackupSize,
         });
       } else {
-        log.warn("[SyncOrchestrator] Could not get storage info, progress will be estimated");
+        log.warn("[DeviceSyncOrchestrator] Could not get storage info, progress will be estimated");
 
         // Even without device storage info, check we have at least 10GB free
         const minRequiredSpace = 10 * 1024 * 1024 * 1024; // 10 GB minimum
@@ -538,7 +538,7 @@ export class SyncOrchestrator extends EventEmitter {
       this.isRunning = false;
       this.setPhase("complete");
 
-      log.info("[SyncOrchestrator] Sync complete", {
+      log.info("[DeviceSyncOrchestrator] Sync complete", {
         conversations: resolvedConversations.length,
         messages: allMessages.length,
         contacts: contacts.length,
@@ -563,7 +563,7 @@ export class SyncOrchestrator extends EventEmitter {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      log.error("[SyncOrchestrator] Sync failed", { error: errorMessage });
+      log.error("[DeviceSyncOrchestrator] Sync failed", { error: errorMessage });
       Sentry.captureException(error, {
         tags: { service: "sync-orchestrator", operation: "sync" },
       });
@@ -592,7 +592,7 @@ export class SyncOrchestrator extends EventEmitter {
       return;
     }
 
-    log.info("[SyncOrchestrator] Cancelling sync");
+    log.info("[DeviceSyncOrchestrator] Cancelling sync");
     this.isCancelled = true;
     this.isRunning = false;
     this.backupService.cancelBackup();
@@ -617,11 +617,11 @@ export class SyncOrchestrator extends EventEmitter {
     if (!backupPath) return;
 
     try {
-      log.info("[SyncOrchestrator] Cleaning up decrypted backup", { backupPath });
+      log.info("[DeviceSyncOrchestrator] Cleaning up decrypted backup", { backupPath });
       await this.decryptionService.cleanup(backupPath);
-      log.info("[SyncOrchestrator] Backup cleanup complete");
+      log.info("[DeviceSyncOrchestrator] Backup cleanup complete");
     } catch (error) {
-      log.warn("[SyncOrchestrator] Backup cleanup failed", {
+      log.warn("[DeviceSyncOrchestrator] Backup cleanup failed", {
         error: error instanceof Error ? error.message : String(error),
       });
       Sentry.captureException(error, {
@@ -634,7 +634,7 @@ export class SyncOrchestrator extends EventEmitter {
    * Force reset sync state (use when sync gets stuck)
    */
   forceReset(): void {
-    log.warn("[SyncOrchestrator] Force resetting sync state");
+    log.warn("[DeviceSyncOrchestrator] Force resetting sync state");
     this.isRunning = false;
     this.isCancelled = false;
     this.currentPhase = "idle";
@@ -657,7 +657,7 @@ export class SyncOrchestrator extends EventEmitter {
       // Can't determine state - process anyway to be safe
       if (!metadata) {
         log.info(
-          "[SyncOrchestrator] No backup metadata available, will process backup"
+          "[DeviceSyncOrchestrator] No backup metadata available, will process backup"
         );
         return true;
       }
@@ -665,7 +665,7 @@ export class SyncOrchestrator extends EventEmitter {
       // No previous sync recorded - first sync, must process
       if (!this.lastBackupSync) {
         log.info(
-          "[SyncOrchestrator] No previous sync recorded, will process backup"
+          "[DeviceSyncOrchestrator] No previous sync recorded, will process backup"
         );
         return true;
       }
@@ -673,7 +673,7 @@ export class SyncOrchestrator extends EventEmitter {
       // Different backup path - process (could be different device)
       if (this.lastBackupSync.backupPath !== backupPath) {
         log.info(
-          "[SyncOrchestrator] Different backup path, will process backup"
+          "[DeviceSyncOrchestrator] Different backup path, will process backup"
         );
         return true;
       }
@@ -684,18 +684,18 @@ export class SyncOrchestrator extends EventEmitter {
           (Date.now() - this.lastBackupSync.syncedAt.getTime()) / 1000 / 60
         );
         log.info(
-          `[SyncOrchestrator] Backup unchanged since last sync (${timeSinceLastSync} min ago), skipping re-parse`
+          `[DeviceSyncOrchestrator] Backup unchanged since last sync (${timeSinceLastSync} min ago), skipping re-parse`
         );
         return false;
       }
 
       log.info(
-        "[SyncOrchestrator] Backup manifest changed, will process backup"
+        "[DeviceSyncOrchestrator] Backup manifest changed, will process backup"
       );
       return true;
     } catch (error) {
       log.error(
-        "[SyncOrchestrator] Error checking if backup should be processed:",
+        "[DeviceSyncOrchestrator] Error checking if backup should be processed:",
         error
       );
       Sentry.captureException(error, {
@@ -718,7 +718,7 @@ export class SyncOrchestrator extends EventEmitter {
       manifestHash,
       syncedAt: new Date(),
     };
-    log.info("[SyncOrchestrator] Recorded backup sync:", {
+    log.info("[DeviceSyncOrchestrator] Recorded backup sync:", {
       backupPath,
       manifestHash: manifestHash.substring(0, 16) + "...",
       syncedAt: this.lastBackupSync.syncedAt.toISOString(),
@@ -732,7 +732,7 @@ export class SyncOrchestrator extends EventEmitter {
    */
   clearLastBackupSync(): void {
     this.lastBackupSync = null;
-    log.info("[SyncOrchestrator] Cleared last backup sync record");
+    log.info("[DeviceSyncOrchestrator] Cleared last backup sync record");
   }
 
   /**
@@ -868,14 +868,14 @@ export class SyncOrchestrator extends EventEmitter {
       const appDataPath = app.getPath("userData");
       const diskInfo = await checkDiskSpace(path.parse(appDataPath).root);
 
-      log.info(`[SyncOrchestrator] Disk space: ${Math.round(diskInfo.free / 1024 / 1024 / 1024)} GB free on ${diskInfo.diskPath}`);
+      log.info(`[DeviceSyncOrchestrator] Disk space: ${Math.round(diskInfo.free / 1024 / 1024 / 1024)} GB free on ${diskInfo.diskPath}`);
 
       return {
         hasEnoughSpace: diskInfo.free >= requiredBytes,
         availableSpace: diskInfo.free,
       };
     } catch (err) {
-      log.error("[SyncOrchestrator] Failed to check disk space:", err);
+      log.error("[DeviceSyncOrchestrator] Failed to check disk space:", err);
       Sentry.captureException(err, {
         tags: { service: "sync-orchestrator", operation: "checkAvailableDiskSpace" },
       });
@@ -921,7 +921,7 @@ export class SyncOrchestrator extends EventEmitter {
         "Backups",
         options.udid
       );
-      log.info("[SyncOrchestrator] Processing existing backup", {
+      log.info("[DeviceSyncOrchestrator] Processing existing backup", {
         udid: options.udid,
         backupPath,
         forceResync: options.forceResync ?? false,
@@ -941,7 +941,7 @@ export class SyncOrchestrator extends EventEmitter {
         return this.errorResult("Backup is incomplete or corrupted");
       }
 
-      log.info("[SyncOrchestrator] Backup status", {
+      log.info("[DeviceSyncOrchestrator] Backup status", {
         exists: backupStatus.exists,
         isComplete: backupStatus.isComplete,
         sizeBytes: backupStatus.sizeBytes,
@@ -965,7 +965,7 @@ export class SyncOrchestrator extends EventEmitter {
             skipReason: "unchanged",
           };
 
-          log.info("[SyncOrchestrator] Skipped unchanged backup", {
+          log.info("[DeviceSyncOrchestrator] Skipped unchanged backup", {
             duration: result.duration,
           });
           this.emit("complete", result);
@@ -973,7 +973,7 @@ export class SyncOrchestrator extends EventEmitter {
         }
       } else {
         log.info(
-          "[SyncOrchestrator] Force resync requested, skipping change detection"
+          "[DeviceSyncOrchestrator] Force resync requested, skipping change detection"
         );
       }
 
@@ -1109,7 +1109,7 @@ export class SyncOrchestrator extends EventEmitter {
       this.isRunning = false;
       this.setPhase("complete");
 
-      log.info("[SyncOrchestrator] Processing complete", {
+      log.info("[DeviceSyncOrchestrator] Processing complete", {
         conversations: resolvedConversations.length,
         messages: allMessages.length,
         contacts: contacts.length,
@@ -1135,7 +1135,7 @@ export class SyncOrchestrator extends EventEmitter {
       return result;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      log.error("[SyncOrchestrator] Processing failed", { error: errorMessage });
+      log.error("[DeviceSyncOrchestrator] Processing failed", { error: errorMessage });
       Sentry.captureException(error, {
         tags: { service: "sync-orchestrator", operation: "processExistingBackup" },
       });
@@ -1171,5 +1171,5 @@ export class SyncOrchestrator extends EventEmitter {
 }
 
 // Export singleton instance
-export const syncOrchestrator = new SyncOrchestrator();
-export default syncOrchestrator;
+export const deviceSyncOrchestrator = new DeviceSyncOrchestrator();
+export default deviceSyncOrchestrator;

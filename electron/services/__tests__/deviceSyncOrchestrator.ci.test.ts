@@ -1,10 +1,10 @@
 /**
  * Sync Orchestrator Tests (CI-Safe)
  *
- * Unit tests for SyncOrchestrator that can run in CI without timer issues.
+ * Unit tests for DeviceSyncOrchestrator that can run in CI without timer issues.
  * Tests exported types, utility methods, and synchronous behaviors.
  *
- * TASK-1054: Add coverage for syncOrchestrator critical paths
+ * TASK-1054: Add coverage for deviceSyncOrchestrator critical paths
  */
 
 import { EventEmitter } from "events";
@@ -108,14 +108,14 @@ jest.mock("../iosContactsParser", () => ({
 
 // Import after mocks
 import {
-  SyncOrchestrator,
+  DeviceSyncOrchestrator,
   SyncPhase,
   SyncResult,
   SyncProgress,
   SyncOptions,
-} from "../syncOrchestrator";
+} from "../deviceSyncOrchestrator";
 
-describe("SyncOrchestrator - Type Exports", () => {
+describe("DeviceSyncOrchestrator - Type Exports", () => {
   it("should export SyncPhase type with expected values", () => {
     const phases: SyncPhase[] = [
       "idle",
@@ -190,15 +190,15 @@ describe("SyncOrchestrator - Type Exports", () => {
   });
 });
 
-describe("SyncOrchestrator - Instance Creation", () => {
+describe("DeviceSyncOrchestrator - Instance Creation", () => {
   it("should create an instance", () => {
-    const orchestrator = new SyncOrchestrator();
+    const orchestrator = new DeviceSyncOrchestrator();
     expect(orchestrator).toBeDefined();
     expect(orchestrator).toBeInstanceOf(EventEmitter);
   });
 
   it("should have initial state as not running", () => {
-    const orchestrator = new SyncOrchestrator();
+    const orchestrator = new DeviceSyncOrchestrator();
     const status = orchestrator.getStatus();
 
     expect(status.isRunning).toBe(false);
@@ -206,11 +206,11 @@ describe("SyncOrchestrator - Instance Creation", () => {
   });
 });
 
-describe("SyncOrchestrator - getStatus", () => {
-  let orchestrator: SyncOrchestrator;
+describe("DeviceSyncOrchestrator - getStatus", () => {
+  let orchestrator: DeviceSyncOrchestrator;
 
   beforeEach(() => {
-    orchestrator = new SyncOrchestrator();
+    orchestrator = new DeviceSyncOrchestrator();
   });
 
   afterEach(() => {
@@ -236,11 +236,11 @@ describe("SyncOrchestrator - getStatus", () => {
   });
 });
 
-describe("SyncOrchestrator - Device Detection Management", () => {
-  let orchestrator: SyncOrchestrator;
+describe("DeviceSyncOrchestrator - Device Detection Management", () => {
+  let orchestrator: DeviceSyncOrchestrator;
 
   beforeEach(() => {
-    orchestrator = new SyncOrchestrator();
+    orchestrator = new DeviceSyncOrchestrator();
   });
 
   afterEach(() => {
@@ -276,11 +276,11 @@ describe("SyncOrchestrator - Device Detection Management", () => {
   });
 });
 
-describe("SyncOrchestrator - Event Emitter Functionality", () => {
-  let orchestrator: SyncOrchestrator;
+describe("DeviceSyncOrchestrator - Event Emitter Functionality", () => {
+  let orchestrator: DeviceSyncOrchestrator;
 
   beforeEach(() => {
-    orchestrator = new SyncOrchestrator();
+    orchestrator = new DeviceSyncOrchestrator();
   });
 
   afterEach(() => {
@@ -314,11 +314,11 @@ describe("SyncOrchestrator - Event Emitter Functionality", () => {
   });
 });
 
-describe("SyncOrchestrator - forceReset", () => {
-  let orchestrator: SyncOrchestrator;
+describe("DeviceSyncOrchestrator - forceReset", () => {
+  let orchestrator: DeviceSyncOrchestrator;
 
   beforeEach(() => {
-    orchestrator = new SyncOrchestrator();
+    orchestrator = new DeviceSyncOrchestrator();
   });
 
   afterEach(() => {
@@ -343,11 +343,11 @@ describe("SyncOrchestrator - forceReset", () => {
   });
 });
 
-describe("SyncOrchestrator - Skip Logic (TASK-908)", () => {
-  let orchestrator: SyncOrchestrator;
+describe("DeviceSyncOrchestrator - Skip Logic (TASK-908)", () => {
+  let orchestrator: DeviceSyncOrchestrator;
 
   beforeEach(() => {
-    orchestrator = new SyncOrchestrator();
+    orchestrator = new DeviceSyncOrchestrator();
   });
 
   afterEach(() => {
@@ -408,11 +408,11 @@ describe("SyncOrchestrator - Skip Logic (TASK-908)", () => {
   });
 });
 
-describe("SyncOrchestrator - cancel", () => {
-  let orchestrator: SyncOrchestrator;
+describe("DeviceSyncOrchestrator - cancel", () => {
+  let orchestrator: DeviceSyncOrchestrator;
 
   beforeEach(() => {
-    orchestrator = new SyncOrchestrator();
+    orchestrator = new DeviceSyncOrchestrator();
   });
 
   afterEach(() => {
@@ -433,7 +433,7 @@ describe("SyncOrchestrator - cancel", () => {
   });
 });
 
-describe("SyncOrchestrator - Progress Calculation", () => {
+describe("DeviceSyncOrchestrator - Progress Calculation", () => {
   it("should have phase progress between 0-100", () => {
     const progress: SyncProgress = {
       phase: "backup",
