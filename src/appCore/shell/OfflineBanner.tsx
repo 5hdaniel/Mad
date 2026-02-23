@@ -2,10 +2,10 @@
  * OfflineBanner Component
  *
  * Displays a notification banner when the application is offline.
- * Provides retry and help options for the user.
+ * Shows a brief "You're back online!" message when connectivity is restored.
  */
 
-import React from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 interface OfflineBannerProps {
   isOnline: boolean;
@@ -18,6 +18,47 @@ export function OfflineBanner({
   isChecking,
   onRetry,
 }: OfflineBannerProps) {
+  const [showReconnected, setShowReconnected] = useState(false);
+  const wasOfflineRef = useRef(false);
+
+  useEffect(() => {
+    if (!isOnline) {
+      wasOfflineRef.current = true;
+      setShowReconnected(false);
+    } else if (wasOfflineRef.current && isOnline) {
+      wasOfflineRef.current = false;
+      setShowReconnected(true);
+      const timer = setTimeout(() => setShowReconnected(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isOnline]);
+
+  // Brief green "back online" banner
+  if (showReconnected) {
+    return (
+      <div className="flex-shrink-0 bg-green-50 border-b border-green-200 px-4 py-3">
+        <div className="flex items-center justify-center max-w-4xl mx-auto gap-2">
+          <svg
+            className="w-5 h-5 text-green-600"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M5 13l4 4L19 7"
+            />
+          </svg>
+          <p className="text-sm font-medium text-green-800">
+            You're back online!
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (isOnline) return null;
 
   return (
