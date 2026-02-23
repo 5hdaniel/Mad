@@ -7,6 +7,7 @@
 import { ipcMain } from "electron";
 import type { BrowserWindow } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
+import * as Sentry from "@sentry/electron/main";
 import transactionService from "../services/transactionService";
 import logService from "../services/logService";
 import { autoLinkAllToTransaction } from "../services/messageMatchingService";
@@ -900,6 +901,16 @@ export function registerEmailSyncHandlers(
         transactionId,
       });
 
+      Sentry.addBreadcrumb({
+        category: 'sync',
+        message: 'sync-and-fetch-emails started',
+        level: 'info',
+        data: {
+          operation: 'sync-and-fetch-emails',
+          transactionId,
+        },
+      });
+
       // Validate transaction ID
       const validatedTransactionId = validateTransactionId(transactionId);
       if (!validatedTransactionId) {
@@ -1006,6 +1017,18 @@ export function registerEmailSyncHandlers(
       let networkErrorMessage = "";
 
       // Try Outlook (TASK-2049: with network resilience)
+      Sentry.addBreadcrumb({
+        category: 'sync',
+        message: 'Outlook email fetch started',
+        level: 'info',
+        data: {
+          syncType: 'emails',
+          provider: 'outlook',
+          operation: 'sync-and-fetch-emails',
+          transactionId: validatedTransactionId,
+          contactEmailCount: contactEmails.length,
+        },
+      });
       try {
         await retryOnNetwork(async () => {
           const outlookReady = await outlookFetchService.initialize(userId);
@@ -1109,7 +1132,32 @@ export function registerEmailSyncHandlers(
             }
           }
         }, undefined, "OutlookSync");
+        Sentry.addBreadcrumb({
+          category: 'sync',
+          message: 'Outlook email fetch completed',
+          level: 'info',
+          data: {
+            syncType: 'emails',
+            provider: 'outlook',
+            operation: 'sync-and-fetch-emails',
+            emailsFetched,
+            emailsStored,
+          },
+        });
       } catch (outlookError) {
+        Sentry.captureException(outlookError, {
+          tags: {
+            syncType: 'emails',
+            provider: 'outlook',
+            operation: 'sync-and-fetch-emails',
+          },
+          extra: {
+            transactionId: validatedTransactionId,
+            contactEmailCount: contactEmails.length,
+            emailsStoredBeforeFailure: emailsStored,
+            isNetworkError: isNetworkError(outlookError),
+          },
+        });
         if (isNetworkError(outlookError)) {
           // TASK-2049: Network error after all retries exhausted
           networkErrorOccurred = true;
@@ -1133,6 +1181,18 @@ export function registerEmailSyncHandlers(
       }
 
       // Try Gmail (bidirectional: from + to contacts) (TASK-2049: with network resilience)
+      Sentry.addBreadcrumb({
+        category: 'sync',
+        message: 'Gmail email fetch started',
+        level: 'info',
+        data: {
+          syncType: 'emails',
+          provider: 'gmail',
+          operation: 'sync-and-fetch-emails',
+          transactionId: validatedTransactionId,
+          contactEmailCount: contactEmails.length,
+        },
+      });
       try {
         await retryOnNetwork(async () => {
           const gmailReady = await gmailFetchService.initialize(userId);
@@ -1231,7 +1291,32 @@ export function registerEmailSyncHandlers(
             }
           }
         }, undefined, "GmailSync");
+        Sentry.addBreadcrumb({
+          category: 'sync',
+          message: 'Gmail email fetch completed',
+          level: 'info',
+          data: {
+            syncType: 'emails',
+            provider: 'gmail',
+            operation: 'sync-and-fetch-emails',
+            emailsFetched,
+            emailsStored,
+          },
+        });
       } catch (gmailError) {
+        Sentry.captureException(gmailError, {
+          tags: {
+            syncType: 'emails',
+            provider: 'gmail',
+            operation: 'sync-and-fetch-emails',
+          },
+          extra: {
+            transactionId: validatedTransactionId,
+            contactEmailCount: contactEmails.length,
+            emailsStoredBeforeFailure: emailsStored,
+            isNetworkError: isNetworkError(gmailError),
+          },
+        });
         if (isNetworkError(gmailError)) {
           // TASK-2049: Network error after all retries exhausted
           networkErrorOccurred = true;
@@ -1257,6 +1342,15 @@ export function registerEmailSyncHandlers(
       logService.info(`Email fetch complete: ${emailsFetched} fetched, ${emailsStored} new stored`, "Transactions");
 
       // Step 2: Auto-link from local DB
+      Sentry.addBreadcrumb({
+        category: 'sync',
+        message: 'Auto-link started',
+        level: 'info',
+        data: {
+          operation: 'sync-and-fetch-emails',
+          contactCount: contactAssignments.length,
+        },
+      });
       let totalEmailsLinked = 0;
       let totalMessagesLinked = 0;
       let totalAlreadyLinked = 0;
@@ -1284,6 +1378,18 @@ export function registerEmailSyncHandlers(
           );
         }
       }
+
+      Sentry.addBreadcrumb({
+        category: 'sync',
+        message: 'Auto-link completed',
+        level: 'info',
+        data: {
+          operation: 'sync-and-fetch-emails',
+          totalEmailsLinked,
+          totalMessagesLinked,
+          totalErrors,
+        },
+      });
 
       // Step 3: Backfill any missing attachments for previously-synced emails
       const backfillResult = await backfillMissingAttachments(userId);

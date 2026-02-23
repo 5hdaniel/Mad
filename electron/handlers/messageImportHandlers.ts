@@ -5,6 +5,7 @@
 
 import { ipcMain, BrowserWindow } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
+import * as Sentry from "@sentry/electron/main";
 import logService from "../services/logService";
 import databaseService from "../services/databaseService";
 import supabaseService from "../services/supabaseService";
@@ -123,6 +124,20 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
         { userId: validUserId, forceReimport, filters: importFilters }
       );
 
+      Sentry.addBreadcrumb({
+        category: 'sync',
+        message: 'macOS Messages import started',
+        level: 'info',
+        data: {
+          syncType: 'messages',
+          platform: 'macos',
+          operation: 'messages-import',
+          forceReimport,
+          lookbackMonths: importFilters.lookbackMonths,
+          maxMessages: importFilters.maxMessages,
+        },
+      });
+
       // TASK-1710: Track import start time for elapsed time calculation
       importStartTime = Date.now();
 
@@ -146,6 +161,20 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
         );
 
         if (result.success) {
+          Sentry.addBreadcrumb({
+            category: 'sync',
+            message: 'macOS Messages import completed',
+            level: 'info',
+            data: {
+              syncType: 'messages',
+              platform: 'macos',
+              operation: 'messages-import',
+              messagesImported: result.messagesImported,
+              messagesSkipped: result.messagesSkipped,
+              duration: result.duration,
+            },
+          });
+
           logService.info(
             `macOS Messages import completed`,
             "MessageImportHandlers",
@@ -216,6 +245,17 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
           `macOS Messages import error: ${errorMessage}`,
           "MessageImportHandlers"
         );
+        Sentry.captureException(error, {
+          tags: {
+            syncType: 'messages',
+            provider: 'macos',
+            operation: 'messages-import',
+          },
+          extra: {
+            userId: validUserId.substring(0, 8) + '...',
+            forceReimport,
+          },
+        });
 
         return {
           success: false,
