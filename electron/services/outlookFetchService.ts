@@ -545,10 +545,18 @@ class OutlookFetchService {
    * Search sent items for emails TO specific contact email addresses.
    * Uses $search with "to:" KQL which works on sentItems folder.
    * Limited to maxResults per contact email to avoid over-fetching.
+   *
+   * TASK-2060: Added after parameter for date-range filtering. When provided,
+   * results are filtered client-side since $search cannot combine with $filter.
+   *
+   * @param contactEmails - Contact email addresses to search for
+   * @param maxResults - Maximum results per contact email (default 50)
+   * @param after - Optional date to filter emails received after this date
    */
   async searchSentEmailsToContacts(
     contactEmails: string[],
     maxResults: number = 50,
+    after?: Date | null,
   ): Promise<ParsedEmail[]> {
     if (!this.accessToken) {
       throw new Error("Outlook API not initialized. Call initialize() first.");
@@ -581,7 +589,12 @@ class OutlookFetchService {
         for (const msg of messages) {
           if (!seenIds.has(msg.id)) {
             seenIds.add(msg.id);
-            allParsed.push(this._parseMessage(msg));
+            const parsed = this._parseMessage(msg);
+            // TASK-2060: Client-side date filter since $search can't combine with $filter
+            if (after && parsed.date < after) {
+              continue;
+            }
+            allParsed.push(parsed);
           }
         }
       } catch (searchError) {
