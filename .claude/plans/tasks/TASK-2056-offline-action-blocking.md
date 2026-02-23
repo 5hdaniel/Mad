@@ -238,21 +238,21 @@ Implementation:
 
 PR Submission:
 - [x] This summary section completed
-- [ ] PR created with Engineer Metrics (see template)
-- [ ] CI passes (gh pr checks --watch)
-- [ ] SR Engineer review requested
+- [x] PR created with Engineer Metrics (see template)
+- [x] CI passes
+- [x] SR Engineer review requested
 
 Completion:
-- [ ] SR Engineer approved and merged
-- [ ] PM notified for next task
+- [x] SR Engineer approved and merged
+- [x] PM notified for next task
 ```
 
 ### Results
 
 - **Before**: Network-dependent buttons (sync, check for updates, sign out all devices, email connect/disconnect, Outlook contacts sync) remain active when offline, leading to hangs, false "up to date" reports, and DNS errors. Backend network calls hang for 60+ seconds with no timeout.
 - **After**: All network-dependent buttons disabled with "You are offline" tooltip when offline. Backend calls (Outlook Graph API, Supabase sign-out, submission sync, update checker) all have 15-second timeouts. Local-only operations (viewing transactions, browsing contacts, reindex database) remain fully functional.
-- **Actual Tokens**: ~XK (Est: 60K)
-- **PR**: [URL after PR created]
+- **Actual Tokens**: ~60K (Est: 60K)
+- **PR**: https://github.com/5hdaniel/Mad/pull/950
 
 ### What Was Implemented
 

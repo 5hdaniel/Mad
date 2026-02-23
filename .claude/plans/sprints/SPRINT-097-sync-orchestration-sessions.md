@@ -1,7 +1,7 @@
 # SPRINT-097: Sync Orchestration + Sessions
 
 **Created:** 2026-02-22
-**Status:** Planned
+**Status:** Completed
 **Base:** `develop` (after SPRINT-096 work merged)
 
 ---
@@ -26,9 +26,9 @@ Three workstreams addressing different layers of the sync and session infrastruc
 
 | ID | Title | Task | Batch | Est Tokens | Actual Tokens | PR | Merged | Status |
 |----|-------|------|-------|-----------|---------------|-----|--------|--------|
-| BACKLOG-800 | Cross-platform session management | TASK-2062 | 1 (parallel) | ~80K | - | - | - | Pending |
-| BACKLOG-791 | Rate limiter + disable sync buttons | TASK-2063 | 1 (parallel) | ~30K | - | - | - | Pending |
-| BACKLOG-793 | Rename conflicting SyncOrchestrator | TASK-2064 | 2 (after TASK-2063) | ~13K | - | - | - | Pending |
+| BACKLOG-800 | Cross-platform session management | TASK-2062 | 1 (parallel) | ~80K | ~80K | #957 | 2026-02-23 | Completed |
+| BACKLOG-791 | Rate limiter + disable sync buttons | TASK-2063 | 1 (parallel) | ~30K | ~25K | #956 | 2026-02-23 | Completed |
+| BACKLOG-793 | Rename conflicting SyncOrchestrator | TASK-2064 | 2 (after TASK-2063) | ~13K | ~13K | #958 | 2026-02-23 | Completed |
 
 **Total Estimated Tokens:** ~123K (engineering) + ~35K (SR review) = ~158K
 
@@ -103,9 +103,42 @@ TASK-2063 (Rate limiter)     ──┼── Batch 1 (parallel)
 
 ## Sprint Metrics
 
-| Metric | Target |
-|--------|--------|
-| Total Estimated Tokens | ~158K |
-| Number of Tasks | 3 |
-| Parallel Tasks | 2 in Batch 1, 1 in Batch 2 |
-| Expected Duration | 1-2 sessions (overnight) |
+| Metric | Target | Actual |
+|--------|--------|--------|
+| Total Estimated Tokens | ~158K | ~118K (engineering) |
+| Number of Tasks | 3 | 3 |
+| Parallel Tasks | 2 in Batch 1, 1 in Batch 2 | 2 in Batch 1, 1 in Batch 2 |
+| Expected Duration | 1-2 sessions (overnight) | 1 session |
+
+---
+
+## Retrospective
+
+**Date:** 2026-02-23
+**Status:** All tasks completed and merged to develop.
+
+### PRs Merged
+
+| Task | PR | Merged |
+|------|-----|--------|
+| TASK-2062 (cross-platform session management) | #957 | 2026-02-23 |
+| TASK-2063 (sync rate limiter) | #956 | 2026-02-23 |
+| TASK-2064 (rename SyncOrchestrator) | #958 | 2026-02-23 |
+
+### Additional PR (Out of Sprint Scope)
+
+- **PR #959** (BACKLOG-812): Broker portal login redirect for agent license users. Created and merged during QA testing of TASK-2062's broker portal changes.
+
+### QA Findings
+
+All 3 tasks passed QA. The following backlog items were added during QA:
+
+- **BACKLOG-811:** Selective per-device session sign out (from TASK-2062). Already noted as out-of-scope in the task.
+- **BACKLOG-812:** Broker portal login redirect for agent license users (from TASK-2062 QA). Completed immediately as PR #959.
+
+### Notable Observations
+
+- TASK-2063 (rate limiter) was defensive/redundant -- existing UI already disables sync buttons during sync. The rate limiter adds a backend safety net, but no observable behavior change was noted during QA.
+- TASK-2062 was the largest task across all 3 sprints (~80K), touching both desktop and broker portal. The dual type declaration issue (window.d.ts + electron/types/ipc.ts) appeared again.
+- TASK-2064 (rename) was a straightforward mechanical refactor with no issues.
+- Batch execution worked as planned: TASK-2062 and TASK-2063 ran in parallel, TASK-2064 followed after TASK-2063.
