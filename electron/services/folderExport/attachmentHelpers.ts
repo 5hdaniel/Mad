@@ -13,6 +13,7 @@ import databaseService from "../databaseService";
 import logService from "../logService";
 import type { Communication } from "../../types/models";
 import { isEmailMessage } from "../../utils/channelHelpers";
+import { getThreadKey } from "./textExportHelpers";
 
 /**
  * Get attachments for a specific message
@@ -188,6 +189,7 @@ export interface AttachmentExportResult {
 export async function exportEmailAttachmentsToThreadDirs(
   emails: Communication[],
   emailsExportPath: string,
+  threadNameMap?: Map<string, string>,
 ): Promise<AttachmentExportResult> {
   const result: AttachmentExportResult = {
     exported: 0,
@@ -198,11 +200,11 @@ export async function exportEmailAttachmentsToThreadDirs(
   };
 
   // Group emails by thread for directory structure
+  // Use getThreadKey() for alignment with exportEmailThreads() in folderExportService
   const threadMap = new Map<string, Communication[]>();
   for (const email of emails) {
     if (!isEmailMessage(email)) continue;
-    // Use thread_id if available, otherwise use email id as thread key
-    const threadKey = email.thread_id || email.id || "unknown";
+    const threadKey = getThreadKey(email);
     const thread = threadMap.get(threadKey) || [];
     thread.push(email);
     threadMap.set(threadKey, thread);
@@ -212,7 +214,8 @@ export async function exportEmailAttachmentsToThreadDirs(
   const usedFilenamesPerThread = new Map<string, Set<string>>();
 
   for (const [threadKey, threadEmails] of threadMap) {
-    const threadDirName = sanitizeFileName(threadKey);
+    // Use mapped human-readable name if available, fallback to sanitized raw key
+    const threadDirName = threadNameMap?.get(threadKey) || sanitizeFileName(threadKey);
 
     for (const email of threadEmails) {
       if (!email.id) continue;

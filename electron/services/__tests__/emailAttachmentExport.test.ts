@@ -428,7 +428,7 @@ describe("TASK-2050: Email Attachment Export", () => {
       expect(result.skipped).toBe(0);
     });
 
-    it("should use email id as thread key when thread_id is missing", async () => {
+    it("should use getThreadKey fallback when thread_id is missing", async () => {
       const email = createEmail("email-solo-123", "", "No thread");
       (email as any).thread_id = undefined;
 
@@ -447,11 +447,11 @@ describe("TASK-2050: Email Attachment Export", () => {
       const result = await exportEmailAttachmentsToThreadDirs([email], "/mock/export/emails");
 
       expect(result.exported).toBe(1);
-      // Thread key should fall back to email id
-      expect(result.items[0].threadId).toBe("email-solo-123");
+      // Thread key should fall back to getThreadKey email fallback (subject + participants)
+      expect(result.items[0].threadId).toBe("email-thread-no thread-alice@test.com-bob@test.com");
 
-      // Dir should contain the email id
-      const attachDir = createdDirs.find((d) => d.includes("email-solo-123"));
+      // Dir should contain the sanitized thread key
+      const attachDir = createdDirs.find((d) => d.includes("email-thread-no_thread"));
       expect(attachDir).toBeDefined();
     });
 
@@ -489,6 +489,122 @@ describe("TASK-2050: Email Attachment Export", () => {
       // Second should have a counter appended
       expect(filenames[1]).not.toBe(filenames[0]);
       expect(filenames[1]).toContain("document");
+    });
+
+    it("should use threadNameMap for folder names when provided", async () => {
+      const emails = [
+        createEmail("e1", "thread-A", "Contract Review"),
+        createEmail("e2", "thread-B", "Inspection Report"),
+      ];
+
+      mockAll.mockImplementation((...args: unknown[]) => {
+        const emailId = args[0] as string;
+        if (emailId === "e1") {
+          return [{
+            id: "att-1",
+            filename: "contract.pdf",
+            mime_type: "application/pdf",
+            storage_path: "/cache/contract.pdf",
+            file_size_bytes: 1000,
+          }];
+        }
+        if (emailId === "e2") {
+          return [{
+            id: "att-2",
+            filename: "report.pdf",
+            mime_type: "application/pdf",
+            storage_path: "/cache/report.pdf",
+            file_size_bytes: 2000,
+          }];
+        }
+        return [];
+      });
+
+      accessiblePaths.add("/cache/contract.pdf");
+      accessiblePaths.add("/cache/report.pdf");
+
+      // Provide a threadNameMap that maps thread IDs to human-readable names
+      const threadNameMap = new Map<string, string>();
+      threadNameMap.set("thread-A", "thread_001_2024-01-15_Contract_Review");
+      threadNameMap.set("thread-B", "thread_002_2024-01-15_Inspection_Report");
+
+      const result = await exportEmailAttachmentsToThreadDirs(
+        emails,
+        "/mock/export/emails",
+        threadNameMap,
+      );
+
+      expect(result.exported).toBe(2);
+
+      // Verify directories use human-readable names from the map
+      const threadADir = createdDirs.find((d) =>
+        d.includes("thread_001_2024-01-15_Contract_Review") && d.includes("attachments")
+      );
+      const threadBDir = createdDirs.find((d) =>
+        d.includes("thread_002_2024-01-15_Inspection_Report") && d.includes("attachments")
+      );
+      expect(threadADir).toBeDefined();
+      expect(threadBDir).toBeDefined();
+
+      // Verify export paths in result items use the human-readable names
+      const contractItem = result.items.find((i) => i.filename === "contract.pdf");
+      expect(contractItem!.exportPath).toContain("thread_001_2024-01-15_Contract_Review");
+
+      const reportItem = result.items.find((i) => i.filename === "report.pdf");
+      expect(reportItem!.exportPath).toContain("thread_002_2024-01-15_Inspection_Report");
+    });
+
+    it("should fall back to sanitized threadKey when threadNameMap has no entry", async () => {
+      const emails = [createEmail("e1", "thread-X", "Unmapped thread")];
+
+      mockAll.mockReturnValue([{
+        id: "att-1",
+        filename: "doc.pdf",
+        mime_type: "application/pdf",
+        storage_path: "/cache/doc.pdf",
+        file_size_bytes: 500,
+      }]);
+
+      accessiblePaths.add("/cache/doc.pdf");
+
+      // Provide a threadNameMap that does NOT include thread-X
+      const threadNameMap = new Map<string, string>();
+      threadNameMap.set("thread-OTHER", "thread_001_2024-01-15_Other");
+
+      const result = await exportEmailAttachmentsToThreadDirs(
+        emails,
+        "/mock/export/emails",
+        threadNameMap,
+      );
+
+      expect(result.exported).toBe(1);
+
+      // Should fall back to sanitized thread key
+      const attachDir = createdDirs.find((d) => d.includes("thread-X") && d.includes("attachments"));
+      expect(attachDir).toBeDefined();
+    });
+
+    it("should fall back to sanitized threadKey when no threadNameMap provided", async () => {
+      const emails = [createEmail("e1", "thread-A", "Test email")];
+
+      mockAll.mockReturnValue([{
+        id: "att-1",
+        filename: "file.pdf",
+        mime_type: "application/pdf",
+        storage_path: "/cache/file.pdf",
+        file_size_bytes: 1000,
+      }]);
+
+      accessiblePaths.add("/cache/file.pdf");
+
+      // Call without threadNameMap (backward compatibility)
+      const result = await exportEmailAttachmentsToThreadDirs(emails, "/mock/export/emails");
+
+      expect(result.exported).toBe(1);
+
+      // Should use sanitized thread key as folder name
+      const attachDir = createdDirs.find((d) => d.includes("thread-A") && d.includes("attachments"));
+      expect(attachDir).toBeDefined();
     });
 
     it("should skip non-email communications", async () => {

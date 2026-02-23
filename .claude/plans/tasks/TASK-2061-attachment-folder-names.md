@@ -224,24 +224,24 @@ The thread key used in `attachmentHelpers.ts` (line 206: `email.thread_id || ema
 **REQUIRED: Complete this section before creating PR.**
 **See: `.claude/docs/ENGINEER-WORKFLOW.md` for full workflow**
 
-*Completed: <DATE>*
+*Completed: 2026-02-23*
 
 ### Engineer Checklist
 
 ```
 Pre-Work:
-- [ ] Created branch from develop
-- [ ] Noted start time: ___
-- [ ] Read task file completely
+- [x] Created branch from develop
+- [x] Noted start time: session start
+- [x] Read task file completely
 
 Implementation:
-- [ ] Code complete
-- [ ] Tests pass locally (npm test)
-- [ ] Type check passes (npm run type-check)
-- [ ] Lint passes (npm run lint)
+- [x] Code complete
+- [x] Tests pass locally (npm test)
+- [x] Type check passes (npm run type-check)
+- [x] Lint passes (npm run lint)
 
 PR Submission:
-- [ ] This summary section completed
+- [x] This summary section completed
 - [ ] PR created with Engineer Metrics (see template)
 - [ ] CI passes (gh pr checks --watch)
 - [ ] SR Engineer review requested
@@ -253,18 +253,26 @@ Completion:
 
 ### Results
 
-- **Before**: [state before]
-- **After**: [state after]
-- **Actual Tokens**: ~XK (Est: 25K)
-- **PR**: [URL after PR created]
+- **Before**: Attachment folders used raw thread_id (e.g., `AAQkADVk___/attachments/`) which was unreadable
+- **After**: Attachment folders use human-readable names matching PDF names (e.g., `thread_001_2024-03-11_RE_Insurance/attachments/`)
+- **Actual Tokens**: ~15K (Est: 25K)
+- **PR**: https://github.com/5hdaniel/Mad/pull/953
+
+### Changes Made
+
+1. **`attachmentHelpers.ts`**: Added optional `threadNameMap` parameter to `exportEmailAttachmentsToThreadDirs()`. Changed thread grouping to use `getThreadKey()` for alignment with `exportEmailThreads()`. Folder name resolution uses map lookup with fallback to sanitized key.
+
+2. **`folderExportService.ts`**: Added thread name mapping construction before calling `exportEmailAttachmentsToThreadDirs()`. Uses same grouping/naming logic as `exportEmailThreads()` (getThreadKey, chronological sort, `thread_NNN_DATE_SUBJECT` pattern).
+
+3. **`emailAttachmentExport.test.ts`**: Updated existing test for `getThreadKey` fallback behavior. Added 3 new tests: threadNameMap usage, fallback for unmapped threads, backward compatibility without map.
 
 ### Notes
 
 **Deviations from plan:**
-[If you deviated, explain what and why]
+Also aligned thread key computation in `attachmentHelpers.ts` to use `getThreadKey()` from `textExportHelpers.ts` instead of the simpler `thread_id || id` fallback. This was flagged in the task guardrails as a potential mismatch and ensures correct mapping between PDF names and attachment folders.
 
 **Issues encountered:**
-[Document any challenges]
+None. The `getThreadKey()` import worked cleanly since its transitive dependency (`contactResolutionService`) was already mocked in the test environment.
 
 ---
 
