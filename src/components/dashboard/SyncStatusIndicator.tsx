@@ -72,6 +72,7 @@ export function SyncStatusIndicator({
   const [showCompletion, setShowCompletion] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const wasSyncingRef = useRef(false);
+  const autoDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Get license status for AI-specific features (pending count, Review Now button)
   const { hasAIAddon } = useLicense();
@@ -93,18 +94,39 @@ export function SyncStatusIndicator({
     if (isAnySyncing) {
       wasSyncingRef.current = true;
       setDismissed(false); // Reset dismissed state when new sync starts
+      // Cancel any pending auto-dismiss timer when new sync starts
+      if (autoDismissTimerRef.current) {
+        clearTimeout(autoDismissTimerRef.current);
+        autoDismissTimerRef.current = null;
+      }
+      setShowCompletion(false);
     } else if (wasSyncingRef.current && !isAnySyncing) {
       // Just finished syncing - show completion message
       setShowCompletion(true);
       wasSyncingRef.current = false;
-      // No auto-dismiss — user must click the X to dismiss.
-      // This ensures the completion message is visible even if sync
-      // finishes while a modal (e.g. Settings) covers the dashboard.
+
+      // Auto-dismiss after 3 seconds
+      autoDismissTimerRef.current = setTimeout(() => {
+        setShowCompletion(false);
+        setDismissed(true);
+        autoDismissTimerRef.current = null;
+      }, 3000);
+
+      return () => {
+        if (autoDismissTimerRef.current) {
+          clearTimeout(autoDismissTimerRef.current);
+          autoDismissTimerRef.current = null;
+        }
+      };
     }
   }, [isAnySyncing]);
 
-  // Handle manual dismiss
+  // Handle manual dismiss (also cancels auto-dismiss timer)
   const handleDismiss = useCallback(() => {
+    if (autoDismissTimerRef.current) {
+      clearTimeout(autoDismissTimerRef.current);
+      autoDismissTimerRef.current = null;
+    }
     setShowCompletion(false);
     setDismissed(true);
   }, []);
