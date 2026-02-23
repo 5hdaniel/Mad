@@ -235,8 +235,15 @@ class SupabaseService {
     const client = this._ensureClient();
 
     try {
-      const { error } = await client.auth.signOut({ scope: 'global' });
-      if (error) throw error;
+      // TASK-2056: 15-second timeout to prevent hanging when offline
+      const timeoutMs = 15000;
+      const result = await Promise.race([
+        client.auth.signOut({ scope: 'global' }),
+        new Promise<{ error: Error }>((resolve) =>
+          setTimeout(() => resolve({ error: new Error(`Sign-out request timed out after ${timeoutMs / 1000}s`) }), timeoutMs)
+        ),
+      ]);
+      if (result.error) throw result.error;
       logService.info("[Supabase] Global sign-out successful", "SupabaseService");
       return { success: true };
     } catch (error) {

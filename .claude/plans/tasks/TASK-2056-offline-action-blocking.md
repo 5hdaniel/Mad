@@ -220,24 +220,24 @@ If creating a shared utility, place it in `electron/utils/fetchWithTimeout.ts`. 
 **REQUIRED: Complete this section before creating PR.**
 **See: `.claude/docs/ENGINEER-WORKFLOW.md` for full workflow**
 
-*Completed: <DATE>*
+*Completed: 2026-02-22*
 
 ### Engineer Checklist
 
 ```
 Pre-Work:
-- [ ] Created branch from develop
-- [ ] Noted start time: ___
-- [ ] Read task file completely
+- [x] Created branch from develop
+- [x] Noted start time: session start
+- [x] Read task file completely
 
 Implementation:
-- [ ] Code complete
-- [ ] Tests pass locally (npm test)
-- [ ] Type check passes (npm run type-check)
-- [ ] Lint passes (npm run lint)
+- [x] Code complete
+- [x] Tests pass locally (npm test)
+- [x] Type check passes (npm run type-check)
+- [x] Lint passes (npm run lint)
 
 PR Submission:
-- [ ] This summary section completed
+- [x] This summary section completed
 - [ ] PR created with Engineer Metrics (see template)
 - [ ] CI passes (gh pr checks --watch)
 - [ ] SR Engineer review requested
@@ -249,18 +249,39 @@ Completion:
 
 ### Results
 
-- **Before**: [state before]
-- **After**: [state after]
+- **Before**: Network-dependent buttons (sync, check for updates, sign out all devices, email connect/disconnect, Outlook contacts sync) remain active when offline, leading to hangs, false "up to date" reports, and DNS errors. Backend network calls hang for 60+ seconds with no timeout.
+- **After**: All network-dependent buttons disabled with "You are offline" tooltip when offline. Backend calls (Outlook Graph API, Supabase sign-out, submission sync, update checker) all have 15-second timeouts. Local-only operations (viewing transactions, browsing contacts, reindex database) remain fully functional.
 - **Actual Tokens**: ~XK (Est: 60K)
 - **PR**: [URL after PR created]
+
+### What Was Implemented
+
+**Part 1 -- UI (6 files modified):**
+- `Dashboard.tsx`: Added `useNetwork()` hook (sync button handled via StartNewAuditModal)
+- `StartNewAuditModal.tsx`: Disabled sync button when offline with tooltip and opacity
+- `Settings.tsx`: Disabled Check for Updates, Sign Out All Devices, and all 6 Gmail/Outlook Connect/Disconnect/Reconnect buttons when offline
+- `MacOSContactsImportSettings.tsx`: Disabled Outlook contacts sync when offline, added offline warning banner
+
+**Part 2 -- Backend (4 files modified):**
+- `updaterHandlers.ts`: Added 15s timeout via Promise.race around autoUpdater.checkForUpdatesAndNotify()
+- `supabaseService.ts`: Added 15s timeout via Promise.race around signOutGlobal
+- `submissionSyncService.ts`: Added 15s timeout via Promise.race around fetchCloudStatuses Supabase query
+- `outlookFetchService.ts`: Added timeout: 15000 to axios config in _graphRequest (all Graph API calls)
+
+**Tests (2 files modified):**
+- `Settings.test.tsx`: Added 8 new offline-specific tests (disable buttons, tooltips, re-enable on reconnect, local ops unaffected)
+- `StartNewAuditModal.test.tsx`: Added useNetwork mock to prevent crash from missing NetworkProvider
 
 ### Notes
 
 **Deviations from plan:**
-[If you deviated, explain what and why]
+1. Task file listed `sessionHandlers.ts` for sign-out timeout, but the actual sign-out network call lives in `supabaseService.ts` (the handler just calls the service). Placed timeout at the network call level in supabaseService.ts instead.
+2. Task suggested AbortController pattern, but used Promise.race pattern instead since autoUpdater and Supabase SDK don't accept AbortSignal. Used axios `timeout` config for Outlook (axios supports it natively).
+3. Cloud export options: No cloud-only export buttons were found that needed disabling -- export is handled locally. Skipped this sub-requirement.
+4. Did not create a shared `fetchWithTimeout.ts` utility since each call site uses a different API (axios, Supabase SDK, electron-updater) and the inline pattern is clearer.
 
 **Issues encountered:**
-[Document any challenges]
+**Issues/Blockers:** None -- implementation was straightforward.
 
 ---
 

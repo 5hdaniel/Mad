@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { ExtendedContact } from "../types";
+import { OfflineNotice } from "../../common/OfflineNotice";
 
 interface ImportContactsModalProps {
   userId: string;
@@ -145,6 +146,8 @@ function ImportContactsModal({
             </svg>
           </button>
         </div>
+
+        <OfflineNotice />
 
         {/* Search and Add Manually */}
         <div className="p-6 border-b border-gray-200 flex-shrink-0">

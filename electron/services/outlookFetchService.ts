@@ -284,6 +284,8 @@ class OutlookFetchService {
             "Content-Type": "application/json",
             ...extraHeaders,
           },
+          // TASK-2056: 15-second timeout to prevent hanging when offline
+          timeout: 15000,
         };
 
         if (data) {

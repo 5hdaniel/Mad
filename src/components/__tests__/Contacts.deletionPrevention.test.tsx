@@ -25,6 +25,19 @@ jest.mock("../../appCore", () => ({
   }),
 }));
 
+jest.mock("../../contexts/NetworkContext", () => ({
+  useNetwork: () => ({
+    isOnline: true,
+    isChecking: false,
+    lastOnlineAt: null,
+    lastOfflineAt: null,
+    connectionError: null,
+    checkConnection: jest.fn(),
+    clearError: jest.fn(),
+    setConnectionError: jest.fn(),
+  }),
+}));
+
 describe("Contacts - Deletion Prevention", () => {
   const mockUserId = "user-123";
   const mockOnClose = jest.fn();

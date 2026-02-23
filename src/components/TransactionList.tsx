@@ -25,6 +25,7 @@ import {
   // Types
   type TransactionFilter,
 } from "./transaction";
+import { OfflineNotice } from "./common/OfflineNotice";
 
 interface TransactionListComponentProps {
   userId: string;
@@ -286,6 +287,8 @@ function TransactionList({
         quickExportSuccess={quickExportSuccess}
         bulkActionSuccess={bulkActionSuccess}
       />
+
+      <OfflineNotice />
 
       {/* Transactions List */}
       <div className="flex-1 min-h-0 overflow-y-auto p-6 max-w-7xl mx-auto w-full">

@@ -10,6 +10,20 @@ import "@testing-library/jest-dom";
 import Transactions from "../Transactions";
 import { PlatformProvider } from "../../contexts/PlatformContext";
 
+// Mock useNetwork to prevent "useNetwork must be used within a NetworkProvider" error
+jest.mock("../../contexts/NetworkContext", () => ({
+  useNetwork: () => ({
+    isOnline: true,
+    isChecking: false,
+    lastOnlineAt: null,
+    lastOfflineAt: null,
+    connectionError: null,
+    checkConnection: jest.fn(),
+    clearError: jest.fn(),
+    setConnectionError: jest.fn(),
+  }),
+}));
+
 // Mock useAppStateMachine to return isDatabaseInitialized: true
 // This allows tests to render the actual component content
 jest.mock("../../appCore", () => ({

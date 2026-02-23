@@ -29,6 +29,7 @@ import { contactService } from "../../../../services";
 // Category filtering is now handled by ContactSearchList with its built-in pill-style filters
 import { sortByRecentCommunication } from "../../../../utils/contactSortUtils";
 import logger from '../../../../utils/logger';
+import { OfflineNotice } from '../../../common/OfflineNotice';
 
 // ============================================
 // TYPES
@@ -319,6 +320,8 @@ export function EditContactsModal({
             </svg>
           </button>
         </div>
+
+        <OfflineNotice />
 
         {/* Shared ContactsProvider for both Screen1 and Screen2 */}
         <ContactsProvider

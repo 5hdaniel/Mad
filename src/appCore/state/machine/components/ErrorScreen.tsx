@@ -12,6 +12,7 @@
 
 import React, { useState } from "react";
 import type { AppError } from "../types";
+import { OfflineNotice } from "../../../../components/common/OfflineNotice";
 
 interface ErrorScreenProps {
   /** Error details to display */
@@ -96,7 +97,9 @@ export function ErrorScreen({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-orange-50 to-yellow-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-orange-50 to-yellow-50 flex flex-col">
+      <OfflineNotice />
+      <div className="flex-1 flex items-center justify-center p-4">
       <div className="text-center max-w-md w-full">
         {/* Error icon */}
         <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -244,6 +247,7 @@ export function ErrorScreen({
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

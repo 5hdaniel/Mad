@@ -12,6 +12,8 @@ import {
   emitEmailConnectionChanged,
   useEmailConnectionListener,
 } from "@/utils/emailConnectionEvents";
+import { useNetwork } from '../contexts/NetworkContext';
+import { OfflineNotice } from './common/OfflineNotice';
 import logger from '../utils/logger';
 import { formatFileSize } from '../utils/formatUtils';
 
@@ -109,6 +111,8 @@ interface SettingsComponentProps {
 function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconnected }: SettingsComponentProps) {
   const { notify } = useNotification();
   const { hasAIAddon } = useLicense();
+  // TASK-2056: Network status for disabling network-dependent actions
+  const { isOnline } = useNetwork();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const visibleTabs = useMemo(
@@ -878,6 +882,9 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
               activeTabId={activeTabId}
               onTabClick={handleTabClick}
             />
+            <div className="sticky top-10 z-10 -mx-6 bg-white">
+              <OfflineNotice />
+            </div>
             {/* General Settings */}
             <div id="settings-general" className="mt-6 mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
@@ -1005,10 +1012,12 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                   </div>
                   <button
                     onClick={handleCheckForUpdates}
-                    disabled={updateStatus === 'checking'}
+                    disabled={updateStatus === 'checking' || !isOnline}
+                    title={!isOnline ? "You are offline" : undefined}
                     className="mt-3 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {updateStatus === 'checking' ? 'Checking...' :
+                    {!isOnline ? 'Check for Updates' :
+                     updateStatus === 'checking' ? 'Checking...' :
                      updateStatus === 'up-to-date' ? 'Up to date' :
                      updateStatus === 'available' ? `Update available (v${updateVersion})` :
                      updateStatus === 'error' ? 'Check failed' :
@@ -1173,7 +1182,8 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                   {connections.google?.connected ? (
                     <button
                       onClick={handleDisconnectGoogle}
-                      disabled={disconnectingProvider === "google"}
+                      disabled={disconnectingProvider === "google" || !isOnline}
+                      title={!isOnline ? "You are offline" : undefined}
                       className="w-full mt-2 px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {disconnectingProvider === "google"
@@ -1183,7 +1193,8 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                   ) : connections.google?.error && connections.google.error.type !== "NOT_CONNECTED" ? (
                     <button
                       onClick={handleConnectGoogle}
-                      disabled={connectingProvider === "google"}
+                      disabled={connectingProvider === "google" || !isOnline}
+                      title={!isOnline ? "You are offline" : undefined}
                       className="w-full mt-2 px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {connectingProvider === "google"
@@ -1193,7 +1204,8 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                   ) : (
                     <button
                       onClick={handleConnectGoogle}
-                      disabled={connectingProvider === "google"}
+                      disabled={connectingProvider === "google" || !isOnline}
+                      title={!isOnline ? "You are offline" : undefined}
                       className="w-full mt-2 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {connectingProvider === "google"
@@ -1288,7 +1300,8 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                   {connections.microsoft?.connected ? (
                     <button
                       onClick={handleDisconnectMicrosoft}
-                      disabled={disconnectingProvider === "microsoft"}
+                      disabled={disconnectingProvider === "microsoft" || !isOnline}
+                      title={!isOnline ? "You are offline" : undefined}
                       className="w-full mt-2 px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {disconnectingProvider === "microsoft"
@@ -1298,7 +1311,8 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                   ) : connections.microsoft?.error && connections.microsoft.error.type !== "NOT_CONNECTED" ? (
                     <button
                       onClick={handleConnectMicrosoft}
-                      disabled={connectingProvider === "microsoft"}
+                      disabled={connectingProvider === "microsoft" || !isOnline}
+                      title={!isOnline ? "You are offline" : undefined}
                       className="w-full mt-2 px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {connectingProvider === "microsoft"
@@ -1308,7 +1322,8 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                   ) : (
                     <button
                       onClick={handleConnectMicrosoft}
-                      disabled={connectingProvider === "microsoft"}
+                      disabled={connectingProvider === "microsoft" || !isOnline}
+                      title={!isOnline ? "You are offline" : undefined}
                       className="w-full mt-2 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {connectingProvider === "microsoft"
@@ -1423,7 +1438,8 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                     </div>
                     <button
                       onClick={handleSignOutAllDevices}
-                      disabled={signingOutAllDevices}
+                      disabled={signingOutAllDevices || !isOnline}
+                      title={!isOnline ? "You are offline" : undefined}
                       className="ml-4 px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded border border-red-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {signingOutAllDevices ? "Signing out..." : "Sign Out All Devices"}

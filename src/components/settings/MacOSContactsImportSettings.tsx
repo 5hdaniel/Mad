@@ -17,6 +17,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { usePlatform } from "../../contexts/PlatformContext";
 import { useSyncOrchestrator } from "../../hooks/useSyncOrchestrator";
+import { useNetwork } from "../../contexts/NetworkContext";
 import logger from '../../utils/logger';
 
 interface ContactsImportSettingsProps {
@@ -56,6 +57,8 @@ export function ContactsImportSettings({
 }: ContactsImportSettingsProps) {
   const { isMacOS } = usePlatform();
   const { queue, isRunning, requestSync } = useSyncOrchestrator();
+  // TASK-2056: Network status for disabling Outlook sync when offline
+  const { isOnline } = useNetwork();
 
   // Derive syncing state from orchestrator queue
   const contactsItem = queue.find(q => q.type === 'contacts');
@@ -145,7 +148,7 @@ export function ContactsImportSettings({
   );
 
   const handleOutlookSync = useCallback(async () => {
-    if (!userId || outlookSyncing || isSyncing || isOtherSyncRunning) return;
+    if (!userId || outlookSyncing || isSyncing || isOtherSyncRunning || !isOnline) return;
 
     setOutlookSyncing(true);
     setOutlookLastResult(null);
@@ -171,7 +174,7 @@ export function ContactsImportSettings({
     } finally {
       setOutlookSyncing(false);
     }
-  }, [userId, outlookSyncing, isSyncing, isOtherSyncRunning]);
+  }, [userId, outlookSyncing, isSyncing, isOtherSyncRunning, isOnline]);
 
   // Format the last sync time for display
   const formatLastSync = (lastSyncAt: string | null | undefined): string => {
@@ -499,6 +502,13 @@ export function ContactsImportSettings({
           </div>
         )}
       </div>
+
+      {/* Offline warning for Outlook contacts */}
+      {!isOnline && hasOutlook && outlookContactsEnabled && (
+        <div className="mb-3 p-2 rounded text-xs bg-yellow-50 text-yellow-700 border border-yellow-200">
+          You are offline. Outlook contacts sync is unavailable.
+        </div>
+      )}
 
       {/* Reconnect required warning (Outlook) */}
       {outlookReconnectRequired && (
