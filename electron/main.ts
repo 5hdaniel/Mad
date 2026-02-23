@@ -87,6 +87,8 @@ import { registerAuthHandlers } from "./auth-handlers";
 import { registerTransactionCrudHandlers } from "./handlers/transactionCrudHandlers";
 import { registerTransactionExportHandlers, cleanupTransactionHandlers } from "./handlers/transactionExportHandlers";
 import { registerEmailSyncHandlers } from "./handlers/emailSyncHandlers";
+import { registerEmailLinkingHandlers } from "./handlers/emailLinkingHandlers";
+import { registerEmailAutoLinkHandlers } from "./handlers/emailAutoLinkHandlers";
 import { registerAttachmentHandlers } from "./handlers/attachmentHandlers";
 import { registerContactHandlers } from "./contact-handlers";
 import { registerAddressHandlers } from "./address-handlers";
@@ -1007,6 +1009,8 @@ app.whenReady().then(async () => {
   registerTransactionCrudHandlers(mainWindow!);
   registerTransactionExportHandlers(mainWindow!);
   registerEmailSyncHandlers(mainWindow!);
+  registerEmailLinkingHandlers();
+  registerEmailAutoLinkHandlers();
   registerAttachmentHandlers(mainWindow!);
   registerContactHandlers(mainWindow!);
   registerAddressHandlers();
