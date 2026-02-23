@@ -132,9 +132,9 @@ describe("Settings", () => {
       });
 
       expect(screen.getAllByText("Email").length).toBeGreaterThanOrEqual(1);
-      expect(screen.getAllByText("Export").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("Security").length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText("AI Settings")).toBeInTheDocument();
-      expect(screen.getByText("Data & Privacy")).toBeInTheDocument();
+      expect(screen.getAllByText("Data & Privacy").length).toBeGreaterThanOrEqual(1);
       expect(screen.getAllByText("About").length).toBeGreaterThanOrEqual(1);
     });
 
