@@ -325,13 +325,35 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
         hasHashParams: !!hashParams?.get("access_token"),
       });
 
+      // Extract OAuth error information if present (provider tells us exactly why auth failed)
+      const oauthError = parsed.searchParams.get("error") || hashParams?.get("error");
+      const oauthErrorDescription = parsed.searchParams.get("error_description") || hashParams?.get("error_description");
+
       if (!accessToken || !refreshToken) {
         // Missing tokens - send error to renderer
         log.error("[DeepLink] Callback URL missing tokens:", redactDeepLinkUrl(url));
-        sendToRenderer("auth:deep-link-error", {
-          error: "Missing tokens in callback URL",
-          code: "MISSING_TOKENS",
-        });
+        if (oauthError) {
+          // OAuth provider explicitly returned an error
+          Sentry.captureException(new Error(`Deep link auth: OAuth error (${oauthError})`), {
+            tags: { component: "deep-link", action: "auth-callback", error_code: "OAUTH_ERROR", oauthError, oauth_reason: oauthErrorDescription || "none" },
+            extra: { callback_path: redactDeepLinkUrl(url) },
+          });
+          sendToRenderer("auth:deep-link-error", {
+            error: oauthErrorDescription || `OAuth error: ${oauthError}`,
+            code: "OAUTH_ERROR",
+          });
+        } else {
+          // No OAuth error but tokens missing — could be corrupted URL or incomplete redirect
+          const isOnline = net.isOnline();
+          Sentry.captureException(new Error(`Deep link auth: missing tokens${!isOnline ? " (device offline)" : ""}`), {
+            tags: { component: "deep-link", action: "auth-callback", error_code: "MISSING_TOKENS", networkOnline: isOnline },
+            extra: { callback_path: redactDeepLinkUrl(url) },
+          });
+          sendToRenderer("auth:deep-link-error", {
+            error: !isOnline ? "Authentication failed — you appear to be offline" : "Missing tokens in callback URL",
+            code: "MISSING_TOKENS",
+          });
+        }
         return;
       }
 
@@ -347,6 +369,10 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
 
       if (sessionError || !sessionData?.user) {
         log.error("[DeepLink] Failed to set session:", sessionError);
+        Sentry.captureException(sessionError || new Error("Deep link auth: session data missing user"), {
+          tags: { component: "deep-link", action: "auth-callback", error_code: "INVALID_TOKENS", networkOnline: net.isOnline(), session_failure: sessionError?.message || "no user data" },
+          extra: { callback_path: redactDeepLinkUrl(url) },
+        });
         sendToRenderer("auth:deep-link-error", {
           error: "Invalid authentication tokens",
           code: "INVALID_TOKENS",
@@ -370,6 +396,9 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
       // TASK-1507: Step 4 - Check if license blocks access (expired/suspended)
       if (!licenseStatus.isValid && licenseStatus.blockReason !== "no_license") {
         log.warn("[DeepLink] License blocked for user:", redactId(user.id), "reason:", licenseStatus.blockReason);
+        Sentry.captureException(new Error("Deep link auth: license blocked"), {
+          tags: { component: "deep-link", action: "auth-callback", error_code: "LICENSE_BLOCKED", block_reason: licenseStatus.blockReason || "unknown" },
+        });
         sendToRenderer("auth:deep-link-license-blocked", {
           accessToken,
           refreshToken,
@@ -387,6 +416,9 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
 
       if (!deviceResult.success && deviceResult.error === "device_limit_reached") {
         log.warn("[DeepLink] Device limit reached for user:", redactId(user.id));
+        Sentry.captureException(new Error("Deep link auth: device limit exceeded"), {
+          tags: { component: "deep-link", action: "auth-callback", error_code: "DEVICE_LIMIT" },
+        });
         sendToRenderer("auth:deep-link-device-limit", {
           accessToken,
           refreshToken,
@@ -545,6 +577,9 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
   } catch (error) {
     // Invalid URL format or unexpected error
     log.error("[DeepLink] Failed to handle callback:", error);
+    Sentry.captureException(error, {
+      tags: { component: "deep-link", action: "auth-callback", error_code: "UNKNOWN_ERROR" },
+    });
     sendToRenderer("auth:deep-link-error", {
       error: "Authentication failed",
       code: "UNKNOWN_ERROR",
