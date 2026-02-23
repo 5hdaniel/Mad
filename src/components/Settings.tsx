@@ -85,16 +85,17 @@ const SETTINGS_TABS = [
   { id: "settings-email", label: "Email" },
   { id: "settings-messages", label: "Messages" },
   { id: "settings-contacts", label: "Contacts" },
-  { id: "settings-export", label: "Export" },
   { id: "settings-ai", label: "AI" },
-  { id: "settings-data", label: "Data" },
-  { id: "settings-privacy", label: "Privacy" },
+  { id: "settings-security", label: "Security" },
+  { id: "settings-data", label: "Data & Privacy" },
   { id: "settings-about", label: "About" },
 ];
 
 interface SettingsComponentProps {
   onClose: () => void;
   userId: string;
+  /** Callback to trigger full logout flow (state machine transition + cleanup) */
+  onLogout?: () => Promise<void>;
   /** Callback when email is connected - updates app state */
   onEmailConnected?: (email: string, provider: "google" | "microsoft") => void;
   /** Callback when email is disconnected - updates app state (TASK-1730) */
@@ -105,7 +106,7 @@ interface SettingsComponentProps {
  * Settings Component
  * Application settings and preferences
  */
-function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: SettingsComponentProps) {
+function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconnected }: SettingsComponentProps) {
   const { notify } = useNotification();
   const { hasAIAddon } = useLicense();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -654,10 +655,14 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
     setSigningOutAllDevices(true);
     try {
       const result = await window.api.auth.signOutAllDevices();
-      if (!result.success) {
+      if (result.success) {
+        // Use the app's logout flow to transition state machine to "unauthenticated"
+        if (onLogout) {
+          await onLogout();
+        }
+      } else {
         notify.error("Failed to sign out of all devices: " + (result.error || "Unknown error"));
       }
-      // On success, the app will redirect to login (session cleared by the handler)
     } catch (error) {
       logger.error("Failed to sign out of all devices:", error);
       notify.error("Failed to sign out of all devices. Please try again.");
@@ -835,7 +840,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <h2 className="text-xl font-bold text-white">Settings</h2>
@@ -1046,6 +1051,50 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                   >
                     Test Notification
                   </button>
+                </div>
+
+                {/* Export Settings (moved from Export tab) */}
+                <div className="space-y-3 bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-700">Default Format</span>
+                    <select
+                      value={exportFormat}
+                      onChange={handleSelectChange}
+                      disabled={loadingPreferences}
+                      className="text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="pdf">PDF</option>
+                      <option value="excel">Excel (.xlsx)</option>
+                      <option value="csv">CSV</option>
+                      <option value="json">JSON</option>
+                      <option value="txt_eml">TXT + EML Files</option>
+                    </select>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="text-sm text-gray-700">Email Export Mode</span>
+                      <p className="text-xs text-gray-500 mt-0.5">How emails are grouped in exported PDFs</p>
+                    </div>
+                    <select
+                      value={emailExportMode}
+                      onChange={(e) => handleEmailExportModeChange(e.target.value as "thread" | "individual")}
+                      disabled={loadingPreferences}
+                      className="text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="thread">Thread (one PDF per conversation)</option>
+                      <option value="individual">Individual (one PDF per email, quotes stripped)</option>
+                    </select>
+                  </div>
+                  {/* TODO: Implement export location chooser with native folder picker */}
+                  <div className="flex justify-between items-center opacity-50">
+                    <span className="text-sm text-gray-700">Export Location</span>
+                    <button
+                      disabled
+                      className="text-sm text-gray-400 font-medium cursor-not-allowed"
+                    >
+                      Choose Folder
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1345,54 +1394,6 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
             </div>
 
             {/* Export Settings */}
-            <div id="settings-export" className="mb-8">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Export
-              </h3>
-              <div className="space-y-3 bg-gray-50 rounded-lg p-4 border border-gray-200">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-700">Default Format</span>
-                  <select
-                    value={exportFormat}
-                    onChange={handleSelectChange}
-                    disabled={loadingPreferences}
-                    className="text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <option value="pdf">PDF</option>
-                    <option value="excel">Excel (.xlsx)</option>
-                    <option value="csv">CSV</option>
-                    <option value="json">JSON</option>
-                    <option value="txt_eml">TXT + EML Files</option>
-                  </select>
-                </div>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <span className="text-sm text-gray-700">Email Export Mode</span>
-                    <p className="text-xs text-gray-500 mt-0.5">How emails are grouped in exported PDFs</p>
-                  </div>
-                  <select
-                    value={emailExportMode}
-                    onChange={(e) => handleEmailExportModeChange(e.target.value as "thread" | "individual")}
-                    disabled={loadingPreferences}
-                    className="text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <option value="thread">Thread (one PDF per conversation)</option>
-                    <option value="individual">Individual (one PDF per email, quotes stripped)</option>
-                  </select>
-                </div>
-                {/* TODO: Implement export location chooser with native folder picker */}
-                <div className="flex justify-between items-center opacity-50">
-                  <span className="text-sm text-gray-700">Export Location</span>
-                  <button
-                    disabled
-                    className="text-sm text-gray-400 font-medium cursor-not-allowed"
-                  >
-                    Choose Folder
-                  </button>
-                </div>
-              </div>
-            </div>
-
             {/* AI Settings - Only visible with AI add-on (BACKLOG-462) */}
             <LicenseGate requires="ai_addon">
               <div id="settings-ai" className="mb-8">
@@ -1403,10 +1404,10 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
               </div>
             </LicenseGate>
 
-            {/* Data & Privacy */}
-            <div id="settings-data" className="mb-8">
+            {/* Security */}
+            <div id="settings-security" className="mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Data & Privacy
+                Security
               </h3>
               <div className="space-y-3">
                 {/* TASK-2045: Sign out all devices */}
@@ -1429,7 +1430,15 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                     </button>
                   </div>
                 </div>
+              </div>
+            </div>
 
+            {/* Data & Privacy */}
+            <div id="settings-data" className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Data & Privacy
+              </h3>
+              <div className="space-y-3">
                 {/* Reindex Database - Database maintenance for performance */}
                 <button
                   onClick={handleReindexDatabase}
@@ -1546,6 +1555,54 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                   </p>
                 </div>
 
+                {/* CCPA Data Export (TASK-2053) - moved from Privacy tab */}
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <h4 className="text-sm font-medium text-gray-900 mb-2">
+                    Export Your Data (CCPA)
+                  </h4>
+                  <p className="text-xs text-gray-600 mb-3">
+                    You have the right to know what personal data is stored in this
+                    application. Click below to export all your data as a JSON file.
+                  </p>
+                  <p className="text-xs text-gray-500 mb-4">
+                    Data included: profile, transactions, contacts, messages, emails,
+                    preferences, and activity logs. OAuth token values are excluded
+                    for security.
+                  </p>
+                  {exporting && (
+                    <div className="mb-3">
+                      <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                        <span>
+                          Exporting{exportCategory ? `: ${exportCategory}` : "..."}
+                        </span>
+                        <span>{exportProgress}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-1.5">
+                        <div
+                          className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
+                          style={{ width: `${exportProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {exportResult && (
+                    <p
+                      className={`text-xs mb-3 ${
+                        exportResult.success ? "text-green-600" : "text-red-600"
+                      }`}
+                    >
+                      {exportResult.message}
+                    </p>
+                  )}
+                  <button
+                    onClick={handleExportData}
+                    disabled={exporting}
+                    className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {exporting ? "Exporting..." : "Export My Data"}
+                  </button>
+                </div>
+
                 {/* TODO: Implement data clearing with confirmation dialog */}
                 <button
                   disabled
@@ -1574,61 +1631,6 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                       />
                     </svg>
                   </div>
-                </button>
-              </div>
-            </div>
-
-            {/* Privacy - CCPA Data Export (TASK-2053) */}
-            <div id="settings-privacy" className="mb-8">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Privacy
-              </h3>
-              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <h4 className="text-sm font-medium text-gray-900 mb-2">
-                  Export Your Data (CCPA)
-                </h4>
-                <p className="text-xs text-gray-600 mb-3">
-                  You have the right to know what personal data is stored in this
-                  application. Click below to export all your data as a JSON file.
-                </p>
-                <p className="text-xs text-gray-500 mb-4">
-                  Data included: profile, transactions, contacts, messages, emails,
-                  preferences, and activity logs. OAuth token values are excluded
-                  for security.
-                </p>
-                {/* Progress indicator */}
-                {exporting && (
-                  <div className="mb-3">
-                    <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
-                      <span>
-                        Exporting{exportCategory ? `: ${exportCategory}` : "..."}
-                      </span>
-                      <span>{exportProgress}%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1.5">
-                      <div
-                        className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
-                        style={{ width: `${exportProgress}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-                {/* Result message */}
-                {exportResult && (
-                  <p
-                    className={`text-xs mb-3 ${
-                      exportResult.success ? "text-green-600" : "text-red-600"
-                    }`}
-                  >
-                    {exportResult.message}
-                  </p>
-                )}
-                <button
-                  onClick={handleExportData}
-                  disabled={exporting}
-                  className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {exporting ? "Exporting..." : "Export My Data"}
                 </button>
               </div>
             </div>
