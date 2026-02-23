@@ -397,8 +397,7 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
       if (!licenseStatus.isValid && licenseStatus.blockReason !== "no_license") {
         log.warn("[DeepLink] License blocked for user:", redactId(user.id), "reason:", licenseStatus.blockReason);
         Sentry.captureException(new Error("Deep link auth: license blocked"), {
-          tags: { component: "deep-link", action: "auth-callback" },
-          extra: { code: "LICENSE_BLOCKED", blockReason: licenseStatus.blockReason },
+          tags: { component: "deep-link", action: "auth-callback", error_code: "LICENSE_BLOCKED", block_reason: licenseStatus.blockReason || "unknown" },
         });
         sendToRenderer("auth:deep-link-license-blocked", {
           accessToken,
@@ -418,8 +417,7 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
       if (!deviceResult.success && deviceResult.error === "device_limit_reached") {
         log.warn("[DeepLink] Device limit reached for user:", redactId(user.id));
         Sentry.captureException(new Error("Deep link auth: device limit exceeded"), {
-          tags: { component: "deep-link", action: "auth-callback" },
-          extra: { code: "DEVICE_LIMIT" },
+          tags: { component: "deep-link", action: "auth-callback", error_code: "DEVICE_LIMIT" },
         });
         sendToRenderer("auth:deep-link-device-limit", {
           accessToken,
@@ -580,8 +578,7 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
     // Invalid URL format or unexpected error
     log.error("[DeepLink] Failed to handle callback:", error);
     Sentry.captureException(error, {
-      tags: { component: "deep-link", action: "auth-callback" },
-      extra: { code: "UNKNOWN_ERROR" },
+      tags: { component: "deep-link", action: "auth-callback", error_code: "UNKNOWN_ERROR" },
     });
     sendToRenderer("auth:deep-link-error", {
       error: "Authentication failed",
