@@ -242,24 +242,24 @@ Even with date filtering, keep a maxResults cap (e.g., 2000) to prevent unbounde
 **REQUIRED: Complete this section before creating PR.**
 **See: `.claude/docs/ENGINEER-WORKFLOW.md` for full workflow**
 
-*Completed: <DATE>*
+*Completed: 2026-02-23*
 
 ### Engineer Checklist
 
 ```
 Pre-Work:
-- [ ] Created branch from develop
-- [ ] Noted start time: ___
-- [ ] Read task file completely
+- [x] Created branch from develop
+- [x] Noted start time: session start
+- [x] Read task file completely
 
 Implementation:
-- [ ] Code complete
-- [ ] Tests pass locally (npm test)
-- [ ] Type check passes (npm run type-check)
-- [ ] Lint passes (npm run lint)
+- [x] Code complete
+- [x] Tests pass locally (npm test)
+- [x] Type check passes (npm run type-check)
+- [x] Lint passes (npm run lint)
 
 PR Submission:
-- [ ] This summary section completed
+- [x] This summary section completed
 - [ ] PR created with Engineer Metrics (see template)
 - [ ] CI passes (gh pr checks --watch)
 - [ ] SR Engineer review requested
@@ -271,18 +271,37 @@ Completion:
 
 ### Results
 
-- **Before**: [state before]
-- **After**: [state after]
-- **Actual Tokens**: ~XK (Est: 65K)
-- **PR**: [URL after PR created]
+- **Before**: Hardcoded `maxResults: 200` on 4 email fetch calls, `maxResults: 50` on sent items. Duplicated fetch-store-dedup logic across 5 provider paths (~160 lines of repetitive code).
+- **After**: Date-range filtering using transaction `started_at`/`created_at` with 2000 safety cap. Shared `fetchStoreAndDedup()` helper eliminates all duplication. Sent items also use date filtering. 10 new unit tests.
+- **Actual Tokens**: ~TBD (Est: 65K)
+- **PR**: TBD
+
+### Changes Made
+
+1. **`electron/handlers/emailSyncHandlers.ts`**:
+   - Added `computeEmailFetchSinceDate()` -- computes "since" date from transaction's `started_at` or `created_at`, falls back to 2 years ago
+   - Added `fetchStoreAndDedup()` -- shared helper replacing 5 duplicated fetch-store-dedup blocks
+   - Added `EMAIL_FETCH_SAFETY_CAP = 2000` and `SENT_ITEMS_SAFETY_CAP = 200` constants
+   - Replaced all 5 provider fetch blocks (Outlook inbox, sent, all-folders, Gmail search, all-labels) with calls to the shared helper
+   - All fetch calls now pass `after: emailFetchSinceDate` for date-range filtering
+   - Added safety cap hit warnings in logs
+   - Cross-provider dedup via shared `seenEmailIds` Set
+
+2. **`electron/services/outlookFetchService.ts`**:
+   - Added optional `after?: Date | null` parameter to `searchSentEmailsToContacts()`
+   - Client-side date filtering (since `$search` cannot combine with `$filter` on Graph API)
+
+3. **`electron/handlers/__tests__/emailSyncHelpers.test.ts`** (new):
+   - 10 unit tests covering date computation logic and safety cap constants
 
 ### Notes
 
 **Deviations from plan:**
-[If you deviated, explain what and why]
+- The task suggested creating `electron/handlers/emailFetchHelpers.ts` as a separate file. Instead, kept the helper in `emailSyncHandlers.ts` since it uses many of the same imports (createEmail, getEmailByExternalId, emailAttachmentService, etc.) and extracting to a separate file would require re-exporting all those dependencies. The functions are exported for testing.
+- No changes needed to `gmailFetchService.ts` -- it already supports `after` parameter in `EmailSearchOptions` and `searchAllLabels`. Similarly, `outlookFetchService.searchEmails` and `searchAllFolders` already support `after` parameter. Only `searchSentEmailsToContacts` needed the new parameter.
+- Transaction model uses `started_at` instead of `audit_start_date` (which does not exist). Used `started_at` as primary with `created_at` fallback.
 
-**Issues encountered:**
-[Document any challenges]
+**Issues/Blockers:** None
 
 ---
 
