@@ -13,6 +13,7 @@ import {
   useEmailConnectionListener,
 } from "@/utils/emailConnectionEvents";
 import { useNetwork } from '../contexts/NetworkContext';
+import { OfflineNotice } from './common/OfflineNotice';
 import logger from '../utils/logger';
 import { formatFileSize } from '../utils/formatUtils';
 
@@ -881,15 +882,9 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
               activeTabId={activeTabId}
               onTabClick={handleTabClick}
             />
-            {/* Offline warning banner */}
-            {!isOnline && (
-              <div className="mt-4 px-4 py-2 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center gap-2 text-sm text-yellow-800">
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                You are offline — some actions are disabled.
-              </div>
-            )}
+            <div className="sticky top-10 z-10 -mx-6 bg-white">
+              <OfflineNotice />
+            </div>
             {/* General Settings */}
             <div id="settings-general" className="mt-6 mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">

@@ -48,6 +48,7 @@ import type { AutoLinkResult } from "./transactionDetailsModule/components/modal
 import type { TransactionTab } from "./transactionDetailsModule/types";
 import { isEmailMessage } from '@/utils/channelHelpers';
 import logger from '../utils/logger';
+import { OfflineNotice } from './common/OfflineNotice';
 
 interface TransactionDetailsComponentProps {
   transaction: Transaction;
@@ -502,6 +503,8 @@ function TransactionDetails({
           attachmentCount={attachmentCount}
           onTabChange={setActiveTab}
         />
+
+        <OfflineNotice />
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">

@@ -5,6 +5,7 @@ import { LicenseGate } from "./common/LicenseGate";
 import { AlertBanner, AlertIcons } from "./common/AlertBanner";
 import { useLicense } from "../contexts/LicenseContext";
 import { useNetwork } from "../contexts/NetworkContext";
+import { OfflineNotice } from "./common/OfflineNotice";
 
 interface StartNewAuditModalProps {
   /** Callback when user wants to view pending transaction details */
@@ -137,6 +138,8 @@ function StartNewAuditModal({
             </button>
           </div>
         </div>
+
+        <OfflineNotice />
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
