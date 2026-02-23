@@ -1073,6 +1073,7 @@ export function registerEmailSyncHandlers(
 
   // Sync emails from email provider (Gmail/Outlook) for a transaction
   // This fetches NEW emails from the provider, stores them, then runs auto-link
+  // Rate limited: 10 second cooldown per transaction to prevent sync spam.
   ipcMain.handle(
     "transactions:sync-and-fetch-emails",
     wrapHandler(async (
@@ -1100,6 +1101,24 @@ export function registerEmailSyncHandlers(
           "Transaction ID validation failed",
           "transactionId",
         );
+      }
+
+      // Rate limit check - 10 second cooldown per transaction
+      const { allowed, remainingMs } = rateLimiters.sync.canExecute(
+        "transactions:sync-and-fetch-emails",
+        validatedTransactionId
+      );
+      if (!allowed && remainingMs !== undefined) {
+        const seconds = Math.ceil(remainingMs / 1000);
+        logService.warn(
+          `Rate limited transactions:sync-and-fetch-emails for transaction ${validatedTransactionId}. Retry in ${seconds}s`,
+          "Transactions"
+        );
+        return {
+          success: false,
+          error: `Please wait ${seconds}s before syncing again.`,
+          rateLimited: true,
+        };
       }
 
       // Get transaction with contacts

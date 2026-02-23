@@ -24,6 +24,8 @@ interface TransactionEmailsTabProps {
   onSyncCommunications?: () => Promise<void>;
   /** Whether sync is in progress */
   syncingCommunications?: boolean;
+  /** Whether a global sync (from dashboard) is in progress */
+  globalSyncRunning?: boolean;
   /** Whether there are contacts assigned (to show appropriate help text) */
   hasContacts?: boolean;
   /** User ID for API calls */
@@ -50,6 +52,7 @@ export function TransactionEmailsTab({
   onShowUnlinkConfirm,
   onSyncCommunications,
   syncingCommunications = false,
+  globalSyncRunning = false,
   hasContacts = false,
   userId,
   transactionId,
@@ -61,6 +64,12 @@ export function TransactionEmailsTab({
 }: TransactionEmailsTabProps): React.ReactElement {
   const { currentUser } = useAuth();
   const [showAttachModal, setShowAttachModal] = useState(false);
+
+  // Disable sync when already syncing or when a global dashboard sync is running
+  const syncDisabled = syncingCommunications || globalSyncRunning;
+  const syncTooltip = globalSyncRunning
+    ? "A sync is already in progress from the dashboard"
+    : undefined;
 
   // Process communications into email threads
   const emailThreads = useMemo(() => {
@@ -140,9 +149,10 @@ export function TransactionEmailsTab({
             {onSyncCommunications && hasContacts && (
               <button
                 onClick={onSyncCommunications}
-                disabled={syncingCommunications}
+                disabled={syncDisabled}
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 data-testid="sync-emails-button"
+                title={syncTooltip}
               >
                 <svg
                   className={`w-4 h-4 ${syncingCommunications ? "animate-spin" : ""}`}
@@ -243,8 +253,9 @@ export function TransactionEmailsTab({
           {onSyncCommunications && hasContacts && (
             <button
               onClick={onSyncCommunications}
-              disabled={syncingCommunications}
+              disabled={syncDisabled}
               className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title={syncTooltip}
             >
               {syncingCommunications ? (
                 <>

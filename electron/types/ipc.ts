@@ -1328,6 +1328,7 @@ export interface WindowApi {
       totalErrors?: number;
       error?: string;
       message?: string;
+      rateLimited?: boolean;
     }>;
     /** Export transaction to organized folder structure */
     exportFolder: (transactionId: string, options?: {

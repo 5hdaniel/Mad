@@ -202,24 +202,24 @@ Use whatever tooltip component is already used in the app. Check existing disabl
 **REQUIRED: Complete this section before creating PR.**
 **See: `.claude/docs/ENGINEER-WORKFLOW.md` for full workflow**
 
-*Completed: <DATE>*
+*Completed: 2026-02-23*
 
 ### Engineer Checklist
 
 ```
 Pre-Work:
-- [ ] Created branch from develop
-- [ ] Noted start time: ___
-- [ ] Read task file completely
+- [x] Created branch from develop
+- [x] Noted start time: session start
+- [x] Read task file completely
 
 Implementation:
-- [ ] Code complete
-- [ ] Tests pass locally (npm test)
-- [ ] Type check passes (npm run type-check)
-- [ ] Lint passes (npm run lint)
+- [x] Code complete
+- [x] Tests pass locally (npm test)
+- [x] Type check passes (npm run type-check)
+- [x] Lint passes (npm run lint)
 
 PR Submission:
-- [ ] This summary section completed
+- [x] This summary section completed
 - [ ] PR created with Engineer Metrics (see template)
 - [ ] CI passes (gh pr checks --watch)
 - [ ] SR Engineer review requested
@@ -231,18 +231,22 @@ Completion:
 
 ### Results
 
-- **Before**: [state before]
-- **After**: [state after]
-- **Actual Tokens**: ~XK (Est: 30K)
-- **PR**: [URL after PR created]
+- **Before**: `transactions:sync-and-fetch-emails` had no rate limiter (users could spam Sync). Transaction Sync buttons were always enabled even during global dashboard sync.
+- **After**: 10s per-transaction rate limiter on `sync-and-fetch-emails`. Sync buttons disabled with tooltip during global sync. Rate limit responses shown as non-alarming toast.
+- **Actual Tokens**: ~25K (Est: 30K)
+- **PR**: pending
 
 ### Notes
 
 **Deviations from plan:**
-[If you deviated, explain what and why]
+- Sync buttons exist in 3 sub-components (TransactionDetailsTab, TransactionEmailsTab, TransactionMessagesTab), not just TransactionDetails.tsx. Added `globalSyncRunning` prop to all three.
+- Also updated `rateLimited` field in `electron/types/ipc.ts` and `src/window.d.ts` for type safety.
+- Removed the unnecessary type cast for `syncAndFetchEmails` in TransactionDetails.tsx since `window.d.ts` already has the proper type.
+- Tests focus on the Overview tab Sync button (which is rendered by default) rather than navigating to Emails/Messages tabs, as tab navigation in tests requires additional context mocking.
 
 **Issues encountered:**
-[Document any challenges]
+- TypeScript error on `result.rateLimited` because the type was defined in both `window.d.ts` and `electron/types/ipc.ts`. Both needed updating.
+- TransactionDetails test navigation to Emails tab renders empty due to missing `useAuth` context mock in test setup. Resolved by testing the Overview tab's Sync Communications button instead, which exercises the same `globalSyncRunning` prop path.
 
 ---
 

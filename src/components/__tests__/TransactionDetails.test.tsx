@@ -36,6 +36,12 @@ jest.mock("../../contexts/NetworkContext", () => ({
   }),
 }));
 
+// Mock useSyncOrchestrator for global sync state
+const mockUseSyncOrchestrator = jest.fn();
+jest.mock("../../hooks/useSyncOrchestrator", () => ({
+  useSyncOrchestrator: () => mockUseSyncOrchestrator(),
+}));
+
 describe("TransactionDetails", () => {
   const mockOnClose = jest.fn();
   const mockOnTransactionUpdated = jest.fn();
@@ -92,6 +98,21 @@ describe("TransactionDetails", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+
+    // Default: no global sync running
+    mockUseSyncOrchestrator.mockReturnValue({
+      state: { isRunning: false, queue: [], currentSync: null, overallProgress: 0, pendingRequest: null },
+      isRunning: false,
+      queue: [],
+      currentSync: null,
+      overallProgress: 0,
+      pendingRequest: null,
+      requestSync: jest.fn(),
+      forceSync: jest.fn(),
+      acceptPending: jest.fn(),
+      rejectPending: jest.fn(),
+      cancel: jest.fn(),
+    });
 
     // Default mocks
     window.api.transactions.getDetails.mockResolvedValue({
@@ -566,6 +587,124 @@ describe("TransactionDetails", () => {
       // Should show "Unknown Contact" for unresolved contacts
       const unknownContacts = screen.getAllByText("Unknown Contact");
       expect(unknownContacts.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("Sync buttons disabled during global sync (overview tab)", () => {
+    const transactionWithContacts = {
+      ...baseTransaction,
+      email_count: 2,
+      text_thread_count: 1,
+    };
+
+    const contactAssignments = [
+      { contact_id: "contact-1", role: "buyer", is_primary: true, display_name: "John Buyer" },
+    ];
+
+    beforeEach(() => {
+      // Set up transaction with contacts assigned so Sync button appears in Overview tab
+      window.api.transactions.getDetails.mockResolvedValue({
+        success: true,
+        transaction: {
+          ...transactionWithContacts,
+          communications: [],
+          contact_assignments: contactAssignments,
+        },
+      });
+    });
+
+    it("should disable Sync Communications button when global sync is running", async () => {
+      // Set global sync to running
+      mockUseSyncOrchestrator.mockReturnValue({
+        state: { isRunning: true, queue: [], currentSync: "emails", overallProgress: 50, pendingRequest: null },
+        isRunning: true,
+        queue: [],
+        currentSync: "emails",
+        overallProgress: 50,
+        pendingRequest: null,
+        requestSync: jest.fn(),
+        forceSync: jest.fn(),
+        acceptPending: jest.fn(),
+        rejectPending: jest.fn(),
+        cancel: jest.fn(),
+      });
+
+      render(
+        <TransactionDetails
+          transaction={transactionWithContacts}
+          onClose={mockOnClose}
+          onTransactionUpdated={mockOnTransactionUpdated}
+          userId="user-456"
+        />,
+      );
+
+      // Wait for the Overview tab (default tab) to render with the Sync Communications button
+      await waitFor(() => {
+        expect(screen.getByText("Key Contacts")).toBeInTheDocument();
+      });
+
+      // The Sync Communications button in the Overview tab should be disabled
+      // It uses title attribute as tooltip
+      const syncButton = screen.getByTitle("A sync is already in progress from the dashboard");
+      expect(syncButton).toBeDisabled();
+    });
+
+    it("should enable Sync Communications button when global sync is not running", async () => {
+      // Global sync is NOT running (default mock)
+
+      render(
+        <TransactionDetails
+          transaction={transactionWithContacts}
+          onClose={mockOnClose}
+          onTransactionUpdated={mockOnTransactionUpdated}
+          userId="user-456"
+        />,
+      );
+
+      // Wait for the Overview tab to render
+      await waitFor(() => {
+        expect(screen.getByText("Key Contacts")).toBeInTheDocument();
+      });
+
+      // The Sync Communications button should be enabled
+      const syncButton = screen.getByTitle("Sync Communications");
+      expect(syncButton).not.toBeDisabled();
+    });
+
+    it("should show global sync tooltip on disabled Sync button", async () => {
+      // Set global sync to running
+      mockUseSyncOrchestrator.mockReturnValue({
+        state: { isRunning: true, queue: [], currentSync: "emails", overallProgress: 50, pendingRequest: null },
+        isRunning: true,
+        queue: [],
+        currentSync: "emails",
+        overallProgress: 50,
+        pendingRequest: null,
+        requestSync: jest.fn(),
+        forceSync: jest.fn(),
+        acceptPending: jest.fn(),
+        rejectPending: jest.fn(),
+        cancel: jest.fn(),
+      });
+
+      render(
+        <TransactionDetails
+          transaction={transactionWithContacts}
+          onClose={mockOnClose}
+          onTransactionUpdated={mockOnTransactionUpdated}
+          userId="user-456"
+        />,
+      );
+
+      // Wait for the Overview tab to render
+      await waitFor(() => {
+        expect(screen.getByText("Key Contacts")).toBeInTheDocument();
+      });
+
+      // Verify the tooltip text is correct
+      const syncButton = screen.getByTitle("A sync is already in progress from the dashboard");
+      expect(syncButton).toBeInTheDocument();
+      expect(syncButton).toBeDisabled();
     });
   });
 });

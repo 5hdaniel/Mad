@@ -73,6 +73,8 @@ interface TransactionMessagesTabProps {
   onSyncMessages?: () => Promise<void>;
   /** Whether sync is in progress */
   syncingMessages?: boolean;
+  /** Whether a global sync (from dashboard) is in progress */
+  globalSyncRunning?: boolean;
   /** Whether there are contacts assigned (to show sync button) */
   hasContacts?: boolean;
 }
@@ -97,8 +99,15 @@ export function TransactionMessagesTab({
   auditEndDate,
   onSyncMessages,
   syncingMessages = false,
+  globalSyncRunning = false,
   hasContacts = false,
 }: TransactionMessagesTabProps): React.ReactElement {
+  // Disable sync when already syncing or when a global dashboard sync is running
+  const syncDisabled = syncingMessages || globalSyncRunning;
+  const syncTooltip = globalSyncRunning
+    ? "A sync is already in progress from the dashboard"
+    : undefined;
+
   const [showAttachModal, setShowAttachModal] = useState(false);
   const [unlinkTarget, setUnlinkTarget] = useState<{
     threadId: string;
@@ -371,9 +380,10 @@ export function TransactionMessagesTab({
             {onSyncMessages && hasContacts && (
               <button
                 onClick={onSyncMessages}
-                disabled={syncingMessages}
+                disabled={syncDisabled}
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 data-testid="sync-messages-button"
+                title={syncTooltip}
               >
                 <svg
                   className={`w-4 h-4 ${syncingMessages ? "animate-spin" : ""}`}
@@ -489,9 +499,10 @@ export function TransactionMessagesTab({
           {onSyncMessages && hasContacts && (
             <button
               onClick={onSyncMessages}
-              disabled={syncingMessages}
+              disabled={syncDisabled}
               className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               data-testid="sync-messages-button"
+              title={syncTooltip}
             >
               {syncingMessages ? (
                 <>

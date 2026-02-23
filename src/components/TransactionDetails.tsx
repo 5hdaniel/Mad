@@ -16,6 +16,7 @@ import AuditTransactionModal from "./AuditTransactionModal";
 import { ToastContainer } from "./Toast";
 import { useToast } from "../hooks/useToast";
 import { useTransactionStatusUpdate } from "../hooks/useTransactionStatusUpdate";
+import { useSyncOrchestrator } from "../hooks/useSyncOrchestrator";
 
 // Import from transactionDetails module
 import {
@@ -182,6 +183,9 @@ function TransactionDetails({
     undefined,
     true, // lazy: don't auto-load on mount
   );
+
+  // Global sync orchestrator state - disable transaction Sync buttons when dashboard sync is running
+  const { isRunning: globalSyncRunning } = useSyncOrchestrator();
 
   // Transaction status update hook
   const { state: statusState, approve, reject, restore } = useTransactionStatusUpdate(userId);
@@ -353,21 +357,14 @@ function TransactionDetails({
   const handleSyncCommunications = useCallback(async () => {
     setSyncingCommunications(true);
     try {
-      // Cast to access syncAndFetchEmails - method is defined in preload but window.d.ts augmentation has issues with tsc
-      const result = await (window.api.transactions as typeof window.api.transactions & {
-        syncAndFetchEmails: (transactionId: string) => Promise<{
-          success: boolean;
-          provider?: "gmail" | "outlook";
-          emailsFetched?: number;
-          emailsStored?: number;
-          totalEmailsLinked?: number;
-          totalMessagesLinked?: number;
-          totalAlreadyLinked?: number;
-          totalErrors?: number;
-          error?: string;
-          message?: string;
-        }>;
-      }).syncAndFetchEmails(transaction.id);
+      const result = await window.api.transactions.syncAndFetchEmails(transaction.id);
+
+      // Handle rate-limited response with a non-alarming message
+      if (!result.success && result.rateLimited) {
+        showSuccess(result.error || "Please wait before syncing again");
+        return;
+      }
+
       if (result.success) {
         const emailsFetched = result.emailsFetched || 0;
         const emailsStored = result.emailsStored || 0;
@@ -532,6 +529,7 @@ function TransactionDetails({
               onAcceptAll={handleAcceptAllWithCallbacks}
               onSyncCommunications={handleSyncCommunications}
               syncingCommunications={syncingCommunications}
+              globalSyncRunning={globalSyncRunning}
             />
           )}
 
@@ -544,6 +542,7 @@ function TransactionDetails({
               onShowUnlinkConfirm={setShowUnlinkConfirm}
               onSyncCommunications={handleSyncCommunications}
               syncingCommunications={syncingCommunications}
+              globalSyncRunning={globalSyncRunning}
               hasContacts={contactAssignments.length > 0}
               userId={userId}
               transactionId={transaction.id}
@@ -571,6 +570,7 @@ function TransactionDetails({
               auditEndDate={transaction.closed_at}
               onSyncMessages={handleSyncMessages}
               syncingMessages={syncingMessages}
+              globalSyncRunning={globalSyncRunning}
               hasContacts={contactAssignments.length > 0}
             />
           )}
