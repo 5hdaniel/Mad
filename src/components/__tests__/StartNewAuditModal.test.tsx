@@ -10,6 +10,20 @@ import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
 import StartNewAuditModal from "../StartNewAuditModal";
 
+// Mock the NetworkContext (TASK-2056)
+jest.mock("../../contexts/NetworkContext", () => ({
+  useNetwork: () => ({
+    isOnline: true,
+    isChecking: false,
+    lastOnlineAt: null,
+    lastOfflineAt: null,
+    connectionError: null,
+    checkConnection: jest.fn(),
+    clearError: jest.fn(),
+    setConnectionError: jest.fn(),
+  }),
+}));
+
 // Mock the AuthContext
 jest.mock("../../contexts/AuthContext", () => {
   const originalModule = jest.requireActual("../../contexts/AuthContext");

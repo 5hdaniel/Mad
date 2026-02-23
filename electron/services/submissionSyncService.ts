@@ -578,10 +578,20 @@ class SubmissionSyncService {
   private async fetchCloudStatuses(submissionIds: string[]): Promise<CloudSubmissionStatus[] | null> {
     try {
       const client = supabaseService.getClient();
-      const { data, error } = await client
-        .from("transaction_submissions")
-        .select("id, status, review_notes, reviewed_by, reviewed_at")
-        .in("id", submissionIds);
+
+      // TASK-2056: 15-second timeout to prevent hanging when offline
+      const timeoutMs = 15000;
+      const queryResult = await Promise.race([
+        client
+          .from("transaction_submissions")
+          .select("id, status, review_notes, reviewed_by, reviewed_at")
+          .in("id", submissionIds),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`Cloud status fetch timed out after ${timeoutMs / 1000}s`)), timeoutMs)
+        ),
+      ]);
+
+      const { data, error } = queryResult;
 
       if (error) {
         logService.error(
