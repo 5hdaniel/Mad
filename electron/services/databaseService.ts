@@ -21,7 +21,7 @@ import type { Database as DatabaseType } from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { app } from "electron";
+import { app, dialog } from "electron";
 import * as Sentry from "@sentry/electron/main";
 import logService from "./logService";
 import {
@@ -147,7 +147,52 @@ class DatabaseService implements IDatabaseService {
       setDbPath(this.dbPath);
       setEncryptionKey(this.encryptionKey);
 
-      await this.runMigrations();
+      try {
+        await this.runMigrations();
+      } catch (migrationError) {
+        // Migration failed -- attempt auto-restore from pre-migration backup
+        await logService.error("Migration failed, attempting auto-restore", "DatabaseService", {
+          error: migrationError instanceof Error ? migrationError.message : String(migrationError),
+        });
+
+        const restoreResult = await this._attemptAutoRestore(migrationError);
+
+        // Report to Sentry with migration failure tags
+        Sentry.captureException(migrationError, {
+          tags: {
+            service: "database-service",
+            operation: "runMigrations",
+            migration_failure: "true",
+            auto_restore: restoreResult.autoRestoreStatus,
+            backup_integrity: restoreResult.backupIntegrity,
+          },
+        });
+
+        // Ensure app is ready before showing dialog
+        if (!app.isReady()) {
+          await app.whenReady();
+        }
+
+        if (restoreResult.restored) {
+          // Show success dialog (non-blocking -- do not await)
+          dialog.showMessageBox({
+            type: "warning",
+            title: "Database Update Notice",
+            message: "A database update failed, but your data has been restored.",
+            detail: "The app will continue with your existing data. Please contact support if this happens again.",
+            buttons: ["OK"],
+          });
+        } else {
+          // Show failure dialog (non-blocking -- do not await)
+          dialog.showMessageBox({
+            type: "error",
+            title: "Database Update Failed",
+            message: "A database update failed and could not be automatically fixed.",
+            detail: "Please contact support. Your data may need manual recovery.",
+            buttons: ["OK"],
+          });
+        }
+      }
 
       await logService.debug("Database initialized successfully with encryption", "DatabaseService");
       return true;
@@ -301,6 +346,141 @@ class DatabaseService implements IDatabaseService {
       fs.unlinkSync(filePath);
     } catch {
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
+  }
+
+  // ============================================
+  // MIGRATION FAILURE AUTO-RESTORE (TASK-2057)
+  // ============================================
+
+  /**
+   * Attempt to auto-restore from the most recent pre-migration backup.
+   *
+   * Flow:
+   * 1. Find the most recent backup file
+   * 2. Verify its integrity (encrypted PRAGMA integrity_check)
+   * 3. Close the current (possibly corrupted) database
+   * 4. Copy backup over the main database file
+   * 5. Re-open and update shared references
+   *
+   * @returns Object describing restore outcome for Sentry tagging
+   */
+  private async _attemptAutoRestore(
+    _migrationError: unknown
+  ): Promise<{
+    restored: boolean;
+    autoRestoreStatus: "succeeded" | "failed" | "no_backup";
+    backupIntegrity: "valid" | "corrupt" | "missing";
+  }> {
+    if (!this.dbPath || !this.encryptionKey) {
+      return { restored: false, autoRestoreStatus: "no_backup", backupIntegrity: "missing" };
+    }
+
+    const dbDir = path.dirname(this.dbPath);
+    const dbName = path.basename(this.dbPath, ".db");
+
+    // Find the most recent backup
+    let backupFiles: string[] = [];
+    try {
+      backupFiles = fs
+        .readdirSync(dbDir)
+        .filter((f) => f.startsWith(`${dbName}-backup-`) && f.endsWith(".db"))
+        .sort()
+        .reverse(); // newest first (timestamp-based names sort chronologically)
+    } catch {
+      // Cannot read directory -- no backups available
+    }
+
+    if (backupFiles.length === 0) {
+      await logService.warn("No backup files found for auto-restore", "DatabaseService");
+      return { restored: false, autoRestoreStatus: "no_backup", backupIntegrity: "missing" };
+    }
+
+    const latestBackupPath = path.join(dbDir, backupFiles[0]);
+
+    // Verify backup integrity
+    const isValid = this._verifyBackupIntegrity(latestBackupPath, this.encryptionKey);
+    if (!isValid) {
+      await logService.error("Backup file failed integrity check, cannot auto-restore", "DatabaseService", {
+        backupPath: latestBackupPath,
+      });
+      return { restored: false, autoRestoreStatus: "failed", backupIntegrity: "corrupt" };
+    }
+
+    await logService.info("Backup integrity verified, proceeding with auto-restore", "DatabaseService", {
+      backupPath: latestBackupPath,
+    });
+
+    try {
+      // Close the current (corrupted) database connection
+      if (this.db) {
+        try {
+          this.db.close();
+        } catch {
+          // May already be in a bad state -- ignore close errors
+        }
+        this.db = null;
+      }
+
+      // Copy the backup file over the main database file
+      fs.copyFileSync(latestBackupPath, this.dbPath);
+      await logService.info("Backup file restored over main database", "DatabaseService");
+
+      // Re-open the database connection with the same encryption params
+      const newDb = this._openDatabase();
+
+      // Update local reference
+      this.db = newDb;
+
+      // Update shared references so sub-services get the new connection
+      setDb(newDb);
+      setDbPath(this.dbPath);
+      setEncryptionKey(this.encryptionKey);
+
+      await logService.info("Auto-restore completed successfully", "DatabaseService");
+      return { restored: true, autoRestoreStatus: "succeeded", backupIntegrity: "valid" };
+    } catch (restoreError) {
+      await logService.error("Auto-restore failed during file replacement or reopening", "DatabaseService", {
+        error: restoreError instanceof Error ? restoreError.message : String(restoreError),
+      });
+      return { restored: false, autoRestoreStatus: "failed", backupIntegrity: "valid" };
+    }
+  }
+
+  /**
+   * Verify backup file integrity using PRAGMA integrity_check.
+   *
+   * CRITICAL: The backup is encrypted with the same key as the main DB.
+   * Must open with `pragma key` and `cipher_compatibility = 4` or
+   * integrity_check will always fail on production encrypted databases.
+   *
+   * @param backupPath - Path to the backup file
+   * @param encryptionKey - The encryption key for the database
+   * @returns true if backup is a valid, readable SQLite database
+   */
+  private _verifyBackupIntegrity(backupPath: string, encryptionKey: string): boolean {
+    let testDb: DatabaseType | null = null;
+    try {
+      if (!fs.existsSync(backupPath)) {
+        return false;
+      }
+
+      testDb = new Database(backupPath, { readonly: true });
+      testDb.pragma(`key = "x'${encryptionKey}'"`);
+      testDb.pragma("cipher_compatibility = 4");
+
+      const result = testDb.pragma("integrity_check") as Array<{ integrity_check: string }>;
+      return result[0]?.integrity_check === "ok";
+    } catch {
+      return false;
+    } finally {
+      if (testDb) {
+        try {
+          testDb.close();
+        } catch {
+          // Ignore close errors during verification
+        }
+      }
     }
   }
 
