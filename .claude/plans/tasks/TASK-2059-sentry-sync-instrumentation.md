@@ -246,25 +246,25 @@ The `messages:import-macos` handler starts at line 59. The main import logic is 
 **REQUIRED: Complete this section before creating PR.**
 **See: `.claude/docs/ENGINEER-WORKFLOW.md` for full workflow**
 
-*Completed: <DATE>*
+*Completed: 2026-02-23*
 
 ### Engineer Checklist
 
 ```
 Pre-Work:
-- [ ] Created branch from develop
-- [ ] Noted start time: ___
-- [ ] Read task file completely
+- [x] Created branch from develop
+- [x] Noted start time: session start
+- [x] Read task file completely
 
 Implementation:
-- [ ] Code complete
-- [ ] Tests pass locally (npm test)
-- [ ] Type check passes (npm run type-check)
-- [ ] Lint passes (npm run lint)
+- [x] Code complete
+- [x] Tests pass locally (npm test) -- 2 pre-existing failures unrelated to changes
+- [x] Type check passes (npm run type-check)
+- [x] Lint passes (npm run lint)
 
 PR Submission:
-- [ ] This summary section completed
-- [ ] PR created with Engineer Metrics (see template)
+- [x] This summary section completed
+- [x] PR created with Engineer Metrics (see template)
 - [ ] CI passes (gh pr checks --watch)
 - [ ] SR Engineer review requested
 
@@ -275,18 +275,25 @@ Completion:
 
 ### Results
 
-- **Before**: [state before]
-- **After**: [state after]
-- **Actual Tokens**: ~XK (Est: 30K)
-- **PR**: [URL after PR created]
+- **Before**: Zero Sentry breadcrumbs on renderer-side sync orchestrator, email sync handlers, message import handlers, and auto-refresh hook
+- **After**: 17 Sentry breadcrumbs across all sync paths providing lifecycle visibility (request, start, complete, cancel, skip reasons). captureException calls removed — auto-capture handles error reporting.
+- **Actual Tokens**: pending (Est: 30K)
+- **PR**: https://github.com/5hdaniel/Mad/pull/954
 
 ### Notes
 
 **Deviations from plan:**
-[If you deviated, explain what and why]
+Removed all 5 `captureException` calls during QA. Only breadcrumbs shipped.
 
 **Issues encountered:**
-[Document any challenges]
+
+### Issue #1: `captureException` calls are dead code due to Sentry auto-capture deduplication
+- **When:** QA testing — triggered an Outlook sync failure and checked Sentry dashboard
+- **What happened:** Custom tags (`syncType`, `provider`, `operation`) added via `captureException` in catch blocks were NOT appearing on Sentry events. The Sentry event showed `operation: initialize` and `service: gmail-fetch` (from `@sentry/electron` auto-instrumentation), not our custom tags.
+- **Root cause:** `@sentry/electron` has global automatic error capture that intercepts unhandled/re-thrown exceptions BEFORE our catch block's `captureException` runs. Sentry deduplicates the same exception and keeps the auto-captured version (which has no custom tags). Our `captureException` calls were effectively dead code.
+- **Resolution:** Removed all 5 `captureException` calls. Kept all 17 `addBreadcrumb` calls (these work because they attach to the scope and appear on the next auto-captured error). For a 1-person team, auto-capture + stack traces + breadcrumbs provides sufficient debugging context without custom tags.
+- **Time spent:** ~30 min investigation + cleanup
+- **Follow-up:** BACKLOG-806 — if tag-based filtering becomes needed at scale, use `Sentry.withScope()` to set tags BEFORE operations run (so auto-capture inherits them).
 
 ---
 

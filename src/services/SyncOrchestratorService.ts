@@ -14,6 +14,7 @@
  * @module services/SyncOrchestratorService
  */
 
+import * as Sentry from "@sentry/electron/renderer";
 import { isMacOS } from '../utils/platform';
 import type { ImportSource, UserPreferences } from './settingsService';
 import logger from '../utils/logger';
@@ -161,6 +162,16 @@ class SyncOrchestratorServiceClass {
       } catch (err) {
         // Don't fail the whole contacts sync if Outlook fails
         logger.warn('[SyncOrchestrator] Outlook contacts sync failed (non-fatal):', err);
+        Sentry.addBreadcrumb({
+          category: 'sync',
+          message: 'Outlook contacts sync failed (non-fatal)',
+          level: 'warning',
+          data: {
+            syncType: 'contacts',
+            provider: 'outlook',
+            error: err instanceof Error ? err.message : String(err),
+          },
+        });
       }
 
       onProgress(100);
@@ -270,6 +281,17 @@ class SyncOrchestratorServiceClass {
    * Returns true if sync started, false if queued (needs user decision).
    */
   requestSync(request: SyncRequest): { started: boolean; needsConfirmation: boolean } {
+    Sentry.addBreadcrumb({
+      category: 'sync',
+      message: `Sync requested: ${request.types.join(', ')}`,
+      level: 'info',
+      data: {
+        syncTypes: request.types,
+        userId: request.userId.substring(0, 8) + '...',
+        alreadyRunning: this.state.isRunning,
+      },
+    });
+
     if (this.state.isRunning) {
       // Sync in progress - queue this request for user decision
       this.setState({ pendingRequest: request });
@@ -311,6 +333,16 @@ class SyncOrchestratorServiceClass {
    * Cancel current sync
    */
   cancel(): void {
+    Sentry.addBreadcrumb({
+      category: 'sync',
+      message: 'Sync cancelled',
+      level: 'info',
+      data: {
+        currentSync: this.state.currentSync,
+        queueLength: this.state.queue.length,
+      },
+    });
+
     if (this.abortController) {
       this.abortController.abort();
       this.abortController = null;
@@ -374,11 +406,33 @@ class SyncOrchestratorServiceClass {
       this.updateQueueItem(type, { status: 'running', progress: 0 });
       this.setState({ currentSync: type });
 
+      Sentry.addBreadcrumb({
+        category: 'sync',
+        message: `Sync started: ${type}`,
+        level: 'info',
+        data: {
+          syncType: type,
+          userId: userId.substring(0, 8) + '...',
+          queuePosition: i + 1,
+          queueTotal: validTypes.length,
+        },
+      });
+
       try {
         // Run the sync with progress callback
         const warning = await syncFn(userId, (percent, phase) => {
           this.updateQueueItem(type, { progress: percent, phase });
           this.updateOverallProgress();
+        });
+
+        Sentry.addBreadcrumb({
+          category: 'sync',
+          message: `Sync completed: ${type}`,
+          level: 'info',
+          data: {
+            syncType: type,
+            hadWarning: !!warning,
+          },
         });
 
         // Mark complete (clear phase), attach warning if returned
