@@ -235,13 +235,51 @@ class FolderExportService {
         }
       }
 
+      // TASK-2061: Build thread name mapping so attachment folders match PDF names
+      // Uses the same grouping and naming logic as exportEmailThreads()
+      const threadNameMap = new Map<string, string>();
+      if (includeEmails && emails.length > 0) {
+        const threads = new Map<string, Communication[]>();
+        for (const email of emails) {
+          const key = getThreadKey(email);
+          const thread = threads.get(key) || [];
+          thread.push(email);
+          threads.set(key, thread);
+        }
+
+        // Sort messages within each thread chronologically (same as exportEmailThreads)
+        threads.forEach((msgs, key) => {
+          threads.set(
+            key,
+            msgs.sort((a, b) => {
+              const dateA = new Date(a.sent_at as string).getTime();
+              const dateB = new Date(b.sent_at as string).getTime();
+              return dateA - dateB;
+            })
+          );
+        });
+
+        let threadIndex = 0;
+        for (const [key, msgs] of threads) {
+          const firstDate = msgs[0].sent_at
+            ? new Date(msgs[0].sent_at as string).toISOString().split("T")[0]
+            : "unknown";
+          const subject = sanitizeFileName(msgs[0].subject || "no_subject");
+          const paddedIndex = String(threadIndex + 1).padStart(3, "0");
+          const folderName = `thread_${paddedIndex}_${firstDate}_${subject}`;
+          threadNameMap.set(key, folderName);
+          threadIndex++;
+        }
+      }
+
       // TASK-2050: Export email attachments into per-thread subdirectories
-      // This runs after email PDFs are exported, adding attachments/ subdirs alongside the PDFs
+      // TASK-2061: Pass threadNameMap so folders match PDF names
       let emailAttachmentResult: AttachmentExportResult | undefined;
       if (includeEmails && emails.length > 0) {
         emailAttachmentResult = await exportEmailAttachmentsToThreadDirs(
           emails,
           emailsPath,
+          threadNameMap,
         );
         if (emailAttachmentResult.exported > 0 || emailAttachmentResult.skipped > 0) {
           logService.info("[Folder Export] Email attachments phase complete", "FolderExport", {
