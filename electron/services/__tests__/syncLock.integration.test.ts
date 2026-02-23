@@ -3,7 +3,7 @@
  *
  * Tests the interaction between:
  * - SyncStatusService (TASK-904)
- * - SyncOrchestrator (TASK-910)
+ * - DeviceSyncOrchestrator (TASK-910)
  * - BackupService
  *
  * Verifies that the system correctly:
@@ -68,7 +68,7 @@ jest.mock("child_process", () => ({
   spawn: jest.fn(),
 }));
 
-// Mock check-disk-space (used by syncOrchestrator)
+// Mock check-disk-space (used by deviceSyncOrchestrator)
 jest.mock("check-disk-space", () => ({
   default: jest.fn().mockResolvedValue({ free: 10 * 1024 * 1024 * 1024 }),
 }));
@@ -86,14 +86,14 @@ jest.mock("../backupService", () => ({
   },
 }));
 
-// Controllable mock status for syncOrchestrator
+// Controllable mock status for deviceSyncOrchestrator
 const mockOrchestratorStatus = {
   isRunning: false,
   phase: "idle" as string,
 };
 
-jest.mock("../syncOrchestrator", () => ({
-  syncOrchestrator: {
+jest.mock("../deviceSyncOrchestrator", () => ({
+  deviceSyncOrchestrator: {
     getStatus: jest.fn(() => ({ ...mockOrchestratorStatus })),
   },
 }));

@@ -9,18 +9,18 @@ import { ipcMain, BrowserWindow } from "electron";
 import log from "electron-log";
 import { redactId } from "./utils/redactSensitive";
 import {
-  SyncOrchestrator,
-  syncOrchestrator,
+  DeviceSyncOrchestrator,
+  deviceSyncOrchestrator,
   SyncProgress,
   SyncResult,
-} from "./services/syncOrchestrator";
+} from "./services/deviceSyncOrchestrator";
 import { iPhoneSyncStorageService } from "./services/iPhoneSyncStorageService";
 import sessionService from "./services/sessionService";
 import type { iOSDevice } from "./types/device";
 import { rateLimiters } from "./utils/rateLimit";
 import { syncStatusService } from "./services/syncStatusService";
 
-let orchestrator: SyncOrchestrator | null = null;
+let orchestrator: DeviceSyncOrchestrator | null = null;
 let mainWindowRef: BrowserWindow | null = null;
 let currentUserId: string | null = null;
 // Track user ID at sync start to prevent race conditions
@@ -71,7 +71,7 @@ async function getCurrentUserIdForSync(): Promise<string | null> {
  */
 export function registerSyncHandlers(mainWindow: BrowserWindow, userId?: string): void {
   mainWindowRef = mainWindow;
-  orchestrator = syncOrchestrator;
+  orchestrator = deviceSyncOrchestrator;
   if (userId) {
     currentUserId = userId;
   }

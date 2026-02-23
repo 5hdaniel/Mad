@@ -291,10 +291,10 @@ jest.mock("../iosContactsParser", () => ({
 
 // Now import the module under test
 import {
-  SyncOrchestrator,
+  DeviceSyncOrchestrator,
   SyncPhase,
   SyncProgress,
-} from "../syncOrchestrator";
+} from "../deviceSyncOrchestrator";
 
 // Enable mock mode for testing
 process.env.MOCK_DEVICE = "true";
@@ -309,8 +309,8 @@ process.env.MOCK_DEVICE = "true";
  */
 const skipInCI = process.env.CI ? describe.skip : describe;
 
-skipInCI("SyncOrchestrator", () => {
-  let orchestrator: SyncOrchestrator;
+skipInCI("DeviceSyncOrchestrator", () => {
+  let orchestrator: DeviceSyncOrchestrator;
 
   beforeEach(() => {
     // Reset mock states
@@ -319,7 +319,7 @@ skipInCI("SyncOrchestrator", () => {
     mockDeviceService.removeAllListeners();
 
     // Create fresh orchestrator
-    orchestrator = new SyncOrchestrator();
+    orchestrator = new DeviceSyncOrchestrator();
   });
 
   afterEach(() => {
@@ -612,14 +612,14 @@ skipInCI("SyncOrchestrator", () => {
   });
 });
 
-describe("SyncOrchestrator E2E Flow", () => {
-  let orchestrator: SyncOrchestrator;
+describe("DeviceSyncOrchestrator E2E Flow", () => {
+  let orchestrator: DeviceSyncOrchestrator;
 
   beforeEach(() => {
     mockBackupService.setMockBehavior(true, false);
     mockBackupService.removeAllListeners();
     mockDeviceService.removeAllListeners();
-    orchestrator = new SyncOrchestrator();
+    orchestrator = new DeviceSyncOrchestrator();
   });
 
   afterEach(() => {
@@ -694,14 +694,14 @@ describe("SyncOrchestrator E2E Flow", () => {
   });
 });
 
-describe("SyncOrchestrator Skip Logic (TASK-908)", () => {
-  let orchestrator: SyncOrchestrator;
+describe("DeviceSyncOrchestrator Skip Logic (TASK-908)", () => {
+  let orchestrator: DeviceSyncOrchestrator;
 
   beforeEach(() => {
     mockBackupService.setMockBehavior(true, false);
     mockBackupService.removeAllListeners();
     mockDeviceService.removeAllListeners();
-    orchestrator = new SyncOrchestrator();
+    orchestrator = new DeviceSyncOrchestrator();
   });
 
   afterEach(() => {

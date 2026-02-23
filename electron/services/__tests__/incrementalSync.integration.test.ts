@@ -5,7 +5,7 @@
  * - GmailFetchService (TASK-906)
  * - OutlookFetchService (TASK-907)
  * - OAuthTokenDbService (last_sync_at tracking)
- * - SyncOrchestrator (iPhone backup skip logic - TASK-908)
+ * - DeviceSyncOrchestrator (iPhone backup skip logic - TASK-908)
  *
  * Verifies that the system correctly:
  * - Uses last_sync_at for incremental fetching
