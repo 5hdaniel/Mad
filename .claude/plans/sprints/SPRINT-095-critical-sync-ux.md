@@ -1,7 +1,7 @@
 # SPRINT-095: Critical Sync UX
 
 **Created:** 2026-02-22
-**Status:** Planned
+**Status:** Completed
 **Base:** `develop` (with all SPRINT-094 / Phase 0 work merged: PRs #940, #942, #943, #944)
 
 ---
@@ -20,10 +20,10 @@ QA testing revealed several critical UX gaps in sync and network operations. The
 
 | ID | Title | Task | Batch | Est Tokens | Actual Tokens | PR | Merged | Status |
 |----|-------|------|-------|-----------|---------------|-----|--------|--------|
-| BACKLOG-798 | Sync progress bar auto-dismiss | TASK-2055 | 1 (parallel) | ~25K | - | - | - | Pending |
-| BACKLOG-799 | Block network-dependent actions when offline | TASK-2056 | 1 (parallel) | ~60K | - | - | - | Pending |
-| BACKLOG-787 | Migration failure auto-restore | TASK-2057 | 1 (parallel) | ~50K | - | - | - | Pending |
-| BACKLOG-797 | Local failure logging for offline diagnostics | TASK-2058 | 2 (after TASK-2056) | ~40K | - | - | - | Pending |
+| BACKLOG-798 | Sync progress bar auto-dismiss | TASK-2055 | 1 (parallel) | ~25K | ~25K | #948 | 2026-02-23 | Completed |
+| BACKLOG-799 | Block network-dependent actions when offline | TASK-2056 | 1 (parallel) | ~60K | ~60K | #950 | 2026-02-23 | Completed |
+| BACKLOG-787 | Migration failure auto-restore | TASK-2057 | 1 (parallel) | ~50K | ~30K | #949 | 2026-02-23 | Completed |
+| BACKLOG-797 | Local failure logging for offline diagnostics | TASK-2058 | 2 (after TASK-2056) | ~40K | ~35K | #951 | 2026-02-23 | Completed |
 
 **Total Estimated Tokens:** ~175K (engineering) + ~60K (SR review) = ~235K
 
@@ -88,7 +88,34 @@ TASK-2057 (migration restore)──┘
 
 ## Technical Review Checklist (SR Engineer)
 
-- [ ] Confirm Batch 1 tasks have no shared file conflicts
-- [ ] Review branch strategy for each task
-- [ ] Add technical considerations to each task file
-- [ ] Flag any architectural concerns
+- [x] Confirm Batch 1 tasks have no shared file conflicts
+- [x] Review branch strategy for each task
+- [x] Add technical considerations to each task file
+- [x] Flag any architectural concerns
+
+---
+
+## Retrospective
+
+**Date:** 2026-02-23
+**Status:** All tasks completed and merged to develop.
+
+### PRs Merged
+
+| Task | PR | Merged |
+|------|-----|--------|
+| TASK-2055 (sync progress auto-dismiss) | #948 | 2026-02-23 |
+| TASK-2056 (offline action blocking) | #950 | 2026-02-23 |
+| TASK-2057 (migration failure auto-restore) | #949 | 2026-02-23 |
+| TASK-2058 (local failure logging) | #951 | 2026-02-23 |
+
+### QA Results
+
+All 4 tasks passed QA testing. No blocking issues found.
+
+### Notable Observations
+
+- TASK-2057 came in under estimate (~30K vs ~50K estimated) -- migration code was straightforward.
+- TASK-2056 had several deviations from plan: timeout was placed at the service level (supabaseService.ts) rather than handler level (sessionHandlers.ts), and Promise.race was used instead of AbortController since Supabase SDK and electron-updater don't accept AbortSignal.
+- TASK-2058 dual type system issue (window.d.ts + electron/types/ipc.ts) -- a recurring pattern that has been encountered in multiple tasks.
+- Batch execution worked well: Batch 1 (TASK-2055, 2056, 2057) ran in parallel with no conflicts, Batch 2 (TASK-2058) followed after TASK-2056 merge.

@@ -260,21 +260,21 @@ Implementation:
 
 PR Submission:
 - [x] This summary section completed
-- [ ] PR created with Engineer Metrics (see template)
-- [ ] CI passes (gh pr checks --watch)
-- [ ] SR Engineer review requested
+- [x] PR created with Engineer Metrics (see template)
+- [x] CI passes
+- [x] SR Engineer review requested
 
 Completion:
-- [ ] SR Engineer approved and merged
-- [ ] PM notified for next task
+- [x] SR Engineer approved and merged
+- [x] PM notified for next task
 ```
 
 ### Results
 
 - **Before**: Hardcoded `maxResults: 200` on 4 email fetch calls, `maxResults: 50` on sent items. Duplicated fetch-store-dedup logic across 5 provider paths (~160 lines of repetitive code).
 - **After**: Date-range filtering using transaction `started_at`/`created_at` with 2000 safety cap. Shared `fetchStoreAndDedup()` helper eliminates all duplication. Sent items also use date filtering. 10 new unit tests.
-- **Actual Tokens**: ~TBD (Est: 65K)
-- **PR**: TBD
+- **Actual Tokens**: ~65K (Est: 65K)
+- **PR**: https://github.com/5hdaniel/Mad/pull/955
 
 ### Changes Made
 

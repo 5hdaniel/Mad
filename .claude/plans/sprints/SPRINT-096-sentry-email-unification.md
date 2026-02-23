@@ -1,7 +1,7 @@
 # SPRINT-096: Sentry + Email Unification
 
 **Created:** 2026-02-22
-**Status:** Planned
+**Status:** Completed
 **Base:** `develop` (after all SPRINT-095 work merged)
 
 ---
@@ -26,9 +26,9 @@ Three distinct workstreams, all improving sync reliability and data completeness
 
 | ID | Title | Task | Batch | Est Tokens | Actual Tokens | PR | Merged | Status |
 |----|-------|------|-------|-----------|---------------|-----|--------|--------|
-| BACKLOG-795 | Sentry instrumentation for all sync paths | TASK-2059 | 1 (parallel) | ~30K | - | - | - | Pending |
-| BACKLOG-786 | Email unification Phase 1 -- fix 200-email cap | TASK-2060 | 1 (parallel) | ~65K | - | - | - | Pending |
-| BACKLOG-785 | Human-readable attachment folder names | TASK-2061 | 1 (parallel) | ~25K | - | - | - | Pending |
+| BACKLOG-795 | Sentry instrumentation for all sync paths | TASK-2059 | 1 (parallel) | ~30K | ~30K | #954 | 2026-02-23 | Completed |
+| BACKLOG-786 | Email unification Phase 1 -- fix 200-email cap | TASK-2060 | 1 (parallel) | ~65K | ~65K | #955 | 2026-02-23 | Completed |
+| BACKLOG-785 | Human-readable attachment folder names | TASK-2061 | 1 (parallel) | ~25K | ~15K | #953 | 2026-02-23 | Completed |
 
 **Total Estimated Tokens:** ~120K (engineering) + ~45K (SR review) = ~165K
 
@@ -91,9 +91,41 @@ No cross-task dependencies. All tasks branch from `develop` and target `develop`
 
 ## Sprint Metrics
 
-| Metric | Target |
-|--------|--------|
-| Total Estimated Tokens | ~165K |
-| Number of Tasks | 3 |
-| Parallel Tasks | 3 (if SR confirms) |
-| Expected Duration | 1 session (overnight) |
+| Metric | Target | Actual |
+|--------|--------|--------|
+| Total Estimated Tokens | ~165K | ~110K (engineering) |
+| Number of Tasks | 3 | 3 |
+| Parallel Tasks | 3 (if SR confirms) | 3 (parallel confirmed) |
+| Expected Duration | 1 session (overnight) | 1 session |
+
+---
+
+## Retrospective
+
+**Date:** 2026-02-23
+**Status:** All tasks completed and merged to develop.
+
+### PRs Merged
+
+| Task | PR | Merged |
+|------|-----|--------|
+| TASK-2059 (Sentry sync instrumentation) | #954 | 2026-02-23 |
+| TASK-2060 (email 200-cap fix) | #955 | 2026-02-23 |
+| TASK-2061 (attachment folder names) | #953 | 2026-02-23 |
+
+### QA Findings
+
+All 3 tasks passed QA. The following backlog items were added during QA:
+
+- **BACKLOG-806:** Fix Sentry custom tags using `withScope` (from TASK-2059). `captureException` calls were dead code due to `@sentry/electron` auto-capture deduplication. 5 calls removed in cleanup (PR #954 amended), 17 breadcrumbs kept.
+- **BACKLOG-807:** Export progress counter and parallel workers (from TASK-2061).
+- **BACKLOG-808:** Non-PDF email attachments not exported (from TASK-2061).
+- **BACKLOG-809:** Manually added contact not immediately selectable (from TASK-2060).
+- **BACKLOG-810:** Sync progress bar in transaction email tab (from TASK-2060).
+
+### Notable Observations
+
+- TASK-2059 had a significant finding during QA: `captureException` calls are dead code because `@sentry/electron` auto-capture deduplicates exceptions. All 5 `captureException` calls were removed, keeping only the 17 `addBreadcrumb` calls. BACKLOG-806 tracks the `withScope` follow-up for when tag-based filtering is needed.
+- TASK-2061 came in well under estimate (~15K vs ~25K). The attachment folder naming fix was straightforward.
+- TASK-2060 discovered that `outlookFetchService.searchEmails` and `gmailFetchService.searchEmails` already supported `after` parameter -- only `searchSentEmailsToContacts` needed the new parameter. Transaction model uses `started_at` (not `audit_start_date` as assumed in the task file).
+- All 3 tasks ran in parallel with no conflicts, confirming SR's parallel safety assessment.
