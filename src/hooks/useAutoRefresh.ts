@@ -202,16 +202,6 @@ export function useAutoRefresh({
    */
   const runAutoRefresh = useCallback(
     (uid: string, emailConnected: boolean): void => {
-      const alreadyTriggered = hasMessagesImportTriggered();
-
-      // Skip if already imported this session (e.g., during onboarding via PermissionsStep)
-      if (alreadyTriggered) {
-        return;
-      }
-
-      // Mark as triggered to prevent duplicate syncs
-      setMessagesImportTriggered();
-
       // Build list of sync types based on platform and permissions
       // Order: Contacts (fast) → Emails (if AI addon) → Messages (slow)
       const typesToSync: SyncType[] = [];
@@ -263,6 +253,11 @@ export function useAutoRefresh({
 
     // Run refresh after delay to let UI settle
     const timeoutId = setTimeout(() => {
+      // Skip if already imported this session (e.g., during onboarding via PermissionsStep)
+      if (hasMessagesImportTriggered()) {
+        return;
+      }
+      setMessagesImportTriggered();
       runAutoRefresh(userId, hasEmailConnected);
     }, AUTO_REFRESH_DELAY_MS);
 
