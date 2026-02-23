@@ -100,6 +100,8 @@ function LoginForm() {
                     <a href="/setup" className="font-medium underline hover:text-red-600">setup page</a>
                     , or{' '}
                     <a href="/download" className="font-medium underline hover:text-red-600">sign up for an individual account</a>.
+                    {' '}If you have an agent license,{' '}
+                    <a href="/auth/desktop" className="font-medium underline hover:text-red-600">sign in to the desktop app here</a>.
                   </p>
                 ) : displayError === 'jit_disabled' ? (
                   <p className="text-sm text-red-700">
@@ -162,6 +164,17 @@ function LoginForm() {
             )}
             <span>{loading === 'azure' ? 'Signing in...' : 'Sign in with Microsoft'}</span>
           </button>
+        </div>
+
+        {/* Agent license redirect */}
+        <div className="rounded-md bg-blue-50 border border-blue-200 p-4">
+          <p className="text-sm text-blue-700">
+            Looking for the Magic Audit desktop app?{' '}
+            <a href="/auth/desktop" className="font-medium underline hover:text-blue-600">
+              Click here to sign in
+            </a>{' '}
+            if you have an agent license.
+          </p>
         </div>
 
         {/* Footer */}
