@@ -325,17 +325,35 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
         hasHashParams: !!hashParams?.get("access_token"),
       });
 
+      // Extract OAuth error information if present (provider tells us exactly why auth failed)
+      const oauthError = parsed.searchParams.get("error") || hashParams?.get("error");
+      const oauthErrorDescription = parsed.searchParams.get("error_description") || hashParams?.get("error_description");
+
       if (!accessToken || !refreshToken) {
         // Missing tokens - send error to renderer
         log.error("[DeepLink] Callback URL missing tokens:", redactDeepLinkUrl(url));
-        Sentry.captureException(new Error("Deep link auth: missing tokens"), {
-          tags: { component: "deep-link", action: "auth-callback" },
-          extra: { code: "MISSING_TOKENS", url: redactDeepLinkUrl(url) },
-        });
-        sendToRenderer("auth:deep-link-error", {
-          error: "Missing tokens in callback URL",
-          code: "MISSING_TOKENS",
-        });
+        if (oauthError) {
+          // OAuth provider explicitly returned an error
+          Sentry.captureException(new Error(`Deep link auth: OAuth error (${oauthError})`), {
+            tags: { component: "deep-link", action: "auth-callback", oauthError },
+            extra: { code: "OAUTH_ERROR", oauthError, oauthErrorDescription, url: redactDeepLinkUrl(url) },
+          });
+          sendToRenderer("auth:deep-link-error", {
+            error: oauthErrorDescription || `OAuth error: ${oauthError}`,
+            code: "OAUTH_ERROR",
+          });
+        } else {
+          // No OAuth error but tokens missing — could be corrupted URL or incomplete redirect
+          const isOnline = net.isOnline();
+          Sentry.captureException(new Error(`Deep link auth: missing tokens${!isOnline ? " (device offline)" : ""}`), {
+            tags: { component: "deep-link", action: "auth-callback", networkOnline: isOnline },
+            extra: { code: "MISSING_TOKENS", networkOnline: isOnline, url: redactDeepLinkUrl(url) },
+          });
+          sendToRenderer("auth:deep-link-error", {
+            error: !isOnline ? "Authentication failed — you appear to be offline" : "Missing tokens in callback URL",
+            code: "MISSING_TOKENS",
+          });
+        }
         return;
       }
 
@@ -352,8 +370,8 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
       if (sessionError || !sessionData?.user) {
         log.error("[DeepLink] Failed to set session:", sessionError);
         Sentry.captureException(sessionError || new Error("Deep link auth: session data missing user"), {
-          tags: { component: "deep-link", action: "auth-callback" },
-          extra: { code: "INVALID_TOKENS" },
+          tags: { component: "deep-link", action: "auth-callback", networkOnline: net.isOnline() },
+          extra: { code: "INVALID_TOKENS", networkOnline: net.isOnline(), errorMessage: sessionError?.message },
         });
         sendToRenderer("auth:deep-link-error", {
           error: "Invalid authentication tokens",
