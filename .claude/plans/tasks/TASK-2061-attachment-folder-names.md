@@ -256,7 +256,7 @@ Completion:
 - **Before**: Attachment folders used raw thread_id (e.g., `AAQkADVk___/attachments/`) which was unreadable
 - **After**: Attachment folders use human-readable names matching PDF names (e.g., `thread_001_2024-03-11_RE_Insurance/attachments/`)
 - **Actual Tokens**: ~15K (Est: 25K)
-- **PR**: TBD
+- **PR**: https://github.com/5hdaniel/Mad/pull/953
 
 ### Changes Made
 
