@@ -75,6 +75,8 @@ interface TransactionMessagesTabProps {
   syncingMessages?: boolean;
   /** Whether a global sync (from dashboard) is in progress */
   globalSyncRunning?: boolean;
+  /** TASK-2074: Whether the app is online (network connectivity) */
+  isOnline?: boolean;
   /** Whether there are contacts assigned (to show sync button) */
   hasContacts?: boolean;
 }
@@ -100,11 +102,14 @@ export function TransactionMessagesTab({
   onSyncMessages,
   syncingMessages = false,
   globalSyncRunning = false,
+  isOnline = true,
   hasContacts = false,
 }: TransactionMessagesTabProps): React.ReactElement {
-  // Disable sync when already syncing or when a global dashboard sync is running
-  const syncDisabled = syncingMessages || globalSyncRunning;
-  const syncTooltip = globalSyncRunning
+  // TASK-2074: Disable sync when offline, already syncing, or when a global dashboard sync is running
+  const syncDisabled = !isOnline || syncingMessages || globalSyncRunning;
+  const syncTooltip = !isOnline
+    ? "You are offline"
+    : globalSyncRunning
     ? "A sync is already in progress from the dashboard"
     : undefined;
 

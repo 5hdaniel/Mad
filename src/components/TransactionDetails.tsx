@@ -17,6 +17,7 @@ import { ToastContainer } from "./Toast";
 import { useToast } from "../hooks/useToast";
 import { useTransactionStatusUpdate } from "../hooks/useTransactionStatusUpdate";
 import { useSyncOrchestrator } from "../hooks/useSyncOrchestrator";
+import { useNetwork } from "../contexts/NetworkContext";
 
 // Import from transactionDetails module
 import {
@@ -188,6 +189,9 @@ function TransactionDetails({
 
   // Global sync orchestrator state - disable transaction Sync buttons when dashboard sync is running
   const { isRunning: globalSyncRunning } = useSyncOrchestrator();
+
+  // TASK-2074: Network status for disabling sync buttons when offline
+  const { isOnline } = useNetwork();
 
   // Transaction status update hook
   const { state: statusState, approve, reject, restore } = useTransactionStatusUpdate(userId);
@@ -544,6 +548,7 @@ function TransactionDetails({
               onSyncCommunications={handleSyncCommunications}
               syncingCommunications={syncingCommunications}
               globalSyncRunning={globalSyncRunning}
+              isOnline={isOnline}
             />
           )}
 
@@ -557,6 +562,7 @@ function TransactionDetails({
               onSyncCommunications={handleSyncCommunications}
               syncingCommunications={syncingCommunications}
               globalSyncRunning={globalSyncRunning}
+              isOnline={isOnline}
               hasContacts={contactAssignments.length > 0}
               userId={userId}
               transactionId={transaction.id}
@@ -585,6 +591,7 @@ function TransactionDetails({
               onSyncMessages={handleSyncMessages}
               syncingMessages={syncingMessages}
               globalSyncRunning={globalSyncRunning}
+              isOnline={isOnline}
               hasContacts={contactAssignments.length > 0}
             />
           )}

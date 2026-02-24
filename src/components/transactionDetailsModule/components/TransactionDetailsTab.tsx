@@ -37,6 +37,8 @@ interface TransactionDetailsTabProps {
   syncingCommunications?: boolean;
   /** Whether a global sync (from dashboard) is in progress */
   globalSyncRunning?: boolean;
+  /** TASK-2074: Whether the app is online (network connectivity) */
+  isOnline?: boolean;
 }
 
 // Helper function to format date in readable format
@@ -80,10 +82,13 @@ export function TransactionDetailsTab({
   onSyncCommunications,
   syncingCommunications = false,
   globalSyncRunning = false,
+  isOnline = true,
 }: TransactionDetailsTabProps): React.ReactElement {
-  // Disable sync when already syncing or when a global dashboard sync is running
-  const syncDisabled = syncingCommunications || globalSyncRunning;
-  const syncTooltip = globalSyncRunning
+  // TASK-2074: Disable sync when offline, already syncing, or when a global dashboard sync is running
+  const syncDisabled = !isOnline || syncingCommunications || globalSyncRunning;
+  const syncTooltip = !isOnline
+    ? "You are offline"
+    : globalSyncRunning
     ? "A sync is already in progress from the dashboard"
     : undefined;
   // Contact preview state for viewing details when clicking a contact card

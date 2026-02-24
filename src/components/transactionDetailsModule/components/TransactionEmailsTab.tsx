@@ -26,6 +26,8 @@ interface TransactionEmailsTabProps {
   syncingCommunications?: boolean;
   /** Whether a global sync (from dashboard) is in progress */
   globalSyncRunning?: boolean;
+  /** TASK-2074: Whether the app is online (network connectivity) */
+  isOnline?: boolean;
   /** Whether there are contacts assigned (to show appropriate help text) */
   hasContacts?: boolean;
   /** User ID for API calls */
@@ -53,6 +55,7 @@ export function TransactionEmailsTab({
   onSyncCommunications,
   syncingCommunications = false,
   globalSyncRunning = false,
+  isOnline = true,
   hasContacts = false,
   userId,
   transactionId,
@@ -65,9 +68,11 @@ export function TransactionEmailsTab({
   const { currentUser } = useAuth();
   const [showAttachModal, setShowAttachModal] = useState(false);
 
-  // Disable sync when already syncing or when a global dashboard sync is running
-  const syncDisabled = syncingCommunications || globalSyncRunning;
-  const syncTooltip = globalSyncRunning
+  // TASK-2074: Disable sync when offline, already syncing, or when a global dashboard sync is running
+  const syncDisabled = !isOnline || syncingCommunications || globalSyncRunning;
+  const syncTooltip = !isOnline
+    ? "You are offline"
+    : globalSyncRunning
     ? "A sync is already in progress from the dashboard"
     : undefined;
 
