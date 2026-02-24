@@ -569,44 +569,42 @@ export function registerTransactionCrudHandlers(
         },
       );
 
-      // TASK-1126: Immediate local auto-link for each added contact
-      const autoLinkResults: Array<{
-        contactId: string;
-        emailsLinked: number;
-        messagesLinked: number;
-        alreadyLinked: number;
-        errors: number;
-      }> = [];
-
       const addOperations = validatedOperations.filter(
         (op) => op.action === "add"
       );
 
-      for (const op of addOperations) {
-        try {
-          const result = await autoLinkCommunicationsForContact({
+      // BACKLOG-820: Fire local auto-link in background (don't block the save response).
+      // Previously awaited per-contact, causing 8+ second UI hangs on contact assignment.
+      // TASK-2067: Also fire provider fetch in background after auto-link.
+      if (addOperations.length > 0) {
+        // Local auto-link (fire-and-forget)
+        for (const op of addOperations) {
+          autoLinkCommunicationsForContact({
             contactId: op.contactId,
             transactionId: validatedTransactionId as string,
+          }).then((result) => {
+            logService.info(
+              "Background local auto-link complete",
+              "Transactions",
+              {
+                contactId: op.contactId,
+                emailsLinked: result.emailsLinked,
+                messagesLinked: result.messagesLinked,
+                alreadyLinked: result.alreadyLinked,
+              }
+            );
+          }).catch((error) => {
+            logService.warn(
+              `Auto-link failed for contact ${op.contactId}`,
+              "Transactions",
+              {
+                error: error instanceof Error ? error.message : "Unknown",
+              }
+            );
           });
-
-          autoLinkResults.push({
-            contactId: op.contactId,
-            ...result,
-          });
-        } catch (error) {
-          logService.warn(
-            `Auto-link failed for contact ${op.contactId}`,
-            "Transactions",
-            {
-              error: error instanceof Error ? error.message : "Unknown",
-            }
-          );
         }
-      }
 
-      // TASK-2067: Fire provider fetch in background (don't block the save response).
-      // This fetches emails from Outlook/Gmail, stores them locally, then re-runs auto-link.
-      if (addOperations.length > 0) {
+        // Provider fetch + re-link (fire-and-forget)
         databaseService.getTransactionById(validatedTransactionId as string)
           .then((transaction) => {
             if (!transaction) return;
@@ -654,8 +652,6 @@ export function registerTransactionCrudHandlers(
 
       return {
         success: true,
-        autoLinkResults:
-          autoLinkResults.length > 0 ? autoLinkResults : undefined,
       };
     }, { module: "Transactions" }),
   );
