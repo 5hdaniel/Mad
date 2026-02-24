@@ -1411,6 +1411,8 @@ interface MainAPI {
       error?: string;
       message?: string;
       rateLimited?: boolean;
+      /** TASK-2070: Warning when provider fetch failed but local results are available */
+      warning?: string;
     }>;
     /**
      * Re-syncs auto-link communications for all contacts on a transaction.

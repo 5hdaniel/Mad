@@ -94,6 +94,8 @@ function TransactionDetails({
   const localToast = useToast();
   const showSuccess = onShowSuccess || localToast.showSuccess;
   const showError = onShowError || localToast.showError;
+  // TASK-2070: Warning toast for provider errors (always local -- no parent prop for warnings)
+  const showWarning = localToast.showWarning;
 
   // Transaction data hook
   const {
@@ -365,12 +367,24 @@ function TransactionDetails({
         return;
       }
 
+      // TASK-2070: Extract warning from result (provider error surfaced through IPC)
+      const syncWarning = (result as { warning?: string }).warning;
+
       if (result.success) {
         const emailsFetched = result.emailsFetched || 0;
         const emailsStored = result.emailsStored || 0;
         const totalLinked = (result.totalEmailsLinked || 0) + (result.totalMessagesLinked || 0);
 
-        if (emailsStored > 0 || totalLinked > 0) {
+        // TASK-2070: Show warning toast if provider fetch failed (token expired, API error)
+        // This takes priority over the green success message
+        if (syncWarning) {
+          showWarning(syncWarning);
+          // Still refresh if any local data was linked
+          if (totalLinked > 0) {
+            loadDetails();
+            refreshMessages();
+          }
+        } else if (emailsStored > 0 || totalLinked > 0) {
           const parts: string[] = [];
           if (emailsStored > 0) {
             parts.push(`${emailsStored} new email${emailsStored !== 1 ? "s" : ""} fetched`);
@@ -403,7 +417,7 @@ function TransactionDetails({
     } finally {
       setSyncingCommunications(false);
     }
-  }, [transaction.id, showSuccess, showError, loadDetails, refreshMessages]);
+  }, [transaction.id, showSuccess, showError, showWarning, loadDetails, refreshMessages]);
 
   // Sync messages handler - re-links text messages from assigned contacts (phone-based matching)
   const handleSyncMessages = useCallback(async () => {
@@ -715,8 +729,8 @@ function TransactionDetails({
         />
       )}
 
-      {/* Toast Notifications - only render if using local toast */}
-      {!onShowSuccess && !onShowError && (
+      {/* Toast Notifications - render if using local toast, or if local toasts exist (TASK-2070: warnings always use local) */}
+      {(!onShowSuccess && !onShowError || localToast.toasts.length > 0) && (
         <ToastContainer toasts={localToast.toasts} onDismiss={localToast.removeToast} />
       )}
     </div>
