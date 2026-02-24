@@ -703,8 +703,8 @@ class EmailSyncService {
    * for the audit period are in the local DB before auto-link searches it.
    */
   /**
-   * Check if local email cache already covers the audit period for given contact emails.
-   * Returns true if cached emails span from before the audit start to within the last day.
+   * Check if local email cache extends back to before the audit start for given contact emails.
+   * If we have cached emails from before the audit period started, a provider fetch is redundant.
    */
   private localCacheCoversAuditPeriod(
     userId: string,
@@ -715,7 +715,7 @@ class EmailSyncService {
 
     const placeholders = contactEmails.map(() => "LOWER(?)").join(", ");
     const sql = `
-      SELECT MIN(sent_at) as earliest, MAX(sent_at) as latest, COUNT(*) as total
+      SELECT MIN(sent_at) as earliest, COUNT(*) as total
       FROM emails
       WHERE user_id = ?
         AND (LOWER(sender) IN (${placeholders}) OR ${contactEmails.map(() => "LOWER(recipients) LIKE ?").join(" OR ")})
@@ -724,22 +724,18 @@ class EmailSyncService {
     const likeParams = contactEmails.map(e => `%${e.toLowerCase()}%`);
     const params = [userId, ...lowerEmails, ...likeParams];
 
-    const row = dbGet<{ earliest: string | null; latest: string | null; total: number }>(sql, params);
+    const row = dbGet<{ earliest: string | null; total: number }>(sql, params);
 
-    if (!row || row.total === 0 || !row.earliest || !row.latest) {
+    if (!row || row.total === 0 || !row.earliest) {
       return false;
     }
 
     const earliest = new Date(row.earliest);
-    const latest = new Date(row.latest);
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-    const covers = earliest <= auditStart && latest >= oneDayAgo;
+    const covers = earliest <= auditStart;
 
     logService.info(`Cache coverage check for contact`, "EmailSyncService", {
       cachedEmails: row.total,
       earliest: earliest.toISOString(),
-      latest: latest.toISOString(),
       auditStart: auditStart.toISOString(),
       covers,
     });
