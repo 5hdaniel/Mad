@@ -986,29 +986,6 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                 General
               </h3>
               <div className="space-y-4">
-                {/* TASK-2072: Transaction Detection (smart scan window — read-only) */}
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <h4 className="text-sm font-medium text-gray-900">
-                        Transaction Detection
-                      </h4>
-                      <span
-                        className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-500 text-[10px] font-bold cursor-help"
-                        title="Automatically detects new real estate transactions in your email. Scans from your last scan date forward. On first use, looks back 1 month."
-                      >
-                        i
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-600 mt-1">
-                      Scans your email for new transactions since your last scan. First scan covers 1 month.
-                    </p>
-                  </div>
-                  <span className="ml-4 text-sm text-gray-500 font-medium bg-gray-100 px-3 py-1.5 rounded border border-gray-200">
-                    Automatic
-                  </span>
-                </div>
-
                 {/* TASK-1980: Start Date Mode Default */}
                 <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <div className="flex-1">
@@ -1513,7 +1490,31 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">
                   AI Settings
                 </h3>
-                <LLMSettings userId={userId} />
+                <div className="space-y-4">
+                  {/* TASK-2072: Transaction Detection (smart scan window — read-only) */}
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <h4 className="text-sm font-medium text-gray-900">
+                          Transaction Detection
+                        </h4>
+                        <span
+                          className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-500 text-[10px] font-bold cursor-help"
+                          title="Automatically detects new real estate transactions in your email. Scans from your last scan date forward. On first use, looks back 1 month."
+                        >
+                          i
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Scans your email for new transactions since your last scan. First scan covers 1 month.
+                      </p>
+                    </div>
+                    <span className="ml-4 text-sm text-gray-500 font-medium bg-gray-100 px-3 py-1.5 rounded border border-gray-200">
+                      Automatic
+                    </span>
+                  </div>
+                  <LLMSettings userId={userId} />
+                </div>
               </div>
             </LicenseGate>
 
