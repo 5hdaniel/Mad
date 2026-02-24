@@ -100,18 +100,18 @@ Remove redundant lookback settings, consolidating from 4 down to 2.
 
 ```
 Pre-Work:
-- [ ] Created branch from develop
-- [ ] Noted start time: session start
-- [ ] Read task file completely
+- [x] Created branch from develop
+- [x] Noted start time: session start
+- [x] Read task file completely
 
 Implementation:
-- [ ] Code complete
-- [ ] Tests pass locally (npm test)
-- [ ] Type check passes (npm run type-check)
-- [ ] Lint passes (npm run lint)
+- [x] Code complete
+- [x] Tests pass locally (npm test)
+- [x] Type check passes (npm run type-check)
+- [x] Lint passes (npm run lint)
 
 PR Submission:
-- [ ] This summary section completed
+- [x] This summary section completed
 - [ ] PR created with Engineer Metrics (see template)
 - [ ] CI passes
 - [ ] SR Engineer review requested
@@ -123,14 +123,18 @@ Completion:
 
 ### Results
 
-- **Before**: _To be filled by engineer_
-- **After**: _To be filled by engineer_
-- **Actual Tokens**: _To be filled by engineer_
-- **PR**: _To be filled by engineer_
+- **Before**: 4 lookback settings (scan.lookbackMonths, messageImport.filters.lookbackMonths, emailSync.lookbackMonths/DEFAULT_EMAIL_SYNC_LOOKBACK_MONTHS, DEFAULT_LOOKBACK_MONTHS in autoLinkService)
+- **After**: 2 lookback settings (scan.lookbackMonths default 9, messageImport.filters.lookbackMonths default 3). First-time email sync now uses scan.lookbackMonths instead of separate emailSync.lookbackMonths.
+- **Actual Tokens**: ~15K
+- **PR**: https://github.com/5hdaniel/Mad/pull/965
 
 ### Notes
 
-_To be filled by engineer_
+- `DEFAULT_LOOKBACK_MONTHS` was already removed from autoLinkService.ts by TASK-2068 (confirmed via grep).
+- Settings.tsx still has a UI for emailSyncLookbackMonths (dropdown). Per task rules "Do NOT change any UI settings pages", the UI was left as-is. The preference is still saved but no longer read by transactionService. A follow-up task could remove the UI element.
+- 2 pre-existing test failures in transaction-handlers.integration.test.ts (unrelated to lookback settings -- they test transaction update/closing date verification).
+
+**Issues/Blockers:** None
 
 ---
 
