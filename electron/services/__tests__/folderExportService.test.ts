@@ -20,6 +20,7 @@ let lastLoadedHtmlContent: string | null = null;
 const mockPrintToPDF = jest.fn().mockResolvedValue(Buffer.from("mock-pdf-data"));
 const mockLoadFile = jest.fn().mockResolvedValue(undefined);
 const mockClose = jest.fn();
+const mockIsDestroyed = jest.fn().mockReturnValue(false);
 
 jest.mock("electron", () => ({
   BrowserWindow: jest.fn().mockImplementation(() => ({
@@ -28,6 +29,7 @@ jest.mock("electron", () => ({
       printToPDF: mockPrintToPDF,
     },
     close: mockClose,
+    isDestroyed: mockIsDestroyed,
   })),
   app: {
     getPath: jest.fn((pathType: string) => {

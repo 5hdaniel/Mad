@@ -637,7 +637,7 @@ app.on("second-instance", (_event, commandLine) => {
   }
 
   // Focus main window when second instance is attempted
-  if (mainWindow) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.focus();
   }

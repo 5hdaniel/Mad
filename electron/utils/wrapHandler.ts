@@ -13,6 +13,7 @@
  */
 
 import type { IpcMainInvokeEvent } from "electron";
+import * as Sentry from "@sentry/electron/main";
 import { ValidationError } from "./validation";
 import logService from "../services/logService";
 
@@ -56,6 +57,7 @@ export function wrapHandler<T extends AnyIpcHandler>(
       }
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
+      Sentry.captureException(error);
       logService.error(`Handler error: ${errorMessage}`, options?.module ?? "IPC", {
         error,
       });
