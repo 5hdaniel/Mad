@@ -15,6 +15,7 @@ import logService from "./logService";
 import { autoLinkCommunicationsForContact } from "./autoLinkService";
 import type { AutoLinkResult } from "./autoLinkService";
 import { createEmail, getEmailByExternalId, countEmailsByUser } from "./db/emailDbService";
+import { dbGet } from "./db/core/dbConnection";
 import gmailFetchService from "./gmailFetchService";
 import outlookFetchService from "./outlookFetchService";
 import databaseService from "./databaseService";
@@ -701,6 +702,51 @@ class EmailSyncService {
    * Called when a contact is assigned to a transaction. This ensures provider emails
    * for the audit period are in the local DB before auto-link searches it.
    */
+  /**
+   * Check if local email cache already covers the audit period for given contact emails.
+   * Returns true if cached emails span from before the audit start to within the last day.
+   */
+  private localCacheCoversAuditPeriod(
+    userId: string,
+    contactEmails: string[],
+    auditStart: Date,
+  ): boolean {
+    if (contactEmails.length === 0) return false;
+
+    const placeholders = contactEmails.map(() => "LOWER(?)").join(", ");
+    const sql = `
+      SELECT MIN(sent_at) as earliest, MAX(sent_at) as latest, COUNT(*) as total
+      FROM emails
+      WHERE user_id = ?
+        AND (LOWER(sender) IN (${placeholders}) OR ${contactEmails.map(() => "LOWER(recipients) LIKE ?").join(" OR ")})
+    `;
+    const lowerEmails = contactEmails.map(e => e.toLowerCase());
+    const likeParams = contactEmails.map(e => `%${e.toLowerCase()}%`);
+    const params = [userId, ...lowerEmails, ...likeParams];
+
+    const row = dbGet<{ earliest: string | null; latest: string | null; total: number }>(sql, params);
+
+    if (!row || row.total === 0 || !row.earliest || !row.latest) {
+      return false;
+    }
+
+    const earliest = new Date(row.earliest);
+    const latest = new Date(row.latest);
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const covers = earliest <= auditStart && latest >= oneDayAgo;
+
+    logService.info(`Cache coverage check for contact`, "EmailSyncService", {
+      cachedEmails: row.total,
+      earliest: earliest.toISOString(),
+      latest: latest.toISOString(),
+      auditStart: auditStart.toISOString(),
+      covers,
+    });
+
+    return covers;
+  }
+
   async fetchAndAutoLinkForContact(params: {
     userId: string;
     transactionId: string;
@@ -722,6 +768,15 @@ class EmailSyncService {
     if (contactEmails.length > 0) {
       // Compute audit period date range
       const emailFetchSinceDate = computeTransactionDateRange(transactionDetails).start;
+
+      // Skip provider fetch if local cache already covers the audit period for this contact
+      if (this.localCacheCoversAuditPeriod(userId, contactEmails, emailFetchSinceDate)) {
+        logService.info(`Skipping provider fetch — local cache covers audit period for contact`, "EmailSyncService", {
+          transactionId,
+          contactId,
+          contactEmailCount: contactEmails.length,
+        });
+      } else {
       logService.info(`Fetching provider emails for contact assignment`, "EmailSyncService", {
         transactionId,
         contactId,
@@ -760,6 +815,7 @@ class EmailSyncService {
         emailsFetched,
         emailsStored,
       });
+      } // end else (provider fetch)
     }
 
     // Now auto-link from local DB (which includes newly fetched emails)
