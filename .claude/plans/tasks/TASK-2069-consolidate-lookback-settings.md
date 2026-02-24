@@ -126,7 +126,7 @@ Completion:
 - **Before**: 4 lookback settings (scan.lookbackMonths, messageImport.filters.lookbackMonths, emailSync.lookbackMonths/DEFAULT_EMAIL_SYNC_LOOKBACK_MONTHS, DEFAULT_LOOKBACK_MONTHS in autoLinkService)
 - **After**: 2 lookback settings (scan.lookbackMonths default 9, messageImport.filters.lookbackMonths default 3). First-time email sync now uses scan.lookbackMonths instead of separate emailSync.lookbackMonths.
 - **Actual Tokens**: ~15K
-- **PR**: _pending_
+- **PR**: https://github.com/5hdaniel/Mad/pull/965
 
 ### Notes
 
