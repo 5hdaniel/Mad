@@ -15,6 +15,7 @@ import logService from "./logService";
 import { autoLinkCommunicationsForContact } from "./autoLinkService";
 import type { AutoLinkResult } from "./autoLinkService";
 import { createEmail, getEmailByExternalId, countEmailsByUser } from "./db/emailDbService";
+import { dbGet } from "./db/core/dbConnection";
 import gmailFetchService from "./gmailFetchService";
 import outlookFetchService from "./outlookFetchService";
 import databaseService from "./databaseService";
@@ -92,10 +93,6 @@ export function classifyProviderError(error: unknown): string {
 
 // TASK-2060: Safety cap for sent items (per-contact email search)
 export const SENT_ITEMS_SAFETY_CAP = 200;
-
-// TASK-2071: Threshold for skipping redundant provider fetches.
-// If a transaction was synced within this window, skip the provider fetch on contact assignment.
-export const RECENT_SYNC_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
 
 // ============================================
 // TASK-2067: Types for new service methods
@@ -293,31 +290,6 @@ async function fetchStoreAndDedup(params: {
  * (validation + rate limiting + delegation) while service owns business logic.
  */
 class EmailSyncService {
-  // TASK-2071: In-memory map of transactionId -> last successful sync timestamp (epoch ms).
-  // Used to skip redundant provider fetches when a recent sync already covered the transaction.
-  // Resets on app restart, which is the correct behaviour -- a fresh session should re-fetch.
-  private lastSyncTimestamps: Map<string, number> = new Map();
-
-  /**
-   * TASK-2071: Check whether a transaction was synced recently enough to skip a provider fetch.
-   *
-   * @param transactionId  The transaction to check
-   * @param thresholdMs    Custom threshold (defaults to RECENT_SYNC_THRESHOLD_MS = 10 min)
-   * @returns true if synced within the threshold, false otherwise (including first-ever fetch)
-   */
-  wasRecentlySynced(transactionId: string, thresholdMs: number = RECENT_SYNC_THRESHOLD_MS): boolean {
-    const lastSync = this.lastSyncTimestamps.get(transactionId);
-    if (lastSync === undefined) return false;
-    return (Date.now() - lastSync) < thresholdMs;
-  }
-
-  /**
-   * TASK-2071: Record that a transaction was just synced successfully.
-   */
-  recordSync(transactionId: string): void {
-    this.lastSyncTimestamps.set(transactionId, Date.now());
-  }
-
   /**
    * Sync emails from provider(s) for a transaction, then auto-link communications.
    *
@@ -490,10 +462,6 @@ class EmailSyncService {
         totalErrors,
       };
     }
-
-    // TASK-2071: Record successful sync timestamp so subsequent contact-assignment
-    // fetches within the threshold window can be skipped.
-    this.recordSync(transactionId);
 
     // TASK-2070: Include warning when provider fetch failed but local results are available
     const result: TransactionResponse = {
@@ -734,6 +702,47 @@ class EmailSyncService {
    * Called when a contact is assigned to a transaction. This ensures provider emails
    * for the audit period are in the local DB before auto-link searches it.
    */
+  /**
+   * Check if local email cache extends back to before the audit start for given contact emails.
+   * If we have cached emails from before the audit period started, a provider fetch is redundant.
+   */
+  private localCacheCoversAuditPeriod(
+    userId: string,
+    contactEmails: string[],
+    auditStart: Date,
+  ): boolean {
+    if (contactEmails.length === 0) return false;
+
+    const placeholders = contactEmails.map(() => "LOWER(?)").join(", ");
+    const sql = `
+      SELECT MIN(sent_at) as earliest, COUNT(*) as total
+      FROM emails
+      WHERE user_id = ?
+        AND (LOWER(sender) IN (${placeholders}) OR ${contactEmails.map(() => "LOWER(recipients) LIKE ?").join(" OR ")})
+    `;
+    const lowerEmails = contactEmails.map(e => e.toLowerCase());
+    const likeParams = contactEmails.map(e => `%${e.toLowerCase()}%`);
+    const params = [userId, ...lowerEmails, ...likeParams];
+
+    const row = dbGet<{ earliest: string | null; total: number }>(sql, params);
+
+    if (!row || row.total === 0 || !row.earliest) {
+      return false;
+    }
+
+    const earliest = new Date(row.earliest);
+    const covers = earliest <= auditStart;
+
+    logService.info(`Cache coverage check for contact`, "EmailSyncService", {
+      cachedEmails: row.total,
+      earliest: earliest.toISOString(),
+      auditStart: auditStart.toISOString(),
+      covers,
+    });
+
+    return covers;
+  }
+
   async fetchAndAutoLinkForContact(params: {
     userId: string;
     transactionId: string;
@@ -746,66 +755,66 @@ class EmailSyncService {
   }): Promise<FetchAndAutoLinkResult> {
     const { userId, transactionId, contactId, transactionDetails } = params;
 
+    // Get contact email addresses
+    const contactEmails = getEmailsByContactId(contactId);
+
     let emailsFetched = 0;
     let emailsStored = 0;
 
-    // TASK-2071: Skip provider fetch if a recent sync already covered this transaction.
-    // Auto-link still runs (from local DB) so newly assigned contacts pick up cached emails.
-    if (this.wasRecentlySynced(transactionId)) {
-      logService.info(
-        "Skipping provider fetch for contact assignment -- transaction was recently synced",
-        "EmailSyncService",
-        { transactionId, contactId },
-      );
-    } else {
-      // Get contact email addresses
-      const contactEmails = getEmailsByContactId(contactId);
+    if (contactEmails.length > 0) {
+      // Compute audit period date range
+      const emailFetchSinceDate = computeTransactionDateRange(transactionDetails).start;
 
-      if (contactEmails.length > 0) {
-        // Compute audit period date range
-        const emailFetchSinceDate = computeTransactionDateRange(transactionDetails).start;
-        logService.info(`Fetching provider emails for contact assignment`, "EmailSyncService", {
+      // Skip provider fetch if local cache already covers the audit period for this contact
+      if (this.localCacheCoversAuditPeriod(userId, contactEmails, emailFetchSinceDate)) {
+        logService.info(`Skipping provider fetch — local cache covers audit period for contact`, "EmailSyncService", {
           transactionId,
           contactId,
           contactEmailCount: contactEmails.length,
-          sinceDate: emailFetchSinceDate.toISOString(),
         });
+      } else {
+      logService.info(`Fetching provider emails for contact assignment`, "EmailSyncService", {
+        transactionId,
+        contactId,
+        contactEmailCount: contactEmails.length,
+        sinceDate: emailFetchSinceDate.toISOString(),
+      });
 
-        const seenEmailIds = new Set<string>();
+      const seenEmailIds = new Set<string>();
 
-        // Fetch from Outlook
-        const outlookResult = await this.fetchOutlookEmails({
-          userId,
-          transactionId,
-          contactEmails,
-          emailFetchSinceDate,
-          seenEmailIds,
-        });
-        emailsFetched += outlookResult.fetched;
-        emailsStored += outlookResult.stored;
+      // Fetch from Outlook
+      const outlookResult = await this.fetchOutlookEmails({
+        userId,
+        transactionId,
+        contactEmails,
+        emailFetchSinceDate,
+        seenEmailIds,
+      });
+      emailsFetched += outlookResult.fetched;
+      emailsStored += outlookResult.stored;
 
-        // Fetch from Gmail
-        const gmailResult = await this.fetchGmailEmails({
-          userId,
-          transactionId,
-          contactEmails,
-          emailFetchSinceDate,
-          seenEmailIds,
-          currentEmailsStored: emailsStored,
-        });
-        emailsFetched += gmailResult.fetched;
-        emailsStored += gmailResult.stored;
+      // Fetch from Gmail
+      const gmailResult = await this.fetchGmailEmails({
+        userId,
+        transactionId,
+        contactEmails,
+        emailFetchSinceDate,
+        seenEmailIds,
+        currentEmailsStored: emailsStored,
+      });
+      emailsFetched += gmailResult.fetched;
+      emailsStored += gmailResult.stored;
 
-        logService.info(`Provider fetch for contact assignment complete`, "EmailSyncService", {
-          transactionId,
-          contactId,
-          emailsFetched,
-          emailsStored,
-        });
-      }
+      logService.info(`Provider fetch for contact assignment complete`, "EmailSyncService", {
+        transactionId,
+        contactId,
+        emailsFetched,
+        emailsStored,
+      });
+      } // end else (provider fetch)
     }
 
-    // Always auto-link from local DB (which includes any newly fetched emails)
+    // Now auto-link from local DB (which includes newly fetched emails)
     const autoLinkResult = await autoLinkCommunicationsForContact({
       contactId,
       transactionId,
