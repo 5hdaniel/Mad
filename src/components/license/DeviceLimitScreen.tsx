@@ -118,7 +118,7 @@ export function DeviceLimitScreen(): React.ReactElement {
             Device Limit Reached
           </h1>
           <p className="text-gray-600">
-            You can only use Magic Audit on 1 device with your current plan.
+            You can only use Keepr on 1 device with your current plan.
             Deactivate another device to use this one.
           </p>
         </div>

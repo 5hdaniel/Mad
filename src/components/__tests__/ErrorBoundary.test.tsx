@@ -189,7 +189,7 @@ describe("ErrorBoundary", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("magicauditwa@gmail.com")).toBeInTheDocument();
+      expect(screen.getByText("support@keeprcompliance.com")).toBeInTheDocument();
     });
   });
 

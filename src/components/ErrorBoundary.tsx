@@ -29,7 +29,7 @@ interface State {
   showFullReport: boolean;
 }
 
-const SUPPORT_EMAIL = "magicauditwa@gmail.com";
+const SUPPORT_EMAIL = "support@keeprcompliance.com";
 
 class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
@@ -86,7 +86,7 @@ class ErrorBoundary extends Component<Props, State> {
   getErrorReport = (): string => {
     const { error, errorInfo, diagnostics } = this.state;
 
-    let report = `=== MAGIC AUDIT ERROR REPORT ===\n\n`;
+    let report = `=== KEEPR ERROR REPORT ===\n\n`;
     report += `TIMESTAMP: ${new Date().toISOString()}\n\n`;
     report += `ERROR:\n${error?.message || "Unknown error"}\n\n`;
 
@@ -136,7 +136,7 @@ class ErrorBoundary extends Component<Props, State> {
       } else if (window.api?.shell?.openExternal) {
         const subject = encodeURIComponent("App Crash Report");
         const body = encodeURIComponent(
-          `Hi,\n\nI encountered an error in the Magic Audit app.\n\n${errorDetails}\n\nPlease help me resolve this issue.\n\nThank you.`,
+          `Hi,\n\nI encountered an error in the Keepr app.\n\n${errorDetails}\n\nPlease help me resolve this issue.\n\nThank you.`,
         );
         await window.api.shell.openExternal(
           `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`,

@@ -15,7 +15,7 @@ module.exports = {
       };
       return paths[name] || `/tmp/test-${name}`;
     }),
-    getName: jest.fn(() => 'MagicAudit'),
+    getName: jest.fn(() => 'Keepr'),
     getVersion: jest.fn(() => '1.1.0'),
     isPackaged: false,
     quit: jest.fn(),

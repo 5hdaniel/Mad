@@ -74,7 +74,7 @@ function DesktopLoginForm() {
       <div className="max-w-md w-full space-y-8">
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900">Magic Audit</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Keepr</h1>
           <p className="mt-4 text-gray-500">Sign in to continue to the desktop app</p>
         </div>
 
@@ -156,7 +156,7 @@ function DesktopLoginForm() {
 
         {/* Footer */}
         <p className="text-center text-sm text-gray-500">
-          After signing in, you&apos;ll be redirected back to Magic Audit.
+          After signing in, you&apos;ll be redirected back to Keepr.
         </p>
       </div>
     </div>

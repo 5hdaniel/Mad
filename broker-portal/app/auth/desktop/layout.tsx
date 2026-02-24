@@ -1,8 +1,8 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Sign in - Magic Audit',
-  description: 'Sign in to Magic Audit desktop application',
+  title: 'Sign in - Keepr',
+  description: 'Sign in to Keepr desktop application',
 };
 
 export default function DesktopAuthLayout({

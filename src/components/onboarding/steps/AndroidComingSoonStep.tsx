@@ -73,7 +73,7 @@ function Content({ onAction }: OnboardingStepContentProps) {
         </h1>
 
         <p className="text-sm text-gray-600 mb-4">
-          We're working hard to bring Android phone sync to Magic Audit. You'll
+          We're working hard to bring Android phone sync to Keepr. You'll
           be able to sync your text messages and contacts from your Android
           device.
         </p>
@@ -178,7 +178,7 @@ function Content({ onAction }: OnboardingStepContentProps) {
         {/* In the Meantime */}
         <div className="border-t border-gray-100 pt-4 mb-4">
           <p className="text-sm text-gray-500 mb-3">
-            In the meantime, you can still use Magic Audit to audit your email
+            In the meantime, you can still use Keepr to audit your email
             communications. Email auditing works great on both Mac and PC!
           </p>
         </div>

@@ -42,7 +42,7 @@ export function registerCcpaHandlers(): void {
 
         // Show save dialog
         const dateStr = new Date().toISOString().split("T")[0];
-        const defaultFilename = `magic-audit-data-export-${dateStr}.json`;
+        const defaultFilename = `keepr-data-export-${dateStr}.json`;
 
         const dialogResult = await dialog.showSaveDialog(
           win || BrowserWindow.getFocusedWindow()!,

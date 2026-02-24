@@ -330,7 +330,7 @@ class PermissionService {
         type: "PERMISSION_DENIED",
         title: "Permission Required",
         message:
-          "Magic Audit needs Full Disk Access to read your iMessages and Contacts.",
+          "Keepr needs Full Disk Access to read your iMessages and Contacts.",
         details: error.message,
         action: "Open System Settings",
         actionHandler: "open-system-settings",

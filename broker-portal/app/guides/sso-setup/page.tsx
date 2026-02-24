@@ -1,8 +1,8 @@
 import Link from 'next/link';
 
 export const metadata = {
-  title: 'SSO Setup Guide - Magic Audit',
-  description: 'How Single Sign-On works in Magic Audit and how to manage access for your organization.',
+  title: 'SSO Setup Guide - Keepr',
+  description: 'How Single Sign-On works in Keepr and how to manage access for your organization.',
 };
 
 export default function SSOSetupGuidePage() {
@@ -24,7 +24,7 @@ export default function SSOSetupGuidePage() {
             Single Sign-On (SSO)
           </h1>
           <p className="mt-2 text-gray-500">
-            How SSO works in Magic Audit and how to control who can join your organization.
+            How SSO works in Keepr and how to control who can join your organization.
           </p>
         </div>
       </div>
@@ -39,12 +39,12 @@ export default function SSOSetupGuidePage() {
             <p className="mt-3 text-gray-700">
               SSO is enabled automatically when your organization is created. During the{' '}
               <Link href="/setup" className="text-blue-600 hover:underline">/setup</Link>{' '}
-              flow, Magic Audit links your Microsoft Entra ID tenant to your organization. After that, anyone with a work account from that same tenant can sign in at{' '}
+              flow, Keepr links your Microsoft Entra ID tenant to your organization. After that, anyone with a work account from that same tenant can sign in at{' '}
               <Link href="/login" className="text-blue-600 hover:underline">/login</Link>{' '}
               using <strong>Sign in with Microsoft</strong>.
             </p>
             <p className="mt-3 text-gray-700">
-              There is no separate SSO configuration step. If your organization exists in Magic Audit, SSO is already active.
+              There is no separate SSO configuration step. If your organization exists in Keepr, SSO is already active.
             </p>
           </section>
 
@@ -79,7 +79,7 @@ export default function SSOSetupGuidePage() {
                 </div>
                 <h3 className="mt-3 text-base font-medium text-gray-900">SCIM provisioning</h3>
                 <p className="mt-2 text-sm text-gray-600">
-                  Sync users automatically from Microsoft Entra ID. Assign or remove them in Azure and changes flow to Magic Audit.
+                  Sync users automatically from Microsoft Entra ID. Assign or remove them in Azure and changes flow to Keepr.
                 </p>
                 <p className="mt-2 text-xs text-gray-500">
                   <Link href="/guides/scim-provisioning" className="text-blue-600 hover:underline">Learn how to set up SCIM</Link>
@@ -140,7 +140,7 @@ export default function SSOSetupGuidePage() {
           <section className="mb-10">
             <h2 className="text-xl font-semibold text-gray-900">Desktop app permissions (admin consent)</h2>
             <p className="mt-3 text-gray-700">
-              The Magic Audit desktop app needs permission to read emails and contacts for transaction auditing. As an admin, you can pre-approve these permissions for your entire organization so team members don&apos;t see individual Microsoft permission prompts.
+              The Keepr desktop app needs permission to read emails and contacts for transaction auditing. As an admin, you can pre-approve these permissions for your entire organization so team members don&apos;t see individual Microsoft permission prompts.
             </p>
             <ul className="mt-3 space-y-1 text-sm text-gray-700">
               <li><strong>Read email messages</strong> &mdash; for building the audit trail</li>
@@ -173,7 +173,7 @@ export default function SSOSetupGuidePage() {
                   <Link href="/setup" className="text-blue-600 hover:underline">/setup</Link>{' '}
                   to create the organization. Alternatively, you can{' '}
                   <Link href="/download" className="text-blue-600 hover:underline">sign up for an individual account</Link>{' '}
-                  if your company doesn&apos;t use Magic Audit yet.
+                  if your company doesn&apos;t use Keepr yet.
                 </p>
               </div>
 
@@ -236,7 +236,7 @@ export default function SSOSetupGuidePage() {
           <section className="mt-12 pt-6 border-t border-gray-200">
             <p className="text-sm text-gray-500">
               Still need help?{' '}
-              <a href="mailto:magicauditwa@gmail.com" className="text-blue-600 hover:underline">
+              <a href="mailto:support@keeprcompliance.com" className="text-blue-600 hover:underline">
                 Contact support
               </a>
             </p>

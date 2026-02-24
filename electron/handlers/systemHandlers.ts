@@ -103,7 +103,7 @@ function getSecureStorageGuidance(platform: string): string {
    - Open Keychain Access (in Applications > Utilities)
    - Find "magic-audit Safe Storage"
    - Right-click and select "Delete"
-   - Then restart Magic Audit and click "Allow"`;
+   - Then restart Keepr and click "Allow"`;
     case "win32":
       return `Windows should automatically provide secure storage via DPAPI.
 If you're seeing this error:
@@ -1007,7 +1007,7 @@ export function registerSystemHandlers(): void {
           contextIsolation: true,
         },
         autoHideMenuBar: true,
-        title: title || "Magic Audit",
+        title: title || "Keepr",
       });
 
       // Load the URL
@@ -1053,10 +1053,10 @@ export function registerSystemHandlers(): void {
       event: IpcMainInvokeEvent,
       errorDetails?: string,
     ): Promise<SystemResponse> => {
-      const supportEmail = "magicauditwa@gmail.com";
-      const subject = encodeURIComponent("Magic Audit Support Request");
+      const supportEmail = "support@keeprcompliance.com";
+      const subject = encodeURIComponent("Keepr Support Request");
       const body = encodeURIComponent(
-        `Hi Magic Audit Support,\n\n` +
+        `Hi Keepr Support,\n\n` +
           `I need help with:\n\n` +
           `${errorDetails ? `Error details: ${errorDetails}\n\n` : ""}` +
           `Thank you for your assistance.\n`,

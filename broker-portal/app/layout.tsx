@@ -7,7 +7,7 @@ import ClarityAnalytics from '@/components/analytics/ClarityAnalytics';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Magic Audit - Broker Portal',
+  title: 'Keepr - Broker Portal',
   description: 'Review and approve real estate transaction audits',
 };
 

@@ -127,7 +127,7 @@ describe("OfflineFallback", () => {
     it("should show support email", () => {
       render(<OfflineFallback isOffline={true} />);
 
-      expect(screen.getByText("magicauditwa@gmail.com")).toBeInTheDocument();
+      expect(screen.getByText("support@keeprcompliance.com")).toBeInTheDocument();
     });
 
     it("should reload page when no onRetry provided", async () => {
@@ -210,7 +210,7 @@ describe("OfflineFallback", () => {
       await user.click(screen.getByText("Contact Support"));
 
       expect(window.api.shell.openExternal).toHaveBeenCalledWith(
-        expect.stringContaining("mailto:magicauditwa@gmail.com"),
+        expect.stringContaining("mailto:support@keeprcompliance.com"),
       );
     });
   });
