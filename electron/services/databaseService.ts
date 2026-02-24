@@ -437,6 +437,19 @@ class DatabaseService implements IDatabaseService {
       setDbPath(this.dbPath);
       setEncryptionKey(this.encryptionKey);
 
+      // Post-restore connectivity check: confirm the DB is truly functional
+      try {
+        const probe = newDb.prepare("SELECT 1 AS ok").get() as { ok: number } | undefined;
+        if (!probe || probe.ok !== 1) {
+          throw new Error("Post-restore connectivity check returned unexpected result");
+        }
+      } catch (probeError) {
+        await logService.error("Post-restore connectivity check failed", "DatabaseService", {
+          error: probeError instanceof Error ? probeError.message : String(probeError),
+        });
+        return { restored: false, autoRestoreStatus: "failed", backupIntegrity: "valid" };
+      }
+
       await logService.info("Auto-restore completed successfully", "DatabaseService");
       return { restored: true, autoRestoreStatus: "succeeded", backupIntegrity: "valid" };
     } catch (restoreError) {
