@@ -31,7 +31,6 @@ import { createEmail, getEmailByExternalId } from "../db/emailDbService";
 import emailAttachmentService from "../emailAttachmentService";
 import * as externalContactDb from "../db/externalContactDbService";
 import { isContactSourceEnabled } from "../../utils/preferenceHelper";
-import { DEFAULT_EMAIL_SYNC_LOOKBACK_MONTHS } from "../../constants";
 
 // Hybrid extraction imports
 import { HybridExtractorService } from "../extraction/hybridExtractorService";
@@ -146,22 +145,13 @@ class TransactionService {
     this.scanCancelled = false;
     this.currentScanUserId = userId;
 
-    // Fetch user preferences for scan lookback and email sync depth
+    // Fetch user preferences for scan lookback (TASK-2069: consolidated to single setting)
     let lookbackMonths = 9;
-    let emailSyncLookbackMonths = DEFAULT_EMAIL_SYNC_LOOKBACK_MONTHS;
     try {
       const preferences = await supabaseService.getPreferences(userId);
       const savedLookback = preferences?.scan?.lookbackMonths;
       if (typeof savedLookback === "number" && savedLookback > 0) {
         lookbackMonths = savedLookback;
-      }
-      const savedEmailSyncLookback =
-        preferences?.emailSync?.lookbackMonths;
-      if (
-        typeof savedEmailSyncLookback === "number" &&
-        savedEmailSyncLookback > 0
-      ) {
-        emailSyncLookbackMonths = savedEmailSyncLookback;
       }
     } catch {
       // Use default if preferences unavailable
@@ -271,19 +261,20 @@ class TransactionService {
             { userId, provider, lastSyncAt: lastSyncAt.toISOString() },
           );
         } else {
+          // TASK-2069: First-time sync uses scan.lookbackMonths (consolidated setting)
           const lookbackDate = new Date();
           lookbackDate.setMonth(
-            lookbackDate.getMonth() - emailSyncLookbackMonths,
+            lookbackDate.getMonth() - lookbackMonths,
           );
           effectiveStartDate =
             startDate > lookbackDate ? startDate : lookbackDate;
           await logService.info(
-            `First sync: fetching last ${emailSyncLookbackMonths} months of emails`,
+            `First sync: fetching last ${lookbackMonths} months of emails`,
             "TransactionService.scanAndExtractTransactions",
             {
               userId,
               provider,
-              emailSyncLookbackMonths,
+              lookbackMonths,
               startDate: effectiveStartDate.toISOString(),
             },
           );

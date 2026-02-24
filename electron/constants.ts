@@ -72,9 +72,12 @@ export const WINDOW_CONFIG: WindowConfig = {
   BACKGROUND_COLOR: "#ffffff",
 };
 
-// Email Sync Constants
-/** Default email sync lookback for first-time sync (months). Matches legacy 90-day behavior. */
-export const DEFAULT_EMAIL_SYNC_LOOKBACK_MONTHS: number = 3;
+// Lookback Settings (2 canonical settings remain after TASK-2069 consolidation):
+//   1. scan.lookbackMonths (default 9) — how far back the transaction scanner looks
+//   2. messageImport.filters.lookbackMonths (default 3) — how far back iMessage import looks
+// Previously removed:
+//   - DEFAULT_EMAIL_SYNC_LOOKBACK_MONTHS (TASK-2069) — first-time sync now uses scan.lookbackMonths
+//   - DEFAULT_LOOKBACK_MONTHS in autoLinkService (TASK-2068) — replaced with computeTransactionDateRange()
 
 // Development
 export const DEV_SERVER_URL: string = "http://localhost:5173";
