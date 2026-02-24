@@ -4,10 +4,7 @@ import databaseService from "./databaseService";
 import logService from "./logService";
 import { OAuthToken } from "../types/models";
 import { computeEmailHash } from "../utils/emailHash";
-import {
-  EmailDeduplicationService,
-  DuplicateCheckResult,
-} from "./emailDeduplicationService";
+import { EmailDeduplicationService } from "./emailDeduplicationService";
 import {
   withRetry,
   apiThrottlers,
@@ -815,51 +812,10 @@ class GmailFetchService {
     userId: string,
     emails: ParsedEmail[]
   ): Promise<ParsedEmail[]> {
-    if (emails.length === 0) {
-      return emails;
-    }
-
-    try {
-      const db = databaseService.getRawDatabase();
-      const dedupService = new EmailDeduplicationService(db);
-
-      // Use batch check for efficiency
-      const dedupInputs = emails.map((e) => ({
-        messageIdHeader: e.messageIdHeader,
-        contentHash: e.contentHash,
-      }));
-
-      const results = dedupService.checkForDuplicatesBatch(userId, dedupInputs);
-
-      // Populate duplicateOf field for each email
-      const enrichedEmails = emails.map((email, index) => {
-        const result = results.get(index);
-        if (result?.isDuplicate && result.originalId) {
-          return {
-            ...email,
-            duplicateOf: result.originalId,
-          };
-        }
-        return email;
-      });
-
-      const duplicateCount = enrichedEmails.filter((e) => e.duplicateOf).length;
-      if (duplicateCount > 0) {
-        logService.info(
-          `Duplicate check: ${duplicateCount}/${emails.length} duplicates found`,
-          "GmailFetch"
-        );
-      }
-
-      return enrichedEmails;
-    } catch (error) {
-      logService.error("Failed to check duplicates", "GmailFetch", { error });
-      Sentry.captureException(error, {
-        tags: { service: "gmail-fetch", operation: "checkDuplicates" },
-      });
-      // Return original emails without duplicate info on error
-      return emails;
-    }
+    return EmailDeduplicationService.checkDuplicates(userId, emails, {
+      logLabel: "GmailFetch",
+      sentryTag: "gmail-fetch",
+    });
   }
 }
 
