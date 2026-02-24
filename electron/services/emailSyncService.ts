@@ -38,6 +38,58 @@ import type { TransactionWithDetails } from "./transactionService/types";
 // serves as a safety valve to prevent runaway fetches for extremely high-volume contacts.
 export const EMAIL_FETCH_SAFETY_CAP = 2000;
 
+// ============================================
+// TASK-2070: Provider error classification
+// ============================================
+
+/**
+ * Determines if an error is caused by an expired or revoked OAuth token.
+ * These errors require the user to re-authenticate (reconnect) in Settings.
+ *
+ * Matches patterns from Outlook (AADSTS50173, 401, "token expired") and
+ * Gmail ("invalid_grant", "Token has been expired or revoked").
+ */
+export function isTokenExpiryError(error: unknown): boolean {
+  const message = error instanceof Error
+    ? error.message
+    : (error as { message?: string })?.message ?? "";
+  const lowerMessage = message.toLowerCase();
+
+  // Check for HTTP 401 status (common for expired tokens)
+  const status = (error as { response?: { status?: number } })?.response?.status
+    ?? (error as { status?: number })?.status;
+  if (status === 401) return true;
+
+  // Outlook-specific: AADSTS error codes for expired/revoked tokens
+  if (/aadsts\d+/i.test(message)) return true;
+
+  // Common token expiry patterns
+  const tokenPatterns = [
+    "token expired",
+    "token has been expired",
+    "token has been revoked",
+    "invalid_grant",
+    "access token expired",
+    "refresh failed",
+    "please reconnect",
+    "invalidauthenticationtoken",
+    "compacttoken",
+  ];
+
+  return tokenPatterns.some((pattern) => lowerMessage.includes(pattern));
+}
+
+/**
+ * Returns a user-facing warning message based on the type of provider error.
+ * Token expiry errors get a reconnect message; other errors get a generic message.
+ */
+export function classifyProviderError(error: unknown): string {
+  if (isTokenExpiryError(error)) {
+    return "Your email connection has expired. Please reconnect in Settings.";
+  }
+  return "Could not reach your email provider. Showing cached results only.";
+}
+
 // TASK-2060: Safety cap for sent items (per-contact email search)
 export const SENT_ITEMS_SAFETY_CAP = 200;
 
@@ -81,6 +133,8 @@ export interface ProviderEmailResult {
 export interface SearchProviderEmailsResult {
   emails: ProviderEmailResult[];
   noProviderConnected: boolean;
+  /** TASK-2070: Warning message when provider fetch failed (token expiry, API error) */
+  warning?: string;
 }
 
 /**
@@ -316,6 +370,9 @@ class EmailSyncService {
     // TASK-2060: Shared seenIds set for cross-provider deduplication
     const seenEmailIds = new Set<string>();
 
+    // TASK-2070: Track provider errors for UI warning
+    let providerWarning = "";
+
     // Try Outlook (TASK-2049: with network resilience)
     const outlookResult = await this.fetchOutlookEmails({
       userId,
@@ -329,6 +386,9 @@ class EmailSyncService {
     if (outlookResult.networkError) {
       networkErrorOccurred = true;
       networkErrorMessage = outlookResult.networkErrorMessage || "";
+    }
+    if (outlookResult.providerError) {
+      providerWarning = outlookResult.providerError;
     }
 
     // Try Gmail (bidirectional: from + to contacts) (TASK-2049: with network resilience)
@@ -345,6 +405,9 @@ class EmailSyncService {
     if (gmailResult.networkError) {
       networkErrorOccurred = true;
       networkErrorMessage = gmailResult.networkErrorMessage || "";
+    }
+    if (gmailResult.providerError && !providerWarning) {
+      providerWarning = gmailResult.providerError;
     }
 
     logService.info(`Email fetch complete: ${emailsFetched} fetched, ${emailsStored} new stored`, "Transactions");
@@ -432,13 +495,18 @@ class EmailSyncService {
     // fetches within the threshold window can be skipped.
     this.recordSync(transactionId);
 
-    return {
+    // TASK-2070: Include warning when provider fetch failed but local results are available
+    const result: TransactionResponse = {
       success: true,
       totalEmailsLinked,
       totalMessagesLinked,
       totalAlreadyLinked,
       totalErrors,
     };
+    if (providerWarning) {
+      result.warning = providerWarning;
+    }
+    return result;
   }
 
   /**
@@ -536,6 +604,8 @@ class EmailSyncService {
 
     let emails: ProviderEmailResult[] = [];
     const seenIds = new Set<string>();
+    // TASK-2070: Track provider errors for UI warning
+    let providerWarning = "";
 
     // Fetch from Gmail if authenticated
     if (googleToken) {
@@ -571,6 +641,12 @@ class EmailSyncService {
           error: gmailError instanceof Error ? gmailError.message : "Unknown",
           isNetworkError: isNetworkError(gmailError),
         });
+        // TASK-2070: Classify provider error for UI warning
+        if (!isNetworkError(gmailError)) {
+          providerWarning = classifyProviderError(gmailError);
+        } else {
+          providerWarning = "Could not reach your email provider. Showing cached results only.";
+        }
       }
     }
 
@@ -629,13 +705,26 @@ class EmailSyncService {
           error: outlookError instanceof Error ? outlookError.message : "Unknown",
           isNetworkError: isNetworkError(outlookError),
         });
+        // TASK-2070: Classify provider error for UI warning
+        if (!providerWarning) {
+          if (!isNetworkError(outlookError)) {
+            providerWarning = classifyProviderError(outlookError);
+          } else {
+            providerWarning = "Could not reach your email provider. Showing cached results only.";
+          }
+        }
       }
     }
 
-    return {
+    // TASK-2070: Include warning when provider fetch failed
+    const result: SearchProviderEmailsResult = {
       emails,
       noProviderConnected: emails.length === 0 && !googleToken && !microsoftToken,
     };
+    if (providerWarning) {
+      result.warning = providerWarning;
+    }
+    return result;
   }
 
   /**
@@ -738,7 +827,7 @@ class EmailSyncService {
     contactEmails: string[];
     emailFetchSinceDate: Date;
     seenEmailIds: Set<string>;
-  }): Promise<{ fetched: number; stored: number; networkError: boolean; networkErrorMessage?: string }> {
+  }): Promise<{ fetched: number; stored: number; networkError: boolean; networkErrorMessage?: string; providerError?: string }> {
     const { userId, transactionId, contactEmails, emailFetchSinceDate, seenEmailIds } = params;
     let fetched = 0;
     let stored = 0;
@@ -857,6 +946,7 @@ class EmailSyncService {
           networkErrorMessage: "Network disconnected during Outlook sync. Emails saved so far will be preserved.",
         };
       } else {
+        // TASK-2070: Non-network provider error (token expiry, API error, etc.)
         logService.warn("Outlook fetch failed, falling back to local search", "Transactions", {
           error: outlookError instanceof Error ? outlookError.message : "Unknown",
         });
@@ -867,7 +957,8 @@ class EmailSyncService {
         outlookError instanceof Error ? outlookError.message : "Unknown error",
         { emailsStoredBeforeFailure: stored }
       );
-      return { fetched, stored, networkError: false };
+      // TASK-2070: Return classified provider error for UI warning
+      return { fetched, stored, networkError: false, providerError: classifyProviderError(outlookError) };
     }
   }
 
@@ -881,7 +972,7 @@ class EmailSyncService {
     emailFetchSinceDate: Date;
     seenEmailIds: Set<string>;
     currentEmailsStored: number;
-  }): Promise<{ fetched: number; stored: number; networkError: boolean; networkErrorMessage?: string }> {
+  }): Promise<{ fetched: number; stored: number; networkError: boolean; networkErrorMessage?: string; providerError?: string }> {
     const { userId, transactionId, contactEmails, emailFetchSinceDate, seenEmailIds, currentEmailsStored } = params;
     let fetched = 0;
     let stored = 0;
@@ -992,6 +1083,7 @@ class EmailSyncService {
           networkErrorMessage: "Network disconnected during Gmail sync. Emails saved so far will be preserved.",
         };
       } else {
+        // TASK-2070: Non-network provider error (token expiry, API error, etc.)
         logService.warn("Gmail fetch failed, falling back to local search", "Transactions", {
           error: gmailError instanceof Error ? gmailError.message : "Unknown",
         });
@@ -1002,7 +1094,8 @@ class EmailSyncService {
         gmailError instanceof Error ? gmailError.message : "Unknown error",
         { emailsStoredBeforeFailure: totalStored }
       );
-      return { fetched, stored, networkError: false };
+      // TASK-2070: Return classified provider error for UI warning
+      return { fetched, stored, networkError: false, providerError: classifyProviderError(gmailError) };
     }
   }
 }
