@@ -110,8 +110,6 @@ interface AttachmentManifest {
 }
 
 class FolderExportService {
-  private exportWindow: BrowserWindow | null = null;
-
   /**
    * Export transaction to organized folder structure
    */
@@ -341,11 +339,6 @@ class FolderExportService {
     } catch (error) {
       logService.error("[Folder Export] Export failed", "FolderExport", { error });
       throw error;
-    } finally {
-      if (this.exportWindow) {
-        this.exportWindow.close();
-        this.exportWindow = null;
-      }
     }
   }
 
@@ -825,8 +818,9 @@ class FolderExportService {
     const tempFile = path.join(tempDir, `export-${Date.now()}-${Math.random().toString(36).slice(2)}.html`);
     await fs.writeFile(tempFile, html, "utf8");
 
+    let exportWindow: BrowserWindow | null = null;
     try {
-      this.exportWindow = new BrowserWindow({
+      exportWindow = new BrowserWindow({
         width: 800,
         height: 1200,
         show: false,
@@ -836,20 +830,20 @@ class FolderExportService {
         },
       });
 
-      await this.exportWindow.loadFile(tempFile);
+      await exportWindow.loadFile(tempFile);
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      const pdfData = await this.exportWindow.webContents.printToPDF({
+      const pdfData = await exportWindow.webContents.printToPDF({
         printBackground: true,
         landscape: false,
         pageSize: "Letter",
       });
 
-      this.exportWindow.close();
-      this.exportWindow = null;
-
       return pdfData;
     } finally {
+      if (exportWindow && !exportWindow.isDestroyed()) {
+        exportWindow.close();
+      }
       try {
         await fs.unlink(tempFile);
       } catch {
@@ -1007,11 +1001,6 @@ class FolderExportService {
         await fs.rm(tempFolder, { recursive: true, force: true });
       } catch {
         // Ignore cleanup errors
-      }
-
-      if (this.exportWindow) {
-        this.exportWindow.close();
-        this.exportWindow = null;
       }
     }
   }
