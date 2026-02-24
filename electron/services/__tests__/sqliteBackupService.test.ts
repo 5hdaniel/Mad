@@ -126,13 +126,13 @@ describe("SqliteBackupService", () => {
   describe("generateBackupFilename", () => {
     it("should include current date in YYYY-MM-DD format", () => {
       const filename = generateBackupFilename();
-      expect(filename).toMatch(/^magic-audit-backup-\d{4}-\d{2}-\d{2}\.db$/);
+      expect(filename).toMatch(/^keepr-backup-\d{4}-\d{2}-\d{2}\.db$/);
     });
 
     it("should use today's date", () => {
       const today = new Date().toISOString().slice(0, 10);
       const filename = generateBackupFilename();
-      expect(filename).toBe(`magic-audit-backup-${today}.db`);
+      expect(filename).toBe(`keepr-backup-${today}.db`);
     });
   });
 
