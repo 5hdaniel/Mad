@@ -1405,17 +1405,9 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                 <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <h4 className="text-sm font-medium text-gray-900">
-                          Email History
-                        </h4>
-                        <span
-                          className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-500 text-[10px] font-bold cursor-help"
-                          title="Emails cached locally load instantly for search and linking. Older emails are fetched from your provider on demand."
-                        >
-                          i
-                        </span>
-                      </div>
+                      <h4 className="text-sm font-medium text-gray-900">
+                        Email History
+                      </h4>
                       <p className="text-xs text-gray-600 mt-1">
                         How much email to keep cached locally for fast search and auto-linking.
                       </p>
@@ -1494,17 +1486,9 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                   {/* TASK-2072: Transaction Detection (smart scan window — read-only) */}
                   <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
                     <div className="flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <h4 className="text-sm font-medium text-gray-900">
-                          Transaction Detection
-                        </h4>
-                        <span
-                          className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-500 text-[10px] font-bold cursor-help"
-                          title="Automatically detects new real estate transactions in your email. Scans from your last scan date forward. On first use, looks back 1 month."
-                        >
-                          i
-                        </span>
-                      </div>
+                      <h4 className="text-sm font-medium text-gray-900">
+                        Transaction Detection
+                      </h4>
                       <p className="text-xs text-gray-600 mt-1">
                         Scans your email for new transactions since your last scan. First scan covers 1 month.
                       </p>
