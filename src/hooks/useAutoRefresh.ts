@@ -313,7 +313,7 @@ export function useAutoRefresh({
       // Sync just completed - send notification
       window.api.notification?.send(
         "Sync Complete",
-        "Magic Audit is ready to use. Your data has been synchronized."
+        "Keepr is ready to use. Your data has been synchronized."
       ).catch(() => {
         // Silently ignore notification failures
       });

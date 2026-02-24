@@ -527,7 +527,7 @@ describe("useAutoRefresh", () => {
 
       expect(mockNotificationSend).toHaveBeenCalledWith(
         "Sync Complete",
-        "Magic Audit is ready to use. Your data has been synchronized."
+        "Keepr is ready to use. Your data has been synchronized."
       );
     });
 

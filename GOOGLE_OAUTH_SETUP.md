@@ -23,7 +23,7 @@ This error occurs when your Google OAuth app is in **Testing mode** and the user
 4. Enter email addresses (one per line):
    ```
    danielxhaim@gmail.com
-   magicauditwa@gmail.com
+   support@keeprcompliance.com
    [add other users here]
    ```
 5. Click **SAVE**
@@ -159,8 +159,8 @@ https://www.googleapis.com/auth/gmail.readonly
 
 1. **App Information**
    - App name: `Mad`
-   - User support email: `magicauditwa@gmail.com`
-   - Developer contact: `magicauditwa@gmail.com`
+   - User support email: `support@keeprcompliance.com`
+   - Developer contact: `support@keeprcompliance.com`
 
 2. **Scopes** (add all of these):
    - `openid`
@@ -310,7 +310,7 @@ GOOGLE_CLIENT_SECRET=xxxxx
 ### Current Configuration (From Error)
 - **Client ID**: `892134553674-0vc87dp5oseka55i7rgi37oo5phmfjem.apps.googleusercontent.com`
 - **Scope**: `https://www.googleapis.com/auth/gmail.readonly`
-- **Support Email**: `magicauditwa@gmail.com`
+- **Support Email**: `support@keeprcompliance.com`
 - **Redirect URI**: `http://localhost:3001/callback` ⚠️ May need review
 
 ---

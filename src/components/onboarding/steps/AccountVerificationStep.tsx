@@ -217,7 +217,7 @@ export function AccountVerificationContent({
 
   const handleContactSupport = () => {
     // Open support email
-    window.open('mailto:support@magicaudit.com?subject=Account%20Setup%20Issue', '_blank');
+    window.open('mailto:support@keeprcompliance.com?subject=Account%20Setup%20Issue', '_blank');
   };
 
   // Determine icon and colors based on status

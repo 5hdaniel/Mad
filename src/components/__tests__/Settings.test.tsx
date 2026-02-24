@@ -156,7 +156,7 @@ describe("Settings", () => {
     it("should show app name and copyright", async () => {
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
-      expect(screen.getByText("MagicAudit")).toBeInTheDocument();
+      expect(screen.getByText("Keepr")).toBeInTheDocument();
       expect(screen.getByText(/© 2026 Blue Spaces LLC/)).toBeInTheDocument();
     });
   });
@@ -712,7 +712,7 @@ describe("Settings", () => {
     it("should show app name", async () => {
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
-      expect(screen.getByText("MagicAudit")).toBeInTheDocument();
+      expect(screen.getByText("Keepr")).toBeInTheDocument();
     });
 
     it("should show disabled action buttons", async () => {

@@ -1870,7 +1870,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                   </div>
                   <div className="ml-3">
                     <h4 className="text-sm font-semibold text-gray-900">
-                      MagicAudit
+                      Keepr
                     </h4>
                   </div>
                 </div>

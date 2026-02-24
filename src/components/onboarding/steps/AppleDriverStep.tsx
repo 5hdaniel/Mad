@@ -460,7 +460,7 @@ function AppleDriverStepContent({
                       d="M5 13l4 4L19 7"
                     />
                   </svg>
-                  <span>Apple's official software bundled with Magic Audit</span>
+                  <span>Apple's official software bundled with Keepr</span>
                 </li>
               </ul>
             </div>
@@ -541,7 +541,7 @@ function AppleDriverStepContent({
       {/* Additional info */}
       {status === "not-installed" && (
         <p className="text-xs text-gray-400 text-center mt-4">
-          Magic Audit does not distribute Apple software. We help you install
+          Keepr does not distribute Apple software. We help you install
           Apple's official tools which are required to communicate with iPhone
           devices.
         </p>

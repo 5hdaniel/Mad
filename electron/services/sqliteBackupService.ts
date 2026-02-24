@@ -48,7 +48,7 @@ export interface DatabaseInfo {
 export function generateBackupFilename(): string {
   const now = new Date();
   const dateStr = now.toISOString().slice(0, 10); // YYYY-MM-DD
-  return `magic-audit-backup-${dateStr}.db`;
+  return `keepr-backup-${dateStr}.db`;
 }
 
 /**

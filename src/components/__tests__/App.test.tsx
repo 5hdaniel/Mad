@@ -248,7 +248,7 @@ const createAppStateMock = (overrides: Partial<AppStateMachine> = {}): AppStateM
   handleNotNowMovePrompt: jest.fn(),
 
   // Utility
-  getPageTitle: jest.fn().mockReturnValue("Magic Audit"),
+  getPageTitle: jest.fn().mockReturnValue("Keepr"),
 
   ...overrides,
 });
@@ -320,7 +320,7 @@ describe("App", () => {
       renderApp();
 
       await waitFor(() => {
-        expect(screen.getByText(/magic audit/i)).toBeInTheDocument();
+        expect(screen.getByText(/keepr/i)).toBeInTheDocument();
       });
 
       // Should show login button
@@ -361,8 +361,8 @@ describe("App", () => {
       renderApp();
 
       await waitFor(() => {
-        // Dashboard shows "Welcome to Magic Audit" heading
-        expect(screen.getByText(/Welcome to Magic Audit/i)).toBeInTheDocument();
+        // Dashboard shows "Welcome to Keepr" heading
+        expect(screen.getByText(/Welcome to Keepr/i)).toBeInTheDocument();
       });
     });
 
@@ -399,7 +399,7 @@ describe("App", () => {
       renderApp();
 
       await waitFor(() => {
-        expect(screen.getByText(/Welcome to Magic Audit/i)).toBeInTheDocument();
+        expect(screen.getByText(/Welcome to Keepr/i)).toBeInTheDocument();
       });
 
       // Verify session token is NOT stored in localStorage
@@ -448,7 +448,7 @@ describe("App", () => {
 
       // Wait for dashboard
       await waitFor(() => {
-        expect(screen.getByText(/Welcome to Magic Audit/i)).toBeInTheDocument();
+        expect(screen.getByText(/Welcome to Keepr/i)).toBeInTheDocument();
       });
 
       // Click profile button - this triggers openProfile
@@ -503,7 +503,7 @@ describe("App", () => {
       const { rerender } = renderApp();
 
       await waitFor(() => {
-        expect(screen.getByText(/Welcome to Magic Audit/i)).toBeInTheDocument();
+        expect(screen.getByText(/Welcome to Keepr/i)).toBeInTheDocument();
       });
 
       // Click profile button
@@ -616,7 +616,7 @@ describe("App", () => {
       renderApp();
 
       await waitFor(() => {
-        expect(screen.getByText(/Welcome to Magic Audit/i)).toBeInTheDocument();
+        expect(screen.getByText(/Welcome to Keepr/i)).toBeInTheDocument();
       });
 
       // Profile button should show user initial
@@ -635,7 +635,7 @@ describe("App", () => {
       const { rerender } = renderApp();
 
       await waitFor(() => {
-        expect(screen.getByText(/Welcome to Magic Audit/i)).toBeInTheDocument();
+        expect(screen.getByText(/Welcome to Keepr/i)).toBeInTheDocument();
       });
 
       const profileButton = screen.getByTitle(/Test User/i);
@@ -859,7 +859,7 @@ describe("App", () => {
       renderApp();
 
       await waitFor(() => {
-        expect(screen.getByText(/Welcome to Magic Audit/i)).toBeInTheDocument();
+        expect(screen.getByText(/Welcome to Keepr/i)).toBeInTheDocument();
       });
 
       const profileButton = screen.getByTitle(/Alice/i);
@@ -876,7 +876,7 @@ describe("App", () => {
       renderApp();
 
       await waitFor(() => {
-        expect(screen.getByText(/Welcome to Magic Audit/i)).toBeInTheDocument();
+        expect(screen.getByText(/Welcome to Keepr/i)).toBeInTheDocument();
       });
 
       const profileButton = screen.getByTitle(/test@example.com/i);
@@ -905,7 +905,7 @@ describe("App", () => {
 
       await waitFor(() => {
         // Dashboard should render with setup prompt visible (hasEmailConnected=false)
-        expect(screen.getByText(/Welcome to Magic Audit/i)).toBeInTheDocument();
+        expect(screen.getByText(/Welcome to Keepr/i)).toBeInTheDocument();
       });
     });
 
@@ -923,7 +923,7 @@ describe("App", () => {
 
       await waitFor(() => {
         // Should show dashboard
-        expect(screen.getByText(/Welcome to Magic Audit/i)).toBeInTheDocument();
+        expect(screen.getByText(/Welcome to Keepr/i)).toBeInTheDocument();
       });
     });
   });

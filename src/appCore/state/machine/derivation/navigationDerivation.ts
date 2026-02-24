@@ -297,7 +297,7 @@ export function derivePageTitle(appStep: AppStep): string {
     case "permissions":
       return "Setup Permissions";
     case "dashboard":
-      return "Magic Audit";
+      return "Keepr";
     case "contacts":
       return "Select Contacts for Export";
     case "outlook":
@@ -305,6 +305,6 @@ export function derivePageTitle(appStep: AppStep): string {
     case "complete":
       return "Export Complete";
     default:
-      return "Magic Audit";
+      return "Keepr";
   }
 }

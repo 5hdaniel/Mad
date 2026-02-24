@@ -162,9 +162,9 @@ export function SecureStorageContent({
   };
 
   const bodyText = context.isNewUser
-    ? "Magic Audit uses your Mac's Keychain to encrypt and protect your data locally. " +
+    ? "Keepr uses your Mac's Keychain to encrypt and protect your data locally. " +
       "When you click Continue, a system dialog will appear asking for your Mac password."
-    : "Magic Audit needs to access your Mac's Keychain to decrypt your local database. This keeps your contacts and messages secure.";
+    : "Keepr needs to access your Mac's Keychain to decrypt your local database. This keeps your contacts and messages secure.";
 
   return (
     <div className="text-center">
@@ -197,7 +197,7 @@ export function SecureStorageContent({
             <div className="mb-4 bg-amber-50 rounded-xl p-3 text-left">
               <p className="text-sm text-amber-800">
                 <strong>What to expect:</strong> A system dialog will appear asking for your
-                Mac login password. This is macOS protecting your data - not Magic Audit.
+                Mac login password. This is macOS protecting your data - not Keepr.
               </p>
             </div>
           )}

@@ -450,7 +450,7 @@ export function generateTextThreadHTML(
   ${messagesHtml}
 
   <div class="footer">
-    <p>Exported from MagicAudit</p>
+    <p>Exported from Keepr</p>
   </div>
 </body>
 </html>

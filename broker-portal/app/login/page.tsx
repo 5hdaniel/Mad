@@ -70,7 +70,7 @@ function LoginForm() {
       <div className="max-w-md w-full space-y-8">
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900">Magic Audit</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Keepr</h1>
           <h2 className="mt-2 text-xl text-gray-600">Broker Portal</h2>
           <p className="mt-4 text-gray-500">Sign in to review and approve transaction audits</p>
         </div>
@@ -169,7 +169,7 @@ function LoginForm() {
         {/* Agent license redirect */}
         <div className="rounded-md bg-blue-50 border border-blue-200 p-4">
           <p className="text-sm text-blue-700">
-            Looking for the Magic Audit desktop app?{' '}
+            Looking for the Keepr desktop app?{' '}
             <a href="/auth/desktop" className="font-medium underline hover:text-blue-600">
               Click here to sign in
             </a>{' '}

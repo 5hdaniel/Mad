@@ -54,7 +54,7 @@ function ConsentForm() {
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
           <p className="text-sm text-gray-700">
-            The Magic Audit desktop app needs permission to read emails and contacts
+            The Keepr desktop app needs permission to read emails and contacts
             for transaction auditing. As an admin, you can approve this for your entire
             organization so team members won&apos;t be prompted individually.
           </p>
