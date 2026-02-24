@@ -27,6 +27,7 @@ import supabaseService from "../supabaseService";
 import { getContactNames } from "../contactsService";
 import { createCommunicationReference } from "../messageMatchingService";
 import { autoLinkCommunicationsForContact } from "../autoLinkService";
+import emailSyncService from "../emailSyncService";
 import { createEmail, getEmailByExternalId } from "../db/emailDbService";
 import emailAttachmentService from "../emailAttachmentService";
 import * as externalContactDb from "../db/externalContactDbService";
@@ -1261,6 +1262,9 @@ class TransactionService {
 
   /**
    * Assign contact to transaction role
+   *
+   * TASK-2067: Now fetches from provider before auto-linking so that emails
+   * from the audit period are stored locally before the auto-link search runs.
    */
   async assignContactToTransaction(
     transactionId: string,
@@ -1285,6 +1289,28 @@ class TransactionService {
     }
 
     try {
+      // TASK-2067: Fetch from provider for audit period, store locally, then auto-link.
+      // This ensures provider emails are in the local DB before auto-link searches it.
+      const transaction = await databaseService.getTransactionById(transactionId);
+      if (transaction) {
+        const fetchResult = await emailSyncService.fetchAndAutoLinkForContact({
+          userId: transaction.user_id,
+          transactionId,
+          contactId,
+          transactionDetails: {
+            started_at: transaction.started_at,
+            created_at: transaction.created_at,
+            closed_at: transaction.closed_at,
+          },
+        });
+
+        return {
+          success: true,
+          autoLink: fetchResult.autoLinkResult,
+        };
+      }
+
+      // Fallback: if transaction not found, still try local-only auto-link
       const autoLinkResult = await autoLinkCommunicationsForContact({
         contactId,
         transactionId,

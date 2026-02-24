@@ -13,15 +13,22 @@
 import * as Sentry from "@sentry/electron/main";
 import logService from "./logService";
 import { autoLinkCommunicationsForContact } from "./autoLinkService";
+import type { AutoLinkResult } from "./autoLinkService";
 import { createEmail, getEmailByExternalId, countEmailsByUser } from "./db/emailDbService";
 import gmailFetchService from "./gmailFetchService";
 import outlookFetchService from "./outlookFetchService";
+import databaseService from "./databaseService";
 import failureLogService from "./failureLogService";
 import emailAttachmentService from "./emailAttachmentService";
 import { backfillMissingAttachments } from "../handlers/attachmentHandlers";
 import { isNetworkError } from "../utils/networkErrors";
 import { retryOnNetwork, networkResilienceService } from "./networkResilience";
 import { computeTransactionDateRange } from "../utils/emailDateRange";
+import {
+  getContactEmailsForTransaction,
+  resolveContactEmailsByQuery,
+} from "./db/contactDbService";
+import { getEmailsByContactId } from "./db/contactDbService";
 import type { TransactionResponse } from "../types/handlerTypes";
 import type { TransactionContactResult } from "./db/transactionContactDbService";
 import type { TransactionWithDetails } from "./transactionService/types";
@@ -33,6 +40,53 @@ export const EMAIL_FETCH_SAFETY_CAP = 2000;
 
 // TASK-2060: Safety cap for sent items (per-contact email search)
 export const SENT_ITEMS_SAFETY_CAP = 200;
+
+// ============================================
+// TASK-2067: Types for new service methods
+// ============================================
+
+/**
+ * Search parameters passed from the get-unlinked-emails handler.
+ */
+export interface EmailSearchParams {
+  query: string;
+  after: Date | null;
+  before: Date | null;
+  maxResults: number;
+  skip?: number;
+  contactEmails?: string[];
+}
+
+/**
+ * A single email result returned to the renderer (matches existing IPC shape).
+ */
+export interface ProviderEmailResult {
+  id: string;
+  subject: string | null;
+  sender: string | null;
+  sent_at: string | null;
+  body_preview?: string | null;
+  email_thread_id?: string | null;
+  has_attachments?: boolean;
+  provider: "gmail" | "outlook";
+}
+
+/**
+ * Result of searching provider emails and storing them locally.
+ */
+export interface SearchProviderEmailsResult {
+  emails: ProviderEmailResult[];
+  noProviderConnected: boolean;
+}
+
+/**
+ * Result of fetching from provider + auto-linking for a contact.
+ */
+export interface FetchAndAutoLinkResult {
+  emailsFetched: number;
+  emailsStored: number;
+  autoLinkResult: AutoLinkResult;
+}
 
 /**
  * TASK-2060: Shared helper for fetching emails from a provider, storing them locally,
@@ -392,6 +446,243 @@ class EmailSyncService {
       totalEmailsLinked: 0,
       totalMessagesLinked,
       totalAlreadyLinked,
+    };
+  }
+
+  // ============================================
+  // TASK-2067: New public methods for Gap 1 & Gap 2
+  // ============================================
+
+  /**
+   * TASK-2067 Gap 1: Search provider emails and store results locally.
+   *
+   * Wraps the provider search logic from the get-unlinked-emails handler
+   * with fetchStoreAndDedup() so that fetched emails are persisted locally
+   * even if the user doesn't manually attach them.
+   *
+   * Returns the same response shape the renderer expects.
+   */
+  async searchProviderEmails(params: {
+    userId: string;
+    searchParams: EmailSearchParams;
+    transactionId?: string;
+  }): Promise<SearchProviderEmailsResult> {
+    const { userId, searchParams, transactionId } = params;
+
+    // Look up contact emails for the transaction (if provided)
+    let contactEmails: string[] = [];
+    if (transactionId) {
+      try {
+        contactEmails = getContactEmailsForTransaction(transactionId);
+        logService.info(`Found ${contactEmails.length} contact emails for transaction`, "EmailSyncService", {
+          transactionId,
+        });
+      } catch (contactErr) {
+        logService.warn("Failed to look up contact emails, proceeding without filter", "EmailSyncService", {
+          error: contactErr instanceof Error ? contactErr.message : "Unknown",
+        });
+      }
+    }
+
+    // When user is actively searching, resolve query against contacts DB
+    const effectiveSearchParams = { ...searchParams };
+    if (searchParams.query?.trim()) {
+      const resolvedEmails = resolveContactEmailsByQuery(userId, searchParams.query);
+      if (resolvedEmails.length > 0) {
+        effectiveSearchParams.contactEmails = resolvedEmails;
+        effectiveSearchParams.query = "";
+        logService.info(`Resolved query "${searchParams.query}" to ${resolvedEmails.length} contact emails`, "EmailSyncService", {
+          resolvedEmails,
+        });
+      }
+    }
+
+    // Check which providers are authenticated
+    const googleToken = await databaseService.getOAuthToken(userId, "google", "mailbox");
+    const microsoftToken = await databaseService.getOAuthToken(userId, "microsoft", "mailbox");
+
+    let emails: ProviderEmailResult[] = [];
+    const seenIds = new Set<string>();
+
+    // Fetch from Gmail if authenticated
+    if (googleToken) {
+      try {
+        await retryOnNetwork(async () => {
+          const isReady = await gmailFetchService.initialize(userId);
+          if (isReady) {
+            const gmailEmails = await gmailFetchService.searchEmails(effectiveSearchParams);
+
+            // TASK-2067: Store fetched emails locally via fetchStoreAndDedup
+            await fetchStoreAndDedup({
+              provider: "gmail",
+              fetchFn: async () => gmailEmails,
+              userId,
+              seenIds,
+            });
+
+            emails = gmailEmails.map((email: { id: string; subject: string | null; from: string | null; date: Date; bodyPlain: string; snippet: string; threadId: string; hasAttachments: boolean }) => ({
+              id: `gmail:${email.id}`,
+              subject: email.subject,
+              sender: email.from,
+              sent_at: email.date ? new Date(email.date).toISOString() : null,
+              body_preview: (email.snippet || email.bodyPlain?.substring(0, 200)) || null,
+              email_thread_id: email.threadId || null,
+              has_attachments: email.hasAttachments || false,
+              provider: "gmail" as const,
+            }));
+            logService.info(`Fetched and stored ${emails.length} emails from Gmail`, "EmailSyncService");
+          }
+        }, undefined, "GmailSearch");
+      } catch (gmailError) {
+        logService.warn("Failed to fetch from Gmail", "EmailSyncService", {
+          error: gmailError instanceof Error ? gmailError.message : "Unknown",
+          isNetworkError: isNetworkError(gmailError),
+        });
+      }
+    }
+
+    // Fetch from Outlook if authenticated (and no Gmail emails)
+    if (microsoftToken && emails.length === 0) {
+      try {
+        await retryOnNetwork(async () => {
+          const isReady = await outlookFetchService.initialize(userId);
+          if (isReady) {
+            const outlookEmails = await outlookFetchService.searchEmails(effectiveSearchParams);
+
+            // Also search sent items for emails TO contacts (bidirectional)
+            let sentEmails: typeof outlookEmails = [];
+            const sentSearchEmails = effectiveSearchParams.contactEmails || [];
+            if (sentSearchEmails.length > 0) {
+              try {
+                sentEmails = await outlookFetchService.searchSentEmailsToContacts(
+                  sentSearchEmails, Math.min(50, effectiveSearchParams.maxResults),
+                );
+              } catch { /* logged inside the method */ }
+            }
+
+            // Merge and dedup
+            const allOutlook = [...outlookEmails, ...sentEmails];
+            const outlookSeenIds = new Set<string>();
+            const dedupedOutlook = allOutlook.filter(e => {
+              if (outlookSeenIds.has(e.id)) return false;
+              outlookSeenIds.add(e.id);
+              return true;
+            });
+
+            // TASK-2067: Store fetched emails locally via fetchStoreAndDedup
+            await fetchStoreAndDedup({
+              provider: "outlook",
+              fetchFn: async () => dedupedOutlook,
+              userId,
+              seenIds,
+              getAttachmentsFn: (msgId) => outlookFetchService.getAttachments(msgId),
+            });
+
+            emails = dedupedOutlook.map((email: { id: string; subject: string | null; from: string | null; date: Date; bodyPlain: string; snippet: string; threadId: string; hasAttachments: boolean }) => ({
+              id: `outlook:${email.id}`,
+              subject: email.subject,
+              sender: email.from,
+              sent_at: email.date ? new Date(email.date).toISOString() : null,
+              body_preview: (email.snippet || email.bodyPlain?.substring(0, 200)) || null,
+              email_thread_id: email.threadId || null,
+              has_attachments: email.hasAttachments || false,
+              provider: "outlook" as const,
+            }));
+            logService.info(`Fetched and stored ${outlookEmails.length} inbox + ${sentEmails.length} sent = ${emails.length} unique from Outlook`, "EmailSyncService");
+          }
+        }, undefined, "OutlookSearch");
+      } catch (outlookError) {
+        logService.warn("Failed to fetch from Outlook", "EmailSyncService", {
+          error: outlookError instanceof Error ? outlookError.message : "Unknown",
+          isNetworkError: isNetworkError(outlookError),
+        });
+      }
+    }
+
+    return {
+      emails,
+      noProviderConnected: emails.length === 0 && !googleToken && !microsoftToken,
+    };
+  }
+
+  /**
+   * TASK-2067 Gap 2: Fetch emails from provider for audit period, store locally,
+   * then auto-link communications for a contact.
+   *
+   * Called when a contact is assigned to a transaction. This ensures provider emails
+   * for the audit period are in the local DB before auto-link searches it.
+   */
+  async fetchAndAutoLinkForContact(params: {
+    userId: string;
+    transactionId: string;
+    contactId: string;
+    transactionDetails: {
+      started_at?: Date | string | null;
+      created_at?: Date | string | null;
+      closed_at?: Date | string | null;
+    };
+  }): Promise<FetchAndAutoLinkResult> {
+    const { userId, transactionId, contactId, transactionDetails } = params;
+
+    // Get contact email addresses
+    const contactEmails = getEmailsByContactId(contactId);
+
+    let emailsFetched = 0;
+    let emailsStored = 0;
+
+    if (contactEmails.length > 0) {
+      // Compute audit period date range
+      const emailFetchSinceDate = computeTransactionDateRange(transactionDetails).start;
+      logService.info(`Fetching provider emails for contact assignment`, "EmailSyncService", {
+        transactionId,
+        contactId,
+        contactEmailCount: contactEmails.length,
+        sinceDate: emailFetchSinceDate.toISOString(),
+      });
+
+      const seenEmailIds = new Set<string>();
+
+      // Fetch from Outlook
+      const outlookResult = await this.fetchOutlookEmails({
+        userId,
+        transactionId,
+        contactEmails,
+        emailFetchSinceDate,
+        seenEmailIds,
+      });
+      emailsFetched += outlookResult.fetched;
+      emailsStored += outlookResult.stored;
+
+      // Fetch from Gmail
+      const gmailResult = await this.fetchGmailEmails({
+        userId,
+        transactionId,
+        contactEmails,
+        emailFetchSinceDate,
+        seenEmailIds,
+        currentEmailsStored: emailsStored,
+      });
+      emailsFetched += gmailResult.fetched;
+      emailsStored += gmailResult.stored;
+
+      logService.info(`Provider fetch for contact assignment complete`, "EmailSyncService", {
+        transactionId,
+        contactId,
+        emailsFetched,
+        emailsStored,
+      });
+    }
+
+    // Now auto-link from local DB (which includes newly fetched emails)
+    const autoLinkResult = await autoLinkCommunicationsForContact({
+      contactId,
+      transactionId,
+    });
+
+    return {
+      emailsFetched,
+      emailsStored,
+      autoLinkResult,
     };
   }
 
