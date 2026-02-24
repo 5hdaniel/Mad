@@ -4,9 +4,12 @@ import {
   dialog,
   session,
   ipcMain,
+  protocol,
+  net,
 } from "electron";
 import path from "path";
 import log from "electron-log";
+import { redactEmail, redactId } from "./utils/redactSensitive";
 
 // ==========================================
 // DEEP LINK PROTOCOL REGISTRATION (TASK-1500)
@@ -24,6 +27,25 @@ if (process.defaultApp) {
   // In production, electron-builder handles registration via package.json protocols config
   app.setAsDefaultProtocolClient('magicaudit');
 }
+
+// ==========================================
+// CUSTOM APP PROTOCOL REGISTRATION (TASK-2051)
+// ==========================================
+// Register custom app:// protocol scheme for production content loading.
+// This MUST be called before app.whenReady() per Electron docs.
+// Enables disabling GrantFileProtocolExtraPrivileges fuse for security hardening.
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'app',
+    privileges: {
+      standard: true,      // Enables relative URL resolution (href="./style.css")
+      secure: true,        // Treated as secure context (like https://)
+      supportFetchAPI: true,
+      corsEnabled: false,
+      stream: true,
+    },
+  },
+]);
 
 // ==========================================
 // SINGLE INSTANCE LOCK (TASK-1500)
@@ -65,6 +87,8 @@ import { registerAuthHandlers } from "./auth-handlers";
 import { registerTransactionCrudHandlers } from "./handlers/transactionCrudHandlers";
 import { registerTransactionExportHandlers, cleanupTransactionHandlers } from "./handlers/transactionExportHandlers";
 import { registerEmailSyncHandlers } from "./handlers/emailSyncHandlers";
+import { registerEmailLinkingHandlers } from "./handlers/emailLinkingHandlers";
+import { registerEmailAutoLinkHandlers } from "./handlers/emailAutoLinkHandlers";
 import { registerAttachmentHandlers } from "./handlers/attachmentHandlers";
 import { registerContactHandlers } from "./contact-handlers";
 import { registerAddressHandlers } from "./address-handlers";
@@ -106,6 +130,9 @@ import {
   registerUpdaterHandlers,
   registerErrorLoggingHandlers,
   registerResetHandlers,
+  registerBackupRestoreHandlers,
+  registerCcpaHandlers,
+  registerFailureLogHandlers,
 } from "./handlers";
 
 // Configure logging for auto-updater
@@ -169,7 +196,7 @@ let pendingDeepLinkUser: PendingDeepLinkUser | null = null;
  */
 export function setPendingDeepLinkUser(data: PendingDeepLinkUser): void {
   pendingDeepLinkUser = data;
-  log.info("[DeepLink] Stored pending user for later creation:", data.supabaseId);
+  log.info("[DeepLink] Stored pending user for later creation:", redactId(data.supabaseId));
 }
 
 /**
@@ -220,25 +247,25 @@ async function syncDeepLinkUserToLocalDb(userData: PendingDeepLinkUser): Promise
         trial_ends_at: userData.trialEndsAt,
         is_active: true,
       });
-      log.info("[DeepLink] Created local SQLite user for:", userData.supabaseId);
+      log.info("[DeepLink] Created local SQLite user for:", redactId(userData.supabaseId));
     } else if (localUser.id !== userData.supabaseId) {
       // BACKLOG-600: Local user exists with different ID than Supabase auth.uid()
       // This happens for users created before TASK-1507G (user ID unification)
       // Migrate the local user to use the Supabase ID for FK constraint compatibility
       log.info("[DeepLink] Migrating local user ID to match Supabase", {
-        oldId: localUser.id.substring(0, 8) + "...",
-        newId: userData.supabaseId.substring(0, 8) + "...",
-        email: userData.email,
+        oldId: redactId(localUser.id),
+        newId: redactId(userData.supabaseId),
+        email: redactEmail(userData.email),
       });
       try {
         await databaseService.migrateUserIdForUnification(localUser.id, userData.supabaseId);
-        log.info("[DeepLink] Local user ID migrated successfully to:", userData.supabaseId);
+        log.info("[DeepLink] Local user ID migrated successfully to:", redactId(userData.supabaseId));
       } catch (migrationError) {
         log.error("[DeepLink] Failed to migrate local user ID:", migrationError);
         // Don't throw - auth should continue, but Supabase operations may fail
       }
     } else {
-      log.info("[DeepLink] Local user already exists with correct ID for:", userData.email);
+      log.info("[DeepLink] Local user already exists with correct ID for:", redactEmail(userData.email));
     }
   } catch (error) {
     log.error("[DeepLink] Failed to create local user:", error);
@@ -301,13 +328,35 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
         hasHashParams: !!hashParams?.get("access_token"),
       });
 
+      // Extract OAuth error information if present (provider tells us exactly why auth failed)
+      const oauthError = parsed.searchParams.get("error") || hashParams?.get("error");
+      const oauthErrorDescription = parsed.searchParams.get("error_description") || hashParams?.get("error_description");
+
       if (!accessToken || !refreshToken) {
         // Missing tokens - send error to renderer
         log.error("[DeepLink] Callback URL missing tokens:", redactDeepLinkUrl(url));
-        sendToRenderer("auth:deep-link-error", {
-          error: "Missing tokens in callback URL",
-          code: "MISSING_TOKENS",
-        });
+        if (oauthError) {
+          // OAuth provider explicitly returned an error
+          Sentry.captureException(new Error(`Deep link auth: OAuth error (${oauthError})`), {
+            tags: { component: "deep-link", action: "auth-callback", error_code: "OAUTH_ERROR", oauthError, oauth_reason: oauthErrorDescription || "none" },
+            extra: { callback_path: redactDeepLinkUrl(url) },
+          });
+          sendToRenderer("auth:deep-link-error", {
+            error: oauthErrorDescription || `OAuth error: ${oauthError}`,
+            code: "OAUTH_ERROR",
+          });
+        } else {
+          // No OAuth error but tokens missing — could be corrupted URL or incomplete redirect
+          const isOnline = net.isOnline();
+          Sentry.captureException(new Error(`Deep link auth: missing tokens${!isOnline ? " (device offline)" : ""}`), {
+            tags: { component: "deep-link", action: "auth-callback", error_code: "MISSING_TOKENS", networkOnline: isOnline },
+            extra: { callback_path: redactDeepLinkUrl(url) },
+          });
+          sendToRenderer("auth:deep-link-error", {
+            error: !isOnline ? "Authentication failed — you appear to be offline" : "Missing tokens in callback URL",
+            code: "MISSING_TOKENS",
+          });
+        }
         return;
       }
 
@@ -323,6 +372,10 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
 
       if (sessionError || !sessionData?.user) {
         log.error("[DeepLink] Failed to set session:", sessionError);
+        Sentry.captureException(sessionError || new Error("Deep link auth: session data missing user"), {
+          tags: { component: "deep-link", action: "auth-callback", error_code: "INVALID_TOKENS", networkOnline: net.isOnline(), session_failure: sessionError?.message || "no user data" },
+          extra: { callback_path: redactDeepLinkUrl(url) },
+        });
         sendToRenderer("auth:deep-link-error", {
           error: "Invalid authentication tokens",
           code: "INVALID_TOKENS",
@@ -331,21 +384,24 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
       }
 
       const user = sessionData.user;
-      log.info("[DeepLink] Session established for user:", user.id);
+      log.info("[DeepLink] Session established for user:", redactId(user.id));
 
       // TASK-1507: Step 2 - Validate license
-      log.info("[DeepLink] Validating license for user:", user.id);
+      log.info("[DeepLink] Validating license for user:", redactId(user.id));
       let licenseStatus = await validateLicense(user.id);
 
       // TASK-1507: Step 3 - Create trial license if needed
       if (licenseStatus.blockReason === "no_license") {
-        log.info("[DeepLink] Creating trial license for new user:", user.id);
+        log.info("[DeepLink] Creating trial license for new user:", redactId(user.id));
         licenseStatus = await createUserLicense(user.id);
       }
 
       // TASK-1507: Step 4 - Check if license blocks access (expired/suspended)
       if (!licenseStatus.isValid && licenseStatus.blockReason !== "no_license") {
-        log.warn("[DeepLink] License blocked for user:", user.id, "reason:", licenseStatus.blockReason);
+        log.warn("[DeepLink] License blocked for user:", redactId(user.id), "reason:", licenseStatus.blockReason);
+        Sentry.captureException(new Error("Deep link auth: license blocked"), {
+          tags: { component: "deep-link", action: "auth-callback", error_code: "LICENSE_BLOCKED", block_reason: licenseStatus.blockReason || "unknown" },
+        });
         sendToRenderer("auth:deep-link-license-blocked", {
           accessToken,
           refreshToken,
@@ -358,11 +414,14 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
       }
 
       // TASK-1507: Step 5 - Register device
-      log.info("[DeepLink] Registering device for user:", user.id);
+      log.info("[DeepLink] Registering device for user:", redactId(user.id));
       const deviceResult = await registerDevice(user.id);
 
       if (!deviceResult.success && deviceResult.error === "device_limit_reached") {
-        log.warn("[DeepLink] Device limit reached for user:", user.id);
+        log.warn("[DeepLink] Device limit reached for user:", redactId(user.id));
+        Sentry.captureException(new Error("Deep link auth: device limit exceeded"), {
+          tags: { component: "deep-link", action: "auth-callback", error_code: "DEVICE_LIMIT" },
+        });
         sendToRenderer("auth:deep-link-device-limit", {
           accessToken,
           refreshToken,
@@ -422,7 +481,7 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
         localUser = await databaseService.getUserByEmail(userEmail);
         if (localUser) {
           localUserId = localUser.id;
-          log.info("[DeepLink] Using local user ID:", localUserId);
+          log.info("[DeepLink] Using local user ID:", redactId(localUserId));
 
           // Save session to disk for persistence across app restarts
           try {
@@ -500,7 +559,7 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
       // TASK-1507: Step 6 - Success! Send all data to renderer
       // TASK-1507F: Use local user ID instead of Supabase UUID for FK constraint compatibility
       // BACKLOG-546: Include isNewUser based on terms acceptance, not transaction count
-      log.info("[DeepLink] Auth complete, sending success event for user:", localUserId);
+      log.info("[DeepLink] Auth complete, sending success event for user:", redactId(localUserId));
       sendToRenderer("auth:deep-link-callback", {
         accessToken,
         refreshToken,
@@ -521,6 +580,9 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
   } catch (error) {
     // Invalid URL format or unexpected error
     log.error("[DeepLink] Failed to handle callback:", error);
+    Sentry.captureException(error, {
+      tags: { component: "deep-link", action: "auth-callback", error_code: "UNKNOWN_ERROR" },
+    });
     sendToRenderer("auth:deep-link-error", {
       error: "Authentication failed",
       code: "UNKNOWN_ERROR",
@@ -583,7 +645,8 @@ app.on("second-instance", (_event, commandLine) => {
 
 /**
  * Configure Content Security Policy for the application
- * This prevents the "unsafe-eval" security warning
+ * This prevents the "unsafe-eval" security warning and restricts connections
+ * to known, trusted domains only.
  *
  * Development vs Production CSP differences:
  * - script-src: Dev uses 'unsafe-inline' for Vite HMR (Hot Module Replacement).
@@ -591,21 +654,40 @@ app.on("second-instance", (_event, commandLine) => {
  *   See: https://vitejs.dev/guide/features.html#content-security-policy
  * - style-src: Both use 'unsafe-inline' for CSS-in-JS and dynamic styling.
  * - connect-src: Dev allows localhost:5173 (Vite dev server) + ws:// for HMR websocket.
- *   Production only allows HTTPS connections.
+ *   Both dev and production restrict connections to specific whitelisted domains.
+ *
+ * Whitelisted external domains (connect-src):
+ * - *.supabase.co           -- Supabase backend (auth, database, edge functions)
+ * - graph.microsoft.com     -- Microsoft Graph API (Outlook mail/contacts)
+ * - login.microsoftonline.com -- Microsoft OAuth2 authentication
+ * - accounts.google.com     -- Google OAuth2 authentication
+ * - *.googleapis.com        -- Google APIs (Gmail, userinfo, token, Maps)
+ * - www.apple.com           -- Apple iTunes driver downloads (Windows only)
  */
 function setupContentSecurityPolicy(): void {
   const isDevelopment =
     process.env.NODE_ENV === "development" || !app.isPackaged;
 
+  // Whitelisted external domains the app connects to.
+  // Adding a new API integration? Add its domain here or requests will be blocked by CSP.
+  const allowedConnectDomains = [
+    "https://*.supabase.co", // Supabase backend (URL from SUPABASE_URL env var)
+    "https://graph.microsoft.com", // Microsoft Graph API (mail, contacts)
+    "https://login.microsoftonline.com", // Microsoft OAuth2 (all tenants)
+    "https://accounts.google.com", // Google OAuth2 authentication
+    "https://*.googleapis.com", // Google APIs (oauth2, www, maps)
+    "https://www.apple.com", // Apple iTunes driver download (Windows)
+  ].join(" ");
+
   // Log CSP mode on startup for debugging
   if (isDevelopment) {
-    console.log("[CSP] Development mode - tightened CSP active");
+    log.info("[CSP] Development mode - tightened CSP active");
   }
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     // Configure CSP based on environment
     // Development: Allow localhost dev server and inline styles for HMR
-    // Production: Strict CSP without unsafe-eval
+    // Production: Strict CSP without unsafe-eval, connections restricted to whitelist
     const cspDirectives = isDevelopment
       ? [
           "default-src 'self'",
@@ -617,9 +699,9 @@ function setupContentSecurityPolicy(): void {
           "style-src 'self' 'unsafe-inline'",
           "img-src 'self' data: cid: https:",
           "font-src 'self' data:",
-          // Tightened: Specific port 5173 instead of wildcard localhost:*
+          // Tightened: Specific port 5173 for Vite dev server + whitelisted external domains
           // Port 5173 is Vite's default dev server port (see vite.config.js and package.json)
-          "connect-src 'self' http://localhost:5173 ws://localhost:5173 https:",
+          `connect-src 'self' http://localhost:5173 ws://localhost:5173 ${allowedConnectDomains}`,
           "media-src 'self'",
           "object-src 'none'",
           "base-uri 'self'",
@@ -635,7 +717,8 @@ function setupContentSecurityPolicy(): void {
           "style-src 'self' 'unsafe-inline'",
           "img-src 'self' data: cid: https:",
           "font-src 'self' data:",
-          "connect-src 'self' https:",
+          // Tightened: Only whitelisted external domains (no https: wildcard)
+          `connect-src 'self' ${allowedConnectDomains}`,
           "media-src 'self'",
           "object-src 'none'",
           "base-uri 'self'",
@@ -737,7 +820,9 @@ function createWindow(): void {
     mainWindow.loadURL(DEV_SERVER_URL);
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
+    // TASK-2051: Use custom app:// protocol instead of file:// for security hardening.
+    // This allows GrantFileProtocolExtraPrivileges fuse to be disabled.
+    mainWindow.loadURL('app://./index.html');
 
     // Check for updates after window loads (only in production)
     setTimeout(() => {
@@ -759,6 +844,7 @@ app.whenReady().then(async () => {
 
   autoUpdater.on("update-available", (info) => {
     log.info("Update available:", info);
+    Sentry.addBreadcrumb({ category: "auto-updater", message: `Update available: ${info.version}`, level: "info" });
     if (mainWindow) {
       mainWindow.webContents.send("update-available", info);
     }
@@ -770,6 +856,7 @@ app.whenReady().then(async () => {
 
   autoUpdater.on("error", (err) => {
     log.error("Error in auto-updater:", err);
+    Sentry.captureException(err, { tags: { component: "auto-updater" } });
   });
 
   autoUpdater.on("download-progress", (progressObj) => {
@@ -782,10 +869,42 @@ app.whenReady().then(async () => {
 
   autoUpdater.on("update-downloaded", (info) => {
     log.info("Update downloaded:", info);
+    Sentry.addBreadcrumb({ category: "auto-updater", message: `Update downloaded: ${info.version}`, level: "info" });
     if (mainWindow) {
       mainWindow.webContents.send("update-downloaded", info);
     }
   });
+
+  // ==========================================
+  // CUSTOM APP PROTOCOL HANDLER (TASK-2051)
+  // ==========================================
+  // Register the app:// protocol handler to serve renderer content from dist/.
+  // This replaces file:// protocol usage, allowing GrantFileProtocolExtraPrivileges
+  // fuse to be disabled for security hardening.
+  // Only needed in production -- dev mode uses Vite dev server (http://localhost:5173).
+  if (app.isPackaged) {
+    protocol.handle('app', (request) => {
+      const url = new URL(request.url);
+      // Decode URI-encoded characters in the pathname (e.g., %20 -> space)
+      let pathname = decodeURIComponent(url.pathname);
+      // Remove leading slash on Windows paths (app://./file -> /file -> file)
+      if (process.platform === 'win32' && pathname.startsWith('/')) {
+        pathname = pathname.slice(1);
+      }
+      // Resolve the file path relative to the dist/ directory
+      // path.normalize prevents path traversal (../../etc/passwd -> etc/passwd)
+      const normalizedPath = path.normalize(pathname);
+      const distDir = path.join(__dirname, '..', 'dist');
+      const filePath = path.join(distDir, normalizedPath);
+      // Security: Ensure the resolved path is within the dist/ directory
+      if (!filePath.startsWith(distDir)) {
+        log.warn('[Protocol] Blocked path traversal attempt:', request.url);
+        return new Response('Forbidden', { status: 403 });
+      }
+      return net.fetch(`file://${filePath}`);
+    });
+    log.info('[Protocol] app:// protocol handler registered for production');
+  }
 
   // Set up Content Security Policy
   setupContentSecurityPolicy();
@@ -879,8 +998,7 @@ app.whenReady().then(async () => {
       log.info("[DeepLink] Cold start with URL (Windows):", redactDeepLinkUrl(deepLinkUrl));
       // Wait for window to be ready before processing
       mainWindow?.webContents.once("did-finish-load", () => {
-        // Small delay to ensure renderer is fully initialized
-        setTimeout(() => handleDeepLinkCallback(deepLinkUrl), 100);
+          handleDeepLinkCallback(deepLinkUrl);
       });
     }
   }
@@ -891,6 +1009,8 @@ app.whenReady().then(async () => {
   registerTransactionCrudHandlers(mainWindow!);
   registerTransactionExportHandlers(mainWindow!);
   registerEmailSyncHandlers(mainWindow!);
+  registerEmailLinkingHandlers();
+  registerEmailAutoLinkHandlers();
   registerAttachmentHandlers(mainWindow!);
   registerContactHandlers(mainWindow!);
   registerAddressHandlers();
@@ -919,6 +1039,9 @@ app.whenReady().then(async () => {
   registerUpdaterHandlers(mainWindow!);
   registerErrorLoggingHandlers();
   registerResetHandlers();
+  registerBackupRestoreHandlers();
+  registerCcpaHandlers();
+  registerFailureLogHandlers();
 
   // DEV-ONLY: Manual deep link handler for testing when protocol handler fails
   // Usage from DevTools console: window.api.system.manualDeepLink("magicaudit://callback?access_token=...&refresh_token=...")

@@ -4,6 +4,7 @@ import ContactAssignmentStep from "./audit/ContactAssignmentStep";
 import type { Transaction } from "../../electron/types/models";
 import { useAppStateMachine } from "../appCore";
 import { useAuditTransaction } from "../hooks/useAuditTransaction";
+import { OfflineNotice } from "./common/OfflineNotice";
 
 // Type definitions
 interface AuditTransactionModalProps {
@@ -161,6 +162,8 @@ function AuditTransactionModal({
             </div>
           </div>
         )}
+
+        <OfflineNotice />
 
         {/* Error Message */}
         {error && (

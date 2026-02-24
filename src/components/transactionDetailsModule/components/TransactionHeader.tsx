@@ -5,6 +5,7 @@
 import React from "react";
 import type { Transaction } from "@/types";
 import { LicenseGate } from "@/components/common/LicenseGate";
+import { useNetwork } from "@/contexts/NetworkContext";
 
 interface TransactionHeaderProps {
   transaction: Transaction;
@@ -287,6 +288,7 @@ function ActiveActions({
     transaction.submission_status === "needs_changes" ||
     !transaction.submission_status;
 
+  const { isOnline } = useNetwork();
   const isResubmit = transaction.submission_status === "needs_changes";
   const isSubmitted = transaction.submission_status === "submitted" ||
     transaction.submission_status === "under_review" ||
@@ -300,8 +302,9 @@ function ActiveActions({
         {onShowSubmitModal && canSubmit && (
           <button
             onClick={onShowSubmitModal}
-            disabled={isSubmitting}
-            className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg disabled:opacity-50"
+            disabled={isSubmitting || !isOnline}
+            title={!isOnline ? "You are offline" : undefined}
+            className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg disabled:opacity-50 ${!isOnline ? "cursor-not-allowed" : ""}`}
           >
             {isSubmitting ? (
               <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />

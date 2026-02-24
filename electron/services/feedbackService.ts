@@ -5,11 +5,11 @@
  * including transaction approvals/rejections, role corrections,
  * and communication relevance feedback.
  *
- * This service adapts to the existing user_feedback table schema:
- * - Uses field_name to distinguish LLM feedback types
- * - Uses feedback_type (correction/confirmation/rejection) for action type
+ * This service adapts to the existing classification_feedback table schema:
+ * - Uses feedback_type to distinguish LLM feedback categories
+ * - Stores action type (correction/confirmation/rejection) in original_value JSON
  * - Stores complex data as JSON in original_value/corrected_value
- * - Stores model/prompt version in user_notes as JSON
+ * - Stores model/prompt version in original_value JSON metadata
  */
 
 import crypto from "crypto";
@@ -111,10 +111,9 @@ export class FeedbackService {
   /**
    * Record feedback for a transaction action (approve/reject/edit)
    *
-   * Maps to existing schema:
-   * - field_name: "llm_transaction_action"
-   * - feedback_type: "confirmation" for approve, "rejection" for reject, "correction" for edit
-   * - original_value: JSON with action details and model/prompt version
+   * Maps to classification_feedback schema:
+   * - feedback_type: "llm_transaction_action"
+   * - original_value: JSON with action ("confirmation"/"rejection"/"correction") and model/prompt version
    * - corrected_value: JSON with corrections (if any)
    */
   async recordTransactionFeedback(
@@ -148,12 +147,12 @@ export class FeedbackService {
     };
 
     // Store using existing databaseService
+    // Maps to classification_feedback.feedback_type = "transaction_link"
     await databaseService.saveFeedback({
       user_id: userId,
       transaction_id: feedback.detectedTransactionId,
-      field_name: "llm_transaction_action",
-      feedback_type: feedbackType,
-      original_value: JSON.stringify(metadata),
+      feedback_type: "transaction_link",
+      original_value: JSON.stringify({ ...metadata, category: "llm_transaction_action", dbFeedbackType: feedbackType }),
       corrected_value: feedback.corrections
         ? JSON.stringify(feedback.corrections)
         : undefined,
@@ -165,9 +164,8 @@ export class FeedbackService {
   /**
    * Record feedback for a contact role correction
    *
-   * Maps to existing schema:
-   * - field_name: "llm_contact_role"
-   * - feedback_type: "correction"
+   * Maps to classification_feedback schema:
+   * - feedback_type: "llm_contact_role"
    * - original_value: JSON with original role and metadata
    * - corrected_value: corrected role string
    */
@@ -185,12 +183,13 @@ export class FeedbackService {
       promptVersion: feedback.promptVersion,
     };
 
+    // Maps to classification_feedback.feedback_type = "contact_role"
     await databaseService.saveFeedback({
       user_id: userId,
       transaction_id: feedback.transactionId,
-      field_name: "llm_contact_role",
-      feedback_type: "correction",
-      original_value: JSON.stringify(metadata),
+      contact_id: feedback.contactId,
+      feedback_type: "contact_role",
+      original_value: JSON.stringify({ ...metadata, category: "llm_contact_role" }),
       corrected_value: feedback.correctedRole,
     });
 
@@ -200,10 +199,9 @@ export class FeedbackService {
   /**
    * Record feedback for communication relevance
    *
-   * Maps to existing schema:
-   * - field_name: "llm_communication"
-   * - feedback_type: "confirmation" if wasRelevant=true (added), "rejection" if false (unlinked)
-   * - original_value: JSON with communication details and metadata
+   * Maps to classification_feedback schema:
+   * - feedback_type: "llm_communication"
+   * - original_value: JSON with communication details, relevance, and metadata
    * - corrected_value: correct transaction ID (if provided)
    */
   async recordCommunicationFeedback(
@@ -228,13 +226,13 @@ export class FeedbackService {
       promptVersion: feedback.promptVersion,
     };
 
+    // Maps to classification_feedback.feedback_type = "message_relevance"
     await databaseService.saveFeedback({
       user_id: userId,
       transaction_id: feedback.correctTransactionId,
-      communication_id: feedback.communicationId,
-      field_name: "llm_communication",
-      feedback_type: feedbackType,
-      original_value: JSON.stringify(metadata),
+      message_id: feedback.communicationId,
+      feedback_type: "message_relevance",
+      original_value: JSON.stringify({ ...metadata, category: "llm_communication", dbFeedbackType: feedbackType }),
       corrected_value: feedback.correctTransactionId || undefined,
     });
 
@@ -244,15 +242,16 @@ export class FeedbackService {
   /**
    * Get aggregated feedback statistics for a user
    *
-   * Queries user_feedback table filtering by LLM-specific field_names
+   * Queries classification_feedback table filtering by LLM-specific feedback_types
    * and parses the JSON original_value to extract action types.
    */
   async getFeedbackStats(userId: string): Promise<FeedbackStats> {
     // Get all LLM-related feedback for this user
+    // Maps to classification_feedback.feedback_type values
     const llmFieldNames = [
-      "llm_transaction_action",
-      "llm_contact_role",
-      "llm_communication",
+      "transaction_link",
+      "contact_role",
+      "message_relevance",
     ];
 
     const stats: FeedbackStats = {
@@ -306,12 +305,13 @@ export class FeedbackService {
               break;
             default:
               // Action not found in metadata, use fallback logic
-              this.countByFeedbackType(stats, fieldName, feedback.feedback_type);
+              // Use dbFeedbackType from metadata if available, otherwise infer from fieldName
+              this.countByFeedbackType(stats, fieldName, metadata.dbFeedbackType || "");
               break;
           }
         } catch {
-          // If JSON parsing fails, count based on feedback_type and field_name
-          this.countByFeedbackType(stats, fieldName, feedback.feedback_type);
+          // If JSON parsing fails, count based on fieldName category only
+          this.countByFeedbackType(stats, fieldName, "");
         }
       }
     }
@@ -340,7 +340,7 @@ export class FeedbackService {
     fieldName: string,
     feedbackType: string
   ): void {
-    if (fieldName === "llm_transaction_action") {
+    if (fieldName === "transaction_link") {
       if (feedbackType === "confirmation") {
         stats.transactionApprovals++;
       } else if (feedbackType === "rejection") {
@@ -348,9 +348,9 @@ export class FeedbackService {
       } else {
         stats.transactionEdits++;
       }
-    } else if (fieldName === "llm_contact_role") {
+    } else if (fieldName === "contact_role") {
       stats.roleCorrections++;
-    } else if (fieldName === "llm_communication") {
+    } else if (fieldName === "message_relevance") {
       if (feedbackType === "confirmation") {
         stats.communicationAdds++;
       } else {

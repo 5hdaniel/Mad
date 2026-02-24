@@ -527,7 +527,7 @@ describe("useAutoRefresh", () => {
 
       expect(mockNotificationSend).toHaveBeenCalledWith(
         "Sync Complete",
-        "Magic Audit is ready to use. Your data has been synchronized."
+        "Keepr is ready to use. Your data has been synchronized."
       );
     });
 
@@ -575,7 +575,7 @@ describe("useAutoRefresh", () => {
       resetMessagesImportTrigger();
     });
 
-    it("should skip sync when marked as just completed onboarding import", async () => {
+    it("should allow manual sync even when onboarding import flag is set", async () => {
       // Mark onboarding import complete
       setMessagesImportTriggered();
 
@@ -585,8 +585,11 @@ describe("useAutoRefresh", () => {
         await result.current.triggerRefresh();
       });
 
-      // Should not call requestSync since import was already triggered
-      expect(mockRequestSync).not.toHaveBeenCalled();
+      // Manual triggerRefresh should bypass the import flag
+      expect(mockRequestSync).toHaveBeenCalledWith(
+        ['contacts', 'messages'],
+        'test-user-123'
+      );
     });
 
     it("should allow sync when import flag not set", async () => {

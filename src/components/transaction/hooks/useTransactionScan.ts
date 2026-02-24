@@ -3,6 +3,7 @@
  * Handles start/stop scan, progress tracking, and IPC listener cleanup
  */
 import { useState, useEffect, useCallback } from "react";
+import logger from '../../../utils/logger';
 
 /**
  * Scan progress state
@@ -105,7 +106,7 @@ export function useTransactionScan(
       // Clear scan progress immediately without showing a message
       setScanProgress(null);
     } catch (err) {
-      console.error("Failed to stop scan:", err);
+      logger.error("Failed to stop scan:", err);
     }
   }, [userId]);
 

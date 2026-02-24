@@ -19,6 +19,7 @@ import React, { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { ContactRow } from "./ContactRow";
 import type { ExtendedContact } from "../../types/components";
 import { sortByRecentCommunication } from "../../utils/contactSortUtils";
+import logger from '../../utils/logger';
 
 /**
  * Internal type for combined contact list
@@ -345,7 +346,7 @@ export function ContactSearchList({
         }
       } catch (err) {
         // Error handling - parent should handle via try/catch in onImportContact
-        console.error("Failed to import contact:", err);
+        logger.error("Failed to import contact:", err);
       } finally {
         setImportingIds((prev) => {
           const next = new Set(prev);

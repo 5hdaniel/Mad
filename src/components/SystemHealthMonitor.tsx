@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 
 import type { OAuthProvider } from "../../electron/types/models";
+import logger from '../utils/logger';
 
 interface SystemHealthMonitorProps {
   userId: string;
@@ -54,7 +55,7 @@ function SystemHealthMonitor({
         setIssues(result.issues as SystemIssue[]);
       }
     } catch (error) {
-      console.error("[SystemHealthMonitor] System health check failed:", error);
+      logger.error("[SystemHealthMonitor] System health check failed:", error);
     } finally {
       checkingRef.current = false;
     }
@@ -98,7 +99,7 @@ function SystemHealthMonitor({
           onOpenSettings();
           // Scroll to and highlight email connections section after modal opens
           setTimeout(() => {
-            const emailSection = document.getElementById("email-connections");
+            const emailSection = document.getElementById("settings-email");
             if (emailSection) {
               emailSection.scrollIntoView({ behavior: "smooth", block: "start" });
               // Add highlight effect
@@ -134,7 +135,7 @@ function SystemHealthMonitor({
                   });
             }
           } catch (error) {
-            console.error(
+            logger.error(
               `[SystemHealthMonitor] ${issue.actionHandler} failed:`,
               error,
             );
@@ -148,7 +149,7 @@ function SystemHealthMonitor({
         break;
 
       default:
-        console.warn(
+        logger.warn(
           "[SystemHealthMonitor] Unknown action handler:",
           issue.actionHandler,
         );

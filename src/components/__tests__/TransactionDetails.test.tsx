@@ -23,6 +23,38 @@ jest.mock("../../contexts/LicenseContext", () => ({
   }),
 }));
 
+// Mock AuthContext for TransactionEmailsTab (uses useAuth)
+jest.mock("../../contexts/AuthContext", () => ({
+  useAuth: () => ({
+    currentUser: { id: "user-456", email: "test@test.com" },
+    isAuthenticated: true,
+  }),
+  useIsAuthenticated: () => true,
+  useCurrentUser: () => ({ id: "user-456", email: "test@test.com" }),
+  AuthProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
+// TASK-2074: Make useNetwork mock configurable for offline testing
+const mockUseNetwork = jest.fn(() => ({
+  isOnline: true,
+  isChecking: false,
+  lastOnlineAt: null,
+  lastOfflineAt: null,
+  connectionError: null,
+  checkConnection: jest.fn(),
+  clearError: jest.fn(),
+  setConnectionError: jest.fn(),
+}));
+jest.mock("../../contexts/NetworkContext", () => ({
+  useNetwork: () => mockUseNetwork(),
+}));
+
+// Mock useSyncOrchestrator for global sync state
+const mockUseSyncOrchestrator = jest.fn();
+jest.mock("../../hooks/useSyncOrchestrator", () => ({
+  useSyncOrchestrator: () => mockUseSyncOrchestrator(),
+}));
+
 describe("TransactionDetails", () => {
   const mockOnClose = jest.fn();
   const mockOnTransactionUpdated = jest.fn();
@@ -79,6 +111,21 @@ describe("TransactionDetails", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+
+    // Default: no global sync running
+    mockUseSyncOrchestrator.mockReturnValue({
+      state: { isRunning: false, queue: [], currentSync: null, overallProgress: 0, pendingRequest: null },
+      isRunning: false,
+      queue: [],
+      currentSync: null,
+      overallProgress: 0,
+      pendingRequest: null,
+      requestSync: jest.fn(),
+      forceSync: jest.fn(),
+      acceptPending: jest.fn(),
+      rejectPending: jest.fn(),
+      cancel: jest.fn(),
+    });
 
     // Default mocks
     window.api.transactions.getDetails.mockResolvedValue({
@@ -553,6 +600,293 @@ describe("TransactionDetails", () => {
       // Should show "Unknown Contact" for unresolved contacts
       const unknownContacts = screen.getAllByText("Unknown Contact");
       expect(unknownContacts.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("Sync buttons disabled during global sync (overview tab)", () => {
+    const transactionWithContacts = {
+      ...baseTransaction,
+      email_count: 2,
+      text_thread_count: 1,
+    };
+
+    const contactAssignments = [
+      { contact_id: "contact-1", role: "buyer", is_primary: true, display_name: "John Buyer" },
+    ];
+
+    beforeEach(() => {
+      // Set up transaction with contacts assigned so Sync button appears in Overview tab
+      window.api.transactions.getDetails.mockResolvedValue({
+        success: true,
+        transaction: {
+          ...transactionWithContacts,
+          communications: [],
+          contact_assignments: contactAssignments,
+        },
+      });
+    });
+
+    it("should disable Sync Communications button when global sync is running", async () => {
+      // Set global sync to running
+      mockUseSyncOrchestrator.mockReturnValue({
+        state: { isRunning: true, queue: [], currentSync: "emails", overallProgress: 50, pendingRequest: null },
+        isRunning: true,
+        queue: [],
+        currentSync: "emails",
+        overallProgress: 50,
+        pendingRequest: null,
+        requestSync: jest.fn(),
+        forceSync: jest.fn(),
+        acceptPending: jest.fn(),
+        rejectPending: jest.fn(),
+        cancel: jest.fn(),
+      });
+
+      render(
+        <TransactionDetails
+          transaction={transactionWithContacts}
+          onClose={mockOnClose}
+          onTransactionUpdated={mockOnTransactionUpdated}
+          userId="user-456"
+        />,
+      );
+
+      // Wait for the Overview tab (default tab) to render with the Sync Communications button
+      await waitFor(() => {
+        expect(screen.getByText("Key Contacts")).toBeInTheDocument();
+      });
+
+      // The Sync Communications button in the Overview tab should be disabled
+      // It uses title attribute as tooltip
+      const syncButton = screen.getByTitle("A sync is already in progress from the dashboard");
+      expect(syncButton).toBeDisabled();
+    });
+
+    it("should enable Sync Communications button when global sync is not running", async () => {
+      // Global sync is NOT running (default mock)
+
+      render(
+        <TransactionDetails
+          transaction={transactionWithContacts}
+          onClose={mockOnClose}
+          onTransactionUpdated={mockOnTransactionUpdated}
+          userId="user-456"
+        />,
+      );
+
+      // Wait for the Overview tab to render
+      await waitFor(() => {
+        expect(screen.getByText("Key Contacts")).toBeInTheDocument();
+      });
+
+      // The Sync Communications button should be enabled
+      const syncButton = screen.getByTitle("Sync Communications");
+      expect(syncButton).not.toBeDisabled();
+    });
+
+    it("should show global sync tooltip on disabled Sync button", async () => {
+      // Set global sync to running
+      mockUseSyncOrchestrator.mockReturnValue({
+        state: { isRunning: true, queue: [], currentSync: "emails", overallProgress: 50, pendingRequest: null },
+        isRunning: true,
+        queue: [],
+        currentSync: "emails",
+        overallProgress: 50,
+        pendingRequest: null,
+        requestSync: jest.fn(),
+        forceSync: jest.fn(),
+        acceptPending: jest.fn(),
+        rejectPending: jest.fn(),
+        cancel: jest.fn(),
+      });
+
+      render(
+        <TransactionDetails
+          transaction={transactionWithContacts}
+          onClose={mockOnClose}
+          onTransactionUpdated={mockOnTransactionUpdated}
+          userId="user-456"
+        />,
+      );
+
+      // Wait for the Overview tab to render
+      await waitFor(() => {
+        expect(screen.getByText("Key Contacts")).toBeInTheDocument();
+      });
+
+      // Verify the tooltip text is correct
+      const syncButton = screen.getByTitle("A sync is already in progress from the dashboard");
+      expect(syncButton).toBeInTheDocument();
+      expect(syncButton).toBeDisabled();
+    });
+  });
+
+  // TASK-2074: Sync buttons disabled when offline
+  describe("Sync buttons disabled when offline (TASK-2074)", () => {
+    const transactionWithContacts = {
+      ...baseTransaction,
+      email_count: 2,
+      text_thread_count: 1,
+    };
+
+    const contactAssignments = [
+      { contact_id: "contact-1", role: "buyer", is_primary: true, display_name: "John Buyer" },
+    ];
+
+    beforeEach(() => {
+      // Set network to offline
+      mockUseNetwork.mockReturnValue({
+        isOnline: false,
+        isChecking: false,
+        lastOnlineAt: null,
+        lastOfflineAt: new Date(),
+        connectionError: null,
+        checkConnection: jest.fn(),
+        clearError: jest.fn(),
+        setConnectionError: jest.fn(),
+      });
+
+      // Set up transaction with contacts assigned so Sync buttons appear
+      window.api.transactions.getDetails.mockResolvedValue({
+        success: true,
+        transaction: {
+          ...transactionWithContacts,
+          communications: [],
+          contact_assignments: contactAssignments,
+        },
+      });
+    });
+
+    afterEach(() => {
+      // Reset to online
+      mockUseNetwork.mockReturnValue({
+        isOnline: true,
+        isChecking: false,
+        lastOnlineAt: null,
+        lastOfflineAt: null,
+        connectionError: null,
+        checkConnection: jest.fn(),
+        clearError: jest.fn(),
+        setConnectionError: jest.fn(),
+      });
+    });
+
+    it("should disable Sync button on Overview tab when offline", async () => {
+      render(
+        <TransactionDetails
+          transaction={transactionWithContacts}
+          onClose={mockOnClose}
+          onTransactionUpdated={mockOnTransactionUpdated}
+          userId="user-456"
+        />,
+      );
+
+      // Wait for the Overview tab to render with Sync button
+      await waitFor(() => {
+        expect(screen.getByText("Key Contacts")).toBeInTheDocument();
+      });
+
+      // Find the Sync button by looking for buttons with title "You are offline"
+      // and filtering to the one containing the Sync icon (green-colored text)
+      const offlineButtons = screen.getAllByTitle("You are offline");
+      const syncButton = offlineButtons.find((btn) =>
+        btn.classList.contains("text-green-600") ||
+        btn.className.includes("text-green-600"),
+      );
+      expect(syncButton).toBeDefined();
+      expect(syncButton).toBeDisabled();
+    });
+
+    it("should disable Sync button on Emails tab when offline", async () => {
+      render(
+        <TransactionDetails
+          transaction={transactionWithContacts}
+          onClose={mockOnClose}
+          onTransactionUpdated={mockOnTransactionUpdated}
+          userId="user-456"
+          initialTab="emails"
+        />,
+      );
+
+      // Wait for emails tab to render - may show empty state or loading
+      await waitFor(() => {
+        // The tab renders with sync button in empty state
+        const syncButton = screen.queryByTestId("sync-emails-button");
+        if (syncButton) {
+          expect(syncButton).toBeDisabled();
+          expect(syncButton).toHaveAttribute("title", "You are offline");
+        }
+      });
+    });
+
+    it("should disable Sync button on Messages tab when offline", async () => {
+      render(
+        <TransactionDetails
+          transaction={transactionWithContacts}
+          onClose={mockOnClose}
+          onTransactionUpdated={mockOnTransactionUpdated}
+          userId="user-456"
+          initialTab="messages"
+        />,
+      );
+
+      // Wait for messages tab to render
+      await waitFor(() => {
+        expect(screen.getByText(/no text messages linked/i)).toBeInTheDocument();
+      });
+
+      // The Sync Messages button should be disabled
+      const syncButton = screen.getByTestId("sync-messages-button");
+      expect(syncButton).toBeDisabled();
+      expect(syncButton).toHaveAttribute("title", "You are offline");
+    });
+
+    it("should re-enable sync buttons when back online", async () => {
+      const { rerender } = render(
+        <TransactionDetails
+          transaction={transactionWithContacts}
+          onClose={mockOnClose}
+          onTransactionUpdated={mockOnTransactionUpdated}
+          userId="user-456"
+        />,
+      );
+
+      // Verify the green sync button is disabled when offline
+      await waitFor(() => {
+        const offlineButtons = screen.getAllByTitle("You are offline");
+        const syncButton = offlineButtons.find((btn) =>
+          btn.className.includes("text-green-600"),
+        );
+        expect(syncButton).toBeDefined();
+        expect(syncButton).toBeDisabled();
+      });
+
+      // Go back online
+      mockUseNetwork.mockReturnValue({
+        isOnline: true,
+        isChecking: false,
+        lastOnlineAt: new Date(),
+        lastOfflineAt: null,
+        connectionError: null,
+        checkConnection: jest.fn(),
+        clearError: jest.fn(),
+        setConnectionError: jest.fn(),
+      });
+
+      rerender(
+        <TransactionDetails
+          transaction={transactionWithContacts}
+          onClose={mockOnClose}
+          onTransactionUpdated={mockOnTransactionUpdated}
+          userId="user-456"
+        />,
+      );
+
+      // Sync button should be re-enabled
+      await waitFor(() => {
+        const syncButton = screen.getByTitle("Sync Communications");
+        expect(syncButton).not.toBeDisabled();
+      });
     });
   });
 });

@@ -606,7 +606,7 @@ describe("Hook Migration Integration Tests", () => {
         () => useNavigationFlow(defaultNavigationFlowOptions),
         { wrapper: createWrapper(readyStateMacOS) }
       );
-      expect(resultReady.current.getPageTitle()).toBe("Magic Audit");
+      expect(resultReady.current.getPageTitle()).toBe("Keepr");
 
       const { result: resultLogin } = renderHook(
         () => useNavigationFlow(defaultNavigationFlowOptions),

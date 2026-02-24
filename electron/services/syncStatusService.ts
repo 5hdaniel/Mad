@@ -9,7 +9,7 @@
  */
 
 import { backupService } from "./backupService";
-import { syncOrchestrator, SyncPhase } from "./syncOrchestrator";
+import { deviceSyncOrchestrator, SyncPhase } from "./deviceSyncOrchestrator";
 import type { BackupStatus } from "../types/backup";
 
 /**
@@ -49,13 +49,13 @@ class SyncStatusService {
    *
    * Aggregates status from:
    * - BackupService (iPhone backup via idevicebackup2)
-   * - SyncOrchestrator (complete sync flow including parsing)
+   * - DeviceSyncOrchestrator (complete sync flow including parsing)
    *
    * @returns Current sync status
    */
   getStatus(): SyncStatus {
     const backupStatus: BackupStatus = backupService.getStatus();
-    const orchestratorStatus = syncOrchestrator.getStatus();
+    const orchestratorStatus = deviceSyncOrchestrator.getStatus();
     const orchestratorRunning = orchestratorStatus.isRunning;
 
     return {

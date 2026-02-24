@@ -19,6 +19,7 @@ import type {
   StepAction,
   Platform,
 } from "../types";
+import logger from '../../../utils/logger';
 
 // =============================================================================
 // TYPES
@@ -151,7 +152,7 @@ export function useOnboardingFlow(
       return getFlowSteps(platform);
     } catch {
       // Return empty array if flow not found (shouldn't happen in production)
-      console.error(`[Onboarding] Failed to get flow for platform: ${platform}`);
+      logger.error(`[Onboarding] Failed to get flow for platform: ${platform}`);
       return [];
     }
   }, [platform]);
@@ -232,7 +233,7 @@ export function useOnboardingFlow(
       return true;
     });
 
-    console.log(
+    logger.debug(
       `%c[STEPS] Visible: ${filtered.map(s => s.meta.id).join(' → ')}`,
       'background: #2E8B57; color: white; font-weight: bold; padding: 2px 8px;'
     );
@@ -343,7 +344,7 @@ export function useOnboardingFlow(
       if (step) {
         setCurrentStepId(step.meta.id);
       } else {
-        console.warn(`[Onboarding] Step "${stepId}" not found in current flow`);
+        logger.warn(`[Onboarding] Step "${stepId}" not found in current flow`);
       }
     },
     [steps]
@@ -429,7 +430,7 @@ export function useOnboardingFlow(
 
         default:
           // Unknown action - log warning
-          console.warn(`[Onboarding] Unknown action type: ${(action as StepAction).type}`);
+          logger.warn(`[Onboarding] Unknown action type: ${(action as StepAction).type}`);
       }
     },
     [onAction, goToNext, goToPrevious, goToStep, onComplete]

@@ -7,7 +7,9 @@
 import { ipcMain, app, BrowserWindow } from "electron";
 import { autoUpdater } from "electron-updater";
 import log from "electron-log";
+import * as Sentry from "@sentry/electron/main";
 import logService from "../services/logService";
+import failureLogService from "../services/failureLogService";
 
 // Track registration to prevent duplicate handlers
 let handlersRegistered = false;
@@ -27,12 +29,22 @@ export function registerUpdaterHandlers(mainWindow: BrowserWindow): void {
   handlersRegistered = true;
 
   // Check for updates manually (TASK-1990)
+  // TASK-2056: Added 15-second timeout to prevent hanging when offline
   ipcMain.handle("app:check-for-updates", async () => {
     try {
       if (!app.isPackaged) {
         return { updateAvailable: false, currentVersion: app.getVersion() };
       }
-      const result = await autoUpdater.checkForUpdatesAndNotify();
+
+      // Race the update check against a 15-second timeout
+      const timeoutMs = 15000;
+      const result = await Promise.race([
+        autoUpdater.checkForUpdatesAndNotify(),
+        new Promise<null>((_, reject) =>
+          setTimeout(() => reject(new Error(`Update check timed out after ${timeoutMs / 1000}s`)), timeoutMs)
+        ),
+      ]);
+
       return {
         updateAvailable: result?.isUpdateAvailable ?? false,
         version: result?.updateInfo?.version,
@@ -40,6 +52,12 @@ export function registerUpdaterHandlers(mainWindow: BrowserWindow): void {
       };
     } catch (error) {
       log.warn("Manual update check failed:", error);
+      Sentry.captureException(error, { tags: { component: "auto-updater", trigger: "manual-check" } });
+      // TASK-2058: Log failure for offline diagnostics
+      failureLogService.logFailure(
+        "check_for_updates",
+        error instanceof Error ? error.message : "Check failed"
+      );
       return {
         updateAvailable: false,
         currentVersion: app.getVersion(),

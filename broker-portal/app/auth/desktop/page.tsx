@@ -46,6 +46,11 @@ function DesktopLoginForm() {
     setLoading(provider);
     setError(null);
 
+    // Clear any stale session before starting fresh OAuth flow.
+    // This prevents issues when "Sign Out All Devices" invalidated the session
+    // but the browser still has cached cookies from the old session.
+    await supabase.auth.signOut();
+
     const { error: authError } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
@@ -69,7 +74,7 @@ function DesktopLoginForm() {
       <div className="max-w-md w-full space-y-8">
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900">Magic Audit</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Keepr</h1>
           <p className="mt-4 text-gray-500">Sign in to continue to the desktop app</p>
         </div>
 
@@ -151,7 +156,7 @@ function DesktopLoginForm() {
 
         {/* Footer */}
         <p className="text-center text-sm text-gray-500">
-          After signing in, you&apos;ll be redirected back to Magic Audit.
+          After signing in, you&apos;ll be redirected back to Keepr.
         </p>
       </div>
     </div>

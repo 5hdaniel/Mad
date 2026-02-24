@@ -6,7 +6,11 @@
  */
 import React, { useState } from "react";
 import type { Communication } from "../types";
+import { isEmailMessage } from "@/utils/channelHelpers";
 import { EmailThreadViewModal } from "./modals";
+import { formatDateRange } from "../../../utils/dateRangeUtils";
+import { filterSelfFromParticipants, formatParticipants } from "../../../utils/emailParticipantUtils";
+import { getEmailAvatarInitial } from "../../../utils/avatarUtils";
 
 /**
  * Email thread data structure for grouping emails into conversations
@@ -42,89 +46,6 @@ export interface EmailThreadCardProps {
 }
 
 /**
- * Get initials for avatar display from sender name/email.
- */
-function getAvatarInitial(sender?: string): string {
-  if (!sender) return "?";
-
-  // Try to get name from email format "Name <email@example.com>"
-  const nameMatch = sender.match(/^([^<]+)/);
-  if (nameMatch) {
-    const name = nameMatch[1].trim();
-    if (name && name !== sender) {
-      return name.charAt(0).toUpperCase();
-    }
-  }
-
-  // Extract first character from email before @
-  const atIndex = sender.indexOf("@");
-  if (atIndex > 0) {
-    return sender.charAt(0).toUpperCase();
-  }
-
-  return sender.charAt(0).toUpperCase();
-}
-
-/**
- * Filter out the logged-in user's email from a participant list.
- */
-function filterSelfFromParticipants(participants: string[], userEmail?: string): string[] {
-  if (!userEmail) return participants;
-  const normalizedUser = userEmail.toLowerCase().trim();
-  return participants.filter(p => {
-    // Extract email from "Name <email>" or bare "email"
-    const match = p.match(/<([^>]+)>/);
-    const email = match ? match[1].toLowerCase() : p.toLowerCase().trim();
-    return email !== normalizedUser;
-  });
-}
-
-/**
- * Format participant list for display (show first few, then "+X more")
- */
-function formatParticipants(participants: string[], maxShow: number = 2): string {
-  if (participants.length === 0) return "Unknown";
-
-  // Extract names from email addresses where possible
-  const names = participants.map(p => {
-    // Try "Name <email>" format first
-    const nameMatch = p.match(/^([^<]+)/);
-    if (nameMatch) {
-      const name = nameMatch[1].trim();
-      if (name && name !== p) return name;
-    }
-    // Extract email prefix and capitalize (e.g. "madison.delvigo" → "Madison Delvigo")
-    const atIndex = p.indexOf("@");
-    const prefix = atIndex > 0 ? p.substring(0, atIndex) : p;
-    return prefix
-      .split(/[._-]/)
-      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(" ");
-  });
-
-  // Deduplicate
-  const unique = [...new Set(names)];
-
-  if (unique.length <= maxShow) {
-    return unique.join(", ");
-  }
-  return `${unique.slice(0, maxShow).join(", ")} +${unique.length - maxShow}`;
-}
-
-/**
- * Format date range for display
- */
-function formatDateRange(startDate: Date, endDate: Date): string {
-  const formatDate = (d: Date) =>
-    d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-
-  if (startDate.toDateString() === endDate.toDateString()) {
-    return formatDate(startDate);
-  }
-  return `${formatDate(startDate)} - ${formatDate(endDate)}`;
-}
-
-/**
  * EmailThreadCard component for displaying an email thread.
  * Compact layout with subject, participant count, and date range.
  */
@@ -147,8 +68,8 @@ export function EmailThreadCard({
 
   // Avatar: use first non-user participant if sender is the user, otherwise use sender
   const avatarInitial = otherParticipants.length > 0
-    ? getAvatarInitial(otherParticipants[0])
-    : getAvatarInitial(firstEmail?.sender);
+    ? getEmailAvatarInitial(otherParticipants[0])
+    : getEmailAvatarInitial(firstEmail?.sender);
 
   // Body preview from most recent email, fall back to first
   const bodyPreview = lastEmail?.body_text?.substring(0, 200)
@@ -375,9 +296,8 @@ export function groupEmailsByThread(
   const threads = new Map<string, Communication[]>();
 
   emails.forEach((email) => {
-    // Only process emails (not texts)
-    const type = email.communication_type || email.channel;
-    if (type && type !== "email") return;
+    // Only process emails (not texts); untyped records are treated as emails
+    if (!isEmailMessage(email) && (email.channel || email.communication_type)) return;
 
     const threadKey = getEmailThreadKey(email);
     const thread = threads.get(threadKey) || [];
@@ -456,11 +376,10 @@ export function sortEmailThreadsByRecent(threads: EmailThread[]): EmailThread[] 
  * This is the main entry point for email thread grouping.
  */
 export function processEmailThreads(communications: Communication[]): EmailThread[] {
-  // Filter to only emails
-  const emails = communications.filter(c => {
-    const type = c.communication_type || c.channel;
-    return !type || type === "email";
-  });
+  // Filter to only emails (untyped records default to email for backward compatibility)
+  const emails = communications.filter(c =>
+    isEmailMessage(c) || (!c.channel && !c.communication_type)
+  );
 
   // Group into threads
   const grouped = groupEmailsByThread(emails);

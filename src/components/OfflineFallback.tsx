@@ -10,8 +10,9 @@
  */
 
 import React, { useState, useEffect } from "react";
+import logger from '../utils/logger';
 
-const SUPPORT_EMAIL = "magicauditwa@gmail.com";
+const SUPPORT_EMAIL = "support@keeprcompliance.com";
 
 interface OfflineFallbackProps {
   /** Whether the app is currently offline */
@@ -82,7 +83,7 @@ function OfflineFallback({
       } else if (window.api?.shell?.openExternal) {
         const subject = encodeURIComponent("Connection Issue Report");
         const body = encodeURIComponent(
-          `Hi,\n\nI'm experiencing connection issues with the Magic Audit app.\n\n${errorDetails}\n\nPlease help me resolve this issue.\n\nThank you.`,
+          `Hi,\n\nI'm experiencing connection issues with the Keepr app.\n\n${errorDetails}\n\nPlease help me resolve this issue.\n\nThank you.`,
         );
         await window.api.shell.openExternal(
           `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`,
@@ -93,7 +94,7 @@ function OfflineFallback({
         alert(`Support email copied to clipboard: ${SUPPORT_EMAIL}`);
       }
     } catch (err) {
-      console.error("[OfflineFallback] Failed to open support email:", err);
+      logger.error("[OfflineFallback] Failed to open support email:", err);
     }
   };
 

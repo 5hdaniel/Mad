@@ -15,6 +15,7 @@ import {
 } from "../../../utils/transactionRoleUtils";
 import ContactSelectModal from "../../ContactSelectModal";
 import { ContactsProvider, useContacts } from "../../../contexts/ContactsContext";
+import logger from '../../../utils/logger';
 
 // ============================================
 // TYPES
@@ -130,7 +131,7 @@ export function EditTransactionModal({
         setContactAssignments(grouped);
       }
     } catch (err) {
-      console.error("Failed to load contact assignments:", err);
+      logger.error("Failed to load contact assignments:", err);
     } finally {
       setLoading(false);
     }

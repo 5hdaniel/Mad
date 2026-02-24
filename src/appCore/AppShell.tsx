@@ -13,6 +13,7 @@ import type { AppStateMachine } from "./state/types";
 import { OfflineBanner } from "./shell";
 import SystemHealthMonitor from "../components/SystemHealthMonitor";
 import { isOnboardingStep } from "./routing";
+import { useSessionValidator } from "../hooks/useSessionValidator";
 
 // OAuthProvider type to match SystemHealthMonitor expectations
 // Note: 'azure' is Microsoft's Azure AD provider
@@ -40,8 +41,15 @@ export function AppShell({ app, children }: AppShellProps) {
     openProfile,
     openSettings,
     handleRetryConnection,
+    handleLogout,
     getPageTitle,
   } = app;
+
+  // TASK-2062: Poll for remote session invalidation
+  useSessionValidator({
+    isAuthenticated,
+    onSessionInvalidated: handleLogout,
+  });
 
   // PRIMARY DATABASE INITIALIZATION GATE
   // Block all content for authenticated users until database is ready

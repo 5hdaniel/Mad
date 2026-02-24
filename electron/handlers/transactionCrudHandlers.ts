@@ -12,6 +12,8 @@ import type { AuditedTransactionData } from "../services/transactionService";
 import auditService from "../services/auditService";
 import logService from "../services/logService";
 import { autoLinkCommunicationsForContact } from "../services/autoLinkService";
+import emailSyncService from "../services/emailSyncService";
+import databaseService from "../services/databaseService";
 import { wrapHandler } from "../utils/wrapHandler";
 import type {
   Transaction,
@@ -567,57 +569,89 @@ export function registerTransactionCrudHandlers(
         },
       );
 
-      // TASK-1126: Auto-link communications for each added contact
-      const autoLinkResults: Array<{
-        contactId: string;
-        emailsLinked: number;
-        messagesLinked: number;
-        alreadyLinked: number;
-        errors: number;
-      }> = [];
-
       const addOperations = validatedOperations.filter(
         (op) => op.action === "add"
       );
 
-      for (const op of addOperations) {
-        try {
-          const result = await autoLinkCommunicationsForContact({
+      // BACKLOG-820: Fire local auto-link in background (don't block the save response).
+      // Previously awaited per-contact, causing 8+ second UI hangs on contact assignment.
+      // TASK-2067: Also fire provider fetch in background after auto-link.
+      if (addOperations.length > 0) {
+        // Local auto-link (fire-and-forget)
+        for (const op of addOperations) {
+          autoLinkCommunicationsForContact({
             contactId: op.contactId,
             transactionId: validatedTransactionId as string,
+          }).then((result) => {
+            logService.info(
+              "Background local auto-link complete",
+              "Transactions",
+              {
+                contactId: op.contactId,
+                emailsLinked: result.emailsLinked,
+                messagesLinked: result.messagesLinked,
+                alreadyLinked: result.alreadyLinked,
+              }
+            );
+          }).catch((error) => {
+            logService.warn(
+              `Auto-link failed for contact ${op.contactId}`,
+              "Transactions",
+              {
+                error: error instanceof Error ? error.message : "Unknown",
+              }
+            );
           });
-
-          autoLinkResults.push({
-            contactId: op.contactId,
-            ...result,
-          });
-
-          logService.debug(
-            "Auto-link complete for contact",
-            "Transactions",
-            {
-              contactId: op.contactId,
-              emailsLinked: result.emailsLinked,
-              messagesLinked: result.messagesLinked,
-              alreadyLinked: result.alreadyLinked,
-            }
-          );
-        } catch (error) {
-          // Log but don't fail the entire operation
-          logService.warn(
-            `Auto-link failed for contact ${op.contactId}`,
-            "Transactions",
-            {
-              error: error instanceof Error ? error.message : "Unknown",
-            }
-          );
         }
+
+        // Provider fetch + re-link (fire-and-forget)
+        databaseService.getTransactionById(validatedTransactionId as string)
+          .then((transaction) => {
+            if (!transaction) return;
+            for (const op of addOperations) {
+              emailSyncService.fetchAndAutoLinkForContact({
+                userId: transaction.user_id,
+                transactionId: validatedTransactionId as string,
+                contactId: op.contactId,
+                transactionDetails: {
+                  started_at: transaction.started_at,
+                  created_at: transaction.created_at,
+                  closed_at: transaction.closed_at,
+                },
+              }).then((fetchResult) => {
+                logService.info(
+                  "Background provider fetch + auto-link complete",
+                  "Transactions",
+                  {
+                    contactId: op.contactId,
+                    emailsFetched: fetchResult.emailsFetched,
+                    emailsStored: fetchResult.emailsStored,
+                    emailsLinked: fetchResult.autoLinkResult.emailsLinked,
+                    messagesLinked: fetchResult.autoLinkResult.messagesLinked,
+                  }
+                );
+              }).catch((error) => {
+                logService.warn(
+                  `Background provider fetch failed for contact ${op.contactId}`,
+                  "Transactions",
+                  {
+                    error: error instanceof Error ? error.message : "Unknown",
+                  }
+                );
+              });
+            }
+          })
+          .catch((error) => {
+            logService.warn(
+              "Failed to get transaction for background provider fetch",
+              "Transactions",
+              { error: error instanceof Error ? error.message : "Unknown" }
+            );
+          });
       }
 
       return {
         success: true,
-        autoLinkResults:
-          autoLinkResults.length > 0 ? autoLinkResults : undefined,
       };
     }, { module: "Transactions" }),
   );

@@ -15,6 +15,7 @@
 
 import { BrowserWindow } from "electron";
 import { RealtimeChannel } from "@supabase/supabase-js";
+import * as Sentry from "@sentry/electron/main";
 import supabaseService from "./supabaseService";
 import databaseService from "./databaseService";
 import logService from "./logService";
@@ -152,6 +153,9 @@ class SubmissionSyncService {
         `[SyncService] Failed to start realtime subscription: ${error instanceof Error ? error.message : "Unknown error"}`,
         "SubmissionSyncService"
       );
+      Sentry.captureException(error, {
+        tags: { service: "submission-sync", operation: "startRealtimeSubscription" },
+      });
     }
   }
 
@@ -171,8 +175,18 @@ class SubmissionSyncService {
           `[SyncService] Error stopping realtime subscription: ${error instanceof Error ? error.message : "Unknown error"}`,
           "SubmissionSyncService"
         );
+        Sentry.captureException(error, {
+          tags: { service: "submission-sync", operation: "stopRealtimeSubscription" },
+        });
       }
     }
+  }
+
+  /**
+   * Check if database is ready for sync operations
+   */
+  private isDatabaseReady(): boolean {
+    return databaseService.isInitialized();
   }
 
   /**
@@ -181,6 +195,14 @@ class SubmissionSyncService {
   private async handleRealtimeUpdate(cloudStatus: CloudSubmissionStatus): Promise<void> {
     if (!cloudStatus?.id) {
       logService.warn("[SyncService] Received invalid realtime update", "SubmissionSyncService");
+      return;
+    }
+
+    if (!this.isDatabaseReady()) {
+      logService.debug(
+        "[SyncService] Skipping realtime update - database not initialized",
+        "SubmissionSyncService"
+      );
       return;
     }
 
@@ -236,6 +258,9 @@ class SubmissionSyncService {
         `[SyncService] Failed to handle realtime update: ${error instanceof Error ? error.message : "Unknown error"}`,
         "SubmissionSyncService"
       );
+      Sentry.captureException(error, {
+        tags: { service: "submission-sync", operation: "handleRealtimeUpdate" },
+      });
     }
   }
 
@@ -263,8 +288,15 @@ class SubmissionSyncService {
       "SubmissionSyncService"
     );
 
-    // Start interval
+    // Start interval - guard each tick against uninitialized DB
     this.syncInterval = setInterval(async () => {
+      if (!this.isDatabaseReady()) {
+        logService.debug(
+          "[SyncService] Skipping periodic sync tick - database not initialized",
+          "SubmissionSyncService"
+        );
+        return;
+      }
       try {
         await this.syncAllSubmissions();
       } catch (error) {
@@ -272,15 +304,29 @@ class SubmissionSyncService {
           `[SyncService] Sync failed: ${error instanceof Error ? error.message : "Unknown error"}`,
           "SubmissionSyncService"
         );
+        Sentry.captureException(error, {
+          tags: { service: "submission-sync", operation: "periodicSync" },
+        });
       }
     }, this.syncIntervalMs);
 
-    // Also run immediately
+    // Also run immediately if DB is ready
+    if (!this.isDatabaseReady()) {
+      logService.debug(
+        "[SyncService] Skipping initial sync - database not initialized, will retry on next interval",
+        "SubmissionSyncService"
+      );
+      return;
+    }
+
     this.syncAllSubmissions().catch((error) => {
       logService.error(
         `[SyncService] Initial sync failed: ${error instanceof Error ? error.message : "Unknown error"}`,
         "SubmissionSyncService"
       );
+      Sentry.captureException(error, {
+        tags: { service: "submission-sync", operation: "initialSync" },
+      });
     });
   }
 
@@ -322,6 +368,15 @@ class SubmissionSyncService {
    * Sync all submitted transactions
    */
   async syncAllSubmissions(): Promise<SyncResult> {
+    // Guard: ensure database is initialized before attempting sync
+    if (!this.isDatabaseReady()) {
+      logService.debug(
+        "[SyncService] Skipping sync - database not initialized",
+        "SubmissionSyncService"
+      );
+      return { updated: 0, failed: 0, details: [] };
+    }
+
     // Check online status (in Electron main process, we check via net module or assume online)
     // For simplicity, we'll try the request and handle errors
     const result: SyncResult = {
@@ -412,6 +467,9 @@ class SubmissionSyncService {
         `[SyncService] Sync error: ${error instanceof Error ? error.message : "Unknown error"}`,
         "SubmissionSyncService"
       );
+      Sentry.captureException(error, {
+        tags: { service: "submission-sync", operation: "syncAllSubmissions" },
+      });
       throw error;
     }
   }
@@ -420,6 +478,14 @@ class SubmissionSyncService {
    * Sync a specific transaction's submission status
    */
   async syncSubmission(transactionId: string): Promise<boolean> {
+    if (!this.isDatabaseReady()) {
+      logService.debug(
+        "[SyncService] Skipping single submission sync - database not initialized",
+        "SubmissionSyncService"
+      );
+      return false;
+    }
+
     try {
       const db = databaseService.getRawDatabase();
       const transaction = db
@@ -468,6 +534,9 @@ class SubmissionSyncService {
         `[SyncService] Failed to sync single submission: ${error instanceof Error ? error.message : "Unknown error"}`,
         "SubmissionSyncService"
       );
+      Sentry.captureException(error, {
+        tags: { service: "submission-sync", operation: "syncSubmission" },
+      });
       return false;
     }
   }
@@ -480,6 +549,14 @@ class SubmissionSyncService {
    * Get local transactions that are submitted but not in terminal states
    */
   private async getLocalSubmittedTransactions(): Promise<LocalSubmittedTransaction[]> {
+    if (!this.isDatabaseReady()) {
+      logService.debug(
+        "[SyncService] Skipping getLocalSubmittedTransactions - database not initialized",
+        "SubmissionSyncService"
+      );
+      return [];
+    }
+
     const db = databaseService.getRawDatabase();
 
     const rows = db
@@ -501,10 +578,20 @@ class SubmissionSyncService {
   private async fetchCloudStatuses(submissionIds: string[]): Promise<CloudSubmissionStatus[] | null> {
     try {
       const client = supabaseService.getClient();
-      const { data, error } = await client
-        .from("transaction_submissions")
-        .select("id, status, review_notes, reviewed_by, reviewed_at")
-        .in("id", submissionIds);
+
+      // TASK-2056: 15-second timeout to prevent hanging when offline
+      const timeoutMs = 15000;
+      const queryResult = await Promise.race([
+        client
+          .from("transaction_submissions")
+          .select("id, status, review_notes, reviewed_by, reviewed_at")
+          .in("id", submissionIds),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`Cloud status fetch timed out after ${timeoutMs / 1000}s`)), timeoutMs)
+        ),
+      ]);
+
+      const { data, error } = queryResult;
 
       if (error) {
         logService.error(
@@ -520,6 +607,9 @@ class SubmissionSyncService {
         `[SyncService] Failed to fetch cloud statuses: ${error instanceof Error ? error.message : "Unknown error"}`,
         "SubmissionSyncService"
       );
+      Sentry.captureException(error, {
+        tags: { service: "submission-sync", operation: "fetchCloudStatuses" },
+      });
       return null;
     }
   }
@@ -534,6 +624,14 @@ class SubmissionSyncService {
       last_review_notes: string | null;
     }
   ): Promise<void> {
+    if (!this.isDatabaseReady()) {
+      logService.debug(
+        "[SyncService] Skipping updateLocalTransaction - database not initialized",
+        "SubmissionSyncService"
+      );
+      return;
+    }
+
     const db = databaseService.getRawDatabase();
 
     db.prepare(

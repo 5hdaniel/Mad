@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import logger from '../utils/logger';
 
 interface WelcomeTermsProps {
   user: {
@@ -33,7 +34,7 @@ function WelcomeTerms({ user, onAccept }: WelcomeTermsProps) {
     try {
       await onAccept();
     } catch (error) {
-      console.error("Failed to accept terms:", error);
+      logger.error("Failed to accept terms:", error);
       setAccepting(false);
     }
   };

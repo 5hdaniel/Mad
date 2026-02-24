@@ -1,6 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
-import { app } from "electron";
+import { app, safeStorage } from "electron";
+import * as Sentry from "@sentry/electron/main";
 import type { User, OAuthProvider, Subscription } from "../types/models";
 import logService from "./logService";
 
@@ -24,14 +25,29 @@ interface SessionData {
   };
 }
 
+/**
+ * Wrapper format for encrypted session data stored on disk.
+ * When encryption is available, session.json contains this structure
+ * instead of raw SessionData JSON.
+ */
+interface EncryptedSessionFile {
+  encrypted: string; // base64-encoded safeStorage-encrypted data
+}
+
 // ============================================
 // SERVICE CLASS
 // ============================================
 
 /**
  * Session Service
- * Manages user session persistence using local file storage
- * Session data is stored in app's user data directory
+ * Manages user session persistence using local file storage.
+ * Session data is encrypted at rest using Electron's safeStorage API
+ * (OS Keychain on macOS, DPAPI on Windows, libsecret on Linux).
+ *
+ * Graceful fallback:
+ * - If safeStorage is unavailable, falls back to plaintext (with warning)
+ * - If decryption fails (e.g., keychain conflict), deletes session and forces re-login
+ * - Plaintext sessions from before encryption are auto-migrated on first read
  */
 class SessionService {
   private sessionFilePath: string | null = null;
@@ -44,7 +60,127 @@ class SessionService {
   }
 
   /**
-   * Save session data to disk
+   * Check if safeStorage encryption is available.
+   * This is independent of keychainGate -- safeStorage is available after app.ready.
+   */
+  private isEncryptionAvailable(): boolean {
+    try {
+      return safeStorage.isEncryptionAvailable();
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Encrypt a JSON string using safeStorage.
+   * Returns an EncryptedSessionFile JSON string, or the original plaintext
+   * if encryption is not available.
+   */
+  private encryptSessionData(jsonString: string): string {
+    if (!this.isEncryptionAvailable()) {
+      logService.warn(
+        "safeStorage not available, saving session as plaintext",
+        "SessionService",
+      );
+      return jsonString;
+    }
+
+    try {
+      const encryptedBuffer = safeStorage.encryptString(jsonString);
+      const wrapper: EncryptedSessionFile = {
+        encrypted: encryptedBuffer.toString("base64"),
+      };
+      return JSON.stringify(wrapper);
+    } catch (error) {
+      logService.warn(
+        "safeStorage encryption failed, saving session as plaintext",
+        "SessionService",
+        { error: error instanceof Error ? error.message : "Unknown error" },
+      );
+      return jsonString;
+    }
+  }
+
+  /**
+   * Decrypt session file content.
+   * Handles three cases:
+   * 1. Encrypted wrapper format ({"encrypted": "<base64>"}) -> decrypt
+   * 2. Plaintext JSON (legacy/migration) -> parse directly, re-encrypt on next save
+   * 3. Corrupted/unreadable -> return null (forces re-login)
+   *
+   * @returns Parsed SessionData or null if decryption/parsing fails
+   */
+  private decryptSessionData(
+    fileContent: string,
+  ): { session: SessionData; needsMigration: boolean } | null {
+    // First, try to parse as JSON (covers both encrypted wrapper and plaintext)
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(fileContent);
+    } catch {
+      // Not valid JSON at all -- corrupted file
+      logService.warn(
+        "Session file is not valid JSON, will be deleted",
+        "SessionService",
+      );
+      return null;
+    }
+
+    // Check if this is an encrypted wrapper
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      "encrypted" in parsed &&
+      typeof (parsed as EncryptedSessionFile).encrypted === "string"
+    ) {
+      // Encrypted format -- decrypt it
+      if (!this.isEncryptionAvailable()) {
+        logService.warn(
+          "Session is encrypted but safeStorage not available, forcing re-login",
+          "SessionService",
+        );
+        return null;
+      }
+
+      try {
+        const buffer = Buffer.from(
+          (parsed as EncryptedSessionFile).encrypted,
+          "base64",
+        );
+        const decrypted = safeStorage.decryptString(buffer);
+        const session: SessionData = JSON.parse(decrypted);
+        return { session, needsMigration: false };
+      } catch (error) {
+        // Decrypt failure -- keychain conflict (DMG/dev switch), corrupted data, etc.
+        logService.warn(
+          "Failed to decrypt session (possible keychain conflict), forcing re-login",
+          "SessionService",
+          { error: error instanceof Error ? error.message : "Unknown error" },
+        );
+        return null;
+      }
+    }
+
+    // Not encrypted -- this is a plaintext session (pre-upgrade migration case)
+    // Validate it has expected session properties
+    if (parsed && typeof parsed === "object" && "sessionToken" in parsed) {
+      logService.info(
+        "Found plaintext session, will migrate to encrypted format",
+        "SessionService",
+      );
+      return { session: parsed as SessionData, needsMigration: true };
+    }
+
+    // Unknown format
+    logService.warn(
+      "Session file has unrecognized format, will be deleted",
+      "SessionService",
+    );
+    return null;
+  }
+
+  /**
+   * Save session data to disk (encrypted with safeStorage when available)
    * @param sessionData - Session data to save
    */
   async saveSession(sessionData: SessionData): Promise<boolean> {
@@ -55,35 +191,57 @@ class SessionService {
         createdAt: sessionData.createdAt || now,
         savedAt: now,
       };
-      await fs.writeFile(
-        this.getSessionFilePath(),
-        JSON.stringify(data, null, 2),
-        "utf8",
-      );
+      const jsonString = JSON.stringify(data, null, 2);
+      const fileContent = this.encryptSessionData(jsonString);
+      await fs.writeFile(this.getSessionFilePath(), fileContent, "utf8");
       await logService.info("Session saved successfully", "SessionService");
       return true;
     } catch (error) {
       await logService.error("Error saving session", "SessionService", {
         error: error instanceof Error ? error.message : "Unknown error",
       });
+      Sentry.captureException(error, {
+        tags: { service: "session-service", operation: "saveSession" },
+      });
       return false;
     }
   }
 
   /**
-   * Load session data from disk
-   * @returns Session data or null if not found/expired
+   * Load session data from disk (decrypts if encrypted, migrates plaintext)
+   * @returns Session data or null if not found/expired/corrupted
    */
   async loadSession(): Promise<SessionData | null> {
     try {
-      const data = await fs.readFile(this.getSessionFilePath(), "utf8");
-      const session: SessionData = JSON.parse(data);
+      const fileContent = await fs.readFile(this.getSessionFilePath(), "utf8");
+      const result = this.decryptSessionData(fileContent);
+
+      if (!result) {
+        // Decryption or parsing failed -- delete the corrupt/unreadable file
+        await logService.warn(
+          "Deleting unreadable session file, user will need to re-login",
+          "SessionService",
+        );
+        await this.clearSession();
+        return null;
+      }
+
+      const { session, needsMigration } = result;
 
       // Check if session is expired (absolute timeout)
       if (session.expiresAt && Date.now() > session.expiresAt) {
         await logService.info("Session expired, clearing...", "SessionService");
         await this.clearSession();
         return null;
+      }
+
+      // Migrate plaintext session to encrypted format
+      if (needsMigration) {
+        await this.saveSession(session);
+        await logService.info(
+          "Plaintext session migrated to encrypted format",
+          "SessionService",
+        );
       }
 
       await logService.info("Session loaded successfully", "SessionService");
@@ -95,6 +253,9 @@ class SessionService {
       }
       await logService.error("Error loading session", "SessionService", {
         error: error instanceof Error ? error.message : "Unknown error",
+      });
+      Sentry.captureException(error, {
+        tags: { service: "session-service", operation: "loadSession" },
       });
       return null;
     }
@@ -115,6 +276,9 @@ class SessionService {
       }
       await logService.error("Error clearing session", "SessionService", {
         error: error instanceof Error ? error.message : "Unknown error",
+      });
+      Sentry.captureException(error, {
+        tags: { service: "session-service", operation: "clearSession" },
       });
       return false;
     }
@@ -151,6 +315,9 @@ class SessionService {
     } catch (error) {
       await logService.error("Error updating session", "SessionService", {
         error: error instanceof Error ? error.message : "Unknown error",
+      });
+      Sentry.captureException(error, {
+        tags: { service: "session-service", operation: "updateSession" },
       });
       return false;
     }

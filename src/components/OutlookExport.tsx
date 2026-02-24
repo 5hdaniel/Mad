@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import type { Conversation } from "@/hooks/useConversations";
+import logger from '../utils/logger';
 
 interface DeviceCodeInfo {
   verificationUri: string;
@@ -110,7 +111,7 @@ function OutlookExport({
         setUserEmail(email);
       }
     } catch (err) {
-      console.error("Error loading user email:", err);
+      logger.error("Error loading user email:", err);
     }
   };
 

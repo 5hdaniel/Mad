@@ -16,10 +16,9 @@ Type `/dashboard` to generate and open the dashboard.
 When invoked, run:
 
 ```bash
-cd /Users/daniel/Documents/Mad-dashboard-recovery && \
+cd /Users/daniel/Documents/Mad && \
 python .claude/plans/backlog/scripts/generate_dashboard.py && \
-cp backlog-dashboard.html /Users/daniel/Documents/Mad/backlog-dashboard.html && \
-open /Users/daniel/Documents/Mad/backlog-dashboard.html
+open backlog-dashboard.html
 ```
 
 ## Features

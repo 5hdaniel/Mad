@@ -56,3 +56,8 @@ resources/win/apple-drivers/*.msi
 temp-itunes-extract/
 nul
 .claude/metrics/tokens.jsonl
+
+# Local database and generated artifacts
+mad.db
+backlog-dashboard.html
+erd-diagram.html

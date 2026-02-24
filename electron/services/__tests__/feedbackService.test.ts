@@ -76,15 +76,16 @@ describe("FeedbackService", () => {
         expect.objectContaining({
           user_id: mockUserId,
           transaction_id: "trans-123",
-          field_name: "llm_transaction_action",
-          feedback_type: "confirmation",
+          feedback_type: "transaction_link",
         })
       );
 
-      // Verify original_value contains action
+      // Verify original_value contains action and category
       const call = mockDatabaseService.saveFeedback.mock.calls[0][0];
       const metadata = JSON.parse(call.original_value as string);
       expect(metadata.action).toBe("transaction_approved");
+      expect(metadata.category).toBe("llm_transaction_action");
+      expect(metadata.dbFeedbackType).toBe("confirmation");
     });
 
     it("should record rejection", async () => {
@@ -99,14 +100,14 @@ describe("FeedbackService", () => {
         expect.objectContaining({
           user_id: mockUserId,
           transaction_id: "trans-456",
-          field_name: "llm_transaction_action",
-          feedback_type: "rejection",
+          feedback_type: "transaction_link",
         })
       );
 
       const call = mockDatabaseService.saveFeedback.mock.calls[0][0];
       const metadata = JSON.parse(call.original_value as string);
       expect(metadata.action).toBe("transaction_rejected");
+      expect(metadata.dbFeedbackType).toBe("rejection");
     });
 
     it("should record edit with corrections", async () => {
@@ -125,14 +126,14 @@ describe("FeedbackService", () => {
         expect.objectContaining({
           user_id: mockUserId,
           transaction_id: "trans-789",
-          field_name: "llm_transaction_action",
-          feedback_type: "correction",
+          feedback_type: "transaction_link",
         })
       );
 
       const call = mockDatabaseService.saveFeedback.mock.calls[0][0];
       const metadata = JSON.parse(call.original_value as string);
       expect(metadata.action).toBe("transaction_edited");
+      expect(metadata.dbFeedbackType).toBe("correction");
 
       const corrections = JSON.parse(call.corrected_value as string);
       expect(corrections.propertyAddress).toBe("123 Main St");
@@ -165,7 +166,7 @@ describe("FeedbackService", () => {
 
       expect(mockDatabaseService.saveFeedback).toHaveBeenCalledWith(
         expect.objectContaining({
-          feedback_type: "rejection",
+          feedback_type: "transaction_link",
         })
       );
     });
@@ -186,8 +187,8 @@ describe("FeedbackService", () => {
         expect.objectContaining({
           user_id: mockUserId,
           transaction_id: "trans-role-123",
-          field_name: "llm_contact_role",
-          feedback_type: "correction",
+          contact_id: "contact-456",
+          feedback_type: "contact_role",
           corrected_value: "seller",
         })
       );
@@ -197,6 +198,7 @@ describe("FeedbackService", () => {
       expect(metadata.action).toBe("contact_role_corrected");
       expect(metadata.contactId).toBe("contact-456");
       expect(metadata.originalRole).toBe("buyer");
+      expect(metadata.category).toBe("llm_contact_role");
     });
 
     it("should track model and prompt version for role feedback", async () => {
@@ -230,9 +232,8 @@ describe("FeedbackService", () => {
       expect(mockDatabaseService.saveFeedback).toHaveBeenCalledWith(
         expect.objectContaining({
           user_id: mockUserId,
-          communication_id: "comm-123",
-          field_name: "llm_communication",
-          feedback_type: "rejection",
+          message_id: "comm-123",
+          feedback_type: "message_relevance",
         })
       );
 
@@ -240,6 +241,7 @@ describe("FeedbackService", () => {
       const metadata = JSON.parse(call.original_value as string);
       expect(metadata.action).toBe("communication_unlinked");
       expect(metadata.wasRelevant).toBe(false);
+      expect(metadata.dbFeedbackType).toBe("rejection");
     });
 
     it("should record communication add (was relevant)", async () => {
@@ -254,10 +256,9 @@ describe("FeedbackService", () => {
       expect(mockDatabaseService.saveFeedback).toHaveBeenCalledWith(
         expect.objectContaining({
           user_id: mockUserId,
-          communication_id: "comm-456",
+          message_id: "comm-456",
           transaction_id: "trans-correct",
-          field_name: "llm_communication",
-          feedback_type: "confirmation",
+          feedback_type: "message_relevance",
           corrected_value: "trans-correct",
         })
       );
@@ -266,6 +267,7 @@ describe("FeedbackService", () => {
       const metadata = JSON.parse(call.original_value as string);
       expect(metadata.action).toBe("communication_added");
       expect(metadata.wasRelevant).toBe(true);
+      expect(metadata.dbFeedbackType).toBe("confirmation");
     });
 
     it("should track model and prompt version for communication feedback", async () => {
@@ -305,7 +307,7 @@ describe("FeedbackService", () => {
     it("should calculate stats correctly from feedback records", async () => {
       mockDatabaseService.getFeedbackByField.mockImplementation(
         async (_userId, fieldName) => {
-          if (fieldName === "llm_transaction_action") {
+          if (fieldName === "transaction_link") {
             return [
               {
                 id: "1",
@@ -337,18 +339,18 @@ describe("FeedbackService", () => {
               },
             ] as UserFeedback[];
           }
-          if (fieldName === "llm_contact_role") {
+          if (fieldName === "contact_role") {
             return [
               {
                 id: "5",
                 user_id: mockUserId,
-                feedback_type: "correction",
+                feedback_type: "contact_role",
                 original_value: JSON.stringify({ action: "contact_role_corrected" }),
                 created_at: new Date().toISOString(),
               },
             ] as UserFeedback[];
           }
-          if (fieldName === "llm_communication") {
+          if (fieldName === "message_relevance") {
             return [
               {
                 id: "6",
@@ -389,19 +391,19 @@ describe("FeedbackService", () => {
     it("should handle malformed JSON gracefully", async () => {
       mockDatabaseService.getFeedbackByField.mockImplementation(
         async (_userId, fieldName) => {
-          if (fieldName === "llm_transaction_action") {
+          if (fieldName === "transaction_link") {
             return [
               {
                 id: "1",
                 user_id: mockUserId,
-                feedback_type: "confirmation",
+                feedback_type: "transaction_link",
                 original_value: "not valid json",
                 created_at: new Date().toISOString(),
               },
               {
                 id: "2",
                 user_id: mockUserId,
-                feedback_type: "rejection",
+                feedback_type: "transaction_link",
                 original_value: null,
                 created_at: new Date().toISOString(),
               },
@@ -413,10 +415,10 @@ describe("FeedbackService", () => {
 
       const stats = await feedbackService.getFeedbackStats(mockUserId);
 
-      // Should fall back to counting by feedback_type
+      // Should fall back to counting by fieldName category
       expect(stats.totalFeedback).toBe(2);
-      expect(stats.transactionApprovals).toBe(1); // confirmation fallback
-      expect(stats.transactionRejections).toBe(1); // rejection fallback
+      // Both fall back to transactionEdits since dbFeedbackType is unavailable
+      expect(stats.transactionEdits).toBe(2);
     });
 
     it("should query all LLM field types", async () => {
@@ -426,17 +428,17 @@ describe("FeedbackService", () => {
 
       expect(mockDatabaseService.getFeedbackByField).toHaveBeenCalledWith(
         mockUserId,
-        "llm_transaction_action",
+        "transaction_link",
         1000
       );
       expect(mockDatabaseService.getFeedbackByField).toHaveBeenCalledWith(
         mockUserId,
-        "llm_contact_role",
+        "contact_role",
         1000
       );
       expect(mockDatabaseService.getFeedbackByField).toHaveBeenCalledWith(
         mockUserId,
-        "llm_communication",
+        "message_relevance",
         1000
       );
     });
@@ -444,12 +446,12 @@ describe("FeedbackService", () => {
     it("should handle role feedback fallback correctly", async () => {
       mockDatabaseService.getFeedbackByField.mockImplementation(
         async (_userId, fieldName) => {
-          if (fieldName === "llm_contact_role") {
+          if (fieldName === "contact_role") {
             return [
               {
                 id: "1",
                 user_id: mockUserId,
-                feedback_type: "correction",
+                feedback_type: "contact_role",
                 original_value: "invalid json",
                 created_at: new Date().toISOString(),
               },
@@ -467,19 +469,19 @@ describe("FeedbackService", () => {
     it("should handle communication feedback fallback correctly", async () => {
       mockDatabaseService.getFeedbackByField.mockImplementation(
         async (_userId, fieldName) => {
-          if (fieldName === "llm_communication") {
+          if (fieldName === "message_relevance") {
             return [
               {
                 id: "1",
                 user_id: mockUserId,
-                feedback_type: "confirmation",
+                feedback_type: "message_relevance",
                 original_value: "invalid",
                 created_at: new Date().toISOString(),
               },
               {
                 id: "2",
                 user_id: mockUserId,
-                feedback_type: "rejection",
+                feedback_type: "message_relevance",
                 original_value: "invalid",
                 created_at: new Date().toISOString(),
               },
@@ -491,8 +493,8 @@ describe("FeedbackService", () => {
 
       const stats = await feedbackService.getFeedbackStats(mockUserId);
 
-      expect(stats.communicationAdds).toBe(1); // confirmation fallback
-      expect(stats.communicationUnlinks).toBe(1); // rejection fallback
+      // Both fall back to communicationUnlinks since dbFeedbackType is unavailable
+      expect(stats.communicationUnlinks).toBe(2);
     });
   });
 

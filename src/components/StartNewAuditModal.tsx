@@ -4,6 +4,8 @@ import { usePendingTransactions } from "../hooks/usePendingTransactions";
 import { LicenseGate } from "./common/LicenseGate";
 import { AlertBanner, AlertIcons } from "./common/AlertBanner";
 import { useLicense } from "../contexts/LicenseContext";
+import { useNetwork } from "../contexts/NetworkContext";
+import { OfflineNotice } from "./common/OfflineNotice";
 
 interface StartNewAuditModalProps {
   /** Callback when user wants to view pending transaction details */
@@ -42,6 +44,8 @@ function StartNewAuditModal({
 }: StartNewAuditModalProps): React.ReactElement {
   const { pendingTransactions, isLoading, error, refetch } = usePendingTransactions();
   const { hasAIAddon, canCreateTransaction, transactionCount, transactionLimit } = useLicense();
+  // TASK-2056: Disable sync button when offline
+  const { isOnline } = useNetwork();
 
   const formatDate = (dateString: string | Date | null | undefined): string => {
     if (!dateString) return "";
@@ -86,13 +90,14 @@ function StartNewAuditModal({
                     // Refetch pending transactions after sync starts
                     setTimeout(() => refetch(), 1000);
                   }}
-                  disabled={isSyncing}
+                  disabled={isSyncing || !isOnline}
+                  title={!isOnline ? "You are offline" : undefined}
                   className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${
-                    isSyncing
-                      ? "bg-white bg-opacity-20 text-blue-100 cursor-not-allowed"
+                    isSyncing || !isOnline
+                      ? "bg-white bg-opacity-20 text-blue-100 cursor-not-allowed opacity-50"
                       : "bg-white bg-opacity-10 text-white hover:bg-white hover:bg-opacity-20"
                   }`}
-                  aria-label="Sync now"
+                  aria-label={!isOnline ? "Sync now (offline)" : "Sync now"}
                 >
                   <svg
                     className={`w-4 h-4 ${isSyncing ? "animate-spin" : ""}`}
@@ -133,6 +138,8 @@ function StartNewAuditModal({
             </button>
           </div>
         </div>
+
+        <OfflineNotice />
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">

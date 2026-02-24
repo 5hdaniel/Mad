@@ -26,6 +26,7 @@ jest.mock("../services/databaseService", () => ({
     saveFeedback: jest.fn(),
     getFeedbackByTransaction: jest.fn(),
     getFeedbackByField: jest.fn(),
+    isInitialized: jest.fn().mockReturnValue(true),
   },
 }));
 
@@ -115,7 +116,7 @@ describe("Feedback Handlers", () => {
       expect(result.feedbackId).toBe("feedback-new");
       expect(mockFeedbackLearningService.clearCache).toHaveBeenCalledWith(
         TEST_USER_ID,
-        "property_address",
+        "correction",
       );
     });
 
@@ -138,7 +139,10 @@ describe("Feedback Handlers", () => {
       );
 
       expect(result.success).toBe(true);
-      expect(mockFeedbackLearningService.clearCache).not.toHaveBeenCalled();
+      expect(mockFeedbackLearningService.clearCache).toHaveBeenCalledWith(
+        TEST_USER_ID,
+        "general",
+      );
     });
 
     it("should handle invalid user ID", async () => {

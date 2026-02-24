@@ -1,11 +1,12 @@
 /**
  * Supabase Service
  * Handles all cloud database operations and sync
- * Currently uses service_role key for development
- * TODO: Refactor to use Supabase Auth for production
+ * Uses SUPABASE_ANON_KEY (public/publishable key) for all client operations.
+ * RLS policies provide security at the database level.
  */
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import * as Sentry from "@sentry/electron/main";
 import { User, SubscriptionTier, Subscription } from "../types/models";
 import type { AuditLogEntry } from "./auditService";
 import logService from "./logService";
@@ -92,6 +93,8 @@ class SupabaseService {
   private initialized = false;
   /** BACKLOG-390: Store Supabase Auth session for RLS-enabled queries */
   private authSession: SupabaseAuthSession | null = null;
+  /** TASK-2040: Auth state change subscription for cleanup on logout/quit */
+  private authSubscription: { unsubscribe: () => void } | null = null;
 
   /**
    * Initialize Supabase client
@@ -105,26 +108,35 @@ class SupabaseService {
     }
 
     const supabaseUrl = process.env.SUPABASE_URL;
-    // Use anon key (public/publishable) - safe for packaged builds
-    // Falls back to service key for backward compatibility during development
-    const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_KEY;
+    // Use anon key (public/publishable) only - never fall back to service_role key.
+    // The service_role key bypasses all RLS and must never be used in client code.
+    const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
+      const missing = [];
+      if (!supabaseUrl) missing.push("SUPABASE_URL");
+      if (!supabaseKey) missing.push("SUPABASE_ANON_KEY");
       logService.error(
-        "[Supabase] Missing credentials. Check .env.development or .env.production file.",
+        `[Supabase] Missing required environment variable(s): ${missing.join(", ")}. Check .env.development or .env.production file.`,
         "Supabase"
       );
-      throw new Error("Supabase credentials not configured");
+      throw new Error(
+        `Supabase credentials not configured: missing ${missing.join(", ")}`
+      );
     }
 
     logService.info("[Supabase] Initializing with URL:", "Supabase", { supabaseUrl });
 
     this.client = createClient(supabaseUrl, supabaseKey, {
       auth: {
-        autoRefreshToken: false,
+        autoRefreshToken: true,
         persistSession: false,
       },
     });
+
+    // TASK-2040: Listen for auth state changes to keep local session cache
+    // in sync when the SDK auto-refreshes the token
+    this._setupAuthStateListener();
 
     this.initialized = true;
     logService.debug("[Supabase] Initialized successfully", "Supabase");
@@ -206,7 +218,40 @@ class SupabaseService {
         "Supabase",
         { error: error instanceof Error ? error.message : "Unknown error" }
       );
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "signInWithIdToken" },
+      });
       return null;
+    }
+  }
+
+  /**
+   * TASK-2045: Sign out from all devices (global session invalidation)
+   * Calls Supabase with scope: 'global' to invalidate all active sessions.
+   * Must be called BEFORE clearing the local session (needs active token).
+   * @returns Success status and optional error message
+   */
+  async signOutGlobal(): Promise<{ success: boolean; error?: string }> {
+    const client = this._ensureClient();
+
+    try {
+      // TASK-2056: 15-second timeout to prevent hanging when offline
+      const timeoutMs = 15000;
+      const result = await Promise.race([
+        client.auth.signOut({ scope: 'global' }),
+        new Promise<{ error: Error }>((resolve) =>
+          setTimeout(() => resolve({ error: new Error(`Sign-out request timed out after ${timeoutMs / 1000}s`) }), timeoutMs)
+        ),
+      ]);
+      if (result.error) throw result.error;
+      logService.info("[Supabase] Global sign-out successful", "SupabaseService");
+      return { success: true };
+    } catch (error) {
+      logService.error("[Supabase] Global sign-out failed", "SupabaseService", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "signOutGlobal" },
+      });
+      return { success: false, error: (error as Error).message };
     }
   }
 
@@ -232,7 +277,13 @@ class SupabaseService {
       logService.warn("[Supabase] signOut exception", "Supabase", {
         error: error instanceof Error ? error.message : "Unknown error",
       });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "signOut" },
+      });
     }
+    // TASK-2040: Note -- we do NOT unsubscribe the auth listener here.
+    // The listener must remain active to detect future sign-in events.
+    // It is cleaned up via destroy() on app quit.
   }
 
   /**
@@ -266,6 +317,9 @@ class SupabaseService {
     } catch (error) {
       logService.warn("[Supabase] Failed to get session from SDK", "Supabase", {
         error: error instanceof Error ? error.message : String(error)
+      });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "getAuthSession" },
       });
     }
 
@@ -328,8 +382,64 @@ class SupabaseService {
       };
     } catch (err) {
       logService.error("[Supabase] Error checking org membership", "SupabaseService", { err });
+      Sentry.captureException(err, {
+        tags: { service: "supabase-service", operation: "getActiveOrganizationMembership" },
+      });
       return null;
     }
+  }
+
+  /**
+   * TASK-2040: Set up auth state change listener.
+   * Keeps the local authSession cache in sync when the Supabase SDK
+   * auto-refreshes the access token (which happens proactively before
+   * the 1-hour JWT expiry).
+   * @private
+   */
+  private _setupAuthStateListener(): void {
+    if (!this.client) return;
+
+    const { data } = this.client.auth.onAuthStateChange((event, session) => {
+      if (event === "TOKEN_REFRESHED" && session) {
+        this.authSession = {
+          userId: session.user.id,
+          accessToken: session.access_token,
+          refreshToken: session.refresh_token,
+          expiresAt: session.expires_at
+            ? new Date(session.expires_at * 1000)
+            : undefined,
+        };
+        logService.info(
+          "[Supabase] Token auto-refreshed successfully",
+          "SupabaseService",
+          { userId: session.user.id }
+        );
+      } else if (event === "SIGNED_OUT") {
+        this.authSession = null;
+        logService.info(
+          "[Supabase] Auth state: signed out",
+          "SupabaseService"
+        );
+      }
+    });
+
+    this.authSubscription = data.subscription;
+  }
+
+  /**
+   * TASK-2040: Clean up auth state listener and resources.
+   * Must be called on app quit to prevent memory leaks.
+   */
+  destroy(): void {
+    if (this.authSubscription) {
+      this.authSubscription.unsubscribe();
+      this.authSubscription = null;
+      logService.debug(
+        "[Supabase] Auth state listener unsubscribed",
+        "SupabaseService"
+      );
+    }
+    this.authSession = null;
   }
 
   /**
@@ -482,6 +592,9 @@ class SupabaseService {
       return result;
     } catch (error) {
       logService.error("[Supabase] Failed to sync user:", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "syncUser" },
+      });
       throw error;
     }
   }
@@ -571,6 +684,9 @@ class SupabaseService {
       return newUser as User;
     } catch (error) {
       logService.error("[Supabase] User migration failed", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "_migrateUserToAuthId" },
+      });
       throw error;
     }
   }
@@ -594,6 +710,9 @@ class SupabaseService {
       return data as User;
     } catch (error) {
       logService.error("[Supabase] Failed to get user:", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "getUserById" },
+      });
       throw error;
     }
   }
@@ -630,6 +749,9 @@ class SupabaseService {
       return data as User;
     } catch (error) {
       logService.error("[Supabase] Failed to sync terms acceptance:", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "syncTermsAcceptance" },
+      });
       throw error;
     }
   }
@@ -662,6 +784,9 @@ class SupabaseService {
         "Supabase",
         { error }
       );
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "completeEmailOnboarding" },
+      });
       throw error;
     }
   }
@@ -712,6 +837,9 @@ class SupabaseService {
       return subscription;
     } catch (error) {
       logService.error("[Supabase] Failed to validate subscription:", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "validateSubscription" },
+      });
       throw error;
     }
   }
@@ -788,6 +916,9 @@ class SupabaseService {
       }
     } catch (error) {
       logService.error("[Supabase] Failed to register device:", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "registerDevice" },
+      });
       throw error;
     }
   }
@@ -836,6 +967,9 @@ class SupabaseService {
       };
     } catch (error) {
       logService.error("[Supabase] Failed to check device limit:", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "checkDeviceLimit" },
+      });
       // If error, allow access (fail open)
       return { allowed: true, current: 0, max: 2 };
     }
@@ -875,6 +1009,9 @@ class SupabaseService {
     } catch (error) {
       // Don't throw - analytics failures shouldn't break the app
       logService.error("[Supabase] Failed to track event:", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "trackEvent" },
+      });
     }
   }
 
@@ -909,6 +1046,9 @@ class SupabaseService {
     } catch (error) {
       // Don't throw - tracking failures shouldn't break the app
       logService.error("[Supabase] Failed to track API usage:", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "trackApiUsage" },
+      });
     }
   }
 
@@ -954,6 +1094,9 @@ class SupabaseService {
       };
     } catch (error) {
       logService.error("[Supabase] Failed to check API limit:", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "checkApiLimit" },
+      });
       // If error, allow access (fail open)
       return { allowed: true, current: 0, limit: 100, remaining: 100 };
     }
@@ -985,6 +1128,9 @@ class SupabaseService {
       logService.info("[Supabase] Preferences synced", "Supabase");
     } catch (error) {
       logService.error("[Supabase] Failed to sync preferences:", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "syncPreferences" },
+      });
       throw error;
     }
   }
@@ -1042,6 +1188,10 @@ class SupabaseService {
         "Supabase",
         { error }
       );
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "callEdgeFunction" },
+        extra: { functionName },
+      });
       throw error;
     }
   }
@@ -1088,6 +1238,9 @@ class SupabaseService {
       logService.info(`[Supabase] Synced ${entries.length} audit logs to cloud`, "Supabase");
     } catch (error) {
       logService.error("[Supabase] Failed to sync audit logs:", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "batchInsertAuditLogs" },
+      });
       throw error;
     }
   }
@@ -1166,6 +1319,9 @@ class SupabaseService {
       }));
     } catch (error) {
       logService.error("[Supabase] Failed to get audit logs:", "Supabase", { error });
+      Sentry.captureException(error, {
+        tags: { service: "supabase-service", operation: "getAuditLogs" },
+      });
       throw error;
     }
   }

@@ -57,6 +57,17 @@ function DesktopCallbackContent() {
         return;
       }
 
+      // Verify the session is actually valid by checking with the server.
+      // getSession() reads from local storage/cookies and may return a stale
+      // session that was invalidated server-side (e.g., "Sign Out All Devices").
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        // Session is stale/invalidated — clear it and redirect to retry
+        await supabase.auth.signOut();
+        window.location.href = '/auth/desktop?error=session_expired';
+        return;
+      }
+
       // Build deep link URL with tokens
       const callbackUrl = new URL('magicaudit://callback');
       callbackUrl.searchParams.set('access_token', session.access_token);
@@ -96,7 +107,7 @@ function DesktopCallbackContent() {
         {status === 'redirecting' && (
           <>
             <div className="animate-spin rounded-full h-12 w-12 border-4 border-green-500 border-t-transparent mx-auto" />
-            <p className="text-gray-900 font-medium">Opening Magic Audit...</p>
+            <p className="text-gray-900 font-medium">Opening Keepr...</p>
             <p className="text-gray-500 text-sm">You should be redirected automatically.</p>
           </>
         )}
@@ -120,16 +131,16 @@ function DesktopCallbackContent() {
             </div>
             <p className="text-gray-900 font-medium">Sign in successful!</p>
             <p className="text-gray-500 text-sm">
-              If Magic Audit didn&apos;t open automatically, click the button below.
+              If Keepr didn&apos;t open automatically, click the button below.
             </p>
             <a
               href={deepLinkUrl}
               className="inline-block mt-4 px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
             >
-              Open Magic Audit
+              Open Keepr
             </a>
             <p className="text-gray-400 text-xs mt-4">
-              You can close this browser tab after Magic Audit opens.
+              You can close this browser tab after Keepr opens.
             </p>
           </>
         )}

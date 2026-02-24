@@ -26,6 +26,7 @@
  */
 
 import { useEffect, useCallback, useState, useRef } from "react";
+import * as Sentry from "@sentry/electron/renderer";
 import { usePlatform } from "../contexts/PlatformContext";
 import { hasMessagesImportTriggered, setMessagesImportTriggered } from "../utils/syncFlags";
 import { useSyncOrchestrator } from "./useSyncOrchestrator";
@@ -202,16 +203,6 @@ export function useAutoRefresh({
    */
   const runAutoRefresh = useCallback(
     (uid: string, emailConnected: boolean): void => {
-      const alreadyTriggered = hasMessagesImportTriggered();
-
-      // Skip if already imported this session (e.g., during onboarding via PermissionsStep)
-      if (alreadyTriggered) {
-        return;
-      }
-
-      // Mark as triggered to prevent duplicate syncs
-      setMessagesImportTriggered();
-
       // Build list of sync types based on platform and permissions
       // Order: Contacts (fast) → Emails (if AI addon) → Messages (slow)
       const typesToSync: SyncType[] = [];
@@ -254,7 +245,15 @@ export function useAutoRefresh({
     if (!isDatabaseInitialized) return;
     if (isOnboarding) return;
     if (!hasLoadedPreference) return;
-    if (!autoSyncEnabled) return;
+    if (!autoSyncEnabled) {
+      Sentry.addBreadcrumb({
+        category: 'sync',
+        message: 'Auto-refresh skipped: auto-sync disabled by user preference',
+        level: 'info',
+        data: { operation: 'auto-refresh' },
+      });
+      return;
+    }
     // Use module-level flag to prevent React strict mode from triggering twice
     if (hasTriggeredAutoRefresh) return;
 
@@ -263,6 +262,30 @@ export function useAutoRefresh({
 
     // Run refresh after delay to let UI settle
     const timeoutId = setTimeout(() => {
+      // Skip if already imported this session (e.g., during onboarding via PermissionsStep)
+      if (hasMessagesImportTriggered()) {
+        Sentry.addBreadcrumb({
+          category: 'sync',
+          message: 'Auto-refresh skipped: messages import already triggered this session',
+          level: 'info',
+          data: { operation: 'auto-refresh' },
+        });
+        return;
+      }
+      setMessagesImportTriggered();
+
+      Sentry.addBreadcrumb({
+        category: 'sync',
+        message: 'Auto-refresh triggered',
+        level: 'info',
+        data: {
+          operation: 'auto-refresh',
+          hasEmailConnected,
+          isMacOS,
+          hasPermissions,
+        },
+      });
+
       runAutoRefresh(userId, hasEmailConnected);
     }, AUTO_REFRESH_DELAY_MS);
 
@@ -290,7 +313,7 @@ export function useAutoRefresh({
       // Sync just completed - send notification
       window.api.notification?.send(
         "Sync Complete",
-        "Magic Audit is ready to use. Your data has been synchronized."
+        "Keepr is ready to use. Your data has been synchronized."
       ).catch(() => {
         // Silently ignore notification failures
       });

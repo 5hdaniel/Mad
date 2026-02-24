@@ -32,7 +32,7 @@ export function LoadingScreen() {
             />
           </svg>
         </div>
-        <p className="text-gray-600 text-sm">Starting Magic Audit...</p>
+        <p className="text-gray-600 text-sm">Starting Keepr...</p>
       </div>
     </div>
   );

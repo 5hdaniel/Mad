@@ -13,7 +13,7 @@
  * @module appCore/state/machine/LoadingOrchestrator
  */
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useCallback } from "react";
 import { useAppState } from "./useAppState";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { ErrorScreen } from "./components/ErrorScreen";
@@ -21,6 +21,7 @@ import {
   detectPlatform,
   autoInitializesStorage,
 } from "./utils/platformInit";
+import { waitForApi } from "./utils/waitForApi";
 import { useAuth } from "../../../contexts";
 import type { PlatformInfo, User, UserData } from "./types";
 
@@ -50,6 +51,21 @@ export function LoadingOrchestrator({
   // Detect platform once at startup (cached in ref to avoid re-detection)
   const platformRef = useRef(detectPlatform());
 
+  // Helper to dispatch API_NOT_READY error (used by all phases)
+  const dispatchApiNotReady = useCallback(
+    (err: unknown) => {
+      dispatch({
+        type: "ERROR",
+        error: {
+          code: "API_NOT_READY",
+          message: err instanceof Error ? err.message : String(err),
+        },
+        recoverable: true,
+      });
+    },
+    [dispatch]
+  );
+
   // Get full platform info including hasIPhone (determined during onboarding)
   const getPlatformInfo = (): PlatformInfo => ({
     ...platformRef.current,
@@ -77,35 +93,48 @@ export function LoadingOrchestrator({
     const platform = platformRef.current;
     // console.log("[LoadingOrchestrator] Platform detected:", platform);
 
-    window.api.system
-      .hasEncryptionKeyStore()
-      .then((result) => {
-        // console.log("[LoadingOrchestrator] PHASE 1: Storage check result:", result);
-        if (cancelled) return;
-        // console.log("[LoadingOrchestrator] PHASE 1: Dispatching STORAGE_CHECKED", { hasKeyStore: result.hasKeyStore });
-        dispatch({
-          type: "STORAGE_CHECKED",
-          hasKeyStore: result.hasKeyStore,
-          isMacOS: platform.isMacOS,
+    const runPhase = async () => {
+      try {
+        await waitForApi();
+      } catch (err) {
+        if (!cancelled) dispatchApiNotReady(err);
+        return;
+      }
+
+      if (cancelled) return;
+
+      window.api.system
+        .hasEncryptionKeyStore()
+        .then((result) => {
+          // console.log("[LoadingOrchestrator] PHASE 1: Storage check result:", result);
+          if (cancelled) return;
+          // console.log("[LoadingOrchestrator] PHASE 1: Dispatching STORAGE_CHECKED", { hasKeyStore: result.hasKeyStore });
+          dispatch({
+            type: "STORAGE_CHECKED",
+            hasKeyStore: result.hasKeyStore,
+            isMacOS: platform.isMacOS,
+          });
+        })
+        .catch((error: Error) => {
+          // console.error("[LoadingOrchestrator] PHASE 1: Storage check FAILED:", error);
+          if (cancelled) return;
+          dispatch({
+            type: "ERROR",
+            error: {
+              code: "STORAGE_CHECK_FAILED",
+              message: error.message || "Failed to check storage",
+            },
+            recoverable: true,
+          });
         });
-      })
-      .catch((error: Error) => {
-        // console.error("[LoadingOrchestrator] PHASE 1: Storage check FAILED:", error);
-        if (cancelled) return;
-        dispatch({
-          type: "ERROR",
-          error: {
-            code: "STORAGE_CHECK_FAILED",
-            message: error.message || "Failed to check storage",
-          },
-          recoverable: true,
-        });
-      });
+    };
+
+    runPhase();
 
     return () => {
       cancelled = true;
     };
-  }, [state.status, loadingPhase, dispatch]);
+  }, [state.status, loadingPhase, dispatch, dispatchApiNotReady]);
 
   // ============================================
   // PHASE 2: Initialize database (platform-specific)
@@ -140,28 +169,41 @@ export function LoadingOrchestrator({
       // console.log("[LoadingOrchestrator] PHASE 2: Windows auto-init path");
       let cancelled = false;
 
-      dispatch({ type: "DB_INIT_STARTED" });
+      const runPhase = async () => {
+        try {
+          await waitForApi();
+        } catch (err) {
+          if (!cancelled) dispatchApiNotReady(err);
+          return;
+        }
 
-      window.api.system
-        .initializeSecureStorage()
-        .then((result) => {
-          // console.log("[LoadingOrchestrator] PHASE 2: DB init result (Windows):", result);
-          if (cancelled) return;
-          dispatch({
-            type: "DB_INIT_COMPLETE",
-            success: result.success,
-            error: result.error,
+        if (cancelled) return;
+
+        dispatch({ type: "DB_INIT_STARTED" });
+
+        window.api.system
+          .initializeSecureStorage()
+          .then((result) => {
+            // console.log("[LoadingOrchestrator] PHASE 2: DB init result (Windows):", result);
+            if (cancelled) return;
+            dispatch({
+              type: "DB_INIT_COMPLETE",
+              success: result.success,
+              error: result.error,
+            });
+          })
+          .catch((error: Error) => {
+            // console.error("[LoadingOrchestrator] PHASE 2: DB init FAILED (Windows):", error);
+            if (cancelled) return;
+            dispatch({
+              type: "DB_INIT_COMPLETE",
+              success: false,
+              error: error.message || "Database initialization failed",
+            });
           });
-        })
-        .catch((error: Error) => {
-          // console.error("[LoadingOrchestrator] PHASE 2: DB init FAILED (Windows):", error);
-          if (cancelled) return;
-          dispatch({
-            type: "DB_INIT_COMPLETE",
-            success: false,
-            error: error.message || "Database initialization failed",
-          });
-        });
+      };
+
+      runPhase();
 
       return () => {
         cancelled = true;
@@ -174,34 +216,47 @@ export function LoadingOrchestrator({
       // console.log("[LoadingOrchestrator] PHASE 2: macOS init path (may trigger Keychain)");
       let cancelled = false;
 
-      dispatch({ type: "DB_INIT_STARTED" });
+      const runPhase = async () => {
+        try {
+          await waitForApi();
+        } catch (err) {
+          if (!cancelled) dispatchApiNotReady(err);
+          return;
+        }
 
-      window.api.system
-        .initializeSecureStorage()
-        .then((result) => {
-          // console.log("[LoadingOrchestrator] PHASE 2: DB init result (macOS):", result);
-          if (cancelled) return;
-          dispatch({
-            type: "DB_INIT_COMPLETE",
-            success: result.success,
-            error: result.error,
+        if (cancelled) return;
+
+        dispatch({ type: "DB_INIT_STARTED" });
+
+        window.api.system
+          .initializeSecureStorage()
+          .then((result) => {
+            // console.log("[LoadingOrchestrator] PHASE 2: DB init result (macOS):", result);
+            if (cancelled) return;
+            dispatch({
+              type: "DB_INIT_COMPLETE",
+              success: result.success,
+              error: result.error,
+            });
+          })
+          .catch((error: Error) => {
+            // console.error("[LoadingOrchestrator] PHASE 2: DB init FAILED (macOS):", error);
+            if (cancelled) return;
+            dispatch({
+              type: "DB_INIT_COMPLETE",
+              success: false,
+              error: error.message || "Database initialization failed",
+            });
           });
-        })
-        .catch((error: Error) => {
-          // console.error("[LoadingOrchestrator] PHASE 2: DB init FAILED (macOS):", error);
-          if (cancelled) return;
-          dispatch({
-            type: "DB_INIT_COMPLETE",
-            success: false,
-            error: error.message || "Database initialization failed",
-          });
-        });
+      };
+
+      runPhase();
 
       return () => {
         cancelled = true;
       };
     }
-  }, [state.status, loadingPhase, dispatch]);
+  }, [state.status, loadingPhase, dispatch, dispatchApiNotReady]);
 
   // ============================================
   // PHASE 3: Load auth state
@@ -223,84 +278,97 @@ export function LoadingOrchestrator({
 
     const platform = getPlatformInfo();
 
-    window.api.auth
-      .getCurrentUser()
-      .then((result) => {
-        /* console.log("[LoadingOrchestrator] PHASE 3: Auth check result:", {
-          success: result.success,
-          hasUser: !!result.user,
-          isNewUser: result.isNewUser,
-        }); */
-        if (cancelled) return;
+    const runPhase = async () => {
+      try {
+        await waitForApi();
+      } catch (err) {
+        if (!cancelled) dispatchApiNotReady(err);
+        return;
+      }
 
-        if (result.success && result.user) {
-          // Type the user from the API response
-          const apiUser = result.user as {
-            id: string;
-            email: string;
-            display_name?: string;
-            avatar_url?: string;
-          };
+      if (cancelled) return;
 
-          const user: User = {
-            id: apiUser.id,
-            email: apiUser.email,
-            displayName: apiUser.display_name,
-            avatarUrl: apiUser.avatar_url,
-          };
+      window.api.auth
+        .getCurrentUser()
+        .then((result) => {
+          /* console.log("[LoadingOrchestrator] PHASE 3: Auth check result:", {
+            success: result.success,
+            hasUser: !!result.user,
+            isNewUser: result.isNewUser,
+          }); */
+          if (cancelled) return;
 
-          // Store for USER_DATA_LOADED phase
-          authDataRef.current = { user, platform };
+          if (result.success && result.user) {
+            // Type the user from the API response
+            const apiUser = result.user as {
+              id: string;
+              email: string;
+              display_name?: string;
+              avatar_url?: string;
+            };
 
-          // Sync to AuthContext so currentUser is available in UI
-          const authContextUser = {
-            id: apiUser.id,
-            email: apiUser.email,
-            display_name: apiUser.display_name,
-            avatar_url: apiUser.avatar_url,
-          };
-          login(
-            authContextUser,
-            result.sessionToken ?? "",
-            result.provider ?? "",
-            result.subscription,
-            result.isNewUser ?? false,
-          );
+            const user: User = {
+              id: apiUser.id,
+              email: apiUser.email,
+              displayName: apiUser.display_name,
+              avatarUrl: apiUser.avatar_url,
+            };
 
-          // console.log("[LoadingOrchestrator] PHASE 3: Dispatching AUTH_LOADED with user:", user.email);
-          dispatch({
-            type: "AUTH_LOADED",
-            user,
-            isNewUser: result.isNewUser ?? false,
-            platform,
-          });
-        } else {
-          // No session - user needs to login
-          // console.log("[LoadingOrchestrator] PHASE 3: No session, dispatching AUTH_LOADED with null user");
+            // Store for USER_DATA_LOADED phase
+            authDataRef.current = { user, platform };
+
+            // Sync to AuthContext so currentUser is available in UI
+            const authContextUser = {
+              id: apiUser.id,
+              email: apiUser.email,
+              display_name: apiUser.display_name,
+              avatar_url: apiUser.avatar_url,
+            };
+            login(
+              authContextUser,
+              result.sessionToken ?? "",
+              result.provider ?? "",
+              result.subscription,
+              result.isNewUser ?? false,
+            );
+
+            // console.log("[LoadingOrchestrator] PHASE 3: Dispatching AUTH_LOADED with user:", user.email);
+            dispatch({
+              type: "AUTH_LOADED",
+              user,
+              isNewUser: result.isNewUser ?? false,
+              platform,
+            });
+          } else {
+            // No session - user needs to login
+            // console.log("[LoadingOrchestrator] PHASE 3: No session, dispatching AUTH_LOADED with null user");
+            dispatch({
+              type: "AUTH_LOADED",
+              user: null,
+              isNewUser: false,
+              platform,
+            });
+          }
+        })
+        .catch((error: Error) => {
+          if (cancelled) return;
+          // No session is not necessarily an error - just means user needs to login
+          // console.warn("[LoadingOrchestrator] PHASE 3: Auth check failed:", error);
           dispatch({
             type: "AUTH_LOADED",
             user: null,
             isNewUser: false,
-            platform,
+            platform: getPlatformInfo(),
           });
-        }
-      })
-      .catch((error: Error) => {
-        if (cancelled) return;
-        // No session is not necessarily an error - just means user needs to login
-        // console.warn("[LoadingOrchestrator] PHASE 3: Auth check failed:", error);
-        dispatch({
-          type: "AUTH_LOADED",
-          user: null,
-          isNewUser: false,
-          platform: getPlatformInfo(),
         });
-      });
+    };
+
+    runPhase();
 
     return () => {
       cancelled = true;
     };
-  }, [state.status, loadingPhase, dispatch, getPlatformInfo, login]);
+  }, [state.status, loadingPhase, dispatch, dispatchApiNotReady, getPlatformInfo, login]);
 
   // ============================================
   // PHASE 4: Load user data (if authenticated)
@@ -434,49 +502,66 @@ export function LoadingOrchestrator({
       };
     };
 
-    loadUserData()
-      .then((userData) => {
-        if (cancelled) return;
+    const loadUserDataAndDispatch = () => {
+      return loadUserData()
+        .then((userData) => {
+          if (cancelled) return;
 
-        // Dispatch with required context (user and platform from state or ref)
-        dispatch({
-          type: "USER_DATA_LOADED",
-          data: userData,
-          // These are required by the reducer for state transition
-          user,
-          platform,
-        } as {
-          type: "USER_DATA_LOADED";
-          data: UserData;
-          user: User;
-          platform: PlatformInfo;
+          // Dispatch with required context (user and platform from state or ref)
+          dispatch({
+            type: "USER_DATA_LOADED",
+            data: userData,
+            // These are required by the reducer for state transition
+            user,
+            platform,
+          } as {
+            type: "USER_DATA_LOADED";
+            data: UserData;
+            user: User;
+            platform: PlatformInfo;
+          });
+        })
+        .catch((error: Error) => {
+          if (cancelled) return;
+          // console.error("[LoadingOrchestrator] Failed to load user data:", error);
+
+          // Fallback to empty user data - will trigger onboarding
+          const fallbackData: UserData = {
+            phoneType: null,
+            hasCompletedEmailOnboarding: false,
+            hasEmailConnected: false,
+            needsDriverSetup: platform.isWindows,
+            hasPermissions: !platform.isMacOS,
+          };
+
+          dispatch({
+            type: "USER_DATA_LOADED",
+            data: fallbackData,
+            user,
+            platform,
+          } as {
+            type: "USER_DATA_LOADED";
+            data: UserData;
+            user: User;
+            platform: PlatformInfo;
+          });
         });
-      })
-      .catch((error: Error) => {
-        if (cancelled) return;
-        // console.error("[LoadingOrchestrator] Failed to load user data:", error);
+    };
 
-        // Fallback to empty user data - will trigger onboarding
-        const fallbackData: UserData = {
-          phoneType: null,
-          hasCompletedEmailOnboarding: false,
-          hasEmailConnected: false,
-          needsDriverSetup: platform.isWindows,
-          hasPermissions: !platform.isMacOS,
-        };
+    const runPhase = async () => {
+      try {
+        await waitForApi();
+      } catch (err) {
+        if (!cancelled) dispatchApiNotReady(err);
+        return;
+      }
 
-        dispatch({
-          type: "USER_DATA_LOADED",
-          data: fallbackData,
-          user,
-          platform,
-        } as {
-          type: "USER_DATA_LOADED";
-          data: UserData;
-          user: User;
-          platform: PlatformInfo;
-        });
-      });
+      if (cancelled) return;
+
+      await loadUserDataAndDispatch();
+    };
+
+    runPhase();
 
     return () => {
       cancelled = true;
@@ -484,7 +569,7 @@ export function LoadingOrchestrator({
     // Note: We read state.user and state.platform for LOGIN_SUCCESS flow,
     // but those are set atomically with loadingPhase, so state.status and loadingPhase
     // are sufficient dependencies.
-  }, [state.status, loadingPhase, dispatch]);
+  }, [state.status, loadingPhase, dispatch, dispatchApiNotReady]);
 
   // ============================================
   // RENDER BASED ON STATE

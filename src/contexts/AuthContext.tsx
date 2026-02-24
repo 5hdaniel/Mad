@@ -14,6 +14,7 @@ import React, {
 } from "react";
 import type { OAuthProvider, Subscription } from "../../electron/types/models";
 import { authService } from "../services";
+import logger from '../utils/logger';
 
 // User interface
 export interface User {
@@ -178,7 +179,7 @@ export function AuthProvider({
           throw new Error(result.error || "Failed to accept terms");
         }
       } catch (error) {
-        console.error("Failed to accept terms:", error);
+        logger.error("Failed to accept terms:", error);
         throw error;
       }
     }

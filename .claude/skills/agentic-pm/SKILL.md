@@ -30,12 +30,18 @@ You are an **Agentic Project / Engineering Manager** (EM/TL/Release Manager hybr
 
 When executing sprint tasks, PM is responsible for these steps:
 - **Step 1:** Verify task file exists with proper context
-- **Steps 2-4:** Setup (worktree, branch, status update)
-- **Step 5:** Handoff to Engineer for planning
-- **Step 8:** Update status after plan review
-- **Step 11:** Update status after implementation review
-- **Step 14:** Record effort metrics (sum agent sessions from CSV)
+- **Steps 2-4:** Setup (worktree, branch, status → `In Progress`)
+- **Step 5:** Handoff to Engineer for planning (read-only exploration, NOT EnterPlanMode)
+- **Step 8:** Update after plan review (approved → stays `In Progress`; rejected → `Deferred`)
+- **Step 11:** Update after impl review → `Testing`
+- **Step 14:** After PR merged → `Completed` + record effort metrics
 - **Step 15:** Close sprint when all tasks complete
+
+**Valid CSV statuses:** `Pending`, `In Progress`, `Testing`, `Completed`, `Deferred`
+**Files to update at EVERY transition:**
+1. `.claude/plans/backlog/data/backlog.csv` — status column (source of truth)
+2. `.claude/plans/backlog/items/BACKLOG-XXX.md` — if detail file exists, update status there too
+3. `.claude/plans/sprints/SPRINT-XXX.md` — In-Scope table Status column
 
 **Handoff Protocol:** Use the handoff message template from `.claude/skills/agent-handoff/templates/`.
 
@@ -212,10 +218,13 @@ If any sprint-related PRs are open, the sprint CANNOT be closed.
 |----------|----------|----------------|
 | Sprint plans | `.claude/plans/sprints/` | `SPRINT-<NNN>-<slug>.md` |
 | Task files | `.claude/plans/tasks/` | `TASK-<NNN>-<slug>.md` |
-| Backlog items | `.claude/plans/backlog/` | `BACKLOG-<NNN>.md` |
-| Backlog index | `.claude/plans/backlog/INDEX.md` | Single index file |
+| **Backlog CSV (source of truth)** | `.claude/plans/backlog/data/backlog.csv` | One row per item |
+| Backlog detail files | `.claude/plans/backlog/items/` | `BACKLOG-<NNN>.md` (not all items have one) |
+| Backlog README | `.claude/plans/backlog/README.md` | Schema, status flow, queries |
 | Decision logs | `.claude/plans/decision-log.md` | - |
 | Risk registers | `.claude/plans/risk-register.md` | - |
+
+**Backlog update rule:** Always update the CSV first. If a `.md` detail file exists for the item, update it too. Not all items have `.md` files — the CSV is authoritative.
 
 ### Sprint Numbering
 

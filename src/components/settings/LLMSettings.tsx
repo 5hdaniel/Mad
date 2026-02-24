@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import logger from '../../utils/logger';
 
 /**
  * LLM Configuration types - matches electron/types/ipc.ts
@@ -492,7 +493,7 @@ export function LLMSettings({ userId }: LLMSettingsProps) {
       }
     } catch (err) {
       setError("Failed to load LLM settings");
-      console.error("Error loading LLM config:", err);
+      logger.error("Error loading LLM config:", err);
     } finally {
       setLoading(false);
     }
@@ -537,7 +538,7 @@ export function LLMSettings({ userId }: LLMSettingsProps) {
         }
       }
     } catch (err) {
-      console.error("Error saving API key:", err);
+      logger.error("Error saving API key:", err);
     }
   };
 
@@ -556,7 +557,7 @@ export function LLMSettings({ userId }: LLMSettingsProps) {
         await loadConfig();
       }
     } catch (err) {
-      console.error("Error removing API key:", err);
+      logger.error("Error removing API key:", err);
     }
   };
 
@@ -578,7 +579,7 @@ export function LLMSettings({ userId }: LLMSettingsProps) {
         setConfig((prev) => (prev ? { ...prev, ...preferences } : prev));
       }
     } catch (err) {
-      console.error("Error updating preferences:", err);
+      logger.error("Error updating preferences:", err);
     }
   };
 
@@ -593,7 +594,7 @@ export function LLMSettings({ userId }: LLMSettingsProps) {
         );
       }
     } catch (err) {
-      console.error("Error recording consent:", err);
+      logger.error("Error recording consent:", err);
     }
   };
 

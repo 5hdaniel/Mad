@@ -12,6 +12,7 @@
  */
 
 import React, { Component, ErrorInfo, ReactNode } from "react";
+import logger from '../utils/logger';
 
 interface Props {
   children: ReactNode;
@@ -28,7 +29,7 @@ interface State {
   showFullReport: boolean;
 }
 
-const SUPPORT_EMAIL = "magicauditwa@gmail.com";
+const SUPPORT_EMAIL = "support@keeprcompliance.com";
 
 class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
@@ -48,8 +49,8 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   async componentDidCatch(error: Error, errorInfo: ErrorInfo): Promise<void> {
-    console.error("[ErrorBoundary] Caught error:", error);
-    console.error("[ErrorBoundary] Error info:", errorInfo);
+    logger.error("[ErrorBoundary] Caught error:", error);
+    logger.error("[ErrorBoundary] Error info:", errorInfo);
 
     this.setState({ errorInfo });
 
@@ -62,7 +63,7 @@ class ErrorBoundary extends Component<Props, State> {
         }
       }
     } catch (diagError) {
-      console.error("[ErrorBoundary] Failed to get diagnostics:", diagError);
+      logger.error("[ErrorBoundary] Failed to get diagnostics:", diagError);
     }
 
     // Call optional error handler
@@ -85,7 +86,7 @@ class ErrorBoundary extends Component<Props, State> {
   getErrorReport = (): string => {
     const { error, errorInfo, diagnostics } = this.state;
 
-    let report = `=== MAGIC AUDIT ERROR REPORT ===\n\n`;
+    let report = `=== KEEPR ERROR REPORT ===\n\n`;
     report += `TIMESTAMP: ${new Date().toISOString()}\n\n`;
     report += `ERROR:\n${error?.message || "Unknown error"}\n\n`;
 
@@ -111,7 +112,7 @@ class ErrorBoundary extends Component<Props, State> {
       this.setState({ copiedToClipboard: true });
       setTimeout(() => this.setState({ copiedToClipboard: false }), 3000);
     } catch (err) {
-      console.error("[ErrorBoundary] Failed to copy error report:", err);
+      logger.error("[ErrorBoundary] Failed to copy error report:", err);
     }
   };
 
@@ -135,7 +136,7 @@ class ErrorBoundary extends Component<Props, State> {
       } else if (window.api?.shell?.openExternal) {
         const subject = encodeURIComponent("App Crash Report");
         const body = encodeURIComponent(
-          `Hi,\n\nI encountered an error in the Magic Audit app.\n\n${errorDetails}\n\nPlease help me resolve this issue.\n\nThank you.`,
+          `Hi,\n\nI encountered an error in the Keepr app.\n\n${errorDetails}\n\nPlease help me resolve this issue.\n\nThank you.`,
         );
         await window.api.shell.openExternal(
           `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`,
@@ -146,7 +147,7 @@ class ErrorBoundary extends Component<Props, State> {
         alert(`Support email copied to clipboard: ${SUPPORT_EMAIL}`);
       }
     } catch (err) {
-      console.error("[ErrorBoundary] Failed to open support email:", err);
+      logger.error("[ErrorBoundary] Failed to open support email:", err);
     }
   };
 

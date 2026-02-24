@@ -24,7 +24,7 @@ const MESSAGES: Record<UpgradeReason, { title: string; description: string }> = 
   trial_expired: {
     title: "Your Trial Has Expired",
     description:
-      "Your 14-day free trial has ended. Upgrade to continue using Magic Audit.",
+      "Your 14-day free trial has ended. Upgrade to continue using Keepr.",
   },
   transaction_limit: {
     title: "Transaction Limit Reached",
@@ -38,7 +38,7 @@ const MESSAGES: Record<UpgradeReason, { title: string; description: string }> = 
   },
   unknown: {
     title: "License Required",
-    description: "A valid license is required to use Magic Audit.",
+    description: "A valid license is required to use Keepr.",
   },
 };
 
@@ -47,7 +47,7 @@ export function UpgradeScreen({ reason, onLogout }: UpgradeScreenProps): React.R
 
   const handleUpgrade = () => {
     // Open upgrade page in popup window (keeps user in-app)
-    window.api?.shell?.openPopup?.("https://broker-portal-two.vercel.app/beta", "Upgrade to Magic Audit Pro");
+    window.api?.shell?.openPopup?.("https://broker-portal-two.vercel.app/beta", "Upgrade to Keepr Pro");
   };
 
   const handleLogout = async () => {

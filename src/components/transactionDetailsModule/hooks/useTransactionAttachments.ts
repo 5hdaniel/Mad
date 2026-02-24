@@ -4,6 +4,8 @@
  */
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { Transaction, Communication } from "@/types";
+import { isEmailMessage } from "@/utils/channelHelpers";
+import logger from '../../../utils/logger';
 
 /**
  * Interface for parsed email attachment metadata
@@ -108,7 +110,7 @@ export function useTransactionAttachments(
     const emailAttachments: TransactionAttachment[] = communications
       .filter(
         (comm: Communication) =>
-          (comm.channel === "email" || comm.communication_type === "email") && comm.has_attachments
+          isEmailMessage(comm) && comm.has_attachments
       )
       .flatMap((email: Communication) => {
         const metadata = parseAttachmentMetadata(email.attachment_metadata);
@@ -151,7 +153,7 @@ export function useTransactionAttachments(
         const emailAttachments: TransactionAttachment[] = allCommunications
           .filter(
             (comm: Communication) =>
-              comm.channel === "email" && comm.has_attachments
+              isEmailMessage(comm) && comm.has_attachments
           )
           .flatMap((email: Communication) => {
             const metadata = parseAttachmentMetadata(email.attachment_metadata);
@@ -177,7 +179,7 @@ export function useTransactionAttachments(
         setFetchedAttachments([]);
       }
     } catch (err) {
-      console.error("Failed to load attachments:", err);
+      logger.error("Failed to load attachments:", err);
       setError("Failed to load attachments");
       setFetchedAttachments([]);
     } finally {
@@ -287,7 +289,7 @@ export function useAttachmentCounts(
         setCounts({ textAttachments: 0, emailAttachments: 0, total: 0, totalSizeBytes: 0 });
       }
     } catch (err) {
-      console.error("Failed to load attachment counts:", err);
+      logger.error("Failed to load attachment counts:", err);
       setError("Failed to load attachment counts");
       setCounts({ textAttachments: 0, emailAttachments: 0, total: 0, totalSizeBytes: 0 });
     } finally {

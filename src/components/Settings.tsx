@@ -1,14 +1,21 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { LLMSettings } from "./settings/LLMSettings";
 import { MacOSMessagesImportSettings } from "./settings/MacOSMessagesImportSettings";
 import { ContactsImportSettings } from "./settings/MacOSContactsImportSettings";
 import { ImportSourceSettings } from "./settings/ImportSourceSettings";
 import { LicenseGate } from "./common/LicenseGate";
+import { SettingsTabBar } from "./settings/SettingsTabBar";
 import { useNotification } from "@/hooks/useNotification";
+import { useScrollSpy } from "@/hooks/useScrollSpy";
+import { useLicense } from "@/contexts/LicenseContext";
 import {
   emitEmailConnectionChanged,
   useEmailConnectionListener,
 } from "@/utils/emailConnectionEvents";
+import { useNetwork } from '../contexts/NetworkContext';
+import { OfflineNotice } from './common/OfflineNotice';
+import logger from '../utils/logger';
+import { formatFileSize } from '../utils/formatUtils';
 
 interface ConnectionError {
   type: string;
@@ -39,7 +46,7 @@ interface PreferencesResult {
       defaultFormat?: string;
     };
     scan?: {
-      lookbackMonths?: number;
+      lookbackMonths?: number; // Legacy (TASK-2072: no longer used for scan, kept for read compat)
     };
     sync?: {
       autoSyncOnLogin?: boolean;
@@ -63,7 +70,10 @@ interface PreferencesResult {
       };
     };
     emailSync?: {
-      lookbackMonths?: number;
+      lookbackMonths?: number; // Legacy key (backward compat)
+    };
+    emailCache?: {
+      durationMonths?: number; // TASK-2072: new canonical key
     };
     audit?: {
       startDateDefault?: "auto" | "manual";
@@ -75,9 +85,60 @@ interface ConnectionResult {
   success: boolean;
 }
 
+// TASK-2058: Human-readable labels for failure log operations
+const OPERATION_LABELS: Record<string, string> = {
+  outlook_contacts_sync: "Outlook Contacts Sync",
+  gmail_email_fetch: "Gmail Email Fetch",
+  outlook_email_fetch: "Outlook Email Fetch",
+  preferences_sync: "Preferences Sync",
+  sign_out_all_devices: "Sign Out All Devices",
+  check_for_updates: "Check for Updates",
+  session_sync: "Session Sync",
+};
+
+/**
+ * TASK-2062: Format a timestamp into a human-readable relative time string.
+ * E.g., "Just now", "2 minutes ago", "3 hours ago", "Yesterday", etc.
+ */
+function formatRelativeTime(isoDate: string): string {
+  const now = Date.now();
+  const then = new Date(isoDate).getTime();
+  const diffMs = now - then;
+
+  if (diffMs < 0 || isNaN(diffMs)) return "Just now";
+
+  const seconds = Math.floor(diffMs / 1000);
+  if (seconds < 60) return "Just now";
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "Yesterday";
+  if (days < 30) return `${days} days ago`;
+
+  return new Date(isoDate).toLocaleDateString();
+}
+
+const SETTINGS_TABS = [
+  { id: "settings-general", label: "General" },
+  { id: "settings-email", label: "Email" },
+  { id: "settings-messages", label: "Messages" },
+  { id: "settings-contacts", label: "Contacts" },
+  { id: "settings-ai", label: "AI" },
+  { id: "settings-security", label: "Security" },
+  { id: "settings-data", label: "Data & Privacy" },
+  { id: "settings-about", label: "About" },
+];
+
 interface SettingsComponentProps {
   onClose: () => void;
   userId: string;
+  /** Callback to trigger full logout flow (state machine transition + cleanup) */
+  onLogout?: () => Promise<void>;
   /** Callback when email is connected - updates app state */
   onEmailConnected?: (email: string, provider: "google" | "microsoft") => void;
   /** Callback when email is disconnected - updates app state (TASK-1730) */
@@ -88,8 +149,19 @@ interface SettingsComponentProps {
  * Settings Component
  * Application settings and preferences
  */
-function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: SettingsComponentProps) {
+function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconnected }: SettingsComponentProps) {
   const { notify } = useNotification();
+  const { hasAIAddon } = useLicense();
+  // TASK-2056: Network status for disabling network-dependent actions
+  const { isOnline } = useNetwork();
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const visibleTabs = useMemo(
+    () => SETTINGS_TABS.filter((t) => t.id !== "settings-ai" || hasAIAddon),
+    [hasAIAddon]
+  );
+  const visibleTabIds = useMemo(() => visibleTabs.map((t) => t.id), [visibleTabs]);
+
   const [connections, setConnections] = useState<Connections>({
     google: null,
     microsoft: null,
@@ -102,8 +174,9 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
     string | null
   >(null);
   const [exportFormat, setExportFormat] = useState<string>("pdf"); // Default export format
-  const [scanLookbackMonths, setScanLookbackMonths] = useState<number>(9); // Default 9 months
-  const [emailSyncLookbackMonths, setEmailSyncLookbackMonths] = useState<number>(3); // TASK-1966: Default 3 months (matches legacy 90-day behavior)
+  const [emailExportMode, setEmailExportMode] = useState<"thread" | "individual">("thread");
+  // TASK-2072: scan lookback removed (now automatic via last_sync_at)
+  const [emailCacheDurationMonths, setEmailCacheDurationMonths] = useState<number>(3); // TASK-2072: Default 3 months
   const [autoSyncOnLogin, setAutoSyncOnLogin] = useState<boolean>(true); // Default auto-sync ON
   const [autoDownloadUpdates, setAutoDownloadUpdates] = useState<boolean>(false); // Default auto-download OFF
   const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(true); // Default notifications ON
@@ -119,6 +192,27 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
   // TASK-1980: Start date default mode preference
   const [startDateDefault, setStartDateDefault] = useState<"auto" | "manual">("manual");
 
+  const activeTabId = useScrollSpy(visibleTabIds, scrollContainerRef, 48, !loadingPreferences);
+
+  const handleTabClick = useCallback((id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, []);
+
+  // TASK-2045: Sign out all devices state
+  const [signingOutAllDevices, setSigningOutAllDevices] = useState<boolean>(false);
+
+  // TASK-2053: CCPA data export state
+  const [exporting, setExporting] = useState<boolean>(false);
+  const [exportProgress, setExportProgress] = useState<number>(0);
+  const [exportCategory, setExportCategory] = useState<string>("");
+  const [exportResult, setExportResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
+
   // Database maintenance state
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'up-to-date' | 'available' | 'error'>('idle');
   const [updateVersion, setUpdateVersion] = useState<string>('');
@@ -127,6 +221,40 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
     success: boolean;
     message: string;
   } | null>(null);
+
+  // TASK-2052: Database backup/restore state
+  const [backingUp, setBackingUp] = useState<boolean>(false);
+  const [restoring, setRestoring] = useState<boolean>(false);
+  const [backupResult, setBackupResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
+  const [dbInfo, setDbInfo] = useState<{
+    fileSize: number;
+    lastModified: string;
+  } | null>(null);
+
+  // TASK-2058: Failure log state
+  const [failureLogEntries, setFailureLogEntries] = useState<Array<{
+    id: number;
+    timestamp: string;
+    operation: string;
+    error_message: string;
+    metadata: string | null;
+    acknowledged: number;
+  }>>([]);
+  const [failureLogLoading, setFailureLogLoading] = useState<boolean>(false);
+
+  // TASK-2062: Active sessions/devices state
+  const [activeDevices, setActiveDevices] = useState<Array<{
+    device_id: string;
+    device_name: string;
+    os: string;
+    platform: string;
+    last_seen_at: string;
+    isCurrentDevice: boolean;
+  }>>([]);
+  const [devicesLoading, setDevicesLoading] = useState<boolean>(false);
 
   // Load connection status and preferences on mount, with periodic refresh
   useEffect(() => {
@@ -142,6 +270,76 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
       return () => clearInterval(refreshInterval);
     }
   }, [userId]);
+
+  // TASK-2058: Load failure log entries
+  const loadFailureLog = useCallback(async () => {
+    setFailureLogLoading(true);
+    try {
+      const result = await window.api.failureLog?.getRecent(50);
+      if (result?.success) {
+        setFailureLogEntries(result.entries);
+      }
+    } catch (err) {
+      logger.error("Failed to load failure log:", err);
+    } finally {
+      setFailureLogLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadFailureLog();
+  }, [loadFailureLog]);
+
+  // TASK-2062: Load active devices for session management
+  const loadActiveDevices = useCallback(async () => {
+    if (!userId || !isOnline) return;
+    setDevicesLoading(true);
+    try {
+      const result = await window.api.auth.getActiveDevices(userId);
+      if (result?.success && result.devices) {
+        setActiveDevices(result.devices);
+      }
+    } catch (err) {
+      logger.error("Failed to load active devices:", err);
+    } finally {
+      setDevicesLoading(false);
+    }
+  }, [userId, isOnline]);
+
+  useEffect(() => {
+    loadActiveDevices();
+  }, [loadActiveDevices]);
+
+  const handleClearFailureLog = async (): Promise<void> => {
+    try {
+      const result = await window.api.failureLog?.clear();
+      if (result?.success) {
+        setFailureLogEntries([]);
+        notify.success("Diagnostic log cleared.");
+      }
+    } catch (err) {
+      logger.error("Failed to clear failure log:", err);
+      notify.error("Failed to clear diagnostic log.");
+    }
+  };
+
+  // TASK-2052: Load database info for backup/restore section
+  useEffect(() => {
+    const loadDbInfo = async () => {
+      try {
+        const result = await window.api.databaseBackup.getInfo();
+        if (result.success && result.info) {
+          setDbInfo({
+            fileSize: result.info.fileSize,
+            lastModified: result.info.lastModified,
+          });
+        }
+      } catch (err) {
+        logger.error("Failed to load database info:", err);
+      }
+    };
+    loadDbInfo();
+  }, []);
 
   // TASK-1730: Listen for email connection events from other components (e.g., onboarding flow)
   // This ensures Settings UI updates immediately when email is connected elsewhere
@@ -188,7 +386,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
       }
       return null;
     } catch (error) {
-      console.error("Failed to check connections:", error);
+      logger.error("Failed to check connections:", error);
       return null;
     } finally {
       setLoadingConnections(false);
@@ -205,15 +403,16 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         if (result.preferences.export?.defaultFormat) {
           setExportFormat(result.preferences.export.defaultFormat);
         }
-        // Load scan lookback preference - use type check for numbers
-        const loadedLookback = result.preferences.scan?.lookbackMonths;
-        if (typeof loadedLookback === "number" && loadedLookback > 0) {
-          setScanLookbackMonths(loadedLookback);
+        // Load email export mode preference
+        const loadedEmailMode = (result.preferences.export as { emailExportMode?: string } | undefined)?.emailExportMode;
+        if (loadedEmailMode === "thread" || loadedEmailMode === "individual") {
+          setEmailExportMode(loadedEmailMode);
         }
-        // TASK-1966: Load email sync lookback preference
-        const loadedEmailSyncLookback = result.preferences.emailSync?.lookbackMonths;
-        if (typeof loadedEmailSyncLookback === "number" && loadedEmailSyncLookback > 0) {
-          setEmailSyncLookbackMonths(loadedEmailSyncLookback);
+        // TASK-2072: Load email cache duration (new key, with fallback to legacy key)
+        const loadedEmailCache = result.preferences.emailCache?.durationMonths
+          ?? result.preferences.emailSync?.lookbackMonths;
+        if (typeof loadedEmailCache === "number" && loadedEmailCache > 0) {
+          setEmailCacheDurationMonths(loadedEmailCache);
         }
         // Load auto-sync preference (default is true if not set)
         if (typeof result.preferences.sync?.autoSyncOnLogin === "boolean") {
@@ -247,11 +446,11 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
           }
         }
       } else if (!result.success) {
-        console.error("[Settings] Failed to load preferences:", result.error);
+        logger.error("[Settings] Failed to load preferences:", result.error);
       }
     } catch (error) {
       // Log preference loading errors for debugging
-      console.error("[Settings] Error loading preferences:", error);
+      logger.error("[Settings] Error loading preferences:", error);
     } finally {
       setLoadingPreferences(false);
     }
@@ -272,36 +471,33 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
     }
   };
 
-  const handleScanLookbackChange = async (months: number): Promise<void> => {
-    setScanLookbackMonths(months);
+  const handleEmailExportModeChange = async (mode: "thread" | "individual"): Promise<void> => {
+    setEmailExportMode(mode);
     try {
-      const result = await window.api.preferences.update(userId, {
-        scan: {
-          lookbackMonths: months,
+      await window.api.preferences.update(userId, {
+        export: {
+          emailExportMode: mode,
         },
       });
-      if (!result.success) {
-        console.error("[Settings] Failed to save scan lookback:", result);
-      }
-    } catch (error) {
-      console.error("[Settings] Error saving scan lookback:", error);
+    } catch (err) {
+      logger.error("Failed to save email export mode preference:", err);
     }
   };
 
-  // TASK-1966: Handle email sync lookback change
-  const handleEmailSyncLookbackChange = async (months: number): Promise<void> => {
-    setEmailSyncLookbackMonths(months);
+  // TASK-2072: Handle email cache duration change
+  const handleEmailCacheDurationChange = async (months: number): Promise<void> => {
+    setEmailCacheDurationMonths(months);
     try {
       const result = await window.api.preferences.update(userId, {
-        emailSync: {
-          lookbackMonths: months,
+        emailCache: {
+          durationMonths: months,
         },
       });
       if (!result.success) {
-        console.error("[Settings] Failed to save email sync lookback:", result);
+        logger.error("[Settings] Failed to save email cache duration:", result);
       }
     } catch (error) {
-      console.error("[Settings] Error saving email sync lookback:", error);
+      logger.error("[Settings] Error saving email cache duration:", error);
     }
   };
 
@@ -315,10 +511,10 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         },
       });
       if (!result.success) {
-        console.error("[Settings] Failed to save start date default:", result);
+        logger.error("[Settings] Failed to save start date default:", result);
       }
     } catch (error) {
-      console.error("[Settings] Error saving start date default:", error);
+      logger.error("[Settings] Error saving start date default:", error);
     }
   };
 
@@ -457,7 +653,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         );
       }
     } catch (error) {
-      console.error("Failed to connect Google:", error);
+      logger.error("Failed to connect Google:", error);
       setConnectingProvider(null);
       if (cleanup) cleanup();
     }
@@ -496,7 +692,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         );
       }
     } catch (error) {
-      console.error("Failed to connect Microsoft:", error);
+      logger.error("Failed to connect Microsoft:", error);
       setConnectingProvider(null);
       if (cleanup) cleanup();
     }
@@ -516,7 +712,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         emitEmailConnectionChanged({ connected: false, provider: "google" });
       }
     } catch (error) {
-      console.error("Failed to disconnect Google:", error);
+      logger.error("Failed to disconnect Google:", error);
     } finally {
       setDisconnectingProvider(null);
     }
@@ -536,7 +732,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         emitEmailConnectionChanged({ connected: false, provider: "microsoft" });
       }
     } catch (error) {
-      console.error("Failed to disconnect Microsoft:", error);
+      logger.error("Failed to disconnect Microsoft:", error);
     } finally {
       setDisconnectingProvider(null);
     }
@@ -546,6 +742,80 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
     e: React.ChangeEvent<HTMLSelectElement>,
   ): void => {
     handleExportFormatChange(e.target.value);
+  };
+
+  // TASK-2045: Handle sign out of all devices
+  const handleSignOutAllDevices = async (): Promise<void> => {
+    const confirmed = window.confirm(
+      "This will sign you out of all devices, including this one. You will need to log in again.\n\nContinue?"
+    );
+    if (!confirmed) return;
+
+    setSigningOutAllDevices(true);
+    try {
+      const result = await window.api.auth.signOutAllDevices();
+      if (result.success) {
+        // Use the app's logout flow to transition state machine to "unauthenticated"
+        if (onLogout) {
+          await onLogout();
+        }
+      } else {
+        notify.error("Failed to sign out of all devices: " + (result.error || "Unknown error"));
+      }
+    } catch (error) {
+      logger.error("Failed to sign out of all devices:", error);
+      notify.error("Failed to sign out of all devices. Please try again.");
+    } finally {
+      setSigningOutAllDevices(false);
+    }
+  };
+
+  // TASK-2053: Handle CCPA data export
+  const handleExportData = async (): Promise<void> => {
+    setExporting(true);
+    setExportProgress(0);
+    setExportCategory("");
+    setExportResult(null);
+
+    // Listen for progress updates
+    const cleanup = window.api.privacy?.onExportProgress?.(
+      (progress: { category: string; progress: number }) => {
+        setExportProgress(progress.progress);
+        setExportCategory(progress.category);
+      },
+    );
+
+    try {
+      const result = await window.api.privacy.exportData(userId);
+      if (result.success) {
+        setExportResult({
+          success: true,
+          message: "Data exported successfully",
+        });
+        notify.success("Your data has been exported successfully.");
+      } else if (result.error === "Export cancelled by user") {
+        // User cancelled - no error message needed
+        setExportResult(null);
+      } else {
+        setExportResult({
+          success: false,
+          message: result.error || "Export failed",
+        });
+        notify.error("Failed to export data: " + (result.error || "Unknown error"));
+      }
+    } catch (error) {
+      logger.error("Failed to export data:", error);
+      setExportResult({
+        success: false,
+        message: "An unexpected error occurred during export",
+      });
+      notify.error("An unexpected error occurred during export.");
+    } finally {
+      setExporting(false);
+      setExportProgress(0);
+      setExportCategory("");
+      if (cleanup) cleanup();
+    }
   };
 
   const handleReindexDatabase = async (): Promise<void> => {
@@ -573,7 +843,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         });
       }
     } catch (error) {
-      console.error("Failed to reindex database:", error);
+      logger.error("Failed to reindex database:", error);
       setReindexResult({
         success: false,
         message: "An unexpected error occurred while optimizing the database",
@@ -583,9 +853,93 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
     }
   };
 
+  // TASK-2052: Backup database handler
+  const handleBackupDatabase = async (): Promise<void> => {
+    setBackingUp(true);
+    setBackupResult(null);
+    try {
+      const result = await window.api.databaseBackup.backup();
+      if (result.cancelled) {
+        // User cancelled the dialog, no feedback needed
+        return;
+      }
+      if (result.success) {
+        const sizeStr = result.fileSize
+          ? formatFileSize(result.fileSize)
+          : "unknown size";
+        setBackupResult({
+          success: true,
+          message: `Backup created successfully (${sizeStr})`,
+        });
+        notify.success("Database backup created successfully");
+      } else {
+        setBackupResult({
+          success: false,
+          message: result.error || "Failed to create backup",
+        });
+        notify.error(result.error || "Failed to create backup");
+      }
+    } catch (error) {
+      logger.error("Failed to backup database:", error);
+      setBackupResult({
+        success: false,
+        message: "An unexpected error occurred during backup",
+      });
+      notify.error("An unexpected error occurred during backup");
+    } finally {
+      setBackingUp(false);
+    }
+  };
+
+  // TASK-2052: Restore database handler
+  const handleRestoreDatabase = async (): Promise<void> => {
+    setRestoring(true);
+    setBackupResult(null);
+    try {
+      const result = await window.api.databaseBackup.restore();
+      if (result.cancelled) {
+        // User cancelled the dialog or confirmation, no feedback needed
+        return;
+      }
+      if (result.success) {
+        setBackupResult({
+          success: true,
+          message: "Database restored successfully",
+        });
+        notify.success("Database restored successfully");
+        // Refresh database info after restore
+        const infoResult = await window.api.databaseBackup.getInfo();
+        if (infoResult.success && infoResult.info) {
+          setDbInfo({
+            fileSize: infoResult.info.fileSize,
+            lastModified: infoResult.info.lastModified,
+          });
+        }
+      } else {
+        setBackupResult({
+          success: false,
+          message: result.error || "Failed to restore database",
+        });
+        notify.error(result.error || "Failed to restore database");
+        if (result.requiresRestart) {
+          notify.error("The app may need to be restarted.");
+        }
+      }
+    } catch (error) {
+      logger.error("Failed to restore database:", error);
+      setBackupResult({
+        success: false,
+        message: "An unexpected error occurred during restore",
+      });
+      notify.error("An unexpected error occurred during restore");
+    } finally {
+      setRestoring(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <h2 className="text-xl font-bold text-white">Settings</h2>
@@ -610,47 +964,28 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
         </div>
 
         {/* Settings Content - Scrollable area */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
+        <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto scroll-smooth scroll-pt-12 px-6 pb-6">
           {loadingPreferences ? (
-            <div className="flex flex-col items-center justify-center py-20">
+            <div className="flex flex-col items-center justify-center pt-24 pb-20">
               <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-3" />
               <p className="text-sm text-gray-500">Loading settings...</p>
             </div>
           ) : (
           <>
+            <SettingsTabBar
+              tabs={visibleTabs}
+              activeTabId={activeTabId}
+              onTabClick={handleTabClick}
+            />
+            <div className="sticky top-10 z-10 -mx-6 bg-white">
+              <OfflineNotice />
+            </div>
             {/* General Settings */}
-            <div className="mb-8">
+            <div id="settings-general" className="mt-6 mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 General
               </h3>
               <div className="space-y-4">
-                {/* Scan Lookback */}
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <div className="flex-1">
-                    <h4 className="text-sm font-medium text-gray-900">
-                      Scan Lookback Period
-                    </h4>
-                    <p className="text-xs text-gray-600 mt-1">
-                      How far back to search emails and messages
-                    </p>
-                  </div>
-                  <select
-                    value={scanLookbackMonths}
-                    onChange={(e) =>
-                      handleScanLookbackChange(Number(e.target.value))
-                    }
-                    disabled={loadingPreferences}
-                    className="ml-4 text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <option value={3}>3 months</option>
-                    <option value={6}>6 months</option>
-                    <option value={9}>9 months</option>
-                    <option value={12}>12 months</option>
-                    <option value={18}>18 months</option>
-                    <option value={24}>24 months</option>
-                  </select>
-                </div>
-
                 {/* TASK-1980: Start Date Mode Default */}
                 <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <div className="flex-1">
@@ -745,10 +1080,12 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                   </div>
                   <button
                     onClick={handleCheckForUpdates}
-                    disabled={updateStatus === 'checking'}
+                    disabled={updateStatus === 'checking' || !isOnline}
+                    title={!isOnline ? "You are offline" : undefined}
                     className="mt-3 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {updateStatus === 'checking' ? 'Checking...' :
+                    {!isOnline ? 'Check for Updates' :
+                     updateStatus === 'checking' ? 'Checking...' :
                      updateStatus === 'up-to-date' ? 'Up to date' :
                      updateStatus === 'available' ? `Update available (v${updateVersion})` :
                      updateStatus === 'error' ? 'Check failed' :
@@ -792,11 +1129,55 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                     Test Notification
                   </button>
                 </div>
+
+                {/* Export Settings (moved from Export tab) */}
+                <div className="space-y-3 bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-700">Default Format</span>
+                    <select
+                      value={exportFormat}
+                      onChange={handleSelectChange}
+                      disabled={loadingPreferences}
+                      className="text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="pdf">PDF</option>
+                      <option value="excel">Excel (.xlsx)</option>
+                      <option value="csv">CSV</option>
+                      <option value="json">JSON</option>
+                      <option value="txt_eml">TXT + EML Files</option>
+                    </select>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="text-sm text-gray-700">Email Export Mode</span>
+                      <p className="text-xs text-gray-500 mt-0.5">How emails are grouped in exported PDFs</p>
+                    </div>
+                    <select
+                      value={emailExportMode}
+                      onChange={(e) => handleEmailExportModeChange(e.target.value as "thread" | "individual")}
+                      disabled={loadingPreferences}
+                      className="text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="thread">Thread (one PDF per conversation)</option>
+                      <option value="individual">Individual (one PDF per email, quotes stripped)</option>
+                    </select>
+                  </div>
+                  {/* TODO: Implement export location chooser with native folder picker */}
+                  <div className="flex justify-between items-center opacity-50">
+                    <span className="text-sm text-gray-700">Export Location</span>
+                    <button
+                      disabled
+                      className="text-sm text-gray-400 font-medium cursor-not-allowed"
+                    >
+                      Choose Folder
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
             {/* Email Connections */}
-            <div id="email-connections" className="mb-8">
+            <div id="settings-email" className="mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 Email Connections
               </h3>
@@ -869,7 +1250,8 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                   {connections.google?.connected ? (
                     <button
                       onClick={handleDisconnectGoogle}
-                      disabled={disconnectingProvider === "google"}
+                      disabled={disconnectingProvider === "google" || !isOnline}
+                      title={!isOnline ? "You are offline" : undefined}
                       className="w-full mt-2 px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {disconnectingProvider === "google"
@@ -879,7 +1261,8 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                   ) : connections.google?.error && connections.google.error.type !== "NOT_CONNECTED" ? (
                     <button
                       onClick={handleConnectGoogle}
-                      disabled={connectingProvider === "google"}
+                      disabled={connectingProvider === "google" || !isOnline}
+                      title={!isOnline ? "You are offline" : undefined}
                       className="w-full mt-2 px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {connectingProvider === "google"
@@ -889,7 +1272,8 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                   ) : (
                     <button
                       onClick={handleConnectGoogle}
-                      disabled={connectingProvider === "google"}
+                      disabled={connectingProvider === "google" || !isOnline}
+                      title={!isOnline ? "You are offline" : undefined}
                       className="w-full mt-2 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {connectingProvider === "google"
@@ -984,7 +1368,8 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                   {connections.microsoft?.connected ? (
                     <button
                       onClick={handleDisconnectMicrosoft}
-                      disabled={disconnectingProvider === "microsoft"}
+                      disabled={disconnectingProvider === "microsoft" || !isOnline}
+                      title={!isOnline ? "You are offline" : undefined}
                       className="w-full mt-2 px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {disconnectingProvider === "microsoft"
@@ -994,7 +1379,8 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                   ) : connections.microsoft?.error && connections.microsoft.error.type !== "NOT_CONNECTED" ? (
                     <button
                       onClick={handleConnectMicrosoft}
-                      disabled={connectingProvider === "microsoft"}
+                      disabled={connectingProvider === "microsoft" || !isOnline}
+                      title={!isOnline ? "You are offline" : undefined}
                       className="w-full mt-2 px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {connectingProvider === "microsoft"
@@ -1004,7 +1390,8 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                   ) : (
                     <button
                       onClick={handleConnectMicrosoft}
-                      disabled={connectingProvider === "microsoft"}
+                      disabled={connectingProvider === "microsoft" || !isOnline}
+                      title={!isOnline ? "You are offline" : undefined}
                       className="w-full mt-2 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {connectingProvider === "microsoft"
@@ -1014,30 +1401,29 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                   )}
                 </div>
 
-                {/* TASK-1966: Email Sync Depth Filter */}
+                {/* TASK-2072: Email History (cache duration) */}
                 <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <h4 className="text-sm font-medium text-gray-900">
-                        First Sync Lookback
+                        Email History
                       </h4>
                       <p className="text-xs text-gray-600 mt-1">
-                        How far back to fetch emails on first sync. Takes effect
-                        on next sync.
+                        How much email to keep cached locally for fast search and auto-linking.
                       </p>
                     </div>
                     <select
-                      value={emailSyncLookbackMonths}
+                      value={emailCacheDurationMonths}
                       onChange={(e) =>
-                        handleEmailSyncLookbackChange(Number(e.target.value))
+                        handleEmailCacheDurationChange(Number(e.target.value))
                       }
                       disabled={loadingPreferences}
                       className="ml-4 text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <option value={1}>1 month</option>
-                      <option value={3}>3 months (default)</option>
+                      <option value={3}>3 months</option>
                       <option value={6}>6 months</option>
-                      <option value={12}>12 months</option>
+                      <option value={12}>1 year</option>
                     </select>
                   </div>
                 </div>
@@ -1045,7 +1431,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
             </div>
 
             {/* macOS Messages Import - Only shows on macOS */}
-            <div className="mb-8">
+            <div id="settings-messages" className="mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 Messages
               </h3>
@@ -1058,7 +1444,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
             </div>
 
             {/* Contacts Import - macOS Contacts + Outlook (TASK-1989) */}
-            <div className="mb-8">
+            <div id="settings-contacts" className="mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 Contacts
               </h3>
@@ -1090,51 +1476,140 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
             </div>
 
             {/* Export Settings */}
-            <div className="mb-8">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Export
-              </h3>
-              <div className="space-y-3 bg-gray-50 rounded-lg p-4 border border-gray-200">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-700">Default Format</span>
-                  <select
-                    value={exportFormat}
-                    onChange={handleSelectChange}
-                    disabled={loadingPreferences}
-                    className="text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <option value="pdf">PDF</option>
-                    <option value="excel">Excel (.xlsx)</option>
-                    <option value="csv">CSV</option>
-                    <option value="json">JSON</option>
-                    <option value="txt_eml">TXT + EML Files</option>
-                  </select>
+            {/* AI Settings - Only visible with AI add-on (BACKLOG-462) */}
+            <LicenseGate requires="ai_addon">
+              <div id="settings-ai" className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  AI Settings
+                </h3>
+                <div className="space-y-4">
+                  {/* TASK-2072: Transaction Detection (smart scan window — read-only) */}
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="flex-1">
+                      <h4 className="text-sm font-medium text-gray-900">
+                        Transaction Detection
+                      </h4>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Scans your email for new transactions since your last scan. First scan covers 1 month.
+                      </p>
+                    </div>
+                    <span className="ml-4 text-sm text-gray-500 font-medium bg-gray-100 px-3 py-1.5 rounded border border-gray-200">
+                      Automatic
+                    </span>
+                  </div>
+                  <LLMSettings userId={userId} />
                 </div>
-                {/* TODO: Implement export location chooser with native folder picker */}
-                <div className="flex justify-between items-center opacity-50">
-                  <span className="text-sm text-gray-700">Export Location</span>
-                  <button
-                    disabled
-                    className="text-sm text-gray-400 font-medium cursor-not-allowed"
-                  >
-                    Choose Folder
-                  </button>
+              </div>
+            </LicenseGate>
+
+            {/* Security */}
+            <div id="settings-security" className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Security
+              </h3>
+              <div className="space-y-3">
+                {/* TASK-2045: Sign out all devices */}
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <h4 className="text-sm font-medium text-gray-900">
+                        Sign Out All Devices
+                      </h4>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Sign out of all active sessions across all your devices
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleSignOutAllDevices}
+                      disabled={signingOutAllDevices || !isOnline}
+                      title={!isOnline ? "You are offline" : undefined}
+                      className="ml-4 px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded border border-red-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {signingOutAllDevices ? "Signing out..." : "Sign Out All Devices"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* TASK-2062: Active Sessions */}
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-900">
+                        Active Sessions
+                      </h4>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Devices where your account is currently logged in
+                      </p>
+                    </div>
+                    <button
+                      onClick={loadActiveDevices}
+                      disabled={devicesLoading || !isOnline}
+                      title={!isOnline ? "You are offline" : "Refresh device list"}
+                      className="px-2 py-1 text-xs font-medium text-gray-600 bg-white hover:bg-gray-100 rounded border border-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {devicesLoading ? "Loading..." : "Refresh"}
+                    </button>
+                  </div>
+                  {devicesLoading && activeDevices.length === 0 ? (
+                    <p className="text-xs text-gray-500">Loading devices...</p>
+                  ) : activeDevices.length === 0 ? (
+                    <p className="text-xs text-gray-400 italic">
+                      {isOnline ? "No active sessions found." : "Go online to view active sessions."}
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {activeDevices.map((device) => (
+                        <div
+                          key={device.device_id}
+                          className={`p-3 rounded border text-xs ${
+                            device.isCurrentDevice
+                              ? "bg-blue-50 border-blue-200"
+                              : "bg-white border-gray-100"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              {/* Device icon */}
+                              <svg
+                                className="w-4 h-4 text-gray-400 flex-shrink-0"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                                />
+                              </svg>
+                              <span className="font-medium text-gray-800">
+                                {device.device_name || "Unknown device"}
+                              </span>
+                              {device.isCurrentDevice && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">
+                                  This device
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="mt-1 flex items-center gap-3 text-gray-500 ml-6">
+                            <span>{device.os || device.platform}</span>
+                            <span className="text-gray-300">|</span>
+                            <span>
+                              {formatRelativeTime(device.last_seen_at)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* AI Settings - Only visible with AI add-on (BACKLOG-462) */}
-            <LicenseGate requires="ai_addon">
-              <div className="mb-8">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  AI Settings
-                </h3>
-                <LLMSettings userId={userId} />
-              </div>
-            </LicenseGate>
-
             {/* Data & Privacy */}
-            <div className="mb-8">
+            <div id="settings-data" className="mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 Data & Privacy
               </h3>
@@ -1204,35 +1679,152 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                   </div>
                 </button>
 
-                {/* TODO: Implement data viewer showing transactions, contacts, and cached emails */}
-                <button
-                  disabled
-                  className="w-full text-left p-4 bg-gray-50 rounded-lg border border-gray-200 opacity-50 cursor-not-allowed"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-900">
-                        View Stored Data
-                      </h4>
-                      <p className="text-xs text-gray-600 mt-1">
-                        See all data stored locally on your device
+                {/* TASK-2052: Database Backup & Restore */}
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <h4 className="text-sm font-medium text-gray-900 mb-1">
+                    Database Backup & Restore
+                  </h4>
+                  <p className="text-xs text-gray-600 mb-2">
+                    Your database is encrypted and stored locally. Backups can be
+                    used to recover data if something goes wrong.
+                  </p>
+                  {dbInfo && (
+                    <div className="text-xs text-gray-500 mb-3 space-y-0.5">
+                      <p>Database size: {formatFileSize(dbInfo.fileSize)}</p>
+                      <p>
+                        Last modified:{" "}
+                        {new Date(dbInfo.lastModified).toLocaleString()}
                       </p>
                     </div>
-                    <svg
-                      className="w-5 h-5 text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleBackupDatabase}
+                      disabled={backingUp || restoring}
+                      className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
+                      {backingUp ? "Backing up..." : "Backup Database"}
+                    </button>
+                    <button
+                      onClick={handleRestoreDatabase}
+                      disabled={backingUp || restoring}
+                      className="px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded border border-amber-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {restoring ? "Restoring..." : "Restore from Backup"}
+                    </button>
                   </div>
-                </button>
+                  {backupResult && (
+                    <p
+                      className={`text-xs mt-2 ${
+                        backupResult.success
+                          ? "text-green-600"
+                          : "text-red-600"
+                      }`}
+                    >
+                      {backupResult.message}
+                    </p>
+                  )}
+                  <p className="text-xs text-gray-400 mt-2">
+                    Backups are encrypted with your machine&apos;s keychain.
+                    They can only be restored on this machine.
+                  </p>
+                </div>
+
+                {/* TASK-2058: Diagnostic Log for offline failure tracking */}
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-900">
+                        Diagnostic Log
+                      </h4>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Recent network operation failures (for support diagnostics)
+                      </p>
+                    </div>
+                    {failureLogEntries.length > 0 && (
+                      <button
+                        onClick={handleClearFailureLog}
+                        className="px-2 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded border border-red-200 transition-colors"
+                      >
+                        Clear Log
+                      </button>
+                    )}
+                  </div>
+                  {failureLogLoading ? (
+                    <p className="text-xs text-gray-500">Loading...</p>
+                  ) : failureLogEntries.length === 0 ? (
+                    <p className="text-xs text-gray-400 italic">No failures recorded.</p>
+                  ) : (
+                    <div className="max-h-48 overflow-y-auto space-y-2 mt-2">
+                      {failureLogEntries.map((entry) => (
+                        <div
+                          key={entry.id}
+                          className="p-2 bg-white rounded border border-gray-100 text-xs"
+                        >
+                          <div className="flex items-center justify-between mb-0.5">
+                            <span className="font-medium text-gray-800">
+                              {OPERATION_LABELS[entry.operation] || entry.operation}
+                            </span>
+                            <span className="text-gray-400 text-[10px]">
+                              {new Date(entry.timestamp + "Z").toLocaleString()}
+                            </span>
+                          </div>
+                          <p className="text-gray-600 break-words">
+                            {entry.error_message}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* CCPA Data Export (TASK-2053) - moved from Privacy tab */}
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <h4 className="text-sm font-medium text-gray-900 mb-2">
+                    Export Your Data (CCPA)
+                  </h4>
+                  <p className="text-xs text-gray-600 mb-3">
+                    You have the right to know what personal data is stored in this
+                    application. Click below to export all your data as a JSON file.
+                  </p>
+                  <p className="text-xs text-gray-500 mb-4">
+                    Data included: profile, transactions, contacts, messages, emails,
+                    preferences, and activity logs. OAuth token values are excluded
+                    for security.
+                  </p>
+                  {exporting && (
+                    <div className="mb-3">
+                      <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                        <span>
+                          Exporting{exportCategory ? `: ${exportCategory}` : "..."}
+                        </span>
+                        <span>{exportProgress}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-1.5">
+                        <div
+                          className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
+                          style={{ width: `${exportProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {exportResult && (
+                    <p
+                      className={`text-xs mb-3 ${
+                        exportResult.success ? "text-green-600" : "text-red-600"
+                      }`}
+                    >
+                      {exportResult.message}
+                    </p>
+                  )}
+                  <button
+                    onClick={handleExportData}
+                    disabled={exporting}
+                    className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {exporting ? "Exporting..." : "Export My Data"}
+                  </button>
+                </div>
 
                 {/* TODO: Implement data clearing with confirmation dialog */}
                 <button
@@ -1267,7 +1859,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
             </div>
 
             {/* About */}
-            <div>
+            <div id="settings-about">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 About
               </h3>
@@ -1278,7 +1870,7 @@ function Settings({ onClose, userId, onEmailConnected, onEmailDisconnected }: Se
                   </div>
                   <div className="ml-3">
                     <h4 className="text-sm font-semibold text-gray-900">
-                      MagicAudit
+                      Keepr
                     </h4>
                   </div>
                 </div>

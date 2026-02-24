@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import type { ExtendedContact } from "../types/components";
 import { ImportContactsModal, ContactFormModal } from "./contact";
 import { ContactPreview } from "./shared/ContactPreview";
+import logger from '../utils/logger';
 
 // Debounce delay for search (ms)
 const SEARCH_DEBOUNCE_MS = 300;
@@ -114,7 +115,7 @@ function ContactSelectModal({
         setSearchResults(null);
       }
     } catch (error) {
-      console.error("Database search failed:", error);
+      logger.error("Database search failed:", error);
       setSearchResults(null);
     } finally {
       setIsSearching(false);

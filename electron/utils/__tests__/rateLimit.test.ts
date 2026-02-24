@@ -380,5 +380,44 @@ describe("rateLimit utilities", () => {
       // Sync limiter should still be available for same key
       expect(rateLimiters.sync.canExecute("sync:start", "device1").allowed).toBe(true);
     });
+
+    it("sync limiter allows different transactions to sync independently (TASK-2063)", () => {
+      // Transaction A syncs
+      const resultA1 = rateLimiters.sync.canExecute("transactions:sync-and-fetch-emails", "txn-A");
+      expect(resultA1.allowed).toBe(true);
+
+      // Transaction B should still be allowed (different key)
+      const resultB1 = rateLimiters.sync.canExecute("transactions:sync-and-fetch-emails", "txn-B");
+      expect(resultB1.allowed).toBe(true);
+
+      // Transaction A should be blocked (same key, within 10s cooldown)
+      const resultA2 = rateLimiters.sync.canExecute("transactions:sync-and-fetch-emails", "txn-A");
+      expect(resultA2.allowed).toBe(false);
+      expect(resultA2.remainingMs).toBeGreaterThan(0);
+
+      // After cooldown, Transaction A should be allowed again
+      jest.advanceTimersByTime(10_001);
+      const resultA3 = rateLimiters.sync.canExecute("transactions:sync-and-fetch-emails", "txn-A");
+      expect(resultA3.allowed).toBe(true);
+    });
+
+    it("sync limiter returns appropriate rate-limited response shape (TASK-2063)", () => {
+      // First call allowed
+      rateLimiters.sync.canExecute("transactions:sync-and-fetch-emails", "txn-1");
+
+      // Second call blocked - verify shape matches handler expectations
+      jest.advanceTimersByTime(3000); // 3 seconds in
+      const result = rateLimiters.sync.canExecute("transactions:sync-and-fetch-emails", "txn-1");
+
+      expect(result.allowed).toBe(false);
+      expect(result.remainingMs).toBeDefined();
+      expect(result.remainingMs).toBeGreaterThan(0);
+      expect(result.remainingMs).toBeLessThanOrEqual(7000);
+
+      // Verify the seconds calculation matches handler format
+      const seconds = Math.ceil(result.remainingMs! / 1000);
+      expect(seconds).toBeGreaterThanOrEqual(1);
+      expect(seconds).toBeLessThanOrEqual(7);
+    });
   });
 });

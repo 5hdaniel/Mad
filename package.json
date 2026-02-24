@@ -1,6 +1,6 @@
 {
   "name": "magic-audit",
-  "version": "2.4.1",
+  "version": "2.5.0",
   "description": "Magic Audit - Export and archive iMessage conversations and emails",
   "main": "electron/main.js",
   "engines": {
@@ -121,7 +121,6 @@
     "electron-updater": "^6.3.9",
     "google-auth-library": "^10.5.0",
     "googleapis": "^128.0.0",
-    "imessage-parser": "^0.1.0",
     "isomorphic-fetch": "^3.0.0",
     "mammoth": "^1.11.0",
     "mime-types": "^3.0.2",

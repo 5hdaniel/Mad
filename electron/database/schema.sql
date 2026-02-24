@@ -59,6 +59,9 @@ CREATE TABLE IF NOT EXISTS users_local (
   ai_detection_enabled INTEGER DEFAULT 0,
   organization_id TEXT,
 
+  -- Email onboarding (Migration 1)
+  email_onboarding_completed_at DATETIME,
+
   -- Sync tracking
   last_cloud_sync_at DATETIME,
 
@@ -251,6 +254,9 @@ CREATE TABLE IF NOT EXISTS messages (
   content_hash TEXT,                     -- SHA-256 hash of normalized content for fallback dedup
   duplicate_of TEXT,                     -- ID of original message if this is a duplicate
 
+  -- Message Type (Migration 28, TASK-1799)
+  message_type TEXT CHECK (message_type IS NULL OR message_type IN ('text', 'voice_message', 'location', 'attachment_only', 'system', 'unknown')),
+
   -- LLM Analysis (Migration 11)
   llm_analysis TEXT,                     -- Full LLM analysis response stored as JSON string
 
@@ -386,6 +392,12 @@ CREATE TABLE IF NOT EXISTS transactions (
   started_at DATETIME,                   -- Representation start / first contact
   closed_at DATETIME,                    -- Closing date
   last_activity_at DATETIME,             -- Last message/update
+  representation_start_date DATE,        -- Migration 2: Representation start date
+  closing_date_verified INTEGER DEFAULT 0, -- Migration 2: Whether closing date was verified
+
+  -- Date Confidence (Migration 2)
+  representation_start_confidence INTEGER,
+  closing_date_confidence INTEGER,
 
   -- Confidence (how sure we are this is a real transaction cluster)
   confidence_score REAL,
@@ -428,6 +440,13 @@ CREATE TABLE IF NOT EXISTS transactions (
   suggested_contacts TEXT,               -- JSON array of suggested contact assignments
   reviewed_at DATETIME,
   rejection_reason TEXT,
+
+  -- Agent/Contact References (Migration 2)
+  buyer_agent_id TEXT,
+  seller_agent_id TEXT,
+  escrow_officer_id TEXT,
+  inspector_id TEXT,
+  other_contacts TEXT,                   -- JSON array of additional contact IDs
 
   -- B2B Submission Tracking (BACKLOG-390)
   submission_status TEXT DEFAULT 'not_submitted' CHECK (submission_status IN ('not_submitted', 'submitted', 'under_review', 'needs_changes', 'resubmitted', 'approved', 'rejected')),
@@ -726,6 +745,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_external_id ON messages(external_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_user_external_id ON messages(user_id, external_id) WHERE external_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id);
 CREATE INDEX IF NOT EXISTS idx_messages_is_transaction_related ON messages(is_transaction_related);
+CREATE INDEX IF NOT EXISTS idx_messages_user_sent ON messages(user_id, sent_at);
 CREATE INDEX IF NOT EXISTS idx_messages_participants_flat ON messages(participants_flat);
 -- Deduplication indexes (TASK-905)
 CREATE INDEX IF NOT EXISTS idx_messages_message_id_header ON messages(message_id_header);
@@ -893,6 +913,7 @@ CREATE INDEX IF NOT EXISTS idx_communications_transaction_id ON communications(t
 CREATE INDEX IF NOT EXISTS idx_communications_message_id ON communications(message_id);
 CREATE INDEX IF NOT EXISTS idx_communications_email_id ON communications(email_id);
 CREATE INDEX IF NOT EXISTS idx_communications_thread_id ON communications(thread_id);
+CREATE INDEX IF NOT EXISTS idx_communications_txn_msg ON communications(transaction_id, message_id);
 
 -- Unique constraints to prevent duplicates
 CREATE UNIQUE INDEX IF NOT EXISTS idx_comm_msg_txn ON communications(message_id, transaction_id)
@@ -938,6 +959,45 @@ CREATE INDEX IF NOT EXISTS idx_ignored_comms_transaction
   ON ignored_communications(transaction_id);
 
 -- ============================================
+-- PHONE LAST MESSAGE TABLE (BACKLOG-567, Migration 24)
+-- ============================================
+-- Lookup table for fast contact sorting by last message date
+-- Enables O(1) lookup instead of O(n) LIKE scans
+CREATE TABLE IF NOT EXISTS phone_last_message (
+  phone_normalized TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  last_message_at DATETIME NOT NULL,
+  PRIMARY KEY (phone_normalized, user_id),
+  FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_phone_last_msg_user ON phone_last_message(user_id);
+
+-- ============================================
+-- EXTERNAL CONTACTS TABLE (BACKLOG-569, SPRINT-068, Migrations 25+27)
+-- ============================================
+-- Caches contacts from external sources (macOS Contacts, iPhone sync, etc.)
+-- with pre-computed last_message_at for instant sorted loading
+CREATE TABLE IF NOT EXISTS external_contacts (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  name TEXT,
+  phones_json TEXT,
+  emails_json TEXT,
+  company TEXT,
+  last_message_at DATETIME,
+  external_record_id TEXT,
+  source TEXT DEFAULT 'macos',
+  synced_at DATETIME,
+  FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
+  UNIQUE(user_id, source, external_record_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_external_contacts_user ON external_contacts(user_id);
+CREATE INDEX IF NOT EXISTS idx_external_contacts_last_msg ON external_contacts(user_id, last_message_at DESC);
+CREATE INDEX IF NOT EXISTS idx_external_contacts_source ON external_contacts(user_id, source);
+
+-- ============================================
 -- VIEWS (Convenient queries for common operations)
 -- ============================================
 
@@ -967,7 +1027,7 @@ SELECT
   t.message_count,
   t.attachment_count,
   t.confidence_score,
-  (SELECT COUNT(*) FROM transaction_participants tp WHERE tp.transaction_id = t.id) as participant_count,
+  (SELECT COUNT(*) FROM transaction_contacts tc WHERE tc.transaction_id = t.id) as participant_count,
   (SELECT COUNT(*) FROM audit_packages ap WHERE ap.transaction_id = t.id) as audit_count
 FROM transactions t;
 
@@ -983,5 +1043,5 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 
 -- Initialize schema version if not exists
--- Version 23: BACKLOG-506 pure junction communications table (content columns removed)
-INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 23);
+-- Version 29: Consolidated schema (all migrations through 28 folded in)
+INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 29);

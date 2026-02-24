@@ -14,6 +14,7 @@ import type {
 import { DatabaseError } from "../../types";
 import { dbGet, dbAll, dbRun } from "./core/dbConnection";
 import { validateFields } from "../../utils/sqlFieldWhitelist";
+import { isTextMessage } from "../../utils/channelHelpers";
 
 /**
  * Create a new communication (junction table entry linking content to transaction)
@@ -69,8 +70,7 @@ export async function createCommunication(
       "SELECT channel FROM messages WHERE id = ?",
       [communicationData.message_id]
     );
-    if (message?.channel &&
-        (message.channel === 'text' || message.channel === 'sms' || message.channel === 'imessage')) {
+    if (message?.channel && isTextMessage({ channel: message.channel })) {
       updateTransactionThreadCount(communicationData.transaction_id);
     }
   }
@@ -215,8 +215,7 @@ export async function deleteCommunication(communicationId: string): Promise<void
         "SELECT channel FROM messages WHERE id = ?",
         [comm.message_id]
       );
-      if (message?.channel &&
-          (message.channel === 'text' || message.channel === 'sms' || message.channel === 'imessage')) {
+      if (message?.channel && isTextMessage({ channel: message.channel })) {
         updateTransactionThreadCount(comm.transaction_id);
       }
     }
@@ -244,8 +243,7 @@ export async function deleteCommunicationByMessageId(messageId: string): Promise
       "SELECT channel FROM messages WHERE id = ?",
       [messageId]
     );
-    if (message?.channel &&
-        (message.channel === 'text' || message.channel === 'sms' || message.channel === 'imessage')) {
+    if (message?.channel && isTextMessage({ channel: message.channel })) {
       updateTransactionThreadCount(comm.transaction_id);
     }
   }
@@ -488,8 +486,7 @@ export async function createCommunicationReference(
     "SELECT channel FROM messages WHERE id = ?",
     [data.message_id]
   );
-  if (message?.channel &&
-      (message.channel === 'text' || message.channel === 'sms' || message.channel === 'imessage')) {
+  if (message?.channel && isTextMessage({ channel: message.channel })) {
     updateTransactionThreadCount(data.transaction_id);
   }
 

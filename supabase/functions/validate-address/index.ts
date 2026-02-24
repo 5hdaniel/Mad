@@ -8,6 +8,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { checkRateLimit } from '../_shared/rateLimiter.ts';
 
 // CORS headers
 const corsHeaders = {
@@ -38,6 +39,32 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ error: 'Address is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Rate limit per user (60 req/min) -- fall back to IP if no userId
+    const rateLimitMaxRequests = parseInt(
+      Deno.env.get('VALIDATE_ADDRESS_RATE_LIMIT_MAX') || '60',
+      10,
+    );
+    const rateLimitWindowMs = parseInt(
+      Deno.env.get('VALIDATE_ADDRESS_RATE_LIMIT_WINDOW_MS') || '60000',
+      10,
+    );
+    const rateLimitKey = `validate-address:${userId || req.headers.get('x-forwarded-for') || 'anonymous'}`;
+    const rateCheck = checkRateLimit(rateLimitKey, rateLimitMaxRequests, rateLimitWindowMs);
+
+    if (!rateCheck.allowed) {
+      return new Response(
+        JSON.stringify({ error: 'Rate limit exceeded' }),
+        {
+          status: 429,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json',
+            'Retry-After': String(rateCheck.retryAfter),
+          },
+        }
       );
     }
 

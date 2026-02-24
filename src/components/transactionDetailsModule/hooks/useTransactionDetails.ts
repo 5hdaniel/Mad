@@ -10,6 +10,8 @@ import type {
   ContactAssignment,
   Communication,
 } from "../types";
+import { isTextMessage, isEmailMessage } from "@/utils/channelHelpers";
+import logger from '../../../utils/logger';
 
 interface UseTransactionDetailsResult {
   // Data
@@ -71,7 +73,7 @@ export function useTransactionDetails(
         );
       }
     } catch (err) {
-      console.error("Failed to load details:", err);
+      logger.error("Failed to load details:", err);
     } finally {
       setLoading(false);
     }
@@ -94,15 +96,16 @@ export function useTransactionDetails(
         // Merge with existing communications (don't overwrite other channel)
         setCommunications(prev => {
           const newComms: Communication[] = result.transaction?.communications || [];
-          const newIds = new Set(newComms.map((c: Communication) => c.id));
-          // Keep existing comms that aren't in the new result (different channel)
-          const kept = prev.filter((c: Communication) => !newIds.has(c.id));
+          // Keep only comms from the OTHER channel; replace the fetched channel entirely.
+          const kept = channelFilter === "text"
+            ? prev.filter((c: Communication) => !isTextMessage(c))
+            : prev.filter((c: Communication) => !isEmailMessage(c));
           return [...kept, ...newComms];
         });
         setContactAssignments(result.transaction.contact_assignments || []);
       }
     } catch (err) {
-      console.error(`Failed to load ${channelFilter} communications:`, err);
+      logger.error(`Failed to load ${channelFilter} communications:`, err);
     } finally {
       setLoading(false);
     }
@@ -123,7 +126,7 @@ export function useTransactionDetails(
         );
       }
     } catch (err) {
-      console.error("Failed to load overview:", err);
+      logger.error("Failed to load overview:", err);
       // Fallback to full details if overview not available
       try {
         const fallback = await window.api.transactions.getDetails(transaction.id);
@@ -131,7 +134,7 @@ export function useTransactionDetails(
           setContactAssignments(fallback.transaction.contact_assignments || []);
         }
       } catch (e) {
-        console.error("Fallback getDetails also failed:", e);
+        logger.error("Fallback getDetails also failed:", e);
       }
     } finally {
       setLoading(false);
@@ -161,7 +164,7 @@ export function useTransactionDetails(
           setResolvedSuggestions(resolved);
         }
       } catch (err) {
-        console.error("Failed to resolve suggested contacts:", err);
+        logger.error("Failed to resolve suggested contacts:", err);
         // Still show suggestions without contact details
         setResolvedSuggestions(suggestedContacts.map((sc) => ({ ...sc })));
       }

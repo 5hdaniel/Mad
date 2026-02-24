@@ -16,6 +16,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, SupabaseClient } from "jsr:@supabase/supabase-js@2";
+import { checkRateLimit } from "../_shared/rateLimiter.ts";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -955,6 +956,40 @@ Deno.serve(async (req: Request) => {
     const authResult = await authenticateScimRequest(req, supabaseAdmin);
     if (authResult instanceof Response) {
       return authResult;
+    }
+
+    // Rate limit by bearer token ID (100 req/min)
+    const rateLimitMaxRequests = parseInt(
+      Deno.env.get("SCIM_RATE_LIMIT_MAX") || "100",
+      10,
+    );
+    const rateLimitWindowMs = parseInt(
+      Deno.env.get("SCIM_RATE_LIMIT_WINDOW_MS") || "60000",
+      10,
+    );
+    const rateLimitKey = `scim:${authResult.tokenId}`;
+    const { allowed, retryAfter } = checkRateLimit(
+      rateLimitKey,
+      rateLimitMaxRequests,
+      rateLimitWindowMs,
+    );
+
+    if (!allowed) {
+      return new Response(
+        JSON.stringify({
+          schemas: [SCIM_ERROR_SCHEMA],
+          detail: "Rate limit exceeded",
+          status: 429,
+        }),
+        {
+          status: 429,
+          headers: {
+            ...CORS_HEADERS,
+            "Content-Type": SCIM_CONTENT_TYPE,
+            "Retry-After": String(retryAfter),
+          },
+        },
+      );
     }
 
     // Parse the route

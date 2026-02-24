@@ -24,6 +24,7 @@ import { getAndClearPendingDeepLinkUser } from "../main";
 import { initializePool } from "../workers/contactWorkerPool";
 import { getDbPath, getEncryptionKey } from "../services/db/core/dbConnection";
 import logService from "../services/logService";
+import failureLogService from "../services/failureLogService";
 import { wrapHandler } from "../utils/wrapHandler";
 import {
   ValidationError,
@@ -102,7 +103,7 @@ function getSecureStorageGuidance(platform: string): string {
    - Open Keychain Access (in Applications > Utilities)
    - Find "magic-audit Safe Storage"
    - Right-click and select "Delete"
-   - Then restart Magic Audit and click "Allow"`;
+   - Then restart Keepr and click "Allow"`;
     case "win32":
       return `Windows should automatically provide secure storage via DPAPI.
 If you're seeing this error:
@@ -551,6 +552,11 @@ export function registerSystemHandlers(): void {
             logService.warn("Failed to initialize contact worker pool: " + (err instanceof Error ? err.message : String(err)), "System");
           });
         }
+
+        // TASK-2058: Initialize failure log service (create table + prune)
+        failureLogService.initialize().catch((err) => {
+          logService.warn("Failed to initialize failure log service: " + (err instanceof Error ? err.message : String(err)), "System");
+        });
 
         return { success: true };
       } catch (error) {
@@ -1001,7 +1007,7 @@ export function registerSystemHandlers(): void {
           contextIsolation: true,
         },
         autoHideMenuBar: true,
-        title: title || "Magic Audit",
+        title: title || "Keepr",
       });
 
       // Load the URL
@@ -1047,10 +1053,10 @@ export function registerSystemHandlers(): void {
       event: IpcMainInvokeEvent,
       errorDetails?: string,
     ): Promise<SystemResponse> => {
-      const supportEmail = "magicauditwa@gmail.com";
-      const subject = encodeURIComponent("Magic Audit Support Request");
+      const supportEmail = "support@keeprcompliance.com";
+      const subject = encodeURIComponent("Keepr Support Request");
       const body = encodeURIComponent(
-        `Hi Magic Audit Support,\n\n` +
+        `Hi Keepr Support,\n\n` +
           `I need help with:\n\n` +
           `${errorDetails ? `Error details: ${errorDetails}\n\n` : ""}` +
           `Thank you for your assistance.\n`,

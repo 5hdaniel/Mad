@@ -12,6 +12,8 @@ import {
   ContactPreview,
   type ContactTransaction,
 } from "./shared/ContactPreview";
+import logger from '../utils/logger';
+import { OfflineNotice } from './common/OfflineNotice';
 
 interface ContactsProps {
   userId: string;
@@ -160,7 +162,7 @@ function Contacts({ userId, onClose }: ContactsProps) {
 
         throw new Error(result.error || "Failed to import contact");
       } catch (err) {
-        console.error("Failed to import contact:", err);
+        logger.error("Failed to import contact:", err);
         throw err;
       }
     },
@@ -187,7 +189,7 @@ function Contacts({ userId, onClose }: ContactsProps) {
       await handleImportContact(previewContact);
       setPreviewContact(null);
     } catch (err) {
-      console.error("Failed to import contact:", err);
+      logger.error("Failed to import contact:", err);
     }
   };
 
@@ -245,6 +247,8 @@ function Contacts({ userId, onClose }: ContactsProps) {
           <p className="text-sm text-red-800">{error}</p>
         </div>
       )}
+
+      <OfflineNotice />
 
       {/* ContactSearchList - main content area */}
       <div className="flex-1 min-h-0 bg-white mx-4 my-4 rounded-xl shadow-lg overflow-hidden">

@@ -1,3 +1,4 @@
+import logger from './logger';
 /**
  * Date formatting utilities for the frontend
  */
@@ -40,7 +41,7 @@ export function parseDateSafe(
   const d = new Date(dateValue);
   if (isNaN(d.getTime())) {
     if (logContext) {
-      console.warn(`[${logContext}] Invalid date:`, dateValue);
+      logger.warn(`[${logContext}] Invalid date:`, dateValue);
     }
     return null;
   }

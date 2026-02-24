@@ -78,7 +78,7 @@ if (typeof window !== 'undefined') {
       // Platform detection (migrated from window.electron.platform)
       platform: 'darwin',
       // App info (migrated from window.electron)
-      getAppInfo: jest.fn().mockResolvedValue({ version: '2.0.8', name: 'MagicAudit' }),
+      getAppInfo: jest.fn().mockResolvedValue({ version: '2.0.8', name: 'Keepr' }),
       getMacOSVersion: jest.fn().mockResolvedValue({ version: '14.0' }),
       checkAppLocation: jest.fn().mockResolvedValue({ inApplications: true, path: '/Applications/MagicAudit.app' }),
       // Permission checks (migrated from window.electron)

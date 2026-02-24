@@ -138,7 +138,7 @@ const Content: React.FC<OnboardingStepContentProps> = ({
           What phone do you use?
         </h1>
         <p className="text-sm text-gray-600">
-          Magic Audit can sync your text messages and contacts to help track
+          Keepr can sync your text messages and contacts to help track
           real estate communications.
         </p>
       </div>

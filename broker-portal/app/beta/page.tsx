@@ -11,7 +11,7 @@ export default function BetaPage() {
       <div className="max-w-md w-full space-y-8">
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900">Magic Audit</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Keepr</h1>
           <h2 className="mt-2 text-xl text-gray-600">Closed Beta Program</h2>
         </div>
 
@@ -49,7 +49,7 @@ export default function BetaPage() {
 
             {/* Email Link */}
             <a
-              href="mailto:magicauditwa@gmail.com"
+              href="mailto:support@keeprcompliance.com"
               className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
             >
               <svg
@@ -65,7 +65,7 @@ export default function BetaPage() {
                   d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
                 />
               </svg>
-              magicauditwa@gmail.com
+              support@keeprcompliance.com
             </a>
 
             {/* Copy hint */}
@@ -77,7 +77,7 @@ export default function BetaPage() {
 
         {/* Footer */}
         <p className="text-center text-sm text-gray-500">
-          Thank you for your interest in Magic Audit.
+          Thank you for your interest in Keepr.
         </p>
       </div>
     </div>

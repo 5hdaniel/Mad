@@ -9,7 +9,7 @@ export const getDashboardTourSteps = (): Step[] => [
   {
     target: "body",
     content:
-      "👋 Welcome to Magic Audit! Let me give you a quick tour of the main features.",
+      "👋 Welcome to Keepr! Let me give you a quick tour of the main features.",
     placement: "center",
     disableBeacon: true,
   },
@@ -61,7 +61,7 @@ export const getDashboardTourSteps = (): Step[] => [
   {
     target: "body",
     content:
-      "🎉 That's it! You're all set to start using Magic Audit. Let's get started!",
+      "🎉 That's it! You're all set to start using Keepr. Let's get started!",
     placement: "center",
     disableBeacon: true,
   },

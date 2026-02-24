@@ -11,12 +11,8 @@ import MicrosoftLogin from "../components/MicrosoftLogin";
 import ConversationList from "../components/ConversationList";
 import ExportComplete from "../components/ExportComplete";
 import OutlookExport from "../components/OutlookExport";
-import KeychainExplanation from "../components/KeychainExplanation";
 import Dashboard from "../components/Dashboard";
 import OfflineFallback from "../components/OfflineFallback";
-import PhoneTypeSelection from "../components/PhoneTypeSelection";
-import AndroidComingSoon from "../components/AndroidComingSoon";
-import AppleDriverSetup from "../components/AppleDriverSetup";
 import { OnboardingFlow } from "../components/onboarding";
 import { UpgradeScreen, type UpgradeReason } from "../components/license/UpgradeScreen";
 import type { AppStateMachine } from "./state/types";
@@ -34,17 +30,16 @@ interface AppRouterProps {
 export function AppRouter({ app }: AppRouterProps) {
   const {
     // State
-    currentStep, isMacOS, isWindows, isOnline, isChecking, connectionError,
-    isAuthenticated, currentUser, authProvider, pendingOAuthData, pendingOnboardingData,
-    isInitializingDatabase, skipKeychainExplanation, selectedPhoneType,
+    currentStep, isWindows, isOnline, isChecking, connectionError,
+    isAuthenticated, currentUser, authProvider, selectedPhoneType,
     hasEmailConnected, showSetupPromptDismissed, exportResult, conversations,
     selectedConversationIds, outlookConnected,
     // Handlers
-    handleLoginSuccess, handleLoginPending, handleDeepLinkAuthSuccess, handleSelectIPhone, handleSelectAndroid,
-    handleAndroidGoBack, handleAndroidContinueWithEmail, handlePhoneTypeChange,
-    handleAppleDriverSetupComplete, handleAppleDriverSetupSkip, handleEmailOnboardingComplete,
-    handleEmailOnboardingSkip, handleEmailOnboardingBack, handleKeychainExplanationContinue,
-    handleKeychainBack, handleMicrosoftLogin, handleMicrosoftSkip, handleConnectOutlook,
+    handleLoginSuccess, handleLoginPending, handleDeepLinkAuthSuccess,
+    handlePhoneTypeChange,
+    handleEmailOnboardingComplete,
+    handleEmailOnboardingSkip, handleEmailOnboardingBack,
+    handleMicrosoftLogin, handleMicrosoftSkip, handleConnectOutlook,
     handlePermissionsGranted, checkPermissions, handleExportComplete, handleOutlookExport,
     handleOutlookCancel, handleStartOver, setExportResult, handleRetryConnection,
     openAuditTransaction, openTransactions, openContacts, goToStep,
@@ -125,50 +120,6 @@ export function AppRouter({ app }: AppRouterProps) {
     );
   }
 
-  // Keychain explanation (macOS only)
-  if (currentStep === "keychain-explanation" && isMacOS) {
-    return (
-      <KeychainExplanation
-        onContinue={handleKeychainExplanationContinue}
-        onBack={handleKeychainBack}
-        isLoading={isInitializingDatabase}
-        hasPendingLogin={!!pendingOAuthData}
-        skipExplanation={skipKeychainExplanation}
-      />
-    );
-  }
-
-  // Phone type selection
-  if (currentStep === "phone-type-selection") {
-    return (
-      <PhoneTypeSelection
-        onSelectIPhone={handleSelectIPhone}
-        onSelectAndroid={handleSelectAndroid}
-        selectedType={selectedPhoneType || pendingOnboardingData.phoneType}
-      />
-    );
-  }
-
-  // Android coming soon
-  if (currentStep === "android-coming-soon") {
-    return (
-      <AndroidComingSoon
-        onGoBack={handleAndroidGoBack}
-        onContinueWithEmail={handleAndroidContinueWithEmail}
-      />
-    );
-  }
-
-  // Apple driver setup (Windows only)
-  if (currentStep === "apple-driver-setup" && isWindows) {
-    return (
-      <AppleDriverSetup
-        onComplete={handleAppleDriverSetupComplete}
-        onSkip={handleAppleDriverSetupSkip}
-      />
-    );
-  }
-
   // Microsoft login
   if (currentStep === "microsoft-login") {
     return (
@@ -188,10 +139,10 @@ export function AppRouter({ app }: AppRouterProps) {
     const handleContinueSetup = () => {
       openSettings();
       // Scroll to and highlight email connections section after modal opens.
-      // The email-connections element is in the Settings modal (cross-component),
+      // The settings-email element is in the Settings modal (cross-component),
       // so we resolve the ref after the modal mounts via setTimeout.
       setTimeout(() => {
-        emailSectionRef.current = document.getElementById("email-connections");
+        emailSectionRef.current = document.getElementById("settings-email");
         if (emailSectionRef.current) {
           emailSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
           // Add highlight effect

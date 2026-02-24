@@ -16,6 +16,10 @@
 
 import { jest } from "@jest/globals";
 
+// TASK-2040: Track auth state change callback for testing token refresh
+let capturedAuthStateCallback: ((event: string, session: unknown) => void) | null = null;
+const mockUnsubscribe = jest.fn();
+
 // Mock Supabase client
 const mockSupabaseClient = {
   from: jest.fn(),
@@ -25,6 +29,11 @@ const mockSupabaseClient = {
       data: { session: { user: { id: "auth-user-123" } } },
       error: null,
     }),
+    onAuthStateChange: jest.fn((callback: (event: string, session: unknown) => void) => {
+      capturedAuthStateCallback = callback;
+      return { data: { subscription: { unsubscribe: mockUnsubscribe } } };
+    }),
+    signOut: jest.fn().mockResolvedValue({ error: null }),
   },
   functions: {
     invoke: jest.fn(),
@@ -43,7 +52,7 @@ jest.mock("dotenv", () => ({
 
 // Set environment variables before importing
 process.env.SUPABASE_URL = "https://test.supabase.co";
-process.env.SUPABASE_SERVICE_KEY = "test-service-key";
+process.env.SUPABASE_ANON_KEY = "test-anon-key";
 
 describe("SupabaseService", () => {
   let supabaseService: typeof import("../supabaseService").default;
@@ -77,6 +86,7 @@ describe("SupabaseService", () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     jest.resetModules();
+    capturedAuthStateCallback = null;
 
     // Re-import to get fresh instance
     const module = await import("../supabaseService");
@@ -85,6 +95,7 @@ describe("SupabaseService", () => {
     // Reset initialization state
     (supabaseService as any).initialized = false;
     (supabaseService as any).client = null;
+    (supabaseService as any).authSubscription = null;
   });
 
   describe("initialize", () => {
@@ -106,10 +117,10 @@ describe("SupabaseService", () => {
       // Reset module and clear env vars
       jest.resetModules();
       const originalUrl = process.env.SUPABASE_URL;
-      const originalKey = process.env.SUPABASE_SERVICE_KEY;
+      const originalKey = process.env.SUPABASE_ANON_KEY;
 
       delete process.env.SUPABASE_URL;
-      delete process.env.SUPABASE_SERVICE_KEY;
+      delete process.env.SUPABASE_ANON_KEY;
 
       const module = await import("../supabaseService");
       const service = module.default;
@@ -122,7 +133,128 @@ describe("SupabaseService", () => {
 
       // Restore env vars
       process.env.SUPABASE_URL = originalUrl;
-      process.env.SUPABASE_SERVICE_KEY = originalKey;
+      process.env.SUPABASE_ANON_KEY = originalKey;
+    });
+  });
+
+  describe("Token Auto-Refresh (TASK-2040)", () => {
+    it("should set up auth state listener on initialize", () => {
+      supabaseService.initialize();
+
+      expect(mockSupabaseClient.auth.onAuthStateChange).toHaveBeenCalledTimes(1);
+      expect(capturedAuthStateCallback).not.toBeNull();
+    });
+
+    it("should update local session cache on TOKEN_REFRESHED event", () => {
+      supabaseService.initialize();
+
+      const refreshedSession = {
+        user: { id: "user-refreshed-123" },
+        access_token: "new-access-token",
+        refresh_token: "new-refresh-token",
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
+      };
+
+      // Simulate the SDK emitting a TOKEN_REFRESHED event
+      capturedAuthStateCallback!("TOKEN_REFRESHED", refreshedSession);
+
+      const authSession = (supabaseService as any).authSession;
+      expect(authSession).not.toBeNull();
+      expect(authSession.userId).toBe("user-refreshed-123");
+      expect(authSession.accessToken).toBe("new-access-token");
+      expect(authSession.refreshToken).toBe("new-refresh-token");
+      expect(authSession.expiresAt).toBeInstanceOf(Date);
+    });
+
+    it("should clear local session cache on SIGNED_OUT event", () => {
+      supabaseService.initialize();
+
+      // Set a session first
+      (supabaseService as any).authSession = {
+        userId: "user-123",
+        accessToken: "old-token",
+      };
+
+      // Simulate SIGNED_OUT
+      capturedAuthStateCallback!("SIGNED_OUT", null);
+
+      expect((supabaseService as any).authSession).toBeNull();
+    });
+
+    it("should not update session for unrelated auth events", () => {
+      supabaseService.initialize();
+
+      const existingSession = {
+        userId: "user-123",
+        accessToken: "existing-token",
+      };
+      (supabaseService as any).authSession = existingSession;
+
+      // Simulate an unrelated event like INITIAL_SESSION
+      capturedAuthStateCallback!("INITIAL_SESSION", {
+        user: { id: "other" },
+        access_token: "other-token",
+        refresh_token: "other-refresh",
+        expires_at: 9999,
+      });
+
+      // Session should be unchanged
+      expect((supabaseService as any).authSession).toBe(existingSession);
+    });
+
+    it("should unsubscribe auth listener on destroy()", () => {
+      supabaseService.initialize();
+
+      supabaseService.destroy();
+
+      expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+      expect((supabaseService as any).authSubscription).toBeNull();
+      expect((supabaseService as any).authSession).toBeNull();
+    });
+
+    it("should handle destroy() when no subscription exists", () => {
+      // Do not initialize -- no subscription
+      supabaseService.destroy();
+
+      // Should not throw
+      expect(mockUnsubscribe).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Global Sign-Out (TASK-2045)", () => {
+    beforeEach(() => {
+      supabaseService.initialize();
+    });
+
+    it("should call Supabase signOut with scope: global", async () => {
+      mockSupabaseClient.auth.signOut.mockResolvedValueOnce({ error: null });
+
+      const result = await supabaseService.signOutGlobal();
+
+      expect(result.success).toBe(true);
+      expect(mockSupabaseClient.auth.signOut).toHaveBeenCalledWith({ scope: "global" });
+    });
+
+    it("should return error when global sign-out fails", async () => {
+      mockSupabaseClient.auth.signOut.mockResolvedValueOnce({
+        error: { message: "Session expired" },
+      });
+
+      const result = await supabaseService.signOutGlobal();
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Session expired");
+    });
+
+    it("should handle exceptions during global sign-out", async () => {
+      mockSupabaseClient.auth.signOut.mockRejectedValueOnce(
+        new Error("Network unavailable")
+      );
+
+      const result = await supabaseService.signOutGlobal();
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Network unavailable");
     });
   });
 

@@ -27,6 +27,7 @@ import type { ContactAssignments } from "../../hooks/useAuditTransaction";
 import type { Contact } from "../../../electron/types/models";
 import type { ExtendedContact } from "../../types/components";
 import { contactService } from "../../services";
+import logger from '../../utils/logger';
 
 interface ContactAssignmentStepProps {
   /** Current step (2 = select contacts, 3 = assign roles) */
@@ -284,7 +285,7 @@ function ContactAssignmentStep({
       await handleImportContact(previewContact);
       setPreviewContact(null);
     } catch (err) {
-      console.error("Failed to import contact:", err);
+      logger.error("Failed to import contact:", err);
     }
   }, [previewContact, handleImportContact]);
 

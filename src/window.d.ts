@@ -479,6 +479,33 @@ interface MainAPI {
      * Used for deep-link authentication flow
      */
     openAuthInBrowser: () => Promise<{ success: boolean; error?: string }>;
+    // TASK-2045: Sign out of all devices (global session invalidation)
+    signOutAllDevices: () => Promise<{ success: boolean; error?: string }>;
+
+    // TASK-2062: Remote session validation
+    /**
+     * Validate remote session by checking Supabase auth.getUser().
+     * Returns { valid: false } if the session has been invalidated remotely.
+     */
+    validateRemoteSession: () => Promise<{ valid: boolean }>;
+
+    // TASK-2062: Active devices list
+    /**
+     * Get active devices for the current user.
+     * Returns list of devices with isCurrentDevice flag.
+     */
+    getActiveDevices: (userId: string) => Promise<{
+      success: boolean;
+      devices?: Array<{
+        device_id: string;
+        device_name: string;
+        os: string;
+        platform: string;
+        last_seen_at: string;
+        isCurrentDevice: boolean;
+      }>;
+      error?: string;
+    }>;
   };
   system: {
     // Platform detection (migrated from window.electron.platform)
@@ -1262,6 +1289,7 @@ interface MainAPI {
         includeEmails?: boolean;
         includeTexts?: boolean;
         includeAttachments?: boolean;
+        emailExportMode?: "thread" | "individual";
       },
     ) => Promise<{
       success: boolean;
@@ -1382,6 +1410,9 @@ interface MainAPI {
       totalErrors?: number;
       error?: string;
       message?: string;
+      rateLimited?: boolean;
+      /** TASK-2070: Warning when provider fetch failed but local results are available */
+      warning?: string;
     }>;
     /**
      * Re-syncs auto-link communications for all contacts on a transaction.
@@ -1923,6 +1954,83 @@ interface MainAPI {
 
     /** Sends a heartbeat to update device last_seen_at */
     deviceHeartbeat: (userId: string) => Promise<void>;
+  };
+
+  // Database Backup & Restore API (TASK-2052)
+  databaseBackup: {
+    /** Create a backup of the local SQLite database (opens save dialog) */
+    backup: () => Promise<{
+      success: boolean;
+      cancelled?: boolean;
+      filePath?: string;
+      fileSize?: number;
+      error?: string;
+    }>;
+    /** Restore database from a backup file (opens file picker + confirmation) */
+    restore: () => Promise<{
+      success: boolean;
+      cancelled?: boolean;
+      error?: string;
+      requiresRestart?: boolean;
+    }>;
+    /** Get database file info (size, last modified date) */
+    getInfo: () => Promise<{
+      success: boolean;
+      info?: {
+        filePath: string;
+        fileSize: number;
+        lastModified: string;
+      } | null;
+      error?: string;
+    }>;
+  };
+
+  // Privacy / CCPA data export (TASK-2053)
+  privacy: {
+    /** Export all personal data as a JSON file (CCPA compliance) */
+    exportData: (userId: string) => Promise<{
+      success: boolean;
+      filePath?: string;
+      error?: string;
+    }>;
+    /** Listen for export progress updates */
+    onExportProgress: (callback: (progress: {
+      category: string;
+      progress: number;
+    }) => void) => () => void;
+  };
+
+  // Failure Log for offline diagnostics (TASK-2058)
+  failureLog: {
+    /** Get recent failure log entries */
+    getRecent: (limit?: number) => Promise<{
+      success: boolean;
+      entries: Array<{
+        id: number;
+        timestamp: string;
+        operation: string;
+        error_message: string;
+        metadata: string | null;
+        acknowledged: number;
+      }>;
+      error?: string;
+    }>;
+    /** Get count of unacknowledged failures */
+    getCount: () => Promise<{
+      success: boolean;
+      count: number;
+      error?: string;
+    }>;
+    /** Mark all failures as acknowledged */
+    acknowledgeAll: () => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    /** Clear entire failure log */
+    clear: () => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

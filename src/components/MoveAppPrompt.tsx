@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import logger from '../utils/logger';
 
 interface MoveAppPromptProps {
   appPath: string;
@@ -30,7 +31,7 @@ export default function MoveAppPrompt({
       }
       onDismiss();
     } catch (error) {
-      console.error("Error opening Applications folder:", error);
+      logger.error("Error opening Applications folder:", error);
     }
   };
 
@@ -61,13 +62,13 @@ export default function MoveAppPrompt({
 
         {/* Message */}
         <p className="text-gray-600 mb-4 text-center text-sm leading-relaxed">
-          We've detected that you're not running MagicAudit from the
+          We've detected that you're not running Keepr from the
           Applications folder of your machine. This could cause problems with
           the app, including impacting your ability to sign in.
         </p>
 
         <p className="text-gray-700 mb-4 text-center text-sm font-medium">
-          Do you want to move MagicAudit to the Applications folder now? This
+          Do you want to move Keepr to the Applications folder now? This
           will also restart the app.
         </p>
 

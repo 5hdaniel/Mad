@@ -9,6 +9,7 @@ import { Mic, MapPin, Paperclip } from "lucide-react";
 import { AudioPlayer } from "@/components/common/AudioPlayer";
 import type { Communication } from "../types";
 import type { MessageType } from "@/types";
+import { isEmptyOrReplacementChar } from "../../../utils/messageFormatUtils";
 
 export interface MessageBubbleProps {
   /** The message to display */
@@ -24,23 +25,12 @@ export interface MessageBubbleProps {
 /**
  * Format timestamp for display within message bubble.
  * Shows time only (e.g., "2:30 PM") for a compact display.
+ * Note: Different from formatMessageTime in messageFormatUtils which shows date+time.
  */
 function formatMessageTime(timestamp: string | Date | undefined): string {
   if (!timestamp) return "";
   const date = new Date(timestamp);
   return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-}
-
-
-/**
- * Check if text is empty or only contains the object replacement character
- * macOS uses U+FFFC (￼) as a placeholder for attachments in message text
- */
-function isEmptyOrReplacementChar(text: string): boolean {
-  if (!text) return true;
-  // U+FFFC is the Object Replacement Character, U+FFFD is the Replacement Character
-  const cleaned = text.replace(/[\uFFFC\uFFFD\s]/g, "");
-  return cleaned.length === 0;
 }
 
 /**

@@ -25,6 +25,21 @@ jest.mock("@/contexts/LicenseContext", () => ({
   })),
 }));
 
+// TASK-2056: Mock the useNetwork hook for offline testing
+const mockUseNetwork = jest.fn(() => ({
+  isOnline: true,
+  isChecking: false,
+  lastOnlineAt: new Date(),
+  lastOfflineAt: null,
+  connectionError: null,
+  checkConnection: jest.fn().mockResolvedValue(true),
+  clearError: jest.fn(),
+  setConnectionError: jest.fn(),
+}));
+jest.mock("../../contexts/NetworkContext", () => ({
+  useNetwork: () => mockUseNetwork(),
+}));
+
 // Wrap Settings in PlatformProvider for tests
 const renderSettings = async (props: { onClose: () => void; userId: string }) => {
   const result = render(
@@ -128,20 +143,20 @@ describe("Settings", () => {
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       await waitFor(() => {
-        expect(screen.getByText("General")).toBeInTheDocument();
+        expect(screen.getAllByText("General").length).toBeGreaterThanOrEqual(1);
       });
 
-      expect(screen.getByText("Email Connections")).toBeInTheDocument();
-      expect(screen.getByText("Export")).toBeInTheDocument();
+      expect(screen.getAllByText("Email").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("Security").length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText("AI Settings")).toBeInTheDocument();
-      expect(screen.getByText("Data & Privacy")).toBeInTheDocument();
-      expect(screen.getByText("About")).toBeInTheDocument();
+      expect(screen.getAllByText("Data & Privacy").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("About").length).toBeGreaterThanOrEqual(1);
     });
 
     it("should show app name and copyright", async () => {
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
-      expect(screen.getByText("MagicAudit")).toBeInTheDocument();
+      expect(screen.getByText("Keepr")).toBeInTheDocument();
       expect(screen.getByText(/© 2026 Blue Spaces LLC/)).toBeInTheDocument();
     });
   });
@@ -601,15 +616,6 @@ describe("Settings", () => {
   });
 
   describe("Data & Privacy", () => {
-    it("should show view stored data button (disabled)", async () => {
-      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
-
-      expect(screen.getByText("View Stored Data")).toBeInTheDocument();
-      expect(
-        screen.getByText(/see all data stored locally/i),
-      ).toBeInTheDocument();
-    });
-
     it("should show clear all data button (disabled)", async () => {
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
@@ -706,7 +712,7 @@ describe("Settings", () => {
     it("should show app name", async () => {
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
-      expect(screen.getByText("MagicAudit")).toBeInTheDocument();
+      expect(screen.getByText("Keepr")).toBeInTheDocument();
     });
 
     it("should show disabled action buttons", async () => {
@@ -901,6 +907,143 @@ describe("Settings", () => {
       await waitFor(() => {
         expect(screen.getByText("AI Settings")).toBeInTheDocument();
       });
+    });
+  });
+
+  // TASK-2056: Offline action blocking tests
+  describe("Offline Action Blocking (TASK-2056)", () => {
+    beforeEach(() => {
+      // Set network to offline
+      mockUseNetwork.mockReturnValue({
+        isOnline: false,
+        isChecking: false,
+        lastOnlineAt: null,
+        lastOfflineAt: new Date(),
+        connectionError: null,
+        checkConnection: jest.fn().mockResolvedValue(false),
+        clearError: jest.fn(),
+        setConnectionError: jest.fn(),
+      });
+    });
+
+    afterEach(() => {
+      // Reset to online
+      mockUseNetwork.mockReturnValue({
+        isOnline: true,
+        isChecking: false,
+        lastOnlineAt: new Date(),
+        lastOfflineAt: null,
+        connectionError: null,
+        checkConnection: jest.fn().mockResolvedValue(true),
+        clearError: jest.fn(),
+        setConnectionError: jest.fn(),
+      });
+    });
+
+    it("should disable Check for Updates button when offline", async () => {
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      await waitFor(() => {
+        const checkButton = screen.getByRole("button", { name: /check for updates/i });
+        expect(checkButton).toBeDisabled();
+      });
+    });
+
+    it("should show 'You are offline' tooltip on Check for Updates when offline", async () => {
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      await waitFor(() => {
+        const checkButton = screen.getByRole("button", { name: /check for updates/i });
+        expect(checkButton).toHaveAttribute("title", "You are offline");
+      });
+    });
+
+    it("should disable Sign Out All Devices button when offline", async () => {
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      await waitFor(() => {
+        const signOutButton = screen.getByRole("button", { name: /sign out all devices/i });
+        expect(signOutButton).toBeDisabled();
+      });
+    });
+
+    it("should show 'You are offline' tooltip on Sign Out All Devices when offline", async () => {
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      await waitFor(() => {
+        const signOutButton = screen.getByRole("button", { name: /sign out all devices/i });
+        expect(signOutButton).toHaveAttribute("title", "You are offline");
+      });
+    });
+
+    it("should disable Connect Gmail button when offline", async () => {
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      await waitFor(() => {
+        const connectButton = screen.getByRole("button", { name: /connect gmail/i });
+        expect(connectButton).toBeDisabled();
+        expect(connectButton).toHaveAttribute("title", "You are offline");
+      });
+    });
+
+    it("should disable Connect Outlook button when offline", async () => {
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      await waitFor(() => {
+        const connectButton = screen.getByRole("button", { name: /connect outlook/i });
+        expect(connectButton).toBeDisabled();
+        expect(connectButton).toHaveAttribute("title", "You are offline");
+      });
+    });
+
+    it("should re-enable buttons when back online", async () => {
+      const { rerender } = await renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      // Verify buttons are disabled
+      await waitFor(() => {
+        const checkButton = screen.getByRole("button", { name: /check for updates/i });
+        expect(checkButton).toBeDisabled();
+      });
+
+      // Go back online
+      mockUseNetwork.mockReturnValue({
+        isOnline: true,
+        isChecking: false,
+        lastOnlineAt: new Date(),
+        lastOfflineAt: null,
+        connectionError: null,
+        checkConnection: jest.fn().mockResolvedValue(true),
+        clearError: jest.fn(),
+        setConnectionError: jest.fn(),
+      });
+
+      rerender(
+        <NotificationProvider>
+          <PlatformProvider>
+            <Settings userId={mockUserId} onClose={mockOnClose} />
+          </PlatformProvider>
+        </NotificationProvider>
+      );
+
+      await waitFor(() => {
+        const checkButton = screen.getByRole("button", { name: /check for updates/i });
+        expect(checkButton).not.toBeDisabled();
+        expect(checkButton).not.toHaveAttribute("title", "You are offline");
+      });
+    });
+
+    it("should keep local-only operations enabled when offline", async () => {
+      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
+
+      // Reindex is a local-only operation, should remain enabled
+      await waitFor(() => {
+        const reindexButton = screen.getByText("Reindex Database").closest("button");
+        expect(reindexButton).not.toBeDisabled();
+      });
+
+      // Done button should remain enabled
+      const doneButton = screen.getByRole("button", { name: /done/i });
+      expect(doneButton).not.toBeDisabled();
     });
   });
 });

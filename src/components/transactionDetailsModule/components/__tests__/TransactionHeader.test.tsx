@@ -15,6 +15,19 @@ jest.mock("@/contexts/LicenseContext", () => ({
 
 import { useLicense } from "@/contexts/LicenseContext";
 
+jest.mock("../../../../contexts/NetworkContext", () => ({
+  useNetwork: () => ({
+    isOnline: true,
+    isChecking: false,
+    lastOnlineAt: null,
+    lastOfflineAt: null,
+    connectionError: null,
+    checkConnection: jest.fn(),
+    clearError: jest.fn(),
+    setConnectionError: jest.fn(),
+  }),
+}));
+
 const mockUseLicense = useLicense as jest.MockedFunction<typeof useLicense>;
 
 // Helper to create mock license context value

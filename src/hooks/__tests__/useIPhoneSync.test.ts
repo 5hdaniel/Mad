@@ -209,7 +209,7 @@ describe("useIPhoneSync", () => {
       await result.current.startSync();
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        "[useIPhoneSync] Cannot start sync: No device connected",
+        "[ERROR] [useIPhoneSync] Cannot start sync: No device connected",
       );
     });
 
@@ -219,7 +219,7 @@ describe("useIPhoneSync", () => {
       await result.current.submitPassword("test-password");
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        "[useIPhoneSync] Cannot submit password: No device connected",
+        "[ERROR] [useIPhoneSync] Cannot submit password: No device connected",
       );
     });
   });

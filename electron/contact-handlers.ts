@@ -7,6 +7,7 @@ import { ipcMain, BrowserWindow } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import { randomUUID } from "crypto";
 import databaseService, { TransactionWithRoles as DbTransactionWithRoles } from "./services/databaseService";
+import failureLogService from "./services/failureLogService";
 import {
   getContactEmailEntries,
   getContactPhoneEntries,
@@ -16,6 +17,7 @@ import {
   setContactPrimaryPhone,
 } from "./services/db/contactDbService";
 import { getContactNames } from "./services/contactsService";
+import { resolveHandles } from "./services/contactResolutionService";
 import auditService from "./services/auditService";
 import logService from "./services/logService";
 import * as externalContactDb from "./services/db/externalContactDbService";
@@ -1392,6 +1394,33 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
     },
   );
 
+  // TASK-2026: Resolve any mix of phone numbers, emails, and Apple IDs to contact names
+  ipcMain.handle(
+    "contacts:resolve-handles",
+    async (
+      _event: IpcMainInvokeEvent,
+      handles: string[],
+    ): Promise<{ success: boolean; names: Record<string, string>; error?: string }> => {
+      try {
+        if (!Array.isArray(handles)) {
+          return { success: false, names: {}, error: "handles must be an array" };
+        }
+
+        const names = await resolveHandles(handles);
+        return { success: true, names };
+      } catch (error) {
+        logService.error("Resolve handles failed", "Contacts", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          names: {},
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
   // TASK-1773: Trigger manual sync of external contacts from macOS
   ipcMain.handle(
     "contacts:syncExternal",
@@ -1659,6 +1688,11 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         logService.error("[Main] Outlook contacts sync failed", "Contacts", {
           error: error instanceof Error ? error.message : "Unknown error",
         });
+        // TASK-2058: Log failure for offline diagnostics
+        failureLogService.logFailure(
+          "outlook_contacts_sync",
+          error instanceof Error ? error.message : "Unknown error"
+        );
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",

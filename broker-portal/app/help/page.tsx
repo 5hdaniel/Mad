@@ -25,19 +25,19 @@ const articles = [
   {
     href: '/setup',
     title: 'Set Up Your Organization',
-    description: 'Register your organization with Magic Audit and link your Microsoft tenant.',
+    description: 'Register your organization with Keepr and link your Microsoft tenant.',
     tags: ['setup', 'organization', 'tenant', 'onboarding', 'getting started'],
   },
   {
     href: '/download',
     title: 'Download the Desktop App',
-    description: 'Get the Magic Audit desktop app for macOS or Windows.',
+    description: 'Get the Keepr desktop app for macOS or Windows.',
     tags: ['download', 'install', 'desktop', 'mac', 'windows', 'app'],
   },
   {
     href: '/guides',
     title: 'IT Admin Guides Overview',
-    description: 'Everything you need to set up Magic Audit for your organization.',
+    description: 'Everything you need to set up Keepr for your organization.',
     tags: ['guides', 'admin', 'it', 'overview', 'setup'],
   },
   {
@@ -72,7 +72,7 @@ const articles = [
     href: '/guides/scim-provisioning',
     title: 'How SCIM User Provisioning Works',
     description:
-      'What happens when Azure AD creates or deactivates users via SCIM, and how changes sync to Magic Audit.',
+      'What happens when Azure AD creates or deactivates users via SCIM, and how changes sync to Keepr.',
     tags: ['scim', 'provisioning', 'azure', 'sync', 'create', 'deactivate', 'users'],
   },
   {
@@ -178,7 +178,7 @@ export default function HelpPage() {
             <p className="mt-4 text-gray-500">No articles found for &quot;{query}&quot;</p>
             <p className="mt-1 text-sm text-gray-400">
               Try a different search term or{' '}
-              <a href="mailto:magicauditwa@gmail.com" className="text-blue-600 hover:underline">
+              <a href="mailto:support@keeprcompliance.com" className="text-blue-600 hover:underline">
                 contact support
               </a>
             </p>
@@ -191,7 +191,7 @@ export default function HelpPage() {
             Can&apos;t find what you&apos;re looking for?
           </p>
           <a
-            href="mailto:magicauditwa@gmail.com"
+            href="mailto:support@keeprcompliance.com"
             className="mt-2 inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-500"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">

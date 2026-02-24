@@ -164,6 +164,19 @@ jest.mock("../../../../services", () => ({
   },
 }));
 
+jest.mock("../../../../contexts/NetworkContext", () => ({
+  useNetwork: () => ({
+    isOnline: true,
+    isChecking: false,
+    lastOnlineAt: null,
+    lastOfflineAt: null,
+    connectionError: null,
+    checkConnection: jest.fn(),
+    clearError: jest.fn(),
+    setConnectionError: jest.fn(),
+  }),
+}));
+
 // Test transaction factory
 const createTestTransaction = (
   overrides: Partial<Transaction> = {}

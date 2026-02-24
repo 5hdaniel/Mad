@@ -8,6 +8,8 @@ import React, { useState, useCallback, useMemo, useEffect } from "react";
 import DOMPurify from "dompurify";
 import type { Communication } from "../../types";
 import { AttachmentPreviewModal } from "./AttachmentPreviewModal";
+import { formatFileSize } from "../../../../utils/formatUtils";
+import logger from '../../../../utils/logger';
 
 /**
  * Email attachment structure from IPC
@@ -18,16 +20,6 @@ interface EmailAttachment {
   mime_type: string | null;
   file_size_bytes: number | null;
   storage_path: string | null;
-}
-
-/**
- * Format file size in human-readable format
- */
-function formatFileSize(bytes: number | null): string {
-  if (bytes === null || bytes === 0) return "";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /**
@@ -188,7 +180,7 @@ export function EmailViewModal({
           }
         })
         .catch((err: Error) => {
-          console.error("Failed to fetch email attachments:", err);
+          logger.error("Failed to fetch email attachments:", err);
         })
         .finally(() => {
           setLoadingAttachments(false);
@@ -199,17 +191,17 @@ export function EmailViewModal({
   // TASK-1776: Handle opening an attachment
   const handleOpenAttachment = useCallback(async (attachment: EmailAttachment) => {
     if (!attachment.storage_path) {
-      console.warn("Attachment has no storage path:", attachment.filename);
+      logger.warn("Attachment has no storage path:", attachment.filename);
       return;
     }
 
     try {
       const result = await window.api.transactions.openAttachment(attachment.storage_path);
       if (!result.success) {
-        console.error("Failed to open attachment:", result.error);
+        logger.error("Failed to open attachment:", result.error);
       }
     } catch (err) {
-      console.error("Error opening attachment:", err);
+      logger.error("Error opening attachment:", err);
     }
   }, []);
 

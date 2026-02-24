@@ -26,7 +26,7 @@ module.exports = async function afterPack(context) {
   console.log('  EnableNodeCliInspectArguments: false');
   console.log('  EnableEmbeddedAsarIntegrityValidation: true');
   console.log('  OnlyLoadAppFromAsar: true');
-  console.log('  GrantFileProtocolExtraPrivileges: true (required for loadFile)');
+  console.log('  GrantFileProtocolExtraPrivileges: false (TASK-2051: app:// protocol replaces file://)');
 
   await flipFuses(electronBinaryPath, {
     version: FuseVersion.V1,
@@ -39,10 +39,11 @@ module.exports = async function afterPack(context) {
     [FuseV1Options.EnableNodeCliInspectArguments]: false,
     [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
     [FuseV1Options.OnlyLoadAppFromAsar]: true,
-    // IMPORTANT: Must be true while app uses mainWindow.loadFile() with file:// protocol.
-    // Setting to false breaks the packaged app. See PR #838 / v2.2.2.
-    // TODO: Migrate to custom protocol (app://) to safely disable this fuse.
-    [FuseV1Options.GrantFileProtocolExtraPrivileges]: true,
+    // TASK-2051: Disabled after migrating from file:// to custom app:// protocol.
+    // The app now uses protocol.handle('app', ...) + mainWindow.loadURL('app://./index.html')
+    // instead of mainWindow.loadFile(), so file:// privileges are no longer needed.
+    // Previous state: true (required for loadFile). See PR #838 / v2.2.2.
+    [FuseV1Options.GrantFileProtocolExtraPrivileges]: false,
   });
 
   console.log('[afterPack] Electron fuses configured successfully.');

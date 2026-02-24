@@ -1,3 +1,4 @@
+import logger from './logger';
 /**
  * Platform Detection Utility
  *
@@ -46,7 +47,7 @@ export function getPlatform(): Platform {
   if (userAgent.includes("linux")) return "linux";
 
   // Last resort default - log warning for debugging
-  console.warn(
+  logger.warn(
     `[Platform] Could not detect platform. electronPlatform=${electronPlatform}, ` +
       `navPlatform=${navPlatform}. Defaulting to Windows.`,
   );

@@ -10,6 +10,9 @@ import DOMPurify from "dompurify";
 import type { Communication } from "../../types";
 import type { EmailThread } from "../EmailThreadCard";
 import { AttachmentPreviewModal } from "./AttachmentPreviewModal";
+import { formatFileSize } from "../../../../utils/formatUtils";
+import { getEmailAvatarInitial } from "../../../../utils/avatarUtils";
+import logger from '../../../../utils/logger';
 
 /**
  * Email attachment structure from IPC
@@ -20,16 +23,6 @@ interface EmailAttachment {
   mime_type: string | null;
   file_size_bytes: number | null;
   storage_path: string | null;
-}
-
-/**
- * Format file size in human-readable format
- */
-function formatFileSize(bytes: number | null): string {
-  if (bytes === null || bytes === 0) return "";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /**
@@ -204,28 +197,6 @@ function extractSenderName(sender: string | undefined, userEmail?: string): stri
 }
 
 /**
- * Get initials for avatar
- */
-function getAvatarInitial(sender?: string): string {
-  if (!sender) return "?";
-
-  const nameMatch = sender.match(/^([^<]+)/);
-  if (nameMatch) {
-    const name = nameMatch[1].trim();
-    if (name && name !== sender) {
-      return name.charAt(0).toUpperCase();
-    }
-  }
-
-  const atIndex = sender.indexOf("@");
-  if (atIndex > 0) {
-    return sender.charAt(0).toUpperCase();
-  }
-
-  return sender.charAt(0).toUpperCase();
-}
-
-/**
  * Get consistent color for sender
  */
 function getSenderColor(sender: string | undefined): string {
@@ -266,7 +237,7 @@ function EmailBubble({
   const emailDate = new Date(email.sent_at || email.received_at || 0);
   const isMe = isSelfSender(email.sender, userEmail);
   const senderName = extractSenderName(email.sender, userEmail);
-  const avatarInitial = isMe ? "Y" : getAvatarInitial(email.sender);
+  const avatarInitial = isMe ? "Y" : getEmailAvatarInitial(email.sender);
   const avatarColor = getSenderColor(email.sender);
   const preview = useMemo(() => getPlainTextPreview(email), [email]);
   const [attachmentsExpanded, setAttachmentsExpanded] = useState(false);
@@ -484,7 +455,7 @@ export function EmailThreadViewModal({
           }
         })
         .catch((err: Error) => {
-          console.error(`Failed to fetch attachments for email ${email.id}:`, err);
+          logger.error(`Failed to fetch attachments for email ${email.id}:`, err);
         })
         .finally(() => {
           setLoadingAttachmentIds(prev => {
@@ -515,11 +486,11 @@ export function EmailThreadViewModal({
       if (transactionsApi?.openAttachment) {
         const result = await transactionsApi.openAttachment(storagePath);
         if (!result.success) {
-          console.error("Failed to open attachment:", result.error);
+          logger.error("Failed to open attachment:", result.error);
         }
       }
     } catch (err) {
-      console.error("Error opening attachment:", err);
+      logger.error("Error opening attachment:", err);
     }
   }, []);
 

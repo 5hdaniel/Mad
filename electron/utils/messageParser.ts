@@ -10,7 +10,7 @@
  *    - Contains $archiver, $objects, $top keys
  *    - String content stored in $objects array
  *
- * 2. **Typedstream format** - Legacy Apple format, parsed with imessage-parser
+ * 2. **Typedstream format** - Legacy Apple format, parsed with custom extractor
  *    - Starts with "streamtyped" or other markers
  *    - Contains NSString markers and inline text
  *
@@ -21,19 +21,13 @@
  * @see https://github.com/alexkwolfe/imessage-parser
  */
 
-// Using require for imessage-parser to avoid ESM/CJS issues
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { parseAttributedBody: parseTypedStream } = require("imessage-parser") as {
-  parseAttributedBody: (buffer: Buffer, options?: { cleanOutput?: boolean }) => { text: string };
-};
-
 /**
  * Preamble bytes that appear after NSString marker in typedstream format.
  * There are two variants:
  * - REGULAR (0x94): Used for immutable NSString in simple messages
  * - MUTABLE (0x95): Used for NSMutableString in rich messages (links, calendars, etc.)
  *
- * The imessage-parser library only handles REGULAR, causing rich messages to fail.
+ * The former imessage-parser library only handled REGULAR, causing rich messages to fail.
  */
 const NSSTRING_PREAMBLE_REGULAR = Buffer.from([0x01, 0x94, 0x84, 0x01, 0x2b]);
 const NSSTRING_PREAMBLE_MUTABLE = Buffer.from([0x01, 0x95, 0x84, 0x01, 0x2b]);
@@ -269,10 +263,8 @@ function isNSKeyedArchiverMetadata(text: string): boolean {
 /**
  * Custom typedstream parser that handles both regular and mutable NSString preambles.
  *
- * The imessage-parser library only recognizes the REGULAR preamble (0x94),
+ * The former imessage-parser library only recognized the REGULAR preamble (0x94),
  * but rich messages (links, calendar events, etc.) use MUTABLE preamble (0x95).
- * This causes the library to misread the length byte and return garbage.
- *
  * This function properly handles both cases.
  *
  * @param buffer - Typedstream buffer to parse
@@ -459,46 +451,25 @@ export async function extractTextFromAttributedBody(
     }
 
     case "typedstream": {
-      // Try our custom parser first - handles both regular and mutable NSString preambles
+      // Custom parser handles both regular (0x94) and mutable (0x95) NSString preambles,
+      // extended length encoding, and metadata filtering. This replaces the imessage-parser
+      // library which only handled the regular preamble and brought in 72 npm vulnerabilities
+      // via its sqlite3 -> node-gyp -> tar dependency chain.
       // Wrap in try-catch to handle potential stack overflow from malformed data
       try {
         const customResult = extractTextFromTypedstream(attributedBodyBuffer);
         if (customResult && customResult.length >= MIN_MESSAGE_TEXT_LENGTH) {
           const cleaned = cleanExtractedText(customResult);
           if (cleaned.length >= MIN_MESSAGE_TEXT_LENGTH && cleaned.length < MAX_MESSAGE_TEXT_LENGTH) {
-            logService.debug(`Custom typedstream parser succeeded: ${cleaned.length} chars`, "MessageParser");
+            logService.debug(`Typedstream parser succeeded: ${cleaned.length} chars`, "MessageParser");
             return cleaned;
           }
         }
-      } catch (customError) {
-        logService.warn("Custom typedstream parser error", "MessageParser", {
-          error: (customError as Error).message,
+      } catch (parseError) {
+        logService.warn("Typedstream parser error", "MessageParser", {
+          error: (parseError as Error).message,
           bufferLength: attributedBodyBuffer.length,
         });
-      }
-
-      // Fall back to imessage-parser library for edge cases
-      // This library can cause stack overflow on certain malformed data
-      try {
-        const result = parseTypedStream(attributedBodyBuffer, { cleanOutput: true });
-        if (result && result.text && result.text.length >= MIN_MESSAGE_TEXT_LENGTH) {
-          const cleaned = cleanExtractedText(result.text);
-          if (cleaned.length >= MIN_MESSAGE_TEXT_LENGTH && cleaned.length < MAX_MESSAGE_TEXT_LENGTH) {
-            return cleaned;
-          }
-        }
-      } catch (e) {
-        // Catch all errors including potential stack overflow
-        const errorMsg = (e as Error).message || "Unknown error";
-        if (errorMsg.includes("stack") || errorMsg.includes("Maximum call")) {
-          logService.warn("imessage-parser stack overflow, skipping message", "MessageParser", {
-            bufferLength: attributedBodyBuffer.length,
-          });
-        } else {
-          logService.debug("imessage-parser failed", "MessageParser", {
-            error: errorMsg,
-          });
-        }
       }
 
       // Typedstream parse failed

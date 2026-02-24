@@ -12,6 +12,9 @@ import type { EmailThread } from "../EmailThreadCard";
 import { EmailThreadViewModal } from "./EmailThreadViewModal";
 import type { Communication } from "../../types";
 import { useAuth } from "../../../../contexts";
+import { formatDateRange } from "../../../../utils/dateRangeUtils";
+import { filterSelfFromParticipants, formatParticipants } from "../../../../utils/emailParticipantUtils";
+import { getEmailAvatarInitial } from "../../../../utils/avatarUtils";
 
 interface AttachEmailsModalProps {
   /** User ID to fetch unlinked emails for */
@@ -38,88 +41,6 @@ interface EmailInfo {
   body_preview?: string | null;
   email_thread_id?: string | null;
   has_attachments?: boolean;
-}
-
-/**
- * Format date range for display (used for threads)
- */
-function formatDateRange(startDate: Date, endDate: Date): string {
-  const formatDateObj = (d: Date) =>
-    d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-
-  if (startDate.toDateString() === endDate.toDateString()) {
-    return formatDateObj(startDate);
-  }
-  return `${formatDateObj(startDate)} - ${formatDateObj(endDate)}`;
-}
-
-/**
- * Filter out the logged-in user's email from a participant list.
- */
-function filterSelfFromParticipants(participants: string[], userEmail?: string): string[] {
-  if (!userEmail) return participants;
-  const normalizedUser = userEmail.toLowerCase().trim();
-  return participants.filter(p => {
-    const match = p.match(/<([^>]+)>/);
-    const email = match ? match[1].toLowerCase() : p.toLowerCase().trim();
-    return email !== normalizedUser;
-  });
-}
-
-/**
- * Format participant list for display (show first few, then "+X more")
- */
-function formatParticipants(participants: string[], maxShow: number = 2): string {
-  if (participants.length === 0) return "Unknown";
-
-  // Extract names from email addresses where possible
-  const names = participants.map(p => {
-    // Try "Name <email>" format first
-    const nameMatch = p.match(/^([^<]+)/);
-    if (nameMatch) {
-      const name = nameMatch[1].trim();
-      if (name && name !== p) return name;
-    }
-    // Extract email prefix and capitalize (e.g. "madison.delvigo" → "Madison Delvigo")
-    const atIndex = p.indexOf("@");
-    const prefix = atIndex > 0 ? p.substring(0, atIndex) : p;
-    return prefix
-      .split(/[._-]/)
-      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(" ");
-  });
-
-  // Deduplicate
-  const unique = [...new Set(names)];
-
-  if (unique.length <= maxShow) {
-    return unique.join(", ");
-  }
-  return `${unique.slice(0, maxShow).join(", ")} +${unique.length - maxShow}`;
-}
-
-/**
- * Get initials for avatar display from sender name/email.
- */
-function getAvatarInitial(sender?: string | null): string {
-  if (!sender) return "?";
-
-  // Try to get name from email format "Name <email@example.com>"
-  const nameMatch = sender.match(/^([^<]+)/);
-  if (nameMatch) {
-    const name = nameMatch[1].trim();
-    if (name && name !== sender) {
-      return name.charAt(0).toUpperCase();
-    }
-  }
-
-  // Extract first character from email before @
-  const atIndex = sender.indexOf("@");
-  if (atIndex > 0) {
-    return sender.charAt(0).toUpperCase();
-  }
-
-  return sender.charAt(0).toUpperCase();
 }
 
 /**
@@ -541,8 +462,8 @@ export function AttachEmailsModal({
                 const otherParticipants = filterSelfFromParticipants(thread.participants, currentUser?.email);
                 // Avatar: use first non-user participant, otherwise fallback to sender
                 const avatarInitial = otherParticipants.length > 0
-                  ? getAvatarInitial(otherParticipants[0])
-                  : getAvatarInitial(firstEmail?.sender);
+                  ? getEmailAvatarInitial(otherParticipants[0])
+                  : getEmailAvatarInitial(firstEmail?.sender);
                 // Get body preview from the most recent email in the thread
                 const lastEmail = thread.emails[thread.emails.length - 1];
                 // TASK-1998: body preview from most recent email, fall back to first, then subject

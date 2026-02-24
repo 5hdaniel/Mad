@@ -253,7 +253,7 @@ const createAppStateMock = (
   handleNotNowMovePrompt: jest.fn(),
 
   // Utility
-  getPageTitle: jest.fn().mockReturnValue("Magic Audit"),
+  getPageTitle: jest.fn().mockReturnValue("Keepr"),
 
   ...overrides,
 });

@@ -11,6 +11,7 @@
 import React from "react";
 import type { LoadingPhase } from "../types";
 import { getDbInitMessage } from "../utils/platformInit";
+import { OfflineNotice } from "../../../../components/common/OfflineNotice";
 
 /**
  * Platform info for determining platform-specific messages.
@@ -68,33 +69,36 @@ export function LoadingScreen({
   const message = getPhaseMessage(phase, platform);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
-      <div className="text-center">
-        {/* Spinner */}
-        <div
-          className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"
-          role="status"
-          aria-label="Loading"
-        />
-
-        {/* Phase message */}
-        <p className="text-gray-600 text-lg mb-2">{message}</p>
-
-        {/* Progress bar (optional) */}
-        {progress !== undefined && (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col">
+      <OfflineNotice />
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center">
+          {/* Spinner */}
           <div
-            className="w-48 h-2 bg-gray-200 rounded-full mx-auto overflow-hidden"
-            role="progressbar"
-            aria-valuenow={progress}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          >
+            className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"
+            role="status"
+            aria-label="Loading"
+          />
+
+          {/* Phase message */}
+          <p className="text-gray-600 text-lg mb-2">{message}</p>
+
+          {/* Progress bar (optional) */}
+          {progress !== undefined && (
             <div
-              className="h-full bg-blue-600 transition-all duration-300"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-        )}
+              className="w-48 h-2 bg-gray-200 rounded-full mx-auto overflow-hidden"
+              role="progressbar"
+              aria-valuenow={progress}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <div
+                className="h-full bg-blue-600 transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

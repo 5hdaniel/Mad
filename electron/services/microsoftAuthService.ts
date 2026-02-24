@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/electron/main";
 import axios, { AxiosError } from "axios";
 import http from "http";
 import url from "url";
@@ -424,6 +425,7 @@ class MicrosoftAuthService {
         "MicrosoftAuth",
         { error: axiosError.response?.data || axiosError.message }
       );
+      Sentry.captureException(error, { tags: { service: "microsoft-auth", operation: "exchangeCodeForTokens" } });
       throw new Error(
         (axiosError.response?.data as any)?.error_description ||
           "Failed to exchange authorization code",
@@ -459,6 +461,7 @@ class MicrosoftAuthService {
         "MicrosoftAuth",
         { error: axiosError.response?.data || axiosError.message }
       );
+      Sentry.captureException(error, { tags: { service: "microsoft-auth", operation: "getUserInfo" } });
       throw new Error("Failed to get user information");
     }
   }
@@ -490,6 +493,7 @@ class MicrosoftAuthService {
         "MicrosoftAuth",
         { error: axiosError.response?.data || axiosError.message }
       );
+      Sentry.captureException(error, { tags: { service: "microsoft-auth", operation: "refreshToken" } });
       throw new Error("Failed to refresh access token");
     }
   }
@@ -595,6 +599,7 @@ class MicrosoftAuthService {
         "MicrosoftAuth",
         { error: axiosError.response?.data || axiosError.message }
       );
+      Sentry.captureException(error, { tags: { service: "microsoft-auth", operation: "getMailboxInfo" } });
       throw new Error("Failed to get mailbox information");
     }
   }

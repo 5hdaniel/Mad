@@ -24,6 +24,29 @@ jest.mock("../logService", () => ({
 
 const mockFs = fs as jest.Mocked<typeof fs>;
 
+/**
+ * Helper: extract session data from encrypted writeFile output.
+ * The global electron mock's encryptString produces Buffer.from(`encrypted:${str}`).
+ */
+function extractSavedSessionData(writeCallArg: string): Record<string, unknown> {
+  const wrapper = JSON.parse(writeCallArg);
+  if (wrapper.encrypted) {
+    const decoded = Buffer.from(wrapper.encrypted, "base64").toString();
+    const json = decoded.startsWith("encrypted:") ? decoded.slice("encrypted:".length) : decoded;
+    return JSON.parse(json);
+  }
+  return wrapper;
+}
+
+/**
+ * Helper: create encrypted file content for readFile mock.
+ */
+function createEncryptedFileContent(sessionData: Record<string, unknown>): string {
+  const json = JSON.stringify(sessionData);
+  const encrypted = Buffer.from(`encrypted:${json}`).toString("base64");
+  return JSON.stringify({ encrypted });
+}
+
 describe("SessionService - Additional Tests", () => {
   const mockSession = {
     user: {
@@ -69,7 +92,7 @@ describe("SessionService - Additional Tests", () => {
       await sessionService.saveSession(sessionWithoutCreatedAt);
 
       const writeCall = mockFs.writeFile.mock.calls[0];
-      const savedData = JSON.parse(writeCall[1] as string);
+      const savedData = extractSavedSessionData(writeCall[1] as string);
       expect(savedData.createdAt).toBeDefined();
       expect(typeof savedData.createdAt).toBe("number");
     });
@@ -77,7 +100,7 @@ describe("SessionService - Additional Tests", () => {
 
   describe("loadSession", () => {
     it("should load valid session", async () => {
-      mockFs.readFile.mockResolvedValue(JSON.stringify(mockSession));
+      mockFs.readFile.mockResolvedValue(createEncryptedFileContent(mockSession));
 
       const result = await sessionService.loadSession();
 
@@ -89,7 +112,7 @@ describe("SessionService - Additional Tests", () => {
         ...mockSession,
         expiresAt: Date.now() - 1000, // Expired 1 second ago
       };
-      mockFs.readFile.mockResolvedValue(JSON.stringify(expiredSession));
+      mockFs.readFile.mockResolvedValue(createEncryptedFileContent(expiredSession));
       mockFs.unlink.mockResolvedValue(undefined);
 
       const result = await sessionService.loadSession();
@@ -118,7 +141,7 @@ describe("SessionService - Additional Tests", () => {
 
     it("should handle session without expiresAt", async () => {
       const sessionNoExpiry = { ...mockSession, expiresAt: undefined };
-      mockFs.readFile.mockResolvedValue(JSON.stringify(sessionNoExpiry));
+      mockFs.readFile.mockResolvedValue(createEncryptedFileContent(sessionNoExpiry));
 
       const result = await sessionService.loadSession();
 
@@ -156,7 +179,7 @@ describe("SessionService - Additional Tests", () => {
 
   describe("hasValidSession", () => {
     it("should return true when valid session exists", async () => {
-      mockFs.readFile.mockResolvedValue(JSON.stringify(mockSession));
+      mockFs.readFile.mockResolvedValue(createEncryptedFileContent(mockSession));
 
       const result = await sessionService.hasValidSession();
 
@@ -176,7 +199,7 @@ describe("SessionService - Additional Tests", () => {
 
   describe("updateSession", () => {
     it("should update existing session", async () => {
-      mockFs.readFile.mockResolvedValue(JSON.stringify(mockSession));
+      mockFs.readFile.mockResolvedValue(createEncryptedFileContent(mockSession));
       mockFs.writeFile.mockResolvedValue(undefined);
 
       const result = await sessionService.updateSession({
@@ -185,7 +208,7 @@ describe("SessionService - Additional Tests", () => {
 
       expect(result).toBe(true);
       const writeCall = mockFs.writeFile.mock.calls[0];
-      const savedData = JSON.parse(writeCall[1] as string);
+      const savedData = extractSavedSessionData(writeCall[1] as string);
       expect(savedData.sessionToken).toBe("new-token");
     });
 
@@ -202,7 +225,7 @@ describe("SessionService - Additional Tests", () => {
     });
 
     it("should call saveSession when updating", async () => {
-      mockFs.readFile.mockResolvedValue(JSON.stringify(mockSession));
+      mockFs.readFile.mockResolvedValue(createEncryptedFileContent(mockSession));
       mockFs.writeFile.mockResolvedValue(undefined);
 
       const result = await sessionService.updateSession({

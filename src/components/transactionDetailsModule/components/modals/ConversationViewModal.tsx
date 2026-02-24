@@ -6,6 +6,10 @@
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import type { MessageLike } from "../MessageThreadCard";
 import { parseDateSafe } from "../../../../utils/dateFormatters";
+import { normalizePhoneForLookup, getSenderPhone } from "../../../../utils/phoneNormalization";
+import { formatDateRangeLabel } from "../../../../utils/dateRangeUtils";
+import { isEmptyOrReplacementChar, formatMessageTime } from "../../../../utils/messageFormatUtils";
+import logger from '../../../../utils/logger';
 
 /**
  * Attachment info for display (TASK-1012)
@@ -36,50 +40,7 @@ interface ConversationViewModalProps {
   onClose: () => void;
 }
 
-/**
- * Normalize phone for lookup (last 10 digits)
- */
-function normalizePhoneForLookup(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  return digits.length >= 10 ? digits.slice(-10) : digits;
-}
-
-/**
- * Extract sender phone from message participants
- */
-function getSenderPhone(msg: MessageLike): string | null {
-  if (msg.direction === "outbound") return null;
-
-  try {
-    if (msg.participants) {
-      const parsed =
-        typeof msg.participants === "string"
-          ? JSON.parse(msg.participants)
-          : msg.participants;
-      if (parsed.from) return parsed.from;
-    }
-  } catch {
-    // Fall through
-  }
-
-  if ("sender" in msg && msg.sender) {
-    return msg.sender;
-  }
-
-  return null;
-}
-
-/**
- * Format timestamp for display
- */
-function formatMessageTime(date: Date): string {
-  return date.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
+// normalizePhoneForLookup and getSenderPhone imported from src/utils/phoneNormalization.ts (TASK-2027)
 
 /**
  * Check if a MIME type is a displayable image
@@ -90,17 +51,6 @@ function isDisplayableImage(mimeType: string | null): boolean {
     mimeType.startsWith("image/") &&
     !mimeType.includes("heic") // HEIC requires conversion
   );
-}
-
-/**
- * Check if text is empty or only contains the object replacement character
- * macOS uses U+FFFC (￼) as a placeholder for attachments in message text
- */
-function isEmptyOrReplacementChar(text: string): boolean {
-  if (!text) return true;
-  // U+FFFC is the Object Replacement Character, U+FFFD is the Replacement Character
-  const cleaned = text.replace(/[\uFFFC\uFFFD\s]/g, "");
-  return cleaned.length === 0;
 }
 
 /**
@@ -176,24 +126,6 @@ function AttachmentImage({
       />
     </div>
   );
-}
-
-/**
- * Format a date range for display in the toggle label
- * Handles partial dates (only start, only end, or both)
- */
-function formatDateRangeLabel(startDate: Date | null, endDate: Date | null): string {
-  const formatDate = (d: Date) =>
-    d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-
-  if (startDate && endDate) {
-    return `${formatDate(startDate)} - ${formatDate(endDate)}`;
-  } else if (startDate) {
-    return `${formatDate(startDate)} - Ongoing`;
-  } else if (endDate) {
-    return `Through ${formatDate(endDate)}`;
-  }
-  return "";
 }
 
 export function ConversationViewModal({
@@ -365,7 +297,7 @@ export function ConversationViewModal({
           setAttachmentsMap(result);
         }
       } catch (error) {
-        console.error("Failed to load attachments:", error);
+        logger.error("Failed to load attachments:", error);
       } finally {
         setAttachmentsLoading(false);
       }

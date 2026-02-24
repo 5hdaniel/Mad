@@ -17,10 +17,22 @@
 import { jest } from "@jest/globals";
 
 // Mock Electron modules
+const mockShowMessageBox = jest.fn().mockResolvedValue({ response: 0 });
 jest.mock("electron", () => ({
   app: {
     getPath: jest.fn(() => "/mock/user/data"),
+    isReady: jest.fn(() => true),
+    whenReady: jest.fn().mockResolvedValue(undefined),
   },
+  dialog: {
+    showMessageBox: mockShowMessageBox,
+  },
+}));
+
+// Mock Sentry
+const mockCaptureException = jest.fn();
+jest.mock("@sentry/electron/main", () => ({
+  captureException: mockCaptureException,
 }));
 
 // Mock better-sqlite3-multiple-ciphers
@@ -60,6 +72,7 @@ jest.mock("fs", () => ({
   existsSync: jest.fn(),
   mkdirSync: jest.fn(),
   readFileSync: jest.fn(),
+  readdirSync: jest.fn(() => []),
   writeSync: jest.fn(),
   fsyncSync: jest.fn(),
   closeSync: jest.fn(),
@@ -105,6 +118,61 @@ jest.mock("../logService", () => {
   };
 });
 
+// Mock db/core/dbConnection
+// Track whether the shared connection is "open" for ensureDb checks
+let mockDbConnectionOpen = true;
+const mockSetDb = jest.fn(() => { mockDbConnectionOpen = true; });
+const mockSetDbPath = jest.fn();
+const mockSetEncryptionKey = jest.fn();
+const mockCloseDb = jest.fn(() => { mockDb.close(); mockDbConnectionOpen = false; });
+const mockVacuumDb = jest.fn(() => { mockDb.exec("VACUUM"); });
+jest.mock("../db/core/dbConnection", () => {
+  // Must import DatabaseError inline -- path is relative to the test file
+  const { DatabaseError } = require("../../types");
+  return {
+    setDb: (...args: unknown[]) => mockSetDb(...args),
+    setDbPath: (...args: unknown[]) => mockSetDbPath(...args),
+    setEncryptionKey: (...args: unknown[]) => mockSetEncryptionKey(...args),
+    closeDb: (...args: unknown[]) => mockCloseDb(...args),
+    vacuumDb: (...args: unknown[]) => mockVacuumDb(...args),
+    ensureDb: () => {
+      if (!mockDbConnectionOpen) {
+        throw new DatabaseError("Database is not initialized. Call initialize() first.");
+      }
+      return mockDb;
+    },
+    getRawDatabase: () => mockDb,
+    dbGet: (sql: string, params: unknown[] = []) => {
+      if (!mockDbConnectionOpen) {
+        throw new DatabaseError("Database is not initialized. Call initialize() first.");
+      }
+      const stmt = mockDb.prepare(sql);
+      return stmt.get(...params);
+    },
+    dbAll: (sql: string, params: unknown[] = []) => {
+      if (!mockDbConnectionOpen) {
+        throw new DatabaseError("Database is not initialized. Call initialize() first.");
+      }
+      const stmt = mockDb.prepare(sql);
+      return stmt.all(...params);
+    },
+    dbRun: (sql: string, params: unknown[] = []) => {
+      if (!mockDbConnectionOpen) {
+        throw new DatabaseError("Database is not initialized. Call initialize() first.");
+      }
+      const stmt = mockDb.prepare(sql);
+      return stmt.run(...params);
+    },
+    dbExec: (sql: string) => mockDb.exec(sql),
+    dbTransaction: (fn: () => unknown) => mockDb.transaction(fn)(),
+    isInitialized: () => mockDbConnectionOpen,
+    getDbPath: () => "/mock/user/data/mad.db",
+    getEncryptionKey: () => "test-encryption-key-hex",
+    openDatabase: () => mockDb,
+    initializePaths: jest.fn().mockResolvedValue(undefined),
+  };
+});
+
 import fs from "fs";
 
 describe("DatabaseService", () => {
@@ -120,6 +188,7 @@ describe("DatabaseService", () => {
     mockStatement.run.mockReturnValue({ lastInsertRowid: 1, changes: 1 });
     (fs.existsSync as jest.Mock).mockReturnValue(false);
     (fs.readFileSync as jest.Mock).mockReturnValue("-- schema SQL");
+    mockDbConnectionOpen = true;
 
     // Re-import to get fresh instance
     const module = await import("../databaseService");
@@ -1280,6 +1349,393 @@ describe("DatabaseService", () => {
         expect(contact.email).toBe("new@example.com");
         expect(contact.source).toBe("email");
       });
+    });
+  });
+
+  describe("Migration Failure Auto-Restore (TASK-2057/2075)", () => {
+    /**
+     * These tests verify the auto-restore behavior when runMigrations() fails.
+     * The flow under test:
+     *   1. initialize() calls runMigrations()
+     *   2. runMigrations() throws
+     *   3. _attemptAutoRestore() runs
+     *   4. Dialog shown based on restore outcome
+     *   5. App continues (does not crash)
+     */
+
+    // After resetModules, we need fresh references to mocked modules
+    let freshFs: typeof import("fs");
+
+    beforeEach(async () => {
+      jest.clearAllMocks();
+      jest.resetModules();
+
+      // Reset mock defaults on shared mocks (these survive resetModules)
+      // CRITICAL: clearAllMocks() removes implementations from all mocks,
+      // including mockDb members. Must re-set them here.
+      mockDb.prepare.mockImplementation(() => mockStatement);
+      mockDb.exec.mockImplementation(() => {});
+      mockDb.pragma.mockImplementation(() => undefined);
+      mockDb.close.mockImplementation(() => {});
+      mockDb.transaction.mockImplementation((callback: () => void) => {
+        return () => callback();
+      });
+      mockStatement.get.mockReturnValue(undefined);
+      mockStatement.all.mockReturnValue([]);
+      mockStatement.run.mockReturnValue({ lastInsertRowid: 1, changes: 1 });
+      mockShowMessageBox.mockResolvedValue({ response: 0 });
+      mockCaptureException.mockClear();
+      mockDbConnectionOpen = true;
+
+      // Re-import fs to get the fresh mock instance after resetModules
+      freshFs = await import("fs");
+      (freshFs.existsSync as jest.Mock).mockReturnValue(false);
+      (freshFs.readFileSync as jest.Mock).mockReturnValue("-- schema SQL");
+      (freshFs.readdirSync as jest.Mock).mockReturnValue([]);
+
+      // Re-configure databaseEncryptionService mocks after clearAllMocks
+      // - isDatabaseEncrypted returns true to skip encryption migration path
+      // - getEncryptionKey returns a key so auto-restore doesn't bail out
+      const { databaseEncryptionService } = await import("../databaseEncryptionService");
+      (databaseEncryptionService.isDatabaseEncrypted as jest.Mock).mockResolvedValue(true);
+      (databaseEncryptionService.initialize as jest.Mock).mockResolvedValue(undefined);
+      (databaseEncryptionService.getEncryptionKey as jest.Mock).mockResolvedValue("test-encryption-key-hex");
+
+      // Re-import to get fresh instance
+      const module = await import("../databaseService");
+      databaseService = module.default;
+    });
+
+    /**
+     * Helper: Configure mocks for a migration failure scenario.
+     * Uses freshFs (re-imported after resetModules) to ensure the mocked fs
+     * is the same instance that databaseService.ts uses.
+     */
+    function setupMigrationFailure() {
+      // Make exec throw when called with schema SQL content
+      (mockDb.exec as jest.Mock).mockImplementation((sql: string) => {
+        if (sql === "-- schema SQL") {
+          throw new Error("Migration failed: syntax error");
+        }
+      });
+    }
+
+    /** Helper: Setup for successful backup restore */
+    function setupSuccessfulRestore() {
+      (freshFs.existsSync as jest.Mock).mockReturnValue(true);
+      (freshFs.readdirSync as jest.Mock).mockReturnValue(["mad-backup-20260220T120000.db"]);
+
+      mockDb.pragma.mockImplementation((pragmaStr: string) => {
+        if (pragmaStr === "integrity_check") {
+          return [{ integrity_check: "ok" }];
+        }
+        return undefined;
+      });
+
+      // Post-restore SELECT 1 connectivity check
+      mockStatement.get.mockReturnValue({ ok: 1 });
+    }
+
+    /** Get fresh Sentry mock reference after resetModules */
+    async function getFreshSentry() {
+      const Sentry = await import("@sentry/electron/main");
+      return Sentry.captureException as jest.Mock;
+    }
+
+    /** Get fresh dialog mock reference after resetModules */
+    async function getFreshDialog() {
+      const { dialog } = await import("electron");
+      return dialog.showMessageBox as jest.Mock;
+    }
+
+    describe("migration failure triggers auto-restore", () => {
+      it("should attempt auto-restore when runMigrations throws", async () => {
+        setupMigrationFailure();
+        setupSuccessfulRestore();
+
+        const sentryCapture = await getFreshSentry();
+        const showMessageBox = await getFreshDialog();
+
+        await databaseService.initialize();
+
+        // Verify Sentry was called with migration failure tags
+        expect(sentryCapture).toHaveBeenCalledWith(
+          expect.any(Error),
+          expect.objectContaining({
+            tags: expect.objectContaining({
+              migration_failure: "true",
+              auto_restore: "succeeded",
+              backup_integrity: "valid",
+            }),
+          }),
+        );
+
+        // Verify success dialog was shown
+        expect(showMessageBox).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: "warning",
+            title: "Database Update Notice",
+          }),
+        );
+      });
+
+      it("should show success dialog and app continues after restore", async () => {
+        setupMigrationFailure();
+        setupSuccessfulRestore();
+
+        // initialize should NOT throw -- the app continues
+        const result = await databaseService.initialize();
+        expect(result).toBe(true);
+
+        // Verify the database service is still functional
+        expect(databaseService.isInitialized()).toBe(true);
+      });
+    });
+
+    describe("no backup available", () => {
+      it("should show error dialog when no backup files exist", async () => {
+        setupMigrationFailure();
+
+        (freshFs.existsSync as jest.Mock).mockReturnValue(true);
+        (freshFs.readdirSync as jest.Mock).mockReturnValue([]);
+
+        const sentryCapture = await getFreshSentry();
+        const showMessageBox = await getFreshDialog();
+
+        await databaseService.initialize();
+
+        // Verify Sentry tags show no_backup
+        expect(sentryCapture).toHaveBeenCalledWith(
+          expect.any(Error),
+          expect.objectContaining({
+            tags: expect.objectContaining({
+              auto_restore: "no_backup",
+              backup_integrity: "missing",
+            }),
+          }),
+        );
+
+        // Verify error dialog was shown
+        expect(showMessageBox).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: "error",
+            title: "Database Update Failed",
+          }),
+        );
+      });
+
+      it("should not crash when no backups exist (app continues)", async () => {
+        setupMigrationFailure();
+
+        const result = await databaseService.initialize();
+        expect(result).toBe(true);
+      });
+    });
+
+    describe("corrupt backup", () => {
+      it("should show error dialog when backup fails integrity check", async () => {
+        setupMigrationFailure();
+
+        (freshFs.existsSync as jest.Mock).mockReturnValue(true);
+        (freshFs.readdirSync as jest.Mock).mockReturnValue(["mad-backup-20260220T120000.db"]);
+
+        // Backup integrity check fails
+        mockDb.pragma.mockImplementation((pragmaStr: string) => {
+          if (pragmaStr === "integrity_check") {
+            return [{ integrity_check: "*** error: page 5 btree corrupt" }];
+          }
+          return undefined;
+        });
+
+        const sentryCapture = await getFreshSentry();
+        const showMessageBox = await getFreshDialog();
+
+        await databaseService.initialize();
+
+        // Verify Sentry tags show corrupt backup
+        expect(sentryCapture).toHaveBeenCalledWith(
+          expect.any(Error),
+          expect.objectContaining({
+            tags: expect.objectContaining({
+              auto_restore: "failed",
+              backup_integrity: "corrupt",
+            }),
+          }),
+        );
+
+        // Verify error dialog was shown
+        expect(showMessageBox).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: "error",
+            title: "Database Update Failed",
+          }),
+        );
+      });
+
+      it("should not crash when backup is corrupt (app continues)", async () => {
+        setupMigrationFailure();
+
+        (freshFs.existsSync as jest.Mock).mockReturnValue(true);
+        (freshFs.readdirSync as jest.Mock).mockReturnValue(["mad-backup-20260220T120000.db"]);
+
+        mockDb.pragma.mockImplementation((pragmaStr: string) => {
+          if (pragmaStr === "integrity_check") {
+            return [{ integrity_check: "corrupt" }];
+          }
+          return undefined;
+        });
+
+        const result = await databaseService.initialize();
+        expect(result).toBe(true);
+      });
+    });
+
+    describe("post-restore database operations", () => {
+      it("should verify post-restore connectivity with SELECT 1", async () => {
+        setupMigrationFailure();
+        setupSuccessfulRestore();
+
+        await databaseService.initialize();
+
+        // Verify prepare was called with SELECT 1 (connectivity check)
+        expect(mockDb.prepare).toHaveBeenCalledWith("SELECT 1 AS ok");
+      });
+
+      it("should report failure when post-restore SELECT 1 fails", async () => {
+        setupMigrationFailure();
+
+        (freshFs.existsSync as jest.Mock).mockReturnValue(true);
+        (freshFs.readdirSync as jest.Mock).mockReturnValue(["mad-backup-20260220T120000.db"]);
+
+        mockDb.pragma.mockImplementation((pragmaStr: string) => {
+          if (pragmaStr === "integrity_check") {
+            return [{ integrity_check: "ok" }];
+          }
+          return undefined;
+        });
+
+        // Post-restore connectivity check fails (get returns undefined)
+        mockStatement.get.mockReturnValue(undefined);
+
+        const showMessageBox = await getFreshDialog();
+
+        await databaseService.initialize();
+
+        // Verify the error dialog was shown (restore reported as failed)
+        expect(showMessageBox).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: "error",
+            title: "Database Update Failed",
+          }),
+        );
+      });
+    });
+
+    describe("dialog safety", () => {
+      it("should wait for app.whenReady() if app is not ready before showing dialog", async () => {
+        setupMigrationFailure();
+
+        // Simulate app not ready
+        const { app } = await import("electron");
+        (app.isReady as jest.Mock).mockReturnValue(false);
+
+        await databaseService.initialize();
+
+        // Verify whenReady was called
+        expect(app.whenReady).toHaveBeenCalled();
+      });
+    });
+
+    describe("normal migration path (happy path)", () => {
+      it("should not call Sentry with migration_failure tag when migrations succeed", async () => {
+        // Make schema_version table exist with a high version to skip all migrations
+        mockStatement.get.mockReturnValue({ name: "schema_version", version: 31 });
+
+        const sentryCapture = await getFreshSentry();
+
+        await databaseService.initialize();
+
+        // Verify Sentry was NOT called with migration_failure tag
+        const migrationFailureCalls = sentryCapture.mock.calls.filter(
+          (call: unknown[]) => {
+            const tags = (call[1] as { tags?: Record<string, string> })?.tags;
+            return tags?.migration_failure === "true";
+          },
+        );
+        expect(migrationFailureCalls).toHaveLength(0);
+      });
+    });
+
+    describe("restore file copy failure", () => {
+      it("should show error dialog when file copy during restore fails", async () => {
+        setupMigrationFailure();
+
+        (freshFs.existsSync as jest.Mock).mockReturnValue(true);
+        (freshFs.readdirSync as jest.Mock).mockReturnValue(["mad-backup-20260220T120000.db"]);
+
+        mockDb.pragma.mockImplementation((pragmaStr: string) => {
+          if (pragmaStr === "integrity_check") {
+            return [{ integrity_check: "ok" }];
+          }
+          return undefined;
+        });
+
+        // Make the copyFileSync throw during restore
+        (freshFs.copyFileSync as jest.Mock).mockImplementation(() => {
+          throw new Error("ENOSPC: no space left on device");
+        });
+
+        const showMessageBox = await getFreshDialog();
+
+        await databaseService.initialize();
+
+        // Verify error dialog was shown
+        expect(showMessageBox).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: "error",
+            title: "Database Update Failed",
+          }),
+        );
+      });
+    });
+  });
+
+  describe("Migration validation helpers", () => {
+    it("validateNoDuplicateVersions should detect duplicates", async () => {
+      const { default: dbModule } = await import("../databaseService");
+      const DatabaseService = dbModule.constructor as typeof import("../databaseService").default.constructor & {
+        validateNoDuplicateVersions: (migrations: Array<{ version: number; description: string; migrate: () => void }>) => void;
+      };
+
+      // Access static method via the class
+      const mod = await import("../databaseService");
+      const cls = (mod.default as unknown as { constructor: { validateNoDuplicateVersions: (m: Array<{ version: number }>) => void } }).constructor;
+
+      // Instead, test via the exported class
+      expect(() => {
+        // We know the class has static methods -- access directly from prototype chain
+        const svc = mod.default as unknown as Record<string, unknown>;
+        const proto = Object.getPrototypeOf(svc);
+        const klass = proto.constructor;
+        klass.validateNoDuplicateVersions([
+          { version: 30, description: "a", migrate: () => {} },
+          { version: 30, description: "b", migrate: () => {} },
+        ]);
+      }).toThrow("Duplicate migration versions");
+    });
+
+    it("validateNoVersionGaps should detect gaps", async () => {
+      const mod = await import("../databaseService");
+      const svc = mod.default as unknown as Record<string, unknown>;
+      const proto = Object.getPrototypeOf(svc);
+      const klass = proto.constructor;
+
+      expect(() => {
+        klass.validateNoVersionGaps([
+          { version: 30, description: "a", migrate: () => {} },
+          { version: 32, description: "b", migrate: () => {} },
+        ]);
+      }).toThrow("Migration sequence error");
     });
   });
 });

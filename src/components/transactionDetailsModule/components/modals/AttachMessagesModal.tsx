@@ -34,6 +34,7 @@ interface ContactInfo {
  * Normalize phone number to digits only for comparison
  */
 function normalizePhone(phone: string): string {
+  if (phone.includes("@")) return phone.toLowerCase();
   const digits = phone.replace(/\D/g, "");
   // Remove leading 1 for US numbers to normalize 10 and 11 digit formats
   if (digits.length === 11 && digits.startsWith("1")) {

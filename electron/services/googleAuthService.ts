@@ -1,17 +1,33 @@
 /**
  * Google Auth Service
- * Handles Google OAuth authentication using Authorization Code Flow with local redirect
+ * Handles Google OAuth authentication using Authorization Code Flow with PKCE
  * Supports two-step consent: login (minimal scopes) + mailbox access (Gmail scopes)
  *
- * Note: Environment variables (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET) are loaded
- * centrally in electron/main.ts via dotenv. Do not import dotenv here.
+ * BACKLOG-733: Migrated from googleapis OAuth2Client to manual PKCE flow (RFC 8252)
+ * PKCE is kept as defense-in-depth, but client_secret is still required because
+ * Google's OAuth server requires it for ALL app types (including Desktop).
+ * See: https://discuss.google.dev/t/authorization-code-flow-without-client-secret/168113
+ *
+ * Note: Environment variable GOOGLE_CLIENT_ID is loaded centrally in electron/main.ts
+ * via dotenv. Do not import dotenv here.
  */
 
-import { google, Auth } from "googleapis";
+import * as Sentry from "@sentry/electron/main";
+import axios, { AxiosError } from "axios";
+import crypto from "crypto";
 import http from "http";
 import url from "url";
 import databaseService from "./databaseService";
 import logService from "./logService";
+
+// ============================================
+// GOOGLE OAUTH2 ENDPOINTS
+// ============================================
+
+const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
+const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+const GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo";
+const GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 
 // ============================================
 // TYPES & INTERFACES
@@ -20,6 +36,7 @@ import logService from "./logService";
 interface AuthFlowResult {
   authUrl: string;
   codePromise: Promise<string>;
+  codeVerifier: string;
   scopes: string[];
 }
 
@@ -53,12 +70,23 @@ interface RefreshTokenResult {
   expires_at: string | null;
 }
 
+/** Raw token response from Google's token endpoint */
+interface GoogleTokenResponse {
+  access_token: string;
+  refresh_token?: string;
+  expires_in: number;
+  scope: string;
+  token_type: string;
+  id_token?: string;
+}
+
 // ============================================
 // SERVICE CLASS
 // ============================================
 
 class GoogleAuthService {
-  private oauth2Client: Auth.OAuth2Client | null = null;
+  private clientId: string = "";
+  private clientSecret: string = "";
   private initialized: boolean = false;
   private redirectUri: string = "http://localhost:3001/callback"; // Different port than Microsoft
   private server: http.Server | null = null;
@@ -67,7 +95,9 @@ class GoogleAuthService {
   private codeRejecter: ((error: Error) => void) | null = null;
 
   /**
-   * Initialize Google OAuth2 client
+   * Initialize Google OAuth2 configuration (PKCE + client_secret)
+   * Google requires client_secret for all app types, including Desktop.
+   * PKCE is kept as defense-in-depth.
    */
   initialize(): void {
     if (this.initialized) {
@@ -77,9 +107,17 @@ class GoogleAuthService {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
-    if (!clientId || !clientSecret) {
+    if (!clientId) {
       logService.error(
-        "[GoogleAuth] Missing credentials. Check .env.development file.",
+        "[GoogleAuth] Missing GOOGLE_CLIENT_ID. Check .env.development file.",
+        "GoogleAuth",
+      );
+      throw new Error("Google OAuth credentials not configured");
+    }
+
+    if (!clientSecret) {
+      logService.error(
+        "[GoogleAuth] Missing GOOGLE_CLIENT_SECRET. Check .env.development file.",
         "GoogleAuth",
       );
       throw new Error("Google OAuth credentials not configured");
@@ -91,29 +129,34 @@ class GoogleAuthService {
       { clientIdPrefix: clientId.substring(0, 20) + "..." },
     );
 
-    this.oauth2Client = new google.auth.OAuth2(
-      clientId,
-      clientSecret,
-      this.redirectUri, // Use local redirect URI
-    );
-
+    this.clientId = clientId;
+    this.clientSecret = clientSecret;
     this.initialized = true;
-    logService.debug("[GoogleAuth] Initialized successfully", "GoogleAuth");
+    logService.debug("[GoogleAuth] Initialized successfully (PKCE + client_secret mode)", "GoogleAuth");
   }
 
   /**
-   * Ensure client is initialized and return it
+   * Ensure service is initialized before use
    * @private
-   * @throws {Error} If client cannot be initialized
    */
-  private _ensureClient(): Auth.OAuth2Client {
-    if (!this.initialized || !this.oauth2Client) {
+  private _ensureInitialized(): void {
+    if (!this.initialized) {
       this.initialize();
     }
-    if (!this.oauth2Client) {
-      throw new Error("Google OAuth2 client is not initialized");
-    }
-    return this.oauth2Client;
+  }
+
+  /**
+   * Generate PKCE code_verifier and code_challenge
+   * @private
+   * @returns Object with codeVerifier and codeChallenge
+   */
+  private _generatePKCE(): { codeVerifier: string; codeChallenge: string } {
+    const codeVerifier = crypto.randomBytes(32).toString("base64url");
+    const codeChallenge = crypto
+      .createHash("sha256")
+      .update(codeVerifier)
+      .digest("base64url");
+    return { codeVerifier, codeChallenge };
   }
 
   /**
@@ -180,93 +223,21 @@ class GoogleAuthService {
 
         if (parsedUrl.pathname === "/callback") {
           const code = parsedUrl.query.code as string | undefined;
-          const error = parsedUrl.query.error as string | undefined;
+          const callbackError = parsedUrl.query.error as string | undefined;
           logService.info(
-            `[GoogleAuth] Callback received via HTTP server - code: ${code ? "present" : "missing"}, error: ${error || "none"}`,
+            `[GoogleAuth] Callback received via HTTP server - code: ${code ? "present" : "missing"}, error: ${callbackError || "none"}`,
             "GoogleAuth",
           );
 
-          if (error) {
+          if (callbackError) {
+            const errorDesc = (parsedUrl.query.error_description as string) || callbackError;
             res.writeHead(200, { "Content-Type": "text/html" });
-            res.end(`
-              <!DOCTYPE html>
-              <html>
-                <head>
-                  <meta charset="UTF-8">
-                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                  <title>Authentication Failed</title>
-                </head>
-                <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
-                  <div style="text-align: center; background: white; padding: 3rem 4rem; border-radius: 1rem; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 500px;">
-                    <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem;">
-                      <svg style="width: 48px; height: 48px; color: white;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path>
-                      </svg>
-                    </div>
-                    <h1 style="color: #1a202c; font-size: 1.875rem; font-weight: 700; margin: 0 0 1rem 0;">Authentication Failed</h1>
-                    <p style="color: #4a5568; font-size: 1rem; margin: 0 0 1.5rem 0; line-height: 1.5;">${parsedUrl.query.error_description || error}</p>
-                    <p style="color: #718096; font-size: 0.875rem; margin: 0;">You can close this window and try again.</p>
-                  </div>
-                </body>
-              </html>
-            `);
+            res.end(this._buildErrorPage(errorDesc));
             this.stopLocalServer();
-            reject(
-              new Error((parsedUrl.query.error_description as string) || error),
-            );
+            reject(new Error(errorDesc));
           } else if (code) {
             res.writeHead(200, { "Content-Type": "text/html" });
-            res.end(`
-              <!DOCTYPE html>
-              <html>
-                <head>
-                  <meta charset="UTF-8">
-                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                  <title>Authentication Successful</title>
-                </head>
-                <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                  <div style="text-align: center; background: white; padding: 3rem 4rem; border-radius: 1rem; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 500px;">
-                    <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem;">
-                      <svg style="width: 48px; height: 48px; color: white;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
-                      </svg>
-                    </div>
-                    <h1 style="color: #1a202c; font-size: 1.875rem; font-weight: 700; margin: 0 0 1rem 0;">Authentication Successful!</h1>
-                    <p id="status-message" style="color: #4a5568; font-size: 1rem; margin: 0 0 1.5rem 0; line-height: 1.5;">You've been successfully authenticated with Google.</p>
-                    <p id="close-message" style="color: #718096; font-size: 0.875rem; margin: 0 0 1rem 0;">Attempting to close this window...</p>
-                    <button id="return-button" style="display: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 0.75rem 2rem; border-radius: 0.5rem; font-size: 1rem; font-weight: 600; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">Return to Application</button>
-                  </div>
-                  <script>
-                    // Try to close the window
-                    setTimeout(() => {
-                      window.close();
-
-                      // If window didn't close (we're still here after 500ms), show fallback
-                      setTimeout(() => {
-                        const closeMsg = document.getElementById('close-message');
-                        const returnBtn = document.getElementById('return-button');
-
-                        closeMsg.innerHTML = 'Please return to the application to continue.';
-                        closeMsg.style.color = '#4a5568';
-                        closeMsg.style.fontSize = '1rem';
-                        closeMsg.style.marginBottom = '1.5rem';
-                        returnBtn.style.display = 'inline-block';
-
-                        // Try to focus the app if possible (won't work in all browsers)
-                        returnBtn.onclick = () => {
-                          // Attempt to close again
-                          window.close();
-                          // If still here, user needs to manually return
-                          if (!window.closed) {
-                            closeMsg.innerHTML = 'You can close this tab and return to the Mad Accountant application.';
-                          }
-                        };
-                      }, 500);
-                    }, 2000);
-                  </script>
-                </body>
-              </html>
-            `);
+            res.end(this._buildSuccessPage());
             this.stopLocalServer();
             resolve(code);
           } else {
@@ -299,6 +270,85 @@ class GoogleAuthService {
   }
 
   /**
+   * Build HTML error page for OAuth callback
+   * @private
+   */
+  private _buildErrorPage(errorMessage: string): string {
+    // Escape HTML entities to prevent XSS from error descriptions
+    const safeMessage = errorMessage
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+
+    return `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication Failed</title>
+  </head>
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+    <div style="text-align: center; background: white; padding: 3rem 4rem; border-radius: 1rem; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 500px;">
+      <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem;">
+        <svg style="width: 48px; height: 48px; color: white;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </div>
+      <h1 style="color: #1a202c; font-size: 1.875rem; font-weight: 700; margin: 0 0 1rem 0;">Authentication Failed</h1>
+      <p style="color: #4a5568; font-size: 1rem; margin: 0 0 1.5rem 0; line-height: 1.5;">${safeMessage}</p>
+      <p style="color: #718096; font-size: 0.875rem; margin: 0;">You can close this window and try again.</p>
+    </div>
+  </body>
+</html>`;
+  }
+
+  /**
+   * Build HTML success page for OAuth callback
+   * @private
+   */
+  private _buildSuccessPage(): string {
+    return `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication Successful</title>
+  </head>
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+    <div style="text-align: center; background: white; padding: 3rem 4rem; border-radius: 1rem; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 500px;">
+      <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem;">
+        <svg style="width: 48px; height: 48px; color: white;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+        </svg>
+      </div>
+      <h1 style="color: #1a202c; font-size: 1.875rem; font-weight: 700; margin: 0 0 1rem 0;">Authentication Successful!</h1>
+      <p id="status-message" style="color: #4a5568; font-size: 1rem; margin: 0 0 1.5rem 0; line-height: 1.5;">You have been successfully authenticated with Google.</p>
+      <p id="close-message" style="color: #718096; font-size: 0.875rem; margin: 0 0 1rem 0;">Attempting to close this window...</p>
+      <button id="return-button" style="display: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 0.75rem 2rem; border-radius: 0.5rem; font-size: 1rem; font-weight: 600; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: transform 0.2s;">Return to Application</button>
+    </div>
+    <script>
+      setTimeout(function() {
+        window.close();
+        setTimeout(function() {
+          var closeMsg = document.getElementById('close-message');
+          var returnBtn = document.getElementById('return-button');
+          if (closeMsg) closeMsg.textContent = 'Please return to the application to continue.';
+          if (returnBtn) {
+            returnBtn.style.display = 'inline-block';
+            returnBtn.onclick = function() {
+              window.close();
+            };
+          }
+        }, 500);
+      }, 2000);
+    </script>
+  </body>
+</html>`;
+  }
+
+  /**
    * Stop the local HTTP server
    */
   stopLocalServer(): void {
@@ -315,7 +365,7 @@ class GoogleAuthService {
    * Opens browser, user logs in, redirects back to local server
    */
   async authenticateForLogin(): Promise<AuthFlowResult> {
-    const client = this._ensureClient();
+    this._ensureInitialized();
 
     const scopes = [
       "openid",
@@ -324,23 +374,34 @@ class GoogleAuthService {
     ];
 
     try {
-      logService.debug("[GoogleAuth] Starting login flow with minimal scopes", "GoogleAuth");
+      logService.debug("[GoogleAuth] Starting login flow with minimal scopes (PKCE)", "GoogleAuth");
+
+      // Generate PKCE challenge
+      const { codeVerifier, codeChallenge } = this._generatePKCE();
 
       // Start local server to catch redirect
       const codePromise = this.startLocalServer();
 
-      // Generate auth URL
-      const authUrl = client.generateAuthUrl({
+      // Build authorization URL manually with PKCE parameters
+      const params = new URLSearchParams({
+        client_id: this.clientId,
+        response_type: "code",
+        redirect_uri: this.redirectUri,
+        scope: scopes.join(" "),
         access_type: "offline",
-        scope: scopes,
         prompt: "select_account", // Show account picker, only consent if needed
+        code_challenge: codeChallenge,
+        code_challenge_method: "S256",
       });
 
-      logService.debug("[GoogleAuth] Auth URL generated, local server started", "GoogleAuth");
+      const authUrl = `${GOOGLE_AUTH_URL}?${params.toString()}`;
+
+      logService.debug("[GoogleAuth] Auth URL generated with PKCE, local server started", "GoogleAuth");
 
       return {
         authUrl,
         codePromise,
+        codeVerifier,
         scopes,
       };
     } catch (error) {
@@ -351,39 +412,67 @@ class GoogleAuthService {
   }
 
   /**
-   * Exchange authorization code for tokens
+   * Exchange authorization code for tokens using PKCE + client_secret
+   * Google requires client_secret for all app types; PKCE is defense-in-depth.
    * @param code - Authorization code from OAuth callback
+   * @param codeVerifier - PKCE code verifier from the auth flow
    * @returns Tokens and user info
    */
-  async exchangeCodeForTokens(code: string): Promise<TokenExchangeResult> {
-    const client = this._ensureClient();
+  async exchangeCodeForTokens(code: string, codeVerifier?: string): Promise<TokenExchangeResult> {
+    this._ensureInitialized();
 
     try {
-      logService.debug("[GoogleAuth] Exchanging code for tokens", "GoogleAuth");
+      logService.debug("[GoogleAuth] Exchanging code for tokens (PKCE + client_secret)", "GoogleAuth");
 
-      const { tokens } = await client.getToken(code);
-      client.setCredentials(tokens);
+      const params = new URLSearchParams({
+        client_id: this.clientId,
+        client_secret: this.clientSecret,
+        code: code,
+        redirect_uri: this.redirectUri,
+        grant_type: "authorization_code",
+      });
+
+      // Include code_verifier for PKCE flow (defense-in-depth)
+      if (codeVerifier) {
+        params.append("code_verifier", codeVerifier);
+      }
+
+      const response = await axios.post<GoogleTokenResponse>(
+        GOOGLE_TOKEN_URL,
+        params.toString(),
+        {
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+        },
+      );
+
+      const tokenResponse = response.data;
 
       logService.debug("[GoogleAuth] Tokens obtained successfully", "GoogleAuth");
 
       // Get user info
-      const userInfo = await this.getUserInfo(tokens.access_token!);
+      const userInfo = await this.getUserInfo(tokenResponse.access_token);
 
       return {
         tokens: {
-          access_token: tokens.access_token!,
-          refresh_token: tokens.refresh_token ?? undefined,
-          expires_at: tokens.expiry_date
-            ? new Date(tokens.expiry_date).toISOString()
+          access_token: tokenResponse.access_token,
+          refresh_token: tokenResponse.refresh_token ?? undefined,
+          expires_at: tokenResponse.expires_in
+            ? new Date(Date.now() + tokenResponse.expires_in * 1000).toISOString()
             : null,
-          scopes: tokens.scope ? tokens.scope.split(" ") : [],
+          scopes: tokenResponse.scope ? tokenResponse.scope.split(" ") : [],
           // BACKLOG-390: Include ID token for Supabase Auth
-          id_token: tokens.id_token ?? undefined,
+          id_token: tokenResponse.id_token ?? undefined,
         },
         userInfo,
       };
     } catch (error) {
-      logService.error("[GoogleAuth] Code exchange failed:", "GoogleAuth", { error });
+      const axiosError = error as AxiosError;
+      logService.error("[GoogleAuth] Code exchange failed:", "GoogleAuth", {
+        error: axiosError.response?.data || axiosError.message || error,
+      });
+      Sentry.captureException(error, { tags: { service: "google-auth", operation: "exchangeCodeForTokens" } });
       throw error;
     }
   }
@@ -395,7 +484,7 @@ class GoogleAuthService {
    * @param loginHint - Optional email to pre-fill
    */
   async authenticateForMailbox(loginHint?: string): Promise<AuthFlowResult> {
-    const client = this._ensureClient();
+    this._ensureInitialized();
 
     const scopes = [
       "openid",
@@ -405,32 +494,41 @@ class GoogleAuthService {
     ];
 
     try {
-      logService.debug("[GoogleAuth] Starting mailbox connection flow", "GoogleAuth");
+      logService.debug("[GoogleAuth] Starting mailbox connection flow (PKCE)", "GoogleAuth");
+
+      // Generate PKCE challenge
+      const { codeVerifier, codeChallenge } = this._generatePKCE();
 
       // Start local server to catch redirect
       const codePromise = this.startLocalServer();
 
-      // Generate auth URL with optional login hint
-      const authUrlOptions: Auth.GenerateAuthUrlOpts = {
+      // Build authorization URL manually with PKCE parameters
+      const params = new URLSearchParams({
+        client_id: this.clientId,
+        response_type: "code",
+        redirect_uri: this.redirectUri,
+        scope: scopes.join(" "),
         access_type: "offline",
-        scope: scopes,
         prompt: "select_account", // Show account picker, only consent if needed
-      };
+        code_challenge: codeChallenge,
+        code_challenge_method: "S256",
+      });
 
       if (loginHint) {
-        authUrlOptions.login_hint = loginHint;
+        params.append("login_hint", loginHint);
       }
 
-      const authUrl = client.generateAuthUrl(authUrlOptions);
+      const authUrl = `${GOOGLE_AUTH_URL}?${params.toString()}`;
 
       logService.info(
-        "[GoogleAuth] Mailbox auth URL generated, local server started",
+        "[GoogleAuth] Mailbox auth URL generated with PKCE, local server started",
         "GoogleAuth",
       );
 
       return {
         authUrl,
         codePromise,
+        codeVerifier,
         scopes,
       };
     } catch (error) {
@@ -441,28 +539,25 @@ class GoogleAuthService {
   }
 
   /**
-   * Get user profile information
+   * Get user profile information via direct HTTP GET (no googleapis dependency)
    * @param accessToken - Access token
    * @returns User info
    */
   async getUserInfo(accessToken: string): Promise<UserInfo> {
-    const client = this._ensureClient();
-
     try {
-      const oauth2 = google.oauth2({ version: "v2", auth: client });
+      const response = await axios.get(GOOGLE_USERINFO_URL, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
 
-      // Set credentials if provided
-      if (accessToken) {
-        client.setCredentials({ access_token: accessToken });
-      }
-
-      const { data } = await oauth2.userinfo.get();
+      const data = response.data;
 
       logService.debug("[GoogleAuth] User info retrieved:", "GoogleAuth", { email: data.email });
 
       return {
-        id: data.id!,
-        email: data.email!,
+        id: data.id,
+        email: data.email,
         verified_email: data.verified_email ?? undefined,
         name: data.name || undefined,
         given_name: data.given_name || undefined,
@@ -471,38 +566,59 @@ class GoogleAuthService {
         locale: data.locale || undefined,
       };
     } catch (error) {
-      logService.error("[GoogleAuth] Failed to get user info:", "GoogleAuth", { error });
+      const axiosError = error as AxiosError;
+      logService.error("[GoogleAuth] Failed to get user info:", "GoogleAuth", {
+        error: axiosError.response?.data || axiosError.message || error,
+      });
+      Sentry.captureException(error, { tags: { service: "google-auth", operation: "getUserInfo" } });
       throw error;
     }
   }
 
   /**
-   * Refresh access token using refresh token
+   * Refresh access token using refresh token via HTTP POST (client_secret required)
    * @param refreshToken - Refresh token
    * @returns New tokens
    */
   async refreshToken(refreshToken: string): Promise<RefreshTokenResult> {
-    const client = this._ensureClient();
+    this._ensureInitialized();
 
     try {
       logService.info("[GoogleAuth] Refreshing access token", "GoogleAuth");
 
-      client.setCredentials({
+      const params = new URLSearchParams({
+        client_id: this.clientId,
+        client_secret: this.clientSecret,
         refresh_token: refreshToken,
+        grant_type: "refresh_token",
       });
 
-      const { credentials } = await client.refreshAccessToken();
+      const response = await axios.post<GoogleTokenResponse>(
+        GOOGLE_TOKEN_URL,
+        params.toString(),
+        {
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+        },
+      );
+
+      const tokenResponse = response.data;
 
       logService.info("[GoogleAuth] Token refreshed successfully", "GoogleAuth");
 
       return {
-        access_token: credentials.access_token!,
-        expires_at: credentials.expiry_date
-          ? new Date(credentials.expiry_date).toISOString()
+        access_token: tokenResponse.access_token,
+        expires_at: tokenResponse.expires_in
+          ? new Date(Date.now() + tokenResponse.expires_in * 1000).toISOString()
           : null,
       };
     } catch (error) {
-      logService.error("[GoogleAuth] Token refresh failed:", "GoogleAuth", { error });
+      const axiosError = error as AxiosError;
+      logService.error("[GoogleAuth] Token refresh failed:", "GoogleAuth", {
+        error: axiosError.response?.data || axiosError.message || error,
+      });
+      Sentry.captureException(error, { tags: { service: "google-auth", operation: "refreshToken" } });
       throw error;
     }
   }
@@ -531,10 +647,10 @@ class GoogleAuthService {
       }
 
       // Session-only OAuth: tokens stored unencrypted in encrypted database
-      const refreshToken = tokenRecord.refresh_token;
+      const currentRefreshToken = tokenRecord.refresh_token;
 
       // Call Google to refresh the token
-      const newTokens = await this.refreshToken(refreshToken);
+      const newTokens = await this.refreshToken(currentRefreshToken);
 
       // Update database with new tokens (no encryption needed)
       // Note: Google typically doesn't return a new refresh token, so we keep the old one
@@ -564,20 +680,29 @@ class GoogleAuthService {
   }
 
   /**
-   * Revoke tokens (sign out)
+   * Revoke tokens via HTTP POST to Google's revocation endpoint (no googleapis dependency)
    * @param accessToken - Access token to revoke
    */
   async revokeToken(accessToken: string): Promise<void> {
-    const client = this._ensureClient();
-
     try {
       logService.info("[GoogleAuth] Revoking token", "GoogleAuth");
 
-      await client.revokeToken(accessToken);
+      await axios.post(
+        GOOGLE_REVOKE_URL,
+        new URLSearchParams({ token: accessToken }).toString(),
+        {
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+        },
+      );
 
       logService.info("[GoogleAuth] Token revoked successfully", "GoogleAuth");
     } catch (error) {
-      logService.error("[GoogleAuth] Token revocation failed:", "GoogleAuth", { error });
+      const axiosError = error as AxiosError;
+      logService.error("[GoogleAuth] Token revocation failed:", "GoogleAuth", {
+        error: axiosError.response?.data || axiosError.message || error,
+      });
       throw error;
     }
   }

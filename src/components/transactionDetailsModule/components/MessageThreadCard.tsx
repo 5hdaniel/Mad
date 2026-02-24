@@ -6,6 +6,8 @@
 import React, { useState } from "react";
 import type { Communication, Message } from "../types";
 import { ConversationViewModal } from "./modals";
+import { normalizePhoneForLookup, getSenderPhone } from "../../../utils/phoneNormalization";
+import { getContactAvatarInitial } from "../../../utils/avatarUtils";
 
 /**
  * Union type for messages - can be from messages table or communications table
@@ -29,18 +31,6 @@ export interface MessageThreadCardProps {
   auditStartDate?: Date | string | null;
   /** Audit period end date for filtering (TASK-1157) */
   auditEndDate?: Date | string | null;
-}
-
-/**
- * Get initials for avatar display.
- * Uses first character of name or '#' for phone numbers.
- */
-function getAvatarInitial(contactName?: string, phoneNumber?: string): string {
-  if (contactName && contactName.trim().length > 0) {
-    return contactName.trim().charAt(0).toUpperCase();
-  }
-  // If phone number, just show hash
-  return "#";
 }
 
 /**
@@ -104,12 +94,7 @@ function isGroupChat(
 ): boolean {
   const participants = getThreadParticipants(messages);
 
-  // Resolve phone numbers to names and deduplicate
-  const normalizePhone = (phone: string): string => {
-    const digits = phone.replace(/\D/g, "");
-    return digits.length >= 10 ? digits.slice(-10) : digits;
-  };
-
+  // TASK-2026: Use normalizePhoneForLookup which handles both phones and emails
   const resolvedNames = new Set<string>();
   for (const p of participants) {
     // Try direct lookup
@@ -117,17 +102,17 @@ function isGroupChat(
       resolvedNames.add(contactNames[p]);
       continue;
     }
-    // Try normalized phone lookup
-    const normalized = normalizePhone(p);
+    // Try normalized lookup (handles both phone and email)
+    const normalized = normalizePhoneForLookup(p);
     let found = false;
     for (const [phone, name] of Object.entries(contactNames)) {
-      if (normalizePhone(phone) === normalized) {
+      if (normalizePhoneForLookup(phone) === normalized) {
         resolvedNames.add(name);
         found = true;
         break;
       }
     }
-    // If no name found, use phone as unique identifier
+    // If no name found, use the raw identifier
     if (!found) {
       resolvedNames.add(p);
     }
@@ -146,25 +131,21 @@ function formatParticipantNames(
   contactNames: Record<string, string>,
   maxShow: number = 3
 ): string {
-  const normalizePhone = (phone: string): string => {
-    const digits = phone.replace(/\D/g, "");
-    return digits.length >= 10 ? digits.slice(-10) : digits;
-  };
-
   // Check if a string looks like a phone number (starts with + or is mostly digits)
   const isPhoneNumber = (s: string): boolean => {
     return s.startsWith("+") || /^\d[\d\s\-()]{6,}$/.test(s);
   };
 
+  // TASK-2026: Use normalizePhoneForLookup which handles both phones and emails
   const names = participants.map((p) => {
     // Try direct lookup first
     if (contactNames[p]) return contactNames[p];
-    // Try normalized phone lookup
-    const normalized = normalizePhone(p);
+    // Try normalized lookup (handles both phone and email)
+    const normalized = normalizePhoneForLookup(p);
     for (const [phone, name] of Object.entries(contactNames)) {
-      if (normalizePhone(phone) === normalized) return name;
+      if (normalizePhoneForLookup(phone) === normalized) return name;
     }
-    // Fall back to phone number
+    // Fall back to raw identifier
     return p;
   });
 
@@ -186,38 +167,7 @@ function formatParticipantNames(
   return `${uniqueNames.slice(0, maxShow).join(", ")} +${uniqueNames.length - maxShow} more`;
 }
 
-/**
- * Extract sender phone from a message's participants.
- */
-function getSenderPhone(msg: MessageLike): string | null {
-  if (msg.direction === "outbound") return null; // Outbound = user sent it
-
-  try {
-    if (msg.participants) {
-      const parsed = typeof msg.participants === 'string'
-        ? JSON.parse(msg.participants)
-        : msg.participants;
-      if (parsed.from) return parsed.from;
-    }
-  } catch {
-    // Fall through
-  }
-
-  // Fallback to sender field if available
-  if ("sender" in msg && msg.sender) {
-    return msg.sender;
-  }
-
-  return null;
-}
-
-/**
- * Normalize phone for lookup (last 10 digits)
- */
-function normalizePhoneForLookup(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
-  return digits.length >= 10 ? digits.slice(-10) : digits;
-}
+// getSenderPhone and normalizePhoneForLookup imported from src/utils/phoneNormalization.ts (TASK-2027)
 
 /**
  * MessageThreadCard component for displaying a conversation thread.
@@ -239,7 +189,7 @@ export function MessageThreadCard({
   // Detect group chat (using contactNames to resolve duplicates)
   const participants = getThreadParticipants(messages);
   const isGroup = isGroupChat(messages, contactNames);
-  const avatarInitial = getAvatarInitial(contactName, phoneNumber);
+  const avatarInitial = getContactAvatarInitial(contactName, phoneNumber);
 
   // Get date range for the conversation
   const getDateRange = (): string => {
@@ -557,10 +507,10 @@ export function sortThreadsByRecent(
   threads: Map<string, MessageLike[]>
 ): [string, MessageLike[]][] {
   return Array.from(threads.entries()).sort(([, msgsA], [, msgsB]) => {
-    const lastA = msgsA[msgsA.length - 1];
-    const lastB = msgsB[msgsB.length - 1];
-    const dateA = new Date(lastA?.sent_at || lastA?.received_at || 0).getTime();
-    const dateB = new Date(lastB?.sent_at || lastB?.received_at || 0).getTime();
+    const newestA = msgsA[0];
+    const newestB = msgsB[0];
+    const dateA = new Date(newestA?.sent_at || newestA?.received_at || 0).getTime();
+    const dateB = new Date(newestB?.sent_at || newestB?.received_at || 0).getTime();
     return dateB - dateA; // Descending order (newest first)
   });
 }

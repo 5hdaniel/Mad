@@ -29,6 +29,7 @@ import React, {
 import type { LicenseType } from "../../electron/types/models";
 import type { LicenseValidationResult } from "../../shared/types/license";
 import { licenseService } from "../services";
+import logger from '../utils/logger';
 
 // License context value interface
 interface LicenseContextValue {
@@ -198,7 +199,7 @@ export function LicenseProvider({
         setState((prev) => ({ ...prev, isLoading: false, hasInitialized: true }));
       }
     } catch (error) {
-      console.error("Failed to validate license:", error);
+      logger.error("Failed to validate license:", error);
       // Set a fallback status that allows app to function with limited features
       const fallbackStatus: LicenseValidationResult = {
         isValid: false,

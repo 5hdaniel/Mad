@@ -8,6 +8,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import type { Device } from "../../../shared/types/license";
+import logger from '../../utils/logger';
 
 export function DeviceLimitScreen(): React.ReactElement {
   const [devices, setDevices] = useState<Device[]>([]);
@@ -37,7 +38,7 @@ export function DeviceLimitScreen(): React.ReactElement {
       const deviceList = await window.api?.license?.listRegisteredDevices?.(userId);
       setDevices(deviceList || []);
     } catch (err) {
-      console.error("Failed to load devices:", err);
+      logger.error("Failed to load devices:", err);
       setError("Failed to load devices. Please try again.");
     } finally {
       setLoading(false);
@@ -80,7 +81,7 @@ export function DeviceLimitScreen(): React.ReactElement {
         window.location.reload();
       }
     } catch (err) {
-      console.error("Failed to deactivate device:", err);
+      logger.error("Failed to deactivate device:", err);
       setError("Failed to deactivate device. Please try again.");
     } finally {
       setDeactivating(null);
@@ -117,7 +118,7 @@ export function DeviceLimitScreen(): React.ReactElement {
             Device Limit Reached
           </h1>
           <p className="text-gray-600">
-            You can only use Magic Audit on 1 device with your current plan.
+            You can only use Keepr on 1 device with your current plan.
             Deactivate another device to use this one.
           </p>
         </div>

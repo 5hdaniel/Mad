@@ -374,18 +374,18 @@ describe("useNavigationFlow - State Machine Path", () => {
       expect(result.current.getPageTitle()).toBe("Setup Permissions");
     });
 
-    it("returns 'Magic Audit' for dashboard step", () => {
+    it("returns 'Keepr' for dashboard step", () => {
       const { result } = renderHook(() => useNavigationFlow(defaultOptions), {
         wrapper: createWrapper(readyState),
       });
-      expect(result.current.getPageTitle()).toBe("Magic Audit");
+      expect(result.current.getPageTitle()).toBe("Keepr");
     });
 
-    it("returns 'Magic Audit' for loading step (default)", () => {
+    it("returns 'Keepr' for loading step (default)", () => {
       const { result } = renderHook(() => useNavigationFlow(defaultOptions), {
         wrapper: createWrapper(loadingCheckingStorage),
       });
-      expect(result.current.getPageTitle()).toBe("Magic Audit");
+      expect(result.current.getPageTitle()).toBe("Keepr");
     });
   });
 

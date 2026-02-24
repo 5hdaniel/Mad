@@ -86,6 +86,7 @@ jobs:
     timeout-minutes: 30  # Prevent CI from running indefinitely
 
     strategy:
+      fail-fast: false
       matrix:
         os: [macos-latest, windows-latest]
         node-version: [20.x]  # Node 18 dropped - better-sqlite3-multiple-ciphers requires Node 20+
@@ -99,18 +100,28 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
+      - name: Install Python setuptools (Windows)
+        if: matrix.os == 'windows-latest'
+        run: pip install setuptools
+        shell: bash
+
       - name: Install dependencies
         run: npm install
+        env:
+          npm_config_ignore_scripts: true
+
+      - name: Build preload
+        run: npm run build:preload
 
       - name: Rebuild native modules for Electron
         run: node scripts/rebuild-native.js
+        continue-on-error: true
 
       - name: TypeScript type check
         run: npm run type-check
 
       - name: Run linter
         run: npm run lint
-        continue-on-error: true
 
       - name: Run tests
         run: npm test -- --silent --maxWorkers=2 --workerIdleMemoryLimit=512MB --forceExit
@@ -183,8 +194,10 @@ jobs:
           node-version: '20.x'
 
       - name: Run npm audit
-        run: npm audit --audit-level=moderate
-        continue-on-error: true
+        # audit-level=critical: 72 known high/moderate vulnerabilities from transitive
+        # dependencies (minimatch, ajv, tar, qs, next) tracked in BACKLOG-723.
+        # None are critical. Will lower to --audit-level=high once dependencies are updated.
+        run: npm audit --audit-level=critical
 
       - name: Check for outdated dependencies
         run: npm outdated

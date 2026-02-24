@@ -217,6 +217,7 @@ export function registerTransactionExportHandlers(
         includeEmails?: boolean;
         includeTexts?: boolean;
         includeAttachments?: boolean;
+        emailExportMode?: "thread" | "individual";
       };
 
       // Get transaction details with communications
@@ -266,6 +267,7 @@ export function registerTransactionExportHandlers(
           includeEmails: sanitizedOptions.includeEmails ?? true,
           includeTexts: sanitizedOptions.includeTexts ?? true,
           includeAttachments: sanitizedOptions.includeAttachments ?? true,
+          emailExportMode: sanitizedOptions.emailExportMode,
           onProgress: (progress: unknown) => {
             // Send progress updates to renderer
             if (mainWindow) {

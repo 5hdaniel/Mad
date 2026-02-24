@@ -6,6 +6,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { useToast } from "./useToast";
+import logger from '../utils/logger';
 
 // ============================================
 // TYPES
@@ -124,7 +125,7 @@ export function useSubmissionSync(options?: {
         }
       }
     } catch (error) {
-      console.error("Sync failed:", error);
+      logger.error("Sync failed:", error);
     } finally {
       setSyncing(false);
     }

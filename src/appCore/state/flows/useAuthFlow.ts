@@ -13,6 +13,7 @@ import type { PendingOAuthData, DeepLinkAuthData } from "../../../components/Log
 import type { Subscription } from "../../../../electron/types/models";
 import type { PendingOnboardingData, AppStep } from "../types";
 import type { User, PlatformInfo, AppAction } from "../machine/types";
+import logger from '../../../utils/logger';
 
 // Default pending onboarding state
 const DEFAULT_PENDING_ONBOARDING: PendingOnboardingData = {
@@ -185,7 +186,7 @@ export function useAuthFlow({
    */
   const handleDeepLinkAuthSuccess = useCallback(
     (data: DeepLinkAuthData): void => {
-      console.log("[useAuthFlow] Deep link auth success", { userId: data.userId || data.user?.id });
+      logger.debug("[useAuthFlow] Deep link auth success", { userId: data.userId || data.user?.id });
 
       // Clear any pending OAuth data
       setPendingOAuthData(null);
@@ -289,7 +290,7 @@ export function useAuthFlow({
         throw new Error(result.error || "Failed to accept terms");
       }
     } catch (error) {
-      console.error("[useAuthFlow] Failed to accept terms:", error);
+      logger.error("[useAuthFlow] Failed to accept terms:", error);
       throw error;
     }
   }, [pendingOAuthData, isAuthenticated, currentUserId, clearTermsRequirement]);

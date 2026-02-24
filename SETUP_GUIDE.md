@@ -106,7 +106,7 @@ The Mad application uses:
    - Click "+ ADD USERS"
    - Add your email address and any testers
    - **IMPORTANT**: While your app is in "Testing" mode, ONLY users added here can sign in
-   - Add all users who will test the app (e.g., danielxhaim@gmail.com, magicauditwa@gmail.com)
+   - Add all users who will test the app (e.g., danielxhaim@gmail.com, support@keeprcompliance.com)
    - Click "SAVE AND CONTINUE"
 7. Click "BACK TO DASHBOARD"
 
@@ -204,7 +204,7 @@ The Mad application uses:
 3. Fill in all your credentials:
 
 ```bash
-# Google OAuth
+# Google OAuth (PKCE + client_secret — Google requires secret for all app types)
 GOOGLE_CLIENT_ID=xxxxx.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=GOCSPX-xxxxx
 

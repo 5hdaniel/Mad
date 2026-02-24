@@ -16,6 +16,21 @@
 
 import React from "react";
 import { act, waitFor, renderHook } from "@testing-library/react";
+
+// Mock useNetwork to prevent "useNetwork must be used within a NetworkProvider" error
+// (OfflineNotice in LoadingScreen/ErrorScreen calls useNetwork)
+jest.mock("../../../../contexts/NetworkContext", () => ({
+  useNetwork: () => ({
+    isOnline: true,
+    isChecking: false,
+    lastOnlineAt: null,
+    lastOfflineAt: null,
+    connectionError: null,
+    checkConnection: jest.fn(),
+    clearError: jest.fn(),
+    setConnectionError: jest.fn(),
+  }),
+}));
 import {
   mockApi,
   setupIntegrationTests,

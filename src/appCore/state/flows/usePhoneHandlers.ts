@@ -17,6 +17,7 @@ import { authService } from "@/services";
 import type { AppStep, PendingOnboardingData } from "../types";
 import type { PendingOAuthData } from "../../../components/Login";
 import { USE_NEW_ONBOARDING } from "../../routing/routeConfig";
+import logger from '../../../utils/logger';
 
 export interface UsePhoneHandlersOptions {
   // Auth state
@@ -194,7 +195,7 @@ export function usePhoneHandlers({
       // Pre-DB flow: need to initialize database before going to dashboard
       const result = await authService.completePendingLogin(pendingOAuthData);
       if (!result.success) {
-        console.error(
+        logger.error(
           "[usePhoneHandlers] Failed to complete pending login:",
           result.error,
         );
@@ -219,7 +220,7 @@ export function usePhoneHandlers({
     if (pendingOAuthData && !isAuthenticated) {
       const result = await authService.completePendingLogin(pendingOAuthData);
       if (!result.success) {
-        console.error(
+        logger.error(
           "[usePhoneHandlers] Failed to complete pending login:",
           result.error,
         );

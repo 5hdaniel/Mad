@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { ExtendedContact, TransactionWithRoles } from "../types";
+import logger from '../../../utils/logger';
 
 interface UseContactListOptions {
   onContactDeleted?: (contactId: string) => void;
@@ -80,7 +81,7 @@ export function useContactList(userId: string, options?: UseContactListOptions):
       // Don't set error on silent refresh - keep existing state
     } catch (err) {
       if (!isMountedRef.current) return;
-      console.error("Silent refresh failed:", err);
+      logger.error("Silent refresh failed:", err);
     }
   }, [userId]);
 
@@ -116,7 +117,7 @@ export function useContactList(userId: string, options?: UseContactListOptions):
       }
     } catch (err) {
       if (!isMountedRef.current) return;
-      console.error("Failed to load external contacts:", err);
+      logger.error("Failed to load external contacts:", err);
     } finally {
       if (isMountedRef.current) {
         setExternalContactsLoading(false);

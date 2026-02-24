@@ -16,6 +16,8 @@ import AuditTransactionModal from "./AuditTransactionModal";
 import { ToastContainer } from "./Toast";
 import { useToast } from "../hooks/useToast";
 import { useTransactionStatusUpdate } from "../hooks/useTransactionStatusUpdate";
+import { useSyncOrchestrator } from "../hooks/useSyncOrchestrator";
+import { useNetwork } from "../contexts/NetworkContext";
 
 // Import from transactionDetails module
 import {
@@ -46,6 +48,9 @@ import { useSubmitForReview } from "./transactionDetailsModule/hooks/useSubmitFo
 import type { AutoLinkResult } from "./transactionDetailsModule/components/modals/EditContactsModal";
 
 import type { TransactionTab } from "./transactionDetailsModule/types";
+import { isEmailMessage } from '@/utils/channelHelpers';
+import logger from '../utils/logger';
+import { OfflineNotice } from './common/OfflineNotice';
 
 interface TransactionDetailsComponentProps {
   transaction: Transaction;
@@ -90,6 +95,8 @@ function TransactionDetails({
   const localToast = useToast();
   const showSuccess = onShowSuccess || localToast.showSuccess;
   const showError = onShowError || localToast.showError;
+  // TASK-2070: Warning toast for provider errors (always local -- no parent prop for warnings)
+  const showWarning = localToast.showWarning;
 
   // Transaction data hook
   const {
@@ -153,8 +160,15 @@ function TransactionDetails({
     messages: textMessages,
     loading: messagesLoading,
     error: messagesError,
-    refresh: refreshMessages,
   } = useTransactionMessages(transaction, communications);
+
+  // Refresh messages by reloading text communications from the parent state.
+  // This ensures derivedMessages (from useTransactionMessages) updates correctly,
+  // unlike the local refresh which updates fetchedMessages but gets overridden
+  // by the non-null derivedMessages. (TASK-2023)
+  const refreshMessages = useCallback(async () => {
+    await loadCommunications("text");
+  }, [loadCommunications]);
 
   // Attachments hook — uses pre-loaded communications to avoid duplicate getDetails call
   const {
@@ -173,19 +187,19 @@ function TransactionDetails({
     true, // lazy: don't auto-load on mount
   );
 
+  // Global sync orchestrator state - disable transaction Sync buttons when dashboard sync is running
+  const { isRunning: globalSyncRunning } = useSyncOrchestrator();
+
+  // TASK-2074: Network status for disabling sync buttons when offline
+  const { isOnline } = useNetwork();
+
   // Transaction status update hook
   const { state: statusState, approve, reject, restore } = useTransactionStatusUpdate(userId);
   const { isApproving, isRejecting, isRestoring } = statusState;
 
   // Filter emails only for Details tab
-  // Must explicitly check for 'email' to match the SQL count query
-  // which uses: communication_type = 'email'
   const emailCommunications = useMemo(() => {
-    return communications.filter((comm) => {
-      const channel = comm.channel || comm.communication_type;
-      // Only include emails - exclude sms, imessage, text, and undefined
-      return channel === 'email';
-    });
+    return communications.filter((comm) => isEmailMessage(comm));
   }, [communications]);
 
   // Note: conversation/message count for tabs now uses transaction.text_thread_count
@@ -243,7 +257,7 @@ function TransactionDetails({
         onTransactionUpdated?.();
       }
     } catch (err) {
-      console.error("Failed to refresh transaction after export:", err);
+      logger.error("Failed to refresh transaction after export:", err);
     }
     // Note: Close transaction prompt is now handled within ExportModal (step 4)
   };
@@ -255,7 +269,7 @@ function TransactionDetails({
       onClose();
       onTransactionUpdated?.();
     } catch (err) {
-      console.error("Failed to delete transaction:", err);
+      logger.error("Failed to delete transaction:", err);
       showError("Failed to delete transaction. Please try again.");
     }
   };
@@ -349,27 +363,32 @@ function TransactionDetails({
   const handleSyncCommunications = useCallback(async () => {
     setSyncingCommunications(true);
     try {
-      // Cast to access syncAndFetchEmails - method is defined in preload but window.d.ts augmentation has issues with tsc
-      const result = await (window.api.transactions as typeof window.api.transactions & {
-        syncAndFetchEmails: (transactionId: string) => Promise<{
-          success: boolean;
-          provider?: "gmail" | "outlook";
-          emailsFetched?: number;
-          emailsStored?: number;
-          totalEmailsLinked?: number;
-          totalMessagesLinked?: number;
-          totalAlreadyLinked?: number;
-          totalErrors?: number;
-          error?: string;
-          message?: string;
-        }>;
-      }).syncAndFetchEmails(transaction.id);
+      const result = await window.api.transactions.syncAndFetchEmails(transaction.id);
+
+      // Handle rate-limited response with a non-alarming message
+      if (!result.success && result.rateLimited) {
+        showSuccess(result.error || "Please wait before syncing again");
+        return;
+      }
+
+      // TASK-2070: Extract warning from result (provider error surfaced through IPC)
+      const syncWarning = (result as { warning?: string }).warning;
+
       if (result.success) {
         const emailsFetched = result.emailsFetched || 0;
         const emailsStored = result.emailsStored || 0;
         const totalLinked = (result.totalEmailsLinked || 0) + (result.totalMessagesLinked || 0);
 
-        if (emailsStored > 0 || totalLinked > 0) {
+        // TASK-2070: Show warning toast if provider fetch failed (token expired, API error)
+        // This takes priority over the green success message
+        if (syncWarning) {
+          showWarning(syncWarning);
+          // Still refresh if any local data was linked
+          if (totalLinked > 0) {
+            loadDetails();
+            refreshMessages();
+          }
+        } else if (emailsStored > 0 || totalLinked > 0) {
           const parts: string[] = [];
           if (emailsStored > 0) {
             parts.push(`${emailsStored} new email${emailsStored !== 1 ? "s" : ""} fetched`);
@@ -397,12 +416,12 @@ function TransactionDetails({
         showError(result.error || "Failed to sync communications");
       }
     } catch (err) {
-      console.error("Failed to sync communications:", err);
+      logger.error("Failed to sync communications:", err);
       showError("Failed to sync communications. Please try again.");
     } finally {
       setSyncingCommunications(false);
     }
-  }, [transaction.id, showSuccess, showError, loadDetails, refreshMessages]);
+  }, [transaction.id, showSuccess, showError, showWarning, loadDetails, refreshMessages]);
 
   // Sync messages handler - re-links text messages from assigned contacts (phone-based matching)
   const handleSyncMessages = useCallback(async () => {
@@ -438,7 +457,7 @@ function TransactionDetails({
         showError(result.error || "Failed to sync messages");
       }
     } catch (err) {
-      console.error("Failed to sync messages:", err);
+      logger.error("Failed to sync messages:", err);
       showError("Failed to sync messages. Please try again.");
     } finally {
       setSyncingMessages(false);
@@ -483,7 +502,7 @@ function TransactionDetails({
                 setTransaction(refreshed.transaction as Transaction);
               }
             } catch (err) {
-              console.error("Failed to refresh transaction before submit:", err);
+              logger.error("Failed to refresh transaction before submit:", err);
             }
             // Load attachment counts now (deferred from mount for perf)
             loadAttachmentCounts();
@@ -499,6 +518,8 @@ function TransactionDetails({
           attachmentCount={attachmentCount}
           onTabChange={setActiveTab}
         />
+
+        <OfflineNotice />
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
@@ -526,6 +547,8 @@ function TransactionDetails({
               onAcceptAll={handleAcceptAllWithCallbacks}
               onSyncCommunications={handleSyncCommunications}
               syncingCommunications={syncingCommunications}
+              globalSyncRunning={globalSyncRunning}
+              isOnline={isOnline}
             />
           )}
 
@@ -538,6 +561,8 @@ function TransactionDetails({
               onShowUnlinkConfirm={setShowUnlinkConfirm}
               onSyncCommunications={handleSyncCommunications}
               syncingCommunications={syncingCommunications}
+              globalSyncRunning={globalSyncRunning}
+              isOnline={isOnline}
               hasContacts={contactAssignments.length > 0}
               userId={userId}
               transactionId={transaction.id}
@@ -565,6 +590,8 @@ function TransactionDetails({
               auditEndDate={transaction.closed_at}
               onSyncMessages={handleSyncMessages}
               syncingMessages={syncingMessages}
+              globalSyncRunning={globalSyncRunning}
+              isOnline={isOnline}
               hasContacts={contactAssignments.length > 0}
             />
           )}
@@ -709,8 +736,8 @@ function TransactionDetails({
         />
       )}
 
-      {/* Toast Notifications - only render if using local toast */}
-      {!onShowSuccess && !onShowError && (
+      {/* Toast Notifications - render if using local toast, or if local toasts exist (TASK-2070: warnings always use local) */}
+      {(!onShowSuccess && !onShowError || localToast.toasts.length > 0) && (
         <ToastContainer toasts={localToast.toasts} onDismiss={localToast.removeToast} />
       )}
     </div>

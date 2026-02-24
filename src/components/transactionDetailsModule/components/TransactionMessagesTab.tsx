@@ -14,25 +14,10 @@ import {
 } from "./MessageThreadCard";
 import { AttachMessagesModal, UnlinkMessageModal } from "./modals";
 import { parseDateSafe } from "../../../utils/dateFormatters";
-
-/**
- * Format a date range for display in the toggle label
- * Handles partial dates (only start, only end, or both)
- * BACKLOG-393: Include year in date format for clarity
- */
-function formatDateRangeLabel(startDate: Date | null, endDate: Date | null): string {
-  const formatDate = (d: Date) =>
-    d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-
-  if (startDate && endDate) {
-    return `${formatDate(startDate)} - ${formatDate(endDate)}`;
-  } else if (startDate) {
-    return `${formatDate(startDate)} - Ongoing`;
-  } else if (endDate) {
-    return `Through ${formatDate(endDate)}`;
-  }
-  return "";
-}
+import { extractAllHandles } from "../../../utils/phoneNormalization";
+import { mergeThreadsByContact, type MergedThreadEntry } from "../../../utils/threadMergeUtils";
+import { formatDateRangeLabel } from "../../../utils/dateRangeUtils";
+import logger from '../../../utils/logger';
 
 /**
  * Check if a message falls within the audit date range
@@ -88,6 +73,10 @@ interface TransactionMessagesTabProps {
   onSyncMessages?: () => Promise<void>;
   /** Whether sync is in progress */
   syncingMessages?: boolean;
+  /** Whether a global sync (from dashboard) is in progress */
+  globalSyncRunning?: boolean;
+  /** TASK-2074: Whether the app is online (network connectivity) */
+  isOnline?: boolean;
   /** Whether there are contacts assigned (to show sync button) */
   hasContacts?: boolean;
 }
@@ -96,40 +85,7 @@ interface TransactionMessagesTabProps {
  * Messages tab content component.
  * Shows loading state, empty state, or message threads.
  */
-/**
- * Extract all unique phone numbers from messages for contact lookup.
- */
-function extractAllPhones(messages: MessageLike[]): string[] {
-  const phones = new Set<string>();
-
-  for (const msg of messages) {
-    try {
-      if (msg.participants) {
-        const parsed = typeof msg.participants === 'string'
-          ? JSON.parse(msg.participants)
-          : msg.participants;
-
-        if (parsed.from) phones.add(parsed.from);
-        if (parsed.to) {
-          const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
-          toList.forEach((p: string) => phones.add(p));
-        }
-      }
-    } catch {
-      // Skip invalid JSON
-    }
-
-    // Also check sender field
-    if ("sender" in msg && msg.sender) {
-      phones.add(msg.sender);
-    }
-  }
-
-  // Remove "me" placeholder
-  phones.delete("me");
-
-  return Array.from(phones);
-}
+// extractAllHandles imported from src/utils/phoneNormalization.ts (TASK-2027)
 
 export function TransactionMessagesTab({
   messages,
@@ -145,13 +101,24 @@ export function TransactionMessagesTab({
   auditEndDate,
   onSyncMessages,
   syncingMessages = false,
+  globalSyncRunning = false,
+  isOnline = true,
   hasContacts = false,
 }: TransactionMessagesTabProps): React.ReactElement {
+  // TASK-2074: Disable sync when offline, already syncing, or when a global dashboard sync is running
+  const syncDisabled = !isOnline || syncingMessages || globalSyncRunning;
+  const syncTooltip = !isOnline
+    ? "You are offline"
+    : globalSyncRunning
+    ? "A sync is already in progress from the dashboard"
+    : undefined;
+
   const [showAttachModal, setShowAttachModal] = useState(false);
   const [unlinkTarget, setUnlinkTarget] = useState<{
     threadId: string;
     phoneNumber: string;
     messageCount: number;
+    originalThreadIds?: string[];
   } | null>(null);
   const [isUnlinking, setIsUnlinking] = useState(false);
   const [contactNames, setContactNames] = useState<Record<string, string>>({});
@@ -166,32 +133,40 @@ export function TransactionMessagesTab({
   // Default to showing audit period only when dates are available
   const [showAuditPeriodOnly, setShowAuditPeriodOnly] = useState<boolean>(hasAuditDates);
 
-  // Look up contact names for all phone numbers in messages
+  // TASK-2026: Look up contact names for all handles (phones + emails + Apple IDs)
+  // Uses shared ContactResolutionService via resolveHandles IPC
   useEffect(() => {
     const lookupContactNames = async () => {
       if (messages.length === 0) return;
 
-      const phones = extractAllPhones(messages);
-      if (phones.length === 0) return;
+      const handles = extractAllHandles(messages);
+      if (handles.length === 0) return;
 
       try {
-        const result = await window.api.contacts.getNamesByPhones(phones);
+        const result = await window.api.contacts.resolveHandles(handles);
 
         if (result.success && result.names) {
-          // Build a lookup map with both original and normalized phone keys
+          // Build a lookup map with both original and normalized keys
           const namesWithNormalized: Record<string, string> = {};
-          Object.entries(result.names as Record<string, string>).forEach(([phone, name]) => {
-            namesWithNormalized[phone] = name;
-            // Also add normalized version (last 10 digits)
-            const normalized = phone.replace(/\D/g, '').slice(-10);
-            if (normalized.length >= 7) {
-              namesWithNormalized[normalized] = name;
+          Object.entries(result.names as Record<string, string>).forEach(([handle, name]) => {
+            namesWithNormalized[handle] = name;
+            // For phone-like handles, also add normalized version (last 10 digits)
+            const isPhone = handle.startsWith("+") || /^\d[\d\s\-()]{6,}$/.test(handle);
+            if (isPhone) {
+              const normalized = handle.replace(/\D/g, '').slice(-10);
+              if (normalized.length >= 7) {
+                namesWithNormalized[normalized] = name;
+              }
+            }
+            // For email handles, also store lowercase version
+            if (handle.includes("@")) {
+              namesWithNormalized[handle.toLowerCase()] = name;
             }
           });
           setContactNames(namesWithNormalized);
         }
       } catch (err) {
-        console.error("Failed to look up contact names:", err);
+        logger.error("Failed to look up contact names:", err);
       }
     };
 
@@ -210,16 +185,29 @@ export function TransactionMessagesTab({
   }, [onMessagesChanged, onShowSuccess]);
 
   // Handle unlink button click on a thread
+  // TASK-2025: Updated to accept originalThreadIds for merged threads
   const handleUnlinkClick = useCallback(
-    (threadId: string) => {
-      // Find thread info for the confirmation modal
-      const threads = groupMessagesByThread(messages);
-      const threadMessages = threads.get(threadId);
-      if (threadMessages) {
+    (threadId: string, originalThreadIds?: string[]) => {
+      // For merged threads, collect all messages from all original thread IDs
+      const rawThreads = groupMessagesByThread(messages);
+      const idsToCollect = originalThreadIds && originalThreadIds.length > 1
+        ? originalThreadIds
+        : [threadId];
+
+      const allMessages: MessageLike[] = [];
+      for (const id of idsToCollect) {
+        const threadMessages = rawThreads.get(id);
+        if (threadMessages) {
+          allMessages.push(...threadMessages);
+        }
+      }
+
+      if (allMessages.length > 0) {
         setUnlinkTarget({
-          threadId,
-          phoneNumber: extractPhoneFromThread(threadMessages),
-          messageCount: threadMessages.length,
+          threadId, // Use the display key for lookup
+          phoneNumber: extractPhoneFromThread(allMessages),
+          messageCount: allMessages.length,
+          originalThreadIds: idsToCollect,
         });
       }
     },
@@ -227,19 +215,33 @@ export function TransactionMessagesTab({
   );
 
   // Handle unlink confirmation
+  // TASK-2025: Updated to handle merged threads (collect messages from all original thread IDs)
   const handleUnlinkConfirm = useCallback(async () => {
     if (!unlinkTarget || !transactionId) return;
 
     setIsUnlinking(true);
     try {
-      // Get all message IDs for this thread
-      const threads = groupMessagesByThread(messages);
-      const threadMessages = threads.get(unlinkTarget.threadId);
-      if (!threadMessages) {
+      // Get all message IDs for this thread (or merged group of threads)
+      const rawThreads = groupMessagesByThread(messages);
+
+      // Use stored originalThreadIds from handleUnlinkClick (avoids stale closure)
+      const idsToCollect = unlinkTarget.originalThreadIds && unlinkTarget.originalThreadIds.length > 1
+        ? unlinkTarget.originalThreadIds
+        : [unlinkTarget.threadId];
+
+      const allMessages: MessageLike[] = [];
+      for (const id of idsToCollect) {
+        const threadMessages = rawThreads.get(id);
+        if (threadMessages) {
+          allMessages.push(...threadMessages);
+        }
+      }
+
+      if (allMessages.length === 0) {
         throw new Error("Thread not found");
       }
 
-      const messageIds = threadMessages.map((m) => m.id);
+      const messageIds = allMessages.map((m) => m.id);
       // TASK-1116: Pass transactionId for thread-based unlinking
       const result = await window.api.transactions.unlinkMessages(messageIds, transactionId);
 
@@ -253,7 +255,7 @@ export function TransactionMessagesTab({
         onShowError?.(result.error || "Failed to remove messages");
       }
     } catch (err) {
-      console.error("Failed to unlink messages:", err);
+      logger.error("Failed to unlink messages:", err);
       onShowError?.(
         err instanceof Error ? err.message : "Failed to remove messages"
       );
@@ -270,33 +272,43 @@ export function TransactionMessagesTab({
   // Group messages by thread and sort by most recent
   // NOTE: These computations and useMemo MUST be called before any early returns
   // to comply with React's Rules of Hooks
-  const threads = groupMessagesByThread(messages);
-  const sortedThreads = sortThreadsByRecent(threads);
+  const sortedThreads = useMemo(() => {
+    const threads = groupMessagesByThread(messages);
+    return sortThreadsByRecent(threads);
+  }, [messages]);
+
+  // TASK-2025: Merge threads from the same contact (display-layer only)
+  // This combines SMS, iMessage, and iCloud email threads into one per contact.
+  const mergedThreads: MergedThreadEntry[] = useMemo(
+    () => mergeThreadsByContact(sortedThreads, contactNames),
+    [sortedThreads, contactNames],
+  );
 
   // BACKLOG-357: Filter threads and messages by audit date range
+  // TASK-2025: Uses mergedThreads (contact-merged) instead of raw sortedThreads
   const { filteredThreads, filteredMessageCount, totalMessageCount, filteredConversationCount, totalConversationCount } = useMemo(() => {
     if (!showAuditPeriodOnly || !hasAuditDates) {
       return {
-        filteredThreads: sortedThreads,
+        filteredThreads: mergedThreads,
         filteredMessageCount: messages.length,
         totalMessageCount: messages.length,
-        filteredConversationCount: sortedThreads.length,
-        totalConversationCount: sortedThreads.length,
+        filteredConversationCount: mergedThreads.length,
+        totalConversationCount: mergedThreads.length,
       };
     }
 
     // Filter threads: keep only threads that have at least one message in audit period
     // Also filter messages within each thread
-    const filtered: [string, MessageLike[]][] = [];
+    const filtered: MergedThreadEntry[] = [];
     let msgCount = 0;
 
-    for (const [threadId, threadMessages] of sortedThreads) {
+    for (const [threadId, threadMessages, originalIds] of mergedThreads) {
       const messagesInPeriod = threadMessages.filter((msg) =>
         isMessageInAuditPeriod(msg, parsedStartDate, parsedEndDate)
       );
 
       if (messagesInPeriod.length > 0) {
-        filtered.push([threadId, messagesInPeriod]);
+        filtered.push([threadId, messagesInPeriod, originalIds]);
         msgCount += messagesInPeriod.length;
       }
     }
@@ -306,9 +318,9 @@ export function TransactionMessagesTab({
       filteredMessageCount: msgCount,
       totalMessageCount: messages.length,
       filteredConversationCount: filtered.length,
-      totalConversationCount: sortedThreads.length,
+      totalConversationCount: mergedThreads.length,
     };
-  }, [sortedThreads, messages.length, showAuditPeriodOnly, hasAuditDates, parsedStartDate, parsedEndDate]);
+  }, [mergedThreads, messages.length, showAuditPeriodOnly, hasAuditDates, parsedStartDate, parsedEndDate]);
 
   // Loading state (placed after hooks to comply with Rules of Hooks)
   if (loading) {
@@ -373,9 +385,10 @@ export function TransactionMessagesTab({
             {onSyncMessages && hasContacts && (
               <button
                 onClick={onSyncMessages}
-                disabled={syncingMessages}
+                disabled={syncDisabled}
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 data-testid="sync-messages-button"
+                title={syncTooltip}
               >
                 <svg
                   className={`w-4 h-4 ${syncingMessages ? "animate-spin" : ""}`}
@@ -491,9 +504,10 @@ export function TransactionMessagesTab({
           {onSyncMessages && hasContacts && (
             <button
               onClick={onSyncMessages}
-              disabled={syncingMessages}
+              disabled={syncDisabled}
               className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               data-testid="sync-messages-button"
+              title={syncTooltip}
             >
               {syncingMessages ? (
                 <>
@@ -550,7 +564,7 @@ export function TransactionMessagesTab({
 
       {/* Thread list */}
       <div className="space-y-4" data-testid="message-thread-list">
-        {filteredThreads.map(([threadId, threadMessages]) => {
+        {filteredThreads.map(([threadId, threadMessages, originalThreadIds]) => {
           const phoneNumber = extractPhoneFromThread(threadMessages);
           // Look up contact name for thread header
           const normalized = phoneNumber.replace(/\D/g, '').slice(-10);
@@ -564,7 +578,9 @@ export function TransactionMessagesTab({
               phoneNumber={phoneNumber}
               contactName={contactName}
               contactNames={contactNames}
-              onUnlink={userId && transactionId ? handleUnlinkClick : undefined}
+              onUnlink={userId && transactionId
+                ? (id: string) => handleUnlinkClick(id, originalThreadIds)
+                : undefined}
               auditStartDate={auditStartDate}
               auditEndDate={auditEndDate}
             />

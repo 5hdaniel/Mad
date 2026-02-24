@@ -4,6 +4,8 @@ import { app } from "electron";
 import folderExportService from "./folderExportService";
 import logService from "./logService";
 import { Transaction, Communication } from "../types/models";
+import { isEmailMessage, isTextMessage } from "../utils/channelHelpers";
+import { sanitizeFileSystemName } from "../utils/fileUtils";
 
 /**
  * Enhanced Export Service
@@ -172,11 +174,11 @@ class EnhancedExportService {
     }
 
     if (contentType === "email") {
-      return communications.filter((c) => c.communication_type === "email");
+      return communications.filter((c) => isEmailMessage(c));
     }
 
     if (contentType === "text") {
-      return communications.filter((c) => c.communication_type === "text");
+      return communications.filter((c) => isTextMessage(c));
     }
 
     return communications;
@@ -316,7 +318,7 @@ class EnhancedExportService {
   ): Promise<string> {
     const downloadsPath = app.getPath("downloads");
     const suffix = summaryOnly ? "Summary" : "Full";
-    const fileName = this._sanitizeFileName(
+    const fileName = sanitizeFileSystemName(
       `Transaction_${suffix}_${transaction.property_address}_${Date.now()}.pdf`,
     );
     const outputPath = path.join(downloadsPath, fileName);
@@ -340,7 +342,7 @@ class EnhancedExportService {
   ): Promise<string> {
     const downloadsPath = app.getPath("downloads");
     const ext = format === "excel" ? "xlsx" : "csv";
-    const fileName = this._sanitizeFileName(
+    const fileName = sanitizeFileSystemName(
       `Transaction_${transaction.property_address}_${Date.now()}.${ext}`,
     );
     const outputPath = path.join(downloadsPath, fileName);
@@ -404,7 +406,7 @@ class EnhancedExportService {
     communications: Communication[],
   ): Promise<string> {
     const downloadsPath = app.getPath("downloads");
-    const fileName = this._sanitizeFileName(
+    const fileName = sanitizeFileSystemName(
       `Transaction_${transaction.property_address}_${Date.now()}.json`,
     );
     const outputPath = path.join(downloadsPath, fileName);
@@ -459,7 +461,7 @@ class EnhancedExportService {
     communications: Communication[],
   ): Promise<string> {
     const downloadsPath = app.getPath("downloads");
-    const folderName = this._sanitizeFileName(
+    const folderName = sanitizeFileSystemName(
       `${transaction.property_address}_Export_${Date.now()}`,
     );
     const basePath = path.join(downloadsPath, folderName);
@@ -473,12 +475,12 @@ class EnhancedExportService {
 
     // Export emails as .eml files
     const emails = communications.filter(
-      (c) => c.communication_type === "email",
+      (c) => isEmailMessage(c),
     );
     for (let i = 0; i < emails.length; i++) {
       const email = emails[i];
       const emlContent = this._createEMLContent(email);
-      const emlFileName = this._sanitizeFileName(
+      const emlFileName = sanitizeFileSystemName(
         `${i + 1}_${email.subject || "no_subject"}.eml`,
       );
       await fs.writeFile(
@@ -489,11 +491,11 @@ class EnhancedExportService {
     }
 
     // Export texts as .txt files
-    const texts = communications.filter((c) => c.communication_type === "text");
+    const texts = communications.filter((c) => isTextMessage(c));
     for (let i = 0; i < texts.length; i++) {
       const text = texts[i];
       const txtContent = this._createTextContent(text);
-      const txtFileName = this._sanitizeFileName(
+      const txtFileName = sanitizeFileSystemName(
         `${i + 1}_${new Date(text.sent_at as string).toISOString().split("T")[0]}.txt`,
       );
       await fs.writeFile(path.join(textsPath, txtFileName), txtContent, "utf8");
@@ -605,12 +607,12 @@ class EnhancedExportService {
     lines.push(`Total Communications Exported: ${communications.length}`);
     lines.push(
       `  - Emails: ${
-        communications.filter((c) => c.communication_type === "email").length
+        communications.filter((c) => isEmailMessage(c)).length
       }`,
     );
     lines.push(
       `  - Texts: ${
-        communications.filter((c) => c.communication_type === "text").length
+        communications.filter((c) => isTextMessage(c)).length
       }`,
     );
     lines.push("");
@@ -621,16 +623,6 @@ class EnhancedExportService {
     return lines.join("\n");
   }
 
-  /**
-   * Sanitize file/folder name
-   * @private
-   */
-  private _sanitizeFileName(name: string): string {
-    return name
-      .replace(/[^a-z0-9_\-\.]/gi, "_")
-      .replace(/_+/g, "_")
-      .substring(0, 200);
-  }
 }
 
 export default new EnhancedExportService();

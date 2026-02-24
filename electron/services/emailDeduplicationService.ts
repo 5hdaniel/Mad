@@ -10,6 +10,8 @@
  */
 
 import type { Database as DatabaseType } from "better-sqlite3";
+import * as Sentry from "@sentry/electron/main";
+import databaseService from "./databaseService";
 import logService from "./logService";
 
 /**
@@ -22,6 +24,24 @@ export interface DuplicateCheckResult {
   originalId?: string;
   /** Method used to detect the duplicate: 'message_id' or 'content_hash' */
   matchMethod?: "message_id" | "content_hash";
+}
+
+/**
+ * Provider label for logging and Sentry tags
+ */
+export interface ProviderLabel {
+  logLabel: string; // e.g., "OutlookFetch", "GmailFetch"
+  sentryTag: string; // e.g., "outlook-fetch", "gmail-fetch"
+}
+
+/**
+ * Minimal interface for emails that can be deduplicated.
+ * Both provider-specific ParsedEmail types satisfy this constraint.
+ */
+interface DedupableEmail {
+  messageIdHeader?: string | null;
+  contentHash?: string | null;
+  duplicateOf?: string | null;
 }
 
 /**
@@ -277,6 +297,72 @@ export class EmailDeduplicationService {
     }
 
     return results;
+  }
+
+  /**
+   * Static convenience method to check emails for duplicates.
+   *
+   * Extracts the common logic used by both OutlookFetchService and
+   * GmailFetchService. Creates an instance internally, runs the batch
+   * check, and enriches the emails with duplicateOf information.
+   *
+   * @param userId - User ID to scope the duplicate check
+   * @param emails - Array of emails with messageIdHeader and contentHash
+   * @param provider - Provider label for logging and Sentry tags
+   * @returns Same emails with duplicateOf field populated where applicable
+   */
+  static checkDuplicates<T extends DedupableEmail>(
+    userId: string,
+    emails: T[],
+    provider: ProviderLabel
+  ): T[] {
+    if (emails.length === 0) {
+      return emails;
+    }
+
+    try {
+      const db = databaseService.getRawDatabase();
+      const dedupService = new EmailDeduplicationService(db);
+
+      // Use batch check for efficiency
+      const dedupInputs = emails.map((e) => ({
+        messageIdHeader: e.messageIdHeader ?? null,
+        contentHash: e.contentHash ?? "",
+      }));
+
+      const results = dedupService.checkForDuplicatesBatch(userId, dedupInputs);
+
+      // Populate duplicateOf field for each email
+      const enrichedEmails = emails.map((email, index) => {
+        const result = results.get(index);
+        if (result?.isDuplicate && result.originalId) {
+          return {
+            ...email,
+            duplicateOf: result.originalId,
+          };
+        }
+        return email;
+      });
+
+      const duplicateCount = enrichedEmails.filter((e) => e.duplicateOf).length;
+      if (duplicateCount > 0) {
+        logService.info(
+          `Duplicate check: ${duplicateCount}/${emails.length} duplicates found`,
+          provider.logLabel
+        );
+      }
+
+      return enrichedEmails;
+    } catch (error) {
+      logService.error("Failed to check duplicates", provider.logLabel, {
+        error,
+      });
+      Sentry.captureException(error, {
+        tags: { service: provider.sentryTag, operation: "checkDuplicates" },
+      });
+      // Return original emails without duplicate info on error
+      return emails;
+    }
   }
 }
 

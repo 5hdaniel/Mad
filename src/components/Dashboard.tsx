@@ -14,6 +14,7 @@ import {
   JOYRIDE_LOCALE,
 } from "../config/tourSteps";
 import type { Transaction } from "../types";
+import { useReconnectionSummary } from "../hooks/useReconnectionSummary";
 
 interface DashboardActionProps {
   onAuditNew: () => void;
@@ -56,6 +57,9 @@ function Dashboard({
   onOpenSettings,
   user,
 }: DashboardActionProps) {
+  // TASK-2058: Show reconnection summary when coming back online with failures
+  useReconnectionSummary();
+
   // State for the Start New Audit modal
   const [showStartNewAuditModal, setShowStartNewAuditModal] = useState(false);
 
@@ -77,9 +81,10 @@ function Dashboard({
 
   // Derive display name for personalized greeting
   // Users only reach Dashboard after WelcomeTerms, so this is always a return visit
-  const displayName = user?.display_name || user?.email?.split("@")[0] || "";
-  const greeting = displayName
-    ? `Welcome back, ${displayName}!`
+  const fullName = user?.display_name || user?.email?.split("@")[0] || "";
+  const firstName = fullName.split(" ")[0];
+  const greeting = firstName
+    ? `Welcome back, ${firstName}!`
     : "Welcome back!";
 
   // Handle viewing pending transactions - navigates to transactions view

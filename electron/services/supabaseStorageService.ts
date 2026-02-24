@@ -14,6 +14,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { app } from "electron";
 import mime from "mime-types";
+import * as Sentry from "@sentry/electron/main";
 import supabaseService from "./supabaseService";
 import logService from "./logService";
 import { sanitizeFilenamePreserveCase } from "../utils/fileUtils";
@@ -283,6 +284,9 @@ class SupabaseStorageService {
         `[Storage] Upload failed for ${filename}: ${errorMessage}`,
         "SupabaseStorageService"
       );
+      Sentry.captureException(error, {
+        tags: { service: "supabase-storage", operation: "uploadAttachment" },
+      });
 
       onProgress?.({
         filename,
@@ -445,6 +449,9 @@ class SupabaseStorageService {
         `[Storage] Failed to create signed URL for ${storagePath}: ${errorMessage}`,
         "SupabaseStorageService"
       );
+      Sentry.captureException(error, {
+        tags: { service: "supabase-storage", operation: "getSignedUrl" },
+      });
       throw error;
     }
   }
@@ -476,6 +483,9 @@ class SupabaseStorageService {
         `[Storage] Failed to delete ${storagePath}: ${errorMessage}`,
         "SupabaseStorageService"
       );
+      Sentry.captureException(error, {
+        tags: { service: "supabase-storage", operation: "deleteAttachment" },
+      });
       throw error;
     }
   }
@@ -532,6 +542,9 @@ class SupabaseStorageService {
         `[Storage] Failed to delete submission attachments: ${errorMessage}`,
         "SupabaseStorageService"
       );
+      Sentry.captureException(error, {
+        tags: { service: "supabase-storage", operation: "deleteSubmissionAttachments" },
+      });
       throw error;
     }
   }

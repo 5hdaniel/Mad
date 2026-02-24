@@ -26,6 +26,7 @@ import {
   selectHasCompletedEmailOnboarding,
   selectHasEmailConnected,
 } from "../machine";
+import logger from '../../../utils/logger';
 
 interface UseEmailOnboardingApiOptions {
   userId: string | undefined;
@@ -128,7 +129,7 @@ export function useEmailOnboardingApi({
     try {
       const result = await authService.completeEmailOnboarding(currentUserId);
       if (!result.success) {
-        console.warn(
+        logger.warn(
           "[useEmailOnboardingApi] API call failed but continuing:",
           result.error
         );
@@ -140,7 +141,7 @@ export function useEmailOnboardingApi({
         step: "email-connect",
       });
     } catch (error) {
-      console.error(
+      logger.error(
         "[useEmailOnboardingApi] Failed to complete email onboarding:",
         error
       );

@@ -47,6 +47,17 @@ If issues exist, use this format:
    - Time impact: [estimate]
 ```
 
+### Effort
+
+**MANDATORY for Engineer and SR Engineer handoffs.** This data feeds into PM metrics collection and sprint retrospectives.
+
+- **Agent ID:** `<agent_id returned by Task tool>`
+- **Total Tokens:** `<from TaskOutput or agent completion summary>`
+- **Duration:** `<seconds or minutes>`
+- **Task Estimate:** `~XK (from task file)`
+
+The Agent ID is the key that links to `.claude/metrics/tokens.csv` for PM aggregation. Record it immediately when the Task tool returns.
+
 ### Files Modified
 [List key files touched in this phase - helps next agent find context]
 
@@ -86,6 +97,12 @@ Verify:
    - What happened: Discovered 250 requests/second limit during exploration
    - Resolution: Added throttling recommendation to plan
    - Time impact: +15 min research
+
+### Effort
+- **Agent ID:** `a7f2c91`
+- **Total Tokens:** ~45K
+- **Duration:** ~3 min
+- **Task Estimate:** ~30K
 
 ### Files Modified
 - `.claude/plans/email-attachments-plan.md` - Created implementation plan

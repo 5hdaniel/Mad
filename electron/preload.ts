@@ -19,6 +19,16 @@
  */
 
 import { contextBridge } from "electron";
+// Initialize Sentry IPC bridge so renderer can communicate with main process Sentry
+// Note: hookupIpc may be undefined depending on @sentry/electron version/exports
+try {
+  const { hookupIpc: sentryHookupIpc } = require("@sentry/electron/preload");
+  if (typeof sentryHookupIpc === "function") {
+    sentryHookupIpc();
+  }
+} catch {
+  // Sentry preload bridge not available — non-critical, continue without it
+}
 
 import {
   authBridge,
@@ -43,6 +53,9 @@ import {
   licenseBridge,
   errorLoggingBridge,
   resetBridge,
+  databaseBackupBridge,
+  privacyBridge,
+  failureLogBridge,
 } from "./preload/index";
 
 // Expose protected methods that allow the renderer process to use
@@ -113,4 +126,13 @@ contextBridge.exposeInMainWorld("api", {
 
   // App reset (TASK-1802: self-healing feature)
   app: resetBridge,
+
+  // Database backup & restore (TASK-2052)
+  databaseBackup: databaseBackupBridge,
+
+  // Privacy / CCPA data export (TASK-2053)
+  privacy: privacyBridge,
+
+  // Failure log for offline diagnostics (TASK-2058)
+  failureLog: failureLogBridge,
 });

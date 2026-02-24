@@ -4,6 +4,7 @@
  */
 
 import { ipcMain, IpcMainInvokeEvent, shell } from "electron";
+import * as Sentry from "@sentry/electron/main";
 import type { User } from "../types/models";
 
 // Import services
@@ -14,6 +15,8 @@ import sessionSecurityService from "../services/sessionSecurityService";
 import auditService from "../services/auditService";
 import logService from "../services/logService";
 import { setSyncUserId } from "../sync-handlers";
+import failureLogService from "../services/failureLogService";
+import { getDeviceId } from "../services/deviceService";
 
 // Import validation utilities
 import { ValidationError, validateUserId, validateSessionToken } from "../utils/validation";
@@ -158,6 +161,9 @@ async function syncTermsFromCloudToLocal(
       "SessionHandlers",
       { error: syncError instanceof Error ? syncError.message : "Unknown error" }
     );
+    Sentry.captureException(syncError, {
+      tags: { service: "session-handlers", operation: "syncTermsFromCloudToLocal" },
+    });
   }
 
   return localUser;
@@ -233,6 +239,9 @@ async function handleLogout(
     await logService.error("Logout failed", "AuthHandlers", {
       error: error instanceof Error ? error.message : "Unknown error",
     });
+    Sentry.captureException(error, {
+      tags: { service: "session-handlers", operation: "handleLogout" },
+    });
     if (error instanceof ValidationError) {
       return {
         success: false,
@@ -281,12 +290,18 @@ async function handleAcceptTerms(
             syncError instanceof Error ? syncError.message : "Unknown error",
         }
       );
+      Sentry.captureException(syncError, {
+        tags: { service: "session-handlers", operation: "handleAcceptTerms.syncToSupabase" },
+      });
     }
 
     return { success: true, user: updatedUser };
   } catch (error) {
     await logService.error("Accept terms failed", "AuthHandlers", {
       error: error instanceof Error ? error.message : "Unknown error",
+    });
+    Sentry.captureException(error, {
+      tags: { service: "session-handlers", operation: "handleAcceptTerms" },
     });
     if (error instanceof ValidationError) {
       return {
@@ -339,6 +354,9 @@ async function handleAcceptTermsToSupabase(
         hint: error?.hint,
       }
     );
+    Sentry.captureException(error, {
+      tags: { service: "session-handlers", operation: "handleAcceptTermsToSupabase" },
+    });
     if (error instanceof ValidationError) {
       return {
         success: false,
@@ -379,6 +397,9 @@ async function handleCompleteEmailOnboarding(
             syncError instanceof Error ? syncError.message : "Unknown error",
         }
       );
+      Sentry.captureException(syncError, {
+        tags: { service: "session-handlers", operation: "handleCompleteEmailOnboarding.syncToSupabase" },
+      });
     }
 
     return { success: true };
@@ -388,6 +409,9 @@ async function handleCompleteEmailOnboarding(
       "AuthHandlers",
       { error: error instanceof Error ? error.message : "Unknown error" }
     );
+    Sentry.captureException(error, {
+      tags: { service: "session-handlers", operation: "handleCompleteEmailOnboarding" },
+    });
     if (error instanceof ValidationError) {
       return {
         success: false,
@@ -473,6 +497,9 @@ async function handleCheckEmailOnboarding(
       "AuthHandlers",
       { error: error instanceof Error ? error.message : "Unknown error" }
     );
+    Sentry.captureException(error, {
+      tags: { service: "session-handlers", operation: "handleCheckEmailOnboarding" },
+    });
     if (error instanceof ValidationError) {
       return {
         success: false,
@@ -533,6 +560,9 @@ async function handleValidateSession(
   } catch (error) {
     await logService.error("Session validation failed", "AuthHandlers", {
       error: error instanceof Error ? error.message : "Unknown error",
+    });
+    Sentry.captureException(error, {
+      tags: { service: "session-handlers", operation: "handleValidateSession" },
     });
     if (error instanceof ValidationError) {
       return {
@@ -737,6 +767,9 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
           "SessionHandlers",
           { error: restoreError instanceof Error ? restoreError.message : "Unknown" }
         );
+        Sentry.captureException(restoreError, {
+          tags: { service: "session-handlers", operation: "handleGetCurrentUser.restoreSupabaseSession" },
+        });
       }
     }
 
@@ -840,6 +873,9 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
             error: createError instanceof Error ? createError.message : "Unknown error",
           }
         );
+        Sentry.captureException(createError, {
+          tags: { service: "session-handlers", operation: "handleGetCurrentUser.createLocalUser" },
+        });
       }
     } else if (freshUser && !freshUser.terms_accepted_at && cloudUser?.terms_accepted_at) {
       // TASK-1809: Existing local user missing terms, but cloud has them
@@ -886,6 +922,9 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
     await logService.error("Get current user failed", "AuthHandlers", {
       error: error instanceof Error ? error.message : "Unknown error",
     });
+    Sentry.captureException(error, {
+      tags: { service: "session-handlers", operation: "handleGetCurrentUser" },
+    });
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
@@ -911,6 +950,9 @@ async function handleForceLogout(): Promise<AuthResponse> {
       await logService.warn("Supabase signOut failed during force logout", "AuthHandlers", {
         error: supabaseError instanceof Error ? supabaseError.message : "Unknown error",
       });
+      Sentry.captureException(supabaseError, {
+        tags: { service: "session-handlers", operation: "handleForceLogout.supabaseSignOut" },
+      });
       // Continue - local cleanup is still important
     }
 
@@ -920,6 +962,9 @@ async function handleForceLogout(): Promise<AuthResponse> {
     } catch (sessionError) {
       await logService.warn("Session file clear failed during force logout", "AuthHandlers", {
         error: sessionError instanceof Error ? sessionError.message : "Unknown error",
+      });
+      Sentry.captureException(sessionError, {
+        tags: { service: "session-handlers", operation: "handleForceLogout.clearSessionFile" },
       });
     }
 
@@ -932,6 +977,9 @@ async function handleForceLogout(): Promise<AuthResponse> {
       await logService.warn("Database session clear failed during force logout", "AuthHandlers", {
         error: dbError instanceof Error ? dbError.message : "Unknown error",
       });
+      Sentry.captureException(dbError, {
+        tags: { service: "session-handlers", operation: "handleForceLogout.clearDbSessions" },
+      });
     }
 
     // 4. Clear sync user ID
@@ -943,9 +991,96 @@ async function handleForceLogout(): Promise<AuthResponse> {
     await logService.error("Force logout failed", "AuthHandlers", {
       error: error instanceof Error ? error.message : "Unknown error",
     });
+    Sentry.captureException(error, {
+      tags: { service: "session-handlers", operation: "handleForceLogout" },
+    });
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+/**
+ * TASK-2045: Sign out of all devices (global session invalidation)
+ * Calls Supabase global sign-out, logs audit entry, then cleans up local session.
+ * Global sign-out is called BEFORE local cleanup because it needs the active token.
+ */
+async function handleSignOutAllDevices(): Promise<AuthResponse> {
+  try {
+    // 1. Call global sign-out while we still have an active token
+    const result = await supabaseService.signOutGlobal();
+
+    if (!result.success) {
+      await logService.error(
+        "Global sign-out failed",
+        "SessionHandlers",
+        { error: result.error }
+      );
+      return { success: false, error: result.error || "Failed to sign out of all devices" };
+    }
+
+    // 2. Log audit entry for global sign-out
+    const userId = supabaseService.getAuthUserId() || "unknown";
+    try {
+      await auditService.log({
+        userId,
+        action: "LOGOUT",
+        resourceType: "SESSION",
+        success: true,
+        metadata: { scope: "global", reason: "user_requested" },
+      });
+    } catch (auditError) {
+      // Non-blocking: don't fail the sign-out if audit logging fails
+      await logService.warn(
+        "Audit log failed during global sign-out",
+        "SessionHandlers",
+        { error: auditError instanceof Error ? auditError.message : "Unknown error" }
+      );
+    }
+
+    // 3. Clean up local session (same as force logout flow)
+    try {
+      await sessionService.clearSession();
+    } catch (sessionError) {
+      await logService.warn(
+        "Session file clear failed during global sign-out",
+        "SessionHandlers",
+        { error: sessionError instanceof Error ? sessionError.message : "Unknown error" }
+      );
+    }
+
+    try {
+      if (databaseService.isInitialized()) {
+        await databaseService.clearAllSessions();
+      }
+    } catch (dbError) {
+      await logService.warn(
+        "Database session clear failed during global sign-out",
+        "SessionHandlers",
+        { error: dbError instanceof Error ? dbError.message : "Unknown error" }
+      );
+    }
+
+    setSyncUserId(null);
+
+    await logService.info("Global sign-out completed successfully", "SessionHandlers");
+    return { success: true };
+  } catch (error) {
+    await logService.error("Global sign-out failed", "SessionHandlers", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    Sentry.captureException(error, {
+      tags: { service: "session-handlers", operation: "handleSignOutAllDevices" },
+    });
+    // TASK-2058: Log failure for offline diagnostics
+    failureLogService.logFailure(
+      "sign_out_all_devices",
+      error instanceof Error ? error.message : "Failed to sign out of all devices"
+    );
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to sign out of all devices",
     };
   }
 }
@@ -972,6 +1107,112 @@ async function handleOpenAuthInBrowser(): Promise<{ success: boolean; error?: st
     await logService.error("Failed to open auth in browser", "AuthHandlers", {
       error: error instanceof Error ? error.message : "Unknown error",
     });
+    Sentry.captureException(error, {
+      tags: { service: "session-handlers", operation: "handleOpenAuthInBrowser" },
+    });
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+/**
+ * TASK-2062: Validate remote session by checking Supabase auth.
+ * Used by the renderer to poll whether the session is still valid
+ * (detects remote invalidation from "Sign Out All Devices").
+ * Returns { valid: true } on network errors to avoid false logouts.
+ */
+async function handleValidateRemoteSession(): Promise<{ valid: boolean }> {
+  try {
+    const client = supabaseService.getClient();
+    const { data, error } = await client.auth.getUser();
+    if (error || !data.user) {
+      await logService.info(
+        "[SessionValidator] Remote session invalid",
+        "SessionHandlers",
+        { error: error?.message }
+      );
+      return { valid: false };
+    }
+    return { valid: true };
+  } catch (error) {
+    // Network error -- assume valid (don't logout on network issues)
+    await logService.debug(
+      "[SessionValidator] Network error during remote validation, assuming valid",
+      "SessionHandlers",
+      { error: error instanceof Error ? error.message : "Unknown error" }
+    );
+    return { valid: true };
+  }
+}
+
+/**
+ * TASK-2062: Get active devices for the current user.
+ * Returns list of devices with isCurrentDevice flag.
+ */
+async function handleGetActiveDevices(
+  _event: IpcMainInvokeEvent,
+  userId: string
+): Promise<{
+  success: boolean;
+  devices?: Array<{
+    device_id: string;
+    device_name: string;
+    os: string;
+    platform: string;
+    last_seen_at: string;
+    isCurrentDevice: boolean;
+  }>;
+  error?: string;
+}> {
+  try {
+    const validatedUserId = validateUserId(userId)!;
+    const client = supabaseService.getClient();
+
+    const { data, error } = await client
+      .from("devices")
+      .select("device_id, device_name, os, platform, last_seen_at")
+      .eq("user_id", validatedUserId)
+      .eq("is_active", true)
+      .order("last_seen_at", { ascending: false });
+
+    if (error) {
+      await logService.error(
+        "[SessionValidator] Failed to get active devices",
+        "SessionHandlers",
+        { error: error.message }
+      );
+      return { success: false, error: error.message };
+    }
+
+    const currentDeviceId = getDeviceId();
+    const devices = (data || []).map(
+      (d: {
+        device_id: string;
+        device_name: string;
+        os: string;
+        platform: string;
+        last_seen_at: string;
+      }) => ({
+        ...d,
+        isCurrentDevice: d.device_id === currentDeviceId,
+      })
+    );
+
+    return { success: true, devices };
+  } catch (error) {
+    await logService.error(
+      "[SessionValidator] Error getting active devices",
+      "SessionHandlers",
+      { error: error instanceof Error ? error.message : "Unknown error" }
+    );
+    Sentry.captureException(error, {
+      tags: { service: "session-handlers", operation: "handleGetActiveDevices" },
+    });
+    if (error instanceof ValidationError) {
+      return { success: false, error: `Validation error: ${error.message}` };
+    }
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
@@ -985,6 +1226,8 @@ async function handleOpenAuthInBrowser(): Promise<{ success: boolean; error?: st
 export function registerSessionHandlers(): void {
   ipcMain.handle("auth:logout", handleLogout);
   ipcMain.handle("auth:force-logout", handleForceLogout);
+  // TASK-2045: Global sign-out (all devices)
+  ipcMain.handle("session:sign-out-all-devices", handleSignOutAllDevices);
   ipcMain.handle("auth:accept-terms", handleAcceptTerms);
   ipcMain.handle("auth:accept-terms-to-supabase", handleAcceptTermsToSupabase);
   ipcMain.handle("auth:complete-email-onboarding", handleCompleteEmailOnboarding);
@@ -993,4 +1236,8 @@ export function registerSessionHandlers(): void {
   ipcMain.handle("auth:get-current-user", handleGetCurrentUser);
   // TASK-1507: Open browser for Supabase OAuth with deep-link callback
   ipcMain.handle("auth:open-in-browser", handleOpenAuthInBrowser);
+  // TASK-2062: Remote session validation (polls Supabase auth.getUser)
+  ipcMain.handle("session:validate-remote", handleValidateRemoteSession);
+  // TASK-2062: Active devices list for session management UI
+  ipcMain.handle("session:get-active-devices", handleGetActiveDevices);
 }
