@@ -46,7 +46,7 @@ interface PreferencesResult {
       defaultFormat?: string;
     };
     scan?: {
-      lookbackMonths?: number;
+      lookbackMonths?: number; // Legacy (TASK-2072: no longer used for scan, kept for read compat)
     };
     sync?: {
       autoSyncOnLogin?: boolean;
@@ -70,7 +70,10 @@ interface PreferencesResult {
       };
     };
     emailSync?: {
-      lookbackMonths?: number;
+      lookbackMonths?: number; // Legacy key (backward compat)
+    };
+    emailCache?: {
+      durationMonths?: number; // TASK-2072: new canonical key
     };
     audit?: {
       startDateDefault?: "auto" | "manual";
@@ -172,8 +175,8 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
   >(null);
   const [exportFormat, setExportFormat] = useState<string>("pdf"); // Default export format
   const [emailExportMode, setEmailExportMode] = useState<"thread" | "individual">("thread");
-  const [scanLookbackMonths, setScanLookbackMonths] = useState<number>(9); // Default 9 months
-  const [emailSyncLookbackMonths, setEmailSyncLookbackMonths] = useState<number>(3); // TASK-1966: Default 3 months (matches legacy 90-day behavior)
+  // TASK-2072: scan lookback removed (now automatic via last_sync_at)
+  const [emailCacheDurationMonths, setEmailCacheDurationMonths] = useState<number>(3); // TASK-2072: Default 3 months
   const [autoSyncOnLogin, setAutoSyncOnLogin] = useState<boolean>(true); // Default auto-sync ON
   const [autoDownloadUpdates, setAutoDownloadUpdates] = useState<boolean>(false); // Default auto-download OFF
   const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(true); // Default notifications ON
@@ -405,15 +408,11 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
         if (loadedEmailMode === "thread" || loadedEmailMode === "individual") {
           setEmailExportMode(loadedEmailMode);
         }
-        // Load scan lookback preference - use type check for numbers
-        const loadedLookback = result.preferences.scan?.lookbackMonths;
-        if (typeof loadedLookback === "number" && loadedLookback > 0) {
-          setScanLookbackMonths(loadedLookback);
-        }
-        // TASK-1966: Load email sync lookback preference
-        const loadedEmailSyncLookback = result.preferences.emailSync?.lookbackMonths;
-        if (typeof loadedEmailSyncLookback === "number" && loadedEmailSyncLookback > 0) {
-          setEmailSyncLookbackMonths(loadedEmailSyncLookback);
+        // TASK-2072: Load email cache duration (new key, with fallback to legacy key)
+        const loadedEmailCache = result.preferences.emailCache?.durationMonths
+          ?? result.preferences.emailSync?.lookbackMonths;
+        if (typeof loadedEmailCache === "number" && loadedEmailCache > 0) {
+          setEmailCacheDurationMonths(loadedEmailCache);
         }
         // Load auto-sync preference (default is true if not set)
         if (typeof result.preferences.sync?.autoSyncOnLogin === "boolean") {
@@ -485,36 +484,20 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
     }
   };
 
-  const handleScanLookbackChange = async (months: number): Promise<void> => {
-    setScanLookbackMonths(months);
+  // TASK-2072: Handle email cache duration change
+  const handleEmailCacheDurationChange = async (months: number): Promise<void> => {
+    setEmailCacheDurationMonths(months);
     try {
       const result = await window.api.preferences.update(userId, {
-        scan: {
-          lookbackMonths: months,
+        emailCache: {
+          durationMonths: months,
         },
       });
       if (!result.success) {
-        logger.error("[Settings] Failed to save scan lookback:", result);
+        logger.error("[Settings] Failed to save email cache duration:", result);
       }
     } catch (error) {
-      logger.error("[Settings] Error saving scan lookback:", error);
-    }
-  };
-
-  // TASK-1966: Handle email sync lookback change
-  const handleEmailSyncLookbackChange = async (months: number): Promise<void> => {
-    setEmailSyncLookbackMonths(months);
-    try {
-      const result = await window.api.preferences.update(userId, {
-        emailSync: {
-          lookbackMonths: months,
-        },
-      });
-      if (!result.success) {
-        logger.error("[Settings] Failed to save email sync lookback:", result);
-      }
-    } catch (error) {
-      logger.error("[Settings] Error saving email sync lookback:", error);
+      logger.error("[Settings] Error saving email cache duration:", error);
     }
   };
 
@@ -1003,31 +986,27 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                 General
               </h3>
               <div className="space-y-4">
-                {/* Scan Lookback */}
+                {/* TASK-2072: Transaction Detection (smart scan window — read-only) */}
                 <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <div className="flex-1">
-                    <h4 className="text-sm font-medium text-gray-900">
-                      Scan Lookback Period
-                    </h4>
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="text-sm font-medium text-gray-900">
+                        Transaction Detection
+                      </h4>
+                      <span
+                        className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-500 text-[10px] font-bold cursor-help"
+                        title="Automatically detects new real estate transactions in your email. Scans from your last scan date forward. On first use, looks back 1 month."
+                      >
+                        i
+                      </span>
+                    </div>
                     <p className="text-xs text-gray-600 mt-1">
-                      How far back to search emails and messages
+                      Scans your email for new transactions since your last scan. First scan covers 1 month.
                     </p>
                   </div>
-                  <select
-                    value={scanLookbackMonths}
-                    onChange={(e) =>
-                      handleScanLookbackChange(Number(e.target.value))
-                    }
-                    disabled={loadingPreferences}
-                    className="ml-4 text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <option value={3}>3 months</option>
-                    <option value={6}>6 months</option>
-                    <option value={9}>9 months</option>
-                    <option value={12}>12 months</option>
-                    <option value={18}>18 months</option>
-                    <option value={24}>24 months</option>
-                  </select>
+                  <span className="ml-4 text-sm text-gray-500 font-medium bg-gray-100 px-3 py-1.5 rounded border border-gray-200">
+                    Automatic
+                  </span>
                 </div>
 
                 {/* TASK-1980: Start Date Mode Default */}
@@ -1445,30 +1424,37 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                   )}
                 </div>
 
-                {/* TASK-1966: Email Sync Depth Filter */}
+                {/* TASK-2072: Email History (cache duration) */}
                 <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
-                      <h4 className="text-sm font-medium text-gray-900">
-                        First Sync Lookback
-                      </h4>
+                      <div className="flex items-center gap-1.5">
+                        <h4 className="text-sm font-medium text-gray-900">
+                          Email History
+                        </h4>
+                        <span
+                          className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-500 text-[10px] font-bold cursor-help"
+                          title="Emails cached locally load instantly for search and linking. Older emails are fetched from your provider on demand."
+                        >
+                          i
+                        </span>
+                      </div>
                       <p className="text-xs text-gray-600 mt-1">
-                        How far back to fetch emails on first sync. Takes effect
-                        on next sync.
+                        How much email to keep cached locally for fast search and auto-linking.
                       </p>
                     </div>
                     <select
-                      value={emailSyncLookbackMonths}
+                      value={emailCacheDurationMonths}
                       onChange={(e) =>
-                        handleEmailSyncLookbackChange(Number(e.target.value))
+                        handleEmailCacheDurationChange(Number(e.target.value))
                       }
                       disabled={loadingPreferences}
                       className="ml-4 text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <option value={1}>1 month</option>
-                      <option value={3}>3 months (default)</option>
+                      <option value={3}>3 months</option>
                       <option value={6}>6 months</option>
-                      <option value={12}>12 months</option>
+                      <option value={12}>1 year</option>
                     </select>
                   </div>
                 </div>

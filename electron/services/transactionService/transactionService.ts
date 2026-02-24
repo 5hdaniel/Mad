@@ -23,8 +23,8 @@ import outlookFetchService from "../outlookFetchService";
 import transactionExtractorService from "../transactionExtractorService";
 import databaseService from "../databaseService";
 import logService from "../logService";
-import supabaseService from "../supabaseService";
 import { getContactNames } from "../contactsService";
+import { FIRST_SCAN_LOOKBACK_MONTHS } from "../../constants";
 import { createCommunicationReference } from "../messageMatchingService";
 import { autoLinkCommunicationsForContact } from "../autoLinkService";
 import emailSyncService from "../emailSyncService";
@@ -146,17 +146,9 @@ class TransactionService {
     this.scanCancelled = false;
     this.currentScanUserId = userId;
 
-    // Fetch user preferences for scan lookback (TASK-2069: consolidated to single setting)
-    let lookbackMonths = 9;
-    try {
-      const preferences = await supabaseService.getPreferences(userId);
-      const savedLookback = preferences?.scan?.lookbackMonths;
-      if (typeof savedLookback === "number" && savedLookback > 0) {
-        lookbackMonths = savedLookback;
-      }
-    } catch {
-      // Use default if preferences unavailable
-    }
+    // TASK-2072: Smart scan window — no fixed lookbackMonths.
+    // Each provider uses last_sync_at (incremental) or 1-month fallback (first scan).
+    // The per-provider logic is in the provider loop below.
 
     // TASK-1951: Fetch inferred contact source preferences
     let inferOutlookContacts = false;
@@ -183,9 +175,10 @@ class TransactionService {
       // Use defaults (all OFF) if preferences unavailable
     }
 
-    const defaultStartDate = new Date(
-      Date.now() - lookbackMonths * 30 * 24 * 60 * 60 * 1000,
-    );
+    // TASK-2072: Default start date is 1 month ago (first-scan fallback).
+    // Incremental scans override this per-provider using last_sync_at.
+    const defaultStartDate = new Date();
+    defaultStartDate.setMonth(defaultStartDate.getMonth() - FIRST_SCAN_LOOKBACK_MONTHS);
 
     const {
       provider: requestedProvider,
@@ -262,20 +255,20 @@ class TransactionService {
             { userId, provider, lastSyncAt: lastSyncAt.toISOString() },
           );
         } else {
-          // TASK-2069: First-time sync uses scan.lookbackMonths (consolidated setting)
+          // TASK-2072: First-time sync uses FIRST_SCAN_LOOKBACK_MONTHS (1 month)
           const lookbackDate = new Date();
           lookbackDate.setMonth(
-            lookbackDate.getMonth() - lookbackMonths,
+            lookbackDate.getMonth() - FIRST_SCAN_LOOKBACK_MONTHS,
           );
           effectiveStartDate =
             startDate > lookbackDate ? startDate : lookbackDate;
           await logService.info(
-            `First sync: fetching last ${lookbackMonths} months of emails`,
+            `First scan: fetching last ${FIRST_SCAN_LOOKBACK_MONTHS} month(s) of emails`,
             "TransactionService.scanAndExtractTransactions",
             {
               userId,
               provider,
-              lookbackMonths,
+              lookbackMonths: FIRST_SCAN_LOOKBACK_MONTHS,
               startDate: effectiveStartDate.toISOString(),
             },
           );
