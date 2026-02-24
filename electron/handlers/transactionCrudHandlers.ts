@@ -12,6 +12,8 @@ import type { AuditedTransactionData } from "../services/transactionService";
 import auditService from "../services/auditService";
 import logService from "../services/logService";
 import { autoLinkCommunicationsForContact } from "../services/autoLinkService";
+import emailSyncService from "../services/emailSyncService";
+import databaseService from "../services/databaseService";
 import { wrapHandler } from "../utils/wrapHandler";
 import type {
   Transaction,
@@ -567,7 +569,8 @@ export function registerTransactionCrudHandlers(
         },
       );
 
-      // TASK-1126: Auto-link communications for each added contact
+      // TASK-1126 + TASK-2067: Fetch from provider then auto-link for each added contact.
+      // This ensures provider emails are in the local DB before auto-link searches it.
       const autoLinkResults: Array<{
         contactId: string;
         emailsLinked: number;
@@ -580,37 +583,96 @@ export function registerTransactionCrudHandlers(
         (op) => op.action === "add"
       );
 
+      // Get transaction details for provider fetch (userId + date range)
+      const transaction = await databaseService.getTransactionById(
+        validatedTransactionId as string,
+      );
+
       for (const op of addOperations) {
         try {
-          const result = await autoLinkCommunicationsForContact({
-            contactId: op.contactId,
-            transactionId: validatedTransactionId as string,
-          });
-
-          autoLinkResults.push({
-            contactId: op.contactId,
-            ...result,
-          });
-
-          logService.debug(
-            "Auto-link complete for contact",
-            "Transactions",
-            {
+          // TASK-2067: Try provider fetch + auto-link first (same pattern as
+          // transactionService.assignContactToTransaction)
+          if (transaction) {
+            const fetchResult = await emailSyncService.fetchAndAutoLinkForContact({
+              userId: transaction.user_id,
+              transactionId: validatedTransactionId as string,
               contactId: op.contactId,
-              emailsLinked: result.emailsLinked,
-              messagesLinked: result.messagesLinked,
-              alreadyLinked: result.alreadyLinked,
-            }
-          );
+              transactionDetails: {
+                started_at: transaction.started_at,
+                created_at: transaction.created_at,
+                closed_at: transaction.closed_at,
+              },
+            });
+
+            autoLinkResults.push({
+              contactId: op.contactId,
+              ...fetchResult.autoLinkResult,
+            });
+
+            logService.debug(
+              "Provider fetch + auto-link complete for contact",
+              "Transactions",
+              {
+                contactId: op.contactId,
+                emailsFetched: fetchResult.emailsFetched,
+                emailsStored: fetchResult.emailsStored,
+                emailsLinked: fetchResult.autoLinkResult.emailsLinked,
+                messagesLinked: fetchResult.autoLinkResult.messagesLinked,
+                alreadyLinked: fetchResult.autoLinkResult.alreadyLinked,
+              }
+            );
+          } else {
+            // Fallback: transaction not found, local-only auto-link
+            const result = await autoLinkCommunicationsForContact({
+              contactId: op.contactId,
+              transactionId: validatedTransactionId as string,
+            });
+
+            autoLinkResults.push({
+              contactId: op.contactId,
+              ...result,
+            });
+
+            logService.debug(
+              "Local-only auto-link complete for contact (transaction not found)",
+              "Transactions",
+              {
+                contactId: op.contactId,
+                emailsLinked: result.emailsLinked,
+                messagesLinked: result.messagesLinked,
+                alreadyLinked: result.alreadyLinked,
+              }
+            );
+          }
         } catch (error) {
-          // Log but don't fail the entire operation
+          // Provider fetch failed — fall back to local-only auto-link
           logService.warn(
-            `Auto-link failed for contact ${op.contactId}`,
+            `Provider fetch failed for contact ${op.contactId}, falling back to local auto-link`,
             "Transactions",
             {
               error: error instanceof Error ? error.message : "Unknown",
             }
           );
+
+          try {
+            const result = await autoLinkCommunicationsForContact({
+              contactId: op.contactId,
+              transactionId: validatedTransactionId as string,
+            });
+
+            autoLinkResults.push({
+              contactId: op.contactId,
+              ...result,
+            });
+          } catch (fallbackError) {
+            logService.warn(
+              `Local auto-link also failed for contact ${op.contactId}`,
+              "Transactions",
+              {
+                error: fallbackError instanceof Error ? fallbackError.message : "Unknown",
+              }
+            );
+          }
         }
       }
 
