@@ -316,10 +316,7 @@ describe("TransactionService - Inferred Contact Preferences (TASK-1951)", () => 
   });
 
   it("should call isContactSourceEnabled for all three inferred sources during scan", async () => {
-    // Mock the necessary services for scanAndExtractTransactions
-    const supabaseService = require("../supabaseService").default;
-    supabaseService.getPreferences = jest.fn().mockResolvedValue({ scan: { lookbackMonths: 3 } });
-
+    // TASK-2072: supabaseService.getPreferences no longer called (smart scan window)
     (databaseService.getOAuthToken as jest.Mock).mockResolvedValue({ access_token: "token" });
     (databaseService.getOAuthTokenSyncTime as jest.Mock).mockResolvedValue(null);
 
