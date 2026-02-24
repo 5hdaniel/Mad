@@ -569,8 +569,7 @@ export function registerTransactionCrudHandlers(
         },
       );
 
-      // TASK-1126 + TASK-2067: Fetch from provider then auto-link for each added contact.
-      // This ensures provider emails are in the local DB before auto-link searches it.
+      // TASK-1126: Immediate local auto-link for each added contact
       const autoLinkResults: Array<{
         contactId: string;
         emailsLinked: number;
@@ -583,97 +582,74 @@ export function registerTransactionCrudHandlers(
         (op) => op.action === "add"
       );
 
-      // Get transaction details for provider fetch (userId + date range)
-      const transaction = await databaseService.getTransactionById(
-        validatedTransactionId as string,
-      );
-
       for (const op of addOperations) {
         try {
-          // TASK-2067: Try provider fetch + auto-link first (same pattern as
-          // transactionService.assignContactToTransaction)
-          if (transaction) {
-            const fetchResult = await emailSyncService.fetchAndAutoLinkForContact({
-              userId: transaction.user_id,
-              transactionId: validatedTransactionId as string,
-              contactId: op.contactId,
-              transactionDetails: {
-                started_at: transaction.started_at,
-                created_at: transaction.created_at,
-                closed_at: transaction.closed_at,
-              },
-            });
+          const result = await autoLinkCommunicationsForContact({
+            contactId: op.contactId,
+            transactionId: validatedTransactionId as string,
+          });
 
-            autoLinkResults.push({
-              contactId: op.contactId,
-              ...fetchResult.autoLinkResult,
-            });
-
-            logService.debug(
-              "Provider fetch + auto-link complete for contact",
-              "Transactions",
-              {
-                contactId: op.contactId,
-                emailsFetched: fetchResult.emailsFetched,
-                emailsStored: fetchResult.emailsStored,
-                emailsLinked: fetchResult.autoLinkResult.emailsLinked,
-                messagesLinked: fetchResult.autoLinkResult.messagesLinked,
-                alreadyLinked: fetchResult.autoLinkResult.alreadyLinked,
-              }
-            );
-          } else {
-            // Fallback: transaction not found, local-only auto-link
-            const result = await autoLinkCommunicationsForContact({
-              contactId: op.contactId,
-              transactionId: validatedTransactionId as string,
-            });
-
-            autoLinkResults.push({
-              contactId: op.contactId,
-              ...result,
-            });
-
-            logService.debug(
-              "Local-only auto-link complete for contact (transaction not found)",
-              "Transactions",
-              {
-                contactId: op.contactId,
-                emailsLinked: result.emailsLinked,
-                messagesLinked: result.messagesLinked,
-                alreadyLinked: result.alreadyLinked,
-              }
-            );
-          }
+          autoLinkResults.push({
+            contactId: op.contactId,
+            ...result,
+          });
         } catch (error) {
-          // Provider fetch failed — fall back to local-only auto-link
           logService.warn(
-            `Provider fetch failed for contact ${op.contactId}, falling back to local auto-link`,
+            `Auto-link failed for contact ${op.contactId}`,
             "Transactions",
             {
               error: error instanceof Error ? error.message : "Unknown",
             }
           );
-
-          try {
-            const result = await autoLinkCommunicationsForContact({
-              contactId: op.contactId,
-              transactionId: validatedTransactionId as string,
-            });
-
-            autoLinkResults.push({
-              contactId: op.contactId,
-              ...result,
-            });
-          } catch (fallbackError) {
-            logService.warn(
-              `Local auto-link also failed for contact ${op.contactId}`,
-              "Transactions",
-              {
-                error: fallbackError instanceof Error ? fallbackError.message : "Unknown",
-              }
-            );
-          }
         }
+      }
+
+      // TASK-2067: Fire provider fetch in background (don't block the save response).
+      // This fetches emails from Outlook/Gmail, stores them locally, then re-runs auto-link.
+      if (addOperations.length > 0) {
+        databaseService.getTransactionById(validatedTransactionId as string)
+          .then((transaction) => {
+            if (!transaction) return;
+            for (const op of addOperations) {
+              emailSyncService.fetchAndAutoLinkForContact({
+                userId: transaction.user_id,
+                transactionId: validatedTransactionId as string,
+                contactId: op.contactId,
+                transactionDetails: {
+                  started_at: transaction.started_at,
+                  created_at: transaction.created_at,
+                  closed_at: transaction.closed_at,
+                },
+              }).then((fetchResult) => {
+                logService.info(
+                  "Background provider fetch + auto-link complete",
+                  "Transactions",
+                  {
+                    contactId: op.contactId,
+                    emailsFetched: fetchResult.emailsFetched,
+                    emailsStored: fetchResult.emailsStored,
+                    emailsLinked: fetchResult.autoLinkResult.emailsLinked,
+                    messagesLinked: fetchResult.autoLinkResult.messagesLinked,
+                  }
+                );
+              }).catch((error) => {
+                logService.warn(
+                  `Background provider fetch failed for contact ${op.contactId}`,
+                  "Transactions",
+                  {
+                    error: error instanceof Error ? error.message : "Unknown",
+                  }
+                );
+              });
+            }
+          })
+          .catch((error) => {
+            logService.warn(
+              "Failed to get transaction for background provider fetch",
+              "Transactions",
+              { error: error instanceof Error ? error.message : "Unknown" }
+            );
+          });
       }
 
       return {
