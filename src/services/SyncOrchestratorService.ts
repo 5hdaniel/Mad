@@ -391,72 +391,76 @@ class SyncOrchestratorServiceClass {
       overallProgress: 0,
     });
 
-    // Run syncs sequentially
-    for (let i = 0; i < validTypes.length; i++) {
-      // Check if cancelled
-      if (this.abortController?.signal.aborted) {
-        break;
-      }
-
-      const type = validTypes[i];
-      const syncFn = this.syncFunctions.get(type);
-      if (!syncFn) continue;
-
-      // Update current sync
-      this.updateQueueItem(type, { status: 'running', progress: 0 });
-      this.setState({ currentSync: type });
-
-      Sentry.addBreadcrumb({
-        category: 'sync',
-        message: `Sync started: ${type}`,
-        level: 'info',
-        data: {
-          syncType: type,
-          userId: userId.substring(0, 8) + '...',
-          queuePosition: i + 1,
-          queueTotal: validTypes.length,
-        },
-      });
-
-      try {
-        // Run the sync with progress callback
-        const warning = await syncFn(userId, (percent, phase) => {
-          this.updateQueueItem(type, { progress: percent, phase });
-          this.updateOverallProgress();
-        });
-
-        Sentry.addBreadcrumb({
-          category: 'sync',
-          message: `Sync completed: ${type}`,
-          level: 'info',
-          data: {
-            syncType: type,
-            hadWarning: !!warning,
-          },
-        });
-
-        // Mark complete (clear phase), attach warning if returned
-        this.updateQueueItem(type, { status: 'complete', progress: 100, phase: undefined, warning: warning || undefined });
-      } catch (error) {
-        // Check if it was cancelled
+    try {
+      // Run syncs sequentially
+      for (let i = 0; i < validTypes.length; i++) {
+        // Check if cancelled
         if (this.abortController?.signal.aborted) {
           break;
         }
 
-        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-        logger.error(`[SyncOrchestrator] ${type} sync failed:`, error);
-        this.updateQueueItem(type, { status: 'error', error: errorMsg });
+        const type = validTypes[i];
+        const syncFn = this.syncFunctions.get(type);
+        if (!syncFn) continue;
+
+        // Update current sync
+        this.updateQueueItem(type, { status: 'running', progress: 0 });
+        this.setState({ currentSync: type });
+
+        Sentry.addBreadcrumb({
+          category: 'sync',
+          message: `Sync started: ${type}`,
+          level: 'info',
+          data: {
+            syncType: type,
+            userId: userId.substring(0, 8) + '...',
+            queuePosition: i + 1,
+            queueTotal: validTypes.length,
+          },
+        });
+
+        try {
+          // Run the sync with progress callback
+          const warning = await syncFn(userId, (percent, phase) => {
+            this.updateQueueItem(type, { progress: percent, phase });
+            this.updateOverallProgress();
+          });
+
+          Sentry.addBreadcrumb({
+            category: 'sync',
+            message: `Sync completed: ${type}`,
+            level: 'info',
+            data: {
+              syncType: type,
+              hadWarning: !!warning,
+            },
+          });
+
+          // Mark complete (clear phase), attach warning if returned
+          this.updateQueueItem(type, { status: 'complete', progress: 100, phase: undefined, warning: warning || undefined });
+        } catch (error) {
+          // Check if it was cancelled
+          if (this.abortController?.signal.aborted) {
+            break;
+          }
+
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          logger.error(`[SyncOrchestrator] ${type} sync failed:`, error);
+          this.updateQueueItem(type, { status: 'error', error: errorMsg });
+        }
+
+        this.updateOverallProgress();
       }
-
-      this.updateOverallProgress();
+    } finally {
+      // Defensive: ALWAYS reset isRunning when startSync exits, regardless of
+      // how the loop terminates (normal completion, cancellation, or unexpected error).
+      // This prevents the UI from getting stuck in a permanent "syncing" state.
+      this.setState({
+        isRunning: false,
+        currentSync: null,
+      });
+      this.abortController = null;
     }
-
-    // Sync run complete
-    this.setState({
-      isRunning: false,
-      currentSync: null,
-    });
-    this.abortController = null;
   }
 
   private updateQueueItem(type: SyncType, updates: Partial<SyncItem>): void {
