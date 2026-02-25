@@ -4,7 +4,7 @@
  * Desktop Auth Callback Page
  *
  * Receives OAuth callback from Supabase, extracts session tokens,
- * and redirects to desktop app via magicaudit:// deep link.
+ * and redirects to desktop app via keepr:// deep link.
  */
 
 import { useEffect, useState, useCallback, Suspense } from 'react';
@@ -69,7 +69,7 @@ function DesktopCallbackContent() {
       }
 
       // Build deep link URL with tokens
-      const callbackUrl = new URL('magicaudit://callback');
+      const callbackUrl = new URL('keepr://callback');
       callbackUrl.searchParams.set('access_token', session.access_token);
       callbackUrl.searchParams.set('refresh_token', session.refresh_token);
 

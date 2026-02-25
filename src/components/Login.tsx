@@ -151,7 +151,7 @@ const Login = ({
 
   /**
    * Handle successful deep link auth callback
-   * Called when browser OAuth completes and returns via magicaudit://callback
+   * Called when browser OAuth completes and returns via keepr://callback
    */
   const handleDeepLinkSuccess = useCallback((data: DeepLinkAuthData) => {
     logger.debug("[Login] Deep link auth success:", data.userId);

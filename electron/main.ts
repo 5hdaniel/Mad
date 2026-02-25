@@ -14,7 +14,7 @@ import { redactEmail, redactId } from "./utils/redactSensitive";
 // ==========================================
 // DEEP LINK PROTOCOL REGISTRATION (TASK-1500)
 // ==========================================
-// Register magicaudit:// protocol handler at runtime
+// Register keepr:// protocol handler at runtime
 // This is needed for development mode and as a fallback for production
 if (process.defaultApp) {
   // In development, register with the full path to the project directory
@@ -22,10 +22,10 @@ if (process.defaultApp) {
   const appPath = path.resolve(__dirname, '..');
   log.info('[DeepLink] Dev mode - registering protocol with path:', appPath);
   log.info('[DeepLink] Electron binary:', process.execPath);
-  app.setAsDefaultProtocolClient('magicaudit', process.execPath, [appPath]);
+  app.setAsDefaultProtocolClient('keepr', process.execPath, [appPath]);
 } else {
   // In production, electron-builder handles registration via package.json protocols config
-  app.setAsDefaultProtocolClient('magicaudit');
+  app.setAsDefaultProtocolClient('keepr');
 }
 
 // ==========================================
@@ -300,7 +300,7 @@ function redactDeepLinkUrl(url: string): string {
  *
  * TASK-1507: Enhanced to validate license and register device before completing auth
  *
- * Expected URL format: magicaudit://callback?access_token=...&refresh_token=...
+ * Expected URL format: keepr://callback?access_token=...&refresh_token=...
  *
  * @param url - The deep link URL to process
  */
@@ -630,7 +630,7 @@ app.on("open-url", (event, url) => {
 // Since we have single-instance lock, the existing instance gets this event
 app.on("second-instance", (_event, commandLine) => {
   // Find the deep link URL in command line args
-  const url = commandLine.find((arg) => arg.startsWith("magicaudit://"));
+  const url = commandLine.find((arg) => arg.startsWith("keepr://"));
   if (url) {
     log.info("[DeepLink] Received URL (Windows):", redactDeepLinkUrl(url));
     handleDeepLinkCallback(url);
@@ -993,7 +993,7 @@ app.whenReady().then(async () => {
   // On macOS: URL comes through 'open-url' event, not command line
   // On Windows: URL is in process.argv
   if (process.platform === "win32") {
-    const deepLinkUrl = process.argv.find((arg) => arg.startsWith("magicaudit://"));
+    const deepLinkUrl = process.argv.find((arg) => arg.startsWith("keepr://"));
     if (deepLinkUrl) {
       log.info("[DeepLink] Cold start with URL (Windows):", redactDeepLinkUrl(deepLinkUrl));
       // Wait for window to be ready before processing
@@ -1044,7 +1044,7 @@ app.whenReady().then(async () => {
   registerFailureLogHandlers();
 
   // DEV-ONLY: Manual deep link handler for testing when protocol handler fails
-  // Usage from DevTools console: window.api.system.manualDeepLink("magicaudit://callback?access_token=...&refresh_token=...")
+  // Usage from DevTools console: window.api.system.manualDeepLink("keepr://callback?access_token=...&refresh_token=...")
   if (process.defaultApp) {
     ipcMain.handle("system:manual-deep-link", async (_event, url: string) => {
       log.info("[DeepLink] Manual trigger from DevTools:", redactDeepLinkUrl(url));

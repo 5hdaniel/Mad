@@ -45,7 +45,7 @@ jest.mock("electron", () => ({
   app: {
     getPath: jest.fn((pathType: string) => {
       if (pathType === "exe")
-        return "/Applications/MagicAudit.app/Contents/MacOS/MagicAudit";
+        return "/Applications/Keepr.app/Contents/MacOS/Keepr";
       return "/mock/path";
     }),
   },

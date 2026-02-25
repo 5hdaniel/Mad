@@ -125,7 +125,7 @@ class MacOSPermissionHelper {
   async setupFullDiskAccess(): Promise<FullDiskAccessResult> {
     try {
       const appPath = app.getPath("exe");
-      const bundleId = "com.realestate.archiveapp";
+      const bundleId = "com.keeprcompliance.keepr";
 
       // Method 1: Open System Preferences to Privacy > Full Disk Access
       // This uses the x-apple.systempreferences URL scheme

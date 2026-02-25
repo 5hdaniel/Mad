@@ -136,13 +136,13 @@
   },
   "build": {
     "asar": true,
-    "appId": "com.realestate.archiveapp",
-    "productName": "MagicAudit",
+    "appId": "com.keeprcompliance.keepr",
+    "productName": "Keepr",
     "protocols": [
       {
-        "name": "Magic Audit",
+        "name": "Keepr",
         "schemes": [
-          "magicaudit"
+          "keepr"
         ]
       }
     ],

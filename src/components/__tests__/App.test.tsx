@@ -167,7 +167,7 @@ const createAppStateMock = (overrides: Partial<AppStateMachine> = {}): AppStateM
   // UI state
   showSetupPromptDismissed: false,
   isTourActive: false,
-  appPath: "/Applications/MagicAudit.app",
+  appPath: "/Applications/Keepr.app",
 
   // Modal methods
   openProfile: jest.fn(),
@@ -281,7 +281,7 @@ describe("App", () => {
     });
     window.api.system.checkAppLocation.mockResolvedValue({
       shouldPrompt: false,
-      appPath: "/Applications/MagicAudit.app",
+      appPath: "/Applications/Keepr.app",
     });
     window.api.user.getPhoneType.mockResolvedValue({
       success: true,
@@ -593,7 +593,7 @@ describe("App", () => {
         currentStep: "login",
         isAuthenticated: false,
         currentUser: null,
-        appPath: "/Applications/MagicAudit.app",
+        appPath: "/Applications/Keepr.app",
       }));
 
       renderApp();
@@ -810,7 +810,7 @@ describe("App", () => {
         currentStep: "login",
         isAuthenticated: false,
         currentUser: null,
-        appPath: "/Users/test/Downloads/MagicAudit.app",
+        appPath: "/Users/test/Downloads/Keepr.app",
         modalState: createModalState({ showMoveAppPrompt: true }),
       }));
 
@@ -830,7 +830,7 @@ describe("App", () => {
         currentStep: "login",
         isAuthenticated: false,
         currentUser: null,
-        appPath: "/Users/test/Downloads/MagicAudit.app",
+        appPath: "/Users/test/Downloads/Keepr.app",
         modalState: createModalState({ showMoveAppPrompt: false }),
       }));
 
