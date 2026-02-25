@@ -97,7 +97,7 @@ jobs:
             echo "GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}"
             echo "MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID}"
             echo "MICROSOFT_TENANT_ID=${MICROSOFT_TENANT_ID}"
-            echo "BROKER_PORTAL_URL=https://broker-portal-two.vercel.app"
+            echo "BROKER_PORTAL_URL=https://www.keeprcompliance.com"
             echo "SENTRY_DSN=${SENTRY_DSN}"
           } > .env.production
           echo ".env.production created with $(wc -l < .env.production) lines"
@@ -222,7 +222,7 @@ jobs:
             "GOOGLE_MAPS_API_KEY=$env:GOOGLE_MAPS_API_KEY",
             "MICROSOFT_CLIENT_ID=$env:MICROSOFT_CLIENT_ID",
             "MICROSOFT_TENANT_ID=$env:MICROSOFT_TENANT_ID",
-            "BROKER_PORTAL_URL=https://broker-portal-two.vercel.app",
+            "BROKER_PORTAL_URL=https://www.keeprcompliance.com",
             "SENTRY_DSN=$env:SENTRY_DSN"
           ) -join "`n"
           $content | Out-File -FilePath .env.production -Encoding utf8 -NoNewline
