@@ -167,7 +167,7 @@ export async function inviteUser(input: InviteUserInput): Promise<InviteUserResu
   }
 
   // Generate invite link
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://portal.magicaudit.com';
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.keeprcompliance.com';
   const inviteLink = `${baseUrl}/invite/${invitationToken}`;
 
   return {

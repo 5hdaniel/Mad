@@ -35,17 +35,17 @@ const RELEASE_PAGE = `https://github.com/${REPO}/releases/latest`;
 const DOWNLOADS: Record<string, { label: string; file: string; icon: string }> = {
   'mac-arm': {
     label: 'Download for macOS (Apple Silicon)',
-    file: 'MagicAudit-VERSION-arm64.dmg',
+    file: 'Keepr-VERSION-arm64.dmg',
     icon: '🍎',
   },
   'mac-intel': {
     label: 'Download for macOS (Intel)',
-    file: 'MagicAudit-VERSION.dmg',
+    file: 'Keepr-VERSION.dmg',
     icon: '🍎',
   },
   windows: {
     label: 'Download for Windows',
-    file: 'MagicAudit.Setup.VERSION.exe',
+    file: 'Keepr.Setup.VERSION.exe',
     icon: '🪟',
   },
 };

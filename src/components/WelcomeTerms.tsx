@@ -124,7 +124,7 @@ function WelcomeTerms({ user, onAccept }: WelcomeTermsProps) {
                     onClick={(e) => {
                       e.preventDefault();
                       window.api?.shell?.openExternal?.(
-                        "https://magicaudit.com/terms"
+                        "https://keeprcompliance.com/terms"
                       );
                     }}
                     className="text-blue-600 hover:underline font-medium"
@@ -137,7 +137,7 @@ function WelcomeTerms({ user, onAccept }: WelcomeTermsProps) {
                     onClick={(e) => {
                       e.preventDefault();
                       window.api?.shell?.openExternal?.(
-                        "https://magicaudit.com/privacy"
+                        "https://keeprcompliance.com/privacy"
                       );
                     }}
                     className="text-blue-600 hover:underline font-medium"

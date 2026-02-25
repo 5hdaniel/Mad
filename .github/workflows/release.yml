@@ -295,22 +295,22 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ steps.version.outputs.version }}
-          name: Magic Audit v${{ steps.version.outputs.version }}
+          name: Keepr v${{ steps.version.outputs.version }}
           draft: true
           prerelease: false
           files: |
             artifacts/release-macos/*
             artifacts/release-windows/*
           body: |
-            ## Magic Audit v${{ steps.version.outputs.version }}
+            ## Keepr v${{ steps.version.outputs.version }}
 
             ### Downloads
 
             | Platform | Download |
             |----------|----------|
-            | macOS (Apple Silicon) | `MagicAudit-${{ steps.version.outputs.version }}-arm64.dmg` |
-            | macOS (Intel) | `MagicAudit-${{ steps.version.outputs.version }}-x64.dmg` |
-            | Windows | `MagicAudit Setup ${{ steps.version.outputs.version }}.exe` |
+            | macOS (Apple Silicon) | `Keepr-${{ steps.version.outputs.version }}-arm64.dmg` |
+            | macOS (Intel) | `Keepr-${{ steps.version.outputs.version }}-x64.dmg` |
+            | Windows | `Keepr Setup ${{ steps.version.outputs.version }}.exe` |
 
             ### What's New
 
@@ -318,7 +318,7 @@ jobs:
 
             ### Installation
 
-            **macOS**: Download the `.dmg` file, open it, and drag Magic Audit to your Applications folder.
+            **macOS**: Download the `.dmg` file, open it, and drag Keepr to your Applications folder.
 
             **Windows**: Download the `.exe` installer and run it. Windows SmartScreen may show a warning for unsigned builds.
 
