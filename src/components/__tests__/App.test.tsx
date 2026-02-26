@@ -248,7 +248,7 @@ const createAppStateMock = (overrides: Partial<AppStateMachine> = {}): AppStateM
   handleNotNowMovePrompt: jest.fn(),
 
   // Utility
-  getPageTitle: jest.fn().mockReturnValue("Keepr"),
+  getPageTitle: jest.fn().mockReturnValue("Keepr."),
 
   ...overrides,
 });

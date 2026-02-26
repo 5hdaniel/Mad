@@ -153,10 +153,9 @@ describe("Settings", () => {
       expect(screen.getAllByText("About").length).toBeGreaterThanOrEqual(1);
     });
 
-    it("should show app name and copyright", async () => {
+    it("should show copyright", async () => {
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
-      expect(screen.getByText("Keepr")).toBeInTheDocument();
       expect(screen.getByText(/© 2026 Blue Spaces LLC/)).toBeInTheDocument();
     });
   });
@@ -709,13 +708,7 @@ describe("Settings", () => {
   });
 
   describe("About Section", () => {
-    it("should show app name", async () => {
-      await renderSettings({ userId: mockUserId, onClose: mockOnClose });
-
-      expect(screen.getByText("Keepr")).toBeInTheDocument();
-    });
-
-    it("should show disabled action buttons", async () => {
+    it("should show action links", async () => {
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
       expect(screen.getByText("View Release Notes")).toBeInTheDocument();

@@ -378,14 +378,14 @@ describe("useNavigationFlow - State Machine Path", () => {
       const { result } = renderHook(() => useNavigationFlow(defaultOptions), {
         wrapper: createWrapper(readyState),
       });
-      expect(result.current.getPageTitle()).toBe("Keepr");
+      expect(result.current.getPageTitle()).toBe("Keepr.");
     });
 
-    it("returns 'Keepr' for loading step (default)", () => {
+    it("returns 'Keepr.' for loading step (default)", () => {
       const { result } = renderHook(() => useNavigationFlow(defaultOptions), {
         wrapper: createWrapper(loadingCheckingStorage),
       });
-      expect(result.current.getPageTitle()).toBe("Keepr");
+      expect(result.current.getPageTitle()).toBe("Keepr.");
     });
   });
 
