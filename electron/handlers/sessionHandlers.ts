@@ -774,6 +774,47 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
       }
     }
 
+    // TASK-2085: Server-side token validation for returning users
+    // Prevents showing authenticated UI when session was revoked remotely
+    // This closes the gap where setSession() succeeds (tokens parse OK)
+    // but the server has actually revoked the user/token
+    if (session.supabaseTokens) {
+      try {
+        const { data: userData, error: getUserError } = await supabaseService
+          .getClient()
+          .auth.getUser();
+
+        if (getUserError || !userData.user) {
+          // Session is invalid on the server (user deleted, token revoked)
+          await logService.info(
+            "Supabase session invalid on server, forcing re-login",
+            "SessionHandlers",
+            { error: getUserError?.message }
+          );
+
+          // Clean up the invalid session
+          await databaseService.deleteSession(session.sessionToken);
+          await sessionService.clearSession();
+          sessionSecurityService.cleanupSession(session.sessionToken);
+
+          return { success: false, error: "Session no longer valid" };
+        }
+
+        await logService.info(
+          "Supabase session validated server-side",
+          "SessionHandlers"
+        );
+      } catch (validationError) {
+        // Network error during validation -- proceed optimistically
+        // The user may be offline, and we don't want to block them
+        await logService.warn(
+          "Server-side session validation failed (network?), proceeding optimistically",
+          "SessionHandlers",
+          { error: validationError instanceof Error ? validationError.message : "Unknown" }
+        );
+      }
+    }
+
     // TASK-1507E: Ensure local SQLite user exists for existing sessions
     // Users who authenticated before TASK-1507D have valid sessions but no local user,
     // which causes FK constraint failures on mailbox connection, messages import, etc.
