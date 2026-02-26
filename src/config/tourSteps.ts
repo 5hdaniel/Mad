@@ -5,7 +5,7 @@
 import { Step } from "react-joyride";
 
 // Main Dashboard Tour - shown to first-time users
-export const getDashboardTourSteps = (): Step[] => [
+export const getDashboardTourSteps = (hasAIAddon: boolean): Step[] => [
   {
     target: "body",
     content:
@@ -36,13 +36,17 @@ export const getDashboardTourSteps = (): Step[] => [
     spotlightClicks: true,
     disableBeacon: true,
   },
-  {
-    target: '[data-tour="ai-detection-status"]',
-    content:
-      "This card shows transactions that our AI has automatically found in your emails. Click 'Review Now' to confirm or dismiss them.",
-    placement: "bottom",
-    disableBeacon: true,
-  },
+  ...(hasAIAddon
+    ? [
+        {
+          target: '[data-tour="ai-detection-status"]',
+          content:
+            "This card shows transactions that our AI has automatically found in your emails. Click 'Review Now' to confirm or dismiss them.",
+          placement: "bottom" as const,
+          disableBeacon: true,
+        },
+      ]
+    : []),
   {
     target: '[data-tour="contacts-card"]',
     content:
