@@ -1882,13 +1882,13 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                     View Release Notes
                   </button>
                   <button
-                    onClick={() => window.open("https://www.keeprcompliance.com/privacy", "_blank")}
+                    onClick={() => window.open("https://www.keeprcompliance.com/legal#privacy", "_blank")}
                     className="w-full text-left text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
                   >
                     Privacy Policy
                   </button>
                   <button
-                    onClick={() => window.open("https://www.keeprcompliance.com/terms", "_blank")}
+                    onClick={() => window.open("https://www.keeprcompliance.com/legal#terms", "_blank")}
                     className="w-full text-left text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
                   >
                     Terms of Service
