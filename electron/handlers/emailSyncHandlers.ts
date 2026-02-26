@@ -251,4 +251,63 @@ export function registerEmailSyncHandlers(
       });
     }, { module: "Transactions" }),
   );
+
+  // ============================================
+  // TASK-2084: CACHE RECENT EMAILS (onboarding)
+  // ============================================
+
+  // Cache recent emails from connected providers (Outlook/Gmail).
+  // Called during onboarding to pre-populate the local email cache so that
+  // transaction email tabs work immediately without requiring manual sync.
+  // Rate limited: reuses scan cooldown (5 second) per user.
+  ipcMain.handle(
+    "emails:cache-recent",
+    wrapHandler(async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+      months?: number,
+    ): Promise<TransactionResponse> => {
+      logService.info("Cache recent emails requested", "Transactions", {
+        userId,
+        months,
+      });
+
+      // Validate input
+      const validatedUserId = validateUserId(userId);
+      if (!validatedUserId) {
+        throw new ValidationError("User ID validation failed", "userId");
+      }
+
+      // Rate limit check - reuse scan cooldown (5 seconds per user)
+      const { allowed, remainingMs } = rateLimiters.scan.canExecute(
+        "emails:cache-recent",
+        validatedUserId,
+      );
+      if (!allowed && remainingMs !== undefined) {
+        const seconds = Math.ceil(remainingMs / 1000);
+        logService.warn(
+          `Rate limited emails:cache-recent for user ${validatedUserId}. Retry in ${seconds}s`,
+          "Transactions",
+        );
+        return {
+          success: false,
+          error: `Please wait ${seconds} seconds before caching emails again.`,
+          rateLimited: true,
+        };
+      }
+
+      const effectiveMonths = months && months > 0 ? months : 3;
+      const result = await emailSyncService.cacheRecentEmails({
+        userId: validatedUserId,
+        months: effectiveMonths,
+      });
+
+      return {
+        success: result.success,
+        emailsFetched: result.emailsFetched,
+        emailsStored: result.emailsStored,
+        error: result.error,
+      };
+    }, { module: "Transactions" }),
+  );
 }

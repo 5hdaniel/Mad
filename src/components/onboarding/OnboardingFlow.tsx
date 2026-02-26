@@ -282,11 +282,16 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
       // PermissionsStep.triggerImport() never ran, so contacts+messages sync was never
       // triggered. Explicitly trigger the sync here to ensure macOS contacts are imported.
       // This mirrors what PermissionsStep.triggerImport() does (line 194 of PermissionsStep.tsx).
+      // TASK-2084: Also include email-cache sync when email is connected.
       const userId = appState.userId;
       if (userId) {
         setMessagesImportTriggered(); // Prevent duplicate sync from useAutoRefresh
-        requestSync(['contacts', 'messages'], userId);
-        logger.info('[OnboardingFlow] Triggered contacts+messages sync for skipped permissions step');
+        const syncTypes: Array<'contacts' | 'messages' | 'email-cache'> = ['contacts', 'messages'];
+        if (appState.emailConnected) {
+          syncTypes.push('email-cache');
+        }
+        requestSync(syncTypes, userId);
+        logger.info('[OnboardingFlow] Triggered sync for skipped permissions step', { syncTypes });
       }
     }
 
@@ -302,6 +307,21 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
       app.handleEmailOnboardingComplete().catch((err: unknown) => {
         logger.error("[OnboardingFlow] Failed to persist email onboarding:", err);
       });
+    }
+
+    // TASK-2084: Trigger email-cache sync if email is connected and it wasn't
+    // already triggered by the permissions-skipped path above.
+    // This covers non-macOS platforms or cases where the permissions path didn't run.
+    if (appState.emailConnected && appState.userId) {
+      // Check if we already triggered it above (permissions-skipped path sets syncTypes with email-cache)
+      // The safe approach: requestSync handles dedup internally (queues if already running)
+      const permissionsSkipped = state.platform.isMacOS &&
+        appState.hasPermissions === true &&
+        !completed.includes("permissions");
+      if (!permissionsSkipped) {
+        requestSync(['email-cache'], appState.userId);
+        logger.info('[OnboardingFlow] Triggered email-cache sync for onboarding completion');
+      }
     }
   }, [machineState, appState, app, requestSync]);
 

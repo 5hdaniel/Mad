@@ -231,7 +231,12 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
 
     // Request sync from orchestrator - runs contacts then messages sequentially
     // Progress is tracked centrally by SyncOrchestratorService
-    requestSync(['contacts', 'messages'], userId);
+    // TASK-2084: Also include email-cache sync when email is connected
+    const syncTypes: Array<'contacts' | 'messages' | 'email-cache'> = ['contacts', 'messages'];
+    if (context.emailConnected) {
+      syncTypes.push('email-cache');
+    }
+    requestSync(syncTypes, userId);
 
     // Don't wait for imports - let them continue in background
     // User will see progress on the dashboard via SyncStatusIndicator
@@ -240,7 +245,7 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
     setTimeout(() => {
       onAction({ type: "PERMISSION_GRANTED" });
     }, 500);
-  }, [context.isDatabaseInitialized, context.userId, onAction, requestSync]);
+  }, [context.isDatabaseInitialized, context.userId, context.emailConnected, onAction, requestSync]);
 
   // Auto-check permissions on mount and periodically after user starts the flow
   const checkPermissions = useCallback(async () => {

@@ -34,11 +34,19 @@ export interface AuditPreferences {
 }
 
 /**
+ * Email cache preferences (TASK-2084)
+ */
+export interface EmailCachePreferences {
+  durationMonths?: number;
+}
+
+/**
  * User preferences object
  */
 export interface UserPreferences {
   messages?: MessagesPreferences;
   audit?: AuditPreferences;
+  emailCache?: EmailCachePreferences;
   [key: string]: unknown;
 }
 

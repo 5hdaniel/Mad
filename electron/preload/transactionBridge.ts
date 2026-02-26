@@ -563,4 +563,16 @@ export const transactionBridge = {
       contactIds,
       userId,
     ),
+
+  /**
+   * TASK-2084: Cache recent emails from connected providers.
+   * Fetches the last N months of emails from Outlook/Gmail and stores locally.
+   * Used during onboarding to pre-populate the email cache so transaction
+   * email tabs work immediately without requiring manual sync.
+   * @param userId - User ID to cache emails for
+   * @param months - Number of months to look back (default: 3)
+   * @returns Cache result with counts of fetched and stored emails
+   */
+  cacheRecentEmails: (userId: string, months?: number) =>
+    ipcRenderer.invoke("emails:cache-recent", userId, months),
 };

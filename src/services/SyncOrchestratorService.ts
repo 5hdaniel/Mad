@@ -19,7 +19,7 @@ import { isMacOS } from '../utils/platform';
 import type { ImportSource, UserPreferences } from './settingsService';
 import logger from '../utils/logger';
 
-export type SyncType = 'contacts' | 'emails' | 'messages';
+export type SyncType = 'contacts' | 'emails' | 'messages' | 'email-cache';
 
 export type SyncItemStatus = 'pending' | 'running' | 'complete' | 'error';
 
@@ -246,6 +246,37 @@ class SyncOrchestratorServiceClass {
         }
       });
     }
+
+    // Register email-cache sync (TASK-2084: cache recent emails during onboarding)
+    // This fetches the last N months of emails from connected providers and stores locally.
+    this.registerSyncFunction('email-cache', async (userId, onProgress) => {
+      logger.info('[SyncOrchestrator] Starting email-cache sync');
+      onProgress(0);
+
+      // Read emailCache.durationMonths preference (default: 3 months)
+      let months = 3;
+      try {
+        const prefResult = await window.api.preferences.get(userId);
+        const prefs = prefResult.preferences as UserPreferences | undefined;
+        if (prefResult.success && prefs?.emailCache?.durationMonths) {
+          months = prefs.emailCache.durationMonths;
+        }
+      } catch (err) {
+        logger.warn('[SyncOrchestrator] Failed to read emailCache preference, defaulting to 3 months:', err);
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const txApi = window.api.transactions as any;
+      const result = await txApi.cacheRecentEmails(userId, months);
+      if (!result.success) {
+        throw new Error(result.error || 'Email cache failed');
+      }
+      onProgress(100);
+      logger.info('[SyncOrchestrator] Email-cache sync complete', {
+        emailsFetched: result.emailsFetched,
+        emailsStored: result.emailsStored,
+      });
+    });
 
     this.initialized = true;
     logger.info('[SyncOrchestrator] Sync functions initialized');

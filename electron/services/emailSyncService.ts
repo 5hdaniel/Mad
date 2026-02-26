@@ -1107,6 +1107,154 @@ class EmailSyncService {
       return { fetched, stored, networkError: false, providerError: classifyProviderError(gmailError) };
     }
   }
+
+  /**
+   * TASK-2084: Cache recent emails from connected providers.
+   *
+   * Fetches the last N months of emails from Outlook and/or Gmail and stores
+   * them locally using the existing fetchStoreAndDedup helper. This is called
+   * during onboarding to pre-populate the email cache so that transaction
+   * email tabs work immediately without requiring a manual sync.
+   *
+   * Non-fatal for each provider: if one fails, the other still runs.
+   * Network errors are logged but do not cause the overall operation to fail.
+   */
+  async cacheRecentEmails(params: {
+    userId: string;
+    months: number;
+  }): Promise<{ success: boolean; emailsFetched: number; emailsStored: number; error?: string }> {
+    const { userId, months } = params;
+
+    // Compute the "since" date
+    const sinceDate = new Date();
+    sinceDate.setMonth(sinceDate.getMonth() - months);
+
+    logService.info(`[EmailSyncService] cacheRecentEmails: fetching last ${months} months (since ${sinceDate.toISOString()})`, "Transactions", {
+      userId,
+      months,
+      sinceDate: sinceDate.toISOString(),
+    });
+
+    let totalFetched = 0;
+    let totalStored = 0;
+    const seenIds = new Set<string>();
+    const errors: string[] = [];
+
+    // --- Outlook ---
+    try {
+      const microsoftToken = await databaseService.getOAuthToken(userId, "microsoft", "mailbox");
+      if (microsoftToken) {
+        await retryOnNetwork(async () => {
+          const outlookReady = await outlookFetchService.initialize(userId);
+          if (outlookReady) {
+            // Fetch inbox emails
+            const inboxResult = await fetchStoreAndDedup({
+              provider: "outlook",
+              fetchFn: () => outlookFetchService.searchEmails({
+                maxResults: EMAIL_FETCH_SAFETY_CAP,
+                after: sinceDate,
+              }),
+              userId,
+              seenIds,
+              getAttachmentsFn: (msgId) => outlookFetchService.getAttachments(msgId),
+            });
+
+            // Fetch all folders (archives, custom folders, etc.)
+            let allFolderResult = { fetched: 0, stored: 0, errors: 0 };
+            try {
+              allFolderResult = await fetchStoreAndDedup({
+                provider: "outlook",
+                fetchFn: () => outlookFetchService.searchAllFolders({
+                  maxResults: EMAIL_FETCH_SAFETY_CAP,
+                  after: sinceDate,
+                }),
+                userId,
+                seenIds,
+                getAttachmentsFn: (msgId) => outlookFetchService.getAttachments(msgId),
+              });
+            } catch (folderError) {
+              if (isNetworkError(folderError)) throw folderError;
+              logService.warn("[EmailSyncService] cacheRecentEmails: Outlook all-folders failed (non-fatal)", "Transactions", {
+                error: folderError instanceof Error ? folderError.message : "Unknown",
+              });
+            }
+
+            totalFetched += inboxResult.fetched + allFolderResult.fetched;
+            totalStored += inboxResult.stored + allFolderResult.stored;
+
+            logService.info(`[EmailSyncService] cacheRecentEmails: Outlook done - ${inboxResult.fetched} inbox + ${allFolderResult.fetched} all-folders`, "Transactions");
+          }
+        }, undefined, "OutlookCacheSync");
+      }
+    } catch (outlookError) {
+      const msg = outlookError instanceof Error ? outlookError.message : "Unknown Outlook error";
+      logService.warn("[EmailSyncService] cacheRecentEmails: Outlook failed (non-fatal)", "Transactions", { error: msg });
+      errors.push(`Outlook: ${msg}`);
+    }
+
+    // --- Gmail ---
+    try {
+      const googleToken = await databaseService.getOAuthToken(userId, "google", "mailbox");
+      if (googleToken) {
+        await retryOnNetwork(async () => {
+          const gmailReady = await gmailFetchService.initialize(userId);
+          if (gmailReady) {
+            // Fetch via search (inbox + sent)
+            const searchResult = await fetchStoreAndDedup({
+              provider: "gmail",
+              fetchFn: () => gmailFetchService.searchEmails({
+                maxResults: EMAIL_FETCH_SAFETY_CAP,
+                after: sinceDate,
+              }),
+              userId,
+              seenIds,
+            });
+
+            // Fetch all labels (archives, custom labels, etc.)
+            let allLabelResult = { fetched: 0, stored: 0, errors: 0 };
+            try {
+              allLabelResult = await fetchStoreAndDedup({
+                provider: "gmail",
+                fetchFn: () => gmailFetchService.searchAllLabels({
+                  maxResults: EMAIL_FETCH_SAFETY_CAP,
+                  after: sinceDate,
+                }),
+                userId,
+                seenIds,
+              });
+            } catch (labelError) {
+              if (isNetworkError(labelError)) throw labelError;
+              logService.warn("[EmailSyncService] cacheRecentEmails: Gmail all-labels failed (non-fatal)", "Transactions", {
+                error: labelError instanceof Error ? labelError.message : "Unknown",
+              });
+            }
+
+            totalFetched += searchResult.fetched + allLabelResult.fetched;
+            totalStored += searchResult.stored + allLabelResult.stored;
+
+            logService.info(`[EmailSyncService] cacheRecentEmails: Gmail done - ${searchResult.fetched} search + ${allLabelResult.fetched} all-labels`, "Transactions");
+          }
+        }, undefined, "GmailCacheSync");
+      }
+    } catch (gmailError) {
+      const msg = gmailError instanceof Error ? gmailError.message : "Unknown Gmail error";
+      logService.warn("[EmailSyncService] cacheRecentEmails: Gmail failed (non-fatal)", "Transactions", { error: msg });
+      errors.push(`Gmail: ${msg}`);
+    }
+
+    logService.info(`[EmailSyncService] cacheRecentEmails complete: ${totalFetched} fetched, ${totalStored} stored`, "Transactions", {
+      totalFetched,
+      totalStored,
+      errors: errors.length,
+    });
+
+    return {
+      success: true,
+      emailsFetched: totalFetched,
+      emailsStored: totalStored,
+      error: errors.length > 0 ? errors.join("; ") : undefined,
+    };
+  }
 }
 
 // Export singleton instance
