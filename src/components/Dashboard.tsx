@@ -159,7 +159,7 @@ function Dashboard({
     <div className="h-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-8">
       {/* Onboarding Tour */}
       <Joyride
-        steps={getDashboardTourSteps()}
+        steps={getDashboardTourSteps(hasAIAddon)}
         run={runTour}
         continuous
         showProgress
