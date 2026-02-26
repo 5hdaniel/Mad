@@ -60,7 +60,6 @@ interface SecureStorageReturn {
   isCheckingSecureStorage: boolean;
   isDatabaseInitialized: boolean;
   isInitializingDatabase: boolean;
-  skipKeychainExplanation: boolean;
 }
 
 interface EmailOnboardingApiReturn {
@@ -196,7 +195,6 @@ export function constructStateProps(
   | "isCheckingSecureStorage"
   | "isDatabaseInitialized"
   | "isInitializingDatabase"
-  | "skipKeychainExplanation"
   | "hasCompletedEmailOnboarding"
   | "hasEmailConnected"
   | "isCheckingEmailOnboarding"
@@ -250,8 +248,6 @@ export function constructStateProps(
     isCheckingSecureStorage: secureStorage.isCheckingSecureStorage,
     isDatabaseInitialized: secureStorage.isDatabaseInitialized,
     isInitializingDatabase: secureStorage.isInitializingDatabase,
-    skipKeychainExplanation: secureStorage.skipKeychainExplanation,
-
     // Email onboarding state
     hasCompletedEmailOnboarding: emailOnboardingApi.hasCompletedEmailOnboarding,
     hasEmailConnected: emailOnboardingApi.hasEmailConnected,

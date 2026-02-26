@@ -127,7 +127,6 @@ describe("useSecureStorage - State Machine Path", () => {
       expect(result.current).toHaveProperty("isCheckingSecureStorage");
       expect(result.current).toHaveProperty("isDatabaseInitialized");
       expect(result.current).toHaveProperty("isInitializingDatabase");
-      expect(result.current).toHaveProperty("skipKeychainExplanation");
       expect(result.current).toHaveProperty("initializeSecureStorage");
 
       // Verify types
@@ -135,7 +134,6 @@ describe("useSecureStorage - State Machine Path", () => {
       expect(typeof result.current.isCheckingSecureStorage).toBe("boolean");
       expect(typeof result.current.isDatabaseInitialized).toBe("boolean");
       expect(typeof result.current.isInitializingDatabase).toBe("boolean");
-      expect(typeof result.current.skipKeychainExplanation).toBe("boolean");
       expect(typeof result.current.initializeSecureStorage).toBe("function");
     });
   });
@@ -260,59 +258,7 @@ describe("useSecureStorage - State Machine Path", () => {
     });
   });
 
-  describe("skipKeychainExplanation", () => {
-    it("returns false when localStorage is empty", () => {
-      const { result } = renderHook(() => useSecureStorage(defaultOptions), {
-        wrapper: createWrapper(readyState),
-      });
-      expect(result.current.skipKeychainExplanation).toBe(false);
-    });
-
-    it("returns true when localStorage has skipKeychainExplanation=true", () => {
-      localStorageMock.setItem("skipKeychainExplanation", "true");
-      const { result } = renderHook(() => useSecureStorage(defaultOptions), {
-        wrapper: createWrapper(readyState),
-      });
-      expect(result.current.skipKeychainExplanation).toBe(true);
-    });
-
-    it("returns false when localStorage has skipKeychainExplanation=false", () => {
-      localStorageMock.setItem("skipKeychainExplanation", "false");
-      const { result } = renderHook(() => useSecureStorage(defaultOptions), {
-        wrapper: createWrapper(readyState),
-      });
-      expect(result.current.skipKeychainExplanation).toBe(false);
-    });
-  });
-
   describe("initializeSecureStorage", () => {
-    it("saves localStorage preference when dontShowAgain is true", async () => {
-      const { result } = renderHook(() => useSecureStorage(defaultOptions), {
-        wrapper: createWrapper(loadingInitializingDb),
-      });
-
-      await act(async () => {
-        await result.current.initializeSecureStorage(true);
-      });
-
-      expect(localStorageMock.setItem).toHaveBeenCalledWith(
-        "skipKeychainExplanation",
-        "true"
-      );
-    });
-
-    it("does not save localStorage preference when dontShowAgain is false", async () => {
-      const { result } = renderHook(() => useSecureStorage(defaultOptions), {
-        wrapper: createWrapper(loadingInitializingDb),
-      });
-
-      await act(async () => {
-        await result.current.initializeSecureStorage(false);
-      });
-
-      expect(localStorageMock.setItem).not.toHaveBeenCalled();
-    });
-
     it("returns true (initialization handled by orchestrator)", async () => {
       const { result } = renderHook(() => useSecureStorage(defaultOptions), {
         wrapper: createWrapper(loadingInitializingDb),
@@ -320,7 +266,7 @@ describe("useSecureStorage - State Machine Path", () => {
 
       let initResult: boolean | undefined;
       await act(async () => {
-        initResult = await result.current.initializeSecureStorage(false);
+        initResult = await result.current.initializeSecureStorage();
       });
 
       expect(initResult).toBe(true);
@@ -332,8 +278,8 @@ describe("useSecureStorage - State Machine Path", () => {
       });
 
       await act(async () => {
-        const result1 = await result.current.initializeSecureStorage(false);
-        const result2 = await result.current.initializeSecureStorage(true);
+        const result1 = await result.current.initializeSecureStorage();
+        const result2 = await result.current.initializeSecureStorage();
         expect(result1).toBe(true);
         expect(result2).toBe(true);
       });

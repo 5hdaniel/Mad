@@ -276,8 +276,6 @@ export interface StorageCheckedAction {
  */
 export interface KeychainConfirmedAction {
   type: "KEYCHAIN_CONFIRMED";
-  /** If true, user doesn't want to see explanation again */
-  dontShowAgain?: boolean;
 }
 
 /**

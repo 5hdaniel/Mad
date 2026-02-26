@@ -138,7 +138,6 @@ const createAppStateMock = (
   isCheckingSecureStorage: false,
   isDatabaseInitialized: true,
   isInitializingDatabase: false,
-  skipKeychainExplanation: false,
 
   // Email onboarding
   hasCompletedEmailOnboarding: true,

@@ -72,8 +72,7 @@ interface UseSecureStorageReturn {
   isCheckingSecureStorage: boolean;
   isDatabaseInitialized: boolean;
   isInitializingDatabase: boolean;
-  skipKeychainExplanation: boolean;
-  initializeSecureStorage: (dontShowAgain: boolean) => Promise<boolean>;
+  initializeSecureStorage: () => Promise<boolean>;
 }
 
 export function useSecureStorage(
@@ -81,11 +80,6 @@ export function useSecureStorage(
   _options: UseSecureStorageOptions
 ): UseSecureStorageReturn {
   const machineState = useOptionalMachineState();
-
-  // Read skipKeychainExplanation from localStorage - UI preference not in state machine
-  const skipKeychainExplanation =
-    typeof window !== "undefined" &&
-    localStorage.getItem("skipKeychainExplanation") === "true";
 
   if (!machineState) {
     throw new Error(
@@ -111,14 +105,10 @@ export function useSecureStorage(
   // Use the dedicated selector for accurate detection
   const isDeferredDbInit = selectIsDeferredDbInit(state);
 
-  // initializeSecureStorage: saves preference AND triggers DB init for first-time macOS users
+  // initializeSecureStorage: triggers DB init for first-time macOS users
   // After DB init succeeds, syncs any queued data (like phone type) to the database
   const initializeSecureStorage = useCallback(
-    async (dontShowAgain: boolean): Promise<boolean> => {
-      if (dontShowAgain) {
-        localStorage.setItem("skipKeychainExplanation", "true");
-      }
-
+    async (): Promise<boolean> => {
       // For first-time macOS users with deferred DB init, trigger it now
       // This is the point where the user has been informed about the Keychain prompt
       if (isDeferredDbInit) {
@@ -172,7 +162,6 @@ export function useSecureStorage(
     isCheckingSecureStorage,
     isDatabaseInitialized,
     isInitializingDatabase,
-    skipKeychainExplanation,
     initializeSecureStorage,
   };
 }

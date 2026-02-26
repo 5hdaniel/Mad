@@ -174,7 +174,7 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
           if (!appState.isDatabaseInitialized) {
             setWaitingForDbInit(true);
           }
-          app.handleKeychainExplanationContinue(action.dontShowAgain);
+          app.handleKeychainExplanationContinue();
           break;
 
         case "DRIVER_SETUP_COMPLETE":
