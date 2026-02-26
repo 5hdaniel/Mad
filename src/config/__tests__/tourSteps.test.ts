@@ -6,6 +6,8 @@
 import {
   getDashboardTourSteps,
   getExportTourSteps,
+  getTransactionsTourSteps,
+  getAuditTourSteps,
   JOYRIDE_STYLES,
   JOYRIDE_LOCALE,
 } from "../tourSteps";
@@ -98,6 +100,74 @@ describe("tourSteps configuration", () => {
           exportEmailsDisconnected?.content,
         );
       });
+    });
+  });
+
+  describe("getTransactionsTourSteps", () => {
+    const steps = getTransactionsTourSteps();
+
+    it("should return an array of steps", () => {
+      expect(Array.isArray(steps)).toBe(true);
+      expect(steps.length).toBeGreaterThan(0);
+    });
+
+    it("should have disableBeacon set to true on ALL steps to prevent blue dot from appearing", () => {
+      steps.forEach((step) => {
+        expect(step.disableBeacon).toBe(true);
+      });
+    });
+
+    it("should have required properties on each step", () => {
+      steps.forEach((step) => {
+        expect(step).toHaveProperty("target");
+        expect(step).toHaveProperty("content");
+        expect(step).toHaveProperty("placement");
+      });
+    });
+
+    it("should not exceed 6 steps", () => {
+      expect(steps.length).toBeLessThanOrEqual(6);
+    });
+
+    it("should target transactions-specific data-tour attributes", () => {
+      const targets = steps.map((s) => s.target);
+      expect(targets).toContain('[data-tour="transactions-search"]');
+      expect(targets).toContain('[data-tour="transactions-filter"]');
+      expect(targets).toContain('[data-tour="transaction-card"]');
+    });
+  });
+
+  describe("getAuditTourSteps", () => {
+    const steps = getAuditTourSteps();
+
+    it("should return an array of steps", () => {
+      expect(Array.isArray(steps)).toBe(true);
+      expect(steps.length).toBeGreaterThan(0);
+    });
+
+    it("should have disableBeacon set to true on ALL steps to prevent blue dot from appearing", () => {
+      steps.forEach((step) => {
+        expect(step.disableBeacon).toBe(true);
+      });
+    });
+
+    it("should have required properties on each step", () => {
+      steps.forEach((step) => {
+        expect(step).toHaveProperty("target");
+        expect(step).toHaveProperty("content");
+        expect(step).toHaveProperty("placement");
+      });
+    });
+
+    it("should not exceed 6 steps", () => {
+      expect(steps.length).toBeLessThanOrEqual(6);
+    });
+
+    it("should target audit-specific data-tour attributes", () => {
+      const targets = steps.map((s) => s.target);
+      expect(targets).toContain('[data-tour="audit-address"]');
+      expect(targets).toContain('[data-tour="audit-transaction-type"]');
+      expect(targets).toContain('[data-tour="audit-dates"]');
     });
   });
 

@@ -69,6 +69,8 @@ export interface TransactionListCardProps {
   onEmailsClick?: (transaction: Transaction, e: React.MouseEvent) => void;
   formatCurrency: (amount: number | undefined) => string;
   formatDate: (dateString: string | Date | undefined) => string;
+  /** Optional data-tour attribute for Joyride tour targeting */
+  dataTour?: string;
 }
 
 // ============================================
@@ -90,6 +92,7 @@ export function TransactionListCard({
   onEmailsClick,
   formatCurrency,
   formatDate,
+  dataTour,
 }: TransactionListCardProps): React.ReactElement {
   // BACKLOG-396: Use text_thread_count (stored) instead of text_count (computed dynamically)
   // This ensures consistency between card view and details page
@@ -103,6 +106,7 @@ export function TransactionListCard({
           : "border-gray-200 hover:border-blue-400 hover:shadow-xl"
       }`}
       onClick={() => onTransactionClick(transaction)}
+      {...(dataTour ? { "data-tour": dataTour } : {})}
     >
       <div className="flex items-start justify-between gap-4">
         {/* Selection Checkbox */}

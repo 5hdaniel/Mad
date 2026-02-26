@@ -17,6 +17,7 @@
  * - useTransactionModals: modal visibility and selected items
  */
 import React, { useState, useCallback } from "react";
+import Joyride from "react-joyride";
 import AuditTransactionModal from "./AuditTransactionModal";
 import ExportModal from "./ExportModal";
 import {
@@ -28,6 +29,7 @@ import { BulkSubmitModal } from "./BulkSubmitModal";
 import { useSelection } from "../hooks/useSelection";
 import { useBulkSubmit } from "../hooks/useBulkSubmit";
 import { useSubmissionSync } from "../hooks/useSubmissionSync";
+import { useTour } from "../hooks/useTour";
 import { useAppStateMachine } from "../appCore";
 import { useToast } from "../hooks/useToast";
 import { ToastContainer } from "./Toast";
@@ -43,6 +45,11 @@ import {
   useTransactionModals,
   type TransactionFilter,
 } from "./transaction/hooks";
+import {
+  getTransactionsTourSteps,
+  JOYRIDE_STYLES,
+  JOYRIDE_LOCALE,
+} from "../config/tourSteps";
 import type { Transaction } from "../../electron/types/models";
 import type { TransactionTab } from "./transactionDetailsModule/types";
 
@@ -99,6 +106,12 @@ function Transactions({
 
   // Toast notifications
   const { toasts, showSuccess, showError, removeToast } = useToast();
+
+  // Onboarding tour for first-time visitors to Transactions page
+  const { runTour, handleJoyrideCallback } = useTour(
+    true,
+    "hasSeenTransactionsTour",
+  );
 
   // UI state (local to component)
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -343,6 +356,19 @@ function Transactions({
 
   return (
     <div className="h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col overflow-hidden">
+      {/* Onboarding Tour */}
+      <Joyride
+        steps={getTransactionsTourSteps()}
+        run={runTour}
+        continuous
+        showProgress
+        showSkipButton
+        hideCloseButton
+        callback={handleJoyrideCallback}
+        styles={JOYRIDE_STYLES}
+        locale={JOYRIDE_LOCALE}
+      />
+
       {/* Header */}
       <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-6 flex items-center justify-between shadow-lg">
         <button
@@ -450,7 +476,7 @@ function Transactions({
           </div>
         ) : (
           <div className="grid gap-6">
-            {filteredTransactions.map((transaction: Transaction) => (
+            {filteredTransactions.map((transaction: Transaction, index: number) => (
               <TransactionListCard
                 key={transaction.id}
                 transaction={transaction}
@@ -463,6 +489,7 @@ function Transactions({
                 onEmailsClick={handleEmailsClick}
                 formatCurrency={formatCurrency}
                 formatDate={formatDate}
+                dataTour={index === 0 ? "transaction-card" : undefined}
               />
             ))}
           </div>
