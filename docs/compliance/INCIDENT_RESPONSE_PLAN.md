@@ -1,6 +1,6 @@
 # Incident Response Plan
 
-**Magic Audit - Security Incident Response Plan**
+**Keepr - Security Incident Response Plan**
 
 > **NOTICE**: This document requires legal review before publication.
 
@@ -24,12 +24,12 @@
 
 ### 1.1 Purpose
 
-This Incident Response Plan (IRP) establishes procedures for detecting, responding to, and recovering from security incidents affecting Magic Audit, its users, and their data. The plan ensures a consistent, coordinated approach to minimize damage, reduce recovery time, and protect sensitive real estate transaction data.
+This Incident Response Plan (IRP) establishes procedures for detecting, responding to, and recovering from security incidents affecting Keepr, its users, and their data. The plan ensures a consistent, coordinated approach to minimize damage, reduce recovery time, and protect sensitive real estate transaction data.
 
 ### 1.2 Scope
 
 This plan applies to:
-- All Magic Audit production systems and services
+- All Keepr production systems and services
 - Cloud infrastructure (Supabase database, authentication services)
 - Third-party integrations (Google OAuth, Microsoft OAuth, Gmail API, Microsoft Graph API)
 - User data including communications, transactions, and contact information
@@ -60,7 +60,7 @@ This plan applies to:
 
 ### 2.2 Incident Categories
 
-| Category | Description | Magic Audit Specific Examples |
+| Category | Description | Keepr Specific Examples |
 |----------|-------------|------------------------------|
 | **Data Breach** | Unauthorized access to or disclosure of user data | Exposure of iMessage archives, email content, transaction details, contact information |
 | **Account Compromise** | Unauthorized access to user or admin accounts | OAuth token theft, session hijacking, credential stuffing against Supabase Auth |
@@ -121,7 +121,7 @@ This plan applies to:
 4. Do not attempt remediation without coordination
 
 **External Reports:**
-1. Direct user reports to security@magicaudit.com
+1. Direct user reports to security@keeprcompliance.com
 2. Log all details provided by reporter
 3. Acknowledge receipt within 2 hours
 4. Triage and assign severity
@@ -149,7 +149,7 @@ This plan applies to:
 3. Create incident tracking record
 4. Begin incident timeline documentation
 5. Preserve initial evidence (logs, screenshots, system state)
-6. Determine affected Magic Audit components:
+6. Determine affected Keepr components:
    - Desktop application
    - Supabase backend
    - OAuth integrations
@@ -309,7 +309,7 @@ This plan applies to:
 This plan shall be reviewed:
 - Annually at minimum
 - After every P1 or P2 incident
-- When significant changes occur to Magic Audit architecture
+- When significant changes occur to Keepr architecture
 - When new compliance requirements emerge
 
 ### 8.2 Testing
@@ -370,10 +370,10 @@ This plan shall be reviewed:
 ## Appendix B: Contact Quick Reference
 
 > **Security Incident Hotline:** [Internal number]
-> **Security Email:** security@magicaudit.com
+> **Security Email:** security@keeprcompliance.com
 > **On-Call Rotation:** [Link to schedule]
 > **Incident Tracking System:** [Link to system]
 
 ---
 
-*This document is proprietary to Magic Audit and intended for internal use only.*
+*This document is proprietary to Keepr and intended for internal use only.*

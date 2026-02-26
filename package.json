@@ -1,7 +1,7 @@
 {
-  "name": "magic-audit",
+  "name": "keepr",
   "version": "2.5.1",
-  "description": "Magic Audit - Export and archive iMessage conversations and emails",
+  "description": "Keepr - Export and archive iMessage conversations and emails",
   "main": "electron/main.js",
   "engines": {
     "node": ">=20.0.0"

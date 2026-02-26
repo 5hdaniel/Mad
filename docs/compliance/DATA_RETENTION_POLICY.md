@@ -1,6 +1,6 @@
 # Data Retention Policy
 
-**Magic Audit - Data Retention and Deletion Policy**
+**Keepr - Data Retention and Deletion Policy**
 
 > **NOTICE**: This document requires legal review before publication.
 
@@ -24,11 +24,11 @@
 
 ### 1.1 Purpose
 
-This Data Retention Policy establishes the periods for which Magic Audit retains different categories of data, the methods used for secure deletion, and the legal basis for each retention period. This policy ensures compliance with applicable privacy regulations while meeting legitimate business and legal requirements.
+This Data Retention Policy establishes the periods for which Keepr retains different categories of data, the methods used for secure deletion, and the legal basis for each retention period. This policy ensures compliance with applicable privacy regulations while meeting legitimate business and legal requirements.
 
 ### 1.2 Scope
 
-This policy applies to all data collected, processed, and stored by Magic Audit, including:
+This policy applies to all data collected, processed, and stored by Keepr, including:
 - Data stored locally on user devices (SQLite database)
 - Data synchronized to cloud infrastructure (Supabase)
 - Data processed through third-party integrations (Google, Microsoft)
@@ -217,7 +217,7 @@ Used for data with legal retention requirements:
 ### 6.1 Right to Access
 
 Users may request a copy of their data:
-- Request method: Email to privacy@magicaudit.com
+- Request method: Email to privacy@keeprcompliance.com
 - Response time: Within 30 days
 - Format: Machine-readable (JSON/CSV) or human-readable (PDF)
 - Scope: All personal data, processing purposes, recipients
@@ -360,4 +360,4 @@ When data is needed for dispute resolution:
 
 ---
 
-*This document is proprietary to Magic Audit. For questions, contact privacy@magicaudit.com.*
+*This document is proprietary to Keepr. For questions, contact privacy@keeprcompliance.com.*

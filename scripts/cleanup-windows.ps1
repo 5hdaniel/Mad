@@ -3,7 +3,6 @@
 .SYNOPSIS
     Keepr Cleanup Script for Windows
     Removes all app data, caches, and credential entries
-    Also removes legacy MagicAudit paths for users upgrading from older versions
 
 .DESCRIPTION
     This script performs a full cleanup of Keepr on Windows:
@@ -23,9 +22,9 @@ Write-Host "  Keepr Cleanup Tool (Windows)"            -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# --- Kill any running processes (current + legacy) ---
+# --- Kill any running processes ---
 Write-Host "Stopping Keepr if running..."
-$processes = Get-Process -Name "Keepr", "MagicAudit" -ErrorAction SilentlyContinue
+$processes = Get-Process -Name "Keepr" -ErrorAction SilentlyContinue
 if ($processes) {
     $processes | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
@@ -34,20 +33,12 @@ if ($processes) {
     Write-Host "  No running processes found." -ForegroundColor Gray
 }
 
-# --- Remove application data directories (current + legacy) ---
+# --- Remove application data directories ---
 Write-Host "Removing application data..."
 
 $dataPaths = @(
     "$env:APPDATA\keepr",
-    "$env:APPDATA\Keepr",
-    "$env:APPDATA\magic-audit",
-    "$env:APPDATA\Magic Audit",
-    "$env:APPDATA\MagicAudit",
-    "$env:LOCALAPPDATA\keepr",
-    "$env:LOCALAPPDATA\Keepr",
-    "$env:LOCALAPPDATA\magic-audit",
-    "$env:LOCALAPPDATA\Magic Audit",
-    "$env:LOCALAPPDATA\MagicAudit"
+    "$env:LOCALAPPDATA\keepr"
 )
 
 foreach ($path in $dataPaths) {
@@ -57,16 +48,12 @@ foreach ($path in $dataPaths) {
     }
 }
 
-# --- Remove the application from Program Files (current + legacy) ---
+# --- Remove the application from Program Files ---
 Write-Host "Removing application..."
 
 $appPaths = @(
     "$env:ProgramFiles\Keepr",
-    "$env:ProgramFiles\MagicAudit",
-    "$env:ProgramFiles\Magic Audit",
-    "${env:ProgramFiles(x86)}\Keepr",
-    "${env:ProgramFiles(x86)}\MagicAudit",
-    "${env:ProgramFiles(x86)}\Magic Audit"
+    "${env:ProgramFiles(x86)}\Keepr"
 )
 
 foreach ($path in $appPaths) {
@@ -76,10 +63,10 @@ foreach ($path in $appPaths) {
     }
 }
 
-# --- Clear Windows Credential Manager entries (current + legacy) ---
+# --- Clear Windows Credential Manager entries ---
 Write-Host "Removing credential entries..."
 
-$credTargets = @("keepr", "Keepr", "Keepr Safe Storage", "magic-audit", "MagicAudit", "magic-audit Safe Storage")
+$credTargets = @("keepr", "Keepr", "Keepr Safe Storage")
 foreach ($target in $credTargets) {
     $result = cmdkey /delete:$target 2>&1
     if ($LASTEXITCODE -eq 0) {
@@ -90,7 +77,7 @@ foreach ($target in $credTargets) {
 # Also try to remove from the generic credential store via rundll32
 # This handles Electron safeStorage credentials
 try {
-    $creds = cmdkey /list 2>&1 | Select-String -Pattern "keepr|Keepr|magic-audit|MagicAudit" -SimpleMatch
+    $creds = cmdkey /list 2>&1 | Select-String -Pattern "keepr|Keepr" -SimpleMatch
     foreach ($cred in $creds) {
         $line = $cred.ToString().Trim()
         if ($line -match "Target:\s*(.+)") {
