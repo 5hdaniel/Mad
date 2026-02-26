@@ -61,7 +61,7 @@ function AddressVerificationStep({
 
   return (
     <div className="space-y-6">
-      <div>
+      <div data-tour="audit-address">
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Property Address *
         </label>
@@ -104,7 +104,7 @@ function AddressVerificationStep({
         </p>
       </div>
 
-      <div>
+      <div data-tour="audit-transaction-type">
         <label className="block text-sm font-medium text-gray-700 mb-3">
           Transaction Type *
         </label>
@@ -136,7 +136,7 @@ function AddressVerificationStep({
       {startDateMode === undefined ? (
         <div className="h-24" />
       ) : (
-      <div>
+      <div data-tour="audit-dates">
         <div className="flex items-center justify-between mb-3">
           <label className="block text-sm font-medium text-gray-700">
             {isAutoMode ? "Audit Period" : "Transaction Dates"}

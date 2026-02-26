@@ -92,7 +92,7 @@ export function TransactionsToolbar({
       {/* Responsive Toolbar: stacked on narrow, single row on wide */}
       <div className="flex flex-col md:flex-row md:items-center gap-3">
         {/* Search - full width on narrow, flex-1 on wide */}
-        <div className="w-full md:w-auto md:flex-1 relative">
+        <div className="w-full md:w-auto md:flex-1 relative" data-tour="transactions-search">
           <input
             type="text"
             placeholder="Search by address..."
@@ -118,7 +118,7 @@ export function TransactionsToolbar({
         {/* Filter tabs + action buttons - no wrap, shrink to fit */}
         <div className="flex items-center gap-2 min-w-0">
           {/* Status Filter Toggle */}
-          <div className="inline-flex items-center bg-gray-200 rounded-lg p-1 min-w-0 h-10">
+          <div className="inline-flex items-center bg-gray-200 rounded-lg p-1 min-w-0 h-10" data-tour="transactions-filter">
             <button
               onClick={() => onStatusFilterChange("active")}
               className={`px-2 sm:px-4 py-2 rounded-md font-medium transition-all text-sm whitespace-nowrap ${

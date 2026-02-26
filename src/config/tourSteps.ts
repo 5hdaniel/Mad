@@ -142,6 +142,85 @@ export const getExportTourSteps = (outlookConnected: boolean): Step[] => [
   },
 ];
 
+// Transactions List Tour - shown when user first visits the Transactions page
+export const getTransactionsTourSteps = (): Step[] => [
+  {
+    target: "body",
+    content:
+      "This is your Transactions page where all your audits live. Let me show you around.",
+    placement: "center",
+    disableBeacon: true,
+  },
+  {
+    target: '[data-tour="transactions-search"]',
+    content:
+      "Search for transactions by property address to find what you need quickly.",
+    placement: "bottom",
+    disableBeacon: true,
+  },
+  {
+    target: '[data-tour="transactions-filter"]',
+    content:
+      "Filter transactions by status — Active, Closed, or All — to focus on what matters.",
+    placement: "bottom",
+    disableBeacon: true,
+  },
+  {
+    target: '[data-tour="transaction-card"]',
+    content:
+      "Each card shows a transaction's key details including address, type, and communication counts. Click to open and review.",
+    placement: "bottom",
+    spotlightClicks: true,
+    disableBeacon: true,
+  },
+  {
+    target: "body",
+    content:
+      "You're all set to manage your transaction audits!",
+    placement: "center",
+    disableBeacon: true,
+  },
+];
+
+// Audit Transaction Tour - shown when user first opens the Audit New Transaction modal
+export const getAuditTourSteps = (): Step[] => [
+  {
+    target: "body",
+    content:
+      "Let's walk through creating a new transaction audit.",
+    placement: "center",
+    disableBeacon: true,
+  },
+  {
+    target: '[data-tour="audit-address"]',
+    content:
+      "Start by entering the property address. As you type, verified addresses from Google Places will appear.",
+    placement: "bottom",
+    disableBeacon: true,
+  },
+  {
+    target: '[data-tour="audit-transaction-type"]',
+    content:
+      "Select whether this is a Purchase or Sale transaction.",
+    placement: "bottom",
+    disableBeacon: true,
+  },
+  {
+    target: '[data-tour="audit-dates"]',
+    content:
+      "Set the transaction dates. In Auto mode, the start date is detected from your earliest communication with the contacts.",
+    placement: "bottom",
+    disableBeacon: true,
+  },
+  {
+    target: "body",
+    content:
+      "After filling in the details, click Continue to assign contacts to this transaction. You're ready to go!",
+    placement: "center",
+    disableBeacon: true,
+  },
+];
+
 // Joyride configuration defaults
 export const JOYRIDE_STYLES = {
   options: {

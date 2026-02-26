@@ -1,9 +1,15 @@
 import React from "react";
+import Joyride from "react-joyride";
 import AddressVerificationStep from "./audit/AddressVerificationStep";
 import ContactAssignmentStep from "./audit/ContactAssignmentStep";
 import type { Transaction } from "../../electron/types/models";
 import { useAppStateMachine } from "../appCore";
 import { useAuditTransaction } from "../hooks/useAuditTransaction";
+import { useTour } from "../hooks/useTour";
+import {
+  getAuditTourSteps,
+  JOYRIDE_LOCALE,
+} from "../config/tourSteps";
 import { OfflineNotice } from "./common/OfflineNotice";
 
 // Type definitions
@@ -73,6 +79,20 @@ function AuditTransactionModal({
     onSuccess,
   });
 
+  // Onboarding tour for first-time audit creation (only for new transactions, not edits)
+  const { runTour, handleJoyrideCallback } = useTour(
+    !editTransaction && step === 1,
+    "hasSeenAuditTour",
+  );
+
+  // Joyride styles with higher z-index for modal context
+  const auditJoyrideStyles = {
+    options: {
+      primaryColor: "#3b82f6",
+      zIndex: 100000,
+    },
+  };
+
   // DEFENSIVE CHECK: Return loading state if database not initialized
   // Should never trigger if AppShell gate works, but prevents errors if bypassed
   if (!isDatabaseInitialized) {
@@ -96,6 +116,19 @@ function AuditTransactionModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+      {/* Onboarding Tour for audit creation */}
+      <Joyride
+        steps={getAuditTourSteps()}
+        run={runTour}
+        continuous
+        showProgress
+        showSkipButton
+        hideCloseButton
+        disableOverlay
+        callback={handleJoyrideCallback}
+        styles={auditJoyrideStyles}
+        locale={JOYRIDE_LOCALE}
+      />
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
