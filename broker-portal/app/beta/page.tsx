@@ -11,7 +11,7 @@ export default function BetaPage() {
       <div className="max-w-md w-full space-y-8">
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900">Keepr</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Keepr.</h1>
           <h2 className="mt-2 text-xl text-gray-600">Closed Beta Program</h2>
         </div>
 

@@ -74,7 +74,7 @@ function DesktopLoginForm() {
       <div className="max-w-md w-full space-y-8">
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900">Keepr</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Keepr.</h1>
           <p className="mt-4 text-gray-500">Sign in to continue to the desktop app</p>
         </div>
 
