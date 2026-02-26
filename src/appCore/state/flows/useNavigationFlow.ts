@@ -42,7 +42,7 @@ export interface UseNavigationFlowOptions {
   isCheckingSecureStorage: boolean;
   isDatabaseInitialized: boolean;
   isInitializingDatabase: boolean;
-  initializeSecureStorage: (dontShowAgain: boolean) => Promise<boolean>;
+  initializeSecureStorage: () => Promise<boolean>;
 
   // Onboarding state
   hasSelectedPhoneType: boolean;

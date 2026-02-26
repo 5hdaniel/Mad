@@ -1,15 +1,14 @@
 /**
  * SecureStorageStep - macOS Keychain Setup Step
  *
- * This step explains the keychain access requirement and handles
- * the "Don't show again" preference for macOS users.
+ * This step explains the keychain access requirement for macOS users.
  *
  * Platform: macOS ONLY
  *
  * @module onboarding/steps/SecureStorageStep
  */
 
-import React, { useState } from "react";
+import React from "react";
 import type {
   OnboardingStep,
   OnboardingStepMeta,
@@ -32,7 +31,7 @@ export const meta: OnboardingStepMeta = {
   platforms: ["macos"],
   navigation: {
     showBack: true,
-    hideContinue: true, // Shell won't render Continue - step handles it with dontShowAgain
+    hideContinue: true, // Shell won't render Continue - step handles its own Continue button
     continueLabel: "Continue",
   },
   // This step is required for macOS users
@@ -147,12 +146,9 @@ export function SecureStorageContent({
   onAction,
   isLoading = false,
 }: SecureStorageContentProps): React.ReactElement {
-  const [dontShowAgain, setDontShowAgain] = useState(false);
-
   const handleContinue = () => {
     const action: SecureStorageSetupAction = {
       type: "SECURE_STORAGE_SETUP",
-      dontShowAgain,
     };
     onAction(action);
   };
@@ -213,19 +209,6 @@ export function SecureStorageContent({
               </p>
             </div>
           </div>
-
-          {/* Don't show again checkbox */}
-          <label className="flex items-center gap-2 mb-4 cursor-pointer justify-start">
-            <input
-              type="checkbox"
-              checked={dontShowAgain}
-              onChange={(e) => setDontShowAgain(e.target.checked)}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-            />
-            <span className="text-sm text-gray-600">
-              Don&apos;t show this explanation again
-            </span>
-          </label>
 
           {/* Continue button - Back is handled by shell */}
           <button

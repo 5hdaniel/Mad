@@ -128,7 +128,6 @@ export interface AppStateMachine {
   isCheckingSecureStorage: boolean;
   isDatabaseInitialized: boolean;
   isInitializingDatabase: boolean;
-  skipKeychainExplanation: boolean;
 
   // Email onboarding state
   hasCompletedEmailOnboarding: boolean;
@@ -274,7 +273,7 @@ export interface AppStateMachine {
   // KEYCHAIN HANDLERS
   // ============================================
 
-  handleKeychainExplanationContinue: (dontShowAgain: boolean) => Promise<void>;
+  handleKeychainExplanationContinue: () => Promise<void>;
   handleKeychainBack: () => void;
 
   // ============================================
