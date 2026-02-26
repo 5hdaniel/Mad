@@ -557,6 +557,101 @@ describe("SyncStatusIndicator", () => {
     });
   });
 
+  describe("Tour-aware auto-dismiss (TASK-2081)", () => {
+    it("should NOT auto-dismiss when isTourActive is true", () => {
+      // Start with running state
+      const runningQueue = [
+        createSyncItem('contacts', 'running', 50),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(runningQueue, true, 50));
+
+      const { rerender } = render(<SyncStatusIndicator isTourActive={true} />);
+
+      // Transition to not syncing
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState([], false, 0));
+      rerender(<SyncStatusIndicator isTourActive={true} />);
+
+      expect(screen.getByTestId("sync-status-complete")).toBeInTheDocument();
+
+      // Advance well past 3s - should still be visible because tour is active
+      act(() => {
+        jest.advanceTimersByTime(10000);
+      });
+      expect(screen.getByTestId("sync-status-complete")).toBeInTheDocument();
+    });
+
+    it("should auto-dismiss after tour ends (isTourActive transitions false)", () => {
+      // Start with running state
+      const runningQueue = [
+        createSyncItem('contacts', 'running', 50),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(runningQueue, true, 50));
+
+      const { rerender } = render(<SyncStatusIndicator isTourActive={true} />);
+
+      // Transition to not syncing (tour still active)
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState([], false, 0));
+      rerender(<SyncStatusIndicator isTourActive={true} />);
+
+      expect(screen.getByTestId("sync-status-complete")).toBeInTheDocument();
+
+      // Tour ends
+      rerender(<SyncStatusIndicator isTourActive={false} />);
+
+      // Completion should still be visible immediately after tour ends
+      expect(screen.getByTestId("sync-status-complete")).toBeInTheDocument();
+
+      // But should auto-dismiss after 3 seconds
+      act(() => {
+        jest.advanceTimersByTime(3000);
+      });
+      expect(screen.queryByTestId("sync-status-complete")).not.toBeInTheDocument();
+    });
+
+    it("should still allow manual dismiss during tour", () => {
+      // Start with running state
+      const runningQueue = [
+        createSyncItem('contacts', 'running', 50),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(runningQueue, true, 50));
+
+      const { rerender } = render(<SyncStatusIndicator isTourActive={true} />);
+
+      // Transition to not syncing (tour still active)
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState([], false, 0));
+      rerender(<SyncStatusIndicator isTourActive={true} />);
+
+      expect(screen.getByTestId("sync-status-complete")).toBeInTheDocument();
+
+      // Manual dismiss should still work
+      fireEvent.click(screen.getByLabelText("Dismiss notification"));
+
+      expect(screen.queryByTestId("sync-status-complete")).not.toBeInTheDocument();
+    });
+
+    it("should auto-dismiss normally when isTourActive is false (default behavior)", () => {
+      // Start with running state
+      const runningQueue = [
+        createSyncItem('contacts', 'running', 50),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(runningQueue, true, 50));
+
+      const { rerender } = render(<SyncStatusIndicator isTourActive={false} />);
+
+      // Transition to not syncing
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState([], false, 0));
+      rerender(<SyncStatusIndicator isTourActive={false} />);
+
+      expect(screen.getByTestId("sync-status-complete")).toBeInTheDocument();
+
+      // Should auto-dismiss after 3 seconds (normal behavior)
+      act(() => {
+        jest.advanceTimersByTime(3000);
+      });
+      expect(screen.queryByTestId("sync-status-complete")).not.toBeInTheDocument();
+    });
+  });
+
   describe("Progress display", () => {
     it("should show progress percentage for running sync", () => {
       const queue = [

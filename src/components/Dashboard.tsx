@@ -203,6 +203,7 @@ function Dashboard({
             pendingCount={pendingCount}
             onViewPending={handleViewPending}
             onOpenSettings={onOpenSettings}
+            isTourActive={runTour}
           />
         </div>
 

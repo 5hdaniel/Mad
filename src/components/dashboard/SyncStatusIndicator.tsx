@@ -32,6 +32,8 @@ interface SyncStatusIndicatorProps {
   onViewPending?: () => void;
   /** Callback to open Settings modal (for message cap warnings) */
   onOpenSettings?: () => void;
+  /** When true, suppress auto-dismiss so the tour anchor stays visible (TASK-2081) */
+  isTourActive?: boolean;
 }
 
 /**
@@ -68,6 +70,7 @@ export function SyncStatusIndicator({
   pendingCount = 0,
   onViewPending,
   onOpenSettings,
+  isTourActive = false,
 }: SyncStatusIndicatorProps) {
   const [showCompletion, setShowCompletion] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -90,6 +93,9 @@ export function SyncStatusIndicator({
   const syncWarning = queue.find(item => item.warning)?.warning;
 
   // Track transition from syncing to not syncing
+  // NOTE: isTourActive is included in deps to gate auto-dismiss during the onboarding tour.
+  // When the tour is active, completion stays visible so the [data-tour="sync-status"] anchor
+  // is not removed mid-step. A separate effect below handles starting the timer when the tour ends.
   useEffect(() => {
     if (isAnySyncing) {
       wasSyncingRef.current = true;
@@ -105,7 +111,28 @@ export function SyncStatusIndicator({
       setShowCompletion(true);
       wasSyncingRef.current = false;
 
-      // Auto-dismiss after 3 seconds
+      // Only auto-dismiss if tour is NOT active (TASK-2081)
+      if (!isTourActive) {
+        autoDismissTimerRef.current = setTimeout(() => {
+          setShowCompletion(false);
+          setDismissed(true);
+          autoDismissTimerRef.current = null;
+        }, 3000);
+      }
+
+      return () => {
+        if (autoDismissTimerRef.current) {
+          clearTimeout(autoDismissTimerRef.current);
+          autoDismissTimerRef.current = null;
+        }
+      };
+    }
+  }, [isAnySyncing, isTourActive]);
+
+  // TASK-2081: When tour ends while completion is still showing, start the auto-dismiss timer.
+  // This is a separate effect to avoid re-firing the sync transition logic above.
+  useEffect(() => {
+    if (!isTourActive && showCompletion && !dismissed && !isAnySyncing) {
       autoDismissTimerRef.current = setTimeout(() => {
         setShowCompletion(false);
         setDismissed(true);
@@ -119,7 +146,7 @@ export function SyncStatusIndicator({
         }
       };
     }
-  }, [isAnySyncing]);
+  }, [isTourActive, showCompletion, dismissed, isAnySyncing]);
 
   // Handle manual dismiss (also cancels auto-dismiss timer)
   const handleDismiss = useCallback(() => {
