@@ -60,7 +60,7 @@ export function VersionPopup({ isVisible, onClose }: VersionPopupProps) {
           <span className="font-mono font-semibold text-gray-900">{version}</span>
         </div>
         <div className="pt-2 border-t border-gray-200">
-          <p className="text-gray-500 text-xs">Keepr</p>
+          <p className="text-gray-500 text-xs">Keepr.</p>
         </div>
       </div>
     </div>

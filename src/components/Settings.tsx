@@ -1875,24 +1875,21 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                   </div>
                 </div>
                 <div className="space-y-2 text-xs">
-                  {/* TODO: Implement release notes viewer/link to GitHub releases */}
                   <button
-                    disabled
-                    className="w-full text-left text-gray-400 font-medium cursor-not-allowed"
+                    onClick={() => window.open("https://github.com/5hdaniel/Mad/releases", "_blank")}
+                    className="w-full text-left text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
                   >
                     View Release Notes
                   </button>
-                  {/* TODO: Implement privacy policy viewer/link */}
                   <button
-                    disabled
-                    className="w-full text-left text-gray-400 font-medium cursor-not-allowed"
+                    onClick={() => window.open("https://www.keeprcompliance.com/privacy", "_blank")}
+                    className="w-full text-left text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
                   >
                     Privacy Policy
                   </button>
-                  {/* TODO: Implement terms of service viewer/link */}
                   <button
-                    disabled
-                    className="w-full text-left text-gray-400 font-medium cursor-not-allowed"
+                    onClick={() => window.open("https://www.keeprcompliance.com/terms", "_blank")}
+                    className="w-full text-left text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
                   >
                     Terms of Service
                   </button>
