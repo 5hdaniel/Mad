@@ -22,6 +22,8 @@ import {
 import { logAllFlags, logNavigation, logStateChange } from "../../appCore/state/machine/debug";
 import type { AppStateMachine } from "../../appCore/state/types";
 import type { StepAction } from "./types";
+import { useSyncOrchestrator } from "../../hooks/useSyncOrchestrator";
+import { setMessagesImportTriggered } from "../../utils/syncFlags";
 import logger from '../../utils/logger';
 
 /**
@@ -71,6 +73,9 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
 
   // Track if user has been verified in local DB (set by account-verification step)
   const [isUserVerifiedInLocalDb, setIsUserVerifiedInLocalDb] = useState(false);
+
+  // Get sync orchestrator for triggering contacts+messages sync when permissions step is skipped
+  const { requestSync } = useSyncOrchestrator();
 
   // Build app state, deriving from state machine when available
   // This fixes the flicker issue where legacy app properties have stale data during initial load
@@ -272,6 +277,17 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
         type: "ONBOARDING_STEP_COMPLETE",
         step: "permissions",
       });
+
+      // TASK-2083: When the permissions step was skipped (permissions already granted),
+      // PermissionsStep.triggerImport() never ran, so contacts+messages sync was never
+      // triggered. Explicitly trigger the sync here to ensure macOS contacts are imported.
+      // This mirrors what PermissionsStep.triggerImport() does (line 194 of PermissionsStep.tsx).
+      const userId = appState.userId;
+      if (userId) {
+        setMessagesImportTriggered(); // Prevent duplicate sync from useAutoRefresh
+        requestSync(['contacts', 'messages'], userId);
+        logger.info('[OnboardingFlow] Triggered contacts+messages sync for skipped permissions step');
+      }
     }
 
     // email-connect: the critical blocking step. Dispatch synchronously to
@@ -287,7 +303,7 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
         logger.error("[OnboardingFlow] Failed to persist email onboarding:", err);
       });
     }
-  }, [machineState, appState, app]);
+  }, [machineState, appState, app, requestSync]);
 
   // Map app's currentStep to onboarding step ID
   // This ensures the OnboardingFlow starts at the correct step based on routing
