@@ -1,5 +1,5 @@
 /**
- * IPC (Inter-Process Communication) Types for Magic Audit
+ * IPC (Inter-Process Communication) Types for Keepr
  * These types define type-safe communication between main and renderer processes
  */
 
@@ -2121,7 +2121,7 @@ export interface WindowApi {
 
   /**
    * Listen for deep link auth callback with tokens and license status
-   * Fired when app receives magicaudit://callback and auth/license validation succeeds
+   * Fired when app receives keepr://callback and auth/license validation succeeds
    * TASK-1507: Enhanced to include user, license, and device data
    */
   onDeepLinkAuthCallback: (

@@ -45,7 +45,7 @@ jest.mock("electron", () => ({
   app: {
     getPath: jest.fn((pathType: string) => {
       if (pathType === "exe")
-        return "/Applications/MagicAudit.app/Contents/MacOS/MagicAudit";
+        return "/Applications/Keepr.app/Contents/MacOS/Keepr";
       return "/mock/path";
     }),
   },
@@ -236,7 +236,7 @@ describe("MacOSPermissionHelper", () => {
       expect(result.message).toBe(
         "System Preferences opened to Full Disk Access",
       );
-      expect(result.appPath).toContain("MagicAudit");
+      expect(result.appPath).toContain("Keepr");
       expect(result.nextStep).toContain("click the + button");
     });
 

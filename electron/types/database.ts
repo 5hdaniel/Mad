@@ -1,5 +1,5 @@
 /**
- * Database-specific types for Magic Audit
+ * Database-specific types for Keepr
  * These types represent database operations, query results, and service interfaces
  */
 

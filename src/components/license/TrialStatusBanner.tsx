@@ -29,7 +29,7 @@ export function TrialStatusBanner(): React.ReactElement | null {
   const isUrgent = trialDaysRemaining <= 3;
 
   const handleUpgrade = () => {
-    window.api?.shell?.openExternal?.("https://magicaudit.com/pricing");
+    window.api?.shell?.openExternal?.("https://keeprcompliance.com/pricing");
   };
 
   return (

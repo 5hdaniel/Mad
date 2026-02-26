@@ -568,19 +568,19 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
         title={
           completedSteps.has(5)
             ? "App Selected"
-            : "Select Real Estate Archive"
+            : "Select Keepr"
         }
         description={
           <p>
             In the file selector, navigate to <strong>Applications</strong> and
-            select <strong>Real Estate Archive.app</strong>
+            select <strong>Keepr.app</strong>
           </p>
         }
         isComplete={completedSteps.has(5)}
         isActive={completedSteps.has(4) && currentInstructionStep >= 4}
         onComplete={() => markStepComplete(5)}
         onBack={() => goBackToStep(4)}
-        tip="If you can't find Real Estate Archive in the Applications folder, you may need to copy it from the DMG file first."
+        tip="If you can't find Keepr in the Applications folder, you may need to copy it from the DMG file first."
       />
 
       {/* Final: All steps complete - show "Almost Done" while waiting for permission check */}

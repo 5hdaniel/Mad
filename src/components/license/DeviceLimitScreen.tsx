@@ -89,7 +89,7 @@ export function DeviceLimitScreen(): React.ReactElement {
   };
 
   const handleUpgrade = () => {
-    window.api?.shell?.openExternal?.("https://magicaudit.com/pricing");
+    window.api?.shell?.openExternal?.("https://keeprcompliance.com/pricing");
   };
 
   const activeDevices = devices.filter((d) => d.is_active);

@@ -1,6 +1,6 @@
 # SOC 2 Controls Matrix
 
-**Magic Audit - SOC 2 Trust Service Criteria Controls Matrix**
+**Keepr - SOC 2 Trust Service Criteria Controls Matrix**
 
 > **NOTICE**: This document requires legal review before publication. Control implementations should be verified by internal audit.
 
@@ -22,7 +22,7 @@
 
 ## 1. Overview
 
-This document maps Magic Audit's security controls to the SOC 2 Trust Service Criteria. SOC 2 examines controls relevant to Security, Availability, Processing Integrity, Confidentiality, and Privacy.
+This document maps Keepr's security controls to the SOC 2 Trust Service Criteria. SOC 2 examines controls relevant to Security, Availability, Processing Integrity, Confidentiality, and Privacy.
 
 ### 1.1 Trust Service Categories
 
@@ -41,7 +41,7 @@ This document maps Magic Audit's security controls to the SOC 2 Trust Service Cr
 | Implemented | Control fully operational |
 | Partial | Control partially implemented, improvements needed |
 | Planned | Control planned but not yet implemented |
-| N/A | Not applicable to Magic Audit |
+| N/A | Not applicable to Keepr |
 
 ---
 
@@ -49,7 +49,7 @@ This document maps Magic Audit's security controls to the SOC 2 Trust Service Cr
 
 ### CC1: Control Environment
 
-| ID | Criteria | Magic Audit Control | Implementation | Status | Evidence |
+| ID | Criteria | Keepr Control | Implementation | Status | Evidence |
 |----|----------|---------------------|----------------|--------|----------|
 | CC1.1 | Commitment to integrity and ethical values | Code of conduct, security policies | Security team oversight, documented policies | Partial | Policy documents |
 | CC1.2 | Board oversight responsibility | Executive security reviews | Quarterly security reviews | Partial | Meeting minutes |
@@ -59,7 +59,7 @@ This document maps Magic Audit's security controls to the SOC 2 Trust Service Cr
 
 ### CC2: Communication and Information
 
-| ID | Criteria | Magic Audit Control | Implementation | Status | Evidence |
+| ID | Criteria | Keepr Control | Implementation | Status | Evidence |
 |----|----------|---------------------|----------------|--------|----------|
 | CC2.1 | Internal information quality | Structured logging, error handling | logService implementation, typed errors | Implemented | `logService.ts` |
 | CC2.2 | Internal communication | Team channels, documentation | README, setup guides, code comments | Implemented | Documentation files |
@@ -67,7 +67,7 @@ This document maps Magic Audit's security controls to the SOC 2 Trust Service Cr
 
 ### CC3: Risk Assessment
 
-| ID | Criteria | Magic Audit Control | Implementation | Status | Evidence |
+| ID | Criteria | Keepr Control | Implementation | Status | Evidence |
 |----|----------|---------------------|----------------|--------|----------|
 | CC3.1 | Risk objectives specified | Security review documentation | SECURITY_REVIEW.md, threat modeling | Implemented | Security review document |
 | CC3.2 | Risk identification and analysis | Security assessment, code review | Parameterized queries, input validation | Implemented | Security review, code audit |
@@ -76,14 +76,14 @@ This document maps Magic Audit's security controls to the SOC 2 Trust Service Cr
 
 ### CC4: Monitoring Activities
 
-| ID | Criteria | Magic Audit Control | Implementation | Status | Evidence |
+| ID | Criteria | Keepr Control | Implementation | Status | Evidence |
 |----|----------|---------------------|----------------|--------|----------|
 | CC4.1 | Ongoing/separate evaluations | Log monitoring, error tracking | Structured logging, Supabase analytics | Implemented | Log files, analytics dashboard |
 | CC4.2 | Deficiencies communicated | Issue tracking, incident response | GitHub issues, incident response plan | Implemented | Issue tracker, IRP |
 
 ### CC5: Control Activities
 
-| ID | Criteria | Magic Audit Control | Implementation | Status | Evidence |
+| ID | Criteria | Keepr Control | Implementation | Status | Evidence |
 |----|----------|---------------------|----------------|--------|----------|
 | CC5.1 | Control activities for risk mitigation | Security controls throughout application | Token encryption, access controls, input validation | Implemented | Security implementation |
 | CC5.2 | Technology general controls | Infrastructure security, access management | Supabase security, OAuth providers | Implemented | Vendor security |
@@ -91,7 +91,7 @@ This document maps Magic Audit's security controls to the SOC 2 Trust Service Cr
 
 ### CC6: Logical and Physical Access Controls
 
-| ID | Criteria | Magic Audit Control | Implementation | Status | Evidence |
+| ID | Criteria | Keepr Control | Implementation | Status | Evidence |
 |----|----------|---------------------|----------------|--------|----------|
 | CC6.1 | Logical access security | OAuth authentication, session management | Google/Microsoft OAuth, Supabase Auth | Implemented | Auth implementation |
 | CC6.2 | Access credentials management | Token encryption, credential storage | OS keychain (safeStorage API), token refresh | Implemented | `tokenEncryptionService.ts` |
@@ -104,7 +104,7 @@ This document maps Magic Audit's security controls to the SOC 2 Trust Service Cr
 
 ### CC7: System Operations
 
-| ID | Criteria | Magic Audit Control | Implementation | Status | Evidence |
+| ID | Criteria | Keepr Control | Implementation | Status | Evidence |
 |----|----------|---------------------|----------------|--------|----------|
 | CC7.1 | Infrastructure monitoring | Application logging, analytics | electron-log, Supabase analytics | Implemented | Log configuration |
 | CC7.2 | Security event monitoring | Authentication logging, error tracking | Auth events logged, structured errors | Implemented | Log implementation |
@@ -114,13 +114,13 @@ This document maps Magic Audit's security controls to the SOC 2 Trust Service Cr
 
 ### CC8: Change Management
 
-| ID | Criteria | Magic Audit Control | Implementation | Status | Evidence |
+| ID | Criteria | Keepr Control | Implementation | Status | Evidence |
 |----|----------|---------------------|----------------|--------|----------|
 | CC8.1 | Infrastructure/software changes | Version control, release process | Git, GitHub releases, electron-updater | Implemented | Release process |
 
 ### CC9: Risk Mitigation
 
-| ID | Criteria | Magic Audit Control | Implementation | Status | Evidence |
+| ID | Criteria | Keepr Control | Implementation | Status | Evidence |
 |----|----------|---------------------|----------------|--------|----------|
 | CC9.1 | Vendor risk management | Vendor assessment, DPAs | Vendor Inventory, security reviews | Partial | Vendor Inventory |
 | CC9.2 | Vendor service level review | Vendor monitoring | Supabase status, provider monitoring | Partial | Monitoring process |
@@ -129,7 +129,7 @@ This document maps Magic Audit's security controls to the SOC 2 Trust Service Cr
 
 ## 3. Availability Criteria
 
-| ID | Criteria | Magic Audit Control | Implementation | Status | Evidence |
+| ID | Criteria | Keepr Control | Implementation | Status | Evidence |
 |----|----------|---------------------|----------------|--------|----------|
 | A1.1 | Capacity management | Cloud infrastructure scaling | Supabase managed infrastructure | Implemented | Vendor SLA |
 | A1.2 | Environmental protections | N/A (cloud hosted) | Supabase data center security | N/A | Vendor SOC 2 |
@@ -139,7 +139,7 @@ This document maps Magic Audit's security controls to the SOC 2 Trust Service Cr
 
 ## 4. Processing Integrity Criteria
 
-| ID | Criteria | Magic Audit Control | Implementation | Status | Evidence |
+| ID | Criteria | Keepr Control | Implementation | Status | Evidence |
 |----|----------|---------------------|----------------|--------|----------|
 | PI1.1 | Data input completeness and accuracy | Input validation, data extraction | Required field validation, extraction confidence scores | Implemented | Validation logic |
 | PI1.2 | Data processing accuracy | Parameterized queries, typed data | SQLite parameterization, TypeScript types | Implemented | Database implementation |
@@ -151,7 +151,7 @@ This document maps Magic Audit's security controls to the SOC 2 Trust Service Cr
 
 ## 5. Confidentiality Criteria
 
-| ID | Criteria | Magic Audit Control | Implementation | Status | Evidence |
+| ID | Criteria | Keepr Control | Implementation | Status | Evidence |
 |----|----------|---------------------|----------------|--------|----------|
 | C1.1 | Confidential information identification | Data classification, sensitivity labels | PII identification, communication handling | Implemented | Data model |
 | C1.2 | Confidential information disposal | Secure deletion, retention policies | Data Retention Policy, secure wipe | Implemented | Retention Policy |
@@ -160,7 +160,7 @@ This document maps Magic Audit's security controls to the SOC 2 Trust Service Cr
 
 ## 6. Privacy Criteria
 
-| ID | Criteria | Magic Audit Control | Implementation | Status | Evidence |
+| ID | Criteria | Keepr Control | Implementation | Status | Evidence |
 |----|----------|---------------------|----------------|--------|----------|
 | P1.1 | Privacy notice | Privacy Policy | Draft Privacy Policy | Partial | Privacy Policy Draft |
 | P2.1 | Choice and consent | User consent, OAuth authorization | TOS acceptance, OAuth scopes, privacy acceptance | Implemented | Consent tracking |
@@ -345,4 +345,4 @@ This document maps Magic Audit's security controls to the SOC 2 Trust Service Cr
 
 ---
 
-*This document is proprietary to Magic Audit and intended for internal use only.*
+*This document is proprietary to Keepr and intended for internal use only.*

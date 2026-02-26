@@ -165,7 +165,7 @@ const createAppStateMock = (
   // UI state
   showSetupPromptDismissed: false,
   isTourActive: false,
-  appPath: "/Applications/MagicAudit.app",
+  appPath: "/Applications/Keepr.app",
 
   // Sync status
   syncStatus: undefined,

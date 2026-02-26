@@ -1,15 +1,15 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    MagicAudit Cleanup Script for Windows
+    Keepr Cleanup Script for Windows
     Removes all app data, caches, and credential entries
 
 .DESCRIPTION
-    This script performs a full cleanup of MagicAudit on Windows:
-    - Kills any running MagicAudit processes
+    This script performs a full cleanup of Keepr on Windows:
+    - Kills any running Keepr processes
     - Removes application data from AppData (Roaming and Local)
     - Removes the application from Program Files
-    - Clears Windows Credential Manager entries for magic-audit
+    - Clears Windows Credential Manager entries for Keepr
     - Prints verification status
 
 .NOTES
@@ -18,13 +18,13 @@
 #>
 
 Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "  MagicAudit Cleanup Tool (Windows)"       -ForegroundColor Cyan
+Write-Host "  Keepr Cleanup Tool (Windows)"            -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# --- Kill any running MagicAudit processes ---
-Write-Host "Stopping MagicAudit if running..."
-$processes = Get-Process -Name "MagicAudit" -ErrorAction SilentlyContinue
+# --- Kill any running processes ---
+Write-Host "Stopping Keepr if running..."
+$processes = Get-Process -Name "Keepr" -ErrorAction SilentlyContinue
 if ($processes) {
     $processes | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
@@ -37,12 +37,8 @@ if ($processes) {
 Write-Host "Removing application data..."
 
 $dataPaths = @(
-    "$env:APPDATA\magic-audit",
-    "$env:APPDATA\Magic Audit",
-    "$env:APPDATA\MagicAudit",
-    "$env:LOCALAPPDATA\magic-audit",
-    "$env:LOCALAPPDATA\Magic Audit",
-    "$env:LOCALAPPDATA\MagicAudit"
+    "$env:APPDATA\keepr",
+    "$env:LOCALAPPDATA\keepr"
 )
 
 foreach ($path in $dataPaths) {
@@ -56,10 +52,8 @@ foreach ($path in $dataPaths) {
 Write-Host "Removing application..."
 
 $appPaths = @(
-    "$env:ProgramFiles\MagicAudit",
-    "$env:ProgramFiles\Magic Audit",
-    "${env:ProgramFiles(x86)}\MagicAudit",
-    "${env:ProgramFiles(x86)}\Magic Audit"
+    "$env:ProgramFiles\Keepr",
+    "${env:ProgramFiles(x86)}\Keepr"
 )
 
 foreach ($path in $appPaths) {
@@ -72,8 +66,7 @@ foreach ($path in $appPaths) {
 # --- Clear Windows Credential Manager entries ---
 Write-Host "Removing credential entries..."
 
-# Use cmdkey to list and delete magic-audit credentials
-$credTargets = @("magic-audit", "MagicAudit", "magic-audit Safe Storage")
+$credTargets = @("keepr", "Keepr", "Keepr Safe Storage")
 foreach ($target in $credTargets) {
     $result = cmdkey /delete:$target 2>&1
     if ($LASTEXITCODE -eq 0) {
@@ -84,7 +77,7 @@ foreach ($target in $credTargets) {
 # Also try to remove from the generic credential store via rundll32
 # This handles Electron safeStorage credentials
 try {
-    $creds = cmdkey /list 2>&1 | Select-String -Pattern "magic-audit|MagicAudit" -SimpleMatch
+    $creds = cmdkey /list 2>&1 | Select-String -Pattern "keepr|Keepr" -SimpleMatch
     foreach ($cred in $creds) {
         $line = $cred.ToString().Trim()
         if ($line -match "Target:\s*(.+)") {
@@ -111,7 +104,7 @@ foreach ($path in ($dataPaths + $appPaths)) {
 }
 
 if ($remainingPaths.Count -eq 0) {
-    Write-Host "Status: All MagicAudit data removed" -ForegroundColor Green
+    Write-Host "Status: All Keepr data removed" -ForegroundColor Green
 } else {
     Write-Host "Warning: Some files may remain:" -ForegroundColor Yellow
     foreach ($path in $remainingPaths) {
@@ -120,5 +113,5 @@ if ($remainingPaths.Count -eq 0) {
 }
 
 Write-Host ""
-Write-Host "Cleanup complete. You can now reinstall MagicAudit." -ForegroundColor Cyan
+Write-Host "Cleanup complete. You can now reinstall Keepr." -ForegroundColor Cyan
 Write-Host ""

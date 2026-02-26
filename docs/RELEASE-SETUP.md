@@ -1,6 +1,6 @@
 # Release Setup Guide
 
-This document explains how to configure code signing and notarization for Magic Audit releases.
+This document explains how to configure code signing and notarization for Keepr releases.
 
 ## Overview
 
@@ -70,7 +70,7 @@ base64 -i your-certificate.p12 | pbcopy
 
 1. Go to [appleid.apple.com](https://appleid.apple.com)
 2. Sign in → Security → App-Specific Passwords
-3. Generate a new password for "Magic Audit CI"
+3. Generate a new password for "Keepr CI"
 4. Save this as `APPLE_APP_PASSWORD` secret
 
 ### 4. Find Your Team ID

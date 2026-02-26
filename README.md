@@ -1,4 +1,4 @@
-# Real Estate Archive App
+# Keepr
 
 A simple desktop application for exporting iMessage conversations to text files.
 

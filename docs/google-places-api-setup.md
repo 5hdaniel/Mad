@@ -26,7 +26,7 @@ This guide walks through setting up Google Places API for address verification i
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Click **"Create Project"** or select existing project
-3. Name it: "Magic Audit" or similar
+3. Name it: "Keepr" or similar
 4. Click **Create**
 
 ### 2. Enable Required APIs

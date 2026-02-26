@@ -128,7 +128,7 @@ export function SourcePill({
 /**
  * ImportStatusPill Component
  *
- * Small pill indicating whether a contact has been imported into Magic Audit.
+ * Small pill indicating whether a contact has been imported into Keepr.
  */
 export function ImportStatusPill({
   isImported,

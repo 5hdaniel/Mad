@@ -27,7 +27,7 @@ export interface ResetResult {
 
 /**
  * What gets reset:
- * - SQLite database (~/Library/Application Support/Magic Audit/)
+ * - SQLite database (~/Library/Application Support/Keepr/)
  * - Session data (session.json in userData)
  * - App preferences stored in userData
  * - Encryption key store

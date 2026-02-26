@@ -6,7 +6,7 @@
 
 ## Overview
 
-This document summarizes the Row Level Security (RLS) audit for the Magic Audit B2B Broker Portal. The audit ensures brokers can:
+This document summarizes the Row Level Security (RLS) audit for the Keepr B2B Broker Portal. The audit ensures brokers can:
 - Read submissions for their organization
 - Update submission status (approve/reject/needs_changes)
 - Read/write submission attachments

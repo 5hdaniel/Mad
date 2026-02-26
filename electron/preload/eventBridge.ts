@@ -260,7 +260,7 @@ export const eventBridge = {
 
   /**
    * Listens for deep link authentication callback events
-   * Fired when the app receives a magicaudit://callback URL with tokens
+   * Fired when the app receives a keepr://callback URL with tokens
    * @param callback - Callback function to handle auth tokens
    * @returns Cleanup function to remove listener
    */

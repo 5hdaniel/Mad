@@ -59,7 +59,7 @@ const devDiagnostics = __DEV__
 
       /**
        * DEV-ONLY: Manually trigger deep link callback when protocol handler fails
-       * @param url - The full magicaudit://callback?... URL from browser
+       * @param url - The full keepr://callback?... URL from browser
        * @returns Success result
        */
       manualDeepLink: (url: string) =>

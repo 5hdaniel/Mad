@@ -1626,7 +1626,7 @@ interface MainAPI {
 
   /**
    * Listen for deep link auth callback with tokens and license status
-   * Fired when app receives magicaudit://callback and auth/license validation succeeds
+   * Fired when app receives keepr://callback and auth/license validation succeeds
    * TASK-1507: Enhanced to include user, license, and device data
    */
   onDeepLinkAuthCallback: (
