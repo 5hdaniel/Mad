@@ -9,12 +9,12 @@ import { useCallback, useMemo } from "react";
 import type { AppStep } from "../types";
 
 export interface UseKeychainHandlersOptions {
-  initializeSecureStorage: (dontShowAgain: boolean) => Promise<boolean>;
+  initializeSecureStorage: () => Promise<boolean>;
   setCurrentStep: (step: AppStep) => void;
 }
 
 export interface UseKeychainHandlersReturn {
-  handleKeychainExplanationContinue: (dontShowAgain: boolean) => Promise<void>;
+  handleKeychainExplanationContinue: () => Promise<void>;
   handleKeychainBack: () => void;
 }
 
@@ -23,8 +23,8 @@ export function useKeychainHandlers({
   setCurrentStep,
 }: UseKeychainHandlersOptions): UseKeychainHandlersReturn {
   const handleKeychainExplanationContinue = useCallback(
-    async (dontShowAgain: boolean): Promise<void> => {
-      await initializeSecureStorage(dontShowAgain);
+    async (): Promise<void> => {
+      await initializeSecureStorage();
     },
     [initializeSecureStorage],
   );
