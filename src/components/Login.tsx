@@ -659,7 +659,7 @@ const Login = ({
       <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8">
         {/* Logo/Title */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Keepr</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Keepr.</h1>
           <p className="text-gray-600">Real Estate Compliance Made Simple</p>
         </div>
 
