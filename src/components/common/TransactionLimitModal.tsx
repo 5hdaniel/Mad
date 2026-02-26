@@ -63,7 +63,7 @@ export function TransactionLimitModal({
         <div className="space-y-3">
           <button
             onClick={() =>
-              window.open("https://www.keeprcompliance.com/beta", "_blank")
+              window.api?.shell?.openExternal?.("https://www.keeprcompliance.com/beta")
             }
             className="w-full py-2.5 px-4 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
           >
@@ -71,7 +71,7 @@ export function TransactionLimitModal({
           </button>
           <button
             onClick={() =>
-              window.open("mailto:support@keeprcompliance.com?subject=Transaction%20Limit%20Inquiry", "_blank")
+              window.api?.shell?.openExternal?.("mailto:support@keeprcompliance.com?subject=Transaction%20Limit%20Inquiry")
             }
             className="w-full py-2.5 px-4 bg-white text-gray-700 rounded-lg font-medium border border-gray-300 hover:bg-gray-50 transition-colors"
           >
