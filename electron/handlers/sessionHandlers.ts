@@ -220,6 +220,7 @@ async function handleLogout(
     sessionSecurityService.cleanupSession(validatedSessionToken);
 
     setSyncUserId(null);
+    Sentry.setUser(null);
 
     await auditService.log({
       userId,
@@ -984,6 +985,7 @@ async function handleForceLogout(): Promise<AuthResponse> {
 
     // 4. Clear sync user ID
     setSyncUserId(null);
+    Sentry.setUser(null);
 
     await logService.info("Force logout completed successfully", "AuthHandlers");
     return { success: true };
