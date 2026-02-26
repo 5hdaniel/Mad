@@ -1,10 +1,10 @@
 # Database Migration Guide
 
-> Canonical reference for adding, modifying, or removing schema in Magic Audit.
+> Canonical reference for adding, modifying, or removing schema in Keepr.
 
 ## Architecture
 
-Magic Audit uses a **version-based migration runner** with two components:
+Keepr uses a **version-based migration runner** with two components:
 
 | Component | File | Purpose |
 |-----------|------|---------|

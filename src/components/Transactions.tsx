@@ -1,6 +1,6 @@
 /**
  * Transactions Component
- * Main transaction management interface for Magic Audit
+ * Main transaction management interface for Keepr
  *
  * This component serves as the coordinator for transaction listing,
  * filtering, bulk operations, and navigation to detail views.

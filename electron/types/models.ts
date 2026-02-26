@@ -1,5 +1,5 @@
 /**
- * Core Data Models for Magic Audit
+ * Core Data Models for Keepr
  * Version: 2.0 (LLM + Agent Ready)
  * These types represent the main entities in the application
  */

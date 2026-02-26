@@ -1,6 +1,6 @@
 # Vendor Inventory
 
-**Magic Audit - Third-Party Vendor Inventory**
+**Keepr - Third-Party Vendor Inventory**
 
 > **NOTICE**: This document requires legal review before publication. All vendor assessments should be verified with current documentation from each provider.
 
@@ -22,7 +22,7 @@
 
 ## 1. Overview
 
-This document inventories all third-party vendors and service providers that process, store, or have access to Magic Audit data. Each vendor has been assessed for SOC 2 compliance, data processing agreements (DPA), and security posture.
+This document inventories all third-party vendors and service providers that process, store, or have access to Keepr data. Each vendor has been assessed for SOC 2 compliance, data processing agreements (DPA), and security posture.
 
 ### 1.1 Vendor Risk Categories
 
@@ -258,7 +258,7 @@ For all new vendors processing sensitive data:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                        MAGIC AUDIT DATA FLOW                            │
+│                        KEEPR DATA FLOW                            │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
 │  ┌─────────────┐                                                        │
@@ -354,4 +354,4 @@ For all new vendors processing sensitive data:
 
 ---
 
-*This document is proprietary to Magic Audit and intended for internal use only.*
+*This document is proprietary to Keepr and intended for internal use only.*

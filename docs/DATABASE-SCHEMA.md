@@ -1,4 +1,4 @@
-# Magic Audit - Database Schema Documentation
+# Keepr - Database Schema Documentation
 
 Generated: 2024-12-12
 

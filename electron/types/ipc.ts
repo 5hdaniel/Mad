@@ -1,5 +1,5 @@
 /**
- * IPC (Inter-Process Communication) Types for Magic Audit
+ * IPC (Inter-Process Communication) Types for Keepr
  * These types define type-safe communication between main and renderer processes
  */
 

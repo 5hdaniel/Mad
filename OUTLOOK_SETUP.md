@@ -83,7 +83,7 @@ The Outlook integration feature:
 End users don't need to do any setup! They just need to:
 
 1. **Launch the Application**
-   - Open the Real Estate Archive app
+   - Open the Keepr app
 
 2. **Select Contacts**
    - Select the conversations/contacts they want to export

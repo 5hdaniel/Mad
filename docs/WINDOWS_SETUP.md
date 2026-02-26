@@ -1,6 +1,6 @@
-# Magic Audit - Windows Setup Guide
+# Keepr - Windows Setup Guide
 
-This guide explains how to use Magic Audit on Windows to sync messages and contacts from your iPhone.
+This guide explains how to use Keepr on Windows to sync messages and contacts from your iPhone.
 
 ## System Requirements
 
@@ -27,12 +27,12 @@ iTunes is required for the Apple Mobile Device drivers that allow Windows to com
 
 > **Note:** After installing iTunes, you may need to restart your computer.
 
-### Step 2: Install Magic Audit
+### Step 2: Install Keepr
 
-1. Download the Magic Audit installer from [your download location]
+1. Download the Keepr installer from [your download location]
 2. Run the installer
 3. Follow the installation wizard
-4. Launch Magic Audit from the Start Menu
+4. Launch Keepr from the Start Menu
 
 ## First-Time iPhone Sync
 
@@ -53,7 +53,7 @@ When you connect your iPhone to a new computer:
 
 ### Step 3: Start the Sync
 
-1. In Magic Audit, your iPhone should appear in the device list
+1. In Keepr, your iPhone should appear in the device list
 2. Click **"Sync from iPhone"**
 3. Wait for the sync to complete
 
@@ -61,7 +61,7 @@ When you connect your iPhone to a new computer:
 
 If you've previously enabled "Encrypt iPhone backup" in iTunes:
 
-1. Magic Audit will prompt you for your backup password
+1. Keepr will prompt you for your backup password
 2. Enter the password you set when enabling encrypted backups
 3. Click **"Continue"**
 
@@ -91,7 +91,7 @@ Subsequent syncs are faster because only new data is transferred (incremental ba
 
 2. **Check iTunes Installation**
    - Open iTunes and verify it detects your iPhone
-   - If iTunes doesn't see the iPhone, Magic Audit won't either
+   - If iTunes doesn't see the iPhone, Keepr won't either
 
 3. **Restart Services**
    - Open Services (Win+R, type `services.msc`)
@@ -119,18 +119,18 @@ Subsequent syncs are faster because only new data is transferred (incremental ba
 ### Wrong Password for Encrypted Backup
 
 If you enter the wrong password:
-1. Magic Audit will show an error
+1. Keepr will show an error
 2. Click "Try Again"
 3. Enter the correct password
 
 If you don't remember the password:
-1. You cannot sync with Magic Audit using encrypted backups
+1. You cannot sync with Keepr using encrypted backups
 2. Option: Disable encrypted backups in iTunes
    - Open iTunes
    - Select your iPhone
    - Uncheck "Encrypt local backup"
    - Enter your current password to disable
-   - Sync again with Magic Audit
+   - Sync again with Keepr
 
 ### Slow Sync Speed
 
@@ -143,7 +143,7 @@ If you don't remember the password:
 
 ### Where is Data Stored?
 
-- Backup data: `%APPDATA%\Magic Audit\Backups\`
+- Backup data: `%APPDATA%\Keepr\Backups\`
 - Extracted messages: Stored in encrypted local database
 - Cleanup: Temporary backup files are deleted after extraction
 
@@ -155,7 +155,7 @@ If you don't remember the password:
 
 ### SOC 2 Compliance
 
-Magic Audit on Windows meets the same SOC 2 compliance standards as the macOS version:
+Keepr on Windows meets the same SOC 2 compliance standards as the macOS version:
 - Data encrypted at rest
 - Secure credential storage
 - Audit logging
@@ -176,7 +176,7 @@ Magic Audit on Windows meets the same SOC 2 compliance standards as the macOS ve
 If you continue to experience issues:
 
 1. **Check Logs**
-   - Open Magic Audit
+   - Open Keepr
    - Go to Help > View Logs
    - Look for error messages
 
