@@ -2,9 +2,11 @@
  * TransactionsToolbar Component
  * Toolbar for the transactions page with filters, search, and actions
  */
-import React from "react";
+import React, { useState } from "react";
 import type { Transaction } from "../../../../electron/types/models";
 import { LicenseGate } from "../../common/LicenseGate";
+import { TransactionLimitModal } from "../../common/TransactionLimitModal";
+import { useLicense } from "../../../contexts/LicenseContext";
 
 // ============================================
 // TYPES
@@ -67,6 +69,17 @@ export function TransactionsToolbar({
   quickExportSuccess,
   bulkActionSuccess,
 }: TransactionsToolbarProps): React.ReactElement {
+  const { canCreateTransaction, transactionCount: licenseTransactionCount, transactionLimit } = useLicense();
+  const [showLimitModal, setShowLimitModal] = useState(false);
+
+  const handleNewTransaction = () => {
+    if (!canCreateTransaction) {
+      setShowLimitModal(true);
+      return;
+    }
+    onNewTransaction();
+  };
+
   const activeCount = transactions.filter(
     (t: Transaction) => t.status === "active"
   ).length;
@@ -165,7 +178,7 @@ export function TransactionsToolbar({
 
           {/* Audit New Transaction Button */}
           <button
-            onClick={onNewTransaction}
+            onClick={handleNewTransaction}
             className="px-2 sm:px-4 py-2 h-10 rounded-lg font-semibold transition-all bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg flex items-center gap-1 sm:gap-2 text-sm whitespace-nowrap"
           >
             <svg
@@ -352,6 +365,13 @@ export function TransactionsToolbar({
             </div>
           </div>
         </div>
+      )}
+    {showLimitModal && (
+        <TransactionLimitModal
+          transactionCount={licenseTransactionCount}
+          transactionLimit={transactionLimit}
+          onClose={() => setShowLimitModal(false)}
+        />
       )}
     </div>
   );

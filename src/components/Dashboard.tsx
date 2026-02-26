@@ -7,6 +7,7 @@ import { SyncStatusIndicator } from "./dashboard/index";
 import StartNewAuditModal from "./StartNewAuditModal";
 import { LicenseGate } from "./common/LicenseGate";
 import { AlertBanner, AlertIcons } from "./common/AlertBanner";
+import { TransactionLimitModal } from "./common/TransactionLimitModal";
 import { useLicense } from "../contexts/LicenseContext";
 import {
   getDashboardTourSteps,
@@ -62,6 +63,8 @@ function Dashboard({
 
   // State for the Start New Audit modal
   const [showStartNewAuditModal, setShowStartNewAuditModal] = useState(false);
+  // State for the transaction limit popup
+  const [showLimitModal, setShowLimitModal] = useState(false);
 
   // Get sync state from SyncOrchestrator (single source of truth for sync status)
   const { isRunning: isAnySyncing } = useSyncOrchestrator();
@@ -96,13 +99,14 @@ function Dashboard({
   // For non-AI users: skip the StartNewAuditModal and go directly to manual creation
   // For AI users: show the modal with AI-detected transactions
   const handleStartNewAuditClick = useCallback(() => {
+    // Check transaction limit first
+    if (!canCreateTransaction) {
+      setShowLimitModal(true);
+      return;
+    }
     if (!hasAIAddon) {
       // Non-AI users bypass the modal entirely
-      // Transaction limit is enforced: only proceed if allowed
-      if (canCreateTransaction) {
-        onAuditNew();
-      }
-      // If limit reached, do nothing -- the limit banner is already visible on Dashboard
+      onAuditNew();
       return;
     }
     setShowStartNewAuditModal(true);
@@ -438,6 +442,14 @@ function Dashboard({
           onClose={handleCloseStartNewAuditModal}
           onSync={onTriggerRefresh}
           isSyncing={isAnySyncing}
+        />
+      )}
+
+      {showLimitModal && (
+        <TransactionLimitModal
+          transactionCount={transactionCount}
+          transactionLimit={transactionLimit}
+          onClose={() => setShowLimitModal(false)}
         />
       )}
     </div>
