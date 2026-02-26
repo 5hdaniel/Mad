@@ -16,6 +16,7 @@ import {
   isThreadLinkedToTransaction,
 } from "./db/communicationDbService";
 import { computeTransactionDateRange } from "../utils/emailDateRange";
+import { normalizeAddress, contentContainsAddress } from "../utils/addressNormalization";
 
 
 // ============================================
@@ -64,13 +65,14 @@ interface ContactInfo {
 }
 
 /**
- * Transaction info needed for auto-linking (dates + user ID)
+ * Transaction info needed for auto-linking (dates + user ID + address)
  */
 interface TransactionInfo {
   userId: string;
   started_at: string | null;
   created_at: string | null;
   closed_at: string | null;
+  propertyAddress: string | null;
 }
 
 // ============================================
@@ -126,7 +128,9 @@ async function getTransactionInfo(
       user_id,
       started_at,
       created_at,
-      closed_at
+      closed_at,
+      property_address,
+      property_street
     FROM transactions
     WHERE id = ?
   `;
@@ -136,6 +140,8 @@ async function getTransactionInfo(
     started_at: string | null;
     created_at: string | null;
     closed_at: string | null;
+    property_address: string | null;
+    property_street: string | null;
   }>(sql, [transactionId]);
 
   if (!transaction) {
@@ -147,6 +153,7 @@ async function getTransactionInfo(
     started_at: transaction.started_at,
     created_at: transaction.created_at,
     closed_at: transaction.closed_at,
+    propertyAddress: transaction.property_address || transaction.property_street || null,
   };
 }
 
@@ -168,7 +175,8 @@ async function findEmailsByContactEmails(
   userId: string,
   emails: string[],
   transactionId: string,
-  dateRange: { start: Date; end: Date }
+  dateRange: { start: Date; end: Date },
+  normalizedAddress?: string | null
 ): Promise<string[]> {
   if (emails.length === 0) {
     return [];
@@ -214,6 +222,11 @@ async function findEmailsByContactEmails(
 
   // BACKLOG-506: Query emails table for content, check if already linked via communications
   // No LIMIT — local SQLite queries are fast and we want to link all matching emails
+  // TASK-2087: Optional address filter narrows results to emails mentioning the property address
+  const addressClause = normalizedAddress
+    ? `AND (LOWER(e.subject) LIKE ? OR LOWER(e.body_plain) LIKE ?)`
+    : '';
+
   const sql = `
     SELECT e.id
     FROM emails e
@@ -223,16 +236,20 @@ async function findEmailsByContactEmails(
       AND (${emailConditions})
       AND e.sent_at >= ?
       AND e.sent_at <= ?
+      ${addressClause}
     ORDER BY e.sent_at DESC
   `;
 
-  // Reorder params: transactionId for JOIN, userId for WHERE, then email patterns, then date range
+  // Reorder params: transactionId for JOIN, userId for WHERE, then email patterns, then date range, then address
   const reorderedParams: (string | number)[] = [transactionId, userId];
   for (const email of contactEmails) {
     reorderedParams.push(`%${email}%`, `%${email}%`, `%${email}%`);
   }
   reorderedParams.push(dateRange.start.toISOString());
   reorderedParams.push(dateRange.end.toISOString());
+  if (normalizedAddress) {
+    reorderedParams.push(`%${normalizedAddress}%`, `%${normalizedAddress}%`);
+  }
 
   const results = dbAll<{ id: string }>(sql, reorderedParams);
   return results.map((r) => r.id);
@@ -258,7 +275,8 @@ async function findMessagesByContactPhones(
   userId: string,
   phoneNumbers: string[],
   transactionId: string,
-  dateRange: { start: Date; end: Date }
+  dateRange: { start: Date; end: Date },
+  normalizedAddress?: string | null
 ): Promise<MessageWithThread[]> {
   if (phoneNumbers.length === 0) {
     return [];
@@ -288,6 +306,15 @@ async function findMessagesByContactPhones(
 
   // TASK-1115: Select DISTINCT threads to avoid missing threads due to LIMIT
   // No LIMIT — local SQLite queries are fast and we want to link all matching threads
+  // TASK-2087: Optional address filter narrows results to messages mentioning the property address
+  const msgAddressClause = normalizedAddress
+    ? `AND (LOWER(m.body) LIKE ? OR LOWER(m.subject) LIKE ?)`
+    : '';
+
+  if (normalizedAddress) {
+    params.push(`%${normalizedAddress}%`, `%${normalizedAddress}%`);
+  }
+
   const sql = `
     SELECT DISTINCT m.thread_id, MIN(m.id) as id
     FROM messages m
@@ -305,6 +332,7 @@ async function findMessagesByContactPhones(
       AND (${phoneConditions})
       AND m.sent_at >= ?
       AND m.sent_at <= ?
+      ${msgAddressClause}
     GROUP BY m.thread_id
     ORDER BY MAX(m.sent_at) DESC
   `;
@@ -451,12 +479,18 @@ export async function autoLinkCommunicationsForContact(
           closed_at: transactionInfo.closed_at,
         });
 
+    // TASK-2087: Normalize the transaction's property address for content filtering.
+    // When multiple transactions share the same contacts, this helps link emails
+    // to the correct transaction by checking if the email content mentions the address.
+    const txnNormalizedAddress = normalizeAddress(transactionInfo.propertyAddress);
+
     await logService.info(
       `Auto-linking communications for contact ${contactId} to transaction ${transactionId}`,
       "AutoLinkService",
       {
         emails: contactInfo.emails.length,
         phones: contactInfo.phoneNumbers.length,
+        normalizedAddress: txnNormalizedAddress,
         dateRange: {
           start: dateRange.start.toISOString(),
           end: dateRange.end.toISOString(),
@@ -465,12 +499,35 @@ export async function autoLinkCommunicationsForContact(
     );
 
     // 4. Find matching emails (from communications table)
-    const emailIds = await findEmailsByContactEmails(
+    // TASK-2087: First try with address filter, then fall back to unfiltered if no results
+    let emailIds = await findEmailsByContactEmails(
       userId,
       contactInfo.emails,
       transactionId,
-      dateRange
+      dateRange,
+      txnNormalizedAddress
     );
+
+    if (emailIds.length === 0 && txnNormalizedAddress) {
+      // Fallback: address filter eliminated all results, retry without it
+      emailIds = await findEmailsByContactEmails(
+        userId,
+        contactInfo.emails,
+        transactionId,
+        dateRange
+      );
+      if (emailIds.length > 0) {
+        await logService.debug(
+          `Address filter fallback: no emails matched "${txnNormalizedAddress}", returning ${emailIds.length} unfiltered results`,
+          "AutoLinkService"
+        );
+      }
+    } else if (txnNormalizedAddress) {
+      await logService.debug(
+        `Address filter applied: ${emailIds.length} emails matched "${txnNormalizedAddress}"`,
+        "AutoLinkService"
+      );
+    }
 
     await logService.debug(
       `Found ${emailIds.length} matching emails for contact ${contactId}`,
@@ -482,14 +539,37 @@ export async function autoLinkCommunicationsForContact(
     // Auto-linking messages to a transaction for an assigned contact is always
     // enabled. The "inferred messages" preference only gates contact *discovery*
     // from messages — it should NOT prevent linking messages for known contacts.
+    // TASK-2087: Same address filter + fallback logic as emails
     let messagesWithThreads: MessageWithThread[] = [];
     if (contactInfo.phoneNumbers.length > 0) {
       messagesWithThreads = await findMessagesByContactPhones(
         userId,
         contactInfo.phoneNumbers,
         transactionId,
-        dateRange
+        dateRange,
+        txnNormalizedAddress
       );
+
+      if (messagesWithThreads.length === 0 && txnNormalizedAddress) {
+        // Fallback: address filter eliminated all results, retry without it
+        messagesWithThreads = await findMessagesByContactPhones(
+          userId,
+          contactInfo.phoneNumbers,
+          transactionId,
+          dateRange
+        );
+        if (messagesWithThreads.length > 0) {
+          await logService.debug(
+            `Address filter fallback: no messages matched "${txnNormalizedAddress}", returning ${messagesWithThreads.length} unfiltered results`,
+            "AutoLinkService"
+          );
+        }
+      } else if (txnNormalizedAddress) {
+        await logService.debug(
+          `Address filter applied: ${messagesWithThreads.length} messages matched "${txnNormalizedAddress}"`,
+          "AutoLinkService"
+        );
+      }
 
       await logService.debug(
         `Found ${messagesWithThreads.length} matching messages for contact ${contactId}`,
