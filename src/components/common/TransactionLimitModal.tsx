@@ -59,11 +59,6 @@ export function TransactionLimitModal({
           transactions.
         </p>
 
-        {/* Progress bar */}
-        <div className="w-full h-2 bg-gray-200 rounded-full mb-6 overflow-hidden">
-          <div className="h-full bg-orange-500 rounded-full" style={{ width: "100%" }} />
-        </div>
-
         {/* Actions */}
         <div className="space-y-3">
           <button
