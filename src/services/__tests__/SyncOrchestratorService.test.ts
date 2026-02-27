@@ -42,7 +42,7 @@ Object.defineProperty(global, 'window', {
   value: {
     api: {
       preferences: { get: jest.fn() },
-      contacts: { getAll: jest.fn(), syncOutlookContacts: jest.fn() },
+      contacts: { syncExternal: jest.fn(), syncOutlookContacts: jest.fn() },
       transactions: { scan: jest.fn() },
       messages: { importMacOSMessages: jest.fn(), onImportProgress: jest.fn() },
       notification: { send: jest.fn() },
