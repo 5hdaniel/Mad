@@ -611,6 +611,11 @@ class EmailSyncService {
         });
         // TASK-2070: Classify provider error for UI warning
         if (!isNetworkError(gmailError)) {
+          Sentry.captureException(gmailError, {
+            tags: { service: "email-sync", operation: "provider-fetch", provider: "gmail" },
+            level: "warning",
+            fingerprint: ["provider-fetch-failure", "gmail"],
+          });
           providerWarning = classifyProviderError(gmailError);
         } else {
           providerWarning = "Could not reach your email provider. Showing cached results only.";
@@ -676,6 +681,11 @@ class EmailSyncService {
         // TASK-2070: Classify provider error for UI warning
         if (!providerWarning) {
           if (!isNetworkError(outlookError)) {
+            Sentry.captureException(outlookError, {
+              tags: { service: "email-sync", operation: "provider-fetch", provider: "outlook" },
+              level: "warning",
+              fingerprint: ["provider-fetch-failure", "outlook"],
+            });
             providerWarning = classifyProviderError(outlookError);
           } else {
             providerWarning = "Could not reach your email provider. Showing cached results only.";
@@ -955,10 +965,22 @@ class EmailSyncService {
           networkErrorMessage: "Network disconnected during Outlook sync. Emails saved so far will be preserved.",
         };
       } else {
-        // TASK-2070: Non-network provider error (token expiry, API error, etc.)
-        logService.warn("Outlook fetch failed, falling back to local search", "Transactions", {
-          error: outlookError instanceof Error ? outlookError.message : "Unknown",
-        });
+        const errorMsg = outlookError instanceof Error ? outlookError.message : "";
+        if (errorMsg.includes("needs to connect")) {
+          // Provider not configured — skip silently (not a provider error)
+          logService.info("Outlook not connected, skipping", "Transactions");
+          return { fetched, stored, networkError: false };
+        } else {
+          // TASK-2070: Non-network provider error (token expiry, API error, etc.)
+          logService.warn("Outlook fetch failed, falling back to local search", "Transactions", {
+            error: errorMsg || "Unknown",
+          });
+          Sentry.captureException(outlookError, {
+            tags: { service: "email-sync", operation: "provider-fetch", provider: "outlook" },
+            level: "warning",
+            fingerprint: ["provider-fetch-failure", "outlook"],
+          });
+        }
       }
       // TASK-2058: Log failure for offline diagnostics
       failureLogService.logFailure(
@@ -1092,10 +1114,22 @@ class EmailSyncService {
           networkErrorMessage: "Network disconnected during Gmail sync. Emails saved so far will be preserved.",
         };
       } else {
-        // TASK-2070: Non-network provider error (token expiry, API error, etc.)
-        logService.warn("Gmail fetch failed, falling back to local search", "Transactions", {
-          error: gmailError instanceof Error ? gmailError.message : "Unknown",
-        });
+        const errorMsg = gmailError instanceof Error ? gmailError.message : "";
+        if (errorMsg.includes("needs to connect")) {
+          // Provider not configured — skip silently (not a provider error)
+          logService.info("Gmail not connected, skipping", "Transactions");
+          return { fetched, stored, networkError: false };
+        } else {
+          // TASK-2070: Non-network provider error (token expiry, API error, etc.)
+          logService.warn("Gmail fetch failed, falling back to local search", "Transactions", {
+            error: errorMsg || "Unknown",
+          });
+          Sentry.captureException(gmailError, {
+            tags: { service: "email-sync", operation: "provider-fetch", provider: "gmail" },
+            level: "warning",
+            fingerprint: ["provider-fetch-failure", "gmail"],
+          });
+        }
       }
       // TASK-2058: Log failure for offline diagnostics
       failureLogService.logFailure(

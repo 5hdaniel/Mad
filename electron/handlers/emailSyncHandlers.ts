@@ -120,7 +120,7 @@ export function registerEmailSyncHandlers(
           ...sanitizedOptions,
           onProgress: (progress: unknown) => {
             // Send progress updates to renderer
-            if (mainWindow) {
+            if (mainWindow && !mainWindow.isDestroyed()) {
               mainWindow.webContents.send(
                 "transactions:scan-progress",
                 progress,
