@@ -6,7 +6,6 @@
 
 import outlookFetchService from "../outlookFetchService";
 import databaseService from "../databaseService";
-import microsoftAuthService from "../microsoftAuthService";
 import axios from "axios";
 
 // Mock dependencies
@@ -156,7 +155,7 @@ describe("OutlookFetchService - Folder Discovery (TASK-2046)", () => {
         });
       });
 
-      const folders = await outlookFetchService.discoverFolders(undefined, 3);
+      await outlookFetchService.discoverFolders(undefined, 3);
 
       // Should stop at depth 3 (1 + 2 + 3 = 3 folders max)
       // maxDepth=3 allows: level 1 (depth=3), level 2 (depth=2), level 3 (depth=1), then stops

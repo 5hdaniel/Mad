@@ -560,14 +560,30 @@ function findFilesRecursive(
  * Extract MSI from iTunes installer
  * iTunes installer is an EXE that contains multiple MSI files
  */
+/**
+ * Validate that a file path is safe for use in shell commands.
+ * Rejects paths containing shell metacharacters that could enable injection.
+ */
+function validateShellPath(p: string): string {
+  // Only allow alphanumeric, path separators, dots, hyphens, underscores, spaces
+  if (/[`$|;&<>(){}!\[\]'"\\*?~#]/.test(p)) {
+    throw new Error(`Unsafe characters in path: ${p}`);
+  }
+  return p;
+}
+
 async function extractMsiFromInstaller(
   installerPath: string,
   outputDir: string,
 ): Promise<string | null> {
   try {
+    // Validate paths before shell usage to prevent command injection
+    const safeInstallerPath = validateShellPath(installerPath);
+    const safeOutputDir = validateShellPath(outputDir);
+
     // Create output directory
-    if (!fs.existsSync(outputDir)) {
-      fs.mkdirSync(outputDir, { recursive: true });
+    if (!fs.existsSync(safeOutputDir)) {
+      fs.mkdirSync(safeOutputDir, { recursive: true });
     }
 
     log.info("[AppleDriverService] Extracting iTunes installer...");
@@ -578,7 +594,7 @@ async function extractMsiFromInstaller(
       log.info("[AppleDriverService] Found 7-Zip at:", sevenZipPath);
       try {
         await execAsync(
-          `"${sevenZipPath}" x "${installerPath}" -o"${outputDir}" -y`,
+          `"${validateShellPath(sevenZipPath)}" x "${safeInstallerPath}" -o"${safeOutputDir}" -y`,
           {
             timeout: 120000,
           },

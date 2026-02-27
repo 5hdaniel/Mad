@@ -46,6 +46,24 @@ interface RevokeTokenResult {
 }
 
 // ============================================
+// HELPERS
+// ============================================
+
+/**
+ * Escape a string for safe interpolation into HTML.
+ * Prevents reflected XSS when user-controlled data (e.g. error_description)
+ * is rendered in an HTML response.
+ */
+function escapeHtml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// ============================================
 // SERVICE CLASS
 // ============================================
 
@@ -192,7 +210,7 @@ class MicrosoftAuthService {
                       </svg>
                     </div>
                     <h1 style="color: #1a202c; font-size: 1.875rem; font-weight: 700; margin: 0 0 1rem 0;">Authentication Failed</h1>
-                    <p style="color: #4a5568; font-size: 1rem; margin: 0 0 1.5rem 0; line-height: 1.5;">${parsedUrl.query.error_description || error}</p>
+                    <p style="color: #4a5568; font-size: 1rem; margin: 0 0 1.5rem 0; line-height: 1.5;">${escapeHtml(String(parsedUrl.query.error_description || error))}</p>
                     <p style="color: #718096; font-size: 0.875rem; margin: 0;">You can close this window and try again.</p>
                   </div>
                 </body>

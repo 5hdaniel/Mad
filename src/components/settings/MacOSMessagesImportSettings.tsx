@@ -276,14 +276,6 @@ export function MacOSMessagesImportSettings({
     [userId, isImporting, maxMessages]
   );
 
-  const handleCancel = useCallback(() => {
-    // Type assertion for cancelImport method (TASK-1710)
-    const cancelFn = (window.api.messages as { cancelImport?: () => void })
-      .cancelImport;
-    if (cancelFn) {
-      cancelFn();
-    }
-  }, []);
 
   // Only render on macOS
   if (!isMacOS) {

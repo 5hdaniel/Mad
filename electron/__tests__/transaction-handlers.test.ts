@@ -118,7 +118,7 @@ const mockTransactionService = transactionService as jest.Mocked<
 >;
 const mockAuditService = auditService as jest.Mocked<typeof auditService>;
 const mockLogService = logService as jest.Mocked<typeof logService>;
-const mockPdfExportService = pdfExportService as jest.Mocked<
+const _mockPdfExportService = pdfExportService as jest.Mocked<
   typeof pdfExportService
 >;
 const mockFolderExportService = folderExportService as jest.Mocked<

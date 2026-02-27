@@ -260,12 +260,18 @@ class DatabaseEncryptionService {
    */
   async isDatabaseEncrypted(dbPath: string): Promise<boolean> {
     try {
-      if (!fs.existsSync(dbPath)) {
-        return false; // New database, will be created encrypted
+      // Open directly and handle ENOENT, avoiding TOCTOU race with existsSync
+      let fd: number;
+      try {
+        fd = fs.openSync(dbPath, "r");
+      } catch (err: unknown) {
+        if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "ENOENT") {
+          return false; // New database, will be created encrypted
+        }
+        throw err;
       }
 
       // Read the first 16 bytes of the file
-      const fd = fs.openSync(dbPath, "r");
       const buffer = Buffer.alloc(16);
       fs.readSync(fd, buffer, 0, 16, 0);
       fs.closeSync(fd);

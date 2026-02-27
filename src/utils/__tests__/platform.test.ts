@@ -10,7 +10,6 @@ import {
   isLinux,
   isFeatureAvailable,
   platformFeatures,
-  Platform,
 } from "../platform";
 
 // Store originals

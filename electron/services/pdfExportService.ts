@@ -507,16 +507,27 @@ class PDFExportService {
 
     // Helper to sanitize HTML for PDF display
     // Removes dangerous elements while preserving formatting
+    // Uses while-loop pattern to handle nested/overlapping patterns
+    // (e.g., <scr<script>ipt> after one pass becomes <script>)
     const sanitizeHtml = (html: string | null | undefined): string => {
       if (!html) return '';
 
       let sanitized = html;
+      let prev: string;
 
-      // Remove script tags and their content
-      sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+      // Remove script tags and their content (loop for nested patterns)
+      prev = '';
+      while (sanitized !== prev) {
+        prev = sanitized;
+        sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+      }
 
-      // Remove style tags and their content (we use our own styles)
-      sanitized = sanitized.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+      // Remove style tags and their content (loop for nested patterns)
+      prev = '';
+      while (sanitized !== prev) {
+        prev = sanitized;
+        sanitized = sanitized.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+      }
 
       // Remove all event handlers (onclick, onerror, onload, etc.)
       sanitized = sanitized.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '');
@@ -530,18 +541,36 @@ class PDFExportService {
       sanitized = sanitized.replace(/src\s*=\s*["']data:[^"']*["']/gi, 'src=""');
       sanitized = sanitized.replace(/href\s*=\s*["']data:[^"']*["']/gi, 'href="#"');
 
-      // Remove iframe, embed, object tags
-      sanitized = sanitized.replace(/<iframe\b[^>]*>.*?<\/iframe>/gi, '');
-      sanitized = sanitized.replace(/<iframe\b[^>]*\/?>/gi, '');
-      sanitized = sanitized.replace(/<embed\b[^>]*\/?>/gi, '');
-      sanitized = sanitized.replace(/<object\b[^>]*>.*?<\/object>/gi, '');
-      sanitized = sanitized.replace(/<object\b[^>]*\/?>/gi, '');
+      // Remove iframe, embed, object tags (loop for nested patterns)
+      prev = '';
+      while (sanitized !== prev) {
+        prev = sanitized;
+        sanitized = sanitized.replace(/<iframe\b[^>]*>.*?<\/iframe>/gi, '');
+        sanitized = sanitized.replace(/<iframe\b[^>]*\/?>/gi, '');
+      }
 
-      // Remove form elements
-      sanitized = sanitized.replace(/<form\b[^>]*>.*?<\/form>/gi, '');
-      sanitized = sanitized.replace(/<input\b[^>]*\/?>/gi, '');
-      sanitized = sanitized.replace(/<button\b[^>]*>.*?<\/button>/gi, '');
-      sanitized = sanitized.replace(/<textarea\b[^>]*>.*?<\/textarea>/gi, '');
+      prev = '';
+      while (sanitized !== prev) {
+        prev = sanitized;
+        sanitized = sanitized.replace(/<embed\b[^>]*\/?>/gi, '');
+      }
+
+      prev = '';
+      while (sanitized !== prev) {
+        prev = sanitized;
+        sanitized = sanitized.replace(/<object\b[^>]*>.*?<\/object>/gi, '');
+        sanitized = sanitized.replace(/<object\b[^>]*\/?>/gi, '');
+      }
+
+      // Remove form elements (loop for nested patterns)
+      prev = '';
+      while (sanitized !== prev) {
+        prev = sanitized;
+        sanitized = sanitized.replace(/<form\b[^>]*>.*?<\/form>/gi, '');
+        sanitized = sanitized.replace(/<input\b[^>]*\/?>/gi, '');
+        sanitized = sanitized.replace(/<button\b[^>]*>.*?<\/button>/gi, '');
+        sanitized = sanitized.replace(/<textarea\b[^>]*>.*?<\/textarea>/gi, '');
+      }
 
       // Remove meta, link, base tags
       sanitized = sanitized.replace(/<meta\b[^>]*\/?>/gi, '');
@@ -550,10 +579,14 @@ class PDFExportService {
 
       // CRITICAL: Remove document-level tags that can affect the whole PDF
       // These tags from email HTML bleed styles into our document
-      sanitized = sanitized.replace(/<!DOCTYPE[^>]*>/gi, '');
-      sanitized = sanitized.replace(/<\/?html\b[^>]*>/gi, '');
-      sanitized = sanitized.replace(/<head\b[^>]*>[\s\S]*?<\/head>/gi, '');
-      sanitized = sanitized.replace(/<\/?body\b[^>]*>/gi, '');
+      prev = '';
+      while (sanitized !== prev) {
+        prev = sanitized;
+        sanitized = sanitized.replace(/<!DOCTYPE[^>]*>/gi, '');
+        sanitized = sanitized.replace(/<\/?html\b[^>]*>/gi, '');
+        sanitized = sanitized.replace(/<head\b[^>]*>[\s\S]*?<\/head>/gi, '');
+        sanitized = sanitized.replace(/<\/?body\b[^>]*>/gi, '');
+      }
 
       // Remove any background-color styles that could affect the page
       sanitized = sanitized.replace(/background(-color)?\s*:\s*[^;"}]+[;"]?/gi, '');
@@ -562,11 +595,13 @@ class PDFExportService {
     };
 
     // Helper to truncate preview text
+    // Returns plain text (NOT escaped) — caller must escape when inserting into HTML
+    // to avoid double-escaping (e.g., &amp; becoming &amp;amp;)
     const truncatePreview = (text: string | null | undefined, maxLen = 80): string => {
       if (!text) return '(No content)';
       const cleaned = text.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
-      if (cleaned.length <= maxLen) return escapeHtml(cleaned);
-      return escapeHtml(cleaned.substring(0, maxLen)) + '...';
+      if (cleaned.length <= maxLen) return cleaned;
+      return cleaned.substring(0, maxLen) + '...';
     };
 
     // TASK-2027: Use shared normalizePhone that handles email handles correctly
@@ -712,7 +747,7 @@ class PDFExportService {
       html += '<h3>Text Conversations (' + sortedThreads.length + ')</h3>';
       html += '<div class="communications">';
 
-      sortedThreads.forEach(([threadId, msgs], idx) => {
+      sortedThreads.forEach(([_threadId, msgs], idx) => {
         const contact = getThreadContact(msgs);
         const lastMsg = msgs[msgs.length - 1];
         const preview = truncatePreview(lastMsg.body_text || lastMsg.body_plain);
@@ -731,7 +766,7 @@ class PDFExportService {
         if (contact.name) {
           html += '<div style="font-size: 12px; color: #718096;">' + escapeHtml(contact.phone) + '</div>';
         }
-        html += '<div style="font-size: 13px; color: #4a5568; margin: 8px 0;">' + preview + '</div>';
+        html += '<div style="font-size: 13px; color: #4a5568; margin: 8px 0;">' + escapeHtml(preview) + '</div>';
         html += '<div class="meta">';
         html += '<span>' + msgs.length + ' message' + (msgs.length === 1 ? '' : 's');
         html += ' &middot; ' + formatDateTime(lastMsg.sent_at as string) + '</span>';
@@ -810,7 +845,7 @@ class PDFExportService {
       });
 
       // Text thread appendix items (show all messages in thread)
-      threadsWithContent.forEach(([threadId, msgs], threadIdx) => {
+      threadsWithContent.forEach(([_threadId, msgs], threadIdx) => {
         const contact = getThreadContact(msgs);
         const isGroupChat = this._isGroupChat(msgs);
 

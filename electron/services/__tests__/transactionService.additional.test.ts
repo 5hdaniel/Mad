@@ -721,7 +721,7 @@ describe("TransactionService - Additional Coverage", () => {
         ...transactionData,
       });
 
-      const result = await transactionService.createManualTransaction(
+      await transactionService.createManualTransaction(
         mockUserId,
         transactionData,
       );

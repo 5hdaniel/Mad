@@ -11,6 +11,7 @@ import { getDeviceId } from "./deviceService";
 import logService from "./logService";
 import { app } from "electron";
 import os from "os";
+import { randomUUID } from "crypto";
 
 /**
  * Payload for submitting an error report
@@ -57,8 +58,8 @@ class ErrorLoggingService {
   private sessionId: string;
 
   private constructor() {
-    // Generate a unique session ID for this app session
-    this.sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    // Generate a unique session ID for this app session using cryptographic randomness
+    this.sessionId = `session_${Date.now()}_${randomUUID().substring(0, 8)}`;
   }
 
   /**

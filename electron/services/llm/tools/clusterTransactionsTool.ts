@@ -15,7 +15,6 @@ import {
   ClusterTransactionsInput,
   ClusterTransactionsOutput,
   ToolResult,
-  MessageAnalysis,
 } from './types';
 import { ContentSanitizer } from '../contentSanitizer';
 import { transactionClusteringPrompt } from '../prompts';

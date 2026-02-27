@@ -143,7 +143,7 @@ export interface UseOnboardingFlowReturn {
 export function useOnboardingFlow(
   options: UseOnboardingFlowOptions
 ): UseOnboardingFlowReturn {
-  const { initialStepIndex = 0, initialStepId, onComplete, onAction, appState } = options;
+  const { initialStepId, onComplete, onAction, appState } = options;
   const { platform } = usePlatform();
 
   // Get all steps for this platform

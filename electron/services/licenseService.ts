@@ -226,7 +226,7 @@ export async function createUserLicense(
       { userId }
     );
 
-    const { data, error } = await supabaseService
+    const { error } = await supabaseService
       .getClient()
       .rpc("create_trial_license", { p_user_id: userId });
 

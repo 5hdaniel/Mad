@@ -27,6 +27,10 @@ const mockReaddirSync = jest.fn();
 const mockStatSync = jest.fn();
 const mockUnlinkSync = jest.fn();
 const mockRmdirSync = jest.fn();
+const mockOpenSync = jest.fn();
+const mockFstatSync = jest.fn();
+const mockWriteSync = jest.fn();
+const mockCloseSync = jest.fn();
 
 jest.mock("fs", () => ({
   existsSync: mockExistsSync,
@@ -37,6 +41,10 @@ jest.mock("fs", () => ({
   statSync: mockStatSync,
   unlinkSync: mockUnlinkSync,
   rmdirSync: mockRmdirSync,
+  openSync: mockOpenSync,
+  fstatSync: mockFstatSync,
+  writeSync: mockWriteSync,
+  closeSync: mockCloseSync,
 }));
 
 // Mock simple-plist
@@ -252,12 +260,15 @@ describe("BackupDecryptionService", () => {
     it("should securely delete files and remove directory", async () => {
       mockExistsSync.mockReturnValue(true);
       mockReaddirSync.mockReturnValue(["sms.db", "AddressBook.sqlitedb"]);
-      mockStatSync.mockReturnValue({ isFile: () => true, size: 1024 });
+      mockOpenSync.mockReturnValue(42);
+      mockFstatSync.mockReturnValue({ isFile: () => true, size: 1024 });
 
       await backupDecryptionService.cleanup("/path/to/decrypted");
 
-      // Should overwrite each file with zeros
-      expect(mockWriteFileSync).toHaveBeenCalledTimes(2);
+      // Should open each file, overwrite with zeros via fd, and close
+      expect(mockOpenSync).toHaveBeenCalledTimes(2);
+      expect(mockWriteSync).toHaveBeenCalledTimes(2);
+      expect(mockCloseSync).toHaveBeenCalledTimes(2);
       // Should delete each file
       expect(mockUnlinkSync).toHaveBeenCalledTimes(2);
       // Should remove directory

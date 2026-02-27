@@ -245,7 +245,7 @@ class TransactionService {
             ? `[${i + 1}/${providers.length}] ${providerName}: `
             : "";
 
-        let effectiveStartDate = startDate;
+        let effectiveStartDate: Date;
         const lastSyncAt = await databaseService.getOAuthTokenSyncTime(userId, provider);
         if (lastSyncAt) {
           effectiveStartDate = lastSyncAt;

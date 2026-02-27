@@ -100,17 +100,21 @@ export function filterRolesByTransactionType(
       return true;
     }
 
-    // For purchase transactions: user is buyer's agent, so show seller's agent
+    // For purchase transactions: user is buyer, so show seller + seller's agents
     if (transactionType === "purchase") {
       return (
+        roleConfig.role === SPECIFIC_ROLES.SELLER ||
         roleConfig.role === SPECIFIC_ROLES.SELLER_AGENT ||
         roleConfig.role === SPECIFIC_ROLES.LISTING_AGENT
       );
     }
 
-    // For sale transactions: user is seller's agent/listing agent, so show buyer's agent
+    // For sale transactions: user is seller, so show buyer + buyer's agent
     if (transactionType === "sale") {
-      return roleConfig.role === SPECIFIC_ROLES.BUYER_AGENT;
+      return (
+        roleConfig.role === SPECIFIC_ROLES.BUYER ||
+        roleConfig.role === SPECIFIC_ROLES.BUYER_AGENT
+      );
     }
 
     return false;

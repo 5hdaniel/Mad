@@ -347,7 +347,7 @@ describe("MessageBubble", () => {
         body_text: "Transcript text",
       });
 
-      const { container } = render(<MessageBubble message={message} />);
+      render(<MessageBubble message={message} />);
 
       // Lucide icons render as SVG
       const indicator = screen.getByTestId("message-type-indicator");
@@ -402,7 +402,7 @@ describe("MessageBubble", () => {
         body_text: "Location text",
       });
 
-      const { container } = render(<MessageBubble message={message} />);
+      render(<MessageBubble message={message} />);
 
       const indicator = screen.getByTestId("message-type-indicator");
       const svg = indicator.querySelector("svg");

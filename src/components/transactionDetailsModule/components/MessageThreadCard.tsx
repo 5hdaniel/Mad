@@ -6,7 +6,7 @@
 import React, { useState } from "react";
 import type { Communication, Message } from "../types";
 import { ConversationViewModal } from "./modals";
-import { normalizePhoneForLookup, getSenderPhone } from "../../../utils/phoneNormalization";
+import { normalizePhoneForLookup } from "../../../utils/phoneNormalization";
 import { getContactAvatarInitial } from "../../../utils/avatarUtils";
 
 /**

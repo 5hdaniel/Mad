@@ -154,31 +154,35 @@ class SupabaseStorageService {
       // Resolve and check local file
       const absolutePath = resolveAttachmentPath(localPath);
 
-      if (!fs.existsSync(absolutePath)) {
-        const error = `File not found: ${absolutePath}`;
-        logService.warn(
-          `[Storage] ${error}`,
-          "SupabaseStorageService"
-        );
-        onProgress?.({
-          filename,
-          bytesUploaded: 0,
-          totalBytes: 0,
-          percentage: 0,
-          status: "failed",
-          error,
-        });
-        return {
-          localId: localPath,
-          storagePath: "",
-          success: false,
-          error,
-        };
+      // Get file stats directly, handling ENOENT to avoid TOCTOU race
+      let fileSizeBytes: number;
+      try {
+        const stats = fs.statSync(absolutePath);
+        fileSizeBytes = stats.size;
+      } catch (err: unknown) {
+        if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "ENOENT") {
+          const error = `File not found: ${absolutePath}`;
+          logService.warn(
+            `[Storage] ${error}`,
+            "SupabaseStorageService"
+          );
+          onProgress?.({
+            filename,
+            bytesUploaded: 0,
+            totalBytes: 0,
+            percentage: 0,
+            status: "failed",
+            error,
+          });
+          return {
+            localId: localPath,
+            storagePath: "",
+            success: false,
+            error,
+          };
+        }
+        throw err;
       }
-
-      // Get file stats
-      const stats = fs.statSync(absolutePath);
-      const fileSizeBytes = stats.size;
 
       // Check file size
       if (fileSizeBytes > MAX_FILE_SIZE) {

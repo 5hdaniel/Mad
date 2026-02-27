@@ -5,7 +5,7 @@
  * This is a pure extraction of the routing logic from App.tsx.
  */
 
-import React, { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef } from "react";
 import Login from "../components/Login";
 import MicrosoftLogin from "../components/MicrosoftLogin";
 import ConversationList from "../components/ConversationList";
@@ -31,16 +31,13 @@ export function AppRouter({ app }: AppRouterProps) {
   const {
     // State
     currentStep, isWindows, isOnline, isChecking, connectionError,
-    isAuthenticated, currentUser, authProvider, selectedPhoneType,
+    currentUser, selectedPhoneType,
     hasEmailConnected, showSetupPromptDismissed, exportResult, conversations,
     selectedConversationIds, outlookConnected,
     // Handlers
     handleLoginSuccess, handleLoginPending, handleDeepLinkAuthSuccess,
-    handlePhoneTypeChange,
-    handleEmailOnboardingComplete,
-    handleEmailOnboardingSkip, handleEmailOnboardingBack,
     handleMicrosoftLogin, handleMicrosoftSkip, handleConnectOutlook,
-    handlePermissionsGranted, checkPermissions, handleExportComplete, handleOutlookExport,
+    handleExportComplete, handleOutlookExport,
     handleOutlookCancel, handleStartOver, setExportResult, handleRetryConnection,
     openAuditTransaction, openTransactions, openContacts, goToStep,
     handleDismissSetupPrompt, setIsTourActive, openIPhoneSync, openSettings,

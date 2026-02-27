@@ -34,7 +34,6 @@ import type {
   AppleDriverStatus,
   SyncResult,
   SyncStatus,
-  SyncProgress,
 } from "../deviceService";
 
 // ============================================
@@ -246,13 +245,6 @@ const mockSyncResult: SyncResult = {
 const mockSyncStatusData: SyncStatus = {
   isRunning: true,
   phase: "extracting",
-};
-
-const mockSyncProgress: SyncProgress = {
-  phase: "extracting",
-  phaseProgress: 50,
-  overallProgress: 25,
-  message: "Extracting messages...",
 };
 
 // ============================================

@@ -85,8 +85,6 @@ describe("SessionService - Initialization Bug Fix", () => {
 
       // Since we already imported in beforeEach, check call count is minimal
       // The actual implementation should only call getPath when methods are invoked
-      const initialCallCount = mockGetPath.mock.calls.length;
-
       // At this point, sessionFilePath should be null, not initialized
       expect((sessionService as any).sessionFilePath).toBeNull();
     });

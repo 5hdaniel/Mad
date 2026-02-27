@@ -153,10 +153,6 @@ export function SecureStorageContent({
     onAction(action);
   };
 
-  const handleBack = () => {
-    onAction({ type: "NAVIGATE_BACK" });
-  };
-
   const bodyText = context.isNewUser
     ? "Keepr uses your Mac's Keychain to encrypt and protect your data locally. " +
       "When you click Continue, a system dialog will appear asking for your Mac password."

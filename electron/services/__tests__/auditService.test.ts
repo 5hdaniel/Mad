@@ -10,7 +10,6 @@
 
 import {
   auditService,
-  AuditLogEntry,
   AuditAction,
   ResourceType,
 } from "../auditService";

@@ -39,7 +39,8 @@ describe("Main Process - AutoUpdater Initialization Bug Fix", () => {
 
       let readyCallback: (() => Promise<void>) | null = null;
 
-      const mockApp = {
+      // mockApp defines whenReady which captures readyCallback; declared for test structure
+      const _mockApp = {
         whenReady: jest
           .fn()
           .mockImplementation((callback?: () => Promise<void>) => {

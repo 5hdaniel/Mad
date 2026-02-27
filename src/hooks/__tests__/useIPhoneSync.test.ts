@@ -3,7 +3,7 @@
  * Tests iPhone device detection, sync functionality, and error handling
  */
 
-import { renderHook, act, waitFor } from "@testing-library/react";
+import { renderHook, act } from "@testing-library/react";
 import { useIPhoneSync } from "../useIPhoneSync";
 
 describe("useIPhoneSync", () => {

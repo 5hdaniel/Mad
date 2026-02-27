@@ -238,7 +238,6 @@ describe('ExtractionStrategyService', () => {
 
     it('should return pattern when budget insufficient for estimated extraction', async () => {
       const messageCount = 100; // Large extraction
-      const estimatedCost = service.estimateTokenCost(messageCount);
 
       mockGetUserConfig.mockResolvedValue({
         ...baseConfig,

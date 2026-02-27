@@ -7,7 +7,6 @@ import path from "path";
 import fs from "fs/promises";
 import sqlite3 from "sqlite3";
 import { promisify } from "util";
-import { exec } from "child_process";
 import logService from "./logService";
 
 const {
@@ -87,6 +86,28 @@ interface PersonMap {
 }
 
 /**
+ * Recursively find all .abcddb files under a directory.
+ * Replaces shell `find` to avoid indirect command-line injection via process.env.HOME.
+ */
+async function findAbcddbFiles(dir: string): Promise<string[]> {
+  const results: string[] = [];
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        results.push(...await findAbcddbFiles(fullPath));
+      } else if (entry.isFile() && entry.name.endsWith(".abcddb")) {
+        results.push(fullPath);
+      }
+    }
+  } catch {
+    // Directory may not exist or be inaccessible; skip
+  }
+  return results;
+}
+
+/**
  * Get contact names from macOS Contacts database
  * Searches for all .abcddb files and uses the one with most records
  */
@@ -99,17 +120,9 @@ async function getContactNames(): Promise<ContactNamesResult> {
   try {
     const baseDir = path.join(process.env.HOME as string, CONTACTS_BASE_DIR);
 
-    // Use exec to find all .abcddb files
-    const execPromise = promisify(exec);
-
+    // Find all .abcddb files using fs (avoids shell injection via process.env.HOME)
     try {
-      const { stdout } = await execPromise(
-        `find "${baseDir}" -name "*.abcddb" 2>/dev/null`,
-      );
-      const dbFiles = stdout
-        .trim()
-        .split("\n")
-        .filter((f) => f);
+      const dbFiles = await findAbcddbFiles(baseDir);
 
       if (dbFiles.length === 0) {
         logService.warn("[ContactsService] No .abcddb files found in", "ContactsService", { baseDir });

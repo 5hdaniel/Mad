@@ -3,9 +3,8 @@
  * TASK-511: Verify cost reduction targets (97% reduction, <$0.20 for 600 emails)
  */
 
-import { HybridExtractorService } from '../extraction/hybridExtractorService';
 import { MessageInput } from '../extraction/types';
-import { createBatches, estimateEmailTokens, EmailBatch } from '../llm/batchLLMService';
+import { createBatches, estimateEmailTokens } from '../llm/batchLLMService';
 
 // ============================================================================
 // Pricing Configuration

@@ -14,7 +14,7 @@
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 
 const ITUNES_URL = 'https://www.apple.com/itunes/download/win64';
 const OUTPUT_DIR = path.join(__dirname, '..', 'resources', 'win', 'apple-drivers');
@@ -85,20 +85,20 @@ async function extractMSI() {
     console.log('Extracting MSI from iTunes installer...');
 
     // Try using 7z if available, otherwise use expand
+    const extractedDir = path.join(TEMP_DIR, 'extracted');
     try {
-      execSync(`7z x "${iTunesExe}" -o"${TEMP_DIR}/extracted" -y`, { stdio: 'pipe' });
+      execFileSync('7z', ['x', iTunesExe, `-o${extractedDir}`, '-y'], { stdio: 'pipe' });
     } catch {
       // Fallback to Windows expand command
       try {
-        execSync(`expand "${iTunesExe}" -F:* "${TEMP_DIR}/extracted"`, { stdio: 'pipe' });
+        execFileSync('expand', [iTunesExe, '-F:*', extractedDir], { stdio: 'pipe' });
       } catch {
         // Try using PowerShell to extract
-        execSync(`powershell -Command "Expand-Archive -Path '${iTunesExe}' -DestinationPath '${TEMP_DIR}/extracted' -Force"`, { stdio: 'pipe' });
+        execFileSync('powershell', ['-Command', `Expand-Archive -Path '${iTunesExe}' -DestinationPath '${extractedDir}' -Force`], { stdio: 'pipe' });
       }
     }
 
     // Find and copy the MSI
-    const extractedDir = path.join(TEMP_DIR, 'extracted');
     const msiSource = path.join(extractedDir, MSI_FILENAME);
     const msiDest = path.join(OUTPUT_DIR, MSI_FILENAME);
 
@@ -165,7 +165,8 @@ async function main() {
     console.log('Done! The MSI will be included in the Windows installer.');
   } catch (error) {
     console.error('');
-    console.error('Error:', error.message);
+    const sanitizedMessage = String(error.message).replace(/[\r\n]/g, ' ').replace(/[\x00-\x1f\x7f]/g, '');
+    console.error('Error:', sanitizedMessage);
     console.error('');
     console.error('You may need to manually download and extract:');
     console.error('1. Download: https://www.apple.com/itunes/download/win64');

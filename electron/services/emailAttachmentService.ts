@@ -289,12 +289,19 @@ class EmailAttachmentService {
       guessExtensionFromMimeType(attachment.mimeType);
     const storagePath = path.join(attachmentsDir, `${contentHash}${ext}`);
 
+    // Validate storage path stays within attachmentsDir (prevent path traversal)
+    const resolvedStoragePath = path.resolve(storagePath);
+    const resolvedAttachmentsDir = path.resolve(attachmentsDir);
+    if (!resolvedStoragePath.startsWith(resolvedAttachmentsDir + path.sep)) {
+      throw new Error(`Storage path escapes attachments directory: ${resolvedStoragePath}`);
+    }
+
     // Check if file already exists (deduplication)
     const fileExists = existingHashes.has(contentHash);
 
     if (!fileExists) {
-      // Write file to disk
-      await fs.writeFile(storagePath, data);
+      // Write downloaded data to disk (data is from HTTP source, validated by content hash)
+      await fs.writeFile(resolvedStoragePath, data);
       existingHashes.add(contentHash);
     }
 

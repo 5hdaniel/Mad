@@ -9,7 +9,7 @@
  * TASK-1783: Updated to mock SyncOrchestrator instead of SyncQueueService
  */
 
-import { renderHook, act, waitFor } from "@testing-library/react";
+import { renderHook, act } from "@testing-library/react";
 import { useAutoRefresh, resetAutoRefreshTrigger } from "../useAutoRefresh";
 import { setMessagesImportTriggered, resetMessagesImportTrigger } from "../../utils/syncFlags";
 

@@ -103,7 +103,7 @@ describe('Pipeline Performance Benchmarks', () => {
       const spamFiltered = filterSpam(emails);
       const threadGrouping = groupEmailsByThread(spamFiltered);
       const firstEmails = getFirstEmailsFromThreads(threadGrouping);
-      const batches = createBatches(toMessageInputs(firstEmails));
+      createBatches(toMessageInputs(firstEmails));
 
       const elapsed = performance.now() - start;
 
@@ -120,7 +120,7 @@ describe('Pipeline Performance Benchmarks', () => {
       const spamFiltered = filterSpam(emails);
       const threadGrouping = groupEmailsByThread(spamFiltered);
       const firstEmails = getFirstEmailsFromThreads(threadGrouping);
-      const batches = createBatches(toMessageInputs(firstEmails));
+      createBatches(toMessageInputs(firstEmails));
 
       const elapsed = performance.now() - start;
 
@@ -137,7 +137,7 @@ describe('Pipeline Performance Benchmarks', () => {
       const spamFiltered = filterSpam(emails);
       const threadGrouping = groupEmailsByThread(spamFiltered);
       const firstEmails = getFirstEmailsFromThreads(threadGrouping);
-      const batches = createBatches(toMessageInputs(firstEmails));
+      createBatches(toMessageInputs(firstEmails));
 
       const elapsed = performance.now() - start;
 
@@ -160,12 +160,14 @@ describe('Pipeline Performance Benchmarks', () => {
       const spamFiltered = filterSpam(emails);
       const threadGrouping = groupEmailsByThread(spamFiltered);
       const firstEmails = getFirstEmailsFromThreads(threadGrouping);
+      // batches must be retained in scope so heapUsed reflects the allocation
       const batches = createBatches(toMessageInputs(firstEmails));
 
       const finalMemory = process.memoryUsage().heapUsed;
       const memoryUsedMB = (finalMemory - initialMemory) / 1024 / 1024;
 
       expect(memoryUsedMB).toBeLessThan(500);
+      expect(batches).toBeDefined(); // keep reference alive for accurate heap measurement
       console.log(`Memory used for 1000 emails: ${memoryUsedMB.toFixed(2)}MB`);
     });
 
@@ -324,7 +326,7 @@ describe('Pipeline Performance Benchmarks', () => {
 
       // Batching timing
       const batchStart = performance.now();
-      const batches = createBatches(toMessageInputs(firstEmails));
+      createBatches(toMessageInputs(firstEmails));
       const batchTime = performance.now() - batchStart;
 
       const totalTime = spamTime + threadTime + batchTime;
