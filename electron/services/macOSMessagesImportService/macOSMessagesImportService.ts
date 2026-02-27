@@ -1008,6 +1008,8 @@ class MacOSMessagesImportService {
 
     // Process attachments with progress reporting and event loop yielding
     const totalAttachments = attachments.length;
+    // TASK-2097: Report at ~5% increments (min 1) for smooth progress with any attachment count
+    const attachReportInterval = Math.max(1, Math.floor(totalAttachments / 20));
     let processed = 0;
 
     for (const attachment of attachments) {
@@ -1178,8 +1180,8 @@ class MacOSMessagesImportService {
       // Update progress bar
       attachProgressBar.update(processed);
 
-      // Report progress to UI every 500 attachments
-      if (processed % 500 === 0) {
+      // Report progress to UI at ~5% increments
+      if (processed % attachReportInterval === 0 || processed === totalAttachments) {
         const percent = Math.round((processed / totalAttachments) * 100);
         onProgress?.({
           phase: "attachments",
