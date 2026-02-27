@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import Joyride from "react-joyride";
 import { useTour } from "../hooks/useTour";
 import { usePendingTransactionCount } from "../hooks/usePendingTransactionCount";
@@ -82,6 +82,28 @@ function Dashboard({
   // License status for transaction limit check and AI addon
   const { canCreateTransaction, transactionCount, transactionLimit, hasAIAddon } = useLicense();
 
+  // Check if notifications are already enabled (macOS only)
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const isMacOS = typeof window !== "undefined" && window.api?.system?.platform === "darwin";
+
+  useEffect(() => {
+    if (isMacOS && window.api?.notification?.isSupported) {
+      window.api.notification.isSupported().then((result) => {
+        // If isSupported returns true, notifications are already enabled
+        setNotificationsEnabled(result.supported);
+      }).catch(() => {
+        // On error, assume enabled to avoid showing the step
+        setNotificationsEnabled(true);
+      });
+    }
+  }, [isMacOS]);
+
+  // Memoize tour steps to avoid recreating on every render
+  const tourSteps = useMemo(
+    () => getDashboardTourSteps({ hasAIAddon, isMacOS, notificationsEnabled }),
+    [hasAIAddon, isMacOS, notificationsEnabled],
+  );
+
   // Derive display name for personalized greeting
   // Users only reach Dashboard after WelcomeTerms, so this is always a return visit
   const fullName = user?.display_name || user?.email?.split("@")[0] || "";
@@ -159,7 +181,7 @@ function Dashboard({
     <div className="h-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-8">
       {/* Onboarding Tour */}
       <Joyride
-        steps={getDashboardTourSteps(hasAIAddon)}
+        steps={tourSteps}
         run={runTour}
         continuous
         showProgress

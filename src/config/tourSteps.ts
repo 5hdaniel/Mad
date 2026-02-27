@@ -2,14 +2,95 @@
  * Tour Steps Configuration
  * Defines the steps for Joyride tours throughout the app
  */
+import React from "react";
 import { Step } from "react-joyride";
 
+/**
+ * Options for configuring which dashboard tour steps to include
+ */
+export interface DashboardTourOptions {
+  hasAIAddon: boolean;
+  /** True when running on macOS (darwin) */
+  isMacOS: boolean;
+  /** True when OS notifications are already enabled for this app */
+  notificationsEnabled: boolean;
+}
+
+/**
+ * Notification permission tour step content component.
+ * Renders explanatory text and a "Send Test Notification" button
+ * that triggers a macOS notification via the existing IPC channel.
+ */
+function NotificationStepContent(): React.ReactElement {
+  const handleSendTestNotification = (): void => {
+    window.api.notification.send(
+      "Keepr",
+      "Notifications help you stay updated on sync progress and audit alerts.",
+    );
+  };
+
+  return React.createElement(
+    "div",
+    null,
+    React.createElement(
+      "p",
+      { style: { marginBottom: "12px" } },
+      "Let's enable notifications so you never miss important updates like sync completions and audit alerts.",
+    ),
+    React.createElement(
+      "p",
+      { style: { marginBottom: "12px" } },
+      "Click the button below to send a test notification, then follow these steps:",
+    ),
+    React.createElement(
+      "ol",
+      { style: { paddingLeft: "20px", marginBottom: "12px" } },
+      React.createElement("li", null, "A notification banner will appear at the top-right of your screen"),
+      React.createElement("li", null, "Hover over the banner to reveal the \"Options\" button"),
+      React.createElement("li", null, "Click \"Options\" to open the dropdown"),
+      React.createElement("li", null, "Select \"Allow\" to enable notifications"),
+    ),
+    React.createElement(
+      "button",
+      {
+        onClick: handleSendTestNotification,
+        style: {
+          backgroundColor: "#3b82f6",
+          color: "white",
+          border: "none",
+          borderRadius: "6px",
+          padding: "8px 16px",
+          fontSize: "14px",
+          fontWeight: 600,
+          cursor: "pointer",
+        },
+        type: "button" as const,
+      },
+      "Send Test Notification",
+    ),
+  );
+}
+
 // Main Dashboard Tour - shown to first-time users
-export const getDashboardTourSteps = (hasAIAddon: boolean): Step[] => [
+export const getDashboardTourSteps = (
+  optionsOrHasAIAddon: DashboardTourOptions | boolean,
+): Step[] => {
+  // Support both old signature (boolean) and new options object
+  const options: DashboardTourOptions =
+    typeof optionsOrHasAIAddon === "boolean"
+      ? { hasAIAddon: optionsOrHasAIAddon, isMacOS: false, notificationsEnabled: true }
+      : optionsOrHasAIAddon;
+
+  const { hasAIAddon, isMacOS, notificationsEnabled } = options;
+
+  // Show notification step only on macOS when notifications are not yet enabled
+  const showNotificationStep = isMacOS && !notificationsEnabled;
+
+  return [
   {
     target: "body",
     content:
-      "👋 Welcome to Keepr! Let me give you a quick tour of the main features.",
+      "Welcome to Keepr! Let me give you a quick tour of the main features.",
     placement: "center",
     disableBeacon: true,
   },
@@ -20,6 +101,16 @@ export const getDashboardTourSteps = (hasAIAddon: boolean): Step[] => [
     placement: "bottom",
     disableBeacon: true,
   },
+  ...(showNotificationStep
+    ? [
+        {
+          target: '[data-tour="sync-status"]',
+          content: React.createElement(NotificationStepContent),
+          placement: "bottom" as const,
+          disableBeacon: true,
+        },
+      ]
+    : []),
   {
     target: '[data-tour="new-audit-card"]',
     content:
@@ -70,6 +161,7 @@ export const getDashboardTourSteps = (hasAIAddon: boolean): Step[] => [
     disableBeacon: true,
   },
 ];
+};
 
 // Export Screen Tour - shown when user first visits export screen
 export const getExportTourSteps = (outlookConnected: boolean): Step[] => [
