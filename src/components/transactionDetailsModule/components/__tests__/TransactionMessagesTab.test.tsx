@@ -778,6 +778,74 @@ describe("TransactionMessagesTab", () => {
       });
     });
 
+    it("should use optimistic removal (onRemoveMessagesByIds) instead of full refresh (TASK-2094)", async () => {
+      const mockOnMessagesChanged = jest.fn();
+      const mockOnRemoveMessagesByIds = jest.fn();
+      const mockOnShowSuccess = jest.fn();
+
+      render(
+        <TransactionMessagesTab
+          messages={messagesWithUserId as Communication[]}
+          loading={false}
+          error={null}
+          userId="user-456"
+          transactionId="txn-123"
+          onMessagesChanged={mockOnMessagesChanged}
+          onRemoveMessagesByIds={mockOnRemoveMessagesByIds}
+          onShowSuccess={mockOnShowSuccess}
+        />
+      );
+
+      // Thread list should be mounted
+      expect(screen.getByTestId("message-thread-list")).toBeInTheDocument();
+
+      // Click unlink and confirm
+      fireEvent.click(screen.getByTestId("unlink-thread-button"));
+      fireEvent.click(screen.getByTestId("unlink-confirm-button"));
+
+      await waitFor(() => {
+        expect(mockUnlinkMessages).toHaveBeenCalled();
+      });
+
+      await waitFor(() => {
+        // Should call optimistic removal with the message IDs
+        expect(mockOnRemoveMessagesByIds).toHaveBeenCalledWith(
+          expect.arrayContaining(["msg-1", "msg-2"])
+        );
+        // Should NOT call onMessagesChanged (full refresh) when optimistic removal is available
+        expect(mockOnMessagesChanged).not.toHaveBeenCalled();
+      });
+    });
+
+    it("should fall back to onMessagesChanged when onRemoveMessagesByIds is not provided (TASK-2094)", async () => {
+      const mockOnMessagesChanged = jest.fn();
+      const mockOnShowSuccess = jest.fn();
+
+      render(
+        <TransactionMessagesTab
+          messages={messagesWithUserId as Communication[]}
+          loading={false}
+          error={null}
+          userId="user-456"
+          transactionId="txn-123"
+          onMessagesChanged={mockOnMessagesChanged}
+          onShowSuccess={mockOnShowSuccess}
+        />
+      );
+
+      fireEvent.click(screen.getByTestId("unlink-thread-button"));
+      fireEvent.click(screen.getByTestId("unlink-confirm-button"));
+
+      await waitFor(() => {
+        expect(mockUnlinkMessages).toHaveBeenCalled();
+      });
+
+      await waitFor(() => {
+        // Without optimistic removal, should fall back to full refresh
+        expect(mockOnMessagesChanged).toHaveBeenCalled();
+      });
+    });
+
     it("should await async onMessagesChanged callback before closing modal", async () => {
       // Track when the callback completes
       let callbackResolved = false;
