@@ -263,7 +263,15 @@ describe("messageMatchingService - address filtering (TASK-2087)", () => {
         if (sql.includes("FROM transaction_contacts") && sql.includes("contact_emails")) {
           return [{ contactId: "contact-1", email: "seller@example.com" }];
         }
-        // findEmailsByAddresses: return 2 messages each time it's called
+        // countAllEmailsMatchingAddress: queries ALL emails (no NOT IN exclusion)
+        // Return emails but none matching the address (content check is in JS)
+        if (sql.includes("FROM messages m") && sql.includes("channel = 'email'") && !sql.includes("NOT IN")) {
+          return [
+            { id: "msg-1", sender: "seller@example.com", recipients: null, subject: "General inquiry", body_text: null },
+            { id: "msg-2", sender: "seller@example.com", recipients: null, subject: "Follow up", body_text: null },
+          ];
+        }
+        // findEmailsByAddresses: return 2 messages each time it's called (uses NOT IN for exclusion)
         if (sql.includes("FROM messages m") && sql.includes("channel = 'email'")) {
           findEmailsCallCount++;
           return [
@@ -281,6 +289,7 @@ describe("messageMatchingService - address filtering (TASK-2087)", () => {
       const result = await autoLinkEmailsToTransaction(mockTransactionId);
 
       // Fallback: all emails should be linked since address filter returned nothing
+      // AND countAllEmailsMatchingAddress confirmed no emails match the address
       expect(result.linked).toBe(2);
       // findEmailsByAddresses should be called twice via withAddressFallback
       // (once with address filter that yields empty, once without)
@@ -322,6 +331,60 @@ describe("messageMatchingService - address filtering (TASK-2087)", () => {
         (call) => typeof call[0] === "string" && call[0].includes("subject, body_text")
       );
       expect(contentQueryCalls.length).toBe(0);
+    });
+  });
+
+  describe("autoLinkEmailsToTransaction - no fallback when already linked", () => {
+    it("should NOT fall back when matching emails are already linked to the transaction", async () => {
+      // BUG SCENARIO (TASK-2087 QA fix):
+      // Transaction has address "456 Maple Drive", contact has matching emails
+      // that are already linked. Fallback should NOT trigger.
+      mockDbGet.mockImplementation((sql: string) => {
+        if (sql.includes("FROM transactions")) {
+          return {
+            user_id: mockUserId,
+            property_address: "456 Maple Drive, Portland, OR",
+            property_street: null,
+          };
+        }
+        if (sql.includes("FROM communications") && sql.includes("message_id")) return null;
+        if (sql.includes("FROM messages WHERE id")) return { id: "msg" };
+        return null;
+      });
+
+      let findEmailsCallCount = 0;
+      mockDbAll.mockImplementation((sql: string) => {
+        if (sql.includes("FROM transaction_contacts") && sql.includes("contact_emails")) {
+          return [{ contactId: "contact-1", email: "bob@example.com" }];
+        }
+        // countAllEmailsMatchingAddress: queries ALL emails without NOT IN exclusion
+        // Return an email that mentions the address (already linked but still matches)
+        if (sql.includes("FROM messages m") && sql.includes("channel = 'email'") && !sql.includes("NOT IN")) {
+          return [
+            {
+              id: "msg-1",
+              sender: "bob@example.com",
+              recipients: null,
+              subject: "456 Maple closing docs",
+              body_text: null,
+            },
+          ];
+        }
+        // findEmailsByAddresses: uses NOT IN to exclude already-linked emails
+        // Returns 0 because the matching email is already linked
+        if (sql.includes("FROM messages m") && sql.includes("channel = 'email'") && sql.includes("NOT IN")) {
+          findEmailsCallCount++;
+          return [];
+        }
+        return [];
+      });
+
+      const result = await autoLinkEmailsToTransaction(mockTransactionId);
+
+      // Should NOT have linked anything (all are already linked)
+      expect(result.linked).toBe(0);
+      // findEmailsByAddresses should only be called ONCE (no fallback)
+      expect(findEmailsCallCount).toBe(1);
     });
   });
 

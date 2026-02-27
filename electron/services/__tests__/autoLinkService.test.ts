@@ -594,6 +594,68 @@ describe("autoLinkService", () => {
         expect(firstCallParams).toContain("%elm%");
       });
 
+      it("should NOT fall back when matching emails are already linked to the transaction", async () => {
+        // BUG SCENARIO (TASK-2087 QA fix):
+        // 1. Transaction has address "456 Maple Drive"
+        // 2. Email matching "456 maple" exists but is already linked to this transaction
+        // 3. findEmailsByContactEmails returns 0 unlinked results (email is linked, c.id IS NULL filters it)
+        // 4. OLD behavior: fallback triggers, returns ALL unlinked emails (wrong!)
+        // 5. NEW behavior: countEmailsMatchingAddress returns > 0, so fallback is suppressed
+
+        // Track calls to find query vs count query
+        let findEmailCallCount = 0;
+        let countCallCount = 0;
+
+        mockDbGet.mockImplementation((sql: string) => {
+          if (sql.includes("FROM contacts")) return { id: mockContactId };
+          if (sql.includes("FROM transactions")) {
+            return {
+              user_id: mockUserId,
+              started_at: "2024-01-01T00:00:00Z",
+              created_at: "2024-01-01T00:00:00Z",
+              closed_at: null,
+              property_address: "456 Maple Drive, Portland, OR",
+              property_street: null,
+            };
+          }
+          if (sql.includes("FROM users_local")) return { email: "user@example.com" };
+          if (sql.includes("FROM emails WHERE id")) return { user_id: mockUserId };
+          if (sql.includes("FROM communications") && sql.includes("email_id")) return null;
+          // Count query: returns 1 matching email (the already-linked one)
+          if (sql.includes("COUNT(*)")) {
+            countCallCount++;
+            return { cnt: 1 };
+          }
+          return null;
+        });
+
+        mockDbAll.mockImplementation((sql: string) => {
+          if (sql.includes("FROM contact_emails")) return [{ email: "bob@example.com" }];
+          if (sql.includes("FROM contact_phones")) return [];
+          if (sql.includes("FROM emails e")) {
+            findEmailCallCount++;
+            // First call (with address filter + c.id IS NULL): 0 results
+            // The email exists but is already linked, so c.id IS NULL excludes it
+            return [];
+          }
+          return [];
+        });
+
+        const result = await autoLinkCommunicationsForContact({
+          contactId: mockContactId,
+          transactionId: mockTransactionId,
+        });
+
+        // Should NOT have linked anything (all matching emails are already linked)
+        expect(result.emailsLinked).toBe(0);
+        // findEmailsByContactEmails should only be called ONCE (no fallback)
+        expect(findEmailCallCount).toBe(1);
+        // countEmailsMatchingAddress should have been called to check
+        expect(countCallCount).toBe(1);
+        // No dbRun calls (no emails to link)
+        expect(mockDbRun).not.toHaveBeenCalled();
+      });
+
       it("should NOT apply address filter to text messages", async () => {
         // Transaction has an address, but text messages should not be filtered by it
         mockDbGet.mockImplementation((sql: string) => {

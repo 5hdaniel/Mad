@@ -163,8 +163,10 @@ export function contentContainsAddress(
  * Generic fallback helper for address-filtered queries.
  *
  * Runs `queryFn` with the normalized address. If the result is empty and an
- * address was provided, retries without the address filter. Logs a debug
- * message via the supplied `debugLog` callback when the fallback fires.
+ * address was provided, retries without the address filter — UNLESS
+ * `countWithFilter` reports that matching items exist (they're just already
+ * linked). In that case the address filter is working correctly and the
+ * fallback is suppressed.
  *
  * This eliminates the duplicated "try with address, fall back without" pattern
  * used by autoLinkService and messageMatchingService.
@@ -173,17 +175,34 @@ export function contentContainsAddress(
  * @param normalizedAddress - The NormalizedAddress to filter by, or null to skip filtering
  * @param debugLog - Callback for logging fallback events (avoids importing logService here)
  * @param entityType - Label for log messages (e.g. "emails", "matches")
+ * @param countWithFilter - Optional callback that returns the total count of items matching
+ *   the address filter INCLUDING already-linked ones. When > 0, the fallback is suppressed
+ *   because the filter is valid — the 0 unlinked results just means everything is linked.
  * @returns The query results (filtered if possible, unfiltered as fallback)
  */
 export async function withAddressFallback<T>(
   queryFn: (address: NormalizedAddress | null) => Promise<T[]>,
   normalizedAddress: NormalizedAddress | null,
   debugLog: (message: string) => Promise<void> | void,
-  entityType: string
+  entityType: string,
+  countWithFilter?: (address: NormalizedAddress) => Promise<number>
 ): Promise<T[]> {
   const results = await queryFn(normalizedAddress);
 
   if (results.length === 0 && normalizedAddress) {
+    // Before falling back, check if matching items exist but are already linked.
+    // If countWithFilter returns > 0, the address filter is correct — the items
+    // are just already linked to this transaction, so we should NOT fall back.
+    if (countWithFilter) {
+      const totalMatching = await countWithFilter(normalizedAddress);
+      if (totalMatching > 0) {
+        await debugLog(
+          `Address filter kept: ${totalMatching} ${entityType} match "${normalizedAddress.full}" but all are already linked, no fallback`
+        );
+        return results; // Return empty — everything matching is already linked
+      }
+    }
+
     // Address filter eliminated all results - retry without it
     const unfiltered = await queryFn(null);
     if (unfiltered.length > 0) {

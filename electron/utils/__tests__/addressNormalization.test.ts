@@ -346,5 +346,58 @@ describe("addressNormalization", () => {
       expect(result).toEqual([]);
       expect(queryFn).toHaveBeenCalledTimes(1);
     });
+
+    it("should NOT fall back when countWithFilter reports matching items exist (already linked)", async () => {
+      const queryFn = jest.fn()
+        .mockResolvedValueOnce([]);  // filtered query: 0 unlinked results
+      const debugLog = jest.fn();
+      // countWithFilter returns 2: matching emails exist but are already linked
+      const countWithFilter = jest.fn().mockResolvedValueOnce(2);
+
+      const result = await withAddressFallback(queryFn, testAddr, debugLog, "items", countWithFilter);
+
+      expect(result).toEqual([]);  // Should return empty, NOT fall back
+      expect(queryFn).toHaveBeenCalledTimes(1);  // Only called once (no fallback)
+      expect(countWithFilter).toHaveBeenCalledWith(testAddr);
+      expect(debugLog).toHaveBeenCalledWith(expect.stringContaining("all are already linked"));
+    });
+
+    it("should fall back when countWithFilter reports 0 matching items", async () => {
+      const queryFn = jest.fn()
+        .mockResolvedValueOnce([])             // filtered: empty
+        .mockResolvedValueOnce(["x", "y"]);    // unfiltered: results
+      const debugLog = jest.fn();
+      // countWithFilter returns 0: no emails match the address at all
+      const countWithFilter = jest.fn().mockResolvedValueOnce(0);
+
+      const result = await withAddressFallback(queryFn, testAddr, debugLog, "items", countWithFilter);
+
+      expect(result).toEqual(["x", "y"]);  // Should fall back
+      expect(queryFn).toHaveBeenCalledTimes(2);
+      expect(countWithFilter).toHaveBeenCalledWith(testAddr);
+      expect(debugLog).toHaveBeenCalledWith(expect.stringContaining("Address filter fallback"));
+    });
+
+    it("should not call countWithFilter when filtered results are non-empty", async () => {
+      const queryFn = jest.fn().mockResolvedValueOnce(["a", "b"]);
+      const debugLog = jest.fn();
+      const countWithFilter = jest.fn();
+
+      const result = await withAddressFallback(queryFn, testAddr, debugLog, "items", countWithFilter);
+
+      expect(result).toEqual(["a", "b"]);
+      expect(countWithFilter).not.toHaveBeenCalled();  // No need to check when results exist
+    });
+
+    it("should not call countWithFilter when no address is provided", async () => {
+      const queryFn = jest.fn().mockResolvedValueOnce([]);
+      const debugLog = jest.fn();
+      const countWithFilter = jest.fn();
+
+      const result = await withAddressFallback(queryFn, null, debugLog, "items", countWithFilter);
+
+      expect(result).toEqual([]);
+      expect(countWithFilter).not.toHaveBeenCalled();
+    });
   });
 });

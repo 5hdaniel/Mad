@@ -704,6 +704,7 @@ export async function autoLinkEmailsToTransaction(
     // 3. Find matching emails
     // TASK-2087: Use withAddressFallback to apply address filter with automatic fallback.
     // The query function fetches all matches, then post-filters by address content.
+    // Pass countWithFilter to prevent fallback when matching emails exist but are already linked.
     const matches = await withAddressFallback(
       async (addr) => {
         const allMatches = await findEmailsByAddresses(userId, contactEmails, transactionId);
@@ -718,7 +719,8 @@ export async function autoLinkEmailsToTransaction(
       },
       txnNormalizedAddress,
       (msg) => logService.debug(msg, "MessageMatchingService"),
-      "emails"
+      "emails",
+      async (addr) => countAllEmailsMatchingAddress(userId, contactEmails, transactionId, addr)
     );
 
     logService.info(
@@ -786,6 +788,91 @@ export async function autoLinkEmailsToTransaction(
     );
     return result;
   }
+}
+
+/**
+ * Count ALL emails (including already-linked) from the given contacts that
+ * match the address content. Used by `withAddressFallback` to determine
+ * whether the address filter is valid.
+ *
+ * If this returns > 0 but the main filtered query returns 0, it means
+ * matching emails exist but are all already linked — the fallback should
+ * NOT trigger.
+ */
+async function countAllEmailsMatchingAddress(
+  userId: string,
+  contactEmails: Array<{ contactId: string; email: string }>,
+  transactionId: string,
+  normalizedAddress: NormalizedAddress
+): Promise<number> {
+  if (contactEmails.length === 0) return 0;
+
+  // Build a map of normalized emails
+  const emailToContact = new Map<string, string>();
+  for (const { contactId, email } of contactEmails) {
+    if (email) {
+      emailToContact.set(email.toLowerCase().trim(), contactId);
+    }
+  }
+  if (emailToContact.size === 0) return 0;
+
+  // Query ALL email messages for this user from these contacts
+  // (no exclusion of already-linked messages — that's the point)
+  const sql = `
+    SELECT
+      m.id,
+      m.sender,
+      m.recipients,
+      m.subject,
+      m.body_text
+    FROM messages m
+    WHERE m.user_id = ?
+      AND m.channel = 'email'
+      AND m.duplicate_of IS NULL
+  `;
+
+  const messages = dbAll<{
+    id: string;
+    sender: string | null;
+    recipients: string | null;
+    subject: string | null;
+    body_text: string | null;
+  }>(sql, [userId]);
+
+  let count = 0;
+  for (const msg of messages) {
+    // Check if this email belongs to one of our contacts
+    let isFromContact = false;
+    if (msg.sender) {
+      const normalizedSender = msg.sender.toLowerCase().trim();
+      const emailMatch = normalizedSender.match(/<([^>]+)>/);
+      const emailToCheck = emailMatch ? emailMatch[1] : normalizedSender;
+      if (emailToContact.has(emailToCheck)) isFromContact = true;
+    }
+    if (!isFromContact && msg.recipients) {
+      const recipientList = msg.recipients.split(/[,;]/).map(r => r.trim().toLowerCase());
+      for (const recipient of recipientList) {
+        const emailMatch = recipient.match(/<([^>]+)>/);
+        const emailToCheck = emailMatch ? emailMatch[1] : recipient;
+        if (emailToContact.has(emailToCheck)) {
+          isFromContact = true;
+          break;
+        }
+      }
+    }
+
+    if (!isFromContact) continue;
+
+    // Check if the email content mentions the address
+    if (
+      contentContainsAddress(msg.subject, normalizedAddress) ||
+      contentContainsAddress(msg.body_text, normalizedAddress)
+    ) {
+      count++;
+    }
+  }
+
+  return count;
 }
 
 /**

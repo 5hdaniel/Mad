@@ -268,6 +268,83 @@ async function findEmailsByContactEmails(
 }
 
 /**
+ * Count emails matching the address filter INCLUDING already-linked ones.
+ *
+ * This is used by `withAddressFallback` to determine whether the address filter
+ * is valid. If this returns > 0 but `findEmailsByContactEmails` returns 0,
+ * it means matching emails exist but are all already linked to this transaction.
+ * In that case, the fallback should NOT trigger.
+ *
+ * The query mirrors `findEmailsByContactEmails` but omits the `c.id IS NULL`
+ * condition, so it counts ALL emails matching the address + contact + date range
+ * regardless of link status.
+ */
+async function countEmailsMatchingAddress(
+  userId: string,
+  emails: string[],
+  transactionId: string,
+  dateRange: { start: Date; end: Date },
+  normalizedAddress: NormalizedAddress
+): Promise<number> {
+  if (emails.length === 0) {
+    return 0;
+  }
+
+  // Get the user's email to exclude it from contact matching
+  const userSql = "SELECT email FROM users_local WHERE id = ?";
+  const userResult = dbGet<{ email: string | null }>(userSql, [userId]);
+  const userEmail = userResult?.email?.toLowerCase().trim();
+
+  // Filter out user's own email from contact emails
+  const contactEmails = emails.filter((email) => {
+    const normalizedEmail = email.toLowerCase().trim();
+    return normalizedEmail !== userEmail;
+  });
+
+  if (contactEmails.length === 0) {
+    return 0;
+  }
+
+  // Build email patterns for LIKE matching (sender, recipients, and cc)
+  const emailConditions = contactEmails
+    .map(() => "(LOWER(e.sender) LIKE ? OR LOWER(e.recipients) LIKE ? OR LOWER(e.cc) LIKE ?)")
+    .join(" OR ");
+
+  // Build address clause (same as findEmailsByContactEmails)
+  const nameWords = normalizedAddress.streetName.split(/\s+/);
+  const likeParts = [
+    `LOWER(e.subject || ' ' || COALESCE(e.body_plain, '')) LIKE ?`,
+    ...nameWords.map(() => `LOWER(e.subject || ' ' || COALESCE(e.body_plain, '')) LIKE ?`),
+  ];
+  const addressClause = 'AND ' + likeParts.join(' AND ');
+
+  // Note: No LEFT JOIN on communications and no c.id IS NULL — we want ALL matches
+  const sql = `
+    SELECT COUNT(*) as cnt
+    FROM emails e
+    WHERE e.user_id = ?
+      AND (${emailConditions})
+      AND e.sent_at >= ?
+      AND e.sent_at <= ?
+      ${addressClause}
+  `;
+
+  const params: (string | number)[] = [userId];
+  for (const email of contactEmails) {
+    params.push(`%${email}%`, `%${email}%`, `%${email}%`);
+  }
+  params.push(dateRange.start.toISOString());
+  params.push(dateRange.end.toISOString());
+  params.push(`%${normalizedAddress.streetNumber}%`);
+  for (const word of nameWords) {
+    params.push(`%${word}%`);
+  }
+
+  const result = dbGet<{ cnt: number }>(sql, params);
+  return result?.cnt ?? 0;
+}
+
+/**
  * Message with thread information for thread-level linking
  *
  * TASK-1115: Now returns thread_id for grouping messages by conversation.
@@ -502,12 +579,14 @@ export async function autoLinkCommunicationsForContact(
     );
 
     // 4. Find matching emails (from communications table)
-    // TASK-2087: Use withAddressFallback to try with address filter first, fall back if empty
+    // TASK-2087: Use withAddressFallback to try with address filter first, fall back if empty.
+    // Pass countWithFilter to prevent fallback when matching emails exist but are already linked.
     const emailIds = await withAddressFallback(
       (addr) => findEmailsByContactEmails(userId, contactInfo.emails, transactionId, dateRange, addr),
       txnNormalizedAddress,
       (msg) => logService.debug(msg, "AutoLinkService"),
-      "emails"
+      "emails",
+      (addr) => countEmailsMatchingAddress(userId, contactInfo.emails, transactionId, dateRange, addr)
     );
 
     await logService.debug(
