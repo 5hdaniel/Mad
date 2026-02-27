@@ -80,23 +80,6 @@ function createEncryptedFileContent(
   return JSON.stringify({ encrypted });
 }
 
-/**
- * Helper: extract session data from encrypted writeFile output.
- */
-function extractSavedSessionData(
-  writeCallArg: string,
-): Record<string, unknown> {
-  const wrapper = JSON.parse(writeCallArg);
-  if (wrapper.encrypted) {
-    const decoded = Buffer.from(wrapper.encrypted, "base64").toString();
-    const json = decoded.startsWith("encrypted:")
-      ? decoded.slice("encrypted:".length)
-      : decoded;
-    return JSON.parse(json);
-  }
-  return wrapper;
-}
-
 const validSessionData = {
   user: {
     id: "user-123",

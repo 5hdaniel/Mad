@@ -57,7 +57,7 @@ import type {
   Message,
 } from "../types";
 
-import { DatabaseError, NotFoundError } from "../types";
+import { DatabaseError } from "../types";
 import { databaseEncryptionService } from "./databaseEncryptionService";
 import type { AuditLogEntry, AuditLogDbRow } from "./auditService";
 
@@ -335,17 +335,21 @@ class DatabaseService implements IDatabaseService {
 
   private async _secureDelete(filePath: string): Promise<void> {
     try {
-      const stats = fs.statSync(filePath);
+      // Open first, then fstat to avoid TOCTOU race between stat and open
       const fd = fs.openSync(filePath, "r+");
-      for (let pass = 0; pass < 3; pass++) {
-        const randomData = crypto.randomBytes(stats.size);
-        fs.writeSync(fd, randomData, 0, randomData.length, 0);
-        fs.fsyncSync(fd);
+      try {
+        const stats = fs.fstatSync(fd);
+        for (let pass = 0; pass < 3; pass++) {
+          const randomData = crypto.randomBytes(stats.size);
+          fs.writeSync(fd, randomData, 0, randomData.length, 0);
+          fs.fsyncSync(fd);
+        }
+      } finally {
+        fs.closeSync(fd);
       }
-      fs.closeSync(fd);
       fs.unlinkSync(filePath);
     } catch {
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      try { fs.unlinkSync(filePath); } catch { /* file already gone */ }
     }
   }
 

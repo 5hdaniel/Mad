@@ -660,12 +660,22 @@ export class BackupDecryptionService {
         const files = fs.readdirSync(decryptedPath);
         for (const file of files) {
           const filePath = path.join(decryptedPath, file);
-          const stats = fs.statSync(filePath);
-          if (stats.isFile()) {
-            // Overwrite with zeros
-            const zeros = Buffer.alloc(stats.size, 0);
-            fs.writeFileSync(filePath, zeros);
+          try {
+            // Open file exclusively to avoid TOCTOU race between stat and write
+            const fd = fs.openSync(filePath, "r+");
+            try {
+              const stats = fs.fstatSync(fd);
+              if (stats.isFile()) {
+                // Overwrite with zeros using the same fd
+                const zeros = Buffer.alloc(stats.size, 0);
+                fs.writeSync(fd, zeros, 0, zeros.length, 0);
+              }
+            } finally {
+              fs.closeSync(fd);
+            }
             fs.unlinkSync(filePath);
+          } catch {
+            // File may have been removed concurrently; skip
           }
         }
         fs.rmdirSync(decryptedPath);

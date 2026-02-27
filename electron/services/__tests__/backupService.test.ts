@@ -330,11 +330,11 @@ describe("BackupService", () => {
 
   describe("getBackupMetadata (TASK-908)", () => {
     it("should return null when manifest does not exist", async () => {
-      // Reset fs.access to reject (file not found)
+      // Reset fs.stat to reject with ENOENT (file not found)
       const fsModule = require("fs");
-      fsModule.promises.access = jest
-        .fn()
-        .mockRejectedValue(new Error("Not found"));
+      const enoent = new Error("ENOENT: no such file or directory") as Error & { code: string };
+      enoent.code = "ENOENT";
+      fsModule.promises.stat = jest.fn().mockRejectedValue(enoent);
 
       const result = await backupService.getBackupMetadata("/some/backup/path");
       expect(result).toBeNull();

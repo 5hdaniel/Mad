@@ -7,8 +7,6 @@ import enhancedExportService from "../enhancedExportService";
 import pdfExportService from "../pdfExportService";
 import { Transaction, Communication } from "../../types/models";
 import fs from "fs/promises";
-import path from "path";
-import { app } from "electron";
 
 // Mock dependencies
 jest.mock("../pdfExportService");
@@ -185,22 +183,6 @@ describe("Export Security - Secret Leak Prevention", () => {
       );
 
       const exportedData = JSON.parse(capturedContent);
-
-      // Verify only expected fields are exported
-      const expectedTransactionKeys = [
-        "id",
-        "property_address",
-        "transaction_type",
-        "status",
-        "started_at",
-        "closed_at",
-        "sale_price",
-        "listing_price",
-        "earnest_money_amount",
-        "extraction_confidence",
-        "total_communications_count",
-        "exported_at",
-      ];
 
       const actualKeys = Object.keys(exportedData.transaction);
 

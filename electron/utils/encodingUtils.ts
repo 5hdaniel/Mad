@@ -252,7 +252,7 @@ export function analyzeBufferEncoding(buffer: Buffer): {
   // Check for null bytes (common in UTF-16)
   let hasNullBytes = false;
   let nullByteCount = 0;
-  let alternatingNullPattern = true;
+  let alternatingNullPattern: boolean;
 
   for (let i = 0; i < Math.min(buffer.length, 100); i++) {
     if (buffer[i] === 0) {

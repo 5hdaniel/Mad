@@ -200,7 +200,6 @@ describe("GmailFetchService", () => {
       await gmailFetchService.searchEmails({ query: "test", after, before });
 
       const expectedAfter = Math.floor(after.getTime() / 1000);
-      const expectedBefore = Math.floor(before.getTime() / 1000);
 
       expect(mockMessagesList).toHaveBeenCalledWith({
         userId: "me",

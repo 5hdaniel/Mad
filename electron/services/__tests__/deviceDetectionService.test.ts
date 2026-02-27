@@ -28,8 +28,6 @@ import log from "electron-log";
 // Valid UDID formats for testing (TASK-601 security requirement)
 // Traditional format: 40 hex chars
 const TEST_UDID = "a1b2c3d4e5f6789012345678901234567890abcd";
-// Modern format: 8-4-16 with hyphens
-const TEST_UDID_MODERN = "00000000-0000000000000000";
 
 // Helper to create a mock process
 function createMockProcess() {

@@ -16,7 +16,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import transactionExtractorService, {
   AnalysisResult,
-  TransactionSummary,
 } from '../transactionExtractorService';
 import { AnalyzeMessageTool } from '../llm/tools/analyzeMessageTool';
 import { ExtractContactRolesTool } from '../llm/tools/extractContactRolesTool';

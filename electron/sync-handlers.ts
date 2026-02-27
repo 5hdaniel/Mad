@@ -118,7 +118,7 @@ export function registerSyncHandlers(mainWindow: BrowserWindow, userId?: string)
       if (!syncSessionUserId) {
         log.warn("[SyncHandlers] No user ID available at sync start - data will not be persisted");
       } else {
-        log.info("[SyncHandlers] User ID captured for sync persistence", { userId: syncSessionUserId ? redactId(syncSessionUserId) : "none" });
+        log.info("[SyncHandlers] User ID captured for sync persistence", { userId: redactId(syncSessionUserId) });
       }
 
       // Check if sync is stuck and force reset if needed
@@ -184,7 +184,7 @@ export function registerSyncHandlers(mainWindow: BrowserWindow, userId?: string)
       if (!syncSessionUserId) {
         log.warn("[SyncHandlers] No user ID available at sync start - data will not be persisted");
       } else {
-        log.info("[SyncHandlers] User ID captured for sync persistence", { userId: syncSessionUserId ? redactId(syncSessionUserId) : "none" });
+        log.info("[SyncHandlers] User ID captured for sync persistence", { userId: redactId(syncSessionUserId) });
       }
 
       // Check if sync is stuck and force reset if needed

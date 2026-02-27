@@ -777,9 +777,6 @@ export class BackupService extends EventEmitter {
     const elapsedMs = Date.now() - this.startTime;
     const elapsedMinutes = elapsedMs / 1000 / 60;
 
-    // Calculate transfer rate (bytes per minute)
-    const transferRate = bytesTransferred / Math.max(elapsedMinutes, 0.1);
-
     // Estimate total time based on typical backup sizes
     // We use a heuristic: if we've been going > 5 min, assume it's a larger backup
     let estimatedTotalMinutes: number;
@@ -966,18 +963,22 @@ export class BackupService extends EventEmitter {
     try {
       const manifestPath = path.join(backupPath, "Manifest.db");
 
-      // Check if manifest exists
-      if (!(await this.pathExists(manifestPath))) {
-        log.debug("[BackupService] Manifest.db not found at:", manifestPath);
-        return null;
+      // Read file and stats directly, handling ENOENT instead of pre-checking
+      let stats: Awaited<ReturnType<typeof fs.stat>>;
+      let manifestContent: Buffer;
+      try {
+        stats = await fs.stat(manifestPath);
+        manifestContent = await fs.readFile(manifestPath);
+      } catch (err: unknown) {
+        if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "ENOENT") {
+          log.debug("[BackupService] Manifest.db not found at:", manifestPath);
+          return null;
+        }
+        throw err;
       }
-
-      // Get file stats for modification time
-      const stats = await fs.stat(manifestPath);
 
       // Compute SHA-256 hash of manifest for reliable change detection
       const { createHash } = await import("crypto");
-      const manifestContent = await fs.readFile(manifestPath);
       const hash = createHash("sha256").update(manifestContent).digest("hex");
 
       log.debug("[BackupService] Backup metadata:", {

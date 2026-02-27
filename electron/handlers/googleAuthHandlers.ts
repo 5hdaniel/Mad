@@ -946,7 +946,7 @@ export async function handleGoogleConnectMailboxPending(
     );
 
     // Start auth flow
-    const { authUrl, codePromise, codeVerifier, scopes } =
+    const { authUrl, codePromise, codeVerifier } =
       await googleAuthService.authenticateForMailbox(emailHint);
 
     // Store codeVerifier for use after code is received

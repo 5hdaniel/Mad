@@ -237,7 +237,7 @@ class GmailFetchService {
       let estimatedTotal = 0;
 
       // Paginate through all results with rate limiting (BACKLOG-497)
-      do {
+      for (;;) {
         pageCount++;
         logService.debug(`Fetching page ${pageCount}`, "GmailFetch");
 
@@ -288,7 +288,7 @@ class GmailFetchService {
         if (allMessages.length >= maxResults || !nextPageToken) {
           break;
         }
-      } while (nextPageToken);
+      }
 
       logService.info(
         `Total messages found: ${allMessages.length}`,
@@ -636,7 +636,7 @@ class GmailFetchService {
       let nextPageToken: string | undefined = undefined;
       let pageCount = 0;
 
-      do {
+      for (;;) {
         pageCount++;
         const response: { data: gmail_v1.Schema$ListMessagesResponse } =
           await this._throttledCall(() =>
@@ -656,7 +656,7 @@ class GmailFetchService {
         if (allMessages.length >= maxResults || !nextPageToken) {
           break;
         }
-      } while (nextPageToken);
+      }
 
       logService.debug(
         `Label ${labelId}: found ${allMessages.length} message IDs`,
