@@ -10,7 +10,7 @@
  * @see TASK-2087
  */
 
-import { normalizeAddress, contentContainsAddress, type NormalizedAddress } from "../addressNormalization";
+import { normalizeAddress, contentContainsAddress, withAddressFallback, type NormalizedAddress } from "../addressNormalization";
 
 describe("addressNormalization", () => {
   describe("normalizeAddress", () => {
@@ -133,6 +133,51 @@ describe("addressNormalization", () => {
       expect(result).toEqual({ streetNumber: "1000", streetName: "forest", full: "1000 forest" });
     });
 
+    it("should handle Alley suffix", () => {
+      const result = normalizeAddress("50 Rose Alley");
+      expect(result).toEqual({ streetNumber: "50", streetName: "rose", full: "50 rose" });
+    });
+
+    it("should handle Aly abbreviation", () => {
+      const result = normalizeAddress("50 Rose Aly");
+      expect(result).toEqual({ streetNumber: "50", streetName: "rose", full: "50 rose" });
+    });
+
+    it("should handle Path suffix", () => {
+      const result = normalizeAddress("75 Deer Path");
+      expect(result).toEqual({ streetNumber: "75", streetName: "deer", full: "75 deer" });
+    });
+
+    it("should handle Run suffix", () => {
+      const result = normalizeAddress("88 Fox Run");
+      expect(result).toEqual({ streetNumber: "88", streetName: "fox", full: "88 fox" });
+    });
+
+    it("should handle Pass suffix", () => {
+      const result = normalizeAddress("200 Mountain Pass");
+      expect(result).toEqual({ streetNumber: "200", streetName: "mountain", full: "200 mountain" });
+    });
+
+    it("should handle Pike suffix", () => {
+      const result = normalizeAddress("1500 Columbia Pike");
+      expect(result).toEqual({ streetNumber: "1500", streetName: "columbia", full: "1500 columbia" });
+    });
+
+    it("should handle Crossing suffix", () => {
+      const result = normalizeAddress("300 Creek Crossing");
+      expect(result).toEqual({ streetNumber: "300", streetName: "creek", full: "300 creek" });
+    });
+
+    it("should handle Xing abbreviation", () => {
+      const result = normalizeAddress("300 Creek Xing");
+      expect(result).toEqual({ streetNumber: "300", streetName: "creek", full: "300 creek" });
+    });
+
+    it("should handle Commons suffix", () => {
+      const result = normalizeAddress("400 Village Commons");
+      expect(result).toEqual({ streetNumber: "400", streetName: "village", full: "400 village" });
+    });
+
     it("should not strip non-suffix words", () => {
       const result = normalizeAddress("123 Oak Hill");
       expect(result).toEqual({ streetNumber: "123", streetName: "oak hill", full: "123 oak hill" });
@@ -231,6 +276,75 @@ describe("addressNormalization", () => {
 
     it("should not match number embedded in larger number", () => {
       expect(contentContainsAddress("Account #45678 oak transaction", addr("456", "oak"))).toBe(false);
+    });
+  });
+
+  describe("withAddressFallback", () => {
+    const testAddr: NormalizedAddress = { streetNumber: "123", streetName: "oak", full: "123 oak" };
+
+    it("should return filtered results when address filter produces results", async () => {
+      const queryFn = jest.fn()
+        .mockResolvedValueOnce(["a", "b"]); // first call with address returns results
+      const debugLog = jest.fn();
+
+      const result = await withAddressFallback(queryFn, testAddr, debugLog, "items");
+
+      expect(result).toEqual(["a", "b"]);
+      expect(queryFn).toHaveBeenCalledTimes(1);
+      expect(queryFn).toHaveBeenCalledWith(testAddr);
+      expect(debugLog).toHaveBeenCalledWith(expect.stringContaining("Address filter applied"));
+    });
+
+    it("should fall back to unfiltered when address filter returns empty", async () => {
+      const queryFn = jest.fn()
+        .mockResolvedValueOnce([])             // first call with address: empty
+        .mockResolvedValueOnce(["x", "y"]);    // second call without address: results
+      const debugLog = jest.fn();
+
+      const result = await withAddressFallback(queryFn, testAddr, debugLog, "items");
+
+      expect(result).toEqual(["x", "y"]);
+      expect(queryFn).toHaveBeenCalledTimes(2);
+      expect(queryFn).toHaveBeenNthCalledWith(1, testAddr);
+      expect(queryFn).toHaveBeenNthCalledWith(2, null);
+      expect(debugLog).toHaveBeenCalledWith(expect.stringContaining("Address filter fallback"));
+    });
+
+    it("should return empty when both filtered and unfiltered are empty", async () => {
+      const queryFn = jest.fn()
+        .mockResolvedValueOnce([])   // with address: empty
+        .mockResolvedValueOnce([]);  // without address: still empty
+      const debugLog = jest.fn();
+
+      const result = await withAddressFallback(queryFn, testAddr, debugLog, "items");
+
+      expect(result).toEqual([]);
+      expect(queryFn).toHaveBeenCalledTimes(2);
+      // No log since unfiltered also returned empty
+      expect(debugLog).not.toHaveBeenCalled();
+    });
+
+    it("should skip fallback logic when no address is provided", async () => {
+      const queryFn = jest.fn().mockResolvedValueOnce(["a", "b"]);
+      const debugLog = jest.fn();
+
+      const result = await withAddressFallback(queryFn, null, debugLog, "items");
+
+      expect(result).toEqual(["a", "b"]);
+      expect(queryFn).toHaveBeenCalledTimes(1);
+      expect(queryFn).toHaveBeenCalledWith(null);
+      // No address = no log message
+      expect(debugLog).not.toHaveBeenCalled();
+    });
+
+    it("should return empty without fallback when no address and no results", async () => {
+      const queryFn = jest.fn().mockResolvedValueOnce([]);
+      const debugLog = jest.fn();
+
+      const result = await withAddressFallback(queryFn, null, debugLog, "items");
+
+      expect(result).toEqual([]);
+      expect(queryFn).toHaveBeenCalledTimes(1);
     });
   });
 });

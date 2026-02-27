@@ -16,7 +16,7 @@ import {
   isThreadLinkedToTransaction,
 } from "./db/communicationDbService";
 import { computeTransactionDateRange } from "../utils/emailDateRange";
-import { normalizeAddress, type NormalizedAddress } from "../utils/addressNormalization";
+import { normalizeAddress, withAddressFallback, type NormalizedAddress } from "../utils/addressNormalization";
 
 
 // ============================================
@@ -502,35 +502,13 @@ export async function autoLinkCommunicationsForContact(
     );
 
     // 4. Find matching emails (from communications table)
-    // TASK-2087: First try with address filter, then fall back to unfiltered if no results
-    let emailIds = await findEmailsByContactEmails(
-      userId,
-      contactInfo.emails,
-      transactionId,
-      dateRange,
-      txnNormalizedAddress
+    // TASK-2087: Use withAddressFallback to try with address filter first, fall back if empty
+    const emailIds = await withAddressFallback(
+      (addr) => findEmailsByContactEmails(userId, contactInfo.emails, transactionId, dateRange, addr),
+      txnNormalizedAddress,
+      (msg) => logService.debug(msg, "AutoLinkService"),
+      "emails"
     );
-
-    if (emailIds.length === 0 && txnNormalizedAddress) {
-      // Fallback: address filter eliminated all results, retry without it
-      emailIds = await findEmailsByContactEmails(
-        userId,
-        contactInfo.emails,
-        transactionId,
-        dateRange
-      );
-      if (emailIds.length > 0) {
-        await logService.debug(
-          `Address filter fallback: no emails matched "${txnNormalizedAddress.full}", returning ${emailIds.length} unfiltered results`,
-          "AutoLinkService"
-        );
-      }
-    } else if (txnNormalizedAddress) {
-      await logService.debug(
-        `Address filter applied: ${emailIds.length} emails matched "${txnNormalizedAddress.full}"`,
-        "AutoLinkService"
-      );
-    }
 
     await logService.debug(
       `Found ${emailIds.length} matching emails for contact ${contactId}`,

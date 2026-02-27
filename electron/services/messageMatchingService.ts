@@ -14,7 +14,7 @@
 import crypto from "crypto";
 import { dbAll, dbRun, dbGet } from "./db/core/dbConnection";
 import logService from "./logService";
-import { normalizeAddress, contentContainsAddress, type NormalizedAddress } from "../utils/addressNormalization";
+import { normalizeAddress, contentContainsAddress, withAddressFallback, type NormalizedAddress } from "../utils/addressNormalization";
 
 /**
  * Result of matching a message to a contact
@@ -702,35 +702,24 @@ export async function autoLinkEmailsToTransaction(
     );
 
     // 3. Find matching emails
-    let matches = await findEmailsByAddresses(
-      userId,
-      contactEmails,
-      transactionId
+    // TASK-2087: Use withAddressFallback to apply address filter with automatic fallback.
+    // The query function fetches all matches, then post-filters by address content.
+    const matches = await withAddressFallback(
+      async (addr) => {
+        const allMatches = await findEmailsByAddresses(userId, contactEmails, transactionId);
+        if (!addr || allMatches.length === 0) return allMatches;
+        const filteredIds = await filterEmailMatchesByAddress(
+          allMatches.map(m => m.messageId),
+          addr
+        );
+        return filteredIds.size > 0
+          ? allMatches.filter(m => filteredIds.has(m.messageId))
+          : [];
+      },
+      txnNormalizedAddress,
+      (msg) => logService.debug(msg, "MessageMatchingService"),
+      "emails"
     );
-
-    // TASK-2087: Apply address filter if transaction has a property address.
-    // Filter emails whose body or subject contains the normalized address.
-    // Fallback: if address filter eliminates ALL results, return unfiltered matches.
-    if (txnNormalizedAddress && matches.length > 0) {
-      const filteredIds = await filterEmailMatchesByAddress(
-        matches.map(m => m.messageId),
-        txnNormalizedAddress
-      );
-
-      if (filteredIds.size > 0) {
-        const originalCount = matches.length;
-        matches = matches.filter(m => filteredIds.has(m.messageId));
-        logService.debug(
-          `Address filter applied to emails: ${originalCount} -> ${matches.length} (address: "${txnNormalizedAddress.full}")`,
-          "MessageMatchingService"
-        );
-      } else {
-        logService.debug(
-          `Address filter fallback for emails: no emails matched "${txnNormalizedAddress.full}", keeping all ${matches.length} results`,
-          "MessageMatchingService"
-        );
-      }
-    }
 
     logService.info(
       `Found ${matches.length} emails to link for transaction ${transactionId}`,

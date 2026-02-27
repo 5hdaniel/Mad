@@ -27,6 +27,13 @@ const STREET_SUFFIXES = new Set([
   'parkway', 'pkwy',
   'highway', 'hwy',
   'loop', 'lp',
+  'alley', 'aly',
+  'path',
+  'run',
+  'pass',
+  'pike',
+  'crossing', 'xing',
+  'commons',
 ]);
 
 /**
@@ -150,4 +157,48 @@ export function contentContainsAddress(
   }
 
   return true;
+}
+
+/**
+ * Generic fallback helper for address-filtered queries.
+ *
+ * Runs `queryFn` with the normalized address. If the result is empty and an
+ * address was provided, retries without the address filter. Logs a debug
+ * message via the supplied `debugLog` callback when the fallback fires.
+ *
+ * This eliminates the duplicated "try with address, fall back without" pattern
+ * used by autoLinkService and messageMatchingService.
+ *
+ * @param queryFn - Async function that returns results, optionally filtered by address
+ * @param normalizedAddress - The NormalizedAddress to filter by, or null to skip filtering
+ * @param debugLog - Callback for logging fallback events (avoids importing logService here)
+ * @param entityType - Label for log messages (e.g. "emails", "matches")
+ * @returns The query results (filtered if possible, unfiltered as fallback)
+ */
+export async function withAddressFallback<T>(
+  queryFn: (address: NormalizedAddress | null) => Promise<T[]>,
+  normalizedAddress: NormalizedAddress | null,
+  debugLog: (message: string) => Promise<void> | void,
+  entityType: string
+): Promise<T[]> {
+  const results = await queryFn(normalizedAddress);
+
+  if (results.length === 0 && normalizedAddress) {
+    // Address filter eliminated all results - retry without it
+    const unfiltered = await queryFn(null);
+    if (unfiltered.length > 0) {
+      await debugLog(
+        `Address filter fallback: no ${entityType} matched "${normalizedAddress.full}", returning ${unfiltered.length} unfiltered`
+      );
+    }
+    return unfiltered;
+  }
+
+  if (results.length > 0 && normalizedAddress) {
+    await debugLog(
+      `Address filter applied: ${results.length} ${entityType} matched "${normalizedAddress.full}"`
+    );
+  }
+
+  return results;
 }
