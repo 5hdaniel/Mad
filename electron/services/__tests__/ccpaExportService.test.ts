@@ -450,7 +450,7 @@ describe("CcpaExportService", () => {
       expect(mockWriteFile).toHaveBeenCalledWith(
         "/tmp/test-export.json",
         expect.any(String),
-        "utf-8",
+        expect.objectContaining({ encoding: "utf-8" }),
       );
 
       // Verify the written content is formatted JSON
@@ -468,7 +468,7 @@ describe("CcpaExportService", () => {
       expect(mockWriteFile).toHaveBeenCalledWith(
         testPath,
         expect.any(String),
-        "utf-8",
+        expect.objectContaining({ encoding: "utf-8" }),
       );
     });
   });
