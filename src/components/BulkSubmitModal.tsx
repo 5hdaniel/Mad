@@ -6,8 +6,7 @@
  * and results summary.
  */
 import React from "react";
-import type { Transaction, SubmissionStatus } from "@/types";
-import { SubmissionStatusBadge } from "./transactionDetailsModule/components/SubmissionStatusBadge";
+import type { SubmissionStatus } from "@/types";
 
 // ============================================
 // TYPES
@@ -57,18 +56,6 @@ interface BulkSubmitModalProps {
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
-
-/**
- * Determine if a transaction is eligible for submission
- */
-function isEligibleForSubmit(status?: SubmissionStatus): boolean {
-  return (
-    status === undefined ||
-    status === "not_submitted" ||
-    status === "needs_changes" ||
-    status === "rejected"
-  );
-}
 
 /**
  * Get label for submission type

@@ -19,7 +19,7 @@ import {
   selectHasPermissionsNullable,
   selectIsDatabaseInitialized,
 } from "../../appCore/state/machine/selectors";
-import { logAllFlags, logNavigation, logStateChange } from "../../appCore/state/machine/debug";
+import { logAllFlags, logStateChange } from "../../appCore/state/machine/debug";
 import type { AppStateMachine } from "../../appCore/state/types";
 import type { StepAction } from "./types";
 import logger from '../../utils/logger';

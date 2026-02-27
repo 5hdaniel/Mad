@@ -68,9 +68,6 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
   const isStoring = progress.phase === "storing";
   const hasStartedTransfer = (progress.bytesProcessed ?? 0) > 0 || (progress.processedFiles ?? 0) > 0;
 
-  // Backup is done once we move to extracting or storing phase
-  const backupComplete = isExtracting || isStoring || isComplete;
-
   // Show passcode waiting warning (special state with detailed instructions)
   const showPasscodeWarning = isWaitingForPasscode;
 

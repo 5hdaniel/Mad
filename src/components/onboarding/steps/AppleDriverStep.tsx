@@ -225,11 +225,6 @@ function AppleDriverStepContent({
     // Note: DRIVER_SETUP_COMPLETE already triggers goToNext() in the flow hook
   }, [onAction]);
 
-  const handleSkip = useCallback(() => {
-    onAction({ type: "DRIVER_SKIPPED" });
-    // Note: DRIVER_SKIPPED already triggers goToNext() in the flow hook
-  }, [onAction]);
-
   return (
     <>
       {/* Header */}

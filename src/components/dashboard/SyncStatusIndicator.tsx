@@ -81,7 +81,7 @@ export function SyncStatusIndicator({
   const { hasAIAddon } = useLicense();
 
   // Use SyncOrchestrator as single source of truth for sync state
-  const { queue, isRunning, overallProgress } = useSyncOrchestrator();
+  const { queue, isRunning } = useSyncOrchestrator();
 
   // Use isRunning from SyncOrchestrator as authoritative "is syncing" state
   const isAnySyncing = isRunning;

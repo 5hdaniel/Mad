@@ -19,7 +19,6 @@ import {
   useOnboardingStep,
   useAppError,
 } from "./useAppState";
-import { INITIAL_APP_STATE } from "./types";
 import type {
   AppState,
   ReadyState,
@@ -120,15 +119,6 @@ function ActionDispatcher() {
       Logout
     </button>
   );
-}
-
-/**
- * Test component that tracks render count.
- */
-function RenderCounter({ onRender }: { onRender: () => void }) {
-  onRender();
-  useAppState();
-  return <div data-testid="render-counter">rendered</div>;
 }
 
 // ============================================

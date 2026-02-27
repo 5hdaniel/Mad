@@ -243,7 +243,7 @@ describe("Step Registry", () => {
   it("all steps have non-empty platforms array", () => {
     const { STEP_REGISTRY } = require("../steps");
 
-    for (const [id, step] of Object.entries(STEP_REGISTRY)) {
+    for (const [_id, step] of Object.entries(STEP_REGISTRY)) {
       const platforms = (step as any).meta.platforms;
       expect(platforms).toBeDefined();
       expect(Array.isArray(platforms)).toBe(true);

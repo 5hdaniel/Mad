@@ -78,7 +78,6 @@ function Contacts({ userId, onClose }: ContactsProps) {
     // External contacts (from macOS Contacts app, etc.)
     externalContacts,
     externalContactsLoading,
-    reloadExternalContacts,
   } = useContactList(userId, { onContactDeleted: handleContactDeleted });
 
   // Helper to check if a contact is external (message-derived or from Contacts app)

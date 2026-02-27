@@ -20,7 +20,6 @@ const mockLocation = {
 
 // Store original values
 const originalWindow = global.window;
-const originalLocalStorage = global.localStorage;
 
 describe("featureFlags", () => {
   beforeEach(() => {

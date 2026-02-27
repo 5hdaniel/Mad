@@ -76,7 +76,7 @@ function Dashboard({
   );
 
   // Fetch pending auto-detected transaction count
-  const { pendingCount, isLoading: isPendingLoading } =
+  const { pendingCount } =
     usePendingTransactionCount();
 
   // License status for transaction limit check and AI addon

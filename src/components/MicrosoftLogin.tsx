@@ -171,15 +171,13 @@ function MicrosoftLogin({ onLoginComplete, onSkip }: MicrosoftLoginProps) {
             </p>
           </div>
 
-          {error && (
-            <div className="mb-6 p-4 bg-yellow-50 rounded-lg">
-              <p className="text-sm text-yellow-800">{error}</p>
-              <p className="text-xs text-yellow-700 mt-2">
-                Email export requires Microsoft app configuration. You can still
-                export text messages.
-              </p>
-            </div>
-          )}
+          <div className="mb-6 p-4 bg-yellow-50 rounded-lg">
+            <p className="text-sm text-yellow-800">{error}</p>
+            <p className="text-xs text-yellow-700 mt-2">
+              Email export requires Microsoft app configuration. You can still
+              export text messages.
+            </p>
+          </div>
 
           <div className="space-y-3">
             <button

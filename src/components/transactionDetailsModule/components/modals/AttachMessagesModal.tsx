@@ -178,54 +178,6 @@ function getThreadParticipants(messages: MessageLike[], selectedContact: string)
   return Array.from(participants);
 }
 
-/**
- * Check if thread is a group chat (more than 2 total participants)
- * Uses chat_members when available for accurate detection
- */
-function isGroupChat(messages: MessageLike[]): boolean {
-  // First check for chat_members (authoritative)
-  for (const msg of messages) {
-    try {
-      if (msg.participants) {
-        const parsed = typeof msg.participants === 'string'
-          ? JSON.parse(msg.participants)
-          : msg.participants;
-
-        if (parsed.chat_members && Array.isArray(parsed.chat_members)) {
-          // Group chat = more than 1 other person (2+ members excluding "me")
-          return parsed.chat_members.length > 1;
-        }
-      }
-    } catch {
-      // Continue
-    }
-  }
-
-  // Fallback: count unique participants from messages
-  const allParticipants = new Set<string>();
-
-  for (const msg of messages) {
-    try {
-      if (msg.participants) {
-        const parsed = typeof msg.participants === 'string'
-          ? JSON.parse(msg.participants)
-          : msg.participants;
-
-        if (parsed.from) allParticipants.add(parsed.from);
-        if (parsed.to) {
-          const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
-          toList.forEach((p: string) => allParticipants.add(p));
-        }
-      }
-    } catch {
-      // Skip
-    }
-  }
-
-  allParticipants.delete('me');
-  return allParticipants.size > 2;
-}
-
 export function AttachMessagesModal({
   userId,
   transactionId,

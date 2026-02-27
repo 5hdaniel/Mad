@@ -3,7 +3,7 @@
  * Phone-style popup modal for viewing a full conversation thread.
  * Supports inline display of image/GIF attachments (TASK-1012).
  */
-import React, { useEffect, useState, useRef, useMemo } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import type { MessageLike } from "../MessageThreadCard";
 import { parseDateSafe } from "../../../../utils/dateFormatters";
 import { normalizePhoneForLookup, getSenderPhone } from "../../../../utils/phoneNormalization";
