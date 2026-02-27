@@ -206,7 +206,9 @@ describe("DatabaseEncryptionService", () => {
     });
 
     it("should return false for non-existent database", async () => {
-      mockExistsSync.mockReturnValue(false);
+      const enoent = new Error("ENOENT: no such file or directory") as Error & { code: string };
+      enoent.code = "ENOENT";
+      mockOpenSync.mockImplementation(() => { throw enoent; });
 
       const result =
         await databaseEncryptionService.isDatabaseEncrypted("/path/to/db");
