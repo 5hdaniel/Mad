@@ -19,6 +19,10 @@ export const SPECIFIC_ROLES = {
   // Client
   CLIENT: "client",
 
+  // Counterparties
+  BUYER: "buyer",
+  SELLER: "seller",
+
   // Agents
   BUYER_AGENT: "buyer_agent",
   SELLER_AGENT: "seller_agent",
@@ -56,6 +60,8 @@ export const SPECIFIC_ROLES = {
 
 export const ROLE_DISPLAY_NAMES = {
   [SPECIFIC_ROLES.CLIENT]: "Client (Buyer/Seller)",
+  [SPECIFIC_ROLES.BUYER]: "Buyer",
+  [SPECIFIC_ROLES.SELLER]: "Seller",
   [SPECIFIC_ROLES.BUYER_AGENT]: "Buyer Agent",
   [SPECIFIC_ROLES.SELLER_AGENT]: "Seller Agent",
   [SPECIFIC_ROLES.LISTING_AGENT]: "Listing Agent",
@@ -64,7 +70,7 @@ export const ROLE_DISPLAY_NAMES = {
   [SPECIFIC_ROLES.SURVEYOR]: "Surveyor",
   [SPECIFIC_ROLES.TITLE_COMPANY]: "Title Company",
   [SPECIFIC_ROLES.ESCROW_OFFICER]: "Escrow Officer",
-  [SPECIFIC_ROLES.MORTGAGE_BROKER]: "Mortgage Broker",
+  [SPECIFIC_ROLES.MORTGAGE_BROKER]: "Lender (Mortgage Broker)",
   [SPECIFIC_ROLES.LENDER]: "Lender",
   [SPECIFIC_ROLES.REAL_ESTATE_ATTORNEY]: "Real Estate Attorney",
   [SPECIFIC_ROLES.TRANSACTION_COORDINATOR]: "Transaction Coordinator (TC)",
@@ -89,6 +95,8 @@ export const CATEGORY_DISPLAY_NAMES = {
 // Map specific roles to their categories
 export const ROLE_TO_CATEGORY = {
   [SPECIFIC_ROLES.CLIENT]: ROLE_CATEGORIES.CLIENT,
+  [SPECIFIC_ROLES.BUYER]: ROLE_CATEGORIES.CLIENT,
+  [SPECIFIC_ROLES.SELLER]: ROLE_CATEGORIES.CLIENT,
   [SPECIFIC_ROLES.BUYER_AGENT]: ROLE_CATEGORIES.AGENT,
   [SPECIFIC_ROLES.SELLER_AGENT]: ROLE_CATEGORIES.AGENT,
   [SPECIFIC_ROLES.LISTING_AGENT]: ROLE_CATEGORIES.AGENT,
@@ -114,6 +122,8 @@ export const AUDIT_WORKFLOW_STEPS = [
     description: "Core parties to the transaction",
     roles: [
       { role: SPECIFIC_ROLES.CLIENT, required: true, multiple: true },
+      { role: SPECIFIC_ROLES.BUYER, required: false, multiple: true },
+      { role: SPECIFIC_ROLES.SELLER, required: false, multiple: true },
       { role: SPECIFIC_ROLES.BUYER_AGENT, required: false, multiple: true },
       { role: SPECIFIC_ROLES.SELLER_AGENT, required: false, multiple: true },
     ],
