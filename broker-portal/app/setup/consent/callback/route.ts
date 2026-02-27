@@ -21,7 +21,10 @@ export async function GET(request: Request) {
   const errorDescription = searchParams.get('error_description');
 
   if (error) {
-    console.error('Admin consent denied:', error, errorDescription);
+    // eslint-disable-next-line no-control-regex
+    const sanitize = (s: string | null) =>
+      s ? s.replace(/[\r\n]/g, ' ').replace(/[\x00-\x1f\x7f]/g, '') : '';
+    console.error('Admin consent denied:', sanitize(error), sanitize(errorDescription));
     return NextResponse.redirect(
       `${origin}/dashboard?consent_error=${encodeURIComponent(errorDescription || error)}`
     );

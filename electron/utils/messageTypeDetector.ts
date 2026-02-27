@@ -33,7 +33,7 @@ const LOCATION_PATTERNS: RegExp[] = [
   /shared a location/i,
   /shared location/i,
   /current location/i,
-  /maps\.(google|apple)\.com/i,
+  /(?:^|[\s/])maps\.(google|apple)\.com(?:[/\s?#]|$)/i,
   // Pin emoji often indicates location
   /\u{1F4CD}/u, // Red pin emoji
 ];
