@@ -63,6 +63,7 @@ const mockDatabaseService = {
   initialize: jest.fn().mockResolvedValue(undefined),
   isInitialized: jest.fn().mockReturnValue(true),
   getUserByOAuthId: jest.fn(),
+  getUserByEmail: jest.fn(),
   createUser: jest.fn(),
   updateUser: jest.fn(),
   updateLastLogin: jest.fn(),
@@ -72,6 +73,11 @@ const mockDatabaseService = {
   validateSession: jest.fn(),
   deleteSession: jest.fn(),
   acceptTerms: jest.fn(),
+  completeEmailOnboarding: jest.fn(),
+  hasCompletedEmailOnboarding: jest.fn(),
+  getOAuthToken: jest.fn(),
+  clearAllSessions: jest.fn(),
+  getRawDatabase: jest.fn(),
 };
 
 const mockGoogleAuthService = {
@@ -96,8 +102,20 @@ const mockSupabaseService = {
   registerDevice: jest.fn(),
   trackEvent: jest.fn(),
   syncTermsAcceptance: jest.fn(),
+  completeEmailOnboarding: jest.fn(),
   // TASK-1507G: Add getAuthUserId for unified ID handling
   getAuthUserId: jest.fn().mockReturnValue(null),
+  // TASK-1809: getUserById used by fetchCloudUserWithRetry for terms sync
+  getUserById: jest.fn().mockResolvedValue(null),
+  // TASK-2085: getClient used for setSession/getUser server-side validation
+  getClient: jest.fn().mockReturnValue({
+    auth: {
+      setSession: jest.fn().mockResolvedValue({ error: null }),
+      getUser: jest.fn().mockResolvedValue({ data: { user: { id: "test-user" } }, error: null }),
+    },
+  }),
+  signOut: jest.fn(),
+  signOutGlobal: jest.fn(),
 };
 
 // Session-only OAuth: tokens stored directly in encrypted database, no separate tokenEncryptionService
@@ -106,6 +124,7 @@ const mockSessionService = {
   saveSession: jest.fn().mockResolvedValue(undefined),
   loadSession: jest.fn(),
   clearSession: jest.fn().mockResolvedValue(undefined),
+  updateSession: jest.fn().mockResolvedValue(undefined),
   getSessionExpirationMs: jest.fn().mockReturnValue(86400000),
 };
 
@@ -126,6 +145,7 @@ const mockAuditService = {
 };
 
 const mockLogService = {
+  debug: jest.fn().mockResolvedValue(undefined),
   info: jest.fn().mockResolvedValue(undefined),
   error: jest.fn().mockResolvedValue(undefined),
   warn: jest.fn().mockResolvedValue(undefined),
@@ -179,6 +199,25 @@ jest.mock("../services/logService", () => ({
 // Mock sync-handlers for setSyncUserId
 jest.mock("../sync-handlers", () => ({
   setSyncUserId: jest.fn(),
+}));
+
+// Mock failureLogService
+jest.mock("../services/failureLogService", () => ({
+  __esModule: true,
+  default: {
+    logFailure: jest.fn(),
+  },
+}));
+
+// Mock @sentry/electron/main
+jest.mock("@sentry/electron/main", () => ({
+  captureException: jest.fn(),
+  setUser: jest.fn(),
+}));
+
+// Mock deviceService
+jest.mock("../services/deviceService", () => ({
+  getDeviceId: jest.fn().mockReturnValue("test-device-id"),
 }));
 
 // NOTE: We do NOT mock the handler modules (googleAuthHandlers, microsoftAuthHandlers, etc.)

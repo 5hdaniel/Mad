@@ -1,6 +1,6 @@
 # Integration Testing Framework
 
-This directory contains the integration testing framework for Magic Audit. It enables end-to-end testing of sync, detection, and extraction pipelines without external dependencies.
+This directory contains the integration testing framework for Keepr. It enables end-to-end testing of sync, detection, and extraction pipelines without external dependencies.
 
 ## Overview
 

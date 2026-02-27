@@ -220,6 +220,7 @@ async function handleLogout(
     sessionSecurityService.cleanupSession(validatedSessionToken);
 
     setSyncUserId(null);
+    Sentry.setUser(null);
 
     await auditService.log({
       userId,
@@ -773,6 +774,47 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
       }
     }
 
+    // TASK-2085: Server-side token validation for returning users
+    // Prevents showing authenticated UI when session was revoked remotely
+    // This closes the gap where setSession() succeeds (tokens parse OK)
+    // but the server has actually revoked the user/token
+    if (session.supabaseTokens) {
+      try {
+        const { data: userData, error: getUserError } = await supabaseService
+          .getClient()
+          .auth.getUser();
+
+        if (getUserError || !userData.user) {
+          // Session is invalid on the server (user deleted, token revoked)
+          await logService.info(
+            "Supabase session invalid on server, forcing re-login",
+            "SessionHandlers",
+            { error: getUserError?.message }
+          );
+
+          // Clean up the invalid session
+          await databaseService.deleteSession(session.sessionToken);
+          await sessionService.clearSession();
+          sessionSecurityService.cleanupSession(session.sessionToken);
+
+          return { success: false, error: "Session no longer valid" };
+        }
+
+        await logService.info(
+          "Supabase session validated server-side",
+          "SessionHandlers"
+        );
+      } catch (validationError) {
+        // Network error during validation -- proceed optimistically
+        // The user may be offline, and we don't want to block them
+        await logService.warn(
+          "Server-side session validation failed (network?), proceeding optimistically",
+          "SessionHandlers",
+          { error: validationError instanceof Error ? validationError.message : "Unknown" }
+        );
+      }
+    }
+
     // TASK-1507E: Ensure local SQLite user exists for existing sessions
     // Users who authenticated before TASK-1507D have valid sessions but no local user,
     // which causes FK constraint failures on mailbox connection, messages import, etc.
@@ -895,6 +937,7 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
     const user = freshUser || session.user;
 
     setSyncUserId(user.id);
+    Sentry.setUser({ id: user.id, email: session.user.email ?? undefined });
 
     // TASK-1809: Pass cloud user to needsToAcceptTerms for fallback check
     // Even if local sync failed, we can still check cloud terms state
@@ -984,6 +1027,7 @@ async function handleForceLogout(): Promise<AuthResponse> {
 
     // 4. Clear sync user ID
     setSyncUserId(null);
+    Sentry.setUser(null);
 
     await logService.info("Force logout completed successfully", "AuthHandlers");
     return { success: true };
@@ -1093,8 +1137,8 @@ async function handleSignOutAllDevices(): Promise<AuthResponse> {
 async function handleOpenAuthInBrowser(): Promise<{ success: boolean; error?: string }> {
   try {
     // Use broker portal for provider selection page
-    // Production: broker-portal-two.vercel.app, Dev: localhost:3001 (via .env.development)
-    const brokerPortalUrl = process.env.BROKER_PORTAL_URL || 'https://broker-portal-two.vercel.app';
+    // Production: www.keeprcompliance.com, Dev: localhost:3001 (via .env.development)
+    const brokerPortalUrl = process.env.BROKER_PORTAL_URL || 'https://www.keeprcompliance.com';
     const authUrl = `${brokerPortalUrl}/auth/desktop`;
 
     await logService.info("Opening auth URL in browser", "AuthHandlers", {

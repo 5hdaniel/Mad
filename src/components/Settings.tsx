@@ -1864,35 +1864,22 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                 About
               </h3>
               <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg p-4 border border-blue-200">
-                <div className="flex items-center mb-3">
-                  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                    <span className="text-white font-bold text-xl">M</span>
-                  </div>
-                  <div className="ml-3">
-                    <h4 className="text-sm font-semibold text-gray-900">
-                      Keepr
-                    </h4>
-                  </div>
-                </div>
                 <div className="space-y-2 text-xs">
-                  {/* TODO: Implement release notes viewer/link to GitHub releases */}
                   <button
-                    disabled
-                    className="w-full text-left text-gray-400 font-medium cursor-not-allowed"
+                    onClick={() => window.open("https://github.com/5hdaniel/Mad/releases", "_blank")}
+                    className="w-full text-left text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
                   >
                     View Release Notes
                   </button>
-                  {/* TODO: Implement privacy policy viewer/link */}
                   <button
-                    disabled
-                    className="w-full text-left text-gray-400 font-medium cursor-not-allowed"
+                    onClick={() => window.open("https://www.keeprcompliance.com/legal#privacy", "_blank")}
+                    className="w-full text-left text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
                   >
                     Privacy Policy
                   </button>
-                  {/* TODO: Implement terms of service viewer/link */}
                   <button
-                    disabled
-                    className="w-full text-left text-gray-400 font-medium cursor-not-allowed"
+                    onClick={() => window.open("https://www.keeprcompliance.com/legal#terms", "_blank")}
+                    className="w-full text-left text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
                   >
                     Terms of Service
                   </button>

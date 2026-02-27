@@ -1,8 +1,8 @@
-# Legal Brief: Terms of Service & Privacy Policy for Magic Audit
+# Legal Brief: Terms of Service & Privacy Policy for Keepr
 
 **Prepared for:** Outside legal counsel
 **From:** Blue Spaces LLC
-**Product:** Magic Audit (desktop application for real estate transaction auditing)
+**Product:** Keepr (desktop application for real estate transaction auditing)
 **Market:** United States only
 **Date:** February 20, 2026
 
@@ -11,7 +11,7 @@
 ## 1. COMPANY & PRODUCT OVERVIEW
 
 **Entity:** Blue Spaces LLC
-**Product:** Magic Audit - an Electron-based desktop application that helps real estate agents organize, audit, and archive transaction communications (email, iMessage, SMS) and documents.
+**Product:** Keepr - an Electron-based desktop application that helps real estate agents organize, audit, and archive transaction communications (email, iMessage, SMS) and documents.
 
 **Architecture:** Local-first. For Individual license users, most sensitive data (emails, messages, transactions, contacts) is stored locally on the user's device in an AES-256 encrypted SQLite database, with only account info stored in the cloud. For Team/Enterprise users, when an agent submits transactions to their broker for review, that transaction data (including messages and attachments) is also stored in Supabase cloud storage.
 
@@ -162,7 +162,7 @@
 | **Confidentiality (C)** | High | Data classification, encryption at rest/in transit, vendor DPAs |
 | **Privacy (P)** | High | Entire privacy policy; consent tracking, retention, user rights |
 
-**SOC 1 & SOC 3:** SOC 1 (financial controls) is not directly relevant - Magic Audit is not a financial services processor. SOC 3 is a public-facing summary of SOC 2 - useful for marketing once certified but doesn't affect policy drafting.
+**SOC 1 & SOC 3:** SOC 1 (financial controls) is not directly relevant - Keepr is not a financial services processor. SOC 3 is a public-facing summary of SOC 2 - useful for marketing once certified but doesn't affect policy drafting.
 
 **Legal team should:** Write policies that would survive a SOC 2 Type II audit. Specifically: documented consent mechanisms, defined retention periods, breach notification procedures, vendor management (DPAs), and user rights processes.
 

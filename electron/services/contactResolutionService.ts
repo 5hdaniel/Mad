@@ -256,7 +256,7 @@ export async function resolveHandles(
   };
 
   // For Apple IDs (no @ and not a phone), try email prefix match
-  // e.g., "magicauditwa" might match "magicauditwa@icloud.com" in contacts
+  // e.g., "janesmith" might match "janesmith@icloud.com" in contacts
   if (appleIds.length > 0) {
     try {
       for (const appleId of appleIds) {

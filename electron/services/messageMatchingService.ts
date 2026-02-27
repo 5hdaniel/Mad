@@ -14,6 +14,7 @@
 import crypto from "crypto";
 import { dbAll, dbRun, dbGet } from "./db/core/dbConnection";
 import logService from "./logService";
+import { normalizeAddress, contentContainsAddress, withAddressFallback, type NormalizedAddress } from "../utils/addressNormalization";
 
 /**
  * Result of matching a message to a contact
@@ -342,6 +343,50 @@ export async function createCommunicationReference(
 }
 
 /**
+ * TASK-2087: Filter a set of email message IDs by checking if their content mentions the address.
+ * Queries the messages table (channel='email') for subject/body_text fields and checks for address match.
+ *
+ * NOTE: This only applies to emails, NOT text messages. People don't put property addresses in texts.
+ *
+ * @param messageIds - Array of message IDs to check
+ * @param normalizedAddress - The NormalizedAddress to search for (parts checked independently)
+ * @returns Set of message IDs whose content contains the address
+ */
+async function filterEmailMatchesByAddress(
+  messageIds: string[],
+  normalizedAddress: NormalizedAddress
+): Promise<Set<string>> {
+  const result = new Set<string>();
+  if (messageIds.length === 0) return result;
+
+  // Query messages in batches to avoid SQLite parameter limits
+  const batchSize = 100;
+  for (let i = 0; i < messageIds.length; i += batchSize) {
+    const batch = messageIds.slice(i, i + batchSize);
+    const placeholders = batch.map(() => '?').join(',');
+    const sql = `
+      SELECT id, subject, body_text
+      FROM messages
+      WHERE id IN (${placeholders})
+    `;
+    const rows = dbAll<{ id: string; subject: string | null; body_text: string | null }>(sql, batch);
+
+    for (const row of rows) {
+      // Combine subject and body for matching; contentContainsAddress checks
+      // each part of the address independently with word boundaries
+      if (
+        contentContainsAddress(row.subject, normalizedAddress) ||
+        contentContainsAddress(row.body_text, normalizedAddress)
+      ) {
+        result.add(row.id);
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
  * Auto-link text messages to a transaction based on assigned contacts.
  * This is the main entry point for the auto-linking feature.
  *
@@ -361,6 +406,7 @@ export async function autoLinkTextsToTransaction(
 
   try {
     // 1. Get the transaction to verify it exists, get user_id and date range
+    // TASK-2087: Address filtering removed from text messages — only applies to emails.
     const txnSql = "SELECT user_id, started_at, closed_at FROM transactions WHERE id = ?";
     const transaction = dbGet<{ user_id: string; started_at: string | null; closed_at: string | null }>(txnSql, [transactionId]);
 
@@ -400,6 +446,7 @@ export async function autoLinkTextsToTransaction(
     );
 
     // 3. Find matching text messages with date filtering
+    // TASK-2087: No address filtering for text messages — only emails get filtered.
     const matches = await findTextMessagesByPhones(
       userId,
       contactPhones,
@@ -621,9 +668,10 @@ export async function autoLinkEmailsToTransaction(
   };
 
   try {
-    // 1. Get the transaction to verify it exists and get user_id
-    const txnSql = "SELECT user_id FROM transactions WHERE id = ?";
-    const transaction = dbGet<{ user_id: string }>(txnSql, [transactionId]);
+    // 1. Get the transaction to verify it exists, get user_id and address
+    // TASK-2087: Also fetch property_address and property_street for address filtering
+    const txnSql = "SELECT user_id, property_address, property_street FROM transactions WHERE id = ?";
+    const transaction = dbGet<{ user_id: string; property_address: string | null; property_street: string | null }>(txnSql, [transactionId]);
 
     if (!transaction) {
       result.errors.push(`Transaction ${transactionId} not found`);
@@ -631,6 +679,11 @@ export async function autoLinkEmailsToTransaction(
     }
 
     const userId = transaction.user_id;
+
+    // TASK-2087: Normalize transaction address for content filtering
+    const txnNormalizedAddress = normalizeAddress(
+      transaction.property_address || transaction.property_street || null
+    );
 
     // 2. Get all email addresses for contacts linked to this transaction
     const contactEmails = await getTransactionContactEmails(transactionId);
@@ -649,10 +702,25 @@ export async function autoLinkEmailsToTransaction(
     );
 
     // 3. Find matching emails
-    const matches = await findEmailsByAddresses(
-      userId,
-      contactEmails,
-      transactionId
+    // TASK-2087: Use withAddressFallback to apply address filter with automatic fallback.
+    // The query function fetches all matches, then post-filters by address content.
+    // Pass countWithFilter to prevent fallback when matching emails exist but are already linked.
+    const matches = await withAddressFallback(
+      async (addr) => {
+        const allMatches = await findEmailsByAddresses(userId, contactEmails, transactionId);
+        if (!addr || allMatches.length === 0) return allMatches;
+        const filteredIds = await filterEmailMatchesByAddress(
+          allMatches.map(m => m.messageId),
+          addr
+        );
+        return filteredIds.size > 0
+          ? allMatches.filter(m => filteredIds.has(m.messageId))
+          : [];
+      },
+      txnNormalizedAddress,
+      (msg) => logService.debug(msg, "MessageMatchingService"),
+      "emails",
+      async (addr) => countAllEmailsMatchingAddress(userId, contactEmails, transactionId, addr)
     );
 
     logService.info(
@@ -720,6 +788,91 @@ export async function autoLinkEmailsToTransaction(
     );
     return result;
   }
+}
+
+/**
+ * Count ALL emails (including already-linked) from the given contacts that
+ * match the address content. Used by `withAddressFallback` to determine
+ * whether the address filter is valid.
+ *
+ * If this returns > 0 but the main filtered query returns 0, it means
+ * matching emails exist but are all already linked — the fallback should
+ * NOT trigger.
+ */
+async function countAllEmailsMatchingAddress(
+  userId: string,
+  contactEmails: Array<{ contactId: string; email: string }>,
+  transactionId: string,
+  normalizedAddress: NormalizedAddress
+): Promise<number> {
+  if (contactEmails.length === 0) return 0;
+
+  // Build a map of normalized emails
+  const emailToContact = new Map<string, string>();
+  for (const { contactId, email } of contactEmails) {
+    if (email) {
+      emailToContact.set(email.toLowerCase().trim(), contactId);
+    }
+  }
+  if (emailToContact.size === 0) return 0;
+
+  // Query ALL email messages for this user from these contacts
+  // (no exclusion of already-linked messages — that's the point)
+  const sql = `
+    SELECT
+      m.id,
+      m.sender,
+      m.recipients,
+      m.subject,
+      m.body_text
+    FROM messages m
+    WHERE m.user_id = ?
+      AND m.channel = 'email'
+      AND m.duplicate_of IS NULL
+  `;
+
+  const messages = dbAll<{
+    id: string;
+    sender: string | null;
+    recipients: string | null;
+    subject: string | null;
+    body_text: string | null;
+  }>(sql, [userId]);
+
+  let count = 0;
+  for (const msg of messages) {
+    // Check if this email belongs to one of our contacts
+    let isFromContact = false;
+    if (msg.sender) {
+      const normalizedSender = msg.sender.toLowerCase().trim();
+      const emailMatch = normalizedSender.match(/<([^>]+)>/);
+      const emailToCheck = emailMatch ? emailMatch[1] : normalizedSender;
+      if (emailToContact.has(emailToCheck)) isFromContact = true;
+    }
+    if (!isFromContact && msg.recipients) {
+      const recipientList = msg.recipients.split(/[,;]/).map(r => r.trim().toLowerCase());
+      for (const recipient of recipientList) {
+        const emailMatch = recipient.match(/<([^>]+)>/);
+        const emailToCheck = emailMatch ? emailMatch[1] : recipient;
+        if (emailToContact.has(emailToCheck)) {
+          isFromContact = true;
+          break;
+        }
+      }
+    }
+
+    if (!isFromContact) continue;
+
+    // Check if the email content mentions the address
+    if (
+      contentContainsAddress(msg.subject, normalizedAddress) ||
+      contentContainsAddress(msg.body_text, normalizedAddress)
+    ) {
+      count++;
+    }
+  }
+
+  return count;
 }
 
 /**

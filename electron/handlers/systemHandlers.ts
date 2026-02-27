@@ -101,7 +101,7 @@ function getSecureStorageGuidance(platform: string): string {
 1. When the Keychain Access prompt appears, click "Allow" or "Always Allow"
 2. If you clicked "Deny", you may need to:
    - Open Keychain Access (in Applications > Utilities)
-   - Find "magic-audit Safe Storage"
+   - Find "Keepr Safe Storage"
    - Right-click and select "Delete"
    - Then restart Keepr and click "Allow"`;
     case "win32":

@@ -12,25 +12,38 @@ import {
 
 describe("tourSteps configuration", () => {
   describe("getDashboardTourSteps", () => {
-    const steps = getDashboardTourSteps();
-
     it("should return an array of steps", () => {
+      const steps = getDashboardTourSteps(true);
       expect(Array.isArray(steps)).toBe(true);
       expect(steps.length).toBeGreaterThan(0);
     });
 
     it("should have disableBeacon set to true on ALL steps to prevent blue dot from appearing", () => {
-      steps.forEach((step, index) => {
+      const steps = getDashboardTourSteps(true);
+      steps.forEach((step) => {
         expect(step.disableBeacon).toBe(true);
       });
     });
 
     it("should have required properties on each step", () => {
+      const steps = getDashboardTourSteps(true);
       steps.forEach((step) => {
         expect(step).toHaveProperty("target");
         expect(step).toHaveProperty("content");
         expect(step).toHaveProperty("placement");
       });
+    });
+
+    it("should include AI detection step when hasAIAddon is true", () => {
+      const steps = getDashboardTourSteps(true);
+      const aiStep = steps.find((s) => s.target === '[data-tour="ai-detection-status"]');
+      expect(aiStep).toBeDefined();
+    });
+
+    it("should exclude AI detection step when hasAIAddon is false", () => {
+      const steps = getDashboardTourSteps(false);
+      const aiStep = steps.find((s) => s.target === '[data-tour="ai-detection-status"]');
+      expect(aiStep).toBeUndefined();
     });
   });
 

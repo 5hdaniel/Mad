@@ -1,6 +1,6 @@
 # Privacy Policy Draft
 
-**Magic Audit - Privacy Policy**
+**Keepr - Privacy Policy**
 
 > **NOTICE**: This document requires legal review before publication. This is a DRAFT and should not be published without approval from legal counsel.
 
@@ -24,7 +24,7 @@
 
 **Last Updated:** [Date - To be inserted upon publication]
 
-Magic Audit ("we," "us," or "our") respects your privacy and is committed to protecting the personal information you share with us. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our desktop application and related services (collectively, the "Service").
+Keepr ("we," "us," or "our") respects your privacy and is committed to protecting the personal information you share with us. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our desktop application and related services (collectively, the "Service").
 
 Please read this Privacy Policy carefully. By using the Service, you agree to the collection and use of information in accordance with this policy.
 
@@ -91,7 +91,7 @@ We do not receive or store your Google or Microsoft passwords.
 We use the information we collect for the following purposes:
 
 ### 2.1 Service Delivery
-- Provide, operate, and maintain the Magic Audit application
+- Provide, operate, and maintain the Keepr application
 - Process and organize your communications and transaction data
 - Extract and structure transaction information using automated processing
 - Enable data export in various formats
@@ -148,7 +148,7 @@ We may disclose your information if required to do so by law or in response to:
 
 ### 3.3 Business Transfers
 
-If Magic Audit is involved in a merger, acquisition, or sale of assets, your information may be transferred as part of that transaction. We will notify you of any change in ownership or uses of your personal information.
+If Keepr is involved in a merger, acquisition, or sale of assets, your information may be transferred as part of that transaction. We will notify you of any change in ownership or uses of your personal information.
 
 ### 3.4 With Your Consent
 
@@ -244,7 +244,7 @@ You have the right to:
 - Request deletion of your entire account
 - Remove connected OAuth accounts
 
-To delete your account, use the account deletion feature in the application or contact privacy@magicaudit.com.
+To delete your account, use the account deletion feature in the application or contact privacy@keeprcompliance.com.
 
 **Note:** Some data may be retained for legal compliance (e.g., transaction records for 7 years).
 
@@ -277,7 +277,7 @@ Our Service may contain links to external websites. We are not responsible for t
 
 ## 8. Children's Privacy
 
-Magic Audit is not intended for use by individuals under the age of 18. We do not knowingly collect personal information from children. If we become aware that we have collected information from a child under 18, we will take steps to delete that information.
+Keepr is not intended for use by individuals under the age of 18. We do not knowingly collect personal information from children. If we become aware that we have collected information from a child under 18, we will take steps to delete that information.
 
 ---
 
@@ -341,10 +341,10 @@ Your continued use of the Service after changes constitutes acceptance of the up
 
 If you have questions about this Privacy Policy or our privacy practices, please contact us:
 
-**Email:** privacy@magicaudit.com
+**Email:** privacy@keeprcompliance.com
 
 **Data Protection Inquiries:**
-Magic Audit
+Keepr
 [Address - To be inserted]
 Attn: Privacy Team
 

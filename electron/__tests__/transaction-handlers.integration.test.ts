@@ -131,6 +131,7 @@ describe("Transaction Handlers Integration Tests", () => {
     webContents: {
       send: mockWebContentsSend,
     },
+    isDestroyed: () => false,
   };
 
   beforeAll(() => {

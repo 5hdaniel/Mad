@@ -784,7 +784,7 @@ class MacOSMessagesImportService {
           // Get actual chat members for this chat (for group chats)
           const chatMembers = msg.chat_id ? chatMembersMap.get(msg.chat_id) : undefined;
 
-          // Get user's identifier for this chat (phone number or Apple ID like "magicauditwa")
+          // Get user's identifier for this chat (phone number or Apple ID like "janesmith")
           // This is what the user actually appears as in the conversation
           const userAccountLogin = msg.chat_id ? chatAccountMap.get(msg.chat_id) : undefined;
 

@@ -100,10 +100,8 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
-      - name: Install Python setuptools (Windows)
-        if: matrix.os == 'windows-latest'
+      - name: Install Python setuptools
         run: pip install setuptools
-        shell: bash
 
       - name: Install dependencies
         run: npm install
@@ -154,6 +152,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20.x'
+
+      - name: Install Python setuptools
+        run: pip install setuptools
 
       - name: Install dependencies
         run: npm install
@@ -222,6 +223,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20.x'
+
+      - name: Install Python setuptools
+        run: pip install setuptools
 
       - name: Install dependencies
         run: npm install

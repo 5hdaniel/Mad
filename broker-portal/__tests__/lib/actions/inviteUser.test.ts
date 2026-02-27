@@ -190,7 +190,7 @@ describe('InviteUserResult type behavior', () => {
   it('should have success true with inviteLink for successful invite', () => {
     const result: InviteUserResult = {
       success: true,
-      inviteLink: 'https://portal.magicaudit.com/invite/abc123',
+      inviteLink: 'https://www.keeprcompliance.com/invite/abc123',
     };
 
     expect(result.success).toBe(true);
@@ -241,13 +241,13 @@ describe('invite link generation', () => {
   }
 
   it('should generate correct invite link format', () => {
-    const link = generateInviteLink('https://portal.magicaudit.com', 'abc123def456');
-    expect(link).toBe('https://portal.magicaudit.com/invite/abc123def456');
+    const link = generateInviteLink('https://www.keeprcompliance.com', 'abc123def456');
+    expect(link).toBe('https://www.keeprcompliance.com/invite/abc123def456');
   });
 
   it('should handle custom base URLs', () => {
-    const link = generateInviteLink('https://staging.magicaudit.com', 'token123');
-    expect(link).toBe('https://staging.magicaudit.com/invite/token123');
+    const link = generateInviteLink('https://staging.keeprcompliance.com', 'token123');
+    expect(link).toBe('https://staging.keeprcompliance.com/invite/token123');
   });
 
   it('should handle localhost for development', () => {

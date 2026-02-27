@@ -641,20 +641,20 @@ describe("Security Validation - TASK-601", () => {
 
   describe("validateMsiPath", () => {
     const allowedPaths = [
-      "C:\\Users\\App\\AppData\\Roaming\\magic-audit",
-      "C:\\Program Files\\magic-audit\\resources",
+      "C:\\Users\\App\\AppData\\Roaming\\keepr",
+      "C:\\Program Files\\keepr\\resources",
     ];
 
     describe("Valid MSI paths", () => {
       it("should accept MSI files within allowed directories", () => {
         const msiPath =
-          "C:\\Users\\App\\AppData\\Roaming\\magic-audit\\drivers\\AppleMobileDeviceSupport64.msi";
+          "C:\\Users\\App\\AppData\\Roaming\\keepr\\drivers\\AppleMobileDeviceSupport64.msi";
         expect(validateMsiPath(msiPath, allowedPaths)).toBe(msiPath);
       });
 
       it("should be case-insensitive for .msi extension", () => {
         const msiPath =
-          "C:\\Users\\App\\AppData\\Roaming\\magic-audit\\drivers\\Driver.MSI";
+          "C:\\Users\\App\\AppData\\Roaming\\keepr\\drivers\\Driver.MSI";
         expect(validateMsiPath(msiPath, allowedPaths)).toBe(msiPath);
       });
     });
@@ -663,7 +663,7 @@ describe("Security Validation - TASK-601", () => {
       it("should reject files that are not MSI", () => {
         expect(() =>
           validateMsiPath(
-            "C:\\Users\\App\\AppData\\Roaming\\magic-audit\\malware.exe",
+            "C:\\Users\\App\\AppData\\Roaming\\keepr\\malware.exe",
             allowedPaths,
           ),
         ).toThrow("Path must be an MSI file");
@@ -678,7 +678,7 @@ describe("Security Validation - TASK-601", () => {
       it("should reject path traversal in MSI paths", () => {
         expect(() =>
           validateMsiPath(
-            "C:\\Users\\App\\AppData\\Roaming\\magic-audit\\..\\..\\..\\evil.msi",
+            "C:\\Users\\App\\AppData\\Roaming\\keepr\\..\\..\\..\\evil.msi",
             allowedPaths,
           ),
         ).toThrow("Executable path contains path traversal sequences");

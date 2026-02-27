@@ -35,17 +35,17 @@ const RELEASE_PAGE = `https://github.com/${REPO}/releases/latest`;
 const DOWNLOADS: Record<string, { label: string; file: string; icon: string }> = {
   'mac-arm': {
     label: 'Download for macOS (Apple Silicon)',
-    file: 'MagicAudit-VERSION-arm64.dmg',
+    file: 'Keepr-VERSION-arm64.dmg',
     icon: '🍎',
   },
   'mac-intel': {
     label: 'Download for macOS (Intel)',
-    file: 'MagicAudit-VERSION.dmg',
+    file: 'Keepr-VERSION.dmg',
     icon: '🍎',
   },
   windows: {
     label: 'Download for Windows',
-    file: 'MagicAudit.Setup.VERSION.exe',
+    file: 'Keepr.Setup.VERSION.exe',
     icon: '🪟',
   },
 };
@@ -81,7 +81,7 @@ export default function DownloadPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
       <div className="max-w-md w-full text-center space-y-6">
-        <h1 className="text-3xl font-bold text-gray-900">Keepr</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Keepr.</h1>
 
         <div className="bg-white rounded-lg border border-gray-200 p-8 space-y-5">
           <h2 className="text-xl font-semibold text-gray-900">

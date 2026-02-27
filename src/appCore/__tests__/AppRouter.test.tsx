@@ -138,7 +138,6 @@ const createAppStateMock = (
   isCheckingSecureStorage: false,
   isDatabaseInitialized: true,
   isInitializingDatabase: false,
-  skipKeychainExplanation: false,
 
   // Email onboarding
   hasCompletedEmailOnboarding: true,
@@ -175,7 +174,7 @@ const createAppStateMock = (
   // UI state
   showSetupPromptDismissed: false,
   isTourActive: false,
-  appPath: "/Applications/MagicAudit.app",
+  appPath: "/Applications/Keepr.app",
 
   // Sync status
   syncStatus: undefined,
@@ -263,7 +262,7 @@ const createAppStateMock = (
   handleNotNowMovePrompt: jest.fn(),
 
   // Utility
-  getPageTitle: jest.fn().mockReturnValue("Keepr"),
+  getPageTitle: jest.fn().mockReturnValue("Keepr."),
 
   ...overrides,
 });

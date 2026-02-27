@@ -144,6 +144,7 @@ describe("Transaction Handlers", () => {
     webContents: {
       send: mockWebContentsSend,
     },
+    isDestroyed: () => false,
   };
 
   beforeAll(() => {

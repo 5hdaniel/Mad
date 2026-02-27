@@ -1,5 +1,5 @@
 /**
- * React Component Types for Magic Audit
+ * React Component Types for Keepr
  * These types are used throughout the React frontend
  */
 

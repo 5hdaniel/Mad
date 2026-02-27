@@ -10,7 +10,7 @@
  * - Download attachments from Gmail API
  * - Download attachments from Outlook/Graph API
  * - Content hash deduplication (same file = one copy)
- * - Storage in ~/Library/Application Support/Magic Audit/attachments/
+ * - Storage in ~/Library/Application Support/Keepr/attachments/
  * - Database records in attachments table with email_id FK
  * - Path traversal protection via filename sanitization
  * - Per-attachment timeout (30s) to prevent hangs

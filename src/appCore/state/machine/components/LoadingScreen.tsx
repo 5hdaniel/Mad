@@ -83,8 +83,8 @@ export function LoadingScreen({
           {/* Phase message */}
           <p className="text-gray-600 text-lg mb-2">{message}</p>
 
-          {/* Progress bar (optional) */}
-          {progress !== undefined && (
+          {/* Progress bar (optional, hidden during keychain phase) */}
+          {progress !== undefined && phase !== "awaiting-keychain" && (
             <div
               className="w-48 h-2 bg-gray-200 rounded-full mx-auto overflow-hidden"
               role="progressbar"

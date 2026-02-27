@@ -1,6 +1,6 @@
-# Magic Audit - Claude Development Guide
+# Keepr - Claude Development Guide
 
-This guide is for all Claude agents working on Magic Audit. Follow these standards for all development work.
+This guide is for all Claude agents working on Keepr. Follow these standards for all development work.
 
 ---
 
@@ -150,7 +150,7 @@ This project uses TypeScript (primary), Supabase (database), Electron (desktop a
 
 ## Project Overview
 
-Magic Audit is an Electron-based desktop application for real estate transaction auditing. It features:
+Keepr is an Electron-based desktop application for real estate transaction auditing. It features:
 - Electron main/preload/renderer architecture
 - React 18 with TypeScript (strict mode)
 - SQLite with encryption for local storage

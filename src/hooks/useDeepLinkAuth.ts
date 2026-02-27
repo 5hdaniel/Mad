@@ -2,7 +2,7 @@
  * useDeepLinkAuth Hook
  *
  * Handles deep link authentication callbacks from browser-based OAuth flow.
- * Listens for magicaudit://callback URLs and forwards tokens to the app.
+ * Listens for keepr://callback URLs and forwards tokens to the app.
  *
  * TASK-1500: Desktop deep link handler for browser auth flow.
  *

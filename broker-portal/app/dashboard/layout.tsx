@@ -44,7 +44,7 @@ export default async function DashboardLayout({
             <div className="flex items-center">
               <Link href="/dashboard" className="flex flex-col">
                 <span className="text-xl font-bold text-gray-900 leading-tight">
-                  Keepr
+                  Keepr.
                 </span>
                 <span className="text-xs text-gray-500">
                   Broker Portal

@@ -47,7 +47,7 @@ export function UpgradeScreen({ reason, onLogout }: UpgradeScreenProps): React.R
 
   const handleUpgrade = () => {
     // Open upgrade page in popup window (keeps user in-app)
-    window.api?.shell?.openPopup?.("https://broker-portal-two.vercel.app/beta", "Upgrade to Keepr Pro");
+    window.api?.shell?.openPopup?.("https://www.keeprcompliance.com/beta", "Upgrade to Keepr Pro");
   };
 
   const handleLogout = async () => {

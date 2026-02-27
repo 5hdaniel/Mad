@@ -27,7 +27,7 @@ Add publish configuration:
 {
   "build": {
     "appId": "com.realestate.archiveapp",
-    "productName": "Real Estate Archive",
+    "productName": "Keepr",
     "publish": {
       "provider": "github",
       "owner": "5hdaniel",
@@ -216,8 +216,8 @@ GH_TOKEN=your_github_token npm run package -- --publish always
 ### Important Files for Updates
 
 electron-builder will generate these files (needed for updates):
-- `Real Estate Archive-1.0.3.dmg` (for manual install)
-- `Real Estate Archive-1.0.3-mac.zip` (for auto-update)
+- `Keepr-1.0.3.dmg` (for manual install)
+- `Keepr-1.0.3-mac.zip` (for auto-update)
 - `latest-mac.yml` (tells app where to find updates)
 
 ---

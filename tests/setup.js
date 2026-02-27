@@ -80,7 +80,7 @@ if (typeof window !== 'undefined') {
       // App info (migrated from window.electron)
       getAppInfo: jest.fn().mockResolvedValue({ version: '2.0.8', name: 'Keepr' }),
       getMacOSVersion: jest.fn().mockResolvedValue({ version: '14.0' }),
-      checkAppLocation: jest.fn().mockResolvedValue({ inApplications: true, path: '/Applications/MagicAudit.app' }),
+      checkAppLocation: jest.fn().mockResolvedValue({ inApplications: true, path: '/Applications/Keepr.app' }),
       // Permission checks (migrated from window.electron)
       checkPermissions: jest.fn().mockResolvedValue({ fullDiskAccess: true, contacts: true }),
       triggerFullDiskAccess: jest.fn().mockResolvedValue({ granted: true }),

@@ -204,7 +204,7 @@ export const authBridge = {
   /**
    * Opens the Supabase auth URL in the default browser
    * Used for deep-link authentication flow where OAuth completes in browser
-   * and redirects back to app via magicaudit://callback
+   * and redirects back to app via keepr://callback
    * @returns Success status
    */
   openAuthInBrowser: (): Promise<{ success: boolean; error?: string }> =>
