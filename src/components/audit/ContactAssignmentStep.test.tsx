@@ -126,6 +126,59 @@ describe("ContactAssignmentStep", () => {
 
       expect(screen.getByTestId("error-state")).toBeInTheDocument();
     });
+
+    it("allows deselecting a contact by clicking it again (toggle behavior)", async () => {
+      const onSelectedContactIdsChange = jest.fn();
+      const user = userEvent.setup();
+
+      render(
+        <ContactAssignmentStep
+          {...defaultProps}
+          step={2}
+          selectedContactIds={["contact-1"]}
+          onSelectedContactIdsChange={onSelectedContactIdsChange}
+        />
+      );
+
+      // Find the selected contact row and click it to deselect
+      const contactRows = screen.getAllByTestId("contact-row");
+      // contact-1 (John Client) should be selected - find the row with that name
+      const johnRow = contactRows.find((row) =>
+        row.textContent?.includes("John Client")
+      );
+      expect(johnRow).toBeDefined();
+
+      await user.click(johnRow!);
+
+      // Should call onSelectedContactIdsChange with contact-1 removed
+      expect(onSelectedContactIdsChange).toHaveBeenCalledWith([]);
+    });
+
+    it("allows selecting a contact by clicking it", async () => {
+      const onSelectedContactIdsChange = jest.fn();
+      const user = userEvent.setup();
+
+      render(
+        <ContactAssignmentStep
+          {...defaultProps}
+          step={2}
+          selectedContactIds={[]}
+          onSelectedContactIdsChange={onSelectedContactIdsChange}
+        />
+      );
+
+      // Find John Client row and click to select
+      const contactRows = screen.getAllByTestId("contact-row");
+      const johnRow = contactRows.find((row) =>
+        row.textContent?.includes("John Client")
+      );
+      expect(johnRow).toBeDefined();
+
+      await user.click(johnRow!);
+
+      // Should call onSelectedContactIdsChange with contact-1 added
+      expect(onSelectedContactIdsChange).toHaveBeenCalledWith(["contact-1"]);
+    });
   });
 
   describe("Step 3: Role Assignment", () => {
