@@ -122,24 +122,11 @@ class SyncOrchestratorServiceClass {
 
       // Phase 1: macOS Contacts sync (macOS only, skip if iphone-sync selected)
       if (macOS && importSource !== 'iphone-sync') {
-        // IPC listener OWNED here - not in consumers
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const contactsApi = window.api.contacts as any;
-        const cleanup = contactsApi?.onImportProgress
-          ? contactsApi.onImportProgress((data: { percent: number }) => {
-              onProgress(Math.round(data.percent * 0.5)); // 0-50% for macOS contacts
-            })
-          : () => {};
-
-        try {
-          const result = await window.api.contacts.getAll(userId);
-          if (!result.success) {
-            throw new Error(result.error || 'Contacts sync failed');
-          }
-          logger.info('[SyncOrchestrator] macOS Contacts sync complete');
-        } finally {
-          cleanup();
+        const result = await window.api.contacts.syncExternal(userId);
+        if (!result.success) {
+          throw new Error(result.error || 'macOS Contacts sync failed');
         }
+        logger.info('[SyncOrchestrator] macOS Contacts sync complete');
       } else if (macOS && importSource === 'iphone-sync') {
         logger.info('[SyncOrchestrator] Skipping macOS Contacts (import source: iphone-sync)');
       }
