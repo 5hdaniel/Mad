@@ -36,6 +36,7 @@ jest.mock("../../../contexts/NetworkContext", () => ({
 const mockApi = {
   auth: {
     getCurrentUser: jest.fn(),
+    preValidateSession: jest.fn(),
   },
   system: {
     hasEncryptionKeyStore: jest.fn(),
@@ -63,6 +64,7 @@ beforeEach(() => {
   mockApi.system.hasEncryptionKeyStore.mockReturnValue(new Promise(() => {}));
   mockApi.system.initializeSecureStorage.mockReturnValue(new Promise(() => {}));
   mockApi.auth.getCurrentUser.mockReturnValue(new Promise(() => {}));
+  mockApi.auth.preValidateSession.mockReturnValue(new Promise(() => {}));
 });
 
 // ============================================
@@ -188,6 +190,20 @@ describe("LoadingScreen phases", () => {
 
     expect(screen.getByText("Checking secure storage...")).toBeInTheDocument();
     expect(screen.queryByText("Children")).not.toBeInTheDocument();
+  });
+
+  it("displays correct message for validating-auth phase (TASK-2086)", () => {
+    render(
+      <TestWrapper
+        initialState={{ status: "loading", phase: "validating-auth" }}
+      >
+        <div>Children</div>
+      </TestWrapper>
+    );
+
+    expect(
+      screen.getByText("Verifying your account...")
+    ).toBeInTheDocument();
   });
 
   it("displays correct message for initializing-db phase (macOS)", () => {
@@ -317,10 +333,15 @@ describe("ErrorScreen", () => {
 // ============================================
 
 describe("LoadingOrchestrator phase transitions", () => {
-  it("transitions from checking-storage to initializing-db", async () => {
+  it("transitions from checking-storage through validating-auth to initializing-db (TASK-2086)", async () => {
     mockApi.system.hasEncryptionKeyStore.mockResolvedValue({
       success: true,
       hasKeyStore: true,
+    });
+    // Pre-auth validation passes (TASK-2086)
+    mockApi.auth.preValidateSession.mockResolvedValue({
+      valid: true,
+      noSession: true,
     });
     // Never resolve - stay at initializing-db
     mockApi.system.initializeSecureStorage.mockReturnValue(new Promise(() => {}));
@@ -334,7 +355,8 @@ describe("LoadingOrchestrator phase transitions", () => {
     // First we see checking-storage message
     expect(screen.getByText("Checking secure storage...")).toBeInTheDocument();
 
-    // After storage check completes, we should see initializing-db message
+    // TASK-2086: After storage check, we briefly see validating-auth,
+    // then after pre-auth validation passes, we see initializing-db
     // (macOS shows "Waiting for Keychain access..." per platform-specific logic)
     await waitFor(
       () => {
@@ -372,6 +394,7 @@ describe("LoadingOrchestrator phase transitions", () => {
       success: true,
       hasKeyStore: true,
     });
+    mockApi.auth.preValidateSession.mockResolvedValue({ valid: true, noSession: true });
     mockApi.system.initializeSecureStorage.mockResolvedValue({
       success: false,
       error: "Database initialization failed",
@@ -398,6 +421,7 @@ describe("LoadingOrchestrator phase transitions", () => {
       success: true,
       hasKeyStore: true,
     });
+    mockApi.auth.preValidateSession.mockResolvedValue({ valid: true, noSession: true });
     mockApi.system.initializeSecureStorage.mockResolvedValue({
       success: true,
       available: true,
@@ -426,6 +450,8 @@ describe("LoadingOrchestrator phase transitions", () => {
       success: true,
       hasKeyStore: true,
     });
+    // TASK-2086: Pre-auth validation passes
+    mockApi.auth.preValidateSession.mockResolvedValue({ valid: true, noSession: true });
     mockApi.system.initializeSecureStorage.mockResolvedValue({
       success: true,
       available: true,
@@ -530,6 +556,8 @@ describe("LoadingOrchestrator preload bridge race condition", () => {
       success: true,
       hasKeyStore: true,
     });
+    // TASK-2086: Pre-auth validation passes
+    mockApi.auth.preValidateSession.mockResolvedValue({ valid: true, noSession: true });
     // Stay at initializing-db phase
     mockApi.system.initializeSecureStorage.mockReturnValue(new Promise(() => {}));
 
@@ -546,7 +574,8 @@ describe("LoadingOrchestrator preload bridge race condition", () => {
     await new Promise((r) => setTimeout(r, 60));
     (window as unknown as { api: typeof mockApi }).api = savedApi;
 
-    // Should eventually transition to the next phase after API becomes available
+    // Should eventually transition past validating-auth to initializing-db phase
+    // (macOS shows "Waiting for Keychain access..." per platform-specific logic)
     await waitFor(
       () => {
         expect(

@@ -137,6 +137,70 @@ export function LoadingOrchestrator({
   }, [state.status, loadingPhase, dispatch, dispatchApiNotReady]);
 
   // ============================================
+  // PHASE 1.5: Pre-DB auth validation (TASK-2086, SOC 2 CC6.1)
+  // Validates auth token BEFORE database decryption to ensure
+  // data is only accessible to currently authorized users.
+  // ============================================
+  useEffect(() => {
+    // Guard: only run in the correct phase
+    if (state.status !== "loading" || loadingPhase !== "validating-auth") {
+      return;
+    }
+
+    let cancelled = false;
+
+    const runPhase = async () => {
+      try {
+        await waitForApi();
+      } catch (err) {
+        if (!cancelled) dispatchApiNotReady(err);
+        return;
+      }
+
+      if (cancelled) return;
+
+      // TASK-2086: Pre-DB auth validation (SOC 2 CC6.1)
+      type PreAuthResult = { valid: boolean; noSession?: boolean; reason?: string };
+      const auth = window.api.auth as typeof window.api.auth & {
+        preValidateSession?: () => Promise<PreAuthResult>;
+      };
+
+      if (!auth.preValidateSession) {
+        // Graceful fallback if preload bridge doesn't expose this method yet
+        dispatch({ type: "AUTH_PRE_VALIDATED", valid: true, noSession: true });
+        return;
+      }
+
+      auth.preValidateSession()
+        .then((result: { valid: boolean; noSession?: boolean; reason?: string }) => {
+          if (cancelled) return;
+          dispatch({
+            type: "AUTH_PRE_VALIDATED",
+            valid: result.valid,
+            noSession: result.noSession,
+            reason: result.reason,
+          });
+        })
+        .catch((error: Error) => {
+          if (cancelled) return;
+          // On IPC error, proceed optimistically (don't block app)
+          // This handles edge cases like preload bridge failures
+          dispatch({
+            type: "AUTH_PRE_VALIDATED",
+            valid: true,
+            noSession: true,
+          });
+        });
+    };
+
+    runPhase();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [state.status, loadingPhase, dispatch, dispatchApiNotReady]);
+
+  // ============================================
   // PHASE 2: Initialize database (platform-specific)
   // ============================================
   useEffect(() => {

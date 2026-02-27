@@ -229,6 +229,19 @@ describe("Full App Flow Integration Tests", () => {
         });
       });
 
+      // TASK-2086: Should be in validating-auth phase first
+      if (result.current.appState.state.status === "loading") {
+        expect(result.current.appState.state.phase).toBe("validating-auth");
+      }
+
+      // Step 1.5: Pre-DB auth validation passes
+      act(() => {
+        result.current.appState.dispatch({
+          type: "AUTH_PRE_VALIDATED",
+          valid: true,
+        });
+      });
+
       // Should be initializing DB
       if (result.current.appState.state.status === "loading") {
         expect(result.current.appState.state.phase).toBe("initializing-db");
@@ -331,6 +344,9 @@ describe("Full App Flow Integration Tests", () => {
         result.current.dispatch({ type: "STORAGE_CHECKED", hasKeyStore: true });
       });
       act(() => {
+        result.current.dispatch({ type: "AUTH_PRE_VALIDATED", valid: true });
+      });
+      act(() => {
         result.current.dispatch({ type: "DB_INIT_COMPLETE", success: true });
       });
       act(() => {
@@ -376,6 +392,9 @@ describe("Full App Flow Integration Tests", () => {
         });
       });
       act(() => {
+        result.current.appState.dispatch({ type: "AUTH_PRE_VALIDATED", valid: true });
+      });
+      act(() => {
         result.current.appState.dispatch({
           type: "DB_INIT_COMPLETE",
           success: true,
@@ -419,6 +438,9 @@ describe("Full App Flow Integration Tests", () => {
       // Go through loading to onboarding
       act(() => {
         result.current.dispatch({ type: "STORAGE_CHECKED", hasKeyStore: true });
+      });
+      act(() => {
+        result.current.dispatch({ type: "AUTH_PRE_VALIDATED", valid: true });
       });
       act(() => {
         result.current.dispatch({ type: "DB_INIT_COMPLETE", success: true });
@@ -476,6 +498,9 @@ describe("Full App Flow Integration Tests", () => {
         result.current.dispatch({ type: "STORAGE_CHECKED", hasKeyStore: true });
       });
       act(() => {
+        result.current.dispatch({ type: "AUTH_PRE_VALIDATED", valid: true });
+      });
+      act(() => {
         result.current.dispatch({ type: "DB_INIT_COMPLETE", success: true });
       });
       act(() => {
@@ -514,6 +539,9 @@ describe("Full App Flow Integration Tests", () => {
           type: "STORAGE_CHECKED",
           hasKeyStore: true,
         });
+      });
+      act(() => {
+        result.current.appState.dispatch({ type: "AUTH_PRE_VALIDATED", valid: true });
       });
       act(() => {
         result.current.appState.dispatch({
@@ -571,6 +599,9 @@ describe("Full App Flow Integration Tests", () => {
         });
       });
       act(() => {
+        result.current.appState.dispatch({ type: "AUTH_PRE_VALIDATED", valid: true });
+      });
+      act(() => {
         result.current.appState.dispatch({
           type: "DB_INIT_COMPLETE",
           success: true,
@@ -622,6 +653,7 @@ describe("Full App Flow Integration Tests", () => {
       // Note: USER_DATA_LOADED requires user and platform context
       act(() => {
         result.current.dispatch({ type: "STORAGE_CHECKED", hasKeyStore: true });
+        result.current.dispatch({ type: "AUTH_PRE_VALIDATED", valid: true });
         result.current.dispatch({ type: "DB_INIT_COMPLETE", success: true });
         result.current.dispatch({
           type: "AUTH_LOADED",
@@ -672,6 +704,7 @@ describe("Full App Flow Integration Tests", () => {
       // Simulate returning user flow (with required context for USER_DATA_LOADED)
       act(() => {
         result.current.appState.dispatch({ type: "STORAGE_CHECKED", hasKeyStore: true });
+        result.current.appState.dispatch({ type: "AUTH_PRE_VALIDATED", valid: true });
         result.current.appState.dispatch({ type: "DB_INIT_COMPLETE", success: true });
         result.current.appState.dispatch({
           type: "AUTH_LOADED",
@@ -731,6 +764,11 @@ describe("Full App Flow Integration Tests", () => {
         });
       });
 
+      // Pre-auth validation passes
+      act(() => {
+        result.current.appState.dispatch({ type: "AUTH_PRE_VALIDATED", valid: true });
+      });
+
       // DB init fails
       act(() => {
         result.current.appState.dispatch({
@@ -764,6 +802,9 @@ describe("Full App Flow Integration Tests", () => {
         result.current.dispatch({ type: "STORAGE_CHECKED", hasKeyStore: true });
       });
       act(() => {
+        result.current.dispatch({ type: "AUTH_PRE_VALIDATED", valid: true });
+      });
+      act(() => {
         result.current.dispatch({
           type: "DB_INIT_COMPLETE",
           success: false,
@@ -793,6 +834,9 @@ describe("Full App Flow Integration Tests", () => {
       // Go through loading
       act(() => {
         result.current.dispatch({ type: "STORAGE_CHECKED", hasKeyStore: true });
+      });
+      act(() => {
+        result.current.dispatch({ type: "AUTH_PRE_VALIDATED", valid: true });
       });
       act(() => {
         result.current.dispatch({ type: "DB_INIT_COMPLETE", success: true });
@@ -947,6 +991,7 @@ describe("Full App Flow Integration Tests", () => {
       // Rapid-fire multiple dispatches
       act(() => {
         result.current.dispatch({ type: "STORAGE_CHECKED", hasKeyStore: true });
+        result.current.dispatch({ type: "AUTH_PRE_VALIDATED", valid: true });
         result.current.dispatch({ type: "DB_INIT_COMPLETE", success: true });
         result.current.dispatch({
           type: "AUTH_LOADED",
