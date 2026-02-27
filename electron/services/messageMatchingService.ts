@@ -14,7 +14,7 @@
 import crypto from "crypto";
 import { dbAll, dbRun, dbGet } from "./db/core/dbConnection";
 import logService from "./logService";
-import { normalizeAddress, contentContainsAddress } from "../utils/addressNormalization";
+import { normalizeAddress, contentContainsAddress, type NormalizedAddress } from "../utils/addressNormalization";
 
 /**
  * Result of matching a message to a contact
@@ -343,18 +343,18 @@ export async function createCommunicationReference(
 }
 
 /**
- * TASK-2087: Filter a set of message IDs by checking if their content mentions the address.
- * Queries the specified table for subject/body fields and checks for address match.
+ * TASK-2087: Filter a set of email message IDs by checking if their content mentions the address.
+ * Queries the messages table (channel='email') for subject/body_text fields and checks for address match.
+ *
+ * NOTE: This only applies to emails, NOT text messages. People don't put property addresses in texts.
  *
  * @param messageIds - Array of message IDs to check
- * @param normalizedAddress - The normalized address string to search for
- * @param table - The database table to query ('messages' for both messages and email-channel messages)
+ * @param normalizedAddress - The NormalizedAddress to search for (parts checked independently)
  * @returns Set of message IDs whose content contains the address
  */
-async function filterMatchesByAddress(
+async function filterEmailMatchesByAddress(
   messageIds: string[],
-  normalizedAddress: string,
-  table: 'messages'
+  normalizedAddress: NormalizedAddress
 ): Promise<Set<string>> {
   const result = new Set<string>();
   if (messageIds.length === 0) return result;
@@ -365,16 +365,18 @@ async function filterMatchesByAddress(
     const batch = messageIds.slice(i, i + batchSize);
     const placeholders = batch.map(() => '?').join(',');
     const sql = `
-      SELECT id, subject, body
-      FROM ${table}
+      SELECT id, subject, body_text
+      FROM messages
       WHERE id IN (${placeholders})
     `;
-    const rows = dbAll<{ id: string; subject: string | null; body: string | null }>(sql, batch);
+    const rows = dbAll<{ id: string; subject: string | null; body_text: string | null }>(sql, batch);
 
     for (const row of rows) {
+      // Combine subject and body for matching; contentContainsAddress checks
+      // each part of the address independently with word boundaries
       if (
         contentContainsAddress(row.subject, normalizedAddress) ||
-        contentContainsAddress(row.body, normalizedAddress)
+        contentContainsAddress(row.body_text, normalizedAddress)
       ) {
         result.add(row.id);
       }
@@ -403,10 +405,10 @@ export async function autoLinkTextsToTransaction(
   };
 
   try {
-    // 1. Get the transaction to verify it exists, get user_id, date range, and address
-    // TASK-2087: Also fetch property_address and property_street for address filtering
-    const txnSql = "SELECT user_id, started_at, closed_at, property_address, property_street FROM transactions WHERE id = ?";
-    const transaction = dbGet<{ user_id: string; started_at: string | null; closed_at: string | null; property_address: string | null; property_street: string | null }>(txnSql, [transactionId]);
+    // 1. Get the transaction to verify it exists, get user_id and date range
+    // TASK-2087: Address filtering removed from text messages — only applies to emails.
+    const txnSql = "SELECT user_id, started_at, closed_at FROM transactions WHERE id = ?";
+    const transaction = dbGet<{ user_id: string; started_at: string | null; closed_at: string | null }>(txnSql, [transactionId]);
 
     if (!transaction) {
       result.errors.push(`Transaction ${transactionId} not found`);
@@ -414,11 +416,6 @@ export async function autoLinkTextsToTransaction(
     }
 
     const userId = transaction.user_id;
-
-    // TASK-2087: Normalize transaction address for content filtering
-    const txnNormalizedAddress = normalizeAddress(
-      transaction.property_address || transaction.property_street || null
-    );
 
     // Use dates from options if provided, otherwise fall back to transaction dates
     const startDate = options?.startDate || transaction.started_at || undefined;
@@ -449,37 +446,13 @@ export async function autoLinkTextsToTransaction(
     );
 
     // 3. Find matching text messages with date filtering
-    let matches = await findTextMessagesByPhones(
+    // TASK-2087: No address filtering for text messages — only emails get filtered.
+    const matches = await findTextMessagesByPhones(
       userId,
       contactPhones,
       transactionId,
       { startDate, endDate }
     );
-
-    // TASK-2087: Apply address filter if transaction has a property address.
-    // Filter messages whose body or subject contains the normalized address.
-    // Fallback: if address filter eliminates ALL results, return unfiltered matches.
-    if (txnNormalizedAddress && matches.length > 0) {
-      const filteredMatches = await filterMatchesByAddress(
-        matches.map(m => m.messageId),
-        txnNormalizedAddress,
-        'messages'
-      );
-
-      if (filteredMatches.size > 0) {
-        const originalCount = matches.length;
-        matches = matches.filter(m => filteredMatches.has(m.messageId));
-        logService.debug(
-          `Address filter applied to texts: ${originalCount} -> ${matches.length} (address: "${txnNormalizedAddress}")`,
-          "MessageMatchingService"
-        );
-      } else {
-        logService.debug(
-          `Address filter fallback for texts: no messages matched "${txnNormalizedAddress}", keeping all ${matches.length} results`,
-          "MessageMatchingService"
-        );
-      }
-    }
 
     logService.info(
       `Found ${matches.length} text messages to link for transaction ${transactionId}`,
@@ -739,22 +712,21 @@ export async function autoLinkEmailsToTransaction(
     // Filter emails whose body or subject contains the normalized address.
     // Fallback: if address filter eliminates ALL results, return unfiltered matches.
     if (txnNormalizedAddress && matches.length > 0) {
-      const filteredIds = await filterMatchesByAddress(
+      const filteredIds = await filterEmailMatchesByAddress(
         matches.map(m => m.messageId),
-        txnNormalizedAddress,
-        'messages'
+        txnNormalizedAddress
       );
 
       if (filteredIds.size > 0) {
         const originalCount = matches.length;
         matches = matches.filter(m => filteredIds.has(m.messageId));
         logService.debug(
-          `Address filter applied to emails: ${originalCount} -> ${matches.length} (address: "${txnNormalizedAddress}")`,
+          `Address filter applied to emails: ${originalCount} -> ${matches.length} (address: "${txnNormalizedAddress.full}")`,
           "MessageMatchingService"
         );
       } else {
         logService.debug(
-          `Address filter fallback for emails: no messages matched "${txnNormalizedAddress}", keeping all ${matches.length} results`,
+          `Address filter fallback for emails: no emails matched "${txnNormalizedAddress.full}", keeping all ${matches.length} results`,
           "MessageMatchingService"
         );
       }

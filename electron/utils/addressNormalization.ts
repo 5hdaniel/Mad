@@ -2,9 +2,11 @@
  * Address Normalization Utility
  *
  * Normalizes property addresses to their core components (street number + street name)
- * for content matching against email/message bodies. Used by auto-link services to
- * filter communications to the correct transaction when multiple transactions share
+ * for content matching against email bodies. Used by auto-link services to
+ * filter emails to the correct transaction when multiple transactions share
  * the same contacts.
+ *
+ * TASK-2087: Address filtering applies to EMAILS ONLY, not text messages.
  *
  * @see TASK-2087
  */
@@ -28,24 +30,42 @@ const STREET_SUFFIXES = new Set([
 ]);
 
 /**
+ * Normalized address with separate parts for independent matching.
+ *
+ * Instead of searching for "123 oak" as one contiguous substring, the caller
+ * can check that content contains BOTH the street number AND street name
+ * independently. This handles extra spaces, reversed order, or the number
+ * and name appearing in different parts of the email.
+ */
+export interface NormalizedAddress {
+  /** The street number, e.g. "123" */
+  streetNumber: string;
+  /** The street name (may be multi-word), e.g. "oak" or "nw johnson" */
+  streetName: string;
+  /** Combined for logging, e.g. "123 oak" */
+  full: string;
+}
+
+/**
  * Normalize a property address to its core components for content matching.
  *
  * Extracts street number + street name, strips common suffixes, and lowercases.
+ * Returns a NormalizedAddress with separate parts for independent matching.
  *
  * Examples:
- *   "123 Oak Street, Portland, OR 97201" -> "123 oak"
- *   "456 Elm Dr"                         -> "456 elm"
- *   "7890 NW Johnson Blvd, Suite 200"    -> "7890 nw johnson"
- *   "123 Oak St."                        -> "123 oak"
- *   "100 Main"                           -> "100 main"
+ *   "123 Oak Street, Portland, OR 97201" -> { streetNumber: "123", streetName: "oak", full: "123 oak" }
+ *   "456 Elm Dr"                         -> { streetNumber: "456", streetName: "elm", full: "456 elm" }
+ *   "7890 NW Johnson Blvd, Suite 200"    -> { streetNumber: "7890", streetName: "nw johnson", full: "7890 nw johnson" }
+ *   "123 Oak St."                        -> { streetNumber: "123", streetName: "oak", full: "123 oak" }
+ *   "100 Main"                           -> { streetNumber: "100", streetName: "main", full: "100 main" }
  *   ""                                   -> null
  *   "Portland, OR"                       -> null (no street number)
  *   "123"                                -> null (no street name)
  *
  * @param fullAddress - The full address string to normalize
- * @returns Normalized address string (lowercase, no suffix), or null if unparseable
+ * @returns NormalizedAddress with separate parts, or null if unparseable
  */
-export function normalizeAddress(fullAddress: string | null | undefined): string | null {
+export function normalizeAddress(fullAddress: string | null | undefined): NormalizedAddress | null {
   if (!fullAddress || !fullAddress.trim()) return null;
 
   // Take only the part before the first comma (street portion)
@@ -68,21 +88,66 @@ export function normalizeAddress(fullAddress: string | null | undefined): string
 
   if (tokens.length < 2) return null;
 
-  return tokens.join(' ');
+  const streetNumber = tokens[0];
+  const streetName = tokens.slice(1).join(' ');
+
+  return {
+    streetNumber,
+    streetName,
+    full: tokens.join(' '),
+  };
 }
 
 /**
- * Check if text content contains the normalized address.
- * Performs case-insensitive substring search.
+ * Check if a word appears in content with word boundaries.
+ * Prevents false positives like "123" matching "1234" or "oak" matching "oakland".
  *
- * @param content - The text content to search (email subject, body, message body)
- * @param normalizedAddress - The normalized address string from normalizeAddress()
- * @returns true if the content contains the normalized address
+ * @param content - The text to search in
+ * @param word - The word to find (will be regex-escaped)
+ * @returns true if the word appears as a whole word in content
+ */
+function containsWord(content: string, word: string): boolean {
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b${escaped}\\b`, 'i').test(content);
+}
+
+/**
+ * Check if text content contains both parts of the normalized address.
+ * Each part (street number and street name) is checked independently with
+ * word-boundary matching. They don't need to be adjacent.
+ *
+ * This handles:
+ * - Extra spaces between number and name
+ * - Reversed order (name then number)
+ * - Number and name in different parts of the email
+ * - Natural phrasing like "Oak property, unit 123"
+ * - Prevents false positives: "123" won't match "1234", "oak" won't match "oakland"
+ *
+ * For multi-word street names (e.g. "nw johnson"), each word in the name must
+ * appear independently.
+ *
+ * @param content - The text content to search (email subject, body)
+ * @param normalizedAddress - The NormalizedAddress from normalizeAddress()
+ * @returns true if the content contains both the street number and all street name words
  */
 export function contentContainsAddress(
   content: string | null | undefined,
-  normalizedAddress: string
+  normalizedAddress: NormalizedAddress
 ): boolean {
   if (!content) return false;
-  return content.toLowerCase().includes(normalizedAddress);
+
+  // Check street number with word boundary
+  if (!containsWord(content, normalizedAddress.streetNumber)) {
+    return false;
+  }
+
+  // Check each word of the street name independently with word boundaries
+  const nameWords = normalizedAddress.streetName.split(/\s+/);
+  for (const word of nameWords) {
+    if (!containsWord(content, word)) {
+      return false;
+    }
+  }
+
+  return true;
 }

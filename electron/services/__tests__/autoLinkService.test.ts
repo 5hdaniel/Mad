@@ -433,7 +433,7 @@ describe("autoLinkService", () => {
 
     // TASK-2087: Address-based filtering tests
     describe("address-based filtering", () => {
-      it("should pass normalized address to email query when transaction has property_address", async () => {
+      it("should pass separate address parts to email query when transaction has property_address", async () => {
         // Set up mocks with a property address on the transaction
         mockDbGet.mockImplementation((sql: string) => {
           if (sql.includes("FROM contacts")) return { id: mockContactId };
@@ -467,14 +467,15 @@ describe("autoLinkService", () => {
 
         expect(result.emailsLinked).toBe(1);
 
-        // Verify the email query included address filter params (%123 oak%)
+        // Verify the email query included separate address filter params (%123% and %oak%)
         const emailQueryCalls = mockDbAll.mock.calls.filter(
           (call) => typeof call[0] === "string" && call[0].includes("FROM emails e")
         );
         expect(emailQueryCalls.length).toBeGreaterThanOrEqual(1);
-        // The first call should include address filter (LIKE params for subject/body_plain)
+        // The first call should include address filter with separate parts
         const firstCallParams = emailQueryCalls[0][1] as string[];
-        expect(firstCallParams).toContain("%123 oak%");
+        expect(firstCallParams).toContain("%123%");
+        expect(firstCallParams).toContain("%oak%");
       });
 
       it("should fall back to unfiltered results when address filter returns no emails", async () => {
@@ -547,7 +548,8 @@ describe("autoLinkService", () => {
         expect(emailQueryCalls.length).toBe(1);
         // Query should only be called once (no fallback needed)
         const callParams = emailQueryCalls[0][1] as string[];
-        expect(callParams).not.toContain(expect.stringMatching(/%.*oak.*/));
+        expect(callParams).not.toContain("%123%");
+        expect(callParams).not.toContain("%oak%");
       });
 
       it("should use property_street as fallback when property_address is null", async () => {
@@ -583,12 +585,68 @@ describe("autoLinkService", () => {
 
         expect(result.emailsLinked).toBe(1);
 
-        // Verify the query used the normalized property_street ("456 elm")
+        // Verify the query used the normalized property_street parts ("456" and "elm")
         const emailQueryCalls = mockDbAll.mock.calls.filter(
           (call) => typeof call[0] === "string" && call[0].includes("FROM emails e")
         );
         const firstCallParams = emailQueryCalls[0][1] as string[];
-        expect(firstCallParams).toContain("%456 elm%");
+        expect(firstCallParams).toContain("%456%");
+        expect(firstCallParams).toContain("%elm%");
+      });
+
+      it("should NOT apply address filter to text messages", async () => {
+        // Transaction has an address, but text messages should not be filtered by it
+        mockDbGet.mockImplementation((sql: string) => {
+          if (sql.includes("FROM contacts")) return { id: mockContactId };
+          if (sql.includes("FROM transactions")) {
+            return {
+              user_id: mockUserId,
+              started_at: "2024-01-01T00:00:00Z",
+              created_at: "2024-01-01T00:00:00Z",
+              closed_at: null,
+              property_address: "123 Oak Street, Portland, OR 97201",
+              property_street: null,
+            };
+          }
+          if (sql.includes("FROM users_local")) return { email: "user@example.com" };
+          if (sql.includes("FROM emails WHERE id")) return { user_id: mockUserId };
+          if (sql.includes("FROM communications") && sql.includes("email_id")) return null;
+          return null;
+        });
+
+        mockDbAll.mockImplementation((sql: string) => {
+          if (sql.includes("FROM contact_emails")) return [];
+          if (sql.includes("FROM contact_phones")) return [{ phone_e164: "+14155551234" }];
+          if (sql.includes("FROM messages") && sql.includes("sms")) {
+            return [
+              { id: "msg-1", thread_id: "thread-1" },
+              { id: "msg-2", thread_id: "thread-2" },
+            ];
+          }
+          return [];
+        });
+
+        const result = await autoLinkCommunicationsForContact({
+          contactId: mockContactId,
+          transactionId: mockTransactionId,
+        });
+
+        // All messages should be linked (no address filtering)
+        expect(result.messagesLinked).toBe(2);
+
+        // Verify the messages query did NOT include address-related columns
+        const msgQueryCalls = mockDbAll.mock.calls.filter(
+          (call) => typeof call[0] === "string" && call[0].includes("FROM messages")
+        );
+        for (const call of msgQueryCalls) {
+          const sql = call[0] as string;
+          // Should not reference body or body_text columns (address filtering columns)
+          expect(sql).not.toContain("body");
+          expect(sql).not.toContain("body_text");
+          // The SQL should only have LIKE for participants_flat (phone matching),
+          // not for address content filtering
+          expect(sql).not.toContain("subject");
+        }
       });
     });
   });
