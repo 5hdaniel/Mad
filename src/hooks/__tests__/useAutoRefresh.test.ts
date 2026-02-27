@@ -345,7 +345,7 @@ describe("useAutoRefresh", () => {
       );
     });
 
-    it("should NOT sync anything on non-macOS without email connected", async () => {
+    it("should sync only contacts on non-macOS without email connected", async () => {
       (usePlatform as jest.Mock).mockReturnValue({ isMacOS: false });
 
       const { result } = renderHook(() =>
@@ -359,8 +359,8 @@ describe("useAutoRefresh", () => {
         await result.current.triggerRefresh();
       });
 
-      // No sync types available on non-macOS without email connection or AI addon
-      expect(mockRequestSync).not.toHaveBeenCalled();
+      // TASK-2092: Contacts always syncs — orchestrator handles source-specific guards
+      expect(mockRequestSync).toHaveBeenCalledWith(["contacts"], expect.any(String));
     });
 
     it("should sync only Outlook contacts without macOS permissions", async () => {
