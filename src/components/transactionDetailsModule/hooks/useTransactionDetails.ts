@@ -26,6 +26,8 @@ interface UseTransactionDetailsResult {
   setCommunications: React.Dispatch<React.SetStateAction<Communication[]>>;
   setResolvedSuggestions: React.Dispatch<React.SetStateAction<ResolvedSuggestedContact[]>>;
   updateSuggestedContacts: (remainingSuggestions: SuggestedContact[]) => Promise<void>;
+  /** TASK-2094: Optimistically remove communications by ID without triggering loading state */
+  removeCommunicationsByIds: (ids: string[]) => void;
 }
 
 /**
@@ -198,6 +200,15 @@ export function useTransactionDetails(
     [transaction.id]
   );
 
+  /**
+   * TASK-2094: Optimistically remove communications by ID from local state.
+   * Does NOT trigger loading state or backend refetch — the list updates in-place.
+   */
+  const removeCommunicationsByIds = useCallback((ids: string[]) => {
+    const idSet = new Set(ids);
+    setCommunications(prev => prev.filter(c => !idSet.has(c.id)));
+  }, []);
+
   return {
     communications,
     contactAssignments,
@@ -208,5 +219,6 @@ export function useTransactionDetails(
     setCommunications,
     setResolvedSuggestions,
     updateSuggestedContacts,
+    removeCommunicationsByIds,
   };
 }
