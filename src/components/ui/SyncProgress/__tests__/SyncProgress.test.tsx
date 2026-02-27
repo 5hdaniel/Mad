@@ -3,7 +3,7 @@
  * Tests for the reusable SyncProgress component with all three variants.
  */
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SyncProgress } from '../SyncProgress';
 import { SyncProgressSteps } from '../SyncProgressSteps';

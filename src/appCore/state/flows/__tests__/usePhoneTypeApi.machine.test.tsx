@@ -95,18 +95,6 @@ const readyStateAndroid: ReadyState = {
   },
 };
 
-const readyStateNoPhoneType: ReadyState = {
-  status: "ready",
-  user: { id: "test-user", email: "test@example.com" },
-  platform: { isMacOS: true, isWindows: false, hasIPhone: false },
-  userData: {
-    phoneType: null,
-    hasCompletedEmailOnboarding: false,
-    hasEmailConnected: false,
-    needsDriverSetup: false,
-    hasPermissions: true,
-  },
-};
 
 const readyStateWindowsIPhoneNeedsDriver: ReadyState = {
   status: "ready",

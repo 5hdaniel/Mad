@@ -12,7 +12,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { LoadingOrchestrator } from "./LoadingOrchestrator";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { AppStateProvider } from "./AppStateContext";
-import { useAppState } from "./useAppState";
+
 import { AuthProvider } from "../../../contexts/AuthContext";
 import type { AppState } from "./types";
 
@@ -68,25 +68,6 @@ beforeEach(() => {
 // ============================================
 // HELPER COMPONENTS
 // ============================================
-
-/**
- * Test component to display current state.
- */
-function StateDisplay() {
-  const { state, loadingPhase, error } = useAppState();
-  return (
-    <div>
-      <div data-testid="status">{state.status}</div>
-      {loadingPhase && <div data-testid="phase">{loadingPhase}</div>}
-      {error && (
-        <>
-          <div data-testid="error-code">{error.code}</div>
-          <div data-testid="error-message">{error.message}</div>
-        </>
-      )}
-    </div>
-  );
-}
 
 /**
  * Wrapper for testing with provider.

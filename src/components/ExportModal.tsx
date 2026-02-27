@@ -48,7 +48,7 @@ function ExportModal({
       : "",
   );
 
-  const [contentType, setContentType] = useState("both"); // text, email, both
+  const [contentType] = useState("both"); // text, email, both
   const [exportFormat, setExportFormat] = useState("folder"); // folder, pdf, excel, csv, json, txt_eml
   const [emailExportMode, setEmailExportMode] = useState<"thread" | "individual">("thread");
   const [exporting, setExporting] = useState(false);

@@ -300,8 +300,6 @@ export function Content({
     ? "microsoft"
     : "google";
 
-  const primaryConfig = PROVIDER_CONFIG[primaryProvider];
-
   // Track connecting state locally (the orchestrator handles actual OAuth)
   const [connectingProvider, setConnectingProvider] = React.useState<
     "google" | "microsoft" | null
@@ -335,9 +333,6 @@ export function Content({
   const handleContinue = () => {
     onAction({ type: "NAVIGATE_NEXT" });
   };
-
-  // Check if any email is connected
-  const hasConnection = context.emailConnected === true;
 
   return (
     <>

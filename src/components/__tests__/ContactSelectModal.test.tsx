@@ -5,7 +5,6 @@
 
 import React from "react";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
 import ContactSelectModal from "../ContactSelectModal";
 import type { ExtendedContact } from "../../types/components";

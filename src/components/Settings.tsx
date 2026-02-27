@@ -556,7 +556,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
       const result = await window.api.update.checkForUpdates();
       if (result?.updateAvailable) {
         setUpdateStatus('available');
-        setUpdateVersion(result.version || '');
+        setUpdateVersion(result.version ?? '');
       } else {
         setUpdateStatus('up-to-date');
       }

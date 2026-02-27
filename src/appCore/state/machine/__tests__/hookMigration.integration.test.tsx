@@ -169,13 +169,6 @@ const readyStateMacOS: ReadyState = {
   userData: completeUserData,
 };
 
-const readyStateWindows: ReadyState = {
-  status: "ready",
-  user: testUser,
-  platform: windowsPlatform,
-  userData: completeUserData,
-};
-
 const errorState: ErrorState = {
   status: "error",
   error: {

@@ -41,7 +41,6 @@ import {
   setupDbInitFailure,
   setupStorageCheckFailure,
   renderAppStateHook,
-  createStateHistoryTracker,
   renderWithStateMachine,
   testFixtures,
   setPlatform,

@@ -16,7 +16,7 @@
  */
 
 import React from "react";
-import { renderHook, act, waitFor } from "@testing-library/react";
+import { renderHook, act } from "@testing-library/react";
 import { AppStateProvider } from "../AppStateContext";
 import { useAppState } from "../useAppState";
 import type {
@@ -92,14 +92,6 @@ const testUser = { id: "test-user-123", email: "test@example.com" };
 
 const macOSPlatform: PlatformInfo = { isMacOS: true, isWindows: false, hasIPhone: true };
 const windowsPlatform: PlatformInfo = { isMacOS: false, isWindows: true, hasIPhone: true };
-
-const newUserData: UserData = {
-  phoneType: null,
-  hasCompletedEmailOnboarding: false,
-  hasEmailConnected: false,
-  needsDriverSetup: false,
-  hasPermissions: false,
-};
 
 const returningUserDataMacOS: UserData = {
   phoneType: "iphone",

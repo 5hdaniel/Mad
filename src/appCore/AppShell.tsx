@@ -37,7 +37,6 @@ export function AppShell({ app, children }: AppShellProps) {
     needsTermsAcceptance,
     isOnline,
     isChecking,
-    modalState,
     openProfile,
     openSettings,
     handleRetryConnection,

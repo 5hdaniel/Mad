@@ -390,10 +390,10 @@ describe("useToast", () => {
     it("should maintain function reference stability across renders", () => {
       const { result, rerender } = renderHook(() => useToast());
 
-      const firstShowToast = result.current.showToast;
-      const firstShowSuccess = result.current.showSuccess;
-      const firstShowError = result.current.showError;
-      const firstShowWarning = result.current.showWarning;
+      const _firstShowToast = result.current.showToast;
+      const _firstShowSuccess = result.current.showSuccess;
+      const _firstShowError = result.current.showError;
+      const _firstShowWarning = result.current.showWarning;
       const firstRemoveToast = result.current.removeToast;
       const firstClearAll = result.current.clearAll;
 
