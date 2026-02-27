@@ -559,18 +559,44 @@ class OutlookService {
         if (email.body) {
           let bodyText = email.body.content;
 
-          // If HTML, strip basic tags for readability
+          // If HTML, strip tags for readability (output goes to .txt file)
+          // Uses while-loop pattern for multi-character patterns to handle
+          // nested/overlapping constructs (e.g., <sty<style>le>)
           if (email.body.contentType === "html") {
-            bodyText = bodyText
-              .replace(/<style[^>]*>.*?<\/style>/gs, "")
-              .replace(/<script[^>]*>.*?<\/script>/gs, "")
-              .replace(/<[^>]+>/g, "")
-              .replace(/&nbsp;/g, " ")
-              .replace(/&amp;/g, "&")
-              .replace(/&lt;/g, "<")
-              .replace(/&gt;/g, ">")
-              .replace(/&quot;/g, '"')
-              .trim();
+            // Remove style tags and content (loop for nested patterns)
+            let prev = '';
+            while (bodyText !== prev) {
+              prev = bodyText;
+              bodyText = bodyText.replace(/<style[^>]*>.*?<\/style>/gs, "");
+            }
+
+            // Remove script tags and content (loop for nested patterns)
+            prev = '';
+            while (bodyText !== prev) {
+              prev = bodyText;
+              bodyText = bodyText.replace(/<script[^>]*>.*?<\/script>/gs, "");
+            }
+
+            // Remove all HTML tags (iterative to handle malformed HTML like <img src=">" onerror="...">)
+            prev = '';
+            while (bodyText !== prev) {
+              prev = bodyText;
+              bodyText = bodyText.replace(/<[^>]+>/g, "");
+            }
+
+            // Decode HTML entities for readable text output (loop for nested entities)
+            prev = '';
+            while (bodyText !== prev) {
+              prev = bodyText;
+              bodyText = bodyText
+                .replace(/&nbsp;/g, " ")
+                .replace(/&amp;/g, "&")
+                .replace(/&lt;/g, "<")
+                .replace(/&gt;/g, ">")
+                .replace(/&quot;/g, '"');
+            }
+
+            bodyText = bodyText.trim();
           }
 
           content += bodyText.trim();
