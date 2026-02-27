@@ -845,7 +845,7 @@ export async function handleGoogleConnectMailbox(
             errorMessage: saveError instanceof Error ? saveError.message : "Failed to save credentials",
           });
 
-          if (mainWindow) {
+          if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send("google:mailbox-connected", {
               success: false,
               error: "Failed to save credentials. Please try logging in again.",
@@ -870,7 +870,7 @@ export async function handleGoogleConnectMailbox(
         });
 
         // Notify renderer
-        if (mainWindow) {
+        if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send("google:mailbox-connected", {
             success: true,
             email: userInfo.email,
@@ -896,7 +896,7 @@ export async function handleGoogleConnectMailbox(
             error instanceof Error ? error.message : "Unknown error",
         });
 
-        if (mainWindow) {
+        if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send("google:mailbox-connected", {
             success: false,
             error: error instanceof Error ? error.message : "Unknown error",

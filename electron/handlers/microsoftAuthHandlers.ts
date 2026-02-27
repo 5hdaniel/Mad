@@ -721,7 +721,7 @@ export async function handleMicrosoftConnectMailbox(
             errorMessage: saveError instanceof Error ? saveError.message : "Failed to save credentials",
           });
 
-          if (mainWindow) {
+          if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send("microsoft:mailbox-connected", {
               success: false,
               error: "Failed to save credentials. Please try logging in again.",
@@ -744,7 +744,7 @@ export async function handleMicrosoftConnectMailbox(
           success: true,
         });
 
-        if (mainWindow) {
+        if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send("microsoft:mailbox-connected", {
             success: true,
             email: userInfo.email,
@@ -770,7 +770,7 @@ export async function handleMicrosoftConnectMailbox(
             error instanceof Error ? error.message : "Unknown error",
         });
 
-        if (mainWindow) {
+        if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send("microsoft:mailbox-connected", {
             success: false,
             error: error instanceof Error ? error.message : "Unknown error",

@@ -270,7 +270,7 @@ export function registerTransactionExportHandlers(
           emailExportMode: sanitizedOptions.emailExportMode,
           onProgress: (progress: unknown) => {
             // Send progress updates to renderer
-            if (mainWindow) {
+            if (mainWindow && !mainWindow.isDestroyed()) {
               mainWindow.webContents.send(
                 "transactions:export-folder-progress",
                 progress,
@@ -342,7 +342,7 @@ export function registerTransactionExportHandlers(
       const result = await submissionService.submitTransaction(
         validatedTransactionId,
         (progress: SubmissionProgress) => {
-          if (mainWindow) {
+          if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send("transactions:submit-progress", progress);
           }
         }
@@ -409,7 +409,7 @@ export function registerTransactionExportHandlers(
       const result = await submissionService.resubmitTransaction(
         validatedTransactionId,
         (progress: SubmissionProgress) => {
-          if (mainWindow) {
+          if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send("transactions:submit-progress", progress);
           }
         }

@@ -846,7 +846,7 @@ app.whenReady().then(async () => {
   autoUpdater.on("update-available", (info) => {
     log.info("Update available:", info);
     Sentry.addBreadcrumb({ category: "auto-updater", message: `Update available: ${info.version}`, level: "info" });
-    if (mainWindow) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("update-available", info);
     }
   });
@@ -863,7 +863,7 @@ app.whenReady().then(async () => {
   autoUpdater.on("download-progress", (progressObj) => {
     const message = `Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent.toFixed(2)}%`;
     log.info(message);
-    if (mainWindow) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("update-progress", progressObj);
     }
   });
@@ -871,7 +871,7 @@ app.whenReady().then(async () => {
   autoUpdater.on("update-downloaded", (info) => {
     log.info("Update downloaded:", info);
     Sentry.addBreadcrumb({ category: "auto-updater", message: `Update downloaded: ${info.version}`, level: "info" });
-    if (mainWindow) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("update-downloaded", info);
     }
   });
