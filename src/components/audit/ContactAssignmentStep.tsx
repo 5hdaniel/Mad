@@ -130,10 +130,25 @@ function ContactAssignmentStep({
     return contact.is_message_derived === 1 || contact.is_message_derived === true;
   };
 
-  // Handle clicking on a contact to view details
+  // Handle clicking on a contact to view details (used in Step 3 only)
   const handleContactClick = useCallback((contact: ExtendedContact) => {
     setPreviewContact(contact);
   }, []);
+
+  // Handle selection change from ContactSearchList (Step 2 toggle behavior)
+  // Cleans up addedContactIds when contacts are deselected
+  const handleSelectionChange = useCallback((newIds: string[]) => {
+    // Find contacts that were removed (deselected)
+    const removedIds = selectedContactIds.filter((id) => !newIds.includes(id));
+    if (removedIds.length > 0) {
+      setAddedContactIds((prev) => {
+        const next = new Set(prev);
+        removedIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    }
+    onSelectedContactIdsChange(newIds);
+  }, [selectedContactIds, onSelectedContactIdsChange]);
 
   // Handle editing a contact from preview
   const handlePreviewEdit = useCallback(() => {
@@ -310,10 +325,9 @@ function ContactAssignmentStep({
               contacts={extendedContacts}
               externalContacts={extendedExternalContacts}
               selectedIds={selectedContactIds}
-              onSelectionChange={onSelectedContactIdsChange}
+              onSelectionChange={handleSelectionChange}
               onImportContact={handleImportContact}
               showAddButtonForImported={true}
-              onContactClick={handleContactClick}
               onAddManually={handleAddManually}
               addedContactIds={addedContactIds}
               isLoading={contactsLoading || externalContactsLoading}
