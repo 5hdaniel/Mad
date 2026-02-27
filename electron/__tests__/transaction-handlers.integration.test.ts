@@ -120,7 +120,6 @@ import { registerTransactionHandlers } from "../transaction-handlers";
 // Test constants
 const TEST_USER_ID = "550e8400-e29b-41d4-a716-446655440000";
 const TEST_TXN_ID = "550e8400-e29b-41d4-a716-446655440001";
-const TEST_TXN_ID_2 = "550e8400-e29b-41d4-a716-446655440002";
 const TEST_CONTACT_ID = "550e8400-e29b-41d4-a716-446655440003";
 const TEST_CONTACT_ID_2 = "550e8400-e29b-41d4-a716-446655440004";
 

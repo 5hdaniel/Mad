@@ -14,9 +14,6 @@ import {
   getEmailsByDifficulty,
   getEmailsByStage,
   toMessageInputs,
-  calculateMatchRate,
-  calculateFalsePositiveRate,
-  calculateFalseNegativeRate,
   groupByThread,
   getFirstEmailsInThreads,
   TestEmail,
@@ -180,7 +177,7 @@ describe('Extraction Pipeline Accuracy', () => {
     it('should identify first email in each thread correctly', () => {
       const threads = groupByThread(testDataset);
 
-      for (const [threadId, emails] of threads) {
+      for (const [_threadId, emails] of threads) {
         // First email should be the one with earliest sent_at
         const sortedByDate = [...emails].sort(
           (a, b) => new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime()
@@ -324,7 +321,6 @@ describe('Extraction Pipeline Accuracy', () => {
       // Step 3: Batching
       const messageInputs = toMessageInputs(firstEmails);
       const batchResult = createBatches(messageInputs);
-      const batchReduction = 1 - batchResult.batches.length / firstEmails.length;
 
       // Total: original emails → batched API calls
       const originalCalls = testDataset.length;

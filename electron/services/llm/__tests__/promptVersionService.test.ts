@@ -16,7 +16,6 @@
 
 import {
   PromptVersionService,
-  PromptVersion,
   getPromptVersionService,
 } from '../promptVersionService';
 import { ALL_PROMPTS } from '../prompts';

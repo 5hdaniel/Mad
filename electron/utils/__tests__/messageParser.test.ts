@@ -48,10 +48,6 @@ describe("messageParser", () => {
    * in the message text field.
    */
   describe("looksLikeBinaryGarbage", () => {
-    // Sample garbage from test-data/message-parsing-test-data.md
-    // Pattern: UTF-16 LE interpreted "streamtyped" produces Oriya + CJK mix
-    const SAMPLE_GARBAGE = "\\u0B04\\u7473\\u6572\\u6D61\\u7479\\u6564\\u8184\\u03E8\\u01C4\\u8440\\u84C4\\u4E43\\u534D\\u7475\\u6261\\u656C\\u7441\\u7274\\u6269\\u7475\\u6564\\u7453\\u6972\\u676E";
-
     it("should detect garbage with Oriya + CJK characters mixed", () => {
       // Real garbage pattern: Oriya characters mixed with CJK
       // This is the signature pattern of UTF-16 interpreted binary

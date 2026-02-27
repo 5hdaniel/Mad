@@ -20,9 +20,6 @@
 import {
   ConfidenceAggregatorService,
   confidenceAggregator,
-  ConfidenceLevel,
-  AggregatedConfidence,
-  ConfidenceThresholds,
 } from '../confidenceAggregatorService';
 
 describe('ConfidenceAggregatorService', () => {

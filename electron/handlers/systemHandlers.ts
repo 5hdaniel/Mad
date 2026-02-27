@@ -30,7 +30,6 @@ import {
   ValidationError,
   validateUserId,
   validateString,
-  validateProvider,
 } from "../utils/validation";
 import type { User, OAuthProvider } from "../types/models";
 

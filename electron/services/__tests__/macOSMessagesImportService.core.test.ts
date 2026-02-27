@@ -411,10 +411,10 @@ describe("macOSMessagesImportService Core Functions", () => {
       it("should structure inbound message correctly", () => {
         const isFromMe = 0;
         const handle = "+15551234567";
-        const participantsObj = {
-          from: isFromMe === 1 ? "me" : handle,
-          to: isFromMe === 1 ? [handle] : ["me"],
-        };
+        // For inbound messages (isFromMe=0), 'from' is the handle and 'to' is ["me"]
+        const fromValue = isFromMe ? "me" : handle;
+        const toValue = isFromMe ? [handle] : ["me"];
+        const participantsObj = { from: fromValue, to: toValue };
 
         expect(participantsObj.from).toBe("+15551234567");
         expect(participantsObj.to).toEqual(["me"]);
@@ -647,7 +647,8 @@ describe("macOSMessagesImportService Core Functions", () => {
 
       it("should default to SMS for null service", () => {
         const service: string | null = null;
-        const channel = service === "iMessage" ? "imessage" : "sms";
+        // Null service should default to SMS (null !== "iMessage")
+        const channel = (service != null && service === "iMessage") ? "imessage" : "sms";
         expect(channel).toBe("sms");
       });
     });
@@ -661,7 +662,8 @@ describe("macOSMessagesImportService Core Functions", () => {
 
       it("should detect inbound message (is_from_me = 0)", () => {
         const isFromMe = 0;
-        const direction = isFromMe === 1 ? "outbound" : "inbound";
+        // For inbound messages (isFromMe=0), direction is "inbound"
+        const direction = isFromMe ? "outbound" : "inbound";
         expect(direction).toBe("inbound");
       });
     });

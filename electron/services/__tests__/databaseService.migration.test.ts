@@ -149,9 +149,6 @@ describe("DatabaseService Migration Robustness (TASK-2048)", () => {
     jest.clearAllMocks();
     jest.resetModules();
 
-    // Get the current fs mock (matches what the re-imported module will use)
-    const fs = getFs();
-
     // Reset mock defaults
     mockStatement.get.mockReturnValue(undefined);
     mockStatement.all.mockReturnValue([]);

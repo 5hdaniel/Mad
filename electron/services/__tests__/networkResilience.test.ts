@@ -302,7 +302,7 @@ describe("NetworkResilienceService", () => {
 
       service.recordPartialSync("user-1", "gmail", 10);
       // Simulate multiple failures by manually incrementing retry count
-      const retries = service.getPendingRetries();
+      service.getPendingRetries();
       // Record again 5 times to hit the max
       for (let i = 0; i < DEFAULT_NETWORK_RETRY_CONFIG.maxRetries; i++) {
         service.recordPartialSync("user-1", "gmail", 10);

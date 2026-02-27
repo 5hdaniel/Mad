@@ -62,7 +62,6 @@ jest.mock('../anthropicService', () => ({
 
 // Import after mocking
 import { LLMConfigService } from '../llmConfigService';
-import { LLMError } from '../types';
 
 describe('LLMConfigService', () => {
   let service: LLMConfigService;

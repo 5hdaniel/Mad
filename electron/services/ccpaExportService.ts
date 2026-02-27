@@ -277,7 +277,8 @@ export async function writeExportFile(
   filePath: string,
 ): Promise<void> {
   const jsonString = JSON.stringify(data, null, 2);
-  await fs.promises.writeFile(filePath, jsonString, "utf-8");
+  // Use exclusive create (wx) and restrictive permissions to prevent symlink attacks in temp dirs
+  await fs.promises.writeFile(filePath, jsonString, { encoding: "utf-8", mode: 0o600, flag: "wx" });
   logService.info(
     `[CcpaExport] Export file written to: ${filePath}`,
     "CcpaExportService",

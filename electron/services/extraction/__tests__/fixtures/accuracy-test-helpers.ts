@@ -4,7 +4,7 @@
  */
 
 import testEmails from './accuracy-test-emails.json';
-import { isGmailSpam, isOutlookJunk } from '../../../llm/spamFilterService';
+import { isGmailSpam } from '../../../llm/spamFilterService';
 import { MessageInput } from '../../types';
 import { BatchAnalysisResult } from '../../../llm/batchLLMService';
 

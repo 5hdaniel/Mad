@@ -58,9 +58,6 @@ jest.mock("../logService", () => {
   };
 });
 
-// Reference to mock for assertions
-const mockLogService = jest.requireMock("../logService").default;
-
 /**
  * Helper: extract the session data from a writeFile call.
  * Since saveSession now encrypts via safeStorage, the written string is
@@ -462,7 +459,7 @@ describe("SessionService", () => {
       mockFs.writeFile.mockRejectedValue(new Error("Write failed"));
 
       // Update may succeed or fail depending on implementation
-      const result = await sessionService.updateSession({
+      await sessionService.updateSession({
         sessionToken: "new-token",
       });
 
@@ -563,7 +560,7 @@ describe("SessionService", () => {
       mockFs.readFile.mockResolvedValue(createEncryptedFileContent(sessionData));
 
       // Due to timing, this could be null or valid depending on execution speed
-      const result = await sessionService.loadSession();
+      await sessionService.loadSession();
 
       // The session should be treated as expired when expiresAt <= now
       // Note: This test may be flaky due to timing - if expiresAt === now,
