@@ -134,17 +134,29 @@ export class LogService {
   }
 
   /**
+   * Sanitize a string for safe log output.
+   * Removes control characters (newlines, tabs, etc.) that could enable log injection,
+   * while preserving Unicode (accented characters, emoji, etc.).
+   */
+  private sanitizeForLog(input: string): string {
+    return input.replace(/[\r\n]/g, " ").replace(/[\x00-\x1f\x7f]/g, "");
+  }
+
+  /**
    * Format log entry for output
    */
   private formatLogEntry(entry: LogEntry): string {
     const timestamp = entry.timestamp.toISOString();
     const level = entry.level.toUpperCase().padEnd(5);
-    const context = entry.context ? `[${entry.context}]` : "";
+    const context = entry.context
+      ? `[${this.sanitizeForLog(entry.context)}]`
+      : "";
+    const sanitizedMessage = this.sanitizeForLog(entry.message);
     const metadata = entry.metadata
       ? `\n${JSON.stringify(entry.metadata, null, 2)}`
       : "";
 
-    return `${timestamp} ${level} ${context} ${entry.message}${metadata}`;
+    return `${timestamp} ${level} ${context} ${sanitizedMessage}${metadata}`;
   }
 
   /**
