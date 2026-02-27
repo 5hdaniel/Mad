@@ -39,6 +39,7 @@ interface LoadingScreenProps {
  */
 const PHASE_MESSAGES: Record<LoadingPhase, string> = {
   "checking-storage": "Checking secure storage...",
+  "validating-auth": "Verifying your account...", // TASK-2086: Pre-DB auth validation
   "awaiting-keychain": "Waiting for keychain access...", // macOS - shown by KeychainExplanation component
   "initializing-db": "Initializing secure database...", // Default, overridden by platform-specific
   "loading-auth": "Loading authentication...",

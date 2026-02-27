@@ -186,7 +186,7 @@ describe("getNextOnboardingStep", () => {
 
 describe("appStateReducer - Loading Phase Transitions", () => {
   describe("STORAGE_CHECKED", () => {
-    it("transitions from checking-storage to initializing-db when hasKeyStore is true", () => {
+    it("transitions from checking-storage to validating-auth when hasKeyStore is true (TASK-2086)", () => {
       const state = INITIAL_APP_STATE;
       const action: AppAction = { type: "STORAGE_CHECKED", hasKeyStore: true };
 
@@ -194,11 +194,11 @@ describe("appStateReducer - Loading Phase Transitions", () => {
 
       expect(result).toEqual({
         status: "loading",
-        phase: "initializing-db",
+        phase: "validating-auth",
       });
     });
 
-    it("transitions to initializing-db when hasKeyStore is false on Windows", () => {
+    it("transitions to validating-auth when hasKeyStore is false on Windows (TASK-2086)", () => {
       const state = INITIAL_APP_STATE;
       const action: AppAction = { type: "STORAGE_CHECKED", hasKeyStore: false, isMacOS: false };
 
@@ -206,7 +206,7 @@ describe("appStateReducer - Loading Phase Transitions", () => {
 
       expect(result).toEqual({
         status: "loading",
-        phase: "initializing-db",
+        phase: "validating-auth",
       });
     });
 
@@ -223,7 +223,7 @@ describe("appStateReducer - Loading Phase Transitions", () => {
       });
     });
 
-    it("does not defer DB init for returning macOS users (has key store)", () => {
+    it("transitions to validating-auth for returning macOS users (has key store) (TASK-2086)", () => {
       const state = INITIAL_APP_STATE;
       const action: AppAction = { type: "STORAGE_CHECKED", hasKeyStore: true, isMacOS: true };
 
@@ -231,7 +231,7 @@ describe("appStateReducer - Loading Phase Transitions", () => {
 
       expect(result).toEqual({
         status: "loading",
-        phase: "initializing-db",
+        phase: "validating-auth",
       });
     });
 
@@ -247,6 +247,72 @@ describe("appStateReducer - Loading Phase Transitions", () => {
     it("returns current state if not in loading status", () => {
       const state: AppState = { status: "unauthenticated" };
       const action: AppAction = { type: "STORAGE_CHECKED", hasKeyStore: true };
+
+      const result = appStateReducer(state, action);
+
+      expect(result).toBe(state);
+    });
+  });
+
+  // ============================================
+  // TASK-2086: AUTH_PRE_VALIDATED transitions
+  // ============================================
+
+  describe("AUTH_PRE_VALIDATED (TASK-2086)", () => {
+    it("transitions from validating-auth to initializing-db when valid is true", () => {
+      const state: LoadingState = { status: "loading", phase: "validating-auth" };
+      const action: AppAction = { type: "AUTH_PRE_VALIDATED", valid: true };
+
+      const result = appStateReducer(state, action);
+
+      expect(result).toEqual({
+        status: "loading",
+        phase: "initializing-db",
+      });
+    });
+
+    it("transitions from validating-auth to initializing-db when noSession is true", () => {
+      const state: LoadingState = { status: "loading", phase: "validating-auth" };
+      const action: AppAction = { type: "AUTH_PRE_VALIDATED", valid: true, noSession: true };
+
+      const result = appStateReducer(state, action);
+
+      expect(result).toEqual({
+        status: "loading",
+        phase: "initializing-db",
+      });
+    });
+
+    it("transitions to unauthenticated when valid is false", () => {
+      const state: LoadingState = { status: "loading", phase: "validating-auth" };
+      const action: AppAction = { type: "AUTH_PRE_VALIDATED", valid: false, reason: "session_revoked" };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("unauthenticated");
+    });
+
+    it("transitions to unauthenticated with default reason when reason is omitted", () => {
+      const state: LoadingState = { status: "loading", phase: "validating-auth" };
+      const action: AppAction = { type: "AUTH_PRE_VALIDATED", valid: false };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("unauthenticated");
+    });
+
+    it("returns current state if not in validating-auth phase", () => {
+      const state: LoadingState = { status: "loading", phase: "initializing-db" };
+      const action: AppAction = { type: "AUTH_PRE_VALIDATED", valid: true };
+
+      const result = appStateReducer(state, action);
+
+      expect(result).toBe(state);
+    });
+
+    it("returns current state if not in loading status", () => {
+      const state: AppState = { status: "unauthenticated" };
+      const action: AppAction = { type: "AUTH_PRE_VALIDATED", valid: true };
 
       const result = appStateReducer(state, action);
 

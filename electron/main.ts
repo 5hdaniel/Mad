@@ -106,6 +106,7 @@ import { registerSyncHandlers, cleanupSyncHandlers } from "./sync-handlers";
 import { registerDriverHandlers } from "./driver-handlers";
 import { registerLLMHandlers } from "./llm-handlers";
 import { registerLicenseHandlers } from "./license-handlers";
+import { registerPreAuthValidationHandler } from "./handlers/preAuthValidationHandler";
 import { LLMConfigService } from "./services/llm/llmConfigService";
 
 // Import license and device services for deep link auth validation (TASK-1507)
@@ -1031,6 +1032,9 @@ app.whenReady().then(async () => {
 
   // Register license handlers
   registerLicenseHandlers();
+
+  // TASK-2086: Register pre-DB auth validation handler (SOC 2 CC6.1)
+  registerPreAuthValidationHandler();
 
   // Register extracted handlers from handlers/ directory
   registerPermissionHandlers();
