@@ -1,51 +1,7 @@
 import { app, shell, Notification } from "electron";
-import { spawn } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
 import logService from "./logService";
-
-/**
- * Execute AppleScript safely by passing the script via stdin to osascript.
- * This avoids shell command injection risks from string interpolation.
- *
- * @param script - The AppleScript code to execute
- * @returns Promise that resolves when script completes successfully
- * @throws Error if osascript exits with non-zero code or encounters an error
- */
-export function runAppleScript(script: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    // Use osascript with '-' to read script from stdin
-    const proc = spawn("osascript", ["-"], {
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-
-    let stderr = "";
-
-    proc.stderr.on("data", (data: Buffer) => {
-      stderr += data.toString();
-    });
-
-    proc.on("error", (error: Error) => {
-      reject(new Error(`Failed to spawn osascript: ${error.message}`));
-    });
-
-    proc.on("close", (code: number | null) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(
-          new Error(
-            `osascript exited with code ${code}${stderr ? `: ${stderr.trim()}` : ""}`,
-          ),
-        );
-      }
-    });
-
-    // Write script to stdin and close
-    proc.stdin.write(script);
-    proc.stdin.end();
-  });
-}
 
 /**
  * macOS Permission Helper
@@ -86,33 +42,15 @@ interface PermissionSetupFlowResult {
 
 class MacOSPermissionHelper {
   /**
-   * Request Contacts permission (standard macOS API)
-   * This shows the native macOS permission dialog
+   * Request Contacts permission
+   * Contacts access is provided via Full Disk Access on macOS.
+   * This method is retained for API compatibility but no longer uses AppleScript.
    */
   async requestContactsPermission(): Promise<PermissionResult> {
-    try {
-      // Alternative: Use AppleScript to trigger Contacts access
-      const appleScript = `
-        tell application "Contacts"
-          activate
-          delay 0.5
-          quit
-        end tell
-      `;
-
-      await runAppleScript(appleScript);
-
-      return {
-        success: true,
-        message: "Contacts permission requested",
-      };
-    } catch (error) {
-      logService.error("[MacOS] Failed to request Contacts permission", "MacOSPermissionHelper", { error });
-      return {
-        success: false,
-        error: (error as Error).message,
-      };
-    }
+    return {
+      success: true,
+      message: "Contacts access included with Full Disk Access",
+    };
   }
 
   /**
@@ -249,21 +187,17 @@ class MacOSPermissionHelper {
     };
 
     try {
-      // Step 1: Request Contacts permission
-      logService.info("[MacOS] Step 1: Requesting Contacts permission...", "MacOSPermissionHelper");
+      // Contacts access is included with Full Disk Access -- no separate step needed
       results.contacts = await this.requestContactsPermission();
 
-      // Wait a moment for user to interact with Contacts dialog
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      // Step 2: Setup Full Disk Access
-      logService.info("[MacOS] Step 2: Setting up Full Disk Access...", "MacOSPermissionHelper");
+      // Setup Full Disk Access (opens System Settings via URL scheme)
+      logService.info("[MacOS] Setting up Full Disk Access...", "MacOSPermissionHelper");
       results.fullDiskAccess = await this.setupFullDiskAccess();
 
-      // Step 3: Show notification
+      // Show notification
       await this.showPermissionNotification(
         "Permission Setup",
-        "Please enable Full Disk Access in System Preferences to continue",
+        "Please enable Full Disk Access in System Settings to continue",
       );
 
       results.overallSuccess =
