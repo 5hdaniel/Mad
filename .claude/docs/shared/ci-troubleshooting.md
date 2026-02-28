@@ -82,6 +82,25 @@ npm test -- --verbose
 npm test -- -t "test name"
 ```
 
+### Windows Build: Electron Download Socket Hang Up
+
+**Symptoms:**
+```
+npm error path D:\a\Mad\Mad\node_modules\electron
+npm error command failed
+npm error RequestError: socket hang up
+```
+
+**Root cause:** Flaky network on GitHub Actions Windows runners. The Electron binary download (~100MB) times out or gets interrupted.
+
+**Fix:** Re-run the failed job or push an empty commit to retrigger CI. This is a transient issue.
+
+**Prevention:** The CI workflow should cache the Electron binary or add retry logic to `npm install`. See the `actions/cache` action with path `~\AppData\Local\electron\Cache` on Windows.
+
+**Incident:** SPRINT-106 PR #1016 (2026-02-28) — Windows build failed with socket hang up during Electron download. macOS build and all tests passed.
+
+---
+
 ### Native Module Errors (NODE_MODULE_VERSION mismatch)
 
 **Symptoms:**
