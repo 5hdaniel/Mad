@@ -381,7 +381,7 @@ export function registerUserSettingsHandlers(): void {
       });
 
       notification.show();
-      logService.debug("Notification sent", "Settings", { title });
+      logService.info("[Notifications] Notification sent via Electron API", "Settings", { title });
 
       return { success: true };
     }, { module: "Settings" }),

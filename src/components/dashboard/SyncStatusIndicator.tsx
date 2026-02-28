@@ -397,23 +397,7 @@ export function SyncStatusIndicator({
         )}
       </div>
 
-      {/* Single progress bar - shows current item's progress to match the % text */}
-      <div className={`w-full ${hasError ? 'bg-red-200' : 'bg-blue-200'} rounded-full h-1.5 overflow-hidden`}>
-        {isAnySyncing ? (
-          activeProgress !== null && activeProgress > 0 ? (
-            <div
-              className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
-              style={{ width: `${activeProgress}%` }}
-            />
-          ) : (
-            <div className="bg-blue-500 h-1.5 rounded-full animate-indeterminate" />
-          )
-        ) : hasError ? (
-          <div className="bg-red-500 h-1.5 rounded-full w-full" />
-        ) : (
-          <div className="bg-green-500 h-1.5 rounded-full w-full" />
-        )}
-      </div>
+      {/* Progress bar hidden — IPC flushing issue causes jumpy updates (BACKLOG-824) */}
 
       {/* Disabled tools notice - only show when syncing */}
       {isAnySyncing && (

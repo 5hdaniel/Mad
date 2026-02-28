@@ -22,7 +22,8 @@ export interface DashboardTourOptions {
  * that triggers a macOS notification via the existing IPC channel.
  */
 function NotificationStepContent(): React.ReactElement {
-  const handleSendTestNotification = (): void => {
+  const handleSendTestNotification = (e: React.MouseEvent): void => {
+    e.stopPropagation();
     window.api.notification.send(
       "Keepr",
       "Notifications help you stay updated on sync progress and audit alerts.",
