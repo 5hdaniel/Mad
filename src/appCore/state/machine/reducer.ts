@@ -19,6 +19,7 @@ import type {
   User,
   UserData,
   LoginSuccessAction,
+  AuthPreValidatedAction,
 } from "./types";
 import { INITIAL_APP_STATE } from "./types";
 
@@ -42,7 +43,7 @@ interface UserDataLoadedWithContext {
 /**
  * Union type for actions that the reducer can handle with full context.
  */
-type AppActionWithContext = Exclude<AppAction, { type: "USER_DATA_LOADED" }> | UserDataLoadedWithContext | LoginSuccessAction;
+type AppActionWithContext = Exclude<AppAction, { type: "USER_DATA_LOADED" }> | UserDataLoadedWithContext | LoginSuccessAction | AuthPreValidatedAction;
 
 // ============================================
 // ONBOARDING STEP PROGRESSION
@@ -187,8 +188,34 @@ export function appStateReducer(
         };
       }
 
-      // Normal flow: proceed to initialize DB
+      // TASK-2086: Proceed to pre-DB auth validation (SOC 2 CC6.1)
+      // Auth must be validated BEFORE database decryption
       // (returning macOS users with key store, or Windows users)
+      return {
+        status: "loading",
+        phase: "validating-auth",
+      };
+    }
+
+    // ============================================
+    // TASK-2086: PRE-DB AUTH VALIDATION (SOC 2 CC6.1)
+    // ============================================
+
+    case "AUTH_PRE_VALIDATED": {
+      // Only valid from validating-auth phase
+      if (state.status !== "loading" || state.phase !== "validating-auth") {
+        return state;
+      }
+
+      if (!action.valid) {
+        // Auth failed pre-DB -- go to unauthenticated WITHOUT ever opening DB
+        return {
+          status: "unauthenticated",
+          reason: action.reason || "session_revoked",
+        } as import("./types").UnauthenticatedState;
+      }
+
+      // Auth passed or no session exists -- proceed to DB initialization
       return {
         status: "loading",
         phase: "initializing-db",

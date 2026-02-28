@@ -10,6 +10,25 @@ import {
   JOYRIDE_LOCALE,
 } from "../tourSteps";
 
+// Mock window.api.notification for notification step tests
+beforeEach(() => {
+  (globalThis as Record<string, unknown>).window = {
+    api: {
+      notification: {
+        send: jest.fn().mockResolvedValue({ success: true }),
+        isSupported: jest.fn().mockResolvedValue({ success: true, supported: false }),
+      },
+      system: {
+        platform: "darwin",
+      },
+    },
+  };
+});
+
+afterEach(() => {
+  delete (globalThis as Record<string, unknown>).window;
+});
+
 describe("tourSteps configuration", () => {
   describe("getDashboardTourSteps", () => {
     it("should return an array of steps", () => {
@@ -45,6 +64,105 @@ describe("tourSteps configuration", () => {
       const aiStep = steps.find((s) => s.target === '[data-tour="ai-detection-status"]');
       expect(aiStep).toBeUndefined();
     });
+
+    it("should accept options object for backward compatibility with boolean", () => {
+      const stepsBoolean = getDashboardTourSteps(true);
+      const stepsOptions = getDashboardTourSteps({
+        hasAIAddon: true,
+        isMacOS: false,
+        notificationsEnabled: true,
+      });
+      // Both should have the same step count (no notification step since not macOS/enabled)
+      expect(stepsBoolean.length).toBe(stepsOptions.length);
+    });
+  });
+
+  describe("notification permission step", () => {
+    it("should include notification step on macOS when notifications are not enabled", () => {
+      const stepsWithNotification = getDashboardTourSteps({
+        hasAIAddon: false,
+        isMacOS: true,
+        notificationsEnabled: false,
+      });
+      const stepsWithout = getDashboardTourSteps({
+        hasAIAddon: false,
+        isMacOS: false,
+        notificationsEnabled: true,
+      });
+      expect(stepsWithNotification.length).toBe(stepsWithout.length + 1);
+    });
+
+    it("should NOT include notification step on Windows", () => {
+      const steps = getDashboardTourSteps({
+        hasAIAddon: false,
+        isMacOS: false,
+        notificationsEnabled: false,
+      });
+      const macSteps = getDashboardTourSteps({
+        hasAIAddon: false,
+        isMacOS: true,
+        notificationsEnabled: false,
+      });
+      expect(macSteps.length).toBe(steps.length + 1);
+    });
+
+    it("should NOT include notification step when notifications are already enabled", () => {
+      const stepsEnabled = getDashboardTourSteps({
+        hasAIAddon: false,
+        isMacOS: true,
+        notificationsEnabled: true,
+      });
+      const stepsDisabled = getDashboardTourSteps({
+        hasAIAddon: false,
+        isMacOS: true,
+        notificationsEnabled: false,
+      });
+      expect(stepsDisabled.length).toBe(stepsEnabled.length + 1);
+    });
+
+    it("should place notification step after sync-status step", () => {
+      const steps = getDashboardTourSteps({
+        hasAIAddon: false,
+        isMacOS: true,
+        notificationsEnabled: false,
+      });
+      // Step 0: welcome (body), Step 1: sync-status, Step 2: notification (also targets sync-status)
+      expect(steps[1].target).toBe('[data-tour="sync-status"]');
+      expect(steps[2].target).toBe('[data-tour="sync-status"]');
+      // Step 3 should be new-audit-card
+      expect(steps[3].target).toBe('[data-tour="new-audit-card"]');
+    });
+
+    it("should have disableBeacon on notification step", () => {
+      const steps = getDashboardTourSteps({
+        hasAIAddon: false,
+        isMacOS: true,
+        notificationsEnabled: false,
+      });
+      // The notification step is at index 2
+      expect(steps[2].disableBeacon).toBe(true);
+    });
+
+    it("notification step content should be a React element (not a string)", () => {
+      const steps = getDashboardTourSteps({
+        hasAIAddon: false,
+        isMacOS: true,
+        notificationsEnabled: false,
+      });
+      // The notification step is at index 2
+      expect(typeof steps[2].content).not.toBe("string");
+    });
+
+    it("should default to no notification step when using boolean signature", () => {
+      // Boolean signature defaults isMacOS=false, notificationsEnabled=true
+      const stepsBoolean = getDashboardTourSteps(false);
+      const stepsNoNotif = getDashboardTourSteps({
+        hasAIAddon: false,
+        isMacOS: false,
+        notificationsEnabled: true,
+      });
+      expect(stepsBoolean.length).toBe(stepsNoNotif.length);
+    });
   });
 
   describe("getExportTourSteps", () => {
@@ -57,7 +175,7 @@ describe("tourSteps configuration", () => {
       });
 
       it("should have disableBeacon set to true on ALL steps to prevent blue dot from appearing", () => {
-        steps.forEach((step, index) => {
+        steps.forEach((step, _index) => {
           expect(step.disableBeacon).toBe(true);
         });
       });
@@ -80,7 +198,7 @@ describe("tourSteps configuration", () => {
       });
 
       it("should have disableBeacon set to true on ALL steps to prevent blue dot from appearing", () => {
-        steps.forEach((step, index) => {
+        steps.forEach((step, _index) => {
           expect(step.disableBeacon).toBe(true);
         });
       });

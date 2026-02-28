@@ -109,6 +109,7 @@ function TransactionDetails({
     setCommunications,
     setResolvedSuggestions,
     updateSuggestedContacts,
+    removeCommunicationsByIds,
   } = useTransactionDetails(transaction);
 
   // Tab state hook - use initialTab prop
@@ -584,6 +585,7 @@ function TransactionDetails({
               transactionId={transaction.id}
               propertyAddress={transaction.property_address}
               onMessagesChanged={refreshMessages}
+              onRemoveMessagesByIds={removeCommunicationsByIds}
               onShowSuccess={showSuccess}
               onShowError={showError}
               auditStartDate={transaction.started_at}

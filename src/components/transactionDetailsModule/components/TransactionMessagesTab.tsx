@@ -61,6 +61,8 @@ interface TransactionMessagesTabProps {
   propertyAddress?: string;
   /** Callback when messages are modified (attached/unlinked). Can be async for refresh. */
   onMessagesChanged?: () => void | Promise<void>;
+  /** TASK-2094: Optimistic removal -- removes messages by ID from parent state without refetch */
+  onRemoveMessagesByIds?: (ids: string[]) => void;
   /** Toast handler for success messages */
   onShowSuccess?: (message: string) => void;
   /** Toast handler for error messages */
@@ -95,6 +97,7 @@ export function TransactionMessagesTab({
   transactionId,
   propertyAddress,
   onMessagesChanged,
+  onRemoveMessagesByIds,
   onShowSuccess,
   onShowError,
   auditStartDate,
@@ -216,6 +219,7 @@ export function TransactionMessagesTab({
 
   // Handle unlink confirmation
   // TASK-2025: Updated to handle merged threads (collect messages from all original thread IDs)
+  // TASK-2094: Uses optimistic removal to avoid full list unmount/remount
   const handleUnlinkConfirm = useCallback(async () => {
     if (!unlinkTarget || !transactionId) return;
 
@@ -247,9 +251,14 @@ export function TransactionMessagesTab({
 
       if (result.success) {
         onShowSuccess?.("Messages removed from transaction");
-        // Await the refresh to ensure UI updates before closing modal
-        // The callback may return a Promise (async refresh function)
-        await onMessagesChanged?.();
+        // TASK-2094: Optimistic removal — remove messages from parent state in-place.
+        // This avoids a full refetch that triggers loading=true → list unmount → remount.
+        if (onRemoveMessagesByIds) {
+          onRemoveMessagesByIds(messageIds);
+        } else {
+          // Fallback: full refresh if optimistic removal is not available
+          await onMessagesChanged?.();
+        }
         setUnlinkTarget(null);
       } else {
         onShowError?.(result.error || "Failed to remove messages");
@@ -262,7 +271,7 @@ export function TransactionMessagesTab({
     } finally {
       setIsUnlinking(false);
     }
-  }, [unlinkTarget, messages, transactionId, onMessagesChanged, onShowSuccess, onShowError]);
+  }, [unlinkTarget, messages, transactionId, onRemoveMessagesByIds, onMessagesChanged, onShowSuccess, onShowError]);
 
   // Handle cancel unlink
   const handleUnlinkCancel = useCallback(() => {

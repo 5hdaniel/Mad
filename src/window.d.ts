@@ -482,6 +482,18 @@ interface MainAPI {
     // TASK-2045: Sign out of all devices (global session invalidation)
     signOutAllDevices: () => Promise<{ success: boolean; error?: string }>;
 
+    // TASK-2086: Pre-DB auth validation (SOC 2 CC6.1)
+    /**
+     * Validate auth session before database decryption.
+     * Checks Supabase auth.getUser() without requiring the encrypted DB.
+     * Returns { valid: true, noSession: true } if no session exists (new user).
+     */
+    preValidateSession: () => Promise<{
+      valid: boolean;
+      noSession?: boolean;
+      reason?: string;
+    }>;
+
     // TASK-2062: Remote session validation
     /**
      * Validate remote session by checking Supabase auth.getUser().

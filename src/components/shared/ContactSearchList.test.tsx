@@ -309,10 +309,11 @@ describe("ContactSearchList", () => {
       const contacts = [createImportedContact({ id: "c1" })];
       const externalContacts = [createExternalContact({ id: "e1" })];
       const onImportContact = jest.fn();
+      const onContactClick = jest.fn();
 
       render(
         <ContactSearchList
-          {...createDefaultProps({ contacts, externalContacts, onImportContact })}
+          {...createDefaultProps({ contacts, externalContacts, onImportContact, onContactClick })}
         />
       );
 
@@ -326,9 +327,10 @@ describe("ContactSearchList", () => {
 
     it("does not show import button when onImportContact is not provided", () => {
       const externalContacts = [createExternalContact({ id: "e1" })];
+      const onContactClick = jest.fn();
 
       render(
-        <ContactSearchList {...createDefaultProps({ externalContacts })} />
+        <ContactSearchList {...createDefaultProps({ externalContacts, onContactClick })} />
       );
 
       expect(
@@ -336,7 +338,7 @@ describe("ContactSearchList", () => {
       ).toBe("false");
     });
 
-    it("shows checkboxes for all contacts", () => {
+    it("shows checkboxes in selection mode (no onContactClick)", () => {
       const contacts = [createImportedContact({ id: "c1" })];
       const externalContacts = [createExternalContact({ id: "e1" })];
 
@@ -346,7 +348,27 @@ describe("ContactSearchList", () => {
         />
       );
 
-      // Checkboxes are disabled in the redesigned contact list (click-to-select pattern)
+      // Selection mode (no onContactClick): checkboxes are shown
+      expect(
+        screen.getByTestId("contact-row-c1").getAttribute("data-show-checkbox")
+      ).toBe("true");
+      expect(
+        screen.getByTestId("contact-row-e1").getAttribute("data-show-checkbox")
+      ).toBe("true");
+    });
+
+    it("hides checkboxes in preview mode (with onContactClick)", () => {
+      const contacts = [createImportedContact({ id: "c1" })];
+      const externalContacts = [createExternalContact({ id: "e1" })];
+      const onContactClick = jest.fn();
+
+      render(
+        <ContactSearchList
+          {...createDefaultProps({ contacts, externalContacts, onContactClick })}
+        />
+      );
+
+      // Preview mode (with onContactClick): checkboxes are hidden
       expect(
         screen.getByTestId("contact-row-c1").getAttribute("data-show-checkbox")
       ).toBe("false");
@@ -610,12 +632,14 @@ describe("ContactSearchList", () => {
         name: "Jane Doe",
         user_id: "user-1",
       });
+      const onContactClick = jest.fn();
 
       render(
         <ContactSearchList
           {...createDefaultProps({
             externalContacts,
             onImportContact,
+            onContactClick,
           })}
         />
       );
@@ -635,6 +659,7 @@ describe("ContactSearchList", () => {
         user_id: "user-1",
       });
       const onSelectionChange = jest.fn();
+      const onContactClick = jest.fn();
 
       render(
         <ContactSearchList
@@ -642,6 +667,7 @@ describe("ContactSearchList", () => {
             externalContacts,
             onImportContact,
             onSelectionChange,
+            onContactClick,
           })}
         />
       );
