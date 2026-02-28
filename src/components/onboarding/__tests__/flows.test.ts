@@ -80,12 +80,12 @@ describe("Onboarding Flows", () => {
   });
 
   describe("Flow Configuration", () => {
-    it("macOS flow has 6 steps", () => {
-      expect(MACOS_FLOW_STEPS.length).toBe(6);
+    it("macOS flow has 7 steps", () => {
+      expect(MACOS_FLOW_STEPS.length).toBe(7);
     });
 
-    it("Windows flow has 5 steps", () => {
-      expect(WINDOWS_FLOW_STEPS.length).toBe(5);
+    it("Windows flow has 6 steps", () => {
+      expect(WINDOWS_FLOW_STEPS.length).toBe(6);
     });
 
     it("macOS includes secure-storage and permissions", () => {
