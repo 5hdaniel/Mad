@@ -61,7 +61,7 @@ def load_backlog() -> list[dict]:
         item_id = item.get('id', '')
         md_file = ITEMS_DIR / f'{item_id}.md'
         md_desc = extract_description(md_file)
-        csv_desc = item.get('description', '').strip()
+        csv_desc = (item.get('description') or '').strip()
         item['description'] = md_desc or csv_desc
 
     return items

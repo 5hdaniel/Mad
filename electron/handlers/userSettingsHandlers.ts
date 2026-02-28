@@ -3,8 +3,9 @@
 // Handles: user preferences, phone type, notifications, user DB checks
 // ============================================
 
-import { ipcMain, Notification } from "electron";
+import { ipcMain, Notification, app } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
+import { execFileSync } from "child_process";
 import databaseService from "../services/databaseService";
 import supabaseService from "../services/supabaseService";
 import logService from "../services/logService";
@@ -293,15 +294,64 @@ export function registerUserSettingsHandlers(): void {
   // ============================================
 
   /**
-   * Check if notifications are supported on this platform
+   * Check if notifications are supported AND authorized on this platform.
+   * On macOS, Notification.isSupported() only checks platform capability (always true).
+   * We also read the actual permission state from the notification center preferences.
    */
   ipcMain.handle(
     "notification:is-supported",
     wrapHandler(async (): Promise<{ success: boolean; supported: boolean }> => {
-      return {
-        success: true,
-        supported: Notification.isSupported(),
-      };
+      if (!Notification.isSupported()) {
+        return { success: true, supported: false };
+      }
+
+      // On macOS, check the actual notification authorization status
+      if (process.platform === "darwin") {
+        try {
+          const bundleId = app.isPackaged
+            ? "com.keeprcompliance.keepr"
+            : "com.github.Electron";
+
+          // Read the ncprefs plist to find our app's auth value
+          // auth: 0 = not determined, 1 = denied, 2 = authorized, 3 = provisional
+          const output = execFileSync(
+            "defaults",
+            ["read", "com.apple.ncprefs", "apps"],
+            { encoding: "utf-8", timeout: 3000 },
+          );
+
+          // Find the entry for our bundle ID and extract auth value
+          const bundleIndex = output.indexOf(`"bundle-id" = "${bundleId}"`);
+          if (bundleIndex !== -1) {
+            const searchRegion = output.substring(bundleIndex, bundleIndex + 500);
+            const authMatch = searchRegion.match(/auth\s*=\s*(\d+)/);
+            if (authMatch) {
+              const authValue = parseInt(authMatch[1], 10);
+              // Only consider authorized (2) or provisional (3) as "enabled"
+              const isAuthorized = authValue >= 2;
+              logService.info(
+                `[Notifications] Permission check: bundleId=${bundleId}, auth=${authValue}, authorized=${isAuthorized}`,
+                "Settings",
+              );
+              return { success: true, supported: isAuthorized };
+            }
+          }
+
+          // App not found in ncprefs — notifications not yet determined
+          logService.info(
+            `[Notifications] App not found in ncprefs (bundleId=${bundleId}), treating as not authorized`,
+            "Settings",
+          );
+          return { success: true, supported: false };
+        } catch (err) {
+          logService.warn(
+            "[Notifications] Failed to read ncprefs, falling back to isSupported()",
+            "Settings",
+          );
+        }
+      }
+
+      return { success: true, supported: Notification.isSupported() };
     }, { module: "Settings" }),
   );
 

@@ -259,7 +259,9 @@ function ContactAssignmentStep({
   // Handle adding a contact (import if external, or just select if already imported)
   const handleImportContact = useCallback(
     async (contact: ExtendedContact): Promise<ExtendedContact> => {
-      const isExternalContact = contact.is_message_derived === true || contact.is_message_derived === 1 || contact.isFromDatabase === false;
+      // Check if contact is already in our DB by matching against the contacts list
+      const isInDatabase = contacts.some(c => c.id === contact.id);
+      const isExternalContact = !isInDatabase;
 
       if (isExternalContact) {
         // External contact: import first, then add to selection
@@ -277,7 +279,7 @@ function ContactAssignmentStep({
           setAddedContactIds((prev) => new Set(prev).add(contact.id));
           // Auto-select the newly imported contact
           onSelectedContactIdsChange([...selectedContactIds, newContact.id]);
-          // Silent refresh to avoid showing loading state (await to ensure it's ready for Step 3)
+          // Silent refresh to pick up newly imported contact in DB
           await onSilentRefreshContacts();
           return newContact;
         }
@@ -290,7 +292,7 @@ function ContactAssignmentStep({
         return contact;
       }
     },
-    [userId, onSilentRefreshContacts, selectedContactIds, onSelectedContactIdsChange]
+    [userId, onSilentRefreshContacts, selectedContactIds, onSelectedContactIdsChange, contacts]
   );
 
   // Handle importing from preview (needs to be after handleImportContact)
@@ -327,7 +329,6 @@ function ContactAssignmentStep({
               selectedIds={selectedContactIds}
               onSelectionChange={handleSelectionChange}
               onImportContact={handleImportContact}
-              showAddButtonForImported={true}
               onAddManually={handleAddManually}
               addedContactIds={addedContactIds}
               isLoading={contactsLoading || externalContactsLoading}
