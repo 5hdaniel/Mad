@@ -46,14 +46,14 @@ export interface PreAuthResult {
  * 6. On network error: check offline grace period
  */
 export async function handlePreAuthValidation(): Promise<PreAuthResult> {
-  console.log("[PRE-AUTH] === Starting pre-DB auth validation (SOC 2 CC6.1) ===");
-  console.log("[PRE-AUTH] Database has NOT been decrypted yet");
+  // console.log("[PRE-AUTH] === Starting pre-DB auth validation (SOC 2 CC6.1) ===");
+  // console.log("[PRE-AUTH] Database has NOT been decrypted yet");
 
   // Step 1: Read session.json (safeStorage decryption, no DB needed)
   const session = await sessionService.loadSession();
 
   if (!session || !session.supabaseTokens) {
-    console.log("[PRE-AUTH] No session found — new user or cleared session. Proceeding to DB init.");
+    // console.log("[PRE-AUTH] No session found — new user or cleared session. Proceeding to DB init.");
     await logService.info(
       "Pre-auth: No session found, proceeding to DB init",
       "PreAuthValidation"
@@ -65,12 +65,12 @@ export async function handlePreAuthValidation(): Promise<PreAuthResult> {
   const isOnline = net.isOnline;
 
   if (!isOnline) {
-    console.log("[PRE-AUTH] Device is OFFLINE — checking grace period...");
+    // console.log("[PRE-AUTH] Device is OFFLINE — checking grace period...");
     return handleOfflineGracePeriod(session.lastServerValidatedAt);
   }
 
   // Step 3: Try server-side validation
-  console.log("[PRE-AUTH] Session found. Validating with Supabase server...");
+  // console.log("[PRE-AUTH] Session found. Validating with Supabase server...");
   try {
     // Initialize Supabase client (env vars only, no DB)
     const client = supabaseService.getClient();
@@ -82,7 +82,7 @@ export async function handlePreAuthValidation(): Promise<PreAuthResult> {
     });
 
     if (setSessionError) {
-      console.log("[PRE-AUTH] ❌ setSession FAILED — token invalid:", setSessionError.message);
+      // console.log("[PRE-AUTH] ❌ setSession FAILED — token invalid:", setSessionError.message);
       await logService.info(
         "Pre-auth: setSession failed, clearing session",
         "PreAuthValidation",
@@ -96,7 +96,7 @@ export async function handlePreAuthValidation(): Promise<PreAuthResult> {
     const { data, error: getUserError } = await client.auth.getUser();
 
     if (getUserError || !data.user) {
-      console.log("[PRE-AUTH] ❌ Server REJECTED session — user revoked/deleted. DB will NOT be decrypted.");
+      // console.log("[PRE-AUTH] ❌ Server REJECTED session — user revoked/deleted. DB will NOT be decrypted.");
       await logService.info(
         "Pre-auth: Server rejected session, clearing",
         "PreAuthValidation",
@@ -107,7 +107,7 @@ export async function handlePreAuthValidation(): Promise<PreAuthResult> {
     }
 
     // Valid! Update lastServerValidatedAt
-    console.log("[PRE-AUTH] ✅ Session VALID — user confirmed by Supabase server. Proceeding to DB decrypt.");
+    // console.log("[PRE-AUTH] ✅ Session VALID — user confirmed by Supabase server. Proceeding to DB decrypt.");
     await sessionService.updateSession({
       lastServerValidatedAt: Date.now(),
     });

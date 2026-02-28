@@ -171,15 +171,15 @@ export function LoadingOrchestrator({
         return;
       }
 
-      console.log("[PRE-AUTH][renderer] Phase 1.5: Calling preValidateSession (DB is NOT decrypted yet)");
+      // console.log("[PRE-AUTH][renderer] Phase 1.5: Calling preValidateSession (DB is NOT decrypted yet)");
       auth.preValidateSession()
         .then((result: { valid: boolean; noSession?: boolean; reason?: string }) => {
           if (cancelled) return;
-          console.log("[PRE-AUTH][renderer] Result:", JSON.stringify(result));
+          // console.log("[PRE-AUTH][renderer] Result:", JSON.stringify(result));
           if (result.valid) {
-            console.log("[PRE-AUTH][renderer] ✅ Auth passed — now proceeding to DB decryption");
+            // console.log("[PRE-AUTH][renderer] ✅ Auth passed — now proceeding to DB decryption");
           } else {
-            console.log("[PRE-AUTH][renderer] ❌ Auth FAILED — DB will NOT be decrypted. Reason:", result.reason);
+            // console.log("[PRE-AUTH][renderer] ❌ Auth FAILED — DB will NOT be decrypted. Reason:", result.reason);
           }
           dispatch({
             type: "AUTH_PRE_VALIDATED",
@@ -190,7 +190,7 @@ export function LoadingOrchestrator({
         })
         .catch((error: Error) => {
           if (cancelled) return;
-          console.log("[PRE-AUTH][renderer] IPC error, proceeding optimistically:", error.message);
+          // console.log("[PRE-AUTH][renderer] IPC error, proceeding optimistically:", error.message);
           // On IPC error, proceed optimistically (don't block app)
           dispatch({
             type: "AUTH_PRE_VALIDATED",
