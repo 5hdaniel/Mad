@@ -97,27 +97,39 @@ class SyncOrchestratorServiceClass {
   }
 
   /**
-   * Read contact source preferences fresh from DB.
-   * Returns { macosContacts: boolean, outlookContacts: boolean }.
-   * TASK-2098: Read at sync time so preferences set in onboarding or settings
-   * take effect on the next sync cycle. Defaults to true (fail-open).
+   * Read all contacts-related preferences in a single IPC call.
+   * Returns import source and contact source preferences together.
+   * TASK-2098: Consolidated to avoid duplicate preferences.get calls per sync.
    */
-  private async getContactSourcePreferences(userId: string): Promise<{ macosContacts: boolean; outlookContacts: boolean }> {
+  private async getContactsSyncPreferences(userId: string): Promise<{
+    importSource: ImportSource;
+    contactSources: { macosContacts: boolean; outlookContacts: boolean };
+  }> {
+    const defaults = {
+      importSource: 'macos-native' as ImportSource,
+      contactSources: { macosContacts: true, outlookContacts: true },
+    };
+
     try {
       const result = await window.api.preferences.get(userId);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const prefs = result.preferences as any;
-      if (result.success && prefs?.contactSources?.direct) {
-        const direct = prefs.contactSources.direct;
-        return {
-          macosContacts: typeof direct.macosContacts === 'boolean' ? direct.macosContacts : true,
-          outlookContacts: typeof direct.outlookContacts === 'boolean' ? direct.outlookContacts : true,
-        };
-      }
+      const prefs = result.preferences as UserPreferences | undefined;
+      if (!result.success || !prefs) return defaults;
+
+      // Extract import source (TASK-1979)
+      const importSource: ImportSource = prefs.messages?.source ?? 'macos-native';
+
+      // Extract contact source preferences (TASK-2098)
+      const direct = prefs.contactSources?.direct;
+      const contactSources = {
+        macosContacts: typeof direct?.macosContacts === 'boolean' ? direct.macosContacts : true,
+        outlookContacts: typeof direct?.outlookContacts === 'boolean' ? direct.outlookContacts : true,
+      };
+
+      return { importSource, contactSources };
     } catch (err) {
-      logger.warn('[SyncOrchestrator] Failed to read contact source preferences, defaulting to all enabled:', err);
+      logger.warn('[SyncOrchestrator] Failed to read contacts sync preferences, using defaults:', err);
+      return defaults;
     }
-    return { macosContacts: true, outlookContacts: true };
   }
 
   /**
@@ -141,12 +153,9 @@ class SyncOrchestratorServiceClass {
       logger.info('[SyncOrchestrator] Starting contacts sync');
       onProgress(0);
 
-      // TASK-1979: Read import source preference to decide which contacts to sync
-      const importSource = await this.getImportSource(userId);
+      // TASK-2098: Read both import source and contact source preferences in one IPC call
+      const { importSource, contactSources: sourcePrefs } = await this.getContactsSyncPreferences(userId);
       logger.info('[SyncOrchestrator] Import source preference:', importSource);
-
-      // TASK-2098: Read contact source preferences (set in onboarding or settings)
-      const sourcePrefs = await this.getContactSourcePreferences(userId);
       logger.info('[SyncOrchestrator] Contact source preferences:', sourcePrefs);
 
       // Phase 1: macOS Contacts sync (macOS only, skip if iphone-sync selected or source disabled)

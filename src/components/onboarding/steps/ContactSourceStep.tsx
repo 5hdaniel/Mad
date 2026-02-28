@@ -12,7 +12,7 @@
  * @module onboarding/steps/ContactSourceStep
  */
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import type {
   OnboardingStep,
   OnboardingStepMeta,
@@ -87,7 +87,7 @@ export const meta: OnboardingStepMeta = {
   platforms: ["macos", "windows"],
   navigation: {
     showBack: true,
-    continueLabel: "Continue",
+    hideContinue: true,
   },
   skip: {
     enabled: true,
@@ -184,11 +184,15 @@ export function Content({
     outlookContacts: true,
   });
 
-  // Filter sources by current platform
-  const visibleSources = SOURCE_OPTIONS.filter((source) => {
-    if (!source.platforms) return true;
-    return source.platforms.includes(isMacOS ? "macos" : "windows");
-  });
+  // Filter sources by current platform (memoized to avoid re-creation every render)
+  const visibleSources = useMemo(
+    () =>
+      SOURCE_OPTIONS.filter((source) => {
+        if (!source.platforms) return true;
+        return source.platforms.includes(isMacOS ? "macos" : "windows");
+      }),
+    [isMacOS]
+  );
 
   const handleToggle = useCallback((key: string) => {
     setSelected((prev) => ({ ...prev, [key]: !prev[key] }));
