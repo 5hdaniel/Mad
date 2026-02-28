@@ -19,6 +19,7 @@ import DataSyncStep from "./DataSyncStep";
 import PermissionsStep from "./PermissionsStep";
 import AppleDriverStep from "./AppleDriverStep";
 import AndroidComingSoonStep from "./AndroidComingSoonStep";
+import ContactSourceStep from "./ContactSourceStep";
 
 /**
  * Central registry of all onboarding steps.
@@ -36,6 +37,7 @@ export const STEP_REGISTRY: Record<string, OnboardingStep> = {
   "permissions": PermissionsStep,
   "apple-driver": AppleDriverStep,
   "android-coming-soon": AndroidComingSoonStep,
+  "contact-source": ContactSourceStep,
 };
 
 /**
