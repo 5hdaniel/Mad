@@ -130,10 +130,25 @@ function ContactAssignmentStep({
     return contact.is_message_derived === 1 || contact.is_message_derived === true;
   };
 
-  // Handle clicking on a contact to view details
+  // Handle clicking on a contact to view details (used in Step 3 only)
   const handleContactClick = useCallback((contact: ExtendedContact) => {
     setPreviewContact(contact);
   }, []);
+
+  // Handle selection change from ContactSearchList (Step 2 toggle behavior)
+  // Cleans up addedContactIds when contacts are deselected
+  const handleSelectionChange = useCallback((newIds: string[]) => {
+    // Find contacts that were removed (deselected)
+    const removedIds = selectedContactIds.filter((id) => !newIds.includes(id));
+    if (removedIds.length > 0) {
+      setAddedContactIds((prev) => {
+        const next = new Set(prev);
+        removedIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    }
+    onSelectedContactIdsChange(newIds);
+  }, [selectedContactIds, onSelectedContactIdsChange]);
 
   // Handle editing a contact from preview
   const handlePreviewEdit = useCallback(() => {
@@ -244,7 +259,9 @@ function ContactAssignmentStep({
   // Handle adding a contact (import if external, or just select if already imported)
   const handleImportContact = useCallback(
     async (contact: ExtendedContact): Promise<ExtendedContact> => {
-      const isExternalContact = contact.is_message_derived === true || contact.is_message_derived === 1 || contact.isFromDatabase === false;
+      // Check if contact is already in our DB by matching against the contacts list
+      const isInDatabase = contacts.some(c => c.id === contact.id);
+      const isExternalContact = !isInDatabase;
 
       if (isExternalContact) {
         // External contact: import first, then add to selection
@@ -262,7 +279,7 @@ function ContactAssignmentStep({
           setAddedContactIds((prev) => new Set(prev).add(contact.id));
           // Auto-select the newly imported contact
           onSelectedContactIdsChange([...selectedContactIds, newContact.id]);
-          // Silent refresh to avoid showing loading state (await to ensure it's ready for Step 3)
+          // Silent refresh to pick up newly imported contact in DB
           await onSilentRefreshContacts();
           return newContact;
         }
@@ -275,7 +292,7 @@ function ContactAssignmentStep({
         return contact;
       }
     },
-    [userId, onSilentRefreshContacts, selectedContactIds, onSelectedContactIdsChange]
+    [userId, onSilentRefreshContacts, selectedContactIds, onSelectedContactIdsChange, contacts]
   );
 
   // Handle importing from preview (needs to be after handleImportContact)
@@ -310,10 +327,8 @@ function ContactAssignmentStep({
               contacts={extendedContacts}
               externalContacts={extendedExternalContacts}
               selectedIds={selectedContactIds}
-              onSelectionChange={onSelectedContactIdsChange}
+              onSelectionChange={handleSelectionChange}
               onImportContact={handleImportContact}
-              showAddButtonForImported={true}
-              onContactClick={handleContactClick}
               onAddManually={handleAddManually}
               addedContactIds={addedContactIds}
               isLoading={contactsLoading || externalContactsLoading}

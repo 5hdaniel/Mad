@@ -211,6 +211,21 @@ export const authBridge = {
     ipcRenderer.invoke("auth:open-in-browser"),
 
   // ==========================================
+  // PRE-DB AUTH VALIDATION (TASK-2086)
+  // ==========================================
+
+  /**
+   * Validate auth session before database decryption (SOC 2 CC6.1).
+   * Checks Supabase auth.getUser() without requiring the encrypted DB.
+   * Returns { valid: true, noSession: true } if no session exists (new user).
+   */
+  preValidateSession: (): Promise<{
+    valid: boolean;
+    noSession?: boolean;
+    reason?: string;
+  }> => ipcRenderer.invoke("pre-auth:validate-session"),
+
+  // ==========================================
   // SESSION MANAGEMENT (TASK-2062)
   // ==========================================
 

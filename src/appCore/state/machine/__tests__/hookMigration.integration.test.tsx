@@ -694,12 +694,13 @@ describe("Hook Migration Integration Tests", () => {
         });
       });
 
-      // Should now be in initializing-db phase
+      // TASK-2086: STORAGE_CHECKED now transitions to validating-auth (pre-DB auth)
+      // before initializing-db
       if (result.current.appState.state.status === "loading") {
-        expect(result.current.appState.state.phase).toBe("initializing-db");
+        expect(result.current.appState.state.phase).toBe("validating-auth");
       }
       expect(result.current.secureStorage.isCheckingSecureStorage).toBe(false);
-      expect(result.current.secureStorage.isInitializingDatabase).toBe(true);
+      expect(result.current.secureStorage.isInitializingDatabase).toBe(false);
     });
 
     it("all hooks handle error state gracefully", () => {

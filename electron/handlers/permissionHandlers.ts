@@ -8,7 +8,6 @@ import { ipcMain, app, shell } from "electron";
 import { promises as fs } from "fs";
 import path from "path";
 import os from "os";
-import { runAppleScript } from "../services/macOSPermissionHelper";
 import logService from "../services/logService";
 
 // Track registration to prevent duplicate handlers
@@ -208,30 +207,10 @@ export function registerPermissionHandlers(): void {
   ipcMain.handle("open-system-settings", async () => {
     try {
       if (process.platform === "darwin") {
-        // Try to open directly to Full Disk Access settings
-        // This uses AppleScript to navigate to the correct panel
-        const script = `
-          tell application "System Settings"
-            activate
-          end tell
-
-          tell application "System Events"
-            tell process "System Settings"
-              try
-                click menu item "Privacy & Security" of menu "View" of menu bar 1
-                delay 0.5
-              end try
-            end tell
-          end tell
-        `;
-
-        // Run AppleScript safely via stdin (no shell injection risk)
-        runAppleScript(script).catch(() => {
-          // Fallback: just open System Settings
-          shell.openExternal(
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
-          );
-        });
+        // Open directly to Full Disk Access via URL scheme (no Accessibility permission needed)
+        await shell.openExternal(
+          "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
+        );
 
         return { success: true };
       }

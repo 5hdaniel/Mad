@@ -18,6 +18,7 @@
  */
 export type LoadingPhase =
   | "checking-storage" // Check if encryption key store exists
+  | "validating-auth" // TASK-2086: Pre-DB auth validation (SOC 2 CC6.1)
   | "awaiting-keychain" // macOS only: Wait for user to confirm keychain access
   | "initializing-db" // Initialize secure storage (may prompt on macOS)
   | "loading-auth" // Check authentication state
@@ -243,6 +244,7 @@ export interface ErrorState {
  */
 export type AppAction =
   | StorageCheckedAction
+  | AuthPreValidatedAction
   | KeychainConfirmedAction
   | DbInitStartedAction
   | DbInitCompleteAction
@@ -268,6 +270,21 @@ export interface StorageCheckedAction {
   hasKeyStore: boolean;
   /** True if running on macOS (needed to determine if keychain confirmation is needed) */
   isMacOS?: boolean;
+}
+
+/**
+ * TASK-2086: Pre-DB auth validation completed (SOC 2 CC6.1).
+ * Dispatched after server-side auth validation BEFORE database decryption.
+ * Ensures data is only accessible to currently authorized users.
+ */
+export interface AuthPreValidatedAction {
+  type: "AUTH_PRE_VALIDATED";
+  /** True if auth validation passed (or no session exists) */
+  valid: boolean;
+  /** True if no session.json exists (new user / cleared session) */
+  noSession?: boolean;
+  /** Reason for auth failure (when valid is false) */
+  reason?: string;
 }
 
 /**

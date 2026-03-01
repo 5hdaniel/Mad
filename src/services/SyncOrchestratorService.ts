@@ -97,6 +97,42 @@ class SyncOrchestratorServiceClass {
   }
 
   /**
+   * Read all contacts-related preferences in a single IPC call.
+   * Returns import source and contact source preferences together.
+   * TASK-2098: Consolidated to avoid duplicate preferences.get calls per sync.
+   */
+  private async getContactsSyncPreferences(userId: string): Promise<{
+    importSource: ImportSource;
+    contactSources: { macosContacts: boolean; outlookContacts: boolean };
+  }> {
+    const defaults = {
+      importSource: 'macos-native' as ImportSource,
+      contactSources: { macosContacts: true, outlookContacts: true },
+    };
+
+    try {
+      const result = await window.api.preferences.get(userId);
+      const prefs = result.preferences as UserPreferences | undefined;
+      if (!result.success || !prefs) return defaults;
+
+      // Extract import source (TASK-1979)
+      const importSource: ImportSource = prefs.messages?.source ?? 'macos-native';
+
+      // Extract contact source preferences (TASK-2098)
+      const direct = prefs.contactSources?.direct;
+      const contactSources = {
+        macosContacts: typeof direct?.macosContacts === 'boolean' ? direct.macosContacts : true,
+        outlookContacts: typeof direct?.outlookContacts === 'boolean' ? direct.outlookContacts : true,
+      };
+
+      return { importSource, contactSources };
+    } catch (err) {
+      logger.warn('[SyncOrchestrator] Failed to read contacts sync preferences, using defaults:', err);
+      return defaults;
+    }
+  }
+
+  /**
    * Initialize canonical sync functions.
    * Each sync function owns its IPC listeners internally.
    * Platform-specific functions are only registered on supported platforms.
@@ -112,66 +148,62 @@ class SyncOrchestratorServiceClass {
 
     // Register contacts sync (macOS Contacts + Outlook contacts on all platforms)
     // TASK-1953: Always register contacts sync so Outlook contacts work on all platforms
+    // TASK-2098: Read contact source preferences to conditionally skip phases
     this.registerSyncFunction('contacts', async (userId, onProgress) => {
       logger.info('[SyncOrchestrator] Starting contacts sync');
       onProgress(0);
 
-      // TASK-1979: Read import source preference to decide which contacts to sync
-      const importSource = await this.getImportSource(userId);
+      // TASK-2098: Read both import source and contact source preferences in one IPC call
+      const { importSource, contactSources: sourcePrefs } = await this.getContactsSyncPreferences(userId);
       logger.info('[SyncOrchestrator] Import source preference:', importSource);
+      logger.info('[SyncOrchestrator] Contact source preferences:', sourcePrefs);
 
-      // Phase 1: macOS Contacts sync (macOS only, skip if iphone-sync selected)
-      if (macOS && importSource !== 'iphone-sync') {
-        // IPC listener OWNED here - not in consumers
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const contactsApi = window.api.contacts as any;
-        const cleanup = contactsApi?.onImportProgress
-          ? contactsApi.onImportProgress((data: { percent: number }) => {
-              onProgress(Math.round(data.percent * 0.5)); // 0-50% for macOS contacts
-            })
-          : () => {};
-
-        try {
-          const result = await window.api.contacts.getAll(userId);
-          if (!result.success) {
-            throw new Error(result.error || 'Contacts sync failed');
-          }
-          logger.info('[SyncOrchestrator] macOS Contacts sync complete');
-        } finally {
-          cleanup();
+      // Phase 1: macOS Contacts sync (macOS only, skip if iphone-sync selected or source disabled)
+      if (macOS && importSource !== 'iphone-sync' && sourcePrefs.macosContacts) {
+        const result = await window.api.contacts.syncExternal(userId);
+        if (!result.success) {
+          throw new Error(result.error || 'macOS Contacts sync failed');
         }
+        logger.info('[SyncOrchestrator] macOS Contacts sync complete');
+      } else if (macOS && !sourcePrefs.macosContacts) {
+        logger.info('[SyncOrchestrator] Skipping macOS Contacts (disabled by user preference)');
       } else if (macOS && importSource === 'iphone-sync') {
         logger.info('[SyncOrchestrator] Skipping macOS Contacts (import source: iphone-sync)');
       }
 
       onProgress(50);
 
-      // Phase 2: Outlook contacts sync (all platforms, non-fatal)
+      // Phase 2: Outlook contacts sync (all platforms, non-fatal, skip if source disabled)
       // TASK-1953: Outlook contacts sync via Graph API
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const contactsApi = window.api.contacts as any;
-        const outlookResult = await contactsApi.syncOutlookContacts(userId);
-        if (outlookResult.success) {
-          logger.info('[SyncOrchestrator] Outlook contacts synced:', outlookResult.count);
-        } else if (outlookResult.reconnectRequired) {
-          logger.warn('[SyncOrchestrator] Outlook contacts need reconnection');
-        } else {
-          logger.warn('[SyncOrchestrator] Outlook contacts sync returned error:', outlookResult.error);
+      // TASK-2098: Skip if user disabled Outlook contacts in onboarding/settings
+      if (!sourcePrefs.outlookContacts) {
+        logger.info('[SyncOrchestrator] Skipping Outlook contacts (disabled by user preference)');
+      } else {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const contactsApi = window.api.contacts as any;
+          const outlookResult = await contactsApi.syncOutlookContacts(userId);
+          if (outlookResult.success) {
+            logger.info('[SyncOrchestrator] Outlook contacts synced:', outlookResult.count);
+          } else if (outlookResult.reconnectRequired) {
+            logger.warn('[SyncOrchestrator] Outlook contacts need reconnection');
+          } else {
+            logger.warn('[SyncOrchestrator] Outlook contacts sync returned error:', outlookResult.error);
+          }
+        } catch (err) {
+          // Don't fail the whole contacts sync if Outlook fails
+          logger.warn('[SyncOrchestrator] Outlook contacts sync failed (non-fatal):', err);
+          Sentry.addBreadcrumb({
+            category: 'sync',
+            message: 'Outlook contacts sync failed (non-fatal)',
+            level: 'warning',
+            data: {
+              syncType: 'contacts',
+              provider: 'outlook',
+              error: err instanceof Error ? err.message : String(err),
+            },
+          });
         }
-      } catch (err) {
-        // Don't fail the whole contacts sync if Outlook fails
-        logger.warn('[SyncOrchestrator] Outlook contacts sync failed (non-fatal):', err);
-        Sentry.addBreadcrumb({
-          category: 'sync',
-          message: 'Outlook contacts sync failed (non-fatal)',
-          level: 'warning',
-          data: {
-            syncType: 'contacts',
-            provider: 'outlook',
-            error: err instanceof Error ? err.message : String(err),
-          },
-        });
       }
 
       onProgress(100);

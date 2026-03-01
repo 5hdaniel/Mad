@@ -260,10 +260,11 @@ export function ContactSearchList({
 
   // Combine, sort, and filter contacts
   const combinedContacts = useMemo((): CombinedContact[] => {
-    // Convert imported contacts - detect external status from is_message_derived
+    // Contacts from DB are never external — they're already imported
+    // (is_message_derived indicates origin, not current status)
     const imported: CombinedContact[] = contacts.map((c) => ({
       contact: c,
-      isExternal: isExternalContact(c),
+      isExternal: false,
     }));
 
     // External contacts - filter out those already imported (by email/phone match)
@@ -377,14 +378,14 @@ export function ContactSearchList({
         onContactClick(combined.contact);
         return;
       }
-      // Otherwise, use selection behavior
-      if (combined.isExternal) {
+      // External contacts: auto-import when selecting, just toggle when deselecting
+      if (combined.isExternal && onImportContact && !selectedIds.includes(combined.contact.id)) {
         handleExternalSelect(combined.contact);
       } else {
         handleSelect(combined.contact.id);
       }
     },
-    [handleSelect, handleExternalSelect, onContactClick]
+    [handleSelect, handleExternalSelect, onContactClick, onImportContact, selectedIds]
   );
 
   // Handle add contact button click - works for all contacts
@@ -658,6 +659,9 @@ export function ContactSearchList({
             const isSelected = selectedIds.includes(combined.contact.id);
             const isImporting = importingIds.has(combined.contact.id);
             const isAdded = addedContactIds.has(combined.contact.id);
+            // Selection mode (audit/edit): checkboxes, no buttons
+            // Preview mode (contacts screen): buttons, no checkboxes
+            const isSelectionMode = !onContactClick;
 
             return (
               <ContactRow
@@ -667,8 +671,8 @@ export function ContactSearchList({
                 isSelected={isSelected}
                 isAdded={isAdded}
                 isAdding={isImporting}
-                showCheckbox={false}
-                showImportButton={!!onImportContact && (combined.isExternal || showAddButtonForImported)}
+                showCheckbox={isSelectionMode}
+                showImportButton={!isSelectionMode && !!onImportContact && (combined.isExternal || showAddButtonForImported)}
                 onSelect={() => handleRowSelect(combined)}
                 onImport={() => handleImportButtonClick(combined)}
                 className={focusedIndex === index ? "ring-2 ring-inset ring-purple-500" : ""}

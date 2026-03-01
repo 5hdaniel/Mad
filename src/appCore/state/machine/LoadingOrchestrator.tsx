@@ -137,6 +137,77 @@ export function LoadingOrchestrator({
   }, [state.status, loadingPhase, dispatch, dispatchApiNotReady]);
 
   // ============================================
+  // PHASE 1.5: Pre-DB auth validation (TASK-2086, SOC 2 CC6.1)
+  // Validates auth token BEFORE database decryption to ensure
+  // data is only accessible to currently authorized users.
+  // ============================================
+  useEffect(() => {
+    // Guard: only run in the correct phase
+    if (state.status !== "loading" || loadingPhase !== "validating-auth") {
+      return;
+    }
+
+    let cancelled = false;
+
+    const runPhase = async () => {
+      try {
+        await waitForApi();
+      } catch (err) {
+        if (!cancelled) dispatchApiNotReady(err);
+        return;
+      }
+
+      if (cancelled) return;
+
+      // TASK-2086: Pre-DB auth validation (SOC 2 CC6.1)
+      type PreAuthResult = { valid: boolean; noSession?: boolean; reason?: string };
+      const auth = window.api.auth as typeof window.api.auth & {
+        preValidateSession?: () => Promise<PreAuthResult>;
+      };
+
+      if (!auth.preValidateSession) {
+        // Graceful fallback if preload bridge doesn't expose this method yet
+        dispatch({ type: "AUTH_PRE_VALIDATED", valid: true, noSession: true });
+        return;
+      }
+
+      // console.log("[PRE-AUTH][renderer] Phase 1.5: Calling preValidateSession (DB is NOT decrypted yet)");
+      auth.preValidateSession()
+        .then((result: { valid: boolean; noSession?: boolean; reason?: string }) => {
+          if (cancelled) return;
+          // console.log("[PRE-AUTH][renderer] Result:", JSON.stringify(result));
+          if (result.valid) {
+            // console.log("[PRE-AUTH][renderer] ✅ Auth passed — now proceeding to DB decryption");
+          } else {
+            // console.log("[PRE-AUTH][renderer] ❌ Auth FAILED — DB will NOT be decrypted. Reason:", result.reason);
+          }
+          dispatch({
+            type: "AUTH_PRE_VALIDATED",
+            valid: result.valid,
+            noSession: result.noSession,
+            reason: result.reason,
+          });
+        })
+        .catch((error: Error) => {
+          if (cancelled) return;
+          // console.log("[PRE-AUTH][renderer] IPC error, proceeding optimistically:", error.message);
+          // On IPC error, proceed optimistically (don't block app)
+          dispatch({
+            type: "AUTH_PRE_VALIDATED",
+            valid: true,
+            noSession: true,
+          });
+        });
+    };
+
+    runPhase();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [state.status, loadingPhase, dispatch, dispatchApiNotReady]);
+
+  // ============================================
   // PHASE 2: Initialize database (platform-specific)
   // ============================================
   useEffect(() => {

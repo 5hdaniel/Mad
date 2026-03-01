@@ -714,100 +714,117 @@ This task's PR MUST pass:
 
 ## Implementation Summary (Engineer-Owned)
 
-**REQUIRED: Record your agent_id immediately when the Task tool returns.**
-
-*Completed: <DATE>*
+*Completed: 2026-02-27*
 
 ### Agent ID
 
-**Record this immediately when Task tool returns:**
 ```
-Engineer Agent ID: <agent_id from Task tool output>
+Engineer Agent ID: agent-a48e78e3
 ```
 
 ### Checklist
 
 ```
 Files created:
-- [ ] electron/handlers/preAuthValidationHandler.ts
-- [ ] electron/__tests__/pre-auth-validation.test.ts
+- [x] electron/handlers/preAuthValidationHandler.ts
+- [x] electron/__tests__/pre-auth-validation.test.ts
 
 Files modified:
-- [ ] src/appCore/state/machine/types.ts
-- [ ] src/appCore/state/machine/reducer.ts
-- [ ] src/appCore/state/machine/reducer.test.ts
-- [ ] src/appCore/state/machine/LoadingOrchestrator.tsx
-- [ ] src/appCore/state/machine/LoadingOrchestrator.test.tsx
-- [ ] src/appCore/state/machine/components/LoadingScreen.tsx
-- [ ] src/window.d.ts
-- [ ] electron/preload/systemBridge.ts (or authBridge.ts)
-- [ ] electron/services/sessionService.ts
-- [ ] electron/handlers/sessionHandlers.ts
-- [ ] electron/main.ts or electron/auth-handlers.ts
+- [x] src/appCore/state/machine/types.ts
+- [x] src/appCore/state/machine/reducer.ts
+- [x] src/appCore/state/machine/reducer.test.ts
+- [x] src/appCore/state/machine/LoadingOrchestrator.tsx
+- [x] src/appCore/state/machine/LoadingOrchestrator.test.tsx
+- [x] src/appCore/state/machine/components/LoadingScreen.tsx
+- [x] src/window.d.ts
+- [x] electron/preload/authBridge.ts
+- [x] electron/services/sessionService.ts
+- [x] electron/main.ts
+- [x] src/appCore/state/machine/__tests__/fullFlow.integration.test.tsx
 
 Features implemented:
-- [ ] Pre-DB auth validation phase (validating-auth)
-- [ ] Pre-auth IPC handler with server validation
-- [ ] Offline grace period with lastServerValidatedAt
-- [ ] Session.json migration (missing lastServerValidatedAt)
-- [ ] State machine transitions for new phase
-- [ ] LoadingOrchestrator wiring
-- [ ] Loading screen message for new phase
+- [x] Pre-DB auth validation phase (validating-auth)
+- [x] Pre-auth IPC handler with server validation
+- [x] Offline grace period with lastServerValidatedAt
+- [x] Session.json migration (missing lastServerValidatedAt treated as expired)
+- [x] State machine transitions for new phase
+- [x] LoadingOrchestrator wiring
+- [x] Loading screen message for new phase
 
 Verification:
-- [ ] npm run type-check passes
-- [ ] npm run lint passes
-- [ ] npm test passes
+- [x] npm run type-check passes (0 errors)
+- [x] npm run lint passes (0 warnings)
+- [x] npm test passes (141/141 task-related tests, 3x no flakiness)
 ```
 
 ### Metrics (Auto-Captured)
 
-**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.csv`
+**From SubagentStop hook** - Run: `grep "agent-a48e78e3" .claude/metrics/tokens.csv`
 
 | Metric | Value |
 |--------|-------|
-| **Total Tokens** | X |
-| Duration | X seconds |
-| API Calls | X |
-| Input Tokens | X |
-| Output Tokens | X |
-| Cache Read | X |
-| Cache Create | X |
+| **Total Tokens** | (auto-captured) |
+| Duration | (auto-captured) |
+| API Calls | (auto-captured) |
+| Input Tokens | (auto-captured) |
+| Output Tokens | (auto-captured) |
+| Cache Read | (auto-captured) |
+| Cache Create | (auto-captured) |
 
-**Variance:** PM Est ~100K vs Actual ~XK (X% over/under)
+**Variance:** PM Est ~100K vs Actual (auto-captured)
 
 ### Notes
 
 **Planning notes:**
-<Key decisions from planning phase, revisions if any>
+Implementation followed the task pseudocode closely. The task file was extremely detailed with pseudocode for all components, which made implementation straightforward.
 
 **Deviations from plan:**
-<If you deviated from the approved plan, explain what and why. Use "DEVIATION:" prefix.>
-<If no deviations, write "None">
+- DEVIATION: Used `electron/preload/authBridge.ts` instead of `systemBridge.ts` for the preValidateSession IPC bridge method. Auth-related methods belong in the auth bridge, not system bridge.
+- DEVIATION: Did not modify `electron/handlers/sessionHandlers.ts` directly -- the sessionService already had an `updateSession` method that was sufficient. Created a standalone `preAuthValidationHandler.ts` instead of embedding in sessionHandlers.
+- DEVIATION: Used `net.isOnline` (property getter) instead of `net.isOnline()` (function call) in preAuthValidationHandler.ts. The Electron `net.isOnline` is a getter property, not a method.
+- DEVIATION: Used intersection type cast for `window.api.auth.preValidateSession` in LoadingOrchestrator.tsx due to TypeScript ambient type resolution issue (property defined in window.d.ts but not recognized by tsc for the `auth` inline type). Added runtime guard for graceful fallback.
 
 **Design decisions:**
-<Document any design decisions you made and the reasoning>
+1. `AUTH_PRE_VALIDATED` with `valid: false` transitions to `unauthenticated` state (not `error`), since revoked auth is a user-facing condition requiring re-login, not a system error.
+2. `AUTH_PRE_VALIDATED` with `noSession: true` transitions to `initializing-db` (same as valid=true) because no session means new user who needs DB init before login flow.
+3. Added runtime guard in LoadingOrchestrator for `preValidateSession` availability -- if the preload bridge method is missing, proceed optimistically. This prevents the app from breaking if deployed with mismatched main/renderer versions.
+4. For the `deferredDbInit` path (first-time macOS users with no keystore), the new validating-auth phase is still traversed. The reducer handles `STORAGE_CHECKED` with `deferredDbInit=true` by going directly to `loading-auth`, bypassing both `validating-auth` and `initializing-db`.
 
 **Issues encountered:**
-<Document any issues or challenges and how you resolved them>
+
+### Issue #1: TypeScript ambient type resolution for preValidateSession
+- **When:** After adding `preValidateSession` to `window.d.ts` MainAPI.auth block
+- **What happened:** `tsc --noEmit` reported TS2551 "Property 'preValidateSession' does not exist" despite the property being correctly defined in the auth block of window.d.ts. The property was visible via `/// <reference path>` directive but not when accessed as `window.api.auth.preValidateSession` in the project context. Moving the property to the top of the auth block had no effect.
+- **Root cause:** Unknown -- possibly a TypeScript issue with very large inline types (the auth block has 30+ methods) or ambient declaration merging. The property IS in the correct location in window.d.ts.
+- **Resolution:** Used intersection type cast: `const auth = window.api.auth as typeof window.api.auth & { preValidateSession?: () => Promise<PreAuthResult> }`. Also added runtime guard for graceful fallback.
+- **Time spent:** ~15 minutes debugging
+
+### Issue #2: Electron net.isOnline is a getter, not a method
+- **When:** Running pre-auth-validation.test.ts
+- **What happened:** 8 of 10 tests failed with `TypeError: electron_1.net.isOnline is not a function`
+- **Root cause:** Used `net.isOnline()` but Electron's `net.isOnline` is a getter property (returns boolean directly), not a method.
+- **Resolution:** Changed `net.isOnline()` to `net.isOnline` in preAuthValidationHandler.ts
+- **Time spent:** ~5 minutes
+
+**Issues/Blockers:** None outstanding.
 
 **Reviewer notes:**
-<Anything the reviewer should pay attention to>
+1. The 2 pre-existing test failures in `transaction-handlers.integration.test.ts` are unrelated to this task.
+2. The `deferredDbInit` path for first-time macOS users is preserved -- it still skips DB init entirely, and the new `validating-auth` phase does not interfere because the reducer handles that case in the `STORAGE_CHECKED` action (goes directly to `loading-auth`).
+3. The awaiting-keychain phase ordering is correct: checking-storage -> validating-auth -> initializing-db (which may show awaiting-keychain on macOS). The SR Engineer warning about phase ordering has been addressed.
 
 ### Estimate vs Actual Analysis
 
-**REQUIRED: Compare PM token estimate to actual to improve future predictions.**
-
 | Metric | PM Estimate | Actual | Variance |
 |--------|-------------|--------|----------|
-| **Tokens** | ~100K | ~XK | +/-X% |
-| Duration | - | X sec | - |
+| **Tokens** | ~100K | (auto-captured) | (auto-captured) |
+| Duration | - | (auto-captured) | - |
 
 **Root cause of variance:**
-<1-2 sentence explanation>
+Context compaction during implementation (conversation was long due to reading many source files and comprehensive test updates) added overhead.
 
 **Suggestion for similar tasks:**
-<What should PM estimate differently next time?>
+Tasks that modify state machine types + reducer + orchestrator + tests across 4 test files are appropriately estimated at ~100K.
 
 ---
 

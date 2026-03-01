@@ -42,7 +42,7 @@ Object.defineProperty(global, 'window', {
   value: {
     api: {
       preferences: { get: jest.fn() },
-      contacts: { getAll: jest.fn(), syncOutlookContacts: jest.fn() },
+      contacts: { syncExternal: jest.fn(), syncOutlookContacts: jest.fn() },
       transactions: { scan: jest.fn() },
       messages: { importMacOSMessages: jest.fn(), onImportProgress: jest.fn() },
       notification: { send: jest.fn() },
@@ -256,6 +256,136 @@ describe('SyncOrchestratorService', () => {
       // Clean up
       syncOrchestrator.cancel();
       if (resolveSync) resolveSync();
+    });
+  });
+
+  // ===========================================================================
+  // TASK-2098: Contact Source Preference Tests
+  // ===========================================================================
+
+  describe('contact source preferences (TASK-2098)', () => {
+    beforeEach(() => {
+      // Add syncExternal and syncOutlookContacts mocks
+      (window as any).api.contacts.syncExternal = jest.fn().mockResolvedValue({ success: true });
+      (window as any).api.contacts.syncOutlookContacts = jest.fn().mockResolvedValue({ success: true, count: 5 });
+      (window as any).api.preferences.get = jest.fn().mockResolvedValue({ success: true, preferences: {} });
+
+      // Mock isMacOS to return true for these tests
+      const platformMock = require('../../utils/platform');
+      platformMock.isMacOS.mockReturnValue(true);
+    });
+
+    it('should skip macOS Contacts phase when macosContacts preference is false', async () => {
+      (window as any).api.preferences.get.mockResolvedValue({
+        success: true,
+        preferences: {
+          contactSources: {
+            direct: { macosContacts: false, outlookContacts: true },
+          },
+        },
+      });
+
+      const platformMock = require('../../utils/platform');
+      platformMock.isMacOS.mockReturnValue(true);
+
+      syncOrchestrator.initializeSyncFunctions();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const syncFn = (syncOrchestrator as any).syncFunctions.get('contacts');
+      expect(syncFn).toBeDefined();
+
+      await syncFn('test-user', jest.fn());
+
+      // macOS Contacts sync should NOT have been called
+      expect((window as any).api.contacts.syncExternal).not.toHaveBeenCalled();
+      // Outlook sync SHOULD have been called
+      expect((window as any).api.contacts.syncOutlookContacts).toHaveBeenCalledWith('test-user');
+    });
+
+    it('should skip Outlook phase when outlookContacts preference is false', async () => {
+      (window as any).api.preferences.get.mockResolvedValue({
+        success: true,
+        preferences: {
+          contactSources: {
+            direct: { macosContacts: true, outlookContacts: false },
+          },
+        },
+      });
+
+      const platformMock = require('../../utils/platform');
+      platformMock.isMacOS.mockReturnValue(true);
+
+      syncOrchestrator.initializeSyncFunctions();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const syncFn = (syncOrchestrator as any).syncFunctions.get('contacts');
+      await syncFn('test-user', jest.fn());
+
+      // Outlook sync should NOT have been called
+      expect((window as any).api.contacts.syncOutlookContacts).not.toHaveBeenCalled();
+      // macOS Contacts SHOULD have been called
+      expect((window as any).api.contacts.syncExternal).toHaveBeenCalledWith('test-user');
+    });
+
+    it('should default to all sources enabled when preferences not set', async () => {
+      (window as any).api.preferences.get.mockResolvedValue({
+        success: true,
+        preferences: {},
+      });
+
+      const platformMock = require('../../utils/platform');
+      platformMock.isMacOS.mockReturnValue(true);
+
+      syncOrchestrator.initializeSyncFunctions();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const syncFn = (syncOrchestrator as any).syncFunctions.get('contacts');
+      await syncFn('test-user', jest.fn());
+
+      // Both should run (fail-open defaults)
+      expect((window as any).api.contacts.syncExternal).toHaveBeenCalledWith('test-user');
+      expect((window as any).api.contacts.syncOutlookContacts).toHaveBeenCalledWith('test-user');
+    });
+
+    it('should default to all sources enabled when preferences.get fails', async () => {
+      (window as any).api.preferences.get.mockRejectedValue(new Error('DB unavailable'));
+
+      const platformMock = require('../../utils/platform');
+      platformMock.isMacOS.mockReturnValue(true);
+
+      syncOrchestrator.initializeSyncFunctions();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const syncFn = (syncOrchestrator as any).syncFunctions.get('contacts');
+      await syncFn('test-user', jest.fn());
+
+      // Both should run (fail-open on error)
+      expect((window as any).api.contacts.syncExternal).toHaveBeenCalledWith('test-user');
+      expect((window as any).api.contacts.syncOutlookContacts).toHaveBeenCalledWith('test-user');
+    });
+
+    it('should make only one preferences.get call per contacts sync (no duplicate IPC)', async () => {
+      (window as any).api.preferences.get.mockResolvedValue({
+        success: true,
+        preferences: {
+          messages: { source: 'macos-native' },
+          contactSources: {
+            direct: { macosContacts: true, outlookContacts: true },
+          },
+        },
+      });
+
+      const platformMock = require('../../utils/platform');
+      platformMock.isMacOS.mockReturnValue(true);
+
+      syncOrchestrator.initializeSyncFunctions();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const syncFn = (syncOrchestrator as any).syncFunctions.get('contacts');
+      await syncFn('test-user', jest.fn());
+
+      // Should only call preferences.get ONCE (consolidated call)
+      expect((window as any).api.preferences.get).toHaveBeenCalledTimes(1);
     });
   });
 

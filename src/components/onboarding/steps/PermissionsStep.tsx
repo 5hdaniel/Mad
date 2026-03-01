@@ -1,8 +1,9 @@
 /**
  * PermissionsStep - macOS Full Disk Access permissions screen
  *
- * This step guides macOS users through granting Full Disk Access permission,
- * which is required to read the Messages database.
+ * Single-screen checklist layout that guides macOS users through granting
+ * Full Disk Access permission. Shows permission status with auto-detection
+ * and provides a button to open System Settings directly.
  *
  * After permission is granted, automatically imports messages from macOS
  * Messages app before continuing to the next onboarding step.
@@ -41,7 +42,7 @@ function ShieldLockIcon({ className }: { className?: string }) {
 }
 
 /**
- * Checkmark icon for completed steps
+ * Checkmark icon for completed items
  */
 function CheckIcon({ className }: { className?: string }) {
   return (
@@ -62,9 +63,9 @@ function CheckIcon({ className }: { className?: string }) {
 }
 
 /**
- * Back arrow icon
+ * Circle icon for pending items
  */
-function BackArrowIcon({ className }: { className?: string }) {
+function CircleIcon({ className }: { className?: string }) {
   return (
     <svg
       className={className}
@@ -72,99 +73,53 @@ function BackArrowIcon({ className }: { className?: string }) {
       stroke="currentColor"
       viewBox="0 0 24 24"
     >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
+      <circle
+        cx="12"
+        cy="12"
+        r="10"
         strokeWidth={2}
-        d="M15 19l-7-7 7-7"
       />
     </svg>
   );
 }
 
 /**
- * Instruction step component for the guided walkthrough
+ * Checklist item for a single permission requirement
  */
-interface InstructionStepProps {
-  stepNumber: number;
-  title: string;
-  description: React.ReactNode;
-  isComplete: boolean;
-  isActive: boolean;
-  onComplete: () => void;
-  onBack?: () => void;
-  actionButton?: React.ReactNode;
-  tip?: string;
+interface ChecklistItemProps {
+  label: string;
+  description: string;
+  isGranted: boolean;
 }
 
-function InstructionStep({
-  stepNumber,
-  title,
-  description,
-  isComplete,
-  isActive,
-  onComplete,
-  onBack,
-  actionButton,
-  tip,
-}: InstructionStepProps) {
-  if (!isActive && !isComplete) {
-    return null;
-  }
-
+function ChecklistItem({ label, description, isGranted }: ChecklistItemProps) {
   return (
     <div
-      className={`border-2 rounded-lg p-4 mb-3 transition-all ${
-        isComplete
+      className={`flex items-start p-3 rounded-lg border-2 transition-all ${
+        isGranted
           ? "bg-green-50 border-green-300"
-          : "bg-yellow-50 border-yellow-300"
+          : "bg-gray-50 border-gray-200"
       }`}
     >
-      <div className="flex items-start mb-4">
-        {isComplete ? (
-          <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
+      <div className="flex-shrink-0 mt-0.5 mr-3">
+        {isGranted ? (
+          <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
             <CheckIcon className="w-4 h-4 text-white" />
           </div>
         ) : (
-          <div className="w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0 text-white font-bold text-sm">
-            {stepNumber}
+          <div className="w-6 h-6 text-gray-400">
+            <CircleIcon className="w-6 h-6" />
           </div>
         )}
-        <div className="flex-1">
-          <h3 className="font-semibold text-gray-900 mb-1">{title}</h3>
-          {!isComplete && (
-            <div className="text-sm text-gray-700">{description}</div>
-          )}
-        </div>
       </div>
-
-      {!isComplete && (
-        <>
-          {actionButton}
-          {tip && (
-            <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-xs text-blue-800">{tip}</p>
-            </div>
-          )}
-          <div className="flex gap-3 mt-3">
-            {onBack && (
-              <button
-                onClick={onBack}
-                className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors flex items-center gap-2"
-              >
-                <BackArrowIcon className="w-4 h-4" />
-                Back
-              </button>
-            )}
-            <button
-              onClick={onComplete}
-              className="flex-1 bg-blue-500 text-white py-2.5 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
-            >
-              Done
-            </button>
-          </div>
-        </>
-      )}
+      <div className="flex-1">
+        <p className={`font-semibold text-sm ${isGranted ? "text-green-800" : "text-gray-900"}`}>
+          {label}
+        </p>
+        <p className={`text-xs mt-0.5 ${isGranted ? "text-green-700" : "text-gray-600"}`}>
+          {description}
+        </p>
+      </div>
     </div>
   );
 }
@@ -172,17 +127,14 @@ function InstructionStep({
 /**
  * PermissionsStep content component
  *
- * Guides macOS users through the Full Disk Access permission flow:
- * 1. Opens System Settings
- * 2. Navigate to Privacy & Security
- * 3. Find Full Disk Access
- * 4. Add the application
- * 5. Restart the app
+ * Single-screen layout with a checklist of permissions and auto-detection.
+ * Users can open System Settings, grant permissions, and see the checklist
+ * update in real-time without navigating between steps.
  */
 function PermissionsStepContent({ context, onAction }: OnboardingStepContentProps) {
-  const [currentInstructionStep, setCurrentInstructionStep] = useState(0);
+  const [hasFullDiskAccess, setHasFullDiskAccess] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
-  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+  const [hasTriggeredFDA, setHasTriggeredFDA] = useState(false);
 
   // Track if we're waiting for DB to be ready before importing
   const [waitingForDb, setWaitingForDb] = useState(false);
@@ -242,15 +194,14 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
     }, 500);
   }, [context.isDatabaseInitialized, context.userId, onAction, requestSync]);
 
-  // Auto-check permissions on mount and periodically after user starts the flow
+  // Check permissions
   const checkPermissions = useCallback(async () => {
     logger.debug('[PermissionsStep] checkPermissions called');
     try {
-      logger.debug('[PermissionsStep] Calling window.api.system.checkPermissions...');
       const result = await window.api.system.checkPermissions();
       logger.debug('[PermissionsStep] checkPermissions result:', result);
       if (result.hasPermission) {
-        // Permissions granted - trigger import first, then continue
+        setHasFullDiskAccess(true);
         logger.debug('[PermissionsStep] Permissions granted, calling triggerImport');
         triggerImport();
       }
@@ -261,22 +212,24 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
     }
   }, [triggerImport]);
 
-  // Initial permission check
+  // Initial permission check on mount
   useEffect(() => {
     checkPermissions();
   }, [checkPermissions]);
 
-  // Periodic check once user has completed the flow
+  // Auto-detect permission grants by polling every 2 seconds
+  // Starts after user has triggered FDA (opened System Settings)
   useEffect(() => {
-    if (completedSteps.has(5)) {
+    if (hasTriggeredFDA && !hasFullDiskAccess) {
       const interval = setInterval(checkPermissions, 2000);
-      const timeout = setTimeout(() => clearInterval(interval), 60000);
+      // Stop polling after 5 minutes to avoid indefinite CPU usage
+      const timeout = setTimeout(() => clearInterval(interval), 300000);
       return () => {
         clearInterval(interval);
         clearTimeout(timeout);
       };
     }
-  }, [completedSteps, checkPermissions]);
+  }, [hasTriggeredFDA, hasFullDiskAccess, checkPermissions]);
 
   // When waiting for DB and it becomes ready, trigger the import
   useEffect(() => {
@@ -287,8 +240,12 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
 
   const handleOpenSystemSettings = async () => {
     try {
+      // Trigger FDA attempt so the app appears in System Settings > Full Disk Access
+      if (!hasTriggeredFDA) {
+        await window.api.system.triggerFullDiskAccess();
+        setHasTriggeredFDA(true);
+      }
       await window.api.system.openSystemSettings();
-      markStepComplete(1);
     } catch (error) {
       logger.error("Error opening system settings:", error);
     }
@@ -298,116 +255,14 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
     logger.debug('[PermissionsStep] Check Permissions button clicked');
     setIsChecking(true);
     try {
-      logger.debug('[PermissionsStep] Calling checkPermissions...');
       await checkPermissions();
-      logger.info('[PermissionsStep] checkPermissions completed');
     } catch (error) {
       logger.error('[PermissionsStep] checkPermissions error:', error);
     }
     setIsChecking(false);
   };
 
-  const markStepComplete = (step: number) => {
-    setCompletedSteps((prev) => new Set([...prev, step]));
-    setCurrentInstructionStep(step);
-  };
-
-  const goBackToStep = (step: number) => {
-    setCompletedSteps((prev) => {
-      const next = new Set(prev);
-      // Remove all steps >= step
-      for (let i = step; i <= 5; i++) {
-        next.delete(i);
-      }
-      return next;
-    });
-    setCurrentInstructionStep(step - 1);
-  };
-
-  // Welcome/intro view (step 0)
-  if (currentInstructionStep === 0) {
-    return (
-      <div className="max-w-2xl mx-auto">
-        <div className="text-center mb-5">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-primary/10 rounded-full mb-4">
-            <ShieldLockIcon className="w-7 h-7 text-primary" />
-          </div>
-          <h1 className="text-xl font-bold text-gray-900 mb-2">
-            Full Disk Access Required
-          </h1>
-          <p className="text-sm text-gray-600">
-            To read your Messages database, macOS requires Full Disk Access
-            permission
-          </p>
-        </div>
-
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-5">
-          <h2 className="font-semibold text-gray-900 mb-3">
-            Why is this needed?
-          </h2>
-          <div className="flex items-start text-sm text-gray-700">
-            <svg
-              className="w-5 h-5 text-green-600 mr-2 flex-shrink-0 mt-0.5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-              />
-            </svg>
-            <span>
-              <strong>Full Disk Access</strong> allows the app to read your
-              iMessage database. This is a macOS security requirement - we
-              cannot access messages without it.
-            </span>
-          </div>
-        </div>
-
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-5">
-          <div className="flex items-start">
-            <svg
-              className="w-5 h-5 text-gray-500 mr-2 flex-shrink-0 mt-0.5"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-            >
-              <path
-                fillRule="evenodd"
-                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                clipRule="evenodd"
-              />
-            </svg>
-            <p className="text-sm text-gray-600">
-              <strong>Your privacy matters.</strong> All data stays on your
-              device. We never upload or share your messages.
-            </p>
-          </div>
-        </div>
-
-        <button
-          onClick={async () => {
-            // Trigger Full Disk Access attempt to make app appear in System Settings
-            try {
-              await window.api.system.triggerFullDiskAccess();
-            } catch (error) {
-              logger.error("Error triggering full disk access:", error);
-            }
-            setCurrentInstructionStep(1);
-          }}
-          className="w-full bg-primary text-white py-2.5 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
-        >
-          Grant Permission
-        </button>
-      </div>
-    );
-  }
-
-  // Check if we're importing - show simple "Setting up" view
-  // Progress will be shown on the dashboard via SyncStatusIndicator
-  // Use orchestrator's isRunning state (triggered by requestSync call above)
+  // Show "Setting up" view while import is running
   if (isRunning) {
     return (
       <div className="max-w-2xl mx-auto">
@@ -448,170 +303,125 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
     );
   }
 
-  // Guided instruction flow
+  // Single-screen checklist layout
   return (
     <div className="max-w-2xl mx-auto">
+      {/* Header */}
       <div className="text-center mb-5">
-        <div className="inline-flex items-center justify-center w-12 h-12 bg-primary/10 rounded-full mb-3">
-          <svg
-            className="w-6 h-6 text-primary"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-            />
-          </svg>
+        <div className="inline-flex items-center justify-center w-14 h-14 bg-primary/10 rounded-full mb-4">
+          <ShieldLockIcon className="w-7 h-7 text-primary" />
         </div>
         <h1 className="text-xl font-bold text-gray-900 mb-2">
-          Grant Full Disk Access
+          Permissions Required
         </h1>
-        <p className="text-sm text-gray-600">Follow these steps to grant permission</p>
+        <p className="text-sm text-gray-600">
+          Keepr needs the following macOS permission to work properly.
+          Grant it in System Settings, then come back here.
+        </p>
       </div>
 
-      {/* Step 1: Open System Settings */}
-      <InstructionStep
-        stepNumber={1}
-        title={
-          completedSteps.has(1)
-            ? "System Settings Opened"
-            : "Open System Settings"
-        }
-        description="Click the button below to open System Settings"
-        isComplete={completedSteps.has(1)}
-        isActive={currentInstructionStep >= 1}
-        onComplete={() => markStepComplete(1)}
-        actionButton={
-          <div className="space-y-2">
-            <button
-              onClick={handleOpenSystemSettings}
-              className="w-full bg-primary text-white py-2.5 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
-            >
-              Open System Settings
-            </button>
-            <button
-              onClick={() => markStepComplete(1)}
-              className="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg text-sm hover:bg-gray-200 transition-colors"
-            >
-              I've Opened Settings Manually
-            </button>
+      {/* Permission Checklist */}
+      <div className="space-y-3 mb-5">
+        <ChecklistItem
+          label="Full Disk Access"
+          description={
+            hasFullDiskAccess
+              ? "Granted -- Keepr can read your Messages database"
+              : "Required to read your iMessage database for auditing"
+          }
+          isGranted={hasFullDiskAccess}
+        />
+      </div>
+
+      {/* Action Area */}
+      {!hasFullDiskAccess ? (
+        <div className="space-y-3">
+          {/* Info box */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="flex items-start">
+              <svg
+                className="w-5 h-5 text-blue-600 mr-2 flex-shrink-0 mt-0.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <div className="text-sm text-blue-800">
+                <p className="font-semibold mb-1">How to grant permission:</p>
+                <ol className="list-decimal list-inside space-y-1 text-xs">
+                  <li>Click "Open System Settings" below</li>
+                  <li>Click the <strong>+</strong> button and add <strong>Keepr</strong> from Applications</li>
+                  <li>If Keepr is already listed, toggle it on</li>
+                  <li>macOS will ask you to quit and reopen the app</li>
+                </ol>
+              </div>
+            </div>
           </div>
-        }
-      />
 
-      {/* Step 2: Find Privacy & Security */}
-      <InstructionStep
-        stepNumber={2}
-        title={
-          completedSteps.has(2)
-            ? "Privacy & Security Found"
-            : "Find Privacy & Security"
-        }
-        description={
-          <p>
-            In the System Settings window, look in the{" "}
-            <strong>left sidebar</strong> for{" "}
-            <strong>"Privacy & Security"</strong> and click on it
-          </p>
-        }
-        isComplete={completedSteps.has(2)}
-        isActive={completedSteps.has(1) && currentInstructionStep >= 1}
-        onComplete={() => markStepComplete(2)}
-        onBack={() => goBackToStep(1)}
-      />
+          {/* Primary action button */}
+          <button
+            onClick={handleOpenSystemSettings}
+            className="w-full bg-primary text-white py-2.5 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+          >
+            Open System Settings
+          </button>
 
-      {/* Step 3: Find Full Disk Access */}
-      <InstructionStep
-        stepNumber={3}
-        title={
-          completedSteps.has(3)
-            ? "Full Disk Access Found"
-            : "Find Full Disk Access"
-        }
-        description={
-          <p>
-            In the Privacy & Security section, scroll down and click on{" "}
-            <strong>"Full Disk Access"</strong>
-          </p>
-        }
-        isComplete={completedSteps.has(3)}
-        isActive={completedSteps.has(2) && currentInstructionStep >= 2}
-        onComplete={() => markStepComplete(3)}
-        onBack={() => goBackToStep(2)}
-      />
+          {/* Manual check button */}
+          <button
+            onClick={handleManualCheck}
+            disabled={isChecking}
+            className="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors disabled:opacity-50"
+          >
+            {isChecking ? "Checking..." : "Check Permissions"}
+          </button>
 
-      {/* Step 4: Click Plus Button */}
-      <InstructionStep
-        stepNumber={4}
-        title={
-          completedSteps.has(4) ? "Plus Button Clicked" : "Click the + Button"
-        }
-        description={
-          <p>
-            Click the <strong>+ (plus)</strong> button to add a new application
-            to the Full Disk Access list
-          </p>
-        }
-        isComplete={completedSteps.has(4)}
-        isActive={completedSteps.has(3) && currentInstructionStep >= 3}
-        onComplete={() => markStepComplete(4)}
-        onBack={() => goBackToStep(3)}
-      />
-
-      {/* Step 5: Select App */}
-      <InstructionStep
-        stepNumber={5}
-        title={
-          completedSteps.has(5)
-            ? "App Selected"
-            : "Select Keepr"
-        }
-        description={
-          <p>
-            In the file selector, navigate to <strong>Applications</strong> and
-            select <strong>Keepr.app</strong>
-          </p>
-        }
-        isComplete={completedSteps.has(5)}
-        isActive={completedSteps.has(4) && currentInstructionStep >= 4}
-        onComplete={() => markStepComplete(5)}
-        onBack={() => goBackToStep(4)}
-        tip="If you can't find Keepr in the Applications folder, you may need to copy it from the DMG file first."
-      />
-
-      {/* Final: All steps complete - show "Almost Done" while waiting for permission check */}
-      {completedSteps.has(5) && !isRunning && (
+          {hasTriggeredFDA && (
+            <p className="text-center text-xs text-gray-500">
+              We are checking for permission changes automatically.
+            </p>
+          )}
+        </div>
+      ) : (
+        /* Permission granted state */
         <div className="bg-green-50 border-2 border-green-300 rounded-lg p-4 text-center">
           <div className="inline-flex items-center justify-center w-12 h-12 bg-green-500 rounded-full mb-3">
             <CheckIcon className="w-6 h-6 text-white" />
           </div>
           <h3 className="text-lg font-bold text-gray-900 mb-2">
-            Almost Done!
+            Permission Granted
           </h3>
-          <p className="text-sm text-gray-700 mb-2">
-            macOS will prompt you to <strong>"Quit & Reopen"</strong> the app.
+          <p className="text-sm text-gray-700">
+            Full Disk Access is enabled. Setting up your account...
           </p>
-          <p className="text-xs text-gray-600 mb-3">
-            Click "Quit & Reopen" when prompted, or restart the app manually.
-            We're checking for permissions automatically.
-          </p>
-          <button
-            onClick={handleManualCheck}
-            disabled={isChecking}
-            className="bg-primary text-white py-2 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors disabled:opacity-50"
-          >
-            {isChecking ? "Checking..." : "Check Permissions"}
-          </button>
         </div>
       )}
 
-      <p className="text-center text-xs text-gray-500 mt-6">
-        All data is stored locally on your device.
-      </p>
+      {/* Privacy note */}
+      <div className="mt-5 bg-gray-50 border border-gray-200 rounded-lg p-3">
+        <div className="flex items-start">
+          <svg
+            className="w-5 h-5 text-gray-500 mr-2 flex-shrink-0 mt-0.5"
+            fill="currentColor"
+            viewBox="0 0 20 20"
+          >
+            <path
+              fillRule="evenodd"
+              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+              clipRule="evenodd"
+            />
+          </svg>
+          <p className="text-sm text-gray-600">
+            <strong>Your privacy matters.</strong> All data stays on your
+            device. We never upload or share your messages.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

@@ -23,6 +23,9 @@ interface SessionData {
     access_token: string;
     refresh_token: string;
   };
+  // TASK-2086: Timestamp of last successful server-side auth validation (SOC 2 CC6.1)
+  // Used for offline grace period -- if missing, treated as "never validated"
+  lastServerValidatedAt?: number;
 }
 
 /**

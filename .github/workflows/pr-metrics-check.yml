@@ -15,6 +15,7 @@ name: PR Metrics Validation
 # - Dependabot PRs are exempt (automated dependency updates)
 # - PRs with [skip-metrics] in title are exempt (use sparingly)
 # - PRs with 'hotfix', 'quick-fix', or 'ci-fix' labels are exempt
+# - Integration branch PRs (int/*) are exempt (combine multiple tasks)
 
 on:
   pull_request:
@@ -46,9 +47,15 @@ jobs:
 
       - name: Check for skip flag
         id: skip-check
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          HEAD_REF: ${{ github.head_ref }}
         run: |
-          PR_TITLE="${{ github.event.pull_request.title }}"
-          if [[ "$PR_TITLE" == *"[skip-metrics]"* ]]; then
+          if [[ "$HEAD_REF" == int/* ]]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "skip_reason=integration branch" >> $GITHUB_OUTPUT
+            echo "::notice::Metrics validation skipped - integration branch (int/*) combines multiple tasks"
+          elif [[ "$PR_TITLE" == *"[skip-metrics]"* ]]; then
             echo "skip=true" >> $GITHUB_OUTPUT
             echo "skip_reason=title flag" >> $GITHUB_OUTPUT
             echo "::warning::Metrics validation skipped via [skip-metrics] flag"
