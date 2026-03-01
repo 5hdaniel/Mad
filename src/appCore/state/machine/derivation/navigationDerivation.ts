@@ -234,6 +234,12 @@ function mapOnboardingStepToAppStep(step: OnboardingStep): AppStep {
       return "phone-type-selection";
     case "secure-storage":
       return "keychain-explanation";
+    case "account-verification":
+    case "contact-source":
+    case "data-sync":
+      // These steps are rendered by the queue-based OnboardingFlow,
+      // not legacy routes. Map to loading as a fallback.
+      return "loading";
     case "email-connect":
       return "email-onboarding";
     case "permissions":

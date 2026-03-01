@@ -79,6 +79,9 @@ export const meta: OnboardingStepMeta = {
   // Only show if email not yet connected (or unknown during loading)
   // Using !== true means: show if false OR undefined (unknown state)
   shouldShow: (context) => context.emailConnected !== true,
+  // Queue predicates
+  isApplicable: () => true,
+  isComplete: (context) => context.emailConnected === true,
 };
 
 // =============================================================================

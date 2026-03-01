@@ -445,6 +445,9 @@ const permissionsStep: OnboardingStep = {
     // Only show if permissions not yet granted (or unknown during loading)
     // Using !== true means: show if false OR undefined (unknown state)
     shouldShow: (context) => context.permissionsGranted !== true,
+    // Queue predicates
+    isApplicable: () => true, // Platform filtering via flow array (macOS only)
+    isComplete: (context) => context.permissionsGranted === true,
   },
   Content: PermissionsStepContent,
 };

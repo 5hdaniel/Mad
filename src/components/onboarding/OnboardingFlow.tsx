@@ -1,14 +1,15 @@
 /**
  * OnboardingFlow Component
  *
- * Main orchestrator component for the new onboarding architecture.
- * Uses useOnboardingFlow hook and integrates with existing app state machine.
+ * Main orchestrator component for onboarding.
+ * Uses the queue-based architecture (useOnboardingQueue) as the single source
+ * of truth for step ordering and progression.
  *
  * @module onboarding/OnboardingFlow
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useOnboardingFlow, type OnboardingAppState } from "./hooks";
+import { useOnboardingQueue, type OnboardingAppState } from "./queue/useOnboardingQueue";
 import { OnboardingShell } from "./shell/OnboardingShell";
 import { ProgressIndicator } from "./shell/ProgressIndicator";
 import { NavigationButtons } from "./shell/NavigationButtons";
@@ -35,52 +36,34 @@ export interface OnboardingFlowProps {
 /**
  * Main onboarding orchestrator component.
  *
- * Uses the new step architecture while integrating with existing app state.
+ * Uses the queue-based step architecture for single-source-of-truth ordering.
  * Maps StepActions to existing app handlers and manages navigation.
- *
- * @example
- * ```tsx
- * <OnboardingFlow app={app} />
- * ```
  */
 export function OnboardingFlow({ app }: OnboardingFlowProps) {
   // Access state machine state when feature flag is enabled
   const machineState = useOptionalMachineState();
 
   // LOADING GATE: Don't render until state machine has finished loading
-  // This prevents race conditions where async checks haven't completed yet,
-  // causing selectors to return defensive defaults that hide steps incorrectly.
-  // By waiting for "loading" to complete, all state is settled before we render.
   if (!machineState || machineState.state.status === "loading") {
     return null;
   }
 
   // Early exit if state machine is already in "ready" state
-  // This handles the race condition where the async dispatch in completeEmailOnboarding()
-  // completes and sets status to "ready", but we're still mounted because goToNext()
-  // called the no-op goToStep("dashboard") before the dispatch finished.
-  // By returning null here, we let AppRouter render the Dashboard instead of showing
-  // a white screen while waiting for navigation that never comes.
   if (machineState.state.status === "ready") {
     return null;
   }
 
   // Track if we're waiting for DB init to complete after clicking Continue on secure-storage
-  // This handles the async nature of macOS keychain initialization for first-time users
   const [waitingForDbInit, setWaitingForDbInit] = useState(false);
 
   // Track if user has been verified in local DB (set by account-verification step)
   const [isUserVerifiedInLocalDb, setIsUserVerifiedInLocalDb] = useState(false);
 
   // Build app state, deriving from state machine when available
-  // This fixes the flicker issue where legacy app properties have stale data during initial load
   const appState: OnboardingAppState = useMemo(() => {
     if (machineState) {
-      // State machine enabled - derive from state machine for consistent state
       const { state } = machineState;
       const isDatabaseInitialized = selectIsDatabaseInitialized(state);
-      // Use nullable selectors - returns undefined during loading instead of defensive true/false
-      // This ensures steps show correctly when state is unknown
       const emailConnected = selectHasEmailConnectedNullable(state);
       const hasPermissions = selectHasPermissionsNullable(state);
 
@@ -144,7 +127,7 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
     };
   }, [machineState, app, isUserVerifiedInLocalDb]);
 
-  // Action handler that maps to existing app handlers
+  // Action handler that maps StepActions to existing app handlers
   const handleAction = useCallback(
     (action: StepAction) => {
       switch (action.type) {
@@ -169,8 +152,6 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
           break;
 
         case "SECURE_STORAGE_SETUP":
-          // For first-time macOS users, DB init is async and happens during keychain setup
-          // Set waitingForDbInit to true so we can show loading state and wait for completion
           if (!appState.isDatabaseInitialized) {
             setWaitingForDbInit(true);
           }
@@ -210,37 +191,28 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
           break;
 
         case "USER_VERIFIED_IN_LOCAL_DB":
-          // Update local state - this triggers step filtering to hide account-verification
           setIsUserVerifiedInLocalDb(true);
           break;
 
         case "NAVIGATE_NEXT":
         case "NAVIGATE_BACK":
         case "ONBOARDING_COMPLETE":
-          // These are handled by the hook's internal navigation
+          // These are handled by the queue hook's internal navigation
           break;
       }
     },
-    [app]
+    [app, appState.isDatabaseInitialized]
   );
 
-  // Handle onboarding completion - called when last visible step completes.
-  // Dispatches state machine actions for any steps that were hidden (already
-  // satisfied) but never formally completed. This bridges the UI flow (which
-  // hides satisfied steps) and the state machine (which requires explicit
-  // ONBOARDING_STEP_COMPLETE dispatches to transition to "ready").
-  //
-  // BUG FIX: Previously called app.goToStep("dashboard") which is a no-op
-  // since navigation is derived from the state machine (commit 2485bc5d).
-  // This caused returning users with email already connected to get stuck
-  // on the data-sync step permanently (SPRINT-070 regression).
+  // Handle onboarding completion - dispatches ONBOARDING_QUEUE_DONE
   const handleComplete = useCallback(() => {
     if (!machineState || machineState.state.status !== "onboarding") return;
 
     const { state, dispatch } = machineState;
+
+    // Dispatch any remaining step completions for the state machine
     const completed = state.completedSteps;
 
-    // phone-type: if already selected but not in completedSteps
     if (!completed.includes("phone-type") && appState.phoneType) {
       dispatch({
         type: "ONBOARDING_STEP_COMPLETE",
@@ -249,7 +221,6 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
       });
     }
 
-    // apple-driver (Windows + iPhone): if driver set up but not completed
     if (
       state.platform.isWindows &&
       appState.phoneType === "iphone" &&
@@ -262,7 +233,6 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
       });
     }
 
-    // permissions (macOS): if granted but not completed
     if (
       state.platform.isMacOS &&
       appState.hasPermissions === true &&
@@ -274,78 +244,54 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
       });
     }
 
-    // email-connect: the critical blocking step. Dispatch synchronously to
-    // unblock the state machine, then persist to API fire-and-forget so
-    // it doesn't recur on next login.
+    // email-connect: the critical blocking step
     if (!completed.includes("email-connect")) {
       dispatch({
         type: "ONBOARDING_STEP_COMPLETE",
         step: "email-connect",
       });
-      // Persist to API (async, fire-and-forget)
       app.handleEmailOnboardingComplete().catch((err: unknown) => {
         logger.error("[OnboardingFlow] Failed to persist email onboarding:", err);
       });
     }
+
+    // Finally dispatch queue done to transition to ready
+    dispatch({ type: "ONBOARDING_QUEUE_DONE" });
   }, [machineState, appState, app]);
 
-  // Map app's currentStep to onboarding step ID
-  // This ensures the OnboardingFlow starts at the correct step based on routing
-  // Memoized with empty deps to only compute once at mount
-  const initialStepId = useMemo(() => {
-    const stepMap: Record<string, string> = {
-      "phone-type-selection": "phone-type",
-      "keychain-explanation": "secure-storage",
-      "email-onboarding": "email-connect",
-      "permissions": "permissions",
-      "apple-driver-setup": "apple-driver",
-      "android-coming-soon": "android-coming-soon",
-    };
-    return stepMap[app.currentStep];
-  }, []); // Empty deps = mount only
-
-  // Initialize the hook
-  const flow = useOnboardingFlow({
+  // Initialize the queue hook
+  const queue = useOnboardingQueue({
     appState,
     onAction: handleAction,
     onComplete: handleComplete,
-    initialStepId,
   });
 
   const {
-    currentStep,
-    steps,
+    visibleEntries,
+    activeEntry,
+    activeStep,
     currentIndex,
+    isComplete,
     context,
     goToNext,
     goToPrevious,
-    handleAction: flowHandleAction,
+    handleAction: queueHandleAction,
     handleSkip,
     isFirstStep,
     canSkip,
     isNextDisabled,
-  } = flow;
+  } = queue;
 
-  // Action handler - flowHandleAction already calls onAction (which is handleAction)
-  // so we just need to call flowHandleAction, not both
-  // NOTE: This hook MUST be before any early return to follow React's rules of hooks
+  // Action handler - queueHandleAction already calls onAction (which is handleAction)
   const handleStepAction = useCallback(
     (action: StepAction) => {
-      // flowHandleAction calls onAction internally, then handles navigation
-      flowHandleAction(action);
+      queueHandleAction(action);
     },
-    [flowHandleAction]
+    [queueHandleAction]
   );
 
   // When DB becomes initialized while we're waiting (after SECURE_STORAGE_SETUP),
-  // clear the waiting flag. Navigation is handled automatically by useOnboardingFlow's
-  // step-filtering effect - when secure-storage gets filtered out (isDatabaseInitialized=true),
-  // it auto-advances to the next visible step.
-  //
-  // BUG FIX: Previously this effect called goToNext(), but that caused double-advancement:
-  // 1. Step-filtering effect: secure-storage filtered out → advances to email-connect
-  // 2. This effect: goToNext() → advances from email-connect to permissions
-  // Result: email-connect step was skipped entirely.
+  // clear the waiting flag. The queue auto-rebuilds when context changes.
   useEffect(() => {
     if (waitingForDbInit && appState.isDatabaseInitialized) {
       logStateChange('OnboardingFlow', 'DB_INIT_COMPLETE - clearing waitingForDbInit', {
@@ -353,65 +299,46 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
         isDatabaseInitialized: appState.isDatabaseInitialized,
         emailConnected: appState.emailConnected,
         hasPermissions: appState.hasPermissions,
-        currentStepId: currentStep?.meta?.id,
-        visibleSteps: steps.map(s => s.meta.id),
+        activeStepId: activeStep?.meta?.id,
+        visibleSteps: visibleEntries.map(e => e.step.meta.id),
       });
       setWaitingForDbInit(false);
-      // Note: Do NOT call goToNext() here - step filtering in useOnboardingFlow
-      // already handles navigation when secure-storage is filtered out
     }
-  }, [waitingForDbInit, appState.isDatabaseInitialized, appState.emailConnected, appState.hasPermissions, currentStep, steps]);
+  }, [waitingForDbInit, appState.isDatabaseInitialized, appState.emailConnected, appState.hasPermissions, activeStep, visibleEntries]);
 
-  // When all steps are filtered out (returning user with everything complete),
-  // navigate to dashboard. This handles the case where a returning user's data
-  // loads and all onboarding steps are already complete.
-  // Track if we've already navigated to prevent infinite loops
+  // When queue reports complete but state machine is still in onboarding,
+  // trigger completion
   const hasNavigatedRef = useRef(false);
-
   useEffect(() => {
-    if (steps.length === 0 && !hasNavigatedRef.current && machineState) {
+    if (isComplete && !hasNavigatedRef.current && machineState) {
       hasNavigatedRef.current = true;
-      const { state, dispatch } = machineState;
-      if (state.status === "onboarding") {
-        // All steps filtered out means all conditions are met.
-        // Dispatch email-connect completion if needed (the blocking step).
-        // BUG FIX: app.goToStep("dashboard") is a no-op.
-        if (!state.completedSteps.includes("email-connect")) {
-          dispatch({
-            type: "ONBOARDING_STEP_COMPLETE",
-            step: "email-connect",
-          });
-          app.handleEmailOnboardingComplete().catch((err: unknown) => {
-            logger.error("[OnboardingFlow] Failed to persist email onboarding:", err);
-          });
-        }
-      }
+      handleComplete();
     }
-  }, [steps.length, machineState, app]);
+  }, [isComplete, machineState, handleComplete]);
 
-  // CRITICAL: Return null immediately when no steps are visible
-  // This prevents the flicker where onboarding screens briefly appear
-  // for returning users who have completed all onboarding steps.
-  // The useEffect above handles navigation to dashboard.
-  if (steps.length === 0 || !currentStep) {
+  // Return null when no steps or no active step - prevents flicker
+  if (visibleEntries.length === 0 || !activeEntry || !activeStep) {
     return null;
   }
 
   // Get navigation config with defaults
-  const navigation = currentStep.meta.navigation ?? {};
+  const navigation = activeStep.meta.navigation ?? {};
   const showBack = navigation.showBack !== false && !isFirstStep;
   const showNext = navigation.hideContinue !== true;
 
   return (
     <OnboardingShell
       progressSlot={
-        <ProgressIndicator steps={steps} currentIndex={currentIndex} />
+        <ProgressIndicator
+          steps={visibleEntries.map(e => e.step)}
+          currentIndex={currentIndex}
+        />
       }
       navigationSlot={
         <NavigationButtons
           showBack={showBack}
           showNext={showNext}
-          skipConfig={canSkip ? currentStep.meta.skip : undefined}
+          skipConfig={canSkip ? activeStep.meta.skip : undefined}
           nextLabel={navigation.continueLabel}
           backLabel={navigation.backLabel}
           nextDisabled={isNextDisabled}
@@ -421,11 +348,11 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
         />
       }
     >
-      <currentStep.Content
-        key={currentStep.meta.id}
+      <activeStep.Content
+        key={activeStep.meta.id}
         context={context}
         onAction={handleStepAction}
-        isLoading={currentStep.meta.id === 'secure-storage' && waitingForDbInit}
+        isLoading={activeStep.meta.id === 'secure-storage' && waitingForDbInit}
       />
     </OnboardingShell>
   );

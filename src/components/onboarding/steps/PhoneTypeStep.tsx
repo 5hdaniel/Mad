@@ -103,6 +103,9 @@ export const meta: OnboardingStepMeta = {
   isStepComplete: (context) => context.phoneType !== null,
   // Only show if phone type not yet selected
   shouldShow: (context) => context.phoneType === null,
+  // Queue predicates
+  isApplicable: () => true,
+  isComplete: (context) => context.phoneType !== null,
 };
 
 // =============================================================================

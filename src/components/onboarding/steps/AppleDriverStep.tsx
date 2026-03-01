@@ -92,6 +92,9 @@ export const meta: OnboardingStepMeta = {
   // Complete when driver is installed or skipped
   isStepComplete: (context) =>
     context.driverSetupComplete || context.driverSkipped,
+  // Queue predicates
+  isApplicable: (context) => context.phoneType === "iphone",
+  isComplete: (context) => context.driverSetupComplete || context.driverSkipped,
 };
 
 // =============================================================================

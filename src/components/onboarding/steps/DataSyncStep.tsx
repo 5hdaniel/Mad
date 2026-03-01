@@ -59,6 +59,9 @@ export const meta: OnboardingStepMeta = {
     );
     return shouldShow;
   },
+  // Queue predicates
+  isApplicable: (context) => context.isDatabaseInitialized && context.userId !== null,
+  isComplete: () => false, // Auto-completes on render
 };
 
 // =============================================================================

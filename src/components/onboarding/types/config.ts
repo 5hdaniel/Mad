@@ -139,4 +139,27 @@ export interface OnboardingStepMeta {
    * @returns true if the step can be completed, false to prevent advancement
    */
   canProceed?: (context: OnboardingContext) => boolean;
+
+  /**
+   * Queue predicate: determines if this step is applicable given current context.
+   * Platform filtering is handled by the flow arrays (macOS vs Windows).
+   * Use this for runtime conditions (e.g., DB not ready, phone type not selected).
+   *
+   * If not provided, the step is always applicable.
+   *
+   * @param context - The current onboarding context
+   * @returns true if the step should be included in the queue
+   */
+  isApplicable?: (context: OnboardingContext) => boolean;
+
+  /**
+   * Queue predicate: determines if this step has been completed.
+   * Used by the queue builder to mark steps as complete and find the active step.
+   *
+   * If not provided, the step is never auto-completed (user must interact).
+   *
+   * @param context - The current onboarding context
+   * @returns true if the step is complete
+   */
+  isComplete?: (context: OnboardingContext) => boolean;
 }

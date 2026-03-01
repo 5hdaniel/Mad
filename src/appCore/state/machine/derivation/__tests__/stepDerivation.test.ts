@@ -94,7 +94,10 @@ describe("STEP_ORDER", () => {
     expect(STEP_ORDER).toEqual([
       "phone-type",
       "secure-storage",
+      "account-verification",
+      "contact-source",
       "email-connect",
+      "data-sync",
       "permissions",
       "apple-driver",
       "android-coming-soon",
@@ -232,6 +235,48 @@ describe("shouldSkipStep", () => {
     });
   });
 
+  describe("account-verification step", () => {
+    it("should never be skipped on macOS", () => {
+      expect(shouldSkipStep("account-verification", createMacOSPlatform(), "iphone")).toBe(
+        false
+      );
+    });
+
+    it("should never be skipped on Windows", () => {
+      expect(shouldSkipStep("account-verification", createWindowsPlatform(), "iphone")).toBe(
+        false
+      );
+    });
+  });
+
+  describe("contact-source step", () => {
+    it("should never be skipped on macOS", () => {
+      expect(shouldSkipStep("contact-source", createMacOSPlatform(), "iphone")).toBe(
+        false
+      );
+    });
+
+    it("should never be skipped on Windows", () => {
+      expect(shouldSkipStep("contact-source", createWindowsPlatform(), "iphone")).toBe(
+        false
+      );
+    });
+  });
+
+  describe("data-sync step", () => {
+    it("should never be skipped on macOS", () => {
+      expect(shouldSkipStep("data-sync", createMacOSPlatform(), "iphone")).toBe(
+        false
+      );
+    });
+
+    it("should never be skipped on Windows", () => {
+      expect(shouldSkipStep("data-sync", createWindowsPlatform(), "iphone")).toBe(
+        false
+      );
+    });
+  });
+
   describe("android-coming-soon step", () => {
     it("should be skipped when phone type is iphone", () => {
       expect(
@@ -268,14 +313,32 @@ describe("deriveNextStep", () => {
       );
     });
 
-    it("should go from secure-storage to email-connect", () => {
+    it("should go from secure-storage to account-verification", () => {
       expect(deriveNextStep("secure-storage", platform, phoneType)).toBe(
+        "account-verification"
+      );
+    });
+
+    it("should go from account-verification to contact-source", () => {
+      expect(deriveNextStep("account-verification", platform, phoneType)).toBe(
+        "contact-source"
+      );
+    });
+
+    it("should go from contact-source to email-connect", () => {
+      expect(deriveNextStep("contact-source", platform, phoneType)).toBe(
         "email-connect"
       );
     });
 
-    it("should go from email-connect to permissions", () => {
+    it("should go from email-connect to data-sync", () => {
       expect(deriveNextStep("email-connect", platform, phoneType)).toBe(
+        "data-sync"
+      );
+    });
+
+    it("should go from data-sync to permissions", () => {
+      expect(deriveNextStep("data-sync", platform, phoneType)).toBe(
         "permissions"
       );
     });
@@ -289,9 +352,7 @@ describe("deriveNextStep", () => {
     const platform = createMacOSPlatform();
     const phoneType = "android" as const;
 
-    it("should go from phone-type to android-coming-soon", () => {
-      // secure-storage is not skipped on macOS, but after email-connect
-      // we should eventually reach android-coming-soon
+    it("should go from phone-type to secure-storage", () => {
       expect(deriveNextStep("phone-type", platform, phoneType)).toBe(
         "secure-storage"
       );
@@ -315,14 +376,32 @@ describe("deriveNextStep", () => {
     const platform = createWindowsPlatform();
     const phoneType = "iphone" as const;
 
-    it("should skip secure-storage and go from phone-type to email-connect", () => {
+    it("should skip secure-storage and go from phone-type to account-verification", () => {
       expect(deriveNextStep("phone-type", platform, phoneType)).toBe(
+        "account-verification"
+      );
+    });
+
+    it("should go from account-verification to contact-source", () => {
+      expect(deriveNextStep("account-verification", platform, phoneType)).toBe(
+        "contact-source"
+      );
+    });
+
+    it("should go from contact-source to email-connect", () => {
+      expect(deriveNextStep("contact-source", platform, phoneType)).toBe(
         "email-connect"
       );
     });
 
-    it("should skip permissions and go from email-connect to apple-driver", () => {
+    it("should go from email-connect to data-sync", () => {
       expect(deriveNextStep("email-connect", platform, phoneType)).toBe(
+        "data-sync"
+      );
+    });
+
+    it("should skip permissions and go from data-sync to apple-driver", () => {
+      expect(deriveNextStep("data-sync", platform, phoneType)).toBe(
         "apple-driver"
       );
     });
@@ -336,14 +415,14 @@ describe("deriveNextStep", () => {
     const platform = createWindowsPlatform();
     const phoneType = "android" as const;
 
-    it("should go from phone-type to email-connect", () => {
+    it("should go from phone-type to account-verification", () => {
       expect(deriveNextStep("phone-type", platform, phoneType)).toBe(
-        "email-connect"
+        "account-verification"
       );
     });
 
-    it("should skip apple-driver and go to android-coming-soon", () => {
-      expect(deriveNextStep("email-connect", platform, phoneType)).toBe(
+    it("should skip apple-driver and go from data-sync to android-coming-soon", () => {
+      expect(deriveNextStep("data-sync", platform, phoneType)).toBe(
         "android-coming-soon"
       );
     });
@@ -456,42 +535,42 @@ describe("isStepComplete", () => {
 
 describe("getTotalSteps", () => {
   describe("macOS with iPhone", () => {
-    it("should return 4 steps", () => {
-      // phone-type, secure-storage, email-connect, permissions
-      expect(getTotalSteps(createMacOSPlatform(), "iphone")).toBe(4);
+    it("should return 7 steps", () => {
+      // phone-type, secure-storage, account-verification, contact-source, email-connect, data-sync, permissions
+      expect(getTotalSteps(createMacOSPlatform(), "iphone")).toBe(7);
     });
   });
 
   describe("macOS with Android", () => {
-    it("should return 5 steps", () => {
-      // phone-type, secure-storage, email-connect, permissions, android-coming-soon
-      expect(getTotalSteps(createMacOSPlatform(), "android")).toBe(5);
+    it("should return 8 steps", () => {
+      // phone-type, secure-storage, account-verification, contact-source, email-connect, data-sync, permissions, android-coming-soon
+      expect(getTotalSteps(createMacOSPlatform(), "android")).toBe(8);
     });
   });
 
   describe("Windows with iPhone", () => {
-    it("should return 3 steps", () => {
-      // phone-type, email-connect, apple-driver
-      expect(getTotalSteps(createWindowsPlatform(), "iphone")).toBe(3);
+    it("should return 6 steps", () => {
+      // phone-type, account-verification, contact-source, email-connect, data-sync, apple-driver
+      expect(getTotalSteps(createWindowsPlatform(), "iphone")).toBe(6);
     });
   });
 
   describe("Windows with Android", () => {
-    it("should return 3 steps", () => {
-      // phone-type, email-connect, android-coming-soon
-      expect(getTotalSteps(createWindowsPlatform(), "android")).toBe(3);
+    it("should return 6 steps", () => {
+      // phone-type, account-verification, contact-source, email-connect, data-sync, android-coming-soon
+      expect(getTotalSteps(createWindowsPlatform(), "android")).toBe(6);
     });
   });
 
   describe("null phone type", () => {
-    it("should return 4 for macOS (no android-coming-soon, no apple-driver)", () => {
-      // phone-type, secure-storage, email-connect, permissions
-      expect(getTotalSteps(createMacOSPlatform(), null)).toBe(4);
+    it("should return 7 for macOS (no android-coming-soon, no apple-driver)", () => {
+      // phone-type, secure-storage, account-verification, contact-source, email-connect, data-sync, permissions
+      expect(getTotalSteps(createMacOSPlatform(), null)).toBe(7);
     });
 
-    it("should return 2 for Windows (no platform-specific steps)", () => {
-      // phone-type, email-connect
-      expect(getTotalSteps(createWindowsPlatform(), null)).toBe(2);
+    it("should return 5 for Windows (no platform-specific steps)", () => {
+      // phone-type, account-verification, contact-source, email-connect, data-sync
+      expect(getTotalSteps(createWindowsPlatform(), null)).toBe(5);
     });
   });
 });
@@ -515,14 +594,20 @@ describe("getCurrentStepNumber", () => {
       );
     });
 
-    it("should return 3 for email-connect", () => {
-      expect(getCurrentStepNumber("email-connect", platform, phoneType)).toBe(
+    it("should return 3 for account-verification", () => {
+      expect(getCurrentStepNumber("account-verification", platform, phoneType)).toBe(
         3
       );
     });
 
-    it("should return 4 for permissions", () => {
-      expect(getCurrentStepNumber("permissions", platform, phoneType)).toBe(4);
+    it("should return 5 for email-connect", () => {
+      expect(getCurrentStepNumber("email-connect", platform, phoneType)).toBe(
+        5
+      );
+    });
+
+    it("should return 7 for permissions", () => {
+      expect(getCurrentStepNumber("permissions", platform, phoneType)).toBe(7);
     });
   });
 
@@ -534,14 +619,20 @@ describe("getCurrentStepNumber", () => {
       expect(getCurrentStepNumber("phone-type", platform, phoneType)).toBe(1);
     });
 
-    it("should return 2 for email-connect (secure-storage skipped)", () => {
-      expect(getCurrentStepNumber("email-connect", platform, phoneType)).toBe(
+    it("should return 2 for account-verification", () => {
+      expect(getCurrentStepNumber("account-verification", platform, phoneType)).toBe(
         2
       );
     });
 
-    it("should return 3 for apple-driver", () => {
-      expect(getCurrentStepNumber("apple-driver", platform, phoneType)).toBe(3);
+    it("should return 4 for email-connect (secure-storage skipped)", () => {
+      expect(getCurrentStepNumber("email-connect", platform, phoneType)).toBe(
+        4
+      );
+    });
+
+    it("should return 6 for apple-driver", () => {
+      expect(getCurrentStepNumber("apple-driver", platform, phoneType)).toBe(6);
     });
 
     it("should return 0 for secure-storage (skipped step)", () => {

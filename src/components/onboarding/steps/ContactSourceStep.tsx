@@ -97,6 +97,9 @@ export const meta: OnboardingStepMeta = {
   // Step is complete once the user has proceeded (either by selecting sources or skipping)
   isStepComplete: () => false,
   canProceed: () => true,
+  // Queue predicates
+  isApplicable: () => true,
+  isComplete: () => false, // User must interact
 };
 
 // =============================================================================

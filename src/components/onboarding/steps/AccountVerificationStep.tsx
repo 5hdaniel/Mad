@@ -59,6 +59,9 @@ export const meta: OnboardingStepMeta = {
     );
     return shouldShow;
   },
+  // Queue predicates
+  isApplicable: (context) => context.isDatabaseInitialized,
+  isComplete: (context) => context.isUserVerifiedInLocalDb,
 };
 
 // =============================================================================

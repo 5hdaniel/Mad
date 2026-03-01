@@ -558,6 +558,32 @@ export function appStateReducer(
       });
     }
 
+    case "ONBOARDING_QUEUE_DONE": {
+      // Queue-driven completion: the onboarding queue reports all steps are done.
+      // Transition to ready state with userData derived from onboarding state.
+      if (state.status !== "onboarding") {
+        return state;
+      }
+
+      const phoneType: "iphone" | "android" | null =
+        state.selectedPhoneType ?? null;
+
+      const userData: UserData = {
+        phoneType,
+        hasCompletedEmailOnboarding: true,
+        hasEmailConnected: state.hasEmailConnected ?? false,
+        needsDriverSetup: false,
+        hasPermissions: state.hasPermissions ?? !state.platform.isMacOS,
+      };
+
+      return {
+        status: "ready",
+        user: state.user,
+        platform: state.platform,
+        userData,
+      };
+    }
+
     case "EMAIL_CONNECTED": {
       if (state.status === "onboarding") {
         // Update onboarding state to track that email was connected
