@@ -59,6 +59,10 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
   // Track if user has been verified in local DB (set by account-verification step)
   const [isUserVerifiedInLocalDb, setIsUserVerifiedInLocalDb] = useState(false);
 
+  // Track if user explicitly skipped email connection or driver setup
+  const [emailSkipped, setEmailSkipped] = useState(false);
+  const [driverSkipped, setDriverSkipped] = useState(false);
+
   // Build app state, deriving from state machine when available
   const appState: OnboardingAppState = useMemo(() => {
     if (machineState) {
@@ -105,6 +109,8 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
         isDatabaseInitialized,
         userId: app.currentUser?.id ?? null,
         isUserVerifiedInLocalDb,
+        emailSkipped,
+        driverSkipped,
       };
     }
 
@@ -124,8 +130,10 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
       isDatabaseInitialized: app.isDatabaseInitialized,
       userId: app.currentUser?.id ?? null,
       isUserVerifiedInLocalDb,
+      emailSkipped,
+      driverSkipped,
     };
-  }, [machineState, app, isUserVerifiedInLocalDb]);
+  }, [machineState, app, isUserVerifiedInLocalDb, emailSkipped, driverSkipped]);
 
   // Action handler that maps StepActions to existing app handlers
   const handleAction = useCallback(
@@ -144,6 +152,7 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
           break;
 
         case "EMAIL_SKIPPED":
+          setEmailSkipped(true);
           app.handleEmailOnboardingSkip();
           break;
 
@@ -163,6 +172,7 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
           break;
 
         case "DRIVER_SKIPPED":
+          setDriverSkipped(true);
           app.handleAppleDriverSetupSkip();
           break;
 
@@ -205,59 +215,17 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
   );
 
   // Handle onboarding completion - dispatches ONBOARDING_QUEUE_DONE
+  // The queue tracks step completion via isComplete predicates, so we only
+  // need to dispatch the single ONBOARDING_QUEUE_DONE action to transition
+  // the state machine from "onboarding" to "ready".
   const handleComplete = useCallback(() => {
     if (!machineState || machineState.state.status !== "onboarding") return;
 
-    const { state, dispatch } = machineState;
+    const { dispatch } = machineState;
 
-    // Dispatch any remaining step completions for the state machine
-    const completed = state.completedSteps;
-
-    if (!completed.includes("phone-type") && appState.phoneType) {
-      dispatch({
-        type: "ONBOARDING_STEP_COMPLETE",
-        step: "phone-type",
-        phoneType: appState.phoneType,
-      });
-    }
-
-    if (
-      state.platform.isWindows &&
-      appState.phoneType === "iphone" &&
-      !completed.includes("apple-driver") &&
-      appState.driverSetupComplete
-    ) {
-      dispatch({
-        type: "ONBOARDING_STEP_COMPLETE",
-        step: "apple-driver",
-      });
-    }
-
-    if (
-      state.platform.isMacOS &&
-      appState.hasPermissions === true &&
-      !completed.includes("permissions")
-    ) {
-      dispatch({
-        type: "ONBOARDING_STEP_COMPLETE",
-        step: "permissions",
-      });
-    }
-
-    // email-connect: the critical blocking step
-    if (!completed.includes("email-connect")) {
-      dispatch({
-        type: "ONBOARDING_STEP_COMPLETE",
-        step: "email-connect",
-      });
-      app.handleEmailOnboardingComplete().catch((err: unknown) => {
-        logger.error("[OnboardingFlow] Failed to persist email onboarding:", err);
-      });
-    }
-
-    // Finally dispatch queue done to transition to ready
+    logger.info("[OnboardingFlow] Queue complete — dispatching ONBOARDING_QUEUE_DONE");
     dispatch({ type: "ONBOARDING_QUEUE_DONE" });
-  }, [machineState, appState, app]);
+  }, [machineState]);
 
   // Initialize the queue hook
   const queue = useOnboardingQueue({

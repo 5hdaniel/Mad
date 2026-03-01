@@ -81,7 +81,7 @@ export const meta: OnboardingStepMeta = {
   shouldShow: (context) => context.emailConnected !== true,
   // Queue predicates
   isApplicable: () => true,
-  isComplete: (context) => context.emailConnected === true,
+  isComplete: (context) => context.emailConnected === true || context.emailSkipped,
 };
 
 // =============================================================================

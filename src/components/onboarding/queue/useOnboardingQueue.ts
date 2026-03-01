@@ -7,9 +7,9 @@
  * @module onboarding/queue/useOnboardingQueue
  */
 
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useState } from "react";
 import { usePlatform } from "../../../contexts/PlatformContext";
-import type { OnboardingContext, StepAction, OnboardingStepId, Platform } from "../types";
+import type { OnboardingContext, StepAction, Platform } from "../types";
 import type { StepQueueEntry } from "./types";
 import { buildOnboardingQueue, isQueueComplete, getActiveEntry, getVisibleEntries } from "./buildQueue";
 import logger from "../../../utils/logger";
@@ -36,6 +36,10 @@ export interface OnboardingAppState {
   isDatabaseInitialized: boolean;
   userId: string | null;
   isUserVerifiedInLocalDb: boolean;
+  /** Whether user explicitly skipped email connection */
+  emailSkipped: boolean;
+  /** Whether user explicitly skipped driver setup */
+  driverSkipped: boolean;
 }
 
 export interface UseOnboardingQueueOptions {
@@ -91,6 +95,10 @@ export function useOnboardingQueue(
   const { appState, onAction, onComplete } = options;
   const { platform } = usePlatform();
 
+  // Back navigation override: when set, forces this index as the active step
+  // instead of the queue's computed active step. Reset on any forward action.
+  const [backOverrideIndex, setBackOverrideIndex] = useState<number | null>(null);
+
   // Build context from app state
   const context: OnboardingContext = useMemo(
     () => ({
@@ -98,8 +106,8 @@ export function useOnboardingQueue(
       phoneType: appState.phoneType,
       emailConnected: appState.emailConnected,
       connectedEmail: appState.connectedEmail,
-      emailSkipped: false,
-      driverSkipped: false,
+      emailSkipped: appState.emailSkipped,
+      driverSkipped: appState.driverSkipped,
       driverSetupComplete: appState.driverSetupComplete,
       permissionsGranted: appState.hasPermissions,
       termsAccepted: appState.termsAccepted,
@@ -121,8 +129,16 @@ export function useOnboardingQueue(
 
   // Derived values
   const visibleEntries = useMemo(() => getVisibleEntries(queue), [queue]);
-  const activeEntry = useMemo(() => getActiveEntry(queue), [queue]);
+  const queueActiveEntry = useMemo(() => getActiveEntry(queue), [queue]);
   const queueComplete = useMemo(() => isQueueComplete(queue), [queue]);
+
+  // Resolve the effective active entry: back override takes precedence
+  const activeEntry = useMemo(() => {
+    if (backOverrideIndex !== null && backOverrideIndex >= 0 && backOverrideIndex < visibleEntries.length) {
+      return visibleEntries[backOverrideIndex];
+    }
+    return queueActiveEntry;
+  }, [backOverrideIndex, visibleEntries, queueActiveEntry]);
 
   const currentIndex = useMemo(() => {
     if (!activeEntry) return visibleEntries.length - 1; // Queue complete, point to last
@@ -143,22 +159,18 @@ export function useOnboardingQueue(
     return true;
   }, [activeEntry, context]);
 
-  // Check if current step is complete
-  const isStepComplete = useMemo(() => {
-    if (!activeEntry) return false;
-    if (activeEntry.step.meta.isStepComplete) {
-      return activeEntry.step.meta.isStepComplete(context);
-    }
-    return false;
-  }, [activeEntry, context]);
-
   const canSkip = activeEntry?.step.meta.skip?.enabled ?? false;
-  const isNextDisabled =
-    !canProceed ||
-    (!isStepComplete && activeEntry?.step.meta.isStepComplete !== undefined);
+
+  // isNextDisabled: only use canProceed. The isStepComplete predicate is for
+  // the queue builder (auto-marking steps done), not for button state.
+  // Steps that need to block the Continue button define canProceed for that.
+  const isNextDisabled = !canProceed;
 
   // Navigation
   const goToNext = useCallback(() => {
+    // Clear any back override — we're moving forward
+    setBackOverrideIndex(null);
+
     // Queue-based navigation: the queue rebuilds on context change.
     // When context changes (e.g. phone type selected), the queue auto-advances.
     // goToNext is for explicit user navigation (Continue button).
@@ -170,16 +182,22 @@ export function useOnboardingQueue(
   }, [currentIndex, visibleEntries.length, onComplete]);
 
   const goToPrevious = useCallback(() => {
-    // Back navigation: the queue doesn't natively support going back
-    // since it's a pure function of context. We'd need to "undo" context changes.
-    // For now, this is a no-op placeholder - back navigation is handled by
-    // the flow hook's step tracking (which we preserve in OnboardingFlow).
-    logger.debug("[Queue] goToPrevious called - handled by flow navigation");
-  }, []);
+    // Navigate back by overriding the active index to the previous visible step.
+    // The queue itself is still a pure function of context — we just display
+    // an earlier step until the user moves forward again.
+    if (currentIndex > 0) {
+      setBackOverrideIndex(currentIndex - 1);
+    }
+  }, [currentIndex]);
 
   // Action handler
   const handleAction = useCallback(
     (action: StepAction) => {
+      // Any forward action clears the back override
+      if (action.type !== "NAVIGATE_BACK") {
+        setBackOverrideIndex(null);
+      }
+
       // Dispatch to parent first (updates app state → context → queue rebuilds)
       onAction?.(action);
 
@@ -192,14 +210,13 @@ export function useOnboardingQueue(
         case "DRIVER_SETUP_COMPLETE":
         case "DRIVER_SKIPPED":
         case "TERMS_ACCEPTED":
-        case "NAVIGATE_NEXT":
         case "CONTINUE_EMAIL_ONLY":
           // These actions update context, which triggers queue rebuild.
           // The active step changes automatically when context changes.
-          // For actions that don't change context (NAVIGATE_NEXT), call goToNext.
-          if (action.type === "NAVIGATE_NEXT") {
-            goToNext();
-          }
+          break;
+
+        case "NAVIGATE_NEXT":
+          goToNext();
           break;
 
         case "SECURE_STORAGE_SETUP":
