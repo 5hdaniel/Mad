@@ -34,11 +34,27 @@ export interface AuditPreferences {
 }
 
 /**
+ * Contact source preferences for direct (non-email) contact import (TASK-2098)
+ */
+export interface ContactSourceDirectPreferences {
+  macosContacts?: boolean;
+  outlookContacts?: boolean;
+}
+
+/**
+ * Contact source preferences (TASK-2098)
+ */
+export interface ContactSourcePreferences {
+  direct?: ContactSourceDirectPreferences;
+}
+
+/**
  * User preferences object
  */
 export interface UserPreferences {
   messages?: MessagesPreferences;
   audit?: AuditPreferences;
+  contactSources?: ContactSourcePreferences;
   [key: string]: unknown;
 }
 

@@ -30,6 +30,7 @@ export type OnboardingStepId =
   | "driver-setup"
   | "apple-driver"
   | "email-connect"
+  | "contact-source"
   | "data-sync"
   | "permissions"
   | "complete";
@@ -40,5 +41,5 @@ export type OnboardingStepId =
  */
 export type SkippableStepId = Extract<
   OnboardingStepId,
-  "email-connect" | "driver-setup"
+  "email-connect" | "driver-setup" | "contact-source"
 >;
