@@ -27,7 +27,10 @@ import type { AppState, OnboardingStep, PlatformInfo } from "../types";
 export const STEP_ORDER: readonly OnboardingStep[] = [
   "phone-type",
   "secure-storage",
+  "account-verification",
+  "contact-source",
   "email-connect",
+  "data-sync",
   "permissions",
   "apple-driver",
   "android-coming-soon",
@@ -97,7 +100,10 @@ export function shouldSkipStep(
 
     // These steps are always shown
     case "phone-type":
+    case "account-verification":
+    case "contact-source":
     case "email-connect":
+    case "data-sync":
       return false;
 
     default:

@@ -94,29 +94,19 @@ interface ChecklistItemProps {
 
 function ChecklistItem({ label, description, isGranted }: ChecklistItemProps) {
   return (
-    <div
-      className={`flex items-start p-3 rounded-lg border-2 transition-all ${
-        isGranted
-          ? "bg-green-50 border-green-300"
-          : "bg-gray-50 border-gray-200"
-      }`}
-    >
-      <div className="flex-shrink-0 mt-0.5 mr-3">
-        {isGranted ? (
-          <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
-            <CheckIcon className="w-4 h-4 text-white" />
-          </div>
-        ) : (
-          <div className="w-6 h-6 text-gray-400">
-            <CircleIcon className="w-6 h-6" />
-          </div>
-        )}
-      </div>
-      <div className="flex-1">
-        <p className={`font-semibold text-sm ${isGranted ? "text-green-800" : "text-gray-900"}`}>
+    <div className="flex items-center gap-3">
+      {isGranted ? (
+        <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+          <CheckIcon className="w-4 h-4 text-white" />
+        </div>
+      ) : (
+        <div className="w-2 h-2 rounded-full bg-gray-400 flex-shrink-0 ml-2" />
+      )}
+      <div>
+        <p className={`text-sm font-medium ${isGranted ? "text-green-800" : "text-gray-900"}`}>
           {label}
         </p>
-        <p className={`text-xs mt-0.5 ${isGranted ? "text-green-700" : "text-gray-600"}`}>
+        <p className={`text-xs ${isGranted ? "text-green-600" : "text-gray-500"}`}>
           {description}
         </p>
       </div>
@@ -134,6 +124,7 @@ function ChecklistItem({ label, description, isGranted }: ChecklistItemProps) {
 function PermissionsStepContent({ context, onAction }: OnboardingStepContentProps) {
   const [hasFullDiskAccess, setHasFullDiskAccess] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
+  const [checkFailed, setCheckFailed] = useState(false);
   const [hasTriggeredFDA, setHasTriggeredFDA] = useState(false);
 
   // Track if we're waiting for DB to be ready before importing
@@ -254,10 +245,15 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
   const handleManualCheck = async () => {
     logger.debug('[PermissionsStep] Check Permissions button clicked');
     setIsChecking(true);
+    setCheckFailed(false);
     try {
-      await checkPermissions();
+      const granted = await checkPermissions();
+      if (!granted) {
+        setCheckFailed(true);
+      }
     } catch (error) {
       logger.error('[PermissionsStep] checkPermissions error:', error);
+      setCheckFailed(true);
     }
     setIsChecking(false);
   };
@@ -320,6 +316,29 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
         </p>
       </div>
 
+      {/* Privacy note */}
+      <div className="mb-5 bg-blue-50 border border-blue-200 rounded-lg p-3">
+        <div className="flex items-start">
+          <svg
+            className="w-5 h-5 text-blue-600 mr-2 flex-shrink-0 mt-0.5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          <p className="text-sm text-blue-800">
+            <strong>Your privacy matters.</strong> All data stays on your
+            device. We never upload or share your messages.
+          </p>
+        </div>
+      </div>
+
       {/* Permission Checklist */}
       <div className="space-y-3 mb-5">
         <ChecklistItem
@@ -356,9 +375,12 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
                 <p className="font-semibold mb-1">How to grant permission:</p>
                 <ol className="list-decimal list-inside space-y-1 text-xs">
                   <li>Click "Open System Settings" below</li>
-                  <li>Click the <strong>+</strong> button and add <strong>Keepr</strong> from Applications</li>
-                  <li>If Keepr is already listed, toggle it on</li>
-                  <li>macOS will ask you to quit and reopen the app</li>
+                  <li>Click the <strong>+</strong> button</li>
+                </ol>
+                <p className="text-xs text-blue-700 mt-1 ml-4 italic">Note: If Keepr is already listed, just toggle it on.</p>
+                <ol start={3} className="list-decimal list-inside space-y-1 text-xs mt-1">
+                  <li>Find <strong>Keepr</strong> in the Applications list, select it, and click <strong>Open</strong></li>
+                  <li>When macOS asks to Quit &amp; Reopen, click <strong>Later</strong></li>
                 </ol>
               </div>
             </div>
@@ -367,8 +389,12 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
           {/* Primary action button */}
           <button
             onClick={handleOpenSystemSettings}
-            className="w-full bg-primary text-white py-2.5 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+            className="w-full bg-primary text-white py-2.5 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
           >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
             Open System Settings
           </button>
 
@@ -381,7 +407,13 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
             {isChecking ? "Checking..." : "Check Permissions"}
           </button>
 
-          {hasTriggeredFDA && (
+          {checkFailed && (
+            <p className="text-center text-xs text-red-600 font-medium">
+              Permission not detected. Please follow the steps above and try again.
+            </p>
+          )}
+
+          {hasTriggeredFDA && !checkFailed && (
             <p className="text-center text-xs text-gray-500">
               We are checking for permission changes automatically.
             </p>
@@ -402,26 +434,6 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
         </div>
       )}
 
-      {/* Privacy note */}
-      <div className="mt-5 bg-gray-50 border border-gray-200 rounded-lg p-3">
-        <div className="flex items-start">
-          <svg
-            className="w-5 h-5 text-gray-500 mr-2 flex-shrink-0 mt-0.5"
-            fill="currentColor"
-            viewBox="0 0 20 20"
-          >
-            <path
-              fillRule="evenodd"
-              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-              clipRule="evenodd"
-            />
-          </svg>
-          <p className="text-sm text-gray-600">
-            <strong>Your privacy matters.</strong> All data stays on your
-            device. We never upload or share your messages.
-          </p>
-        </div>
-      </div>
     </div>
   );
 }
@@ -445,6 +457,9 @@ const permissionsStep: OnboardingStep = {
     // Only show if permissions not yet granted (or unknown during loading)
     // Using !== true means: show if false OR undefined (unknown state)
     shouldShow: (context) => context.permissionsGranted !== true,
+    // Queue predicates
+    isApplicable: () => true, // Platform filtering via flow array (macOS only)
+    isComplete: (context) => context.permissionsGranted === true,
   },
   Content: PermissionsStepContent,
 };

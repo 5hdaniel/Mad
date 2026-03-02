@@ -18,7 +18,10 @@ import logger from '../../../../utils/logger';
 const STEP_ORDER: OnboardingStep[] = [
   "phone-type",
   "secure-storage",
+  "account-verification",
+  "contact-source",
   "email-connect",
+  "data-sync",
   "permissions",
   "apple-driver",
   "android-coming-soon",
