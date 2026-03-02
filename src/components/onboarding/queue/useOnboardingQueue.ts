@@ -83,6 +83,8 @@ export interface UseOnboardingQueueReturn {
   isLastStep: boolean;
   /** Total visible steps */
   totalSteps: number;
+  /** Whether viewing a past step via back navigation */
+  isViewingPastStep: boolean;
 }
 
 // =============================================================================
@@ -170,6 +172,7 @@ export function useOnboardingQueue(
 
   const isFirstStep = currentIndex === 0;
   const isLastStep = currentIndex === visibleEntries.length - 1;
+  const isViewingPastStep = backOverrideIndex !== null;
 
   // Check if current step can proceed
   const canProceed = useMemo(() => {
@@ -337,5 +340,6 @@ export function useOnboardingQueue(
     isFirstStep,
     isLastStep,
     totalSteps: visibleEntries.length,
+    isViewingPastStep,
   };
 }

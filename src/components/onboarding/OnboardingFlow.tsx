@@ -257,6 +257,7 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
     isFirstStep,
     canSkip,
     isNextDisabled,
+    isViewingPastStep,
   } = queue;
 
   // Action handler - queueHandleAction already calls onAction (which is handleAction)
@@ -313,10 +314,13 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
     return null;
   }
 
-  // Get navigation config with defaults
+  // Get navigation config with defaults.
+  // When viewing a past step via back navigation, always show Continue
+  // so the user can navigate forward (even for auto-advance steps like
+  // account-verification that normally hide Continue).
   const navigation = activeStep.meta.navigation ?? {};
   const showBack = navigation.showBack !== false && !isFirstStep;
-  const showNext = navigation.hideContinue !== true;
+  const showNext = isViewingPastStep || navigation.hideContinue !== true;
 
   return (
     <OnboardingShell
