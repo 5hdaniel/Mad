@@ -124,6 +124,7 @@ function ChecklistItem({ label, description, isGranted }: ChecklistItemProps) {
 function PermissionsStepContent({ context, onAction }: OnboardingStepContentProps) {
   const [hasFullDiskAccess, setHasFullDiskAccess] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
+  const [checkFailed, setCheckFailed] = useState(false);
   const [hasTriggeredFDA, setHasTriggeredFDA] = useState(false);
 
   // Track if we're waiting for DB to be ready before importing
@@ -244,10 +245,15 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
   const handleManualCheck = async () => {
     logger.debug('[PermissionsStep] Check Permissions button clicked');
     setIsChecking(true);
+    setCheckFailed(false);
     try {
-      await checkPermissions();
+      const granted = await checkPermissions();
+      if (!granted) {
+        setCheckFailed(true);
+      }
     } catch (error) {
       logger.error('[PermissionsStep] checkPermissions error:', error);
+      setCheckFailed(true);
     }
     setIsChecking(false);
   };
@@ -378,7 +384,13 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
             {isChecking ? "Checking..." : "Check Permissions"}
           </button>
 
-          {hasTriggeredFDA && (
+          {checkFailed && (
+            <p className="text-center text-xs text-red-600 font-medium">
+              Permission not detected. Please follow the steps above and try again.
+            </p>
+          )}
+
+          {hasTriggeredFDA && !checkFailed && (
             <p className="text-center text-xs text-gray-500">
               We are checking for permission changes automatically.
             </p>
