@@ -296,12 +296,8 @@ export function derivePageTitle(appStep: AppStep): string {
   switch (appStep) {
     case "login":
       return "Welcome";
-    case "email-onboarding":
-      return "Connect Email";
     case "microsoft-login":
       return "Login";
-    case "permissions":
-      return "Setup Permissions";
     case "dashboard":
       return "Keepr.";
     case "contacts":
@@ -310,6 +306,15 @@ export function derivePageTitle(appStep: AppStep): string {
       return "Export to Outlook";
     case "complete":
       return "Export Complete";
+    // Onboarding steps: show generic "Setup" since the queue manages
+    // step-specific titles via each step's content component.
+    case "phone-type-selection":
+    case "keychain-explanation":
+    case "email-onboarding":
+    case "permissions":
+    case "apple-driver-setup":
+    case "android-coming-soon":
+      return "Setup";
     default:
       return "Keepr.";
   }

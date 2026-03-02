@@ -53,8 +53,14 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
     return null;
   }
 
-  // Track if we're waiting for DB init to complete after clicking Continue on secure-storage
+  // Track if we're waiting for DB init to complete after clicking Continue on secure-storage.
+  // While true, isDatabaseInitialized is suppressed in appState so the queue won't
+  // advance to account-verification before the main process DB is actually ready.
   const [waitingForDbInit, setWaitingForDbInit] = useState(false);
+
+  // Tracks the actual DB init status from the selector (not gated by waitingForDbInit).
+  // Used by the effect below to detect when init actually completes.
+  const [dbInitConfirmed, setDbInitConfirmed] = useState(false);
 
   // Track if user has been verified in local DB (set by account-verification step)
   const [isUserVerifiedInLocalDb, setIsUserVerifiedInLocalDb] = useState(false);
@@ -67,7 +73,10 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
   const appState: OnboardingAppState = useMemo(() => {
     if (machineState) {
       const { state } = machineState;
-      const isDatabaseInitialized = selectIsDatabaseInitialized(state);
+      const selectorSaysDbInit = selectIsDatabaseInitialized(state);
+      // Gate on dbInitConfirmed: if we're waiting for DB init, suppress until
+      // the main process confirms the DB is actually ready.
+      const isDatabaseInitialized = selectorSaysDbInit && (!waitingForDbInit || dbInitConfirmed);
       const emailConnected = selectHasEmailConnectedNullable(state);
       const hasPermissions = selectHasPermissionsNullable(state);
 
@@ -133,7 +142,7 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
       emailSkipped,
       driverSkipped,
     };
-  }, [machineState, app, isUserVerifiedInLocalDb, emailSkipped, driverSkipped]);
+  }, [machineState, app, isUserVerifiedInLocalDb, emailSkipped, driverSkipped, waitingForDbInit, dbInitConfirmed]);
 
   // Action handler that maps StepActions to existing app handlers
   const handleAction = useCallback(
@@ -258,21 +267,36 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
     [queueHandleAction]
   );
 
-  // When DB becomes initialized while we're waiting (after SECURE_STORAGE_SETUP),
-  // clear the waiting flag. The queue auto-rebuilds when context changes.
+  // Poll the main process to confirm DB is actually initialized.
+  // The selector may report isDatabaseInitialized=true before the main process
+  // has fully finished (race condition). We poll system:is-database-initialized
+  // to gate the queue's isDatabaseInitialized flag.
   useEffect(() => {
-    if (waitingForDbInit && appState.isDatabaseInitialized) {
-      logStateChange('OnboardingFlow', 'DB_INIT_COMPLETE - clearing waitingForDbInit', {
-        waitingForDbInit,
-        isDatabaseInitialized: appState.isDatabaseInitialized,
-        emailConnected: appState.emailConnected,
-        hasPermissions: appState.hasPermissions,
-        activeStepId: activeStep?.meta?.id,
-        visibleSteps: visibleEntries.map(e => e.step.meta.id),
-      });
-      setWaitingForDbInit(false);
-    }
-  }, [waitingForDbInit, appState.isDatabaseInitialized, appState.emailConnected, appState.hasPermissions, activeStep, visibleEntries]);
+    if (!waitingForDbInit) return;
+
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const ready = await window.api?.system?.isDatabaseInitialized?.();
+        if (ready && !cancelled) {
+          logStateChange('OnboardingFlow', 'DB_INIT_CONFIRMED by main process', {});
+          setDbInitConfirmed(true);
+          setWaitingForDbInit(false);
+        }
+      } catch {
+        // Ignore — will retry
+      }
+    };
+
+    // Poll every 500ms
+    const interval = setInterval(poll, 500);
+    poll(); // Immediate first check
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [waitingForDbInit]);
 
   // When queue reports complete but state machine is still in onboarding,
   // trigger completion

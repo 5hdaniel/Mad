@@ -60,7 +60,9 @@ export const meta: OnboardingStepMeta = {
     return shouldShow;
   },
   // Queue predicates
-  isApplicable: (context) => context.isDatabaseInitialized && context.userId !== null,
+  // Always visible in progress bar. Only becomes active after preceding steps
+  // complete. userId is guaranteed non-null during onboarding (user is authenticated).
+  isApplicable: () => true,
   isComplete: () => false, // Auto-completes on render
 };
 

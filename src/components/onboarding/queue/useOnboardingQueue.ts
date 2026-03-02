@@ -193,8 +193,24 @@ export function useOnboardingQueue(
   // Action handler
   const handleAction = useCallback(
     (action: StepAction) => {
-      // Any forward action clears the back override
-      if (action.type !== "NAVIGATE_BACK") {
+      // Only clear back override on explicit forward navigation actions.
+      // Context-update actions (like USER_VERIFIED_IN_LOCAL_DB from auto-running
+      // steps) should NOT snap the user forward when they're reviewing a past step.
+      const forwardActions = [
+        "SELECT_PHONE",
+        "NAVIGATE_NEXT",
+        "EMAIL_CONNECTED",
+        "EMAIL_SKIPPED",
+        "PERMISSION_GRANTED",
+        "SECURE_STORAGE_SETUP",
+        "DRIVER_SETUP_COMPLETE",
+        "DRIVER_SKIPPED",
+        "TERMS_ACCEPTED",
+        "CONTINUE_EMAIL_ONLY",
+        "CONNECT_EMAIL_START",
+        "ONBOARDING_COMPLETE",
+      ];
+      if (forwardActions.includes(action.type)) {
         setBackOverrideIndex(null);
       }
 

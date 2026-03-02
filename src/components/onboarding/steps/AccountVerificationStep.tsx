@@ -30,6 +30,8 @@ import logger from '../../../utils/logger';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1500;
+/** Minimum time to show "Setting up..." so user sees the step */
+const MIN_DISPLAY_MS = 1200;
 
 // =============================================================================
 // STEP METADATA
@@ -60,7 +62,10 @@ export const meta: OnboardingStepMeta = {
     return shouldShow;
   },
   // Queue predicates
-  isApplicable: (context) => context.isDatabaseInitialized,
+  // Always visible in progress bar. Only becomes active after secure-storage
+  // completes (isDatabaseInitialized = true), because it follows secure-storage
+  // in the flow and secure-storage's isComplete gates progression.
+  isApplicable: () => true,
   isComplete: (context) => context.isUserVerifiedInLocalDb,
 };
 
@@ -156,6 +161,8 @@ export function AccountVerificationContent({
 
   // Effect safety pattern: ref guard prevents double-execution
   const hasStartedRef = useRef(false);
+  // Track when step first rendered so we can enforce MIN_DISPLAY_MS
+  const startTimeRef = useRef(Date.now());
 
   const verify = async (attempt: number) => {
     setStatus('verifying');
@@ -167,11 +174,17 @@ export function AccountVerificationContent({
 
       if (result.success) {
         setStatus('success');
-        // Dispatch action to update context
-        const action: UserVerifiedInLocalDbAction = {
-          type: 'USER_VERIFIED_IN_LOCAL_DB',
-        };
-        onAction(action);
+
+        // Ensure the step is visible for at least MIN_DISPLAY_MS
+        const elapsed = Date.now() - startTimeRef.current;
+        const remaining = Math.max(0, MIN_DISPLAY_MS - elapsed);
+        setTimeout(() => {
+          // Dispatch action to update context
+          const action: UserVerifiedInLocalDbAction = {
+            type: 'USER_VERIFIED_IN_LOCAL_DB',
+          };
+          onAction(action);
+        }, remaining);
         // Note: The step will be filtered out after context updates,
         // causing automatic advancement to the next step
       } else {
@@ -219,8 +232,9 @@ export function AccountVerificationContent({
   };
 
   const handleContactSupport = () => {
-    // Open support email
-    window.open('mailto:support@keeprcompliance.com?subject=Account%20Setup%20Issue', '_blank');
+    window.api?.shell?.openExternal?.(
+      'mailto:support@keeprcompliance.com?subject=Account%20Setup%20Issue'
+    );
   };
 
   // Determine icon and colors based on status
