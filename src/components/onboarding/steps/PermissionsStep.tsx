@@ -348,9 +348,9 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
                   <li>Click "Open System Settings" below</li>
                   <li>Click the <strong>+</strong> button</li>
                   <li>Find <strong>Keepr</strong> in the Applications list, select it, and click <strong>Open</strong></li>
-                  <li>If Keepr is already listed, toggle it on</li>
                   <li>When macOS asks to Quit &amp; Reopen, click <strong>Later</strong></li>
                 </ol>
+                <p className="text-xs text-blue-700 mt-2 italic">Note: If Keepr is already listed, just toggle it on.</p>
               </div>
             </div>
           </div>
