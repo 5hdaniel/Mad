@@ -346,9 +346,10 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
                 <p className="font-semibold mb-1">How to grant permission:</p>
                 <ol className="list-decimal list-inside space-y-1 text-xs">
                   <li>Click "Open System Settings" below</li>
-                  <li>Click the <strong>+</strong> button and add <strong>Keepr</strong> from Applications</li>
+                  <li>Click the <strong>+</strong> button</li>
+                  <li>Find <strong>Keepr</strong> in the Applications list, select it, and click <strong>Open</strong></li>
                   <li>If Keepr is already listed, toggle it on</li>
-                  <li>macOS will ask you to quit and reopen the app</li>
+                  <li>When macOS asks to Quit &amp; Reopen, click <strong>Later</strong></li>
                 </ol>
               </div>
             </div>
