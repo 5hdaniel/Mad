@@ -94,29 +94,19 @@ interface ChecklistItemProps {
 
 function ChecklistItem({ label, description, isGranted }: ChecklistItemProps) {
   return (
-    <div
-      className={`flex items-start p-3 rounded-lg border-2 transition-all ${
-        isGranted
-          ? "bg-green-50 border-green-300"
-          : "bg-gray-50 border-gray-200"
-      }`}
-    >
-      <div className="flex-shrink-0 mt-0.5 mr-3">
-        {isGranted ? (
-          <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
-            <CheckIcon className="w-4 h-4 text-white" />
-          </div>
-        ) : (
-          <div className="w-6 h-6 text-gray-400">
-            <CircleIcon className="w-6 h-6" />
-          </div>
-        )}
-      </div>
-      <div className="flex-1">
-        <p className={`font-semibold text-sm ${isGranted ? "text-green-800" : "text-gray-900"}`}>
+    <div className="flex items-center gap-3">
+      {isGranted ? (
+        <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+          <CheckIcon className="w-4 h-4 text-white" />
+        </div>
+      ) : (
+        <div className="w-2 h-2 rounded-full bg-gray-400 flex-shrink-0 ml-2" />
+      )}
+      <div>
+        <p className={`text-sm font-medium ${isGranted ? "text-green-800" : "text-gray-900"}`}>
           {label}
         </p>
-        <p className={`text-xs mt-0.5 ${isGranted ? "text-green-700" : "text-gray-600"}`}>
+        <p className={`text-xs ${isGranted ? "text-green-600" : "text-gray-500"}`}>
           {description}
         </p>
       </div>
