@@ -38,7 +38,10 @@ export type LoadingPhase =
 export type OnboardingStep =
   | "phone-type" // Phone type selection screen
   | "secure-storage" // macOS keychain explanation (keychain-explanation route)
+  | "account-verification" // Verify user exists in local DB
+  | "contact-source" // Select contact sources
   | "email-connect" // Email onboarding screen
+  | "data-sync" // Sync checkpoint before permissions
   | "permissions" // macOS permissions
   | "apple-driver" // Windows + iPhone driver setup
   | "android-coming-soon"; // Android placeholder
@@ -185,7 +188,7 @@ export interface UnauthenticatedState {
  */
 export interface OnboardingState {
   status: "onboarding";
-  /** Current onboarding step */
+  /** Current onboarding step (legacy - queue now determines active step) */
   step: OnboardingStep;
   /** Authenticated user */
   user: User;
@@ -253,6 +256,7 @@ export type AppAction =
   | UserDataLoadedAction
   | OnboardingStepCompleteAction
   | OnboardingSkipAction
+  | OnboardingQueueDoneAction
   | EmailConnectedAction
   | EmailDisconnectedAction
   | StartEmailSetupAction
@@ -360,6 +364,14 @@ export interface OnboardingStepCompleteAction {
   step: OnboardingStep;
   /** Phone type selected during phone-type step (required when step is "phone-type") */
   phoneType?: "iphone" | "android";
+}
+
+/**
+ * Queue-driven onboarding completion.
+ * Dispatched when the onboarding queue reports all steps are complete.
+ */
+export interface OnboardingQueueDoneAction {
+  type: "ONBOARDING_QUEUE_DONE";
 }
 
 /**

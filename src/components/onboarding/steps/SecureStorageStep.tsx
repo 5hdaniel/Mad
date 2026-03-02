@@ -47,6 +47,9 @@ export const meta: OnboardingStepMeta = {
     );
     return shouldShow;
   },
+  // Queue predicates
+  isApplicable: () => true, // Platform filtering via flow array (macOS only)
+  isComplete: (context) => context.isDatabaseInitialized,
 };
 
 // =============================================================================

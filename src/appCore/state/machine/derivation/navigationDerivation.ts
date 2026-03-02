@@ -234,6 +234,12 @@ function mapOnboardingStepToAppStep(step: OnboardingStep): AppStep {
       return "phone-type-selection";
     case "secure-storage":
       return "keychain-explanation";
+    case "account-verification":
+    case "contact-source":
+    case "data-sync":
+      // These steps are rendered by the queue-based OnboardingFlow,
+      // not legacy routes. Map to loading as a fallback.
+      return "loading";
     case "email-connect":
       return "email-onboarding";
     case "permissions":
@@ -290,12 +296,8 @@ export function derivePageTitle(appStep: AppStep): string {
   switch (appStep) {
     case "login":
       return "Welcome";
-    case "email-onboarding":
-      return "Connect Email";
     case "microsoft-login":
       return "Login";
-    case "permissions":
-      return "Setup Permissions";
     case "dashboard":
       return "Keepr.";
     case "contacts":
@@ -304,6 +306,15 @@ export function derivePageTitle(appStep: AppStep): string {
       return "Export to Outlook";
     case "complete":
       return "Export Complete";
+    // Onboarding steps: show generic "Setup" since the queue manages
+    // step-specific titles via each step's content component.
+    case "phone-type-selection":
+    case "keychain-explanation":
+    case "email-onboarding":
+    case "permissions":
+    case "apple-driver-setup":
+    case "android-coming-soon":
+      return "Setup";
     default:
       return "Keepr.";
   }

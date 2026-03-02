@@ -360,18 +360,18 @@ describe("useNavigationFlow - State Machine Path", () => {
       expect(result.current.getPageTitle()).toBe("Welcome");
     });
 
-    it("returns 'Connect Email' for email-onboarding step", () => {
+    it("returns 'Setup' for email-onboarding step", () => {
       const { result } = renderHook(() => useNavigationFlow(defaultOptions), {
         wrapper: createWrapper(onboardingStateEmailConnect),
       });
-      expect(result.current.getPageTitle()).toBe("Connect Email");
+      expect(result.current.getPageTitle()).toBe("Setup");
     });
 
-    it("returns 'Setup Permissions' for permissions step", () => {
+    it("returns 'Setup' for permissions step", () => {
       const { result } = renderHook(() => useNavigationFlow(defaultOptions), {
         wrapper: createWrapper(onboardingStatePermissions),
       });
-      expect(result.current.getPageTitle()).toBe("Setup Permissions");
+      expect(result.current.getPageTitle()).toBe("Setup");
     });
 
     it("returns 'Keepr' for dashboard step", () => {

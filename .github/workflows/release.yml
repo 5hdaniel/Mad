@@ -327,3 +327,38 @@ jobs:
             🤖 Release created automatically from main branch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Mirror release assets to the public repo so the download page works
+      # without GitHub authentication
+      - name: Mirror to public releases repo
+        env:
+          GH_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
+          VERSION: v${{ steps.version.outputs.version }}
+        run: |
+          PUBLIC_REPO="5hdaniel/keepr-releases"
+
+          echo "Mirroring release ${VERSION} to ${PUBLIC_REPO}..."
+
+          # Create the release in the public repo (or update if exists)
+          gh release create "${VERSION}" \
+            --repo "${PUBLIC_REPO}" \
+            --title "Keepr ${VERSION}" \
+            --notes "Download the Keepr desktop app. Visit [keeprcompliance.com](https://www.keeprcompliance.com) for more info." \
+            artifacts/release-macos/*.dmg \
+            artifacts/release-macos/*.zip \
+            artifacts/release-macos/*.yml \
+            artifacts/release-macos/*.blockmap \
+            artifacts/release-windows/*.exe \
+            artifacts/release-windows/*.yml \
+            artifacts/release-windows/*.blockmap \
+            2>/dev/null || \
+          gh release upload "${VERSION}" \
+            --repo "${PUBLIC_REPO}" \
+            --clobber \
+            artifacts/release-macos/*.dmg \
+            artifacts/release-macos/*.zip \
+            artifacts/release-macos/*.yml \
+            artifacts/release-macos/*.blockmap \
+            artifacts/release-windows/*.exe \
+            artifacts/release-windows/*.yml \
+            artifacts/release-windows/*.blockmap
