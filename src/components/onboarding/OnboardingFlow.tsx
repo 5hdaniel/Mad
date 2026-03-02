@@ -14,6 +14,7 @@ import { OnboardingShell } from "./shell/OnboardingShell";
 import { ProgressIndicator } from "./shell/ProgressIndicator";
 import { NavigationButtons } from "./shell/NavigationButtons";
 import { useOptionalMachineState } from "../../appCore/state/machine";
+import type { AppStateContextValue } from "../../appCore/state/machine/types";
 import {
   selectPhoneType,
   selectHasEmailConnectedNullable,
@@ -38,6 +39,10 @@ export interface OnboardingFlowProps {
  *
  * Uses the queue-based step architecture for single-source-of-truth ordering.
  * Maps StepActions to existing app handlers and manages navigation.
+ *
+ * Split into a guard wrapper (OnboardingFlow) and an inner component
+ * (OnboardingFlowInner) so that React hooks are never called after
+ * conditional early returns — satisfying the Rules of Hooks.
  */
 export function OnboardingFlow({ app }: OnboardingFlowProps) {
   // Access state machine state when feature flag is enabled
@@ -53,6 +58,15 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
     return null;
   }
 
+  return <OnboardingFlowInner app={app} machineState={machineState} />;
+}
+
+interface OnboardingFlowInnerProps {
+  app: AppStateMachine;
+  machineState: AppStateContextValue;
+}
+
+function OnboardingFlowInner({ app, machineState }: OnboardingFlowInnerProps) {
   // Track if we're waiting for DB init to complete after clicking Continue on secure-storage.
   // While true, isDatabaseInitialized is suppressed in appState so the queue won't
   // advance to account-verification before the main process DB is actually ready.
@@ -260,14 +274,6 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
     isViewingPastStep,
   } = queue;
 
-  // Action handler - queueHandleAction already calls onAction (which is handleAction)
-  const handleStepAction = useCallback(
-    (action: StepAction) => {
-      queueHandleAction(action);
-    },
-    [queueHandleAction]
-  );
-
   // Poll the main process to confirm DB is actually initialized.
   // The selector may report isDatabaseInitialized=true before the main process
   // has fully finished (race condition). We poll system:is-database-initialized
@@ -347,7 +353,7 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
       <activeStep.Content
         key={activeStep.meta.id}
         context={context}
-        onAction={handleStepAction}
+        onAction={queueHandleAction}
         isLoading={activeStep.meta.id === 'secure-storage' && waitingForDbInit}
       />
     </OnboardingShell>
