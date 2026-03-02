@@ -35,11 +35,11 @@ export function OnboardingShell({
   maxWidth = 'max-w-xl',
 }: OnboardingShellProps) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-4">
-      {/* Progress indicator spans full width (not constrained by max-w-xl) */}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      {/* Progress indicator spans full viewport width — no padding */}
       {progressSlot}
 
-      <div className={`${maxWidth} w-full mx-auto`}>
+      <div className={`${maxWidth} w-full mx-auto px-4`}>
         {/* Card with responsive gap from progress bar */}
         <div className="mt-4 sm:mt-6">
           {/* Main card container */}

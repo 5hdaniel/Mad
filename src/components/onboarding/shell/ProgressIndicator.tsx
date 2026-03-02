@@ -162,7 +162,7 @@ export function ProgressIndicator({
     : 0;
 
   return (
-    <div ref={containerRef} className="w-full overflow-hidden px-4 pt-1">
+    <div ref={containerRef} className="w-full overflow-hidden pt-4 pb-1">
       <div
         className="flex items-start"
         style={{
