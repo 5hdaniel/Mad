@@ -67,7 +67,7 @@ export const meta: OnboardingStepMeta = {
   platforms: ["macos", "windows"],
   navigation: {
     showBack: true,
-    continueLabel: "Continue",
+    hideContinue: true, // Provider cards have their own Connect/Continue buttons
   },
   skip: {
     enabled: true,
