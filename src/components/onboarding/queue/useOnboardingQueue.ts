@@ -99,6 +99,10 @@ export function useOnboardingQueue(
   // instead of the queue's computed active step. Reset on any forward action.
   const [backOverrideIndex, setBackOverrideIndex] = useState<number | null>(null);
 
+  // Steps manually advanced past via goToNext (for steps whose isComplete
+  // can't be derived from context, like contact-source and data-sync).
+  const [manuallyCompletedIds, setManuallyCompletedIds] = useState<Set<string>>(new Set());
+
   // Build context from app state
   const context: OnboardingContext = useMemo(
     () => ({
@@ -121,11 +125,28 @@ export function useOnboardingQueue(
     [platform, appState]
   );
 
-  // Build the queue - rebuilds when context changes
-  const queue = useMemo(
-    () => buildOnboardingQueue(platform, context),
-    [platform, context]
-  );
+  // Build the queue - rebuilds when context or manual completions change.
+  // Manual completions are applied post-build: steps in manuallyCompletedIds
+  // are marked complete, then active/pending statuses are re-derived.
+  const queue = useMemo(() => {
+    const rawQueue = buildOnboardingQueue(platform, context);
+    if (manuallyCompletedIds.size === 0) return rawQueue;
+
+    let foundActive = false;
+    return rawQueue.map((entry) => {
+      if (!entry.applicable) return entry; // skipped stays skipped
+
+      const isManuallyComplete = manuallyCompletedIds.has(entry.step.meta.id);
+      if (isManuallyComplete || entry.status === "complete") {
+        return { ...entry, status: "complete" as const };
+      }
+      if (!foundActive) {
+        foundActive = true;
+        return { ...entry, status: "active" as const };
+      }
+      return { ...entry, status: "pending" as const };
+    });
+  }, [platform, context, manuallyCompletedIds]);
 
   // Derived values
   const visibleEntries = useMemo(() => getVisibleEntries(queue), [queue]);
@@ -171,15 +192,24 @@ export function useOnboardingQueue(
     // Clear any back override — we're moving forward
     setBackOverrideIndex(null);
 
-    // Queue-based navigation: the queue rebuilds on context change.
-    // When context changes (e.g. phone type selected), the queue auto-advances.
-    // goToNext is for explicit user navigation (Continue button).
     // If we're at the last visible step, signal completion.
     if (currentIndex >= visibleEntries.length - 1) {
       onComplete?.();
+      return;
     }
-    // Otherwise, the action handler updates context → queue rebuilds → active step changes
-  }, [currentIndex, visibleEntries.length, onComplete]);
+
+    // For steps whose isComplete is context-driven (e.g. phone-type, email-connect),
+    // the queue auto-advances when context changes. But for steps with
+    // isComplete: () => false (e.g. contact-source, data-sync), we need to
+    // manually mark them complete so the queue advances.
+    if (activeEntry && activeEntry.status !== "complete") {
+      setManuallyCompletedIds((prev) => {
+        const next = new Set(prev);
+        next.add(activeEntry.step.meta.id);
+        return next;
+      });
+    }
+  }, [currentIndex, visibleEntries.length, onComplete, activeEntry]);
 
   const goToPrevious = useCallback(() => {
     // Navigate back by overriding the active index to the previous visible step.
