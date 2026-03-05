@@ -15,6 +15,7 @@ function DesktopCallbackContent() {
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [deepLinkUrl, setDeepLinkUrl] = useState<string>('');
+  const [hasDesktopApp, setHasDesktopApp] = useState<boolean | null>(null);
 
   const handleCallback = useCallback(async () => {
     // Check for errors in hash fragment first (Supabase puts errors there)
@@ -67,6 +68,14 @@ function DesktopCallbackContent() {
         window.location.href = '/auth/desktop?error=session_expired';
         return;
       }
+
+      // Check if user has ever logged in from the desktop app
+      const { data: devices } = await supabase
+        .from('devices')
+        .select('device_id')
+        .eq('user_id', user.id)
+        .limit(1);
+      setHasDesktopApp(!!devices && devices.length > 0);
 
       // Build deep link URL with tokens
       const callbackUrl = new URL('keepr://callback');
@@ -130,18 +139,48 @@ function DesktopCallbackContent() {
               </svg>
             </div>
             <p className="text-gray-900 font-medium">Sign in successful!</p>
-            <p className="text-gray-500 text-sm">
-              If Keepr didn&apos;t open automatically, click the button below.
-            </p>
-            <a
-              href={deepLinkUrl}
-              className="inline-block mt-4 px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-            >
-              Open Keepr
-            </a>
-            <p className="text-gray-400 text-xs mt-4">
-              You can close this browser tab after Keepr opens.
-            </p>
+            {hasDesktopApp === false ? (
+              <>
+                <p className="text-gray-500 text-sm">
+                  It looks like you don&apos;t have Keepr installed yet. Download it to get started.
+                </p>
+                <a
+                  href="/download"
+                  className="inline-block mt-4 px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                >
+                  Download Keepr
+                </a>
+                <p className="text-gray-400 text-xs mt-4">
+                  Already have Keepr?{' '}
+                  <a href={deepLinkUrl} className="text-blue-500 hover:underline">
+                    Open Keepr
+                  </a>
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-gray-500 text-sm">
+                  If Keepr didn&apos;t open automatically, click the button below.
+                </p>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-4">
+                  <a
+                    href={deepLinkUrl}
+                    className="inline-block px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                  >
+                    Open Keepr
+                  </a>
+                  <a
+                    href="/download"
+                    className="inline-block px-6 py-3 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 transition-colors"
+                  >
+                    Download Keepr
+                  </a>
+                </div>
+                <p className="text-gray-400 text-xs mt-4">
+                  You can close this browser tab after Keepr opens.
+                </p>
+              </>
+            )}
           </>
         )}
 
