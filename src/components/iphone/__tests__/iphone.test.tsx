@@ -558,4 +558,71 @@ describe("SyncProgress", () => {
       screen.queryByRole("button", { name: /cancel/i }),
     ).not.toBeInTheDocument();
   });
+
+  describe("size estimate overflow handling", () => {
+    it("should show determinate bar and estimate text when bytesProcessed <= estimatedTotalBytes", () => {
+      const progress: BackupProgress = {
+        phase: "backing_up",
+        percent: 50,
+        bytesProcessed: 1_000_000_000, // 1 GB
+        estimatedTotalBytes: 2_000_000_000, // 2 GB
+      };
+
+      render(<SyncProgress progress={progress} onCancel={mockOnCancel} />);
+
+      // Should show "X / ~Y" format
+      expect(screen.getByText(/\/ ~/)).toBeInTheDocument();
+      // Should show percentage (determinate bar)
+      expect(screen.getByText(/50%/)).toBeInTheDocument();
+    });
+
+    it("should show indeterminate bar and no estimate text when bytesProcessed > estimatedTotalBytes", () => {
+      const progress: BackupProgress = {
+        phase: "backing_up",
+        percent: 99,
+        bytesProcessed: 10_700_000_000, // 10.7 GB - exceeds estimate
+        estimatedTotalBytes: 1_900_000_000, // 1.9 GB
+      };
+
+      render(<SyncProgress progress={progress} onCancel={mockOnCancel} />);
+
+      // Should NOT show "/ ~" estimate text
+      expect(screen.queryByText(/\/ ~/)).not.toBeInTheDocument();
+      // Should NOT show percentage (no determinate bar)
+      expect(screen.queryByText(/\d+%/)).not.toBeInTheDocument();
+      // Should still show transferred amount
+      expect(screen.getByText(/transferred/)).toBeInTheDocument();
+    });
+
+    it("should show indeterminate bar when estimatedTotalBytes is 0", () => {
+      const progress: BackupProgress = {
+        phase: "backing_up",
+        percent: 0,
+        bytesProcessed: 500_000_000,
+        estimatedTotalBytes: 0,
+      };
+
+      render(<SyncProgress progress={progress} onCancel={mockOnCancel} />);
+
+      // Should NOT show estimate text
+      expect(screen.queryByText(/\/ ~/)).not.toBeInTheDocument();
+      // Should NOT show percentage (indeterminate bar)
+      expect(screen.queryByText(/\d+%/)).not.toBeInTheDocument();
+    });
+
+    it("should show indeterminate bar when estimatedTotalBytes is undefined", () => {
+      const progress: BackupProgress = {
+        phase: "backing_up",
+        percent: 0,
+        bytesProcessed: 500_000_000,
+      };
+
+      render(<SyncProgress progress={progress} onCancel={mockOnCancel} />);
+
+      // Should NOT show estimate text
+      expect(screen.queryByText(/\/ ~/)).not.toBeInTheDocument();
+      // Should NOT show percentage
+      expect(screen.queryByText(/\d+%/)).not.toBeInTheDocument();
+    });
+  });
 });
