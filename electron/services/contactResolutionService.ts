@@ -81,26 +81,8 @@ export async function resolvePhoneNames(
   // Source 1: App's imported contacts (contact_phones table)
   try {
     const normalizedPhones = phones.map((p) => p.replace(/\D/g, "").slice(-10));
-    const placeholders = normalizedPhones.map(() => "?").join(",");
-    const sql = `
-      SELECT
-        cp.phone_e164,
-        cp.phone_display,
-        c.display_name
-      FROM contact_phones cp
-      JOIN contacts c ON cp.contact_id = c.id
-      WHERE substr(replace(replace(replace(cp.phone_e164, '+', ''), '-', ''), ' ', ''), -10) IN (${placeholders})
-         OR substr(replace(replace(replace(cp.phone_display, '+', ''), '-', ''), ' ', ''), -10) IN (${placeholders})
-    `;
 
-    const db = databaseService.getRawDatabase();
-    const rows = db
-      .prepare(sql)
-      .all(...normalizedPhones, ...normalizedPhones) as {
-      phone_e164: string | null;
-      phone_display: string | null;
-      display_name: string | null;
-    }[];
+    const rows = databaseService.getContactNamesByPhoneDigits(normalizedPhones);
 
     for (const row of rows) {
       if (row.display_name) {
@@ -181,21 +163,8 @@ export async function resolveEmailNames(
 
   try {
     const lowerEmails = emails.map((e) => e.toLowerCase());
-    const placeholders = lowerEmails.map(() => "?").join(",");
-    const sql = `
-      SELECT
-        LOWER(ce.email) as email,
-        c.display_name
-      FROM contact_emails ce
-      JOIN contacts c ON ce.contact_id = c.id
-      WHERE LOWER(ce.email) IN (${placeholders})
-    `;
 
-    const db = databaseService.getRawDatabase();
-    const rows = db.prepare(sql).all(...lowerEmails) as {
-      email: string;
-      display_name: string | null;
-    }[];
+    const rows = databaseService.getContactNamesByEmails(lowerEmails);
 
     for (const row of rows) {
       if (row.display_name && row.email) {
@@ -264,20 +233,7 @@ export async function resolveHandles(
         if (!appleId || appleId.trim() === "") continue;
 
         // Try as email prefix: search contact_emails for emails starting with this prefix
-        const sql = `
-          SELECT
-            LOWER(ce.email) as email,
-            c.display_name
-          FROM contact_emails ce
-          JOIN contacts c ON ce.contact_id = c.id
-          WHERE LOWER(ce.email) LIKE ? || '@%'
-          LIMIT 1
-        `;
-        const db = databaseService.getRawDatabase();
-        const row = db.prepare(sql).get(appleId.toLowerCase()) as {
-          email: string;
-          display_name: string | null;
-        } | undefined;
+        const row = databaseService.getContactNameByAppleIdPrefix(appleId.toLowerCase());
 
         if (row?.display_name) {
           result[appleId] = row.display_name;
