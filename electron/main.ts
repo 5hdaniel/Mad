@@ -144,6 +144,7 @@ log.transports.file.level = "info";
 // ==========================================
 // Initialize Sentry as early as possible for error monitoring
 import * as Sentry from "@sentry/electron/main";
+import { runStartupHealthChecks } from "./services/startupHealthCheck";
 
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
@@ -920,6 +921,20 @@ app.whenReady().then(async () => {
   // The renderer will call 'system:initialize-secure-storage' which handles:
   // 1. Database initialization (triggers keychain prompt)
   // 2. Clearing sessions/tokens for session-only OAuth
+
+  // ==========================================
+  // PRE-AUTH HEALTH CHECKS (TASK-2101)
+  // ==========================================
+  // Run system-level health checks before creating the window.
+  // Critical failures (P0/P1) show a dialog and quit the app.
+  // Warnings (P2) are logged to Sentry but don't block startup.
+  const healthResult = await runStartupHealthChecks();
+  if (!healthResult.passed) {
+    log.error("[HealthCheck] Pre-auth health checks failed, quitting app");
+    app.quit();
+    return;
+  }
+  log.debug(`[PERF] post-healthChecks: ${Date.now() - appStartTime}ms`);
 
   log.debug(`[PERF] pre-createWindow: ${Date.now() - appStartTime}ms`);
   createWindow();
