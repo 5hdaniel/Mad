@@ -6,11 +6,13 @@ import {
   getSystemCounts,
   getPlatformBreakdown,
   getLicenseUtilization,
+  getPhoneTypeBreakdown,
 } from '@/lib/analytics-queries';
 import { VersionDistribution } from './components/VersionDistribution';
 import { SystemCounts } from './components/SystemCounts';
 import { PlatformBreakdown } from './components/PlatformBreakdown';
 import { LicenseUtilization } from './components/LicenseUtilization';
+import { PhoneTypeBreakdown } from './components/PhoneTypeBreakdown';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,12 +46,13 @@ export default async function AnalyticsPage() {
   }
 
   // Fetch all analytics data in parallel
-  const [versionData, systemCounts, platformData, licenseData] =
+  const [versionData, systemCounts, platformData, licenseData, phoneTypeData] =
     await Promise.all([
       getVersionDistribution(supabase),
       getSystemCounts(supabase),
       getPlatformBreakdown(supabase),
       getLicenseUtilization(supabase),
+      getPhoneTypeBreakdown(supabase),
     ]);
 
   return (
@@ -71,11 +74,14 @@ export default async function AnalyticsPage() {
       {/* Section 2: Version Distribution */}
       <VersionDistribution data={versionData} />
 
-      {/* Section 3: Two-column layout for Platform + License */}
+      {/* Section 3: Two-column layout for Platform + Phone Type */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <PlatformBreakdown data={platformData} />
-        <LicenseUtilization data={licenseData} />
+        <PhoneTypeBreakdown data={phoneTypeData} />
       </div>
+
+      {/* Section 4: License Utilization */}
+      <LicenseUtilization data={licenseData} />
 
       {/* Section 4: Error Rate by Version (Sentry) — graceful placeholder */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">

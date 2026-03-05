@@ -36,6 +36,12 @@ export interface LicenseUtilization {
   utilization_pct: number;
 }
 
+export interface PhoneTypeBreakdown {
+  phone_type: string;
+  user_count: number;
+  pct: number;
+}
+
 // ─── Queries ─────────────────────────────────────────────────────
 
 /**
@@ -236,5 +242,42 @@ export async function getLicenseUtilization(
     (a, b) => (planOrder[a.plan] ?? 99) - (planOrder[b.plan] ?? 99)
   );
 
+  return results;
+}
+
+/**
+ * Phone type breakdown (iPhone vs Android) from user_preferences.
+ */
+export async function getPhoneTypeBreakdown(
+  supabase: SupabaseClient
+): Promise<PhoneTypeBreakdown[]> {
+  const { data: prefs, error } = await supabase
+    .from('user_preferences')
+    .select('user_id, preferences');
+
+  if (error || !prefs) {
+    console.error('getPhoneTypeBreakdown error:', error?.message);
+    return [];
+  }
+
+  const typeMap = new Map<string, number>();
+  for (const p of prefs) {
+    const phoneType =
+      (p.preferences as Record<string, unknown>)?.phone_type as string | undefined;
+    const label = phoneType || 'Not set';
+    typeMap.set(label, (typeMap.get(label) ?? 0) + 1);
+  }
+
+  const total = prefs.length || 1;
+  const results: PhoneTypeBreakdown[] = [];
+  for (const [phoneType, count] of typeMap) {
+    results.push({
+      phone_type: phoneType,
+      user_count: count,
+      pct: Math.round((count / total) * 100),
+    });
+  }
+
+  results.sort((a, b) => b.user_count - a.user_count);
   return results;
 }
