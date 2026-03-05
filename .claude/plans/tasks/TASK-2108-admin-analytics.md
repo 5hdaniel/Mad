@@ -2,11 +2,10 @@
 
 ---
 
-## STATUS: BLOCKED
+## STATUS: Completed
 
-**Blocked by:** SPRINT-109 / TASK-2106 (admin portal scaffold must exist first)
-
-This task file is created for planning. Implementation begins after SPRINT-109 completes.
+**Completed:** 2026-03-05
+**Sprint:** SPRINT-111
 
 ---
 
@@ -87,15 +86,15 @@ Add a system-wide analytics/stats page to the admin portal at `/dashboard/analyt
 
 ## Acceptance Criteria
 
-- [ ] Analytics page accessible at `/dashboard/analytics` for authenticated internal users
-- [ ] Active users by version displayed with counts and percentages
-- [ ] Total users/orgs/devices counts displayed
-- [ ] Sentry error rates by version displayed (or graceful fallback if API unavailable)
-- [ ] Platform breakdown displayed
-- [ ] License utilization displayed
-- [ ] Page is responsive and matches admin portal design patterns
-- [ ] `npm run build` passes in `admin-portal/`
-- [ ] No TypeScript errors
+- [x] Analytics page accessible at `/dashboard/analytics` for authenticated internal users
+- [x] Active users by version displayed with counts and percentages
+- [x] Total users/orgs/devices counts displayed
+- [x] Sentry error rates by version displayed (or graceful fallback if API unavailable)
+- [x] Platform breakdown displayed
+- [x] License utilization displayed
+- [x] Page is responsive and matches admin portal design patterns
+- [x] `npm run build` passes in `admin-portal/`
+- [x] No TypeScript errors
 
 ## Integration Notes
 
