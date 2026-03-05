@@ -44,9 +44,9 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
 
     switch (progress.phase) {
       case "preparing":
-        return "Preparing backup...";
+        return "Preparing export...";
       case "backing_up":
-        return "Backing up - Keep connected";
+        return "Exporting - Keep connected";
       case "extracting":
         return "Reading messages - Safe to disconnect";
       case "storing":
@@ -154,7 +154,7 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
       {!isComplete && !isError && isBackingUp && (
         <div className="mb-4">
           {/* Determinate progress bar when we have estimated size */}
-          {progress.estimatedTotalBytes && progress.estimatedTotalBytes > 0 && (progress.bytesProcessed ?? 0) > 0 ? (
+          {progress.estimatedTotalBytes && progress.estimatedTotalBytes > 0 && (progress.bytesProcessed ?? 0) > 0 && (progress.bytesProcessed ?? 0) <= progress.estimatedTotalBytes ? (
             <>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs text-gray-500">Progress</span>
@@ -196,7 +196,7 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
         <div className="text-center mb-4">
           <p className="text-2xl font-bold text-gray-800">
             {formatBytes(progress.bytesProcessed)}
-            {progress.estimatedTotalBytes && progress.estimatedTotalBytes > 0 && (
+            {progress.estimatedTotalBytes && progress.estimatedTotalBytes > 0 && (progress.bytesProcessed ?? 0) <= progress.estimatedTotalBytes && (
               <span className="text-lg font-normal text-gray-400">
                 {" "}/ ~{formatBytes(progress.estimatedTotalBytes)}
               </span>
@@ -290,7 +290,7 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
             />
           </svg>
           <p className="text-sm text-gray-600">
-            Please keep your iPhone connected until backup completes.
+            Please keep your iPhone connected until export completes.
           </p>
         </div>
       )}
