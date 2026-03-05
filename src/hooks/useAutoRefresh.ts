@@ -180,10 +180,18 @@ export function useAutoRefresh({
           const notifEnabled = prefs.notifications?.enabled !== false;
           setNotificationsEnabled(notifEnabled);
         }
-      } catch {
+      } catch (prefsError) {
         // Default to enabled on error
         setAutoSyncEnabled(true);
         setNotificationsEnabled(true);
+        Sentry.captureException(prefsError, {
+          tags: { sync_type: "auto_refresh" },
+          level: "warning",
+          extra: {
+            operation: "load-preferences",
+            error_message: prefsError instanceof Error ? prefsError.message : String(prefsError),
+          },
+        });
       } finally {
         setHasLoadedPreference(true);
       }
@@ -313,8 +321,16 @@ export function useAutoRefresh({
       window.api.notification?.send(
         "Sync Complete",
         "Keepr is ready to use. Your data has been synchronized."
-      ).catch(() => {
-        // Silently ignore notification failures
+      ).catch((notifError: unknown) => {
+        // Track notification failures but don't disrupt UX
+        Sentry.captureException(notifError, {
+          tags: { sync_type: "auto_refresh" },
+          level: "warning",
+          extra: {
+            operation: "sync-complete-notification",
+            error_message: notifError instanceof Error ? notifError.message : String(notifError),
+          },
+        });
       });
     }
     wasSyncingRef.current = isRunning;

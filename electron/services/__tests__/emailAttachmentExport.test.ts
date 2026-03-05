@@ -93,11 +93,13 @@ const mockGet = jest.fn();
 const mockRun = jest.fn();
 const mockPrepare = jest.fn();
 const mockGetRawDatabase = jest.fn();
+const mockGetAttachmentsForEmailExport = jest.fn();
 
 jest.mock("../databaseService", () => ({
   __esModule: true,
   default: {
     getRawDatabase: (...args: unknown[]) => mockGetRawDatabase(...args),
+    getAttachmentsForEmailExport: (...args: unknown[]) => mockGetAttachmentsForEmailExport(...args),
   },
 }));
 
@@ -157,6 +159,8 @@ describe("TASK-2050: Email Attachment Export", () => {
     mockGetRawDatabase.mockReturnValue({
       prepare: mockPrepare,
     });
+    // getAttachmentsForEmailExport delegates to mockAll to reuse per-test overrides
+    mockGetAttachmentsForEmailExport.mockImplementation((...args: unknown[]) => mockAll(...args));
 
     // Re-set fs/promises mock implementations
     mockMkdir.mockImplementation(async (dirPath: string) => {

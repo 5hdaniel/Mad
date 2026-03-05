@@ -5,6 +5,7 @@
 /**
  * Unit tests for EmailAttachmentService
  * TASK-1775: Tests email attachment download and storage functionality
+ * TASK-2100: Updated to test service-layer methods instead of raw SQL
  */
 
 import fs from "fs/promises";
@@ -51,15 +52,12 @@ describe("EmailAttachmentService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    // Setup default mocks
-    const mockDb = {
-      prepare: jest.fn().mockReturnValue({
-        all: jest.fn().mockReturnValue([]),
-        get: jest.fn().mockReturnValue(null),
-        run: jest.fn().mockReturnValue({ changes: 1 }),
-      }),
-    };
-    (databaseService.getRawDatabase as jest.Mock).mockReturnValue(mockDb);
+    // TASK-2100: Mock new service-layer methods instead of getRawDatabase
+    (databaseService.getAttachmentStoragePaths as jest.Mock).mockReturnValue([]);
+    (databaseService.hasAttachmentForEmail as jest.Mock).mockReturnValue(false);
+    (databaseService.createAttachmentRecord as jest.Mock).mockReturnValue(undefined);
+    (databaseService.getAttachmentsByEmailId as jest.Mock).mockReturnValue([]);
+
     (gmailFetchService.getAttachment as jest.Mock).mockResolvedValue(
       mockAttachmentData
     );
@@ -156,22 +154,8 @@ describe("EmailAttachmentService", () => {
     });
 
     it("should skip existing attachments for same email", async () => {
-      // Mock existing attachment found
-      const mockDb = {
-        prepare: jest.fn().mockImplementation((sql: string) => {
-          if (sql.includes("SELECT id FROM attachments WHERE email_id")) {
-            return {
-              get: jest.fn().mockReturnValue({ id: "existing-att" }),
-            };
-          }
-          return {
-            all: jest.fn().mockReturnValue([]),
-            get: jest.fn().mockReturnValue(null),
-            run: jest.fn(),
-          };
-        }),
-      };
-      (databaseService.getRawDatabase as jest.Mock).mockReturnValue(mockDb);
+      // Mock existing attachment found via service method
+      (databaseService.hasAttachmentForEmail as jest.Mock).mockReturnValue(true);
 
       const result = await emailAttachmentService.downloadEmailAttachments(
         mockUserId,
@@ -206,25 +190,9 @@ describe("EmailAttachmentService", () => {
         .createHash("sha256")
         .update(mockAttachmentData)
         .digest("hex");
-      const mockDbWithExistingHash = {
-        prepare: jest.fn().mockImplementation((sql: string) => {
-          if (sql.includes("SELECT storage_path FROM attachments")) {
-            return {
-              all: jest
-                .fn()
-                .mockReturnValue([{ storage_path: `/mock/path/${contentHash}.pdf` }]),
-            };
-          }
-          return {
-            all: jest.fn().mockReturnValue([]),
-            get: jest.fn().mockReturnValue(null),
-            run: jest.fn(),
-          };
-        }),
-      };
-      (databaseService.getRawDatabase as jest.Mock).mockReturnValue(
-        mockDbWithExistingHash
-      );
+      (databaseService.getAttachmentStoragePaths as jest.Mock).mockReturnValue([
+        { storage_path: `/mock/path/${contentHash}.pdf` },
+      ]);
 
       // Second download with same content should not write file
       const result = await emailAttachmentService.downloadEmailAttachments(
@@ -320,12 +288,7 @@ describe("EmailAttachmentService", () => {
         },
       ];
 
-      const mockDb = {
-        prepare: jest.fn().mockReturnValue({
-          all: jest.fn().mockReturnValue(mockAttachments),
-        }),
-      };
-      (databaseService.getRawDatabase as jest.Mock).mockReturnValue(mockDb);
+      (databaseService.getAttachmentsByEmailId as jest.Mock).mockReturnValue(mockAttachments);
 
       const result =
         await emailAttachmentService.getAttachmentsForEmail(mockEmailId);
@@ -334,12 +297,9 @@ describe("EmailAttachmentService", () => {
     });
 
     it("should return empty array on error", async () => {
-      const mockDb = {
-        prepare: jest.fn().mockImplementation(() => {
-          throw new Error("Database error");
-        }),
-      };
-      (databaseService.getRawDatabase as jest.Mock).mockReturnValue(mockDb);
+      (databaseService.getAttachmentsByEmailId as jest.Mock).mockImplementation(() => {
+        throw new Error("Database error");
+      });
 
       const result =
         await emailAttachmentService.getAttachmentsForEmail(mockEmailId);

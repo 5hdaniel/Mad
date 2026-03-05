@@ -553,73 +553,13 @@ class FolderExportService {
     }
 
     // Query attachments table for all linked messages and emails
-    const db = databaseService.getRawDatabase();
-    let attachmentRows: {
-      id: string;
-      message_id: string | null;
-      email_id: string | null;
-      filename: string;
-      mime_type: string | null;
-      file_size_bytes: number | null;
-      storage_path: string | null;
-    }[] = [];
+    const attachmentRows = databaseService.getAttachmentsForExportBulk(messageIds, externalIds, emailIds);
 
-    if (messageIds.length > 0) {
-      const placeholders = messageIds.map(() => "?").join(", ");
-      const textAttachmentRows = db
-        .prepare(
-          `
-          SELECT id, message_id, NULL as email_id, filename, mime_type, file_size_bytes, storage_path
-          FROM attachments
-          WHERE message_id IN (${placeholders})
-        `
-        )
-        .all(...messageIds) as typeof attachmentRows;
-
-      attachmentRows = [...attachmentRows, ...textAttachmentRows];
-
-      if (externalIds.length > 0) {
-        const externalPlaceholders = externalIds.map(() => "?").join(", ");
-        const fallbackRows = db
-          .prepare(
-            `
-            SELECT id, message_id, NULL as email_id, filename, mime_type, file_size_bytes, storage_path
-            FROM attachments
-            WHERE external_message_id IN (${externalPlaceholders})
-              AND id NOT IN (SELECT id FROM attachments WHERE message_id IN (${placeholders}))
-          `
-          )
-          .all(...externalIds, ...messageIds) as typeof attachmentRows;
-
-        if (fallbackRows.length > 0) {
-          logService.info(
-            `[Folder Export] Found ${fallbackRows.length} additional attachments via external_message_id fallback`,
-            "FolderExport"
-          );
-          attachmentRows = [...attachmentRows, ...fallbackRows];
-        }
-      }
-    }
-
-    if (emailIds.length > 0) {
-      const emailPlaceholders = emailIds.map(() => "?").join(", ");
-      const emailAttachmentRows = db
-        .prepare(
-          `
-          SELECT id, NULL as message_id, email_id, filename, mime_type, file_size_bytes, storage_path
-          FROM attachments
-          WHERE email_id IN (${emailPlaceholders})
-        `
-        )
-        .all(...emailIds) as typeof attachmentRows;
-
-      if (emailAttachmentRows.length > 0) {
-        logService.info(
-          `[Folder Export] Found ${emailAttachmentRows.length} email attachments`,
-          "FolderExport"
-        );
-        attachmentRows = [...attachmentRows, ...emailAttachmentRows];
-      }
+    if (attachmentRows.length > 0) {
+      logService.info(
+        `[Folder Export] Found ${attachmentRows.length} total attachments for export`,
+        "FolderExport"
+      );
     }
 
     // Build maps for quick lookup
