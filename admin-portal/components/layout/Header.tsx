@@ -3,14 +3,13 @@
 /**
  * Header - Admin Portal
  *
- * Top header bar with title, user info, and sign out button.
+ * Top header bar with title and user info.
  */
 
-import { LogOut } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 
 export function Header() {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
 
   const displayName =
     user?.user_metadata?.full_name ||
@@ -26,33 +25,20 @@ export function Header() {
         <h1 className="text-lg font-semibold text-gray-900">Keepr Admin</h1>
       </div>
 
-      <div className="flex items-center gap-4">
-        {/* User Info */}
-        <div className="flex items-center gap-3">
-          {avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={avatarUrl}
-              alt={displayName}
-              className="h-8 w-8 rounded-full"
-            />
-          ) : (
-            <div className="h-8 w-8 rounded-full bg-primary-600 flex items-center justify-center text-white text-sm font-medium">
-              {displayName.charAt(0).toUpperCase()}
-            </div>
-          )}
-          <span className="text-sm text-gray-700">{displayName}</span>
-        </div>
-
-        {/* Sign Out Button */}
-        <button
-          onClick={signOut}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 rounded-md hover:bg-gray-100 transition-colors"
-          title="Sign out"
-        >
-          <LogOut className="h-4 w-4" />
-          <span className="hidden sm:inline">Sign Out</span>
-        </button>
+      <div className="flex items-center gap-3">
+        {avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={avatarUrl}
+            alt={displayName}
+            className="h-8 w-8 rounded-full"
+          />
+        ) : (
+          <div className="h-8 w-8 rounded-full bg-primary-600 flex items-center justify-center text-white text-sm font-medium">
+            {displayName.charAt(0).toUpperCase()}
+          </div>
+        )}
+        <span className="text-sm text-gray-700">{displayName}</span>
       </div>
     </header>
   );
