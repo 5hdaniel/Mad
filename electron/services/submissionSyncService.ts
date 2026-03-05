@@ -207,16 +207,8 @@ class SubmissionSyncService {
     }
 
     try {
-      const db = databaseService.getRawDatabase();
-
       // Find local transaction by submission_id
-      const localTransaction = db
-        .prepare(
-          `SELECT id, property_address, submission_id, submission_status, last_review_notes
-           FROM transactions
-           WHERE submission_id = ?`
-        )
-        .get(cloudStatus.id) as LocalSubmittedTransaction | undefined;
+      const localTransaction = databaseService.getTransactionBySubmissionId(cloudStatus.id) as LocalSubmittedTransaction | undefined;
 
       if (!localTransaction) {
         logService.debug(
@@ -487,14 +479,7 @@ class SubmissionSyncService {
     }
 
     try {
-      const db = databaseService.getRawDatabase();
-      const transaction = db
-        .prepare(
-          `SELECT id, property_address, submission_id, submission_status, last_review_notes
-           FROM transactions
-           WHERE id = ? AND submission_id IS NOT NULL`
-        )
-        .get(transactionId) as LocalSubmittedTransaction | undefined;
+      const transaction = databaseService.getSubmittedTransactionById(transactionId) as LocalSubmittedTransaction | undefined;
 
       if (!transaction) {
         return false;
@@ -557,19 +542,7 @@ class SubmissionSyncService {
       return [];
     }
 
-    const db = databaseService.getRawDatabase();
-
-    const rows = db
-      .prepare(
-        `SELECT id, property_address, submission_id, submission_status, last_review_notes
-         FROM transactions
-         WHERE submission_id IS NOT NULL
-         AND submission_status NOT IN ('approved', 'rejected', 'not_submitted')
-         ORDER BY submitted_at DESC`
-      )
-      .all() as LocalSubmittedTransaction[];
-
-    return rows;
+    return databaseService.getActiveSubmittedTransactions() as LocalSubmittedTransaction[];
   }
 
   /**
@@ -632,19 +605,10 @@ class SubmissionSyncService {
       return;
     }
 
-    const db = databaseService.getRawDatabase();
-
-    db.prepare(
-      `UPDATE transactions
-       SET submission_status = ?,
-           last_review_notes = ?,
-           updated_at = ?
-       WHERE id = ?`
-    ).run(
+    databaseService.updateTransactionSubmissionStatus(
+      transactionId,
       updates.submission_status,
-      updates.last_review_notes,
-      new Date().toISOString(),
-      transactionId
+      updates.last_review_notes
     );
   }
 

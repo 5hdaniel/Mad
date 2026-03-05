@@ -110,12 +110,21 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
             maxMessages: messageImportPrefs.filters.maxMessages ?? DEFAULT_MAX_MESSAGES,
           };
         }
-      } catch {
+      } catch (prefsError) {
         // Use defaults if preferences unavailable
         logService.warn(
           "Failed to load import filter preferences, using defaults",
           "MessageImportHandlers"
         );
+        Sentry.captureException(prefsError, {
+          tags: { sync_type: "message_import" },
+          level: "warning",
+          extra: {
+            handler: "messages:import-macos",
+            operation: "load-preferences",
+            error_message: prefsError instanceof Error ? prefsError.message : String(prefsError),
+          },
+        });
       }
 
       logService.info(
@@ -199,6 +208,15 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
               `Failed to update contact communication dates: ${backfillError}`,
               "MessageImportHandlers"
             );
+            Sentry.captureException(backfillError, {
+              tags: { sync_type: "message_import" },
+              level: "warning",
+              extra: {
+                handler: "messages:import-macos",
+                operation: "backfill-contact-dates",
+                error_message: backfillError instanceof Error ? backfillError.message : String(backfillError),
+              },
+            });
           }
 
           // Update phone_last_message lookup table for fast external contact sorting (BACKLOG-567)
@@ -214,6 +232,15 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
               `Failed to update phone last message table: ${phoneBackfillError}`,
               "MessageImportHandlers"
             );
+            Sentry.captureException(phoneBackfillError, {
+              tags: { sync_type: "message_import" },
+              level: "warning",
+              extra: {
+                handler: "messages:import-macos",
+                operation: "backfill-phone-last-message",
+                error_message: phoneBackfillError instanceof Error ? phoneBackfillError.message : String(phoneBackfillError),
+              },
+            });
           }
 
           // TASK-1773: Update external_contacts last_message_at from phone_last_message lookup
@@ -229,6 +256,15 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
               `Failed to update external contacts dates: ${externalUpdateError}`,
               "MessageImportHandlers"
             );
+            Sentry.captureException(externalUpdateError, {
+              tags: { sync_type: "message_import" },
+              level: "warning",
+              extra: {
+                handler: "messages:import-macos",
+                operation: "update-external-contacts-dates",
+                error_message: externalUpdateError instanceof Error ? externalUpdateError.message : String(externalUpdateError),
+              },
+            });
           }
         } else {
           logService.error(
@@ -245,6 +281,14 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
           `macOS Messages import error: ${errorMessage}`,
           "MessageImportHandlers"
         );
+        Sentry.captureException(error, {
+          tags: { sync_type: "message_import", platform: "macos" },
+          extra: {
+            handler: "messages:import-macos",
+            operation: "import-messages",
+            error_message: errorMessage,
+          },
+        });
         return {
           success: false,
           messagesImported: 0,
@@ -288,6 +332,14 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
           `Failed to get message count: ${errorMessage}`,
           "MessageImportHandlers"
         );
+        Sentry.captureException(error, {
+          tags: { sync_type: "message_import" },
+          level: "warning",
+          extra: {
+            handler: "messages:get-import-count",
+            error_message: errorMessage,
+          },
+        });
 
         return {
           success: false,
@@ -327,6 +379,14 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
           `Failed to get attachments: ${error instanceof Error ? error.message : "Unknown"}`,
           "MessageImportHandlers"
         );
+        Sentry.captureException(error, {
+          tags: { sync_type: "message_import" },
+          level: "warning",
+          extra: {
+            handler: "messages:get-attachments",
+            error_message: error instanceof Error ? error.message : String(error),
+          },
+        });
         return [];
       }
     }
@@ -368,6 +428,14 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
           `Failed to get attachments batch: ${error instanceof Error ? error.message : "Unknown"}`,
           "MessageImportHandlers"
         );
+        Sentry.captureException(error, {
+          tags: { sync_type: "message_import" },
+          level: "warning",
+          extra: {
+            handler: "messages:get-attachments-batch",
+            error_message: error instanceof Error ? error.message : String(error),
+          },
+        });
         return {};
       }
     }
@@ -468,6 +536,14 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
           `Failed to get import status: ${error instanceof Error ? error.message : "Unknown"}`,
           "MessageImportHandlers"
         );
+        Sentry.captureException(error, {
+          tags: { sync_type: "message_import" },
+          level: "warning",
+          extra: {
+            handler: "messages:getImportStatus",
+            error_message: error instanceof Error ? error.message : String(error),
+          },
+        });
         return {
           success: false,
           error: error instanceof Error ? error.message : "Failed to get import status",

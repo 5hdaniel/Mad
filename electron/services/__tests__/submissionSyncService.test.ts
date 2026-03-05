@@ -23,27 +23,17 @@ import databaseService from "../databaseService";
 import logService from "../logService";
 
 describe("SubmissionSyncService", () => {
-  let mockPrepare: jest.Mock;
-  let mockAll: jest.Mock;
-  let mockGet: jest.Mock;
-
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
 
-    mockAll = jest.fn().mockReturnValue([]);
-    mockGet = jest.fn().mockReturnValue(null);
-    mockPrepare = jest.fn().mockReturnValue({
-      all: mockAll,
-      get: mockGet,
-      run: jest.fn().mockReturnValue({ changes: 1 }),
-    });
-
     // Default: database IS initialized
     (databaseService.isInitialized as jest.Mock).mockReturnValue(true);
-    (databaseService.getRawDatabase as jest.Mock).mockReturnValue({
-      prepare: mockPrepare,
-    });
+    // TASK-2100: Mock new service-layer methods instead of getRawDatabase
+    (databaseService.getActiveSubmittedTransactions as jest.Mock).mockReturnValue([]);
+    (databaseService.getTransactionBySubmissionId as jest.Mock).mockReturnValue(undefined);
+    (databaseService.getSubmittedTransactionById as jest.Mock).mockReturnValue(undefined);
+    (databaseService.updateTransactionSubmissionStatus as jest.Mock).mockReturnValue(undefined);
   });
 
   afterEach(() => {
@@ -72,8 +62,8 @@ describe("SubmissionSyncService", () => {
         "SubmissionSyncService"
       );
 
-      // getRawDatabase should NOT have been called
-      expect(databaseService.getRawDatabase).not.toHaveBeenCalled();
+      // Service-layer DB methods should NOT have been called
+      expect(databaseService.getActiveSubmittedTransactions).not.toHaveBeenCalled();
     });
 
     it("should skip periodic sync tick when DB is not ready", () => {
@@ -99,7 +89,7 @@ describe("SubmissionSyncService", () => {
 
       // First tick: DB still not ready
       jest.advanceTimersByTime(10000);
-      expect(databaseService.getRawDatabase).not.toHaveBeenCalled();
+      expect(databaseService.getActiveSubmittedTransactions).not.toHaveBeenCalled();
 
       // Now DB becomes ready
       (databaseService.isInitialized as jest.Mock).mockReturnValue(true);
@@ -107,8 +97,8 @@ describe("SubmissionSyncService", () => {
       // Second tick: DB is ready, sync should run
       jest.advanceTimersByTime(10000);
 
-      // getRawDatabase should now be called (via getLocalSubmittedTransactions)
-      expect(databaseService.getRawDatabase).toHaveBeenCalled();
+      // Service-layer DB methods should now be called (via getLocalSubmittedTransactions)
+      expect(databaseService.getActiveSubmittedTransactions).toHaveBeenCalled();
     });
 
     it("should run initial sync immediately when DB is ready", () => {
@@ -122,8 +112,8 @@ describe("SubmissionSyncService", () => {
         "SubmissionSyncService"
       );
 
-      // getRawDatabase should have been called (for the immediate sync)
-      expect(databaseService.getRawDatabase).toHaveBeenCalled();
+      // Service-layer DB methods should have been called (for the immediate sync)
+      expect(databaseService.getActiveSubmittedTransactions).toHaveBeenCalled();
     });
 
     it("should still set up the interval timer even when DB is not ready", () => {
@@ -147,7 +137,7 @@ describe("SubmissionSyncService", () => {
         "[SyncService] Skipping sync - database not initialized",
         "SubmissionSyncService"
       );
-      expect(databaseService.getRawDatabase).not.toHaveBeenCalled();
+      expect(databaseService.getActiveSubmittedTransactions).not.toHaveBeenCalled();
     });
 
     it("should proceed with sync when DB is initialized", async () => {
@@ -156,7 +146,7 @@ describe("SubmissionSyncService", () => {
       const result = await submissionSyncService.syncAllSubmissions();
 
       expect(result).toEqual({ updated: 0, failed: 0, details: [] });
-      expect(databaseService.getRawDatabase).toHaveBeenCalled();
+      expect(databaseService.getActiveSubmittedTransactions).toHaveBeenCalled();
     });
   });
 
@@ -171,7 +161,7 @@ describe("SubmissionSyncService", () => {
         "[SyncService] Skipping single submission sync - database not initialized",
         "SubmissionSyncService"
       );
-      expect(databaseService.getRawDatabase).not.toHaveBeenCalled();
+      expect(databaseService.getSubmittedTransactionById).not.toHaveBeenCalled();
     });
   });
 
