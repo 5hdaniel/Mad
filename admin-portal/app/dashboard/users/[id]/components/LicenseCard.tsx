@@ -8,8 +8,13 @@ import { Shield } from 'lucide-react';
 
 interface License {
   id: string;
+  license_type: string | null;
   license_key: string | null;
   status: string | null;
+  trial_status: string | null;
+  trial_expires_at: string | null;
+  transaction_count: number | null;
+  transaction_limit: number | null;
   expires_at: string | null;
   created_at: string;
 }
@@ -51,21 +56,31 @@ export function LicenseCard({ licenses }: { licenses: License[] }) {
           {licenses.map((lic) => (
             <li
               key={lic.id}
-              className="flex items-center justify-between p-3 rounded-md bg-gray-50"
+              className="p-3 rounded-md bg-gray-50 space-y-2"
             >
-              <div>
+              <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-gray-900">
-                  {lic.license_key || 'Standard'}
+                  {lic.license_type || 'Standard'}
                 </p>
-                <p className="text-xs text-gray-500">
-                  Expires {formatDate(lic.expires_at)}
-                </p>
+                <span
+                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(lic.status)}`}
+                >
+                  {lic.status || 'unknown'}
+                </span>
               </div>
-              <span
-                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(lic.status)}`}
-              >
-                {lic.status || 'unknown'}
-              </span>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500">
+                <span>Expires: {formatDate(lic.expires_at)}</span>
+                <span>
+                  Transactions: {lic.transaction_count ?? 0}
+                  {lic.transaction_limit ? ` / ${lic.transaction_limit}` : ' (unlimited)'}
+                </span>
+                {lic.trial_status && (
+                  <>
+                    <span>Trial: {lic.trial_status}</span>
+                    <span>Trial expires: {formatDate(lic.trial_expires_at)}</span>
+                  </>
+                )}
+              </div>
             </li>
           ))}
         </ul>

@@ -60,7 +60,7 @@ export default async function UserDetailPage({
         .eq('user_id', id),
       supabase
         .from('licenses')
-        .select('id, license_key, status, expires_at, created_at')
+        .select('id, license_type, license_key, status, trial_status, trial_expires_at, transaction_count, transaction_limit, expires_at, created_at')
         .eq('user_id', id),
       supabase
         .from('devices')
