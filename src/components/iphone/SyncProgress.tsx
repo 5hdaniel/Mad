@@ -150,38 +150,17 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
         </p>
       )}
 
-      {/* Progress Bar - shown during backup phase */}
+      {/* Progress Bar - shown during backup phase (always indeterminate since idevicebackup2 estimates are unreliable) */}
       {!isComplete && !isError && isBackingUp && (
         <div className="mb-4">
-          {/* Determinate progress bar when we have estimated size */}
-          {progress.estimatedTotalBytes && progress.estimatedTotalBytes > 0 && (progress.bytesProcessed ?? 0) > 0 && (progress.bytesProcessed ?? 0) <= progress.estimatedTotalBytes ? (
-            <>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-gray-500">Progress</span>
-                <span className="text-xs font-medium text-gray-600">
-                  {Math.min(Math.round(((progress.bytesProcessed ?? 0) / progress.estimatedTotalBytes) * 100), 99)}%
-                </span>
-              </div>
-              <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-purple-500 to-indigo-600 rounded-full transition-all duration-500"
-                  style={{
-                    width: `${Math.min(((progress.bytesProcessed ?? 0) / progress.estimatedTotalBytes) * 100, 99)}%`
-                  }}
-                />
-              </div>
-            </>
-          ) : (
-            /* Indeterminate progress bar when we don't have estimated size yet */
-            <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-              <div
-                className="h-full w-1/3 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-full"
-                style={{
-                  animation: 'indeterminate 1.5s ease-in-out infinite'
-                }}
-              />
-            </div>
-          )}
+          <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div
+              className="h-full w-1/3 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-full"
+              style={{
+                animation: 'indeterminate 1.5s ease-in-out infinite'
+              }}
+            />
+          </div>
           <style>{`
             @keyframes indeterminate {
               0% { transform: translateX(-100%); }
@@ -196,11 +175,6 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
         <div className="text-center mb-4">
           <p className="text-2xl font-bold text-gray-800">
             {formatBytes(progress.bytesProcessed)}
-            {progress.estimatedTotalBytes && progress.estimatedTotalBytes > 0 && (progress.bytesProcessed ?? 0) <= progress.estimatedTotalBytes && (
-              <span className="text-lg font-normal text-gray-400">
-                {" "}/ ~{formatBytes(progress.estimatedTotalBytes)}
-              </span>
-            )}
           </p>
           <p className="text-sm text-gray-500">
             transferred
