@@ -419,7 +419,7 @@ describe("SyncProgress", () => {
 
     render(<SyncProgress progress={progress} onCancel={mockOnCancel} />);
 
-    expect(screen.getByText(/preparing backup/i)).toBeInTheDocument();
+    expect(screen.getByText(/preparing export/i)).toBeInTheDocument();
   });
 
   it("should show backing up phase", () => {
@@ -431,7 +431,7 @@ describe("SyncProgress", () => {
     render(<SyncProgress progress={progress} onCancel={mockOnCancel} />);
 
     // Option C 2-tier UI shows combined title+context
-    expect(screen.getByText(/backing up/i)).toBeInTheDocument();
+    expect(screen.getByText(/exporting/i)).toBeInTheDocument();
     expect(screen.getByText(/keep connected/i)).toBeInTheDocument();
   });
 
