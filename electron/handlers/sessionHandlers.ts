@@ -1137,8 +1137,8 @@ async function handleSignOutAllDevices(): Promise<AuthResponse> {
 async function handleOpenAuthInBrowser(): Promise<{ success: boolean; error?: string }> {
   try {
     // Use broker portal for provider selection page
-    // Production: www.keeprcompliance.com, Dev: localhost:3001 (via .env.development)
-    const brokerPortalUrl = process.env.BROKER_PORTAL_URL || 'https://www.keeprcompliance.com';
+    // Production: app.keeprcompliance.com, Dev: localhost:3001 (via .env.development)
+    const brokerPortalUrl = process.env.BROKER_PORTAL_URL || 'https://app.keeprcompliance.com';
     const authUrl = `${brokerPortalUrl}/auth/desktop`;
 
     await logService.info("Opening auth URL in browser", "AuthHandlers", {
