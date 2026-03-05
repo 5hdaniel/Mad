@@ -44,9 +44,9 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
 
     switch (progress.phase) {
       case "preparing":
-        return "Preparing backup...";
+        return "Preparing export...";
       case "backing_up":
-        return "Backing up - Keep connected";
+        return "Exporting - Keep connected";
       case "extracting":
         return "Reading messages - Safe to disconnect";
       case "storing":
@@ -290,7 +290,7 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
             />
           </svg>
           <p className="text-sm text-gray-600">
-            Please keep your iPhone connected until backup completes.
+            Please keep your iPhone connected until export completes.
           </p>
         </div>
       )}
