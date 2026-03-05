@@ -9,7 +9,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, Building2, Settings, LogOut } from 'lucide-react';
+import { LayoutDashboard, BarChart3, Users, Building2, Settings, LogOut } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 
 interface NavItem {
@@ -21,6 +21,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, enabled: true },
+  { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart3, enabled: true },
   { label: 'Users', href: '/dashboard/users', icon: Users, enabled: true },
   { label: 'Organizations', href: '/dashboard/organizations', icon: Building2, enabled: false },
   { label: 'Settings', href: '/dashboard/settings', icon: Settings, enabled: false },
