@@ -59,9 +59,14 @@ export function LicenseCard({ licenses }: { licenses: License[] }) {
               className="p-3 rounded-md bg-gray-50 space-y-2"
             >
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-gray-900">
-                  {lic.license_type || 'Standard'}
-                </p>
+                <div>
+                  <p className="text-sm font-medium text-gray-900 capitalize">
+                    {lic.license_type || 'Standard'}
+                  </p>
+                  {lic.license_key && (
+                    <p className="text-xs text-gray-400 font-mono">{lic.license_key}</p>
+                  )}
+                </div>
                 <span
                   className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(lic.status)}`}
                 >
@@ -69,10 +74,12 @@ export function LicenseCard({ licenses }: { licenses: License[] }) {
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500">
-                <span>Expires: {formatDate(lic.expires_at)}</span>
+                <span>Expires: {lic.expires_at ? formatDate(lic.expires_at) : 'No expiration'}</span>
                 <span>
                   Transactions: {lic.transaction_count ?? 0}
-                  {lic.transaction_limit ? ` / ${lic.transaction_limit}` : ' (unlimited)'}
+                  {lic.transaction_limit && lic.transaction_limit < 999999
+                    ? ` / ${lic.transaction_limit.toLocaleString()}`
+                    : ' (unlimited)'}
                 </span>
                 {lic.trial_status && (
                   <>
