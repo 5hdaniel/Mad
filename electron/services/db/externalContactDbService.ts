@@ -261,13 +261,18 @@ export function upsertFromMacOS(userId: string, contacts: MacOSContact[]): numbe
 /**
  * Upsert contacts from iPhone sync (SPRINT-068, BACKLOG-585)
  * Returns count of contacts processed
+ *
+ * TASK-2110: Accepts optional sessionId for ACID rollback.
+ * sync_session_id is only set on INSERT (new contacts), not on UPDATE.
+ * This ensures rollback only deletes newly-created contacts, not
+ * pre-existing contacts that were merely updated during this sync.
  */
-export function upsertFromiPhone(userId: string, contacts: iPhoneContact[]): number {
+export function upsertFromiPhone(userId: string, contacts: iPhoneContact[], sessionId?: string): number {
   const now = new Date().toISOString();
 
   const stmt = `
-    INSERT INTO external_contacts (id, user_id, name, phones_json, emails_json, company, source, external_record_id, synced_at)
-    VALUES (?, ?, ?, ?, ?, ?, 'iphone', ?, ?)
+    INSERT INTO external_contacts (id, user_id, name, phones_json, emails_json, company, source, external_record_id, synced_at, sync_session_id)
+    VALUES (?, ?, ?, ?, ?, ?, 'iphone', ?, ?, ?)
     ON CONFLICT(user_id, source, external_record_id) DO UPDATE SET
       name = excluded.name,
       phones_json = excluded.phones_json,
@@ -289,6 +294,7 @@ export function upsertFromiPhone(userId: string, contacts: iPhoneContact[]): num
         contact.company || null,
         contact.recordId,
         now,
+        sessionId || null,
       ]);
       count++;
     }
@@ -297,6 +303,28 @@ export function upsertFromiPhone(userId: string, contacts: iPhoneContact[]): num
   logService.info(`Upserted ${count} external contacts from iPhone`, 'ExternalContactDbService', { userId });
 
   return count;
+}
+
+/**
+ * Delete external contacts by sync session ID (TASK-2110: ACID rollback)
+ * Only deletes contacts that were newly inserted during this session
+ * (sync_session_id is only set on INSERT, not UPDATE).
+ */
+export function deleteBySessionId(userId: string, sessionId: string): number {
+  const result = dbRun(
+    `DELETE FROM external_contacts WHERE user_id = ? AND sync_session_id = ?`,
+    [userId, sessionId]
+  );
+
+  if (result.changes > 0) {
+    logService.info(
+      `Deleted ${result.changes} external contacts for session ${sessionId}`,
+      'ExternalContactDbService',
+      { userId }
+    );
+  }
+
+  return result.changes;
 }
 
 /**

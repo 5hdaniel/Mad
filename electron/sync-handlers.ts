@@ -25,6 +25,8 @@ let mainWindowRef: BrowserWindow | null = null;
 let currentUserId: string | null = null;
 // Track user ID at sync start to prevent race conditions
 let syncSessionUserId: string | null = null;
+// TASK-2110: Cancellation signal ref shared between sync:cancel and persistence
+const persistCancelSignal = { cancelled: false };
 
 /**
  * Send event to renderer process
@@ -152,6 +154,8 @@ export function registerSyncHandlers(mainWindow: BrowserWindow, userId?: string)
   ipcMain.handle("sync:cancel", () => {
     log.info("[SyncHandlers] Cancelling sync");
     orchestrator?.cancel();
+    // TASK-2110: Signal persistence phase to stop and roll back
+    persistCancelSignal.cancelled = true;
     return { success: true };
   });
 
@@ -327,7 +331,13 @@ function setupEventForwarding(): void {
 
     // Persist to database if we have a user ID
     if (userIdForPersistence && result.success) {
-      log.info("[SyncHandlers] Starting database persistence for user", { userId: redactId(userIdForPersistence) });
+      // TASK-2110: Reset cancel signal for this persistence run
+      persistCancelSignal.cancelled = false;
+
+      log.info("[SyncHandlers] Starting database persistence for user", {
+        userId: redactId(userIdForPersistence),
+        sessionId: result.sessionId || "none",
+      });
       sendToRenderer("sync:progress", {
         phase: "storing",
         percent: 0,
@@ -351,8 +361,25 @@ function setupEventForwarding(): void {
               percent: progress.percent,
               message,
             });
-          }
+          },
+          result.sessionId,      // TASK-2110: Session ID for rollback tagging
+          persistCancelSignal    // TASK-2110: Cancel signal for early abort
         );
+
+        // TASK-2110: Handle cancelled persistence (rollback already done by storage service)
+        if (!persistResult.success && persistCancelSignal.cancelled) {
+          log.info("[SyncHandlers] Database persistence cancelled and rolled back", {
+            duration: persistResult.duration,
+          });
+          sendToRenderer("sync:storage-error", {
+            error: "Sync cancelled — partial data has been cleaned up.",
+          });
+          // Still cleanup backup
+          if (result.needsCleanup && result.backupPath && orchestrator) {
+            await orchestrator.cleanupBackup(result.backupPath);
+          }
+          return;
+        }
 
         log.info("[SyncHandlers] Database persistence complete", {
           messagesStored: persistResult.messagesStored,
@@ -417,6 +444,7 @@ export function cleanupSyncHandlers(): void {
   mainWindowRef = null;
   currentUserId = null;
   syncSessionUserId = null;
+  persistCancelSignal.cancelled = false;
 
   // Remove IPC handlers
   ipcMain.removeHandler("sync:start");
