@@ -36,11 +36,11 @@ export interface UseLoginHandlersOptions {
 function dispatchLoginSuccess(
   dispatch: React.Dispatch<AppAction> | undefined,
   platformOpts: { isMacOS: boolean; isWindows: boolean } | undefined,
-  user: { id: string; email: string; displayName?: string },
+  user: { id: string; email: string; displayName?: string; avatarUrl?: string },
   isNewUser: boolean,
 ): void {
   if (!dispatch || !platformOpts) return;
-  const stateMachineUser: User = { id: user.id, email: user.email, displayName: user.displayName };
+  const stateMachineUser: User = { id: user.id, email: user.email, displayName: user.displayName, avatarUrl: user.avatarUrl };
   const platformInfo: PlatformInfo = { isMacOS: platformOpts.isMacOS, isWindows: platformOpts.isWindows, hasIPhone: false };
   dispatch({ type: "LOGIN_SUCCESS", user: stateMachineUser, platform: platformInfo, isNewUser });
 }
@@ -57,7 +57,7 @@ export function useLoginHandlers({
       setPendingOAuthData(null);
       login(user, token, provider, subscriptionData, isNewUser);
       dispatchLoginSuccess(stateMachineDispatch, platform,
-        { id: user.id, email: user.email, displayName: user.display_name }, isNewUser);
+        { id: user.id, email: user.email, displayName: user.display_name, avatarUrl: user.avatar_url }, isNewUser);
     },
     [login, stateMachineDispatch, platform, setIsNewUserFlow, setPendingOAuthData],
   );
