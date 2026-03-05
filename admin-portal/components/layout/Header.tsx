@@ -20,11 +20,7 @@ export function Header() {
   const avatarUrl = user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
 
   return (
-    <header className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200">
-      <div>
-        <h1 className="text-lg font-semibold text-gray-900">Keepr Admin</h1>
-      </div>
-
+    <header className="flex items-center justify-end px-6 py-4 bg-white border-b border-gray-200">
       <div className="flex items-center gap-3">
         {avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
