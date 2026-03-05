@@ -40,6 +40,8 @@ interface SourceConfig {
   authProvider?: "google" | "microsoft";
   /** Hidden sources are registered but not shown in UI yet. */
   hidden?: boolean;
+  /** Show as disabled with a "Coming Soon" badge. */
+  comingSoon?: boolean;
 }
 
 const SOURCE_OPTIONS: SourceConfig[] = [
@@ -114,7 +116,8 @@ const SOURCE_OPTIONS: SourceConfig[] = [
     ),
     selectedBorder: "border-green-400",
     selectedBg: "bg-green-50",
-    hidden: true,
+    authProvider: "google",
+    comingSoon: true,
   },
 ];
 
@@ -161,6 +164,25 @@ function SourceCard({
   onToggle: () => void;
   isSaving: boolean;
 }) {
+  if (source.comingSoon) {
+    return (
+      <div className="w-full p-4 rounded-xl border-2 border-gray-200 bg-gray-50 text-left flex items-center gap-4 opacity-60 cursor-not-allowed">
+        <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 bg-gray-100">
+          {source.icon}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h4 className="text-sm font-semibold text-gray-500">{source.label}</h4>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 bg-gray-200 px-1.5 py-0.5 rounded">
+              Coming Soon
+            </span>
+          </div>
+          <p className="text-xs text-gray-400 mt-0.5">{source.description}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <button
       type="button"
@@ -256,9 +278,10 @@ export function Content({
 
     setIsSaving(true);
     try {
-      // Build preferences object for visible sources only
+      // Build preferences object for active (non-coming-soon) visible sources only
       const directPrefs: Record<string, boolean> = {};
       for (const source of visibleSources) {
+        if (source.comingSoon) continue;
         directPrefs[source.key] = selected[source.key] ?? true;
       }
 

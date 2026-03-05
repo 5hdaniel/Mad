@@ -184,12 +184,26 @@ describe("ContactSourceStep", () => {
       expect(screen.queryByText("iPhone Contacts")).not.toBeInTheDocument();
     });
 
-    it("does not render Google Contacts (hidden)", () => {
+    it("renders Google Contacts as coming soon for Google auth users", () => {
       (usePlatform as jest.Mock).mockReturnValue({ isMacOS: false });
 
       render(
         <ContactSourceStep.Content
           context={createMockContext({ platform: "windows", authProvider: "google" })}
+          onAction={jest.fn()}
+        />
+      );
+
+      expect(screen.getByText("Google Contacts")).toBeInTheDocument();
+      expect(screen.getByText("Coming Soon")).toBeInTheDocument();
+    });
+
+    it("does not render Google Contacts for Microsoft auth users", () => {
+      (usePlatform as jest.Mock).mockReturnValue({ isMacOS: false });
+
+      render(
+        <ContactSourceStep.Content
+          context={createMockContext({ platform: "windows", authProvider: "microsoft" })}
           onAction={jest.fn()}
         />
       );
