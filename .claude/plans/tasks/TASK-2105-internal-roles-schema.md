@@ -104,3 +104,16 @@ VALUES (
 **Token Cap:** 20K
 
 **Confidence:** High — straightforward DDL.
+
+---
+
+## Completion Summary
+
+*Completed: 2026-03-05*
+
+Migration applied via Supabase MCP:
+- `internal_roles` table created with correct schema
+- RLS enabled with user-read and super_admin-manage policies
+- RLS recursion issue discovered and fixed (self-referencing policy on `internal_roles` caused infinite recursion; resolved by using `SECURITY DEFINER` helper function)
+- Seed data: dhaim@bluespaces.com inserted as super_admin
+- SPRINT-109 PR #1038 merged to develop

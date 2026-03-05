@@ -54,8 +54,8 @@ BACKLOG-837 is a large effort broken into 3 sprints. This is Phase 1 — foundat
 
 | # | Task | Backlog | Status |
 |---|------|---------|--------|
-| 1 | TASK-2105: Create internal_roles table + seed data | BACKLOG-837 | Pending |
-| 2 | TASK-2106: Scaffold admin portal app with auth + deploy | BACKLOG-837 | Pending |
+| 1 | TASK-2105: Create internal_roles table + seed data | BACKLOG-837 | Completed |
+| 2 | TASK-2106: Scaffold admin portal app with auth + deploy | BACKLOG-837 | Completed |
 
 ## Out of Scope / Deferred
 

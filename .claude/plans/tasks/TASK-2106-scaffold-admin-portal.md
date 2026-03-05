@@ -301,48 +301,52 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 
 **REQUIRED: Record your agent_id immediately when the Task tool returns.**
 
-*Completed: <DATE>*
+*Completed: 2026-03-05*
 
 ### Agent ID
 
 ```
-Engineer Agent ID: <agent_id from Task tool output>
+Engineer Agent ID: (see metrics log)
 ```
 
 ### Checklist
 
 ```
 Files created:
-- [ ] admin-portal/package.json
-- [ ] admin-portal/app/layout.tsx
-- [ ] admin-portal/app/page.tsx
-- [ ] admin-portal/app/login/page.tsx
-- [ ] admin-portal/app/auth/callback/route.ts
-- [ ] admin-portal/app/dashboard/layout.tsx
-- [ ] admin-portal/app/dashboard/page.tsx
-- [ ] admin-portal/components/providers/AuthProvider.tsx
-- [ ] admin-portal/components/layout/Sidebar.tsx
-- [ ] admin-portal/components/layout/Header.tsx
-- [ ] admin-portal/lib/supabase/client.ts
-- [ ] admin-portal/lib/supabase/server.ts
-- [ ] admin-portal/middleware.ts
-- [ ] admin-portal/next.config.mjs
-- [ ] admin-portal/tailwind.config.ts
-- [ ] admin-portal/tsconfig.json
+- [x] admin-portal/package.json
+- [x] admin-portal/app/layout.tsx
+- [x] admin-portal/app/page.tsx
+- [x] admin-portal/app/login/page.tsx
+- [x] admin-portal/app/auth/callback/route.ts
+- [x] admin-portal/app/dashboard/layout.tsx
+- [x] admin-portal/app/dashboard/page.tsx
+- [x] admin-portal/components/providers/AuthProvider.tsx
+- [x] admin-portal/components/layout/Sidebar.tsx
+- [x] admin-portal/components/layout/Header.tsx
+- [x] admin-portal/lib/supabase/client.ts
+- [x] admin-portal/lib/supabase/server.ts
+- [x] admin-portal/middleware.ts
+- [x] admin-portal/next.config.mjs
+- [x] admin-portal/tailwind.config.ts
+- [x] admin-portal/tsconfig.json
 
 Verification:
-- [ ] npm run build passes
-- [ ] npm run lint passes
-- [ ] Deployed to admin.keeprcompliance.com
+- [x] npm run build passes
+- [x] npm run lint passes
+- [x] Deployed to admin.keeprcompliance.com
 ```
 
 ### Metrics (Auto-Captured)
 
 | Metric | Value |
 |--------|-------|
-| **Total Tokens** | X |
-| Duration | X seconds |
-| API Calls | X |
+| **Total Tokens** | (see tokens.csv) |
+| Duration | (see tokens.csv) |
+| API Calls | (see tokens.csv) |
+
+### Notes
+
+PR #1034 merged to int/sprint-109-admin-portal. SPRINT-109 integration PR #1038 merged to develop.
 
 ---
 
