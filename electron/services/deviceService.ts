@@ -5,6 +5,7 @@
  * Manages device registration and tracking for license enforcement.
  */
 
+import { app } from "electron";
 import supabaseService from "./supabaseService";
 import * as Sentry from "@sentry/electron/main";
 import { machineIdSync } from "node-machine-id";
@@ -92,6 +93,7 @@ export async function registerDevice(
           platform: devicePlatform,
           is_active: true,
           last_seen_at: new Date().toISOString(),
+          app_version: app.getVersion(),
         },
         {
           onConflict: "user_id,device_id",
@@ -160,7 +162,7 @@ export async function updateDeviceHeartbeat(userId: string): Promise<void> {
     await supabaseService
       .getClient()
       .from("devices")
-      .update({ last_seen_at: new Date().toISOString() })
+      .update({ last_seen_at: new Date().toISOString(), app_version: app.getVersion() })
       .eq("user_id", userId)
       .eq("device_id", deviceId);
 
