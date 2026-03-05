@@ -13,6 +13,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useNetwork } from "../contexts/NetworkContext";
 import logger from "../utils/logger";
+import { syncStateRef, setDeferredLogoutCallback } from "./useIPhoneSync";
 
 /** Polling interval: 60 seconds */
 const POLL_INTERVAL_MS = 60_000;
@@ -49,6 +50,15 @@ export function useSessionValidator({
     try {
       const result = await window.api.auth.validateRemoteSession();
       if (!result.valid && !isLoggingOut.current) {
+        // TASK-2109: Defer logout if iPhone sync is active
+        if (syncStateRef.isActive) {
+          syncStateRef.deferredLogout = true;
+          logger.info(
+            "[SessionValidator] Remote session invalidated, but iPhone sync is active. Deferring logout until sync completes."
+          );
+          return;
+        }
+
         isLoggingOut.current = true;
         logger.info(
           "[SessionValidator] Remote session invalidated, triggering logout"
@@ -67,6 +77,22 @@ export function useSessionValidator({
         "[SessionValidator] Validation check failed (network/IPC error), skipping"
       );
     }
+  }, [onSessionInvalidated]);
+
+  // TASK-2109: Register the deferred logout callback so useIPhoneSync can trigger it
+  useEffect(() => {
+    setDeferredLogoutCallback(async () => {
+      if (isLoggingOut.current) return;
+      isLoggingOut.current = true;
+      logger.info(
+        "[SessionValidator] Executing deferred logout after sync completed"
+      );
+      window.alert(
+        "Your session was ended from another device. Please sign in again."
+      );
+      await onSessionInvalidated();
+    });
+    return () => setDeferredLogoutCallback(null);
   }, [onSessionInvalidated]);
 
   useEffect(() => {

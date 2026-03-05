@@ -8,6 +8,26 @@ import type {
 import logger from '../utils/logger';
 
 /**
+ * Module-level sync state ref for cross-hook communication.
+ * Safe in single-threaded renderer. Checked by useSessionValidator
+ * to defer logout during active sync.
+ */
+export const syncStateRef = { isActive: false, deferredLogout: false };
+
+/**
+ * Module-level callback ref for deferred logout.
+ * Set by useSessionValidator so useIPhoneSync can trigger logout after sync ends.
+ */
+export let deferredLogoutCallback: (() => Promise<void>) | null = null;
+
+/**
+ * Called by useSessionValidator to register the deferred logout callback.
+ */
+export function setDeferredLogoutCallback(cb: (() => Promise<void>) | null): void {
+  deferredLogoutCallback = cb;
+}
+
+/**
  * useIPhoneSync Hook
  * Manages iPhone device detection, connection state, and sync operations
  *
@@ -407,8 +427,33 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     return () => clearInterval(interval);
   }, [checkSyncStatus]);
 
+  // TASK-2109: Track sync state in module-level ref for cross-hook communication
+  useEffect(() => {
+    if (syncStatus === "syncing") {
+      syncStateRef.isActive = true;
+    } else if (syncStatus === "idle" || syncStatus === "complete" || syncStatus === "error") {
+      syncStateRef.isActive = false;
+
+      // If logout was deferred while sync was running, trigger it now
+      if (syncStateRef.deferredLogout) {
+        syncStateRef.deferredLogout = false;
+        logger.info("[useIPhoneSync] Sync ended, triggering deferred logout");
+        if (deferredLogoutCallback) {
+          void deferredLogoutCallback();
+        }
+      }
+    }
+  }, [syncStatus]);
+
   // Start sync operation
   const startSync = useCallback(async () => {
+    // TASK-2109: Block new syncs if a deferred logout is pending
+    if (syncStateRef.deferredLogout) {
+      logger.warn("[useIPhoneSync] Sync blocked - deferred logout pending");
+      setError("Session expired. Please sign in again.");
+      return;
+    }
+
     if (!device) {
       logger.error("[useIPhoneSync] Cannot start sync: No device connected");
       setError("No device connected");

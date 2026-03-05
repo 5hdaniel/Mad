@@ -4,7 +4,7 @@
  */
 
 import { renderHook, act } from "@testing-library/react";
-import { useIPhoneSync } from "../useIPhoneSync";
+import { useIPhoneSync, syncStateRef } from "../useIPhoneSync";
 
 describe("useIPhoneSync", () => {
   let consoleErrorSpy: jest.SpyInstance;
@@ -87,6 +87,10 @@ describe("useIPhoneSync", () => {
 
   beforeEach(() => {
     jest.useFakeTimers();
+
+    // Reset sync state ref
+    syncStateRef.isActive = false;
+    syncStateRef.deferredLogout = false;
 
     // Reset callbacks
     deviceConnectedCallback = null;
@@ -750,6 +754,29 @@ describe("useIPhoneSync", () => {
 
       expect(result.current.syncStatus).toBe("error");
       expect(result.current.error).toBe("Connection timeout");
+    });
+
+    it("should block sync when deferredLogout is pending (TASK-2109)", async () => {
+      const syncApi = setupSyncApiMock();
+      (window as any).api = { sync: syncApi, backup: { checkStatus: jest.fn().mockResolvedValue({ success: true }) } };
+
+      const { result } = renderHook(() => useIPhoneSync());
+
+      // Connect device
+      await act(async () => {
+        deviceConnectedCallback?.(mockDevice);
+        await Promise.resolve();
+      });
+
+      // Set deferred logout flag
+      syncStateRef.deferredLogout = true;
+
+      await act(async () => {
+        await result.current.startSync();
+      });
+
+      expect(syncApi.start).not.toHaveBeenCalled();
+      expect(result.current.error).toBe("Session expired. Please sign in again.");
     });
   });
 
