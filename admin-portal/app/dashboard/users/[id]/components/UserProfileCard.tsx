@@ -1,0 +1,119 @@
+/**
+ * UserProfileCard - Displays user profile information
+ *
+ * Shows name, email, avatar, auth provider, and key dates.
+ */
+
+interface UserProfile {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
+  provider: string | null;
+  created_at: string;
+  last_sign_in_at: string | null;
+  email_confirmed_at: string | null;
+}
+
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return 'Never';
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function getInitials(name: string | null, email: string | null): string {
+  if (name) {
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  }
+  if (email) {
+    return email[0].toUpperCase();
+  }
+  return '?';
+}
+
+export function UserProfileCard({ user }: { user: UserProfile }) {
+  const displayName = user.full_name || user.email || 'Unknown User';
+  const initials = getInitials(user.full_name, user.email);
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div className="flex items-start gap-4">
+        {/* Avatar */}
+        {user.avatar_url ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={user.avatar_url}
+            alt={displayName}
+            className="h-16 w-16 rounded-full object-cover"
+          />
+        ) : (
+          <div className="h-16 w-16 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xl font-semibold">
+            {initials}
+          </div>
+        )}
+
+        <div className="flex-1 min-w-0">
+          <h2 className="text-xl font-bold text-gray-900 truncate">
+            {displayName}
+          </h2>
+          {user.email && (
+            <p className="text-sm text-gray-500 truncate">{user.email}</p>
+          )}
+
+          {/* Provider badge */}
+          {user.provider && (
+            <span className="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+              {user.provider}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Dates grid */}
+      <dl className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div>
+          <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Created
+          </dt>
+          <dd className="mt-1 text-sm text-gray-900">
+            {formatDate(user.created_at)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Last Sign In
+          </dt>
+          <dd className="mt-1 text-sm text-gray-900">
+            {formatDate(user.last_sign_in_at)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Email Confirmed
+          </dt>
+          <dd className="mt-1 text-sm text-gray-900">
+            {formatDate(user.email_confirmed_at)}
+          </dd>
+        </div>
+      </dl>
+
+      {/* User ID (monospace, for quick copy) */}
+      <div className="mt-4 pt-4 border-t border-gray-100">
+        <span className="text-xs text-gray-400">ID: </span>
+        <code className="text-xs text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded">
+          {user.id}
+        </code>
+      </div>
+    </div>
+  );
+}
