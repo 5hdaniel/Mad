@@ -7,12 +7,13 @@
 interface UserProfile {
   id: string;
   email: string | null;
-  full_name: string | null;
+  display_name: string | null;
   avatar_url: string | null;
-  provider: string | null;
+  oauth_provider: string | null;
+  status: string | null;
+  subscription_tier: string | null;
   created_at: string;
-  last_sign_in_at: string | null;
-  email_confirmed_at: string | null;
+  last_login_at: string | null;
 }
 
 function formatDate(dateStr: string | null): string {
@@ -42,8 +43,8 @@ function getInitials(name: string | null, email: string | null): string {
 }
 
 export function UserProfileCard({ user }: { user: UserProfile }) {
-  const displayName = user.full_name || user.email || 'Unknown User';
-  const initials = getInitials(user.full_name, user.email);
+  const displayName = user.display_name || user.email || 'Unknown User';
+  const initials = getInitials(user.display_name, user.email);
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -71,9 +72,9 @@ export function UserProfileCard({ user }: { user: UserProfile }) {
           )}
 
           {/* Provider badge */}
-          {user.provider && (
+          {user.oauth_provider && (
             <span className="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-              {user.provider}
+              {user.oauth_provider}
             </span>
           )}
         </div>
@@ -94,15 +95,15 @@ export function UserProfileCard({ user }: { user: UserProfile }) {
             Last Sign In
           </dt>
           <dd className="mt-1 text-sm text-gray-900">
-            {formatDate(user.last_sign_in_at)}
+            {formatDate(user.last_login_at)}
           </dd>
         </div>
         <div>
           <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-            Email Confirmed
+            Status
           </dt>
           <dd className="mt-1 text-sm text-gray-900">
-            {formatDate(user.email_confirmed_at)}
+            {user.status || 'active'}
           </dd>
         </div>
       </dl>

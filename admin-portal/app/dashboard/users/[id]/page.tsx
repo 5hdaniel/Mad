@@ -50,8 +50,8 @@ export default async function UserDetailPage({
   const [profileResult, orgsResult, licensesResult, devicesResult, auditResult] =
     await Promise.all([
       supabase
-        .from('profiles')
-        .select('id, email, full_name, avatar_url, provider, created_at, last_sign_in_at, email_confirmed_at')
+        .from('users')
+        .select('id, email, display_name, avatar_url, oauth_provider, status, subscription_tier, created_at, last_login_at')
         .eq('id', id)
         .single(),
       supabase
@@ -60,13 +60,13 @@ export default async function UserDetailPage({
         .eq('user_id', id),
       supabase
         .from('licenses')
-        .select('id, tier, status, expires_at, created_at')
+        .select('id, license_key, status, expires_at, created_at')
         .eq('user_id', id),
       supabase
         .from('devices')
-        .select('id, device_name, platform, app_version, last_active_at, created_at')
+        .select('id, device_name, os, app_version, last_seen_at, created_at')
         .eq('user_id', id)
-        .order('last_active_at', { ascending: false }),
+        .order('last_seen_at', { ascending: false }),
       supabase
         .from('audit_logs')
         .select('id, action, resource_type, resource_id, metadata, created_at')

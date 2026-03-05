@@ -8,7 +8,7 @@ import { Shield } from 'lucide-react';
 
 interface License {
   id: string;
-  tier: string | null;
+  license_key: string | null;
   status: string | null;
   expires_at: string | null;
   created_at: string;
@@ -55,7 +55,7 @@ export function LicenseCard({ licenses }: { licenses: License[] }) {
             >
               <div>
                 <p className="text-sm font-medium text-gray-900">
-                  {lic.tier || 'Standard'}
+                  {lic.license_key || 'Standard'}
                 </p>
                 <p className="text-xs text-gray-500">
                   Expires {formatDate(lic.expires_at)}

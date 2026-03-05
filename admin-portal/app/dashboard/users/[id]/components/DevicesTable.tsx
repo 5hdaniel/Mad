@@ -9,9 +9,9 @@ import { Monitor } from 'lucide-react';
 interface Device {
   id: string;
   device_name: string | null;
-  platform: string | null;
+  os: string | null;
   app_version: string | null;
-  last_active_at: string | null;
+  last_seen_at: string | null;
   created_at: string;
 }
 
@@ -65,7 +65,7 @@ export function DevicesTable({ devices }: { devices: Device[] }) {
                     {device.device_name || 'Unknown Device'}
                   </td>
                   <td className="px-3 py-2 text-sm text-gray-600 whitespace-nowrap">
-                    {device.platform || '--'}
+                    {device.os || '--'}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     <code className="text-xs text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded">
@@ -73,7 +73,7 @@ export function DevicesTable({ devices }: { devices: Device[] }) {
                     </code>
                   </td>
                   <td className="px-3 py-2 text-sm text-gray-600 whitespace-nowrap">
-                    {formatDate(device.last_active_at)}
+                    {formatDate(device.last_seen_at)}
                   </td>
                   <td className="px-3 py-2 text-sm text-gray-500 whitespace-nowrap">
                     {formatDate(device.created_at)}
