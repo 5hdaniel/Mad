@@ -21,7 +21,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, enabled: true },
-  { label: 'Users', href: '/dashboard/users', icon: Users, enabled: false },
+  { label: 'Users', href: '/dashboard/users', icon: Users, enabled: true },
   { label: 'Organizations', href: '/dashboard/organizations', icon: Building2, enabled: false },
   { label: 'Settings', href: '/dashboard/settings', icon: Settings, enabled: false },
 ];
