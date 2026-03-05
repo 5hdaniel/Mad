@@ -8,14 +8,25 @@ import { createClient } from '@/lib/supabase/client';
 
 export interface AdminSearchUser {
   id: string;
-  full_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  display_name: string | null;
   email: string | null;
   avatar_url: string | null;
   org_name: string | null;
   org_slug: string | null;
-  role: string | null;
+  org_role: string | null;
   status: string | null;
-  last_sign_in_at: string | null;
+  last_login_at: string | null;
+}
+
+/** Build a display name from available fields */
+export function getUserDisplayName(user: AdminSearchUser): string {
+  if (user.display_name) return user.display_name;
+  if (user.first_name || user.last_name) {
+    return [user.first_name, user.last_name].filter(Boolean).join(' ');
+  }
+  return 'Unnamed User';
 }
 
 /**

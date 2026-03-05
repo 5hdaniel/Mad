@@ -9,7 +9,7 @@
 
 import { useRouter } from 'next/navigation';
 import { Users } from 'lucide-react';
-import type { AdminSearchUser } from '@/lib/admin-queries';
+import { getUserDisplayName, type AdminSearchUser } from '@/lib/admin-queries';
 
 interface UserResultsTableProps {
   users: AdminSearchUser[] | null;
@@ -177,9 +177,9 @@ export function UserResultsTable({ users, query, isLoading, error }: UserResults
               >
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center gap-3">
-                    <UserAvatar name={user.full_name} avatarUrl={user.avatar_url} />
+                    <UserAvatar name={getUserDisplayName(user)} avatarUrl={user.avatar_url} />
                     <span className="text-sm font-medium text-gray-900">
-                      {user.full_name || 'Unnamed User'}
+                      {getUserDisplayName(user)}
                     </span>
                   </div>
                 </td>
@@ -190,13 +190,13 @@ export function UserResultsTable({ users, query, isLoading, error }: UserResults
                   {user.org_name || user.org_slug || '--'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {user.role || '--'}
+                  {user.org_role || '--'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <StatusBadge status={user.status} />
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {formatLastLogin(user.last_sign_in_at)}
+                  {formatLastLogin(user.last_login_at)}
                 </td>
               </tr>
             ))
