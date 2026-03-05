@@ -262,156 +262,126 @@ class IPhoneSyncStorageService {
     let stored = 0;
     let skipped = 0;
 
-    // Get database instance via public API
-    const db = databaseService.getRawDatabase();
-
     // OPTIMIZATION: Load ALL existing external_ids into a Set (one query instead of 626k)
     // This gives us O(1) lookup instead of O(n) database queries
     log.info(`[${IPhoneSyncStorageService.SERVICE_NAME}] Loading existing message IDs for deduplication...`);
-    const existingIds = new Set<string>();
-    const existingRows = db.prepare(`
-      SELECT external_id FROM messages
-      WHERE user_id = ? AND external_id IS NOT NULL
-    `).all(userId) as { external_id: string }[];
-    for (const row of existingRows) {
-      existingIds.add(row.external_id);
-    }
+    const existingIds = databaseService.getExistingMessageExternalIds(userId);
     log.info(`[${IPhoneSyncStorageService.SERVICE_NAME}] Found ${existingIds.size} existing messages`);
 
-    // Prepare the insert statement
-    // SPRINT-068: Added participants_flat for phone number matching (was missing, causing auto-link to fail on Windows)
-    // TASK-1799: Added message_type for UI differentiation of voice messages, location, etc.
-    const insertStmt = db.prepare(`
-      INSERT OR IGNORE INTO messages (
-        id, user_id, channel, external_id, direction,
-        body_text, participants, participants_flat, thread_id, sent_at,
-        has_attachments, message_type, metadata, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `);
+    // Pre-filter and prepare messages for batch insert
+    const messagesToInsert: {
+      id: string;
+      userId: string;
+      channel: string;
+      externalId: string;
+      direction: string;
+      bodyText: string | null;
+      participants: string;
+      participantsFlat: string;
+      threadId: string;
+      sentAt: string;
+      hasAttachments: number;
+      messageType: string | null;
+      metadata: string | null;
+    }[] = [];
 
-    // Process in batches
-    const totalBatches = Math.ceil(messages.length / IPhoneSyncStorageService.BATCH_SIZE);
+    log.info(`[${IPhoneSyncStorageService.SERVICE_NAME}] Processing ${messages.length} messages`);
 
-    log.info(`[${IPhoneSyncStorageService.SERVICE_NAME}] Processing ${messages.length} messages in ${totalBatches} batches`);
+    for (const msg of messages) {
+      // Validate GUID before using it
+      if (!isValidGuid(msg.guid)) {
+        log.warn(`[${IPhoneSyncStorageService.SERVICE_NAME}] Skipping message with invalid GUID`, {
+          guid: msg.guid?.substring(0, 20),
+        });
+        skipped++;
+        continue;
+      }
 
-    for (let batchNum = 0; batchNum < totalBatches; batchNum++) {
-      const start = batchNum * IPhoneSyncStorageService.BATCH_SIZE;
-      const end = Math.min(start + IPhoneSyncStorageService.BATCH_SIZE, messages.length);
-      const batch = messages.slice(start, end);
+      // O(1) lookup using Set instead of database query
+      if (existingIds.has(msg.guid)) {
+        skipped++;
+        continue;
+      }
 
-      // Use a transaction for each batch
-      const insertBatch = db.transaction((msgs: iOSMessage[]) => {
-        for (const msg of msgs) {
-          // Validate GUID before using it
-          if (!isValidGuid(msg.guid)) {
-            log.warn(`[${IPhoneSyncStorageService.SERVICE_NAME}] Skipping message with invalid GUID`, {
-              guid: msg.guid?.substring(0, 20),
-            });
-            skipped++;
-            continue;
-          }
+      // Add to set so duplicates within same batch are caught
+      existingIds.add(msg.guid);
 
-          // O(1) lookup using Set instead of database query
-          if (existingIds.has(msg.guid)) {
-            skipped++;
-            continue;
-          }
+      // Find the conversation/thread for this message
+      const chatId = messageToChat.get(msg.id);
+      const threadId = chatId ? `ios-chat-${chatId}` : null;
 
-          // Find the conversation/thread for this message
-          const chatId = messageToChat.get(msg.id);
-          const threadId = chatId ? `ios-chat-${chatId}` : null;
+      // Map channel
+      const channel = msg.service === "iMessage" ? "imessage" : "sms";
 
-          // Map channel
-          const channel = msg.service === "iMessage" ? "imessage" : "sms";
+      // Map direction
+      const direction = msg.isFromMe ? "outbound" : "inbound";
 
-          // Map direction
-          const direction = msg.isFromMe ? "outbound" : "inbound";
+      // Sanitize user-provided data
+      const sanitizedHandle = sanitizeString(msg.handle, MAX_HANDLE_LENGTH, "unknown");
+      const sanitizedText = sanitizeString(msg.text, MAX_MESSAGE_TEXT_LENGTH, "");
 
-          // Sanitize user-provided data
-          const sanitizedHandle = sanitizeString(msg.handle, MAX_HANDLE_LENGTH, "unknown");
-          const sanitizedText = sanitizeString(msg.text, MAX_MESSAGE_TEXT_LENGTH, "");
-
-          // Build participants JSON with sanitized data
-          const participants = JSON.stringify({
-            from: msg.isFromMe ? "me" : sanitizedHandle,
-            to: msg.isFromMe ? [sanitizedHandle] : ["me"],
-          });
-
-          // SPRINT-068: Build participants_flat for phone number matching
-          // Extract digits from handle for fast LIKE queries (matches macOS import behavior)
-          const handleDigits = sanitizedHandle.replace(/\D/g, "");
-          const participantsFlat = handleDigits || sanitizedHandle;
-
-          // Build metadata
-          const metadata = JSON.stringify({
-            source: "iphone_sync",
-            originalId: msg.id,
-            dateRead: msg.dateRead?.toISOString() || null,
-            dateDelivered: msg.dateDelivered?.toISOString() || null,
-            attachmentCount: msg.attachments.length,
-          });
-
-          // TASK-1799: Detect message type for UI differentiation
-          // Get primary attachment MIME type for voice message detection
-          const primaryAttachmentMimeType = msg.attachments.length > 0
-            ? msg.attachments[0].mimeType
-            : null;
-          const messageType = detectMessageType({
-            text: sanitizedText,
-            hasAudioTranscript: !!msg.audioTranscript,
-            attachmentMimeType: primaryAttachmentMimeType,
-            attachmentCount: msg.attachments.length,
-          });
-
-          try {
-            insertStmt.run(
-              crypto.randomUUID(), // id
-              userId, // user_id
-              channel, // channel
-              msg.guid, // external_id (for deduplication) - already validated
-              direction, // direction
-              sanitizedText, // body_text - sanitized
-              participants, // participants JSON - sanitized
-              participantsFlat, // participants_flat for phone matching (SPRINT-068)
-              threadId, // thread_id
-              msg.date.toISOString(), // sent_at
-              msg.attachments.length > 0 ? 1 : 0, // has_attachments
-              messageType, // message_type (TASK-1799)
-              metadata // metadata
-            );
-            stored++;
-            // Add to set so duplicates within same batch are caught
-            existingIds.add(msg.guid);
-          } catch (insertError) {
-            // Log unexpected errors (not just duplicates)
-            const errMsg = insertError instanceof Error ? insertError.message : "Unknown error";
-            if (!errMsg.includes("UNIQUE constraint")) {
-              log.warn(`[${IPhoneSyncStorageService.SERVICE_NAME}] Failed to insert message`, {
-                guid: msg.guid,
-                error: errMsg,
-              });
-            }
-            skipped++;
-          }
-        }
+      // Build participants JSON with sanitized data
+      const participants = JSON.stringify({
+        from: msg.isFromMe ? "me" : sanitizedHandle,
+        to: msg.isFromMe ? [sanitizedHandle] : ["me"],
       });
 
-      // Execute batch
-      insertBatch(batch);
+      // SPRINT-068: Build participants_flat for phone number matching
+      // Extract digits from handle for fast LIKE queries (matches macOS import behavior)
+      const handleDigits = sanitizedHandle.replace(/\D/g, "");
+      const participantsFlat = handleDigits || sanitizedHandle;
 
-      // Report progress
-      onProgress?.(end, messages.length);
+      // Build metadata
+      const metadata = JSON.stringify({
+        source: "iphone_sync",
+        originalId: msg.id,
+        dateRead: msg.dateRead?.toISOString() || null,
+        dateDelivered: msg.dateDelivered?.toISOString() || null,
+        attachmentCount: msg.attachments.length,
+      });
 
-      // Yield to event loop every N batches to keep UI responsive
-      if ((batchNum + 1) % IPhoneSyncStorageService.YIELD_INTERVAL === 0) {
-        await yieldToEventLoop();
-      }
+      // TASK-1799: Detect message type for UI differentiation
+      // Get primary attachment MIME type for voice message detection
+      const primaryAttachmentMimeType = msg.attachments.length > 0
+        ? msg.attachments[0].mimeType
+        : null;
+      const messageType = detectMessageType({
+        text: sanitizedText,
+        hasAudioTranscript: !!msg.audioTranscript,
+        attachmentMimeType: primaryAttachmentMimeType,
+        attachmentCount: msg.attachments.length,
+      });
 
-      // Log progress every 10 batches
-      if ((batchNum + 1) % 10 === 0) {
-        log.info(`[${IPhoneSyncStorageService.SERVICE_NAME}] Progress: ${end}/${messages.length} messages (${Math.round((end / messages.length) * 100)}%)`);
-      }
+      messagesToInsert.push({
+        id: crypto.randomUUID(),
+        userId,
+        channel,
+        externalId: msg.guid,
+        direction,
+        bodyText: sanitizedText,
+        participants,
+        participantsFlat,
+        threadId: threadId || "",
+        sentAt: msg.date.toISOString(),
+        hasAttachments: msg.attachments.length > 0 ? 1 : 0,
+        messageType,
+        metadata,
+      });
     }
+
+    // Batch insert all prepared messages through the service layer
+    if (messagesToInsert.length > 0) {
+      const result = databaseService.batchInsertMessages(
+        messagesToInsert,
+        IPhoneSyncStorageService.BATCH_SIZE
+      );
+      stored = result.stored;
+      // Add DB-level skips (UNIQUE constraint) to our pre-filter skips
+      skipped += result.skipped;
+    }
+
+    // Report final progress
+    onProgress?.(messages.length, messages.length);
 
     return { stored, skipped };
   }
@@ -510,47 +480,24 @@ class IPhoneSyncStorageService {
 
     log.info(`[${IPhoneSyncStorageService.SERVICE_NAME}] Processing ${attachmentsToStore.length} attachments`);
 
-    const db = databaseService.getRawDatabase();
     const attachmentsDir = path.join(app.getPath("userData"), ATTACHMENTS_DIR);
 
     // Create attachments directory if it doesn't exist
     await fs.promises.mkdir(attachmentsDir, { recursive: true });
 
     // Load existing message IDs for linking
-    const messageIdMap = new Map<string, string>();
-    const msgRows = db.prepare(`
-      SELECT id, external_id FROM messages
-      WHERE user_id = ? AND external_id IS NOT NULL
-    `).all(userId) as { id: string; external_id: string }[];
-    for (const row of msgRows) {
-      messageIdMap.set(row.external_id, row.id);
-    }
+    const messageIdMap = databaseService.getMessageIdMap(userId);
 
     // Load existing attachment hashes for deduplication
     const existingHashes = new Set<string>();
-    const hashRows = db.prepare(`
-      SELECT storage_path FROM attachments WHERE storage_path IS NOT NULL
-    `).all() as { storage_path: string }[];
+    const hashRows = databaseService.getAttachmentStoragePaths();
     for (const row of hashRows) {
       const filename = path.basename(row.storage_path, path.extname(row.storage_path));
       existingHashes.add(filename);
     }
 
     // Load existing attachment records (message_id + filename)
-    const existingRecords = new Set<string>();
-    const recordRows = db.prepare(`
-      SELECT message_id, filename FROM attachments WHERE message_id IS NOT NULL
-    `).all() as { message_id: string; filename: string }[];
-    for (const row of recordRows) {
-      existingRecords.add(`${row.message_id}:${row.filename}`);
-    }
-
-    // Prepare insert statement
-    const insertStmt = db.prepare(`
-      INSERT OR IGNORE INTO attachments (
-        id, message_id, external_message_id, filename, mime_type, file_size_bytes, storage_path, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `);
+    const existingRecords = databaseService.getExistingAttachmentRecords();
 
     let stored = 0;
     let skipped = 0;
@@ -620,15 +567,15 @@ class IPhoneSyncStorageService {
         }
 
         // Create attachment record
-        insertStmt.run(
-          crypto.randomUUID(),
-          internalMessageId,
-          messageGuid,
+        databaseService.insertAttachment({
+          id: crypto.randomUUID(),
+          messageId: internalMessageId,
+          externalMessageId: messageGuid,
           filename,
-          attachment.mimeType || this.getMimeType(ext),
-          stats.size,
-          destPath
-        );
+          mimeType: attachment.mimeType || this.getMimeType(ext),
+          fileSizeBytes: stats.size,
+          storagePath: destPath,
+        });
 
         existingRecords.add(`${internalMessageId}:${filename}`);
         stored++;

@@ -321,7 +321,7 @@ export class EmailDeduplicationService {
     }
 
     try {
-      const db = databaseService.getRawDatabase();
+      const db = databaseService.getDatabaseForDeduplication();
       const dedupService = new EmailDeduplicationService(db);
 
       // Use batch check for efficiency
