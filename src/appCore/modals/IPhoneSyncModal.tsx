@@ -27,7 +27,7 @@ export function IPhoneSyncModal({ onClose }: IPhoneSyncModalProps) {
             </svg>
           </button>
         </div>
-        <IPhoneSyncFlow onClose={onClose} />
+        <IPhoneSyncFlow onClose={onClose} onSyncStarted={onClose} />
       </div>
     </div>
   );
