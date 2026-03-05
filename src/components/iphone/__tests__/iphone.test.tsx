@@ -559,8 +559,8 @@ describe("SyncProgress", () => {
     ).not.toBeInTheDocument();
   });
 
-  describe("size estimate overflow handling", () => {
-    it("should show determinate bar and estimate text when bytesProcessed <= estimatedTotalBytes", () => {
+  describe("backup phase progress display", () => {
+    it("should never show size estimate during backup phase (estimates are unreliable)", () => {
       const progress: BackupProgress = {
         phase: "backing_up",
         percent: 50,
@@ -570,13 +570,15 @@ describe("SyncProgress", () => {
 
       render(<SyncProgress progress={progress} onCancel={mockOnCancel} />);
 
-      // Should show "X / ~Y" format
-      expect(screen.getByText(/\/ ~/)).toBeInTheDocument();
-      // Should show percentage (determinate bar)
-      expect(screen.getByText(/50%/)).toBeInTheDocument();
+      // Should NOT show estimate text even when estimate is available
+      expect(screen.queryByText(/\/ ~/)).not.toBeInTheDocument();
+      // Should NOT show percentage (always indeterminate during backup)
+      expect(screen.queryByText(/50%/)).not.toBeInTheDocument();
+      // Should show transferred amount
+      expect(screen.getByText(/transferred/)).toBeInTheDocument();
     });
 
-    it("should show indeterminate bar and no estimate text when bytesProcessed > estimatedTotalBytes", () => {
+    it("should show only transferred amount when bytesProcessed exceeds estimate", () => {
       const progress: BackupProgress = {
         phase: "backing_up",
         percent: 99,
@@ -586,11 +588,8 @@ describe("SyncProgress", () => {
 
       render(<SyncProgress progress={progress} onCancel={mockOnCancel} />);
 
-      // Should NOT show "/ ~" estimate text
       expect(screen.queryByText(/\/ ~/)).not.toBeInTheDocument();
-      // Should NOT show percentage (no determinate bar)
       expect(screen.queryByText(/\d+%/)).not.toBeInTheDocument();
-      // Should still show transferred amount
       expect(screen.getByText(/transferred/)).toBeInTheDocument();
     });
 
@@ -604,9 +603,7 @@ describe("SyncProgress", () => {
 
       render(<SyncProgress progress={progress} onCancel={mockOnCancel} />);
 
-      // Should NOT show estimate text
       expect(screen.queryByText(/\/ ~/)).not.toBeInTheDocument();
-      // Should NOT show percentage (indeterminate bar)
       expect(screen.queryByText(/\d+%/)).not.toBeInTheDocument();
     });
 
