@@ -165,6 +165,47 @@ describe("tourSteps configuration", () => {
     });
   });
 
+  describe("iPhone sync tour step", () => {
+    it("should include iPhone sync step when hasIPhoneSync is true", () => {
+      const stepsWithSync = getDashboardTourSteps({
+        hasAIAddon: false,
+        isMacOS: false,
+        notificationsEnabled: true,
+        hasIPhoneSync: true,
+      });
+      const stepsWithout = getDashboardTourSteps({
+        hasAIAddon: false,
+        isMacOS: false,
+        notificationsEnabled: true,
+        hasIPhoneSync: false,
+      });
+      expect(stepsWithSync.length).toBe(stepsWithout.length + 1);
+    });
+
+    it("should NOT include iPhone sync step when hasIPhoneSync is false", () => {
+      const steps = getDashboardTourSteps({
+        hasAIAddon: false,
+        isMacOS: false,
+        notificationsEnabled: true,
+        hasIPhoneSync: false,
+      });
+      const syncStep = steps.find((s) => s.target === '[data-tour="sync-phone-card"]');
+      expect(syncStep).toBeUndefined();
+    });
+
+    it("should target sync-phone-card element", () => {
+      const steps = getDashboardTourSteps({
+        hasAIAddon: false,
+        isMacOS: false,
+        notificationsEnabled: true,
+        hasIPhoneSync: true,
+      });
+      const syncStep = steps.find((s) => s.target === '[data-tour="sync-phone-card"]');
+      expect(syncStep).toBeDefined();
+      expect(syncStep?.disableBeacon).toBe(true);
+    });
+  });
+
   describe("getExportTourSteps", () => {
     describe("with Outlook connected", () => {
       const steps = getExportTourSteps(true);
