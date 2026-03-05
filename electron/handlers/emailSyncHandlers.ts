@@ -55,6 +55,13 @@ export function registerEmailSyncHandlers(
       event: IpcMainInvokeEvent,
       userId: string,
     ): Promise<TransactionResponse> => {
+      Sentry.addBreadcrumb({
+        category: 'sync',
+        message: 'Cancel scan handler invoked',
+        level: 'info',
+        data: { handler: 'cancel-scan', sync_type: 'email' },
+      });
+
       logService.info("Cancelling transaction scan", "Transactions", {
         userId,
       });
@@ -84,6 +91,13 @@ export function registerEmailSyncHandlers(
       userId: string,
       options?: unknown,
     ): Promise<TransactionResponse> => {
+      Sentry.addBreadcrumb({
+        category: 'sync',
+        message: 'Transaction scan handler invoked',
+        level: 'info',
+        data: { handler: 'scan', sync_type: 'email' },
+      });
+
       logService.info("Starting transaction scan", "Transactions", {
         userId,
       });
@@ -134,6 +148,18 @@ export function registerEmailSyncHandlers(
         userId: validatedUserId,
         transactionsFound: result.transactionsFound,
         emailsScanned: result.emailsScanned,
+      });
+
+      Sentry.addBreadcrumb({
+        category: 'sync',
+        message: 'Transaction scan completed',
+        level: 'info',
+        data: {
+          handler: 'scan',
+          sync_type: 'email',
+          transactionsFound: result.transactionsFound,
+          emailsScanned: result.emailsScanned,
+        },
       });
 
       return {
@@ -239,6 +265,18 @@ export function registerEmailSyncHandlers(
 
       logService.info(`Total contact emails for sync: ${contactEmails.length}`, "Transactions", {
         contactEmails,
+      });
+
+      Sentry.addBreadcrumb({
+        category: 'sync',
+        message: 'Delegating to EmailSyncService for sync orchestration',
+        level: 'info',
+        data: {
+          handler: 'sync-and-fetch-emails',
+          sync_type: 'email',
+          transactionId: validatedTransactionId,
+          contactEmailCount: contactEmails.length,
+        },
       });
 
       // TASK-2066: Delegate to EmailSyncService for full orchestration
