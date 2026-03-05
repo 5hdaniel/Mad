@@ -345,12 +345,7 @@ class EmailAttachmentService {
     const existingHashes = new Set<string>();
 
     try {
-      const db = databaseService.getRawDatabase();
-      const rows = db
-        .prepare(
-          `SELECT storage_path FROM attachments WHERE storage_path IS NOT NULL`
-        )
-        .all() as { storage_path: string }[];
+      const rows = databaseService.getAttachmentStoragePaths();
 
       for (const row of rows) {
         // Extract hash from storage path (filename is the hash)
@@ -382,13 +377,7 @@ class EmailAttachmentService {
     filename: string
   ): Promise<boolean> {
     try {
-      const db = databaseService.getRawDatabase();
-      const row = db
-        .prepare(
-          `SELECT id FROM attachments WHERE email_id = ? AND filename = ?`
-        )
-        .get(emailId, filename);
-      return !!row;
+      return databaseService.hasAttachmentForEmail(emailId, filename);
     } catch {
       // If email_id column doesn't exist yet, return false
       return false;
@@ -407,26 +396,19 @@ class EmailAttachmentService {
     fileSize: number,
     storagePath: string
   ): Promise<void> {
-    const db = databaseService.getRawDatabase();
     const attachmentId = crypto.randomUUID();
 
     // Insert with email_id (new column for email attachments)
     // message_id is NULL for email attachments per SR Engineer migration clarification
-    db.prepare(
-      `
-      INSERT INTO attachments (
-        id, email_id, external_message_id, filename, mime_type, file_size_bytes, storage_path, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `
-    ).run(
-      attachmentId,
+    databaseService.createAttachmentRecord({
+      id: attachmentId,
       emailId,
       externalEmailId,
       filename,
       mimeType,
-      fileSize,
-      storagePath
-    );
+      fileSizeBytes: fileSize,
+      storagePath,
+    });
 
     await logService.debug(
       `Created attachment record: ${filename}`,
@@ -450,22 +432,7 @@ class EmailAttachmentService {
     }[]
   > {
     try {
-      const db = databaseService.getRawDatabase();
-      return db
-        .prepare(
-          `
-          SELECT id, filename, mime_type, file_size_bytes, storage_path
-          FROM attachments
-          WHERE email_id = ?
-        `
-        )
-        .all(emailId) as {
-        id: string;
-        filename: string;
-        mime_type: string | null;
-        file_size_bytes: number | null;
-        storage_path: string | null;
-      }[];
+      return databaseService.getAttachmentsByEmailId(emailId);
     } catch (error) {
       await logService.warn(
         `Failed to get attachments for email ${emailId}`,

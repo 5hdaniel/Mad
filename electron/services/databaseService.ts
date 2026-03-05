@@ -55,6 +55,7 @@ import type {
   IgnoredCommunication,
   NewIgnoredCommunication,
   Message,
+  Attachment,
 } from "../types";
 
 import { DatabaseError } from "../types";
@@ -2020,6 +2021,719 @@ class DatabaseService implements IDatabaseService {
         error: errorMessage,
       };
     }
+  }
+
+  // ============================================
+  // CONTACT RESOLUTION QUERIES (TASK-2100)
+  // ============================================
+
+  /**
+   * Look up contact display names by phone numbers.
+   * Matches against last 10 digits of both phone_e164 and phone_display.
+   */
+  getContactNamesByPhoneDigits(
+    normalizedPhones: string[]
+  ): { phone_e164: string | null; phone_display: string | null; display_name: string | null }[] {
+    if (normalizedPhones.length === 0) return [];
+    const db = this._ensureDb();
+    const placeholders = normalizedPhones.map(() => "?").join(", ");
+    const sql = `
+      SELECT
+        cp.phone_e164,
+        cp.phone_display,
+        c.display_name
+      FROM contact_phones cp
+      JOIN contacts c ON cp.contact_id = c.id
+      WHERE substr(replace(replace(replace(cp.phone_e164, '+', ''), '-', ''), ' ', ''), -10) IN (${placeholders})
+         OR substr(replace(replace(replace(cp.phone_display, '+', ''), '-', ''), ' ', ''), -10) IN (${placeholders})
+    `;
+    return db.prepare(sql).all(...normalizedPhones, ...normalizedPhones) as {
+      phone_e164: string | null;
+      phone_display: string | null;
+      display_name: string | null;
+    }[];
+  }
+
+  /**
+   * Look up contact display names by email addresses (case-insensitive).
+   */
+  getContactNamesByEmails(
+    lowerEmails: string[]
+  ): { email: string; display_name: string | null }[] {
+    if (lowerEmails.length === 0) return [];
+    const db = this._ensureDb();
+    const placeholders = lowerEmails.map(() => "?").join(", ");
+    const sql = `
+      SELECT
+        LOWER(ce.email) as email,
+        c.display_name
+      FROM contact_emails ce
+      JOIN contacts c ON ce.contact_id = c.id
+      WHERE LOWER(ce.email) IN (${placeholders})
+    `;
+    return db.prepare(sql).all(...lowerEmails) as {
+      email: string;
+      display_name: string | null;
+    }[];
+  }
+
+  /**
+   * Look up a contact display name by Apple ID prefix (email prefix match).
+   */
+  getContactNameByAppleIdPrefix(
+    appleIdLower: string
+  ): { email: string; display_name: string | null } | undefined {
+    const db = this._ensureDb();
+    const sql = `
+      SELECT
+        LOWER(ce.email) as email,
+        c.display_name
+      FROM contact_emails ce
+      JOIN contacts c ON ce.contact_id = c.id
+      WHERE LOWER(ce.email) LIKE ? || '@%'
+      LIMIT 1
+    `;
+    return db.prepare(sql).get(appleIdLower) as {
+      email: string;
+      display_name: string | null;
+    } | undefined;
+  }
+
+  // ============================================
+  // EMAIL ATTACHMENT QUERIES (TASK-2100)
+  // ============================================
+
+  /**
+   * Get all attachment storage paths (for content hash deduplication).
+   */
+  getAttachmentStoragePaths(): { storage_path: string }[] {
+    const db = this._ensureDb();
+    return db
+      .prepare(`SELECT storage_path FROM attachments WHERE storage_path IS NOT NULL`)
+      .all() as { storage_path: string }[];
+  }
+
+  /**
+   * Check if an attachment already exists for a given email and filename.
+   */
+  hasAttachmentForEmail(emailId: string, filename: string): boolean {
+    const db = this._ensureDb();
+    const row = db
+      .prepare(`SELECT id FROM attachments WHERE email_id = ? AND filename = ?`)
+      .get(emailId, filename);
+    return !!row;
+  }
+
+  /**
+   * Create an attachment record in the database.
+   */
+  createAttachmentRecord(params: {
+    id: string;
+    emailId: string;
+    externalEmailId: string;
+    filename: string;
+    mimeType: string;
+    fileSizeBytes: number;
+    storagePath: string;
+  }): void {
+    const db = this._ensureDb();
+    db.prepare(
+      `
+      INSERT INTO attachments (
+        id, email_id, external_message_id, filename, mime_type, file_size_bytes, storage_path, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `
+    ).run(
+      params.id,
+      params.emailId,
+      params.externalEmailId,
+      params.filename,
+      params.mimeType,
+      params.fileSizeBytes,
+      params.storagePath
+    );
+  }
+
+  /**
+   * Get attachments for an email by email_id.
+   */
+  getAttachmentsByEmailId(
+    emailId: string
+  ): {
+    id: string;
+    filename: string;
+    mime_type: string | null;
+    file_size_bytes: number | null;
+    storage_path: string | null;
+  }[] {
+    const db = this._ensureDb();
+    return db
+      .prepare(
+        `
+        SELECT id, filename, mime_type, file_size_bytes, storage_path
+        FROM attachments
+        WHERE email_id = ?
+      `
+      )
+      .all(emailId) as {
+      id: string;
+      filename: string;
+      mime_type: string | null;
+      file_size_bytes: number | null;
+      storage_path: string | null;
+    }[];
+  }
+
+  // ============================================
+  // FOLDER EXPORT ATTACHMENT QUERIES (TASK-2100)
+  // ============================================
+
+  /**
+   * Get attachments for a text message by message_id, with fallback to external_message_id.
+   */
+  getAttachmentsForMessageWithFallback(
+    messageId: string,
+    externalId?: string
+  ): {
+    id: string;
+    filename: string;
+    mime_type: string | null;
+    storage_path: string | null;
+    file_size_bytes: number | null;
+  }[] {
+    const db = this._ensureDb();
+
+    // Direct message_id lookup
+    let rows = db
+      .prepare(
+        `SELECT id, filename, mime_type, storage_path, file_size_bytes
+         FROM attachments WHERE message_id = ?`
+      )
+      .all(messageId) as {
+      id: string;
+      filename: string;
+      mime_type: string | null;
+      storage_path: string | null;
+      file_size_bytes: number | null;
+    }[];
+
+    // Fallback to external_message_id
+    if (rows.length === 0) {
+      let lookupExternalId = externalId;
+      if (!lookupExternalId) {
+        const messageRow = db
+          .prepare(`SELECT external_id FROM messages WHERE id = ?`)
+          .get(messageId) as { external_id: string | null } | undefined;
+        lookupExternalId = messageRow?.external_id || undefined;
+      }
+
+      if (lookupExternalId) {
+        rows = db
+          .prepare(
+            `SELECT id, filename, mime_type, storage_path, file_size_bytes
+             FROM attachments WHERE external_message_id = ?`
+          )
+          .all(lookupExternalId) as typeof rows;
+
+        // Update stale message_id for future queries
+        if (rows.length > 0) {
+          db.prepare(
+            `UPDATE attachments SET message_id = ? WHERE external_message_id = ?`
+          ).run(messageId, lookupExternalId);
+        }
+      }
+    }
+
+    return rows;
+  }
+
+  /**
+   * Get attachments for an email by email_id (folder export variant).
+   */
+  getAttachmentsForEmailExport(
+    emailId: string
+  ): {
+    id: string;
+    filename: string;
+    mime_type: string | null;
+    storage_path: string | null;
+    file_size_bytes: number | null;
+  }[] {
+    const db = this._ensureDb();
+    return db
+      .prepare(
+        `SELECT id, filename, mime_type, storage_path, file_size_bytes
+         FROM attachments WHERE email_id = ?`
+      )
+      .all(emailId) as {
+      id: string;
+      filename: string;
+      mime_type: string | null;
+      storage_path: string | null;
+      file_size_bytes: number | null;
+    }[];
+  }
+
+  /**
+   * Bulk query attachments by message_ids, external_message_ids, and email_ids.
+   * Used by folderExportService for building attachment manifests.
+   */
+  getAttachmentsForExportBulk(
+    messageIds: string[],
+    externalIds: string[],
+    emailIds: string[]
+  ): {
+    id: string;
+    message_id: string | null;
+    email_id: string | null;
+    filename: string;
+    mime_type: string | null;
+    file_size_bytes: number | null;
+    storage_path: string | null;
+  }[] {
+    const db = this._ensureDb();
+    type AttachmentRow = {
+      id: string;
+      message_id: string | null;
+      email_id: string | null;
+      filename: string;
+      mime_type: string | null;
+      file_size_bytes: number | null;
+      storage_path: string | null;
+    };
+    let attachmentRows: AttachmentRow[] = [];
+
+    if (messageIds.length > 0) {
+      const placeholders = messageIds.map(() => "?").join(", ");
+      const textRows = db
+        .prepare(
+          `SELECT id, message_id, NULL as email_id, filename, mime_type, file_size_bytes, storage_path
+           FROM attachments WHERE message_id IN (${placeholders})`
+        )
+        .all(...messageIds) as AttachmentRow[];
+      attachmentRows = [...attachmentRows, ...textRows];
+
+      if (externalIds.length > 0) {
+        const externalPlaceholders = externalIds.map(() => "?").join(", ");
+        const fallbackRows = db
+          .prepare(
+            `SELECT id, message_id, NULL as email_id, filename, mime_type, file_size_bytes, storage_path
+             FROM attachments
+             WHERE external_message_id IN (${externalPlaceholders})
+               AND id NOT IN (SELECT id FROM attachments WHERE message_id IN (${placeholders}))`
+          )
+          .all(...externalIds, ...messageIds) as AttachmentRow[];
+        attachmentRows = [...attachmentRows, ...fallbackRows];
+      }
+    }
+
+    if (emailIds.length > 0) {
+      const emailPlaceholders = emailIds.map(() => "?").join(", ");
+      const emailRows = db
+        .prepare(
+          `SELECT id, NULL as message_id, email_id, filename, mime_type, file_size_bytes, storage_path
+           FROM attachments WHERE email_id IN (${emailPlaceholders})`
+        )
+        .all(...emailIds) as AttachmentRow[];
+      attachmentRows = [...attachmentRows, ...emailRows];
+    }
+
+    return attachmentRows;
+  }
+
+  // ============================================
+  // SUBMISSION QUERIES (TASK-2100)
+  // ============================================
+
+  /**
+   * Load messages linked to a transaction via communications junction table,
+   * with optional audit date range filter.
+   */
+  getTransactionMessages(
+    transactionId: string,
+    auditStartDate?: Date | null,
+    auditEndDate?: Date | null
+  ): Message[] {
+    const db = this._ensureDb();
+
+    let sql = `
+      SELECT DISTINCT m.*
+      FROM messages m
+      INNER JOIN communications c ON (
+        (c.message_id IS NOT NULL AND c.message_id = m.id)
+        OR
+        (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+      )
+      WHERE c.transaction_id = ?
+    `;
+    const params: (string | number)[] = [transactionId];
+
+    if (auditStartDate) {
+      sql += ` AND m.sent_at >= ?`;
+      params.push(auditStartDate.toISOString());
+    }
+    if (auditEndDate) {
+      const endOfDay = new Date(auditEndDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      sql += ` AND m.sent_at <= ?`;
+      params.push(endOfDay.toISOString());
+    }
+
+    sql += ` ORDER BY m.sent_at ASC`;
+    return db.prepare(sql).all(...params) as Message[];
+  }
+
+  /**
+   * Load emails linked to a transaction via communications.email_id,
+   * with optional audit date range filter.
+   */
+  getTransactionEmails(
+    transactionId: string,
+    auditStartDate?: Date | null,
+    auditEndDate?: Date | null
+  ): Record<string, unknown>[] {
+    const db = this._ensureDb();
+
+    let sql = `
+      SELECT DISTINCT e.*
+      FROM emails e
+      INNER JOIN communications c ON c.email_id = e.id
+      WHERE c.transaction_id = ?
+    `;
+    const params: (string | number)[] = [transactionId];
+
+    if (auditStartDate) {
+      sql += ` AND e.sent_at >= ?`;
+      params.push(auditStartDate.toISOString());
+    }
+    if (auditEndDate) {
+      const endOfDay = new Date(auditEndDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      sql += ` AND e.sent_at <= ?`;
+      params.push(endOfDay.toISOString());
+    }
+
+    sql += ` ORDER BY e.sent_at ASC`;
+    return db.prepare(sql).all(...params) as Record<string, unknown>[];
+  }
+
+  /**
+   * Load attachments linked to a transaction (both text message and email attachments),
+   * with optional audit date range filter.
+   */
+  getTransactionAttachments(
+    transactionId: string,
+    auditStartDate?: Date | null,
+    auditEndDate?: Date | null
+  ): Attachment[] {
+    const db = this._ensureDb();
+
+    // Build date filter conditions for text messages
+    let dateFilter = "";
+    const dateParams: string[] = [];
+    if (auditStartDate) {
+      dateFilter += " AND m.sent_at >= ?";
+      dateParams.push(auditStartDate.toISOString());
+    }
+    if (auditEndDate) {
+      const endOfDay = new Date(auditEndDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      dateFilter += " AND m.sent_at <= ?";
+      dateParams.push(endOfDay.toISOString());
+    }
+
+    // Query 1: Text message attachments
+    const textAttachmentsSql = `
+      SELECT DISTINCT a.*
+      FROM attachments a
+      INNER JOIN messages m ON a.message_id = m.id
+      INNER JOIN communications c ON (
+        (c.message_id IS NOT NULL AND c.message_id = m.id)
+        OR
+        (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+      )
+      WHERE c.transaction_id = ?
+      AND a.storage_path IS NOT NULL
+      ${dateFilter}
+    `;
+    const textAttachments = db
+      .prepare(textAttachmentsSql)
+      .all(transactionId, ...dateParams) as Attachment[];
+
+    // Build email date filter
+    let emailDateFilter = "";
+    const emailDateParams: string[] = [];
+    if (auditStartDate) {
+      emailDateFilter += " AND e.sent_at >= ?";
+      emailDateParams.push(auditStartDate.toISOString());
+    }
+    if (auditEndDate) {
+      const endOfDay = new Date(auditEndDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      emailDateFilter += " AND e.sent_at <= ?";
+      emailDateParams.push(endOfDay.toISOString());
+    }
+
+    // Query 2: Email attachments
+    const emailAttachmentsSql = `
+      SELECT DISTINCT a.*
+      FROM attachments a
+      INNER JOIN emails e ON a.email_id = e.id
+      INNER JOIN communications c ON c.email_id = e.id
+      WHERE c.transaction_id = ?
+      AND a.email_id IS NOT NULL
+      AND a.storage_path IS NOT NULL
+      ${emailDateFilter}
+    `;
+    const emailAttachments = db
+      .prepare(emailAttachmentsSql)
+      .all(transactionId, ...emailDateParams) as Attachment[];
+
+    // Combine, deduplicate by id, and sort by created_at
+    const allAttachments = [...textAttachments, ...emailAttachments];
+    const uniqueAttachments = Array.from(
+      new Map(allAttachments.map((a) => [a.id, a])).values()
+    );
+    uniqueAttachments.sort((a, b) => {
+      const aTime = a.created_at ? new Date(a.created_at as string).getTime() : 0;
+      const bTime = b.created_at ? new Date(b.created_at as string).getTime() : 0;
+      return aTime - bTime;
+    });
+
+    return uniqueAttachments;
+  }
+
+  // ============================================
+  // SUBMISSION SYNC QUERIES (TASK-2100)
+  // ============================================
+
+  /**
+   * Find a local transaction by its cloud submission_id.
+   */
+  getTransactionBySubmissionId(
+    submissionId: string
+  ): { id: string; property_address: string; submission_id: string; submission_status: string | null; last_review_notes: string | null } | undefined {
+    const db = this._ensureDb();
+    return db
+      .prepare(
+        `SELECT id, property_address, submission_id, submission_status, last_review_notes
+         FROM transactions WHERE submission_id = ?`
+      )
+      .get(submissionId) as { id: string; property_address: string; submission_id: string; submission_status: string | null; last_review_notes: string | null } | undefined;
+  }
+
+  /**
+   * Find a local transaction by id that has a submission_id (i.e., has been submitted).
+   */
+  getSubmittedTransactionById(
+    transactionId: string
+  ): { id: string; property_address: string; submission_id: string; submission_status: string | null; last_review_notes: string | null } | undefined {
+    const db = this._ensureDb();
+    return db
+      .prepare(
+        `SELECT id, property_address, submission_id, submission_status, last_review_notes
+         FROM transactions WHERE id = ? AND submission_id IS NOT NULL`
+      )
+      .get(transactionId) as { id: string; property_address: string; submission_id: string; submission_status: string | null; last_review_notes: string | null } | undefined;
+  }
+
+  /**
+   * Get all locally submitted transactions that still have active (non-final) statuses.
+   */
+  getActiveSubmittedTransactions(): { id: string; property_address: string; submission_id: string; submission_status: string | null; last_review_notes: string | null }[] {
+    const db = this._ensureDb();
+    return db
+      .prepare(
+        `SELECT id, property_address, submission_id, submission_status, last_review_notes
+         FROM transactions
+         WHERE submission_id IS NOT NULL
+         AND submission_status NOT IN ('approved', 'rejected', 'not_submitted')
+         ORDER BY submitted_at DESC`
+      )
+      .all() as { id: string; property_address: string; submission_id: string; submission_status: string | null; last_review_notes: string | null }[];
+  }
+
+  /**
+   * Update a transaction's submission status and review notes.
+   */
+  updateTransactionSubmissionStatus(
+    transactionId: string,
+    submissionStatus: string,
+    lastReviewNotes: string | null
+  ): void {
+    const db = this._ensureDb();
+    db.prepare(
+      `UPDATE transactions
+       SET submission_status = ?,
+           last_review_notes = ?,
+           updated_at = ?
+       WHERE id = ?`
+    ).run(submissionStatus, lastReviewNotes, new Date().toISOString(), transactionId);
+  }
+
+  // ============================================
+  // iPHONE SYNC QUERIES (TASK-2100)
+  // ============================================
+
+  /**
+   * Get existing message external_ids for a user (for deduplication).
+   */
+  getExistingMessageExternalIds(userId: string): Set<string> {
+    const db = this._ensureDb();
+    const rows = db
+      .prepare(
+        `SELECT external_id FROM messages WHERE user_id = ? AND external_id IS NOT NULL`
+      )
+      .all(userId) as { external_id: string }[];
+    const ids = new Set<string>();
+    for (const row of rows) {
+      ids.add(row.external_id);
+    }
+    return ids;
+  }
+
+  /**
+   * Batch insert messages using a prepared statement within a transaction.
+   * Returns count of inserted and skipped messages.
+   */
+  batchInsertMessages(
+    messages: {
+      id: string;
+      userId: string;
+      channel: string;
+      externalId: string;
+      direction: string;
+      bodyText: string | null;
+      participants: string;
+      participantsFlat: string;
+      threadId: string;
+      sentAt: string;
+      hasAttachments: number;
+      messageType: string | null;
+      metadata: string | null;
+    }[],
+    batchSize: number
+  ): { stored: number; skipped: number } {
+    const db = this._ensureDb();
+    const insertStmt = db.prepare(`
+      INSERT OR IGNORE INTO messages (
+        id, user_id, channel, external_id, direction,
+        body_text, participants, participants_flat, thread_id, sent_at,
+        has_attachments, message_type, metadata, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `);
+
+    let stored = 0;
+    let skipped = 0;
+    const totalBatches = Math.ceil(messages.length / batchSize);
+
+    for (let batchNum = 0; batchNum < totalBatches; batchNum++) {
+      const start = batchNum * batchSize;
+      const end = Math.min(start + batchSize, messages.length);
+      const batch = messages.slice(start, end);
+
+      const runBatch = db.transaction(() => {
+        for (const msg of batch) {
+          const result = insertStmt.run(
+            msg.id,
+            msg.userId,
+            msg.channel,
+            msg.externalId,
+            msg.direction,
+            msg.bodyText,
+            msg.participants,
+            msg.participantsFlat,
+            msg.threadId,
+            msg.sentAt,
+            msg.hasAttachments,
+            msg.messageType,
+            msg.metadata
+          );
+          if (result.changes > 0) {
+            stored++;
+          } else {
+            skipped++;
+          }
+        }
+      });
+      runBatch();
+    }
+
+    return { stored, skipped };
+  }
+
+  /**
+   * Get message id/external_id map for a user (for attachment linking).
+   */
+  getMessageIdMap(userId: string): Map<string, string> {
+    const db = this._ensureDb();
+    const rows = db
+      .prepare(
+        `SELECT id, external_id FROM messages WHERE user_id = ? AND external_id IS NOT NULL`
+      )
+      .all(userId) as { id: string; external_id: string }[];
+    const map = new Map<string, string>();
+    for (const row of rows) {
+      map.set(row.external_id, row.id);
+    }
+    return map;
+  }
+
+  /**
+   * Get existing attachment records for deduplication (message_id + filename pairs).
+   */
+  getExistingAttachmentRecords(): Set<string> {
+    const db = this._ensureDb();
+    const rows = db
+      .prepare(
+        `SELECT message_id, filename FROM attachments WHERE message_id IS NOT NULL`
+      )
+      .all() as { message_id: string; filename: string }[];
+    const records = new Set<string>();
+    for (const row of rows) {
+      records.add(`${row.message_id}:${row.filename}`);
+    }
+    return records;
+  }
+
+  /**
+   * Insert a single attachment record (for iPhone sync).
+   */
+  insertAttachment(params: {
+    id: string;
+    messageId: string;
+    externalMessageId: string;
+    filename: string;
+    mimeType: string;
+    fileSizeBytes: number;
+    storagePath: string;
+  }): void {
+    const db = this._ensureDb();
+    db.prepare(
+      `INSERT OR IGNORE INTO attachments (
+        id, message_id, external_message_id, filename, mime_type, file_size_bytes, storage_path, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+    ).run(
+      params.id,
+      params.messageId,
+      params.externalMessageId,
+      params.filename,
+      params.mimeType,
+      params.fileSizeBytes,
+      params.storagePath
+    );
+  }
+
+  // ============================================
+  // EMAIL DEDUPLICATION (TASK-2100)
+  // ============================================
+
+  /**
+   * Get the raw database handle for use by EmailDeduplicationService.
+   * This is a controlled accessor -- only use for classes that need direct DB access.
+   */
+  getDatabaseForDeduplication(): DatabaseType {
+    return this._ensureDb();
   }
 }
 
