@@ -1057,5 +1057,5 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 
 -- Initialize schema version if not exists
--- Version 29: Consolidated schema (all migrations through 28 folded in)
-INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 29);
+-- Version 32: Consolidated schema (includes sync_session_id columns from TASK-2110)
+INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 32);
