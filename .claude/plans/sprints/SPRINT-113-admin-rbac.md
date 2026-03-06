@@ -141,8 +141,9 @@ ALTER TABLE public.internal_roles ADD COLUMN role_id UUID REFERENCES public.admi
 | TASK-2122 | Role management UI (create/edit/delete roles, permission matrix) | service | ~35K | Pending |
 | TASK-2123 | Update middleware and page guards to check permissions | service | ~15K | Pending |
 | TASK-2124 | Update internal user management to assign roles from admin_roles | service | ~10K | Pending |
+| TASK-2125 | Group Settings sidebar items under collapsible sub-nav | service | ~8K | In Progress |
 
-**Total Estimated:** ~78K tokens
+**Total Estimated:** ~86K tokens
 
 ---
 
