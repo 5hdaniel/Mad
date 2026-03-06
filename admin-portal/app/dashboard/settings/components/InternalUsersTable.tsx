@@ -24,7 +24,7 @@ interface InternalUsersTableProps {
   onClearExternalRoleFilter?: () => void;
 }
 
-type SortField = 'name' | 'role' | 'added';
+type SortField = 'name' | 'role' | 'added' | 'added_by';
 type SortDir = 'asc' | 'desc';
 
 const roleBadgeStyles: Record<string, { bg: string; text: string; icon: typeof Shield; ring: string }> = {
@@ -138,6 +138,10 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles,
           case 'added':
             aVal = a.created_at;
             bVal = b.created_at;
+            break;
+          case 'added_by':
+            aVal = (a.created_by_email || '').toLowerCase();
+            bVal = (b.created_by_email || '').toLowerCase();
             break;
         }
         const cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
@@ -325,7 +329,9 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles,
               <th onClick={() => toggleSort('added')} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none">
                 <span className="inline-flex items-center">Added<SortIcon field="added" currentField={sortField} dir={sortDir} /></span>
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Added By</th>
+              <th onClick={() => toggleSort('added_by')} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none">
+                <span className="inline-flex items-center">Added By<SortIcon field="added_by" currentField={sortField} dir={sortDir} /></span>
+              </th>
               {canManage && <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>}
             </tr>
           </thead>

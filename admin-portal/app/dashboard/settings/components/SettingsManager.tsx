@@ -5,17 +5,18 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Users, ShieldCheck } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Users, ShieldCheck, FileText } from 'lucide-react';
 import type { InternalUser, AdminRole, AdminPermission } from '../page';
 import { InternalUsersTable } from './InternalUsersTable';
 import { AddInternalUserForm } from './AddInternalUserForm';
 import { RemoveUserDialog } from './RemoveUserDialog';
 import { RoleManagement } from './RoleManagement';
+import { AuditLogContent } from '@/app/dashboard/audit-log/AuditLogContent';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
 import { PERMISSIONS } from '@/lib/permissions';
 
-type Tab = 'users' | 'roles';
+type Tab = 'users' | 'roles' | 'audit';
 
 interface SettingsManagerProps {
   initialUsers: InternalUser[];
@@ -26,6 +27,7 @@ interface SettingsManagerProps {
 
 export function SettingsManager({ initialUsers, currentUserId, initialRoles, permissions }: SettingsManagerProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { hasPermission } = usePermissions();
   const [activeTab, setActiveTab] = useState<Tab>('users');
   const [users, setUsers] = useState<InternalUser[]>(initialUsers);
@@ -44,14 +46,25 @@ export function SettingsManager({ initialUsers, currentUserId, initialRoles, per
 
   const canManageUsers = hasPermission(PERMISSIONS.INTERNAL_USERS_MANAGE);
   const canViewRoles = hasPermission(PERMISSIONS.ROLES_VIEW) || hasPermission(PERMISSIONS.ROLES_MANAGE);
+  const canViewAudit = hasPermission(PERMISSIONS.AUDIT_VIEW);
 
   const handleRefresh = useCallback(() => {
     router.refresh();
   }, [router]);
 
+  // Handle tab from URL query param (e.g., ?tab=roles from sidebar)
+  // useSearchParams is reactive to Next.js client-side navigation
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'roles' && canViewRoles) setActiveTab('roles');
+    else if (tab === 'audit' && canViewAudit) setActiveTab('audit');
+    else if (tab === 'users') setActiveTab('users');
+  }, [searchParams, canViewRoles, canViewAudit]);
+
   const tabs = [
-    { key: 'users' as Tab, label: 'Internal Users', icon: Users, count: users.length },
-    ...(canViewRoles ? [{ key: 'roles' as Tab, label: 'Roles & Permissions', icon: ShieldCheck, count: initialRoles.length }] : []),
+    { key: 'users' as Tab, label: 'Internal Users', icon: Users },
+    ...(canViewRoles ? [{ key: 'roles' as Tab, label: 'Roles & Permissions', icon: ShieldCheck }] : []),
+    ...(canViewAudit ? [{ key: 'audit' as Tab, label: 'Audit Log', icon: FileText }] : []),
   ];
 
   return (
@@ -74,11 +87,6 @@ export function SettingsManager({ initialUsers, currentUserId, initialRoles, per
               >
                 <Icon className="h-4 w-4" />
                 {tab.label}
-                <span className={`rounded-full px-2 py-0.5 text-xs ${
-                  isActive ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-500'
-                }`}>
-                  {tab.count}
-                </span>
               </button>
             );
           })}
@@ -118,6 +126,10 @@ export function SettingsManager({ initialUsers, currentUserId, initialRoles, per
           users={initialUsers}
           onNavigateToUsersWithRole={handleNavigateToUsersWithRole}
         />
+      )}
+
+      {activeTab === 'audit' && canViewAudit && (
+        <AuditLogContent embedded />
       )}
     </div>
   );

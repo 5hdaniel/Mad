@@ -12,13 +12,13 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 
-/** Maps route prefixes to required permission keys */
-const ROUTE_PERMISSIONS: Record<string, string> = {
-  '/dashboard/analytics': 'analytics.view',
-  '/dashboard/users': 'users.view',
-  '/dashboard/organizations': 'organizations.view',
-  '/dashboard/audit-log': 'audit.view',
-  '/dashboard/settings': 'internal_users.view',
+/** Maps route prefixes to required permission keys (any one grants access) */
+const ROUTE_PERMISSIONS: Record<string, string[]> = {
+  '/dashboard/analytics': ['analytics.view'],
+  '/dashboard/users': ['users.view'],
+  '/dashboard/organizations': ['organizations.view'],
+  '/dashboard/audit-log': ['audit.view'],
+  '/dashboard/settings': ['internal_users.view', 'roles.view', 'audit.view'],
 };
 
 export async function middleware(request: NextRequest) {
@@ -106,14 +106,21 @@ export async function middleware(request: NextRequest) {
       }
 
       // Check route-level permissions (skip for /dashboard root — always allowed for internal users)
-      for (const [routePrefix, requiredPermission] of Object.entries(ROUTE_PERMISSIONS)) {
+      for (const [routePrefix, requiredPermissions] of Object.entries(ROUTE_PERMISSIONS)) {
         if (pathname.startsWith(routePrefix)) {
-          const { data: hasPerm } = await supabase.rpc('has_permission', {
-            check_user_id: user.id,
-            required_permission: requiredPermission,
-          });
+          let hasAnyPerm = false;
+          for (const perm of requiredPermissions) {
+            const { data: hasPerm } = await supabase.rpc('has_permission', {
+              check_user_id: user.id,
+              required_permission: perm,
+            });
+            if (hasPerm) {
+              hasAnyPerm = true;
+              break;
+            }
+          }
 
-          if (!hasPerm) {
+          if (!hasAnyPerm) {
             return NextResponse.redirect(new URL('/dashboard?error=insufficient_permissions', request.url));
           }
           break;

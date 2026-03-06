@@ -10,7 +10,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { LayoutDashboard, BarChart3, Users, Building2, Settings, LogOut, PanelLeftClose, PanelLeftOpen, FileText, ChevronDown, ChevronRight, Shield } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
@@ -34,9 +34,9 @@ const mainNavItems: NavItem[] = [
 
 /** Sub-items under the collapsible "Settings" section */
 const settingsSubItems: NavItem[] = [
-  { label: 'Internal Users', href: '/dashboard/settings', icon: Users, permission: PERMISSIONS.INTERNAL_USERS_VIEW },
+  { label: 'Internal Users', href: '/dashboard/settings?tab=users', icon: Users, permission: PERMISSIONS.INTERNAL_USERS_VIEW },
   { label: 'Roles & Permissions', href: '/dashboard/settings?tab=roles', icon: Shield, permission: PERMISSIONS.ROLES_VIEW },
-  { label: 'Audit Log', href: '/dashboard/audit-log', icon: FileText, permission: PERMISSIONS.AUDIT_VIEW },
+  { label: 'Audit Log', href: '/dashboard/settings?tab=audit', icon: FileText, permission: PERMISSIONS.AUDIT_VIEW },
 ];
 
 /** Permissions that grant visibility to the Settings section */
@@ -53,11 +53,12 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { signOut } = useAuth();
   const { hasPermission, roleName, loading } = usePermissions();
 
   // Check if any settings sub-item route is active
-  const isSettingsActive = pathname.startsWith('/dashboard/settings') || pathname.startsWith('/dashboard/audit-log');
+  const isSettingsActive = pathname.startsWith('/dashboard/settings');
 
   // Auto-expand when a settings route is active; allow manual toggle otherwise
   const [settingsExpanded, setSettingsExpanded] = useState(isSettingsActive);
@@ -76,28 +77,14 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     // While permissions are loading, show all items to prevent flash
     if (!loading && !hasPermission(item.permission)) return null;
 
-    // For sub-items with query params (e.g., ?tab=roles), match on pathname + search
     const itemPath = item.href.split('?')[0];
-    const itemQuery = item.href.includes('?') ? item.href.split('?')[1] : null;
+    const itemQuery = item.href.includes('?') ? new URLSearchParams(item.href.split('?')[1]) : null;
     let isActive: boolean;
 
     if (itemQuery) {
-      // Match path and ensure query param is present
-      isActive = pathname === itemPath;
-      // For tab-based routes, we check if this is the specific tab
-      // The "Internal Users" item (no query) is active when on /dashboard/settings without ?tab=roles
-      // The "Roles & Permissions" item (?tab=roles) is active when on /dashboard/settings?tab=roles
-      // Since usePathname doesn't include search params, we rely on the pathname match
-      // and differentiate at render time by checking if the default tab
-      if (isActive && itemQuery === 'tab=roles') {
-        // This will be highlighted via CSS; both settings sub-items share the same path
-        // We mark it active only if the URL has the tab=roles param
-        // Since Next.js usePathname doesn't include query, we use a workaround
-        isActive = typeof window !== 'undefined' && window.location.search.includes('tab=roles');
-      } else if (isActive && !itemQuery) {
-        // Default tab (Internal Users) - active when no tab=roles in URL
-        isActive = typeof window === 'undefined' || !window.location.search.includes('tab=roles');
-      }
+      const tabValue = itemQuery.get('tab');
+      const currentTab = searchParams.get('tab');
+      isActive = pathname === itemPath && currentTab === tabValue;
     } else {
       isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
     }

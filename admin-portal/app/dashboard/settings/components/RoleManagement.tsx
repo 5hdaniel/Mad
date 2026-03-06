@@ -412,7 +412,7 @@ function DeleteRoleDialog({
       });
       if (error) {
         onError(error.message);
-        setDeleting(false);
+        onCancel();
         return;
       }
       onConfirm();
