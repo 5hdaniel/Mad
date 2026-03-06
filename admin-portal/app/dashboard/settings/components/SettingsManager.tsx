@@ -28,7 +28,7 @@ interface SettingsManagerProps {
 export function SettingsManager({ initialUsers, currentUserId, initialRoles, permissions }: SettingsManagerProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, refreshPermissions } = usePermissions();
   const [activeTab, setActiveTab] = useState<Tab>('users');
   const [users, setUsers] = useState<InternalUser[]>(initialUsers);
   const [usersToRemove, setUsersToRemove] = useState<InternalUser[]>([]);
@@ -49,8 +49,9 @@ export function SettingsManager({ initialUsers, currentUserId, initialRoles, per
   const canViewAudit = hasPermission(PERMISSIONS.AUDIT_VIEW);
 
   const handleRefresh = useCallback(() => {
+    refreshPermissions();
     router.refresh();
-  }, [router]);
+  }, [router, refreshPermissions]);
 
   // Handle tab from URL query param (e.g., ?tab=roles from sidebar)
   // useSearchParams is reactive to Next.js client-side navigation
@@ -112,7 +113,7 @@ export function SettingsManager({ initialUsers, currentUserId, initialRoles, per
           {usersToRemove.length > 0 && (
             <RemoveUserDialog
               users={usersToRemove}
-              onConfirm={() => { setUsersToRemove([]); router.refresh(); }}
+              onConfirm={() => { setUsersToRemove([]); refreshPermissions(); router.refresh(); }}
               onCancel={() => setUsersToRemove([])}
             />
           )}

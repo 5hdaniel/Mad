@@ -7,7 +7,7 @@
  * then provides a `hasPermission` helper and the raw set.
  */
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from './AuthProvider';
 import type { PermissionKey } from '@/lib/permissions';
@@ -19,6 +19,7 @@ interface PermissionsContextType {
   loading: boolean;
   hasPermission: (key: PermissionKey) => boolean;
   hasAnyPermission: (...keys: PermissionKey[]) => boolean;
+  refreshPermissions: () => Promise<void>;
 }
 
 const PermissionsContext = createContext<PermissionsContextType>({
@@ -28,6 +29,7 @@ const PermissionsContext = createContext<PermissionsContextType>({
   loading: true,
   hasPermission: () => false,
   hasAnyPermission: () => false,
+  refreshPermissions: async () => {},
 });
 
 export function PermissionsProvider({ children }: { children: ReactNode }) {
@@ -38,7 +40,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const supabase = useMemo(() => createClient(), []);
 
-  useEffect(() => {
+  const fetchPermissions = useCallback(async () => {
     if (!user) {
       setPermissions(new Set());
       setRoleName(null);
@@ -47,33 +49,33 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    async function loadPermissions() {
-      // Fetch permissions and role info in parallel
-      const [permsResult, roleResult] = await Promise.all([
-        supabase.rpc('get_user_permissions', { check_user_id: user!.id }),
-        supabase
-          .from('internal_roles')
-          .select('role_id, role:admin_roles(name, slug)')
-          .eq('user_id', user!.id)
-          .single(),
-      ]);
+    // Fetch permissions and role info in parallel
+    const [permsResult, roleResult] = await Promise.all([
+      supabase.rpc('get_user_permissions', { check_user_id: user.id }),
+      supabase
+        .from('internal_roles')
+        .select('role_id, role:admin_roles(name, slug)')
+        .eq('user_id', user.id)
+        .single(),
+    ]);
 
-      if (permsResult.data) {
-        const keys = (permsResult.data as Array<{ key: string }>).map((r) => r.key);
-        setPermissions(new Set(keys));
-      }
-
-      if (roleResult.data) {
-        const role = roleResult.data.role as unknown as { name: string; slug: string } | null;
-        setRoleName(role?.name ?? null);
-        setRoleSlug(role?.slug ?? null);
-      }
-
-      setLoading(false);
+    if (permsResult.data) {
+      const keys = (permsResult.data as Array<{ key: string }>).map((r) => r.key);
+      setPermissions(new Set(keys));
     }
 
-    loadPermissions();
+    if (roleResult.data) {
+      const role = roleResult.data.role as unknown as { name: string; slug: string } | null;
+      setRoleName(role?.name ?? null);
+      setRoleSlug(role?.slug ?? null);
+    }
+
+    setLoading(false);
   }, [user, supabase]);
+
+  useEffect(() => {
+    fetchPermissions();
+  }, [fetchPermissions]);
 
   const value = useMemo(() => ({
     permissions,
@@ -82,7 +84,8 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     loading,
     hasPermission: (key: PermissionKey) => permissions.has(key),
     hasAnyPermission: (...keys: PermissionKey[]) => keys.some((k) => permissions.has(k)),
-  }), [permissions, roleName, roleSlug, loading]);
+    refreshPermissions: fetchPermissions,
+  }), [permissions, roleName, roleSlug, loading, fetchPermissions]);
 
   return (
     <PermissionsContext.Provider value={value}>

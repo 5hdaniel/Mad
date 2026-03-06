@@ -22,7 +22,7 @@ interface RoleManagementProps {
 }
 
 export function RoleManagement({ roles, permissions, onRefresh, users = [], onNavigateToUsersWithRole }: RoleManagementProps) {
-  const { hasPermission } = usePermissions();
+  const { hasPermission, refreshPermissions } = usePermissions();
   const canManage = hasPermission(PERMISSIONS.ROLES_MANAGE);
   const [editingRole, setEditingRole] = useState<AdminRole | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -196,6 +196,7 @@ function RoleEditor({
   onSave: () => void;
   onError: (msg: string) => void;
 }) {
+  const { refreshPermissions } = usePermissions();
   const [name, setName] = useState(role?.name || '');
   const [description, setDescription] = useState(role?.description || '');
   const [selectedPerms, setSelectedPerms] = useState<Set<string>>(
@@ -261,6 +262,7 @@ function RoleEditor({
         if (permErr) { onError(permErr.message); return; }
       }
 
+      await refreshPermissions();
       onSave();
       onClose();
     } catch (err) {
@@ -268,7 +270,7 @@ function RoleEditor({
     } finally {
       setSaving(false);
     }
-  }, [isNew, role, name, description, selectedPerms, onSave, onClose, onError]);
+  }, [isNew, role, name, description, selectedPerms, onSave, onClose, onError, refreshPermissions]);
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -401,6 +403,7 @@ function DeleteRoleDialog({
   onCancel: () => void;
   onError: (msg: string) => void;
 }) {
+  const { refreshPermissions } = usePermissions();
   const [deleting, setDeleting] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -432,12 +435,13 @@ function DeleteRoleDialog({
         onCancel();
         return;
       }
+      await refreshPermissions();
       onConfirm();
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Failed to delete role');
       setDeleting(false);
     }
-  }, [role.id, onConfirm, onCancel, onError]);
+  }, [role.id, onConfirm, onCancel, onError, refreshPermissions]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
