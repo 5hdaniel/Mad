@@ -13,7 +13,7 @@ import { createClient } from '@/lib/supabase/client';
 import type { InternalUser, AdminRole } from '../page';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
 import { PERMISSIONS } from '@/lib/permissions';
-import { formatDate } from '@/lib/format';
+import { formatTimestamp } from '@/lib/format';
 
 interface InternalUsersTableProps {
   users: InternalUser[];
@@ -395,7 +395,7 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles,
                       <RoleBadge slug={user.role_slug} name={user.role_name} />
                     )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(user.created_at)}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatTimestamp(user.created_at)}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.created_by_email || '--'}</td>
                   {canManage && (
                     <td className="px-6 py-4 whitespace-nowrap text-right">
