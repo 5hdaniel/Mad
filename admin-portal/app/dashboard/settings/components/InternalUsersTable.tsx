@@ -20,6 +20,8 @@ interface InternalUsersTableProps {
   onRemoveClick: (user: InternalUser) => void;
   roles: AdminRole[];
   onRoleChange: () => void;
+  externalRoleFilter?: string | null;
+  onClearExternalRoleFilter?: () => void;
 }
 
 type SortField = 'name' | 'role' | 'added';
@@ -85,7 +87,7 @@ function SortIcon({ field, currentField, dir }: { field: SortField; currentField
     : <ArrowDown className="h-3 w-3 ml-1" />;
 }
 
-export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles, onRoleChange }: InternalUsersTableProps) {
+export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles, onRoleChange, externalRoleFilter, onClearExternalRoleFilter }: InternalUsersTableProps) {
   const { hasPermission } = usePermissions();
   const canManage = hasPermission(PERMISSIONS.INTERNAL_USERS_MANAGE);
   const [sortField, setSortField] = useState<SortField | null>(null);
@@ -105,10 +107,12 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles,
 
   const uniqueRoleSlugs = useMemo(() => Object.keys(roleCounts).sort(), [roleCounts]);
 
+  const effectiveRoleFilter = externalRoleFilter ?? roleFilter;
+
   const filteredUsers = useMemo(() => {
     let list = users;
-    if (roleFilter) {
-      list = list.filter((u) => u.role_slug === roleFilter);
+    if (effectiveRoleFilter) {
+      list = list.filter((u) => u.role_slug === effectiveRoleFilter);
     }
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
@@ -141,7 +145,7 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles,
       });
     }
     return list;
-  }, [users, roleFilter, searchQuery, sortField, sortDir]);
+  }, [users, effectiveRoleFilter, searchQuery, sortField, sortDir]);
 
   const selectableUsers = filteredUsers.filter((u) => u.user_id !== currentUserId);
   const allSelected = selectableUsers.length > 0 && selected.size === selectableUsers.length;
@@ -230,13 +234,19 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles,
         <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Filter by role:</span>
         {uniqueRoleSlugs.map((slug) => {
           const style = roleBadgeStyles[slug] || { bg: 'bg-gray-100', text: 'text-gray-600', ring: 'ring-gray-400' };
-          const isActive = roleFilter === slug;
+          const isActive = effectiveRoleFilter === slug;
           const roleName = users.find((u) => u.role_slug === slug)?.role_name || slug;
           return (
             <button
               key={slug}
               type="button"
-              onClick={() => toggleFilter(slug)}
+              onClick={() => {
+                if (externalRoleFilter !== undefined && externalRoleFilter !== null) {
+                  // Clear external filter first, then apply local filter
+                  onClearExternalRoleFilter?.();
+                }
+                toggleFilter(slug);
+              }}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${style.bg} ${style.text} ${
                 isActive ? `ring-2 ${style.ring}` : 'ring-1 ring-transparent hover:shadow-sm'
               }`}
@@ -246,8 +256,15 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles,
             </button>
           );
         })}
-        {roleFilter && (
-          <button type="button" onClick={() => setRoleFilter(null)} className="text-xs text-primary-600 hover:text-primary-800 underline">
+        {effectiveRoleFilter && (
+          <button
+            type="button"
+            onClick={() => {
+              setRoleFilter(null);
+              onClearExternalRoleFilter?.();
+            }}
+            className="text-xs text-primary-600 hover:text-primary-800 underline"
+          >
             Clear
           </button>
         )}
@@ -274,7 +291,7 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles,
         </div>
       )}
 
-      {(roleFilter || trimmedSearch) && (
+      {(effectiveRoleFilter || trimmedSearch) && (
         <div className="mb-3 text-sm text-gray-500">
           Showing {filteredUsers.length} of {users.length} user{users.length !== 1 ? 's' : ''}
         </div>
