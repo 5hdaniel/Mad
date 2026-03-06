@@ -8,7 +8,7 @@
  */
 
 import { useState, useMemo, useCallback } from 'react';
-import { Shield, ShieldAlert, ShieldCheck, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Shield, ShieldAlert, ShieldCheck, ArrowUpDown, ArrowUp, ArrowDown, Search } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { InternalUser, AdminRole } from '../page';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
@@ -91,6 +91,7 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles,
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [roleFilter, setRoleFilter] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [changingRole, setChangingRole] = useState<string | null>(null);
 
@@ -108,6 +109,14 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles,
     let list = users;
     if (roleFilter) {
       list = list.filter((u) => u.role_slug === roleFilter);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      list = list.filter(
+        (u) =>
+          (u.display_name?.toLowerCase().includes(q) ?? false) ||
+          (u.email?.toLowerCase().includes(q) ?? false),
+      );
     }
     if (sortField) {
       list = [...list].sort((a, b) => {
@@ -132,7 +141,7 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles,
       });
     }
     return list;
-  }, [users, roleFilter, sortField, sortDir]);
+  }, [users, roleFilter, searchQuery, sortField, sortDir]);
 
   const selectableUsers = filteredUsers.filter((u) => u.user_id !== currentUserId);
   const allSelected = selectableUsers.length > 0 && selected.size === selectableUsers.length;
@@ -200,8 +209,22 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles,
     );
   }
 
+  const trimmedSearch = searchQuery.trim();
+
   return (
     <>
+      {/* Search input */}
+      <div className="relative mb-4">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => { setSearchQuery(e.target.value); setSelected(new Set()); }}
+          placeholder="Search by name or email..."
+          className="w-full rounded-md border border-gray-300 pl-9 pr-3 py-2 text-sm text-gray-900 shadow-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none"
+        />
+      </div>
+
       {/* Role filter badges */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
         <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Filter by role:</span>
@@ -251,9 +274,9 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles,
         </div>
       )}
 
-      {roleFilter && (
+      {(roleFilter || trimmedSearch) && (
         <div className="mb-3 text-sm text-gray-500">
-          Showing {filteredUsers.length} of {users.length} users
+          Showing {filteredUsers.length} of {users.length} user{users.length !== 1 ? 's' : ''}
         </div>
       )}
 
@@ -290,6 +313,15 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles,
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
+            {filteredUsers.length === 0 && (
+              <tr>
+                <td colSpan={canManage ? 6 : 4} className="px-6 py-12 text-center text-sm text-gray-500">
+                  {trimmedSearch
+                    ? `No users matching "${trimmedSearch}"`
+                    : 'No users match the selected filter.'}
+                </td>
+              </tr>
+            )}
             {filteredUsers.map((user) => {
               const isCurrentUser = user.user_id === currentUserId;
               return (
