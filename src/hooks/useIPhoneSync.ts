@@ -85,6 +85,28 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       const status = await syncApi.getUnifiedStatus();
       setSyncLocked(status.isAnyOperationRunning);
       setLockReason(status.currentOperation);
+
+      // If an iPhone sync is running but our local state is idle (e.g., after
+      // hot reload), reconnect by setting syncStatus to "syncing". The IPC
+      // event listeners are already set up and will populate progress.
+      if (
+        status.isAnyOperationRunning &&
+        status.currentOperation?.toLowerCase().includes("iphone")
+      ) {
+        setSyncStatus((current) => {
+          if (current === "idle") {
+            logger.info("[useIPhoneSync] Reconnecting to in-progress iPhone sync");
+            return "syncing";
+          }
+          return current;
+        });
+        setProgress((current) => {
+          if (!current) {
+            return { phase: "backing_up", percent: 0, message: "Reconnecting to sync..." };
+          }
+          return current;
+        });
+      }
     } catch (err) {
       logger.error("[useIPhoneSync] Failed to check sync status:", err);
     }

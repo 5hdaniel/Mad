@@ -71,7 +71,7 @@ const getIPhonePhaseLabel = (phase: BackupProgress["phase"]): string => {
     case "preparing":
       return "Preparing";
     case "backing_up":
-      return "Exporting";
+      return "Importing";
     case "extracting":
       return "Reading";
     case "storing":
@@ -96,10 +96,10 @@ const statusColors: Record<SyncItemStatus, string> = {
 };
 
 /**
- * iPhone-specific status colors (purple theme)
+ * iPhone-specific status colors (same blue theme as email/contacts)
  */
 const iPhoneStatusColors: Record<string, string> = {
-  syncing: 'bg-purple-100 text-purple-700',
+  syncing: 'bg-blue-100 text-blue-700',
   complete: 'bg-green-100 text-green-700',
   error: 'bg-red-100 text-red-700',
 };
@@ -409,7 +409,7 @@ export function SyncStatusIndicator({
         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${iPhoneStatusColors.syncing}`}
         data-testid="sync-pill-iphone"
       >
-        <div className="w-3 h-3 border border-purple-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-3 h-3 border border-blue-500 border-t-transparent rounded-full animate-spin" />
         {phaseLabel ? `iPhone - ${phaseLabel}` : 'iPhone'}
       </span>
     );
@@ -480,23 +480,17 @@ export function SyncStatusIndicator({
   const hasIPhoneError = isIPhoneError;
   const anyError = hasError || hasIPhoneError;
 
-  // Determine background color: purple if only iPhone active, red if error, blue default
+  // Determine background color: red if error, blue default (consistent for all sync types)
   const onlyIPhoneActive = !isRunning && queue.length === 0 && isIPhoneActive;
   const bgClass = anyError
     ? 'bg-red-50 border-red-200'
-    : onlyIPhoneActive
-      ? 'bg-purple-50 border-purple-200'
-      : 'bg-blue-50 border-blue-200';
+    : 'bg-blue-50 border-blue-200';
   const textClass = anyError
     ? 'text-red-800'
-    : onlyIPhoneActive
-      ? 'text-purple-800'
-      : 'text-blue-800';
+    : 'text-blue-800';
   const iconClass = anyError
     ? 'text-red-600'
-    : onlyIPhoneActive
-      ? 'text-purple-600'
-      : 'text-blue-600';
+    : 'text-blue-600';
 
   // Show compact sync progress
   return (
@@ -523,46 +517,44 @@ export function SyncStatusIndicator({
         {queue.map((item) => renderPill(item.type, item.status, item.progress, item.error, item.phase))}
         {/* Render iPhone pill when active */}
         {isIPhoneActive && renderIPhonePill()}
-        {/* Show progress percentage */}
+        {/* Show progress percentage for email/contacts only */}
         {activeProgress !== null && !onlyIPhoneActive && (
-          <span className="text-xs text-blue-600 ml-auto">{activeProgress}%</span>
+          <span className="text-xs text-blue-600 ml-auto">{Math.round(activeProgress)}%</span>
         )}
-        {isIPhoneSyncing && iPhoneProgress && iPhoneProgress.percent > 0 && (
-          <span className="text-xs text-purple-600 ml-auto">{iPhoneProgress.percent}%</span>
+        {/* iPhone action buttons — inline with pills */}
+        {isIPhoneActive && (
+          <div className="flex items-center gap-1 ml-auto">
+            {onViewIPhoneDetails && (
+              <button
+                onClick={onViewIPhoneDetails}
+                className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                data-testid="sync-iphone-view-details"
+              >
+                Details
+              </button>
+            )}
+            {isIPhoneSyncing && onCancelIPhoneSync && (
+              <button
+                onClick={onCancelIPhoneSync}
+                className="p-0.5 text-blue-400 hover:text-blue-600 rounded transition-colors"
+                title="Cancel sync"
+                aria-label="Cancel iPhone sync"
+                data-testid="sync-iphone-cancel"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
         )}
       </div>
 
       {/* Progress bar hidden — IPC flushing issue causes jumpy updates (BACKLOG-824) */}
 
-      {/* Action buttons row - only render when iPhone sync is active */}
-      {isIPhoneActive && (
-        <div className="flex items-center gap-2">
-          {/* View Details button - shown when iPhone sync is active */}
-          {onViewIPhoneDetails && (
-            <button
-              onClick={onViewIPhoneDetails}
-              className="text-xs font-medium text-purple-700 hover:text-purple-900 hover:bg-purple-100 px-2 py-1 rounded transition-colors"
-              data-testid="sync-iphone-view-details"
-            >
-              View Details
-            </button>
-          )}
-          {/* Cancel button for iPhone sync */}
-          {isIPhoneSyncing && onCancelIPhoneSync && (
-            <button
-              onClick={onCancelIPhoneSync}
-              className="text-xs font-medium text-purple-700 hover:text-purple-900 hover:bg-purple-100 px-2 py-1 rounded transition-colors"
-              data-testid="sync-iphone-cancel"
-            >
-              Cancel
-            </button>
-          )}
-        </div>
-      )}
-
       {/* Disabled tools notice - only show when syncing */}
       {isAnySyncing && (
-        <p className={`text-xs ${onlyIPhoneActive ? 'text-purple-600' : 'text-blue-600'} mt-2 text-center`}>
+        <p className="text-xs text-blue-600 mt-2 text-center">
           Audit tools are disabled during sync to ensure accurate data
         </p>
       )}

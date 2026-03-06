@@ -5,4 +5,5 @@
  */
 
 export { OfflineBanner } from "./OfflineBanner";
+export { SyncStatusBanner } from "./SyncStatusBanner";
 export { VersionPopup } from "./VersionPopup";

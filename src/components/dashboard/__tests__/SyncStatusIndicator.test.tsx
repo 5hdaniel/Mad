@@ -691,7 +691,7 @@ describe("SyncStatusIndicator", () => {
 
       expect(screen.getByTestId("sync-status-indicator")).toBeInTheDocument();
       expect(screen.getByTestId("sync-pill-iphone")).toBeInTheDocument();
-      expect(screen.getByText(/iPhone - Exporting/)).toBeInTheDocument();
+      expect(screen.getByText(/iPhone - Importing/)).toBeInTheDocument();
     });
 
     it("should show iPhone pill with green checkmark when complete", () => {
@@ -784,7 +784,7 @@ describe("SyncStatusIndicator", () => {
       expect(screen.getByText(/iPhone - Saving/)).toBeInTheDocument();
     });
 
-    it("should use purple background when only iPhone is active", () => {
+    it("should use blue background when only iPhone is active", () => {
       render(
         <SyncStatusIndicator
           iPhoneSyncStatus="syncing"
@@ -793,7 +793,7 @@ describe("SyncStatusIndicator", () => {
       );
 
       const indicator = screen.getByTestId("sync-status-indicator");
-      expect(indicator).toHaveClass("bg-purple-50", "border-purple-200");
+      expect(indicator).toHaveClass("bg-blue-50", "border-blue-200");
     });
 
     it("should use blue background when both email and iPhone sync are active", () => {
@@ -813,7 +813,7 @@ describe("SyncStatusIndicator", () => {
       expect(indicator).toHaveClass("bg-blue-50", "border-blue-200");
     });
 
-    it("should show iPhone progress percentage", () => {
+    it("should not show iPhone progress percentage (unreliable)", () => {
       render(
         <SyncStatusIndicator
           iPhoneSyncStatus="syncing"
@@ -821,7 +821,8 @@ describe("SyncStatusIndicator", () => {
         />
       );
 
-      expect(screen.getByText("45%")).toBeInTheDocument();
+      // iPhone percentage is not shown (unreliable data from idevicebackup2)
+      expect(screen.queryByText("45%")).not.toBeInTheDocument();
     });
 
     it("should show View Details for completed iPhone sync", () => {

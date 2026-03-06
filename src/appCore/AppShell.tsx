@@ -10,9 +10,8 @@
 
 import React from "react";
 import type { AppStateMachine } from "./state/types";
-import { OfflineBanner } from "./shell";
+import { OfflineBanner, SyncStatusBanner } from "./shell";
 import SystemHealthMonitor from "../components/SystemHealthMonitor";
-import { SyncStatusIndicator } from "../components/dashboard/SyncStatusIndicator";
 import { isOnboardingStep } from "./routing";
 import { useSessionValidator } from "../hooks/useSessionValidator";
 import { IPhoneSyncProvider, useIPhoneSyncContext } from "../contexts/IPhoneSyncContext";
@@ -29,6 +28,7 @@ interface AppShellProps {
 export function AppShell({ app, children }: AppShellProps) {
   const {
     currentStep,
+    modalState,
     isAuthenticated,
     isDatabaseInitialized,
     currentUser,
@@ -56,6 +56,14 @@ export function AppShell({ app, children }: AppShellProps) {
   // TASK-2116: iPhone sync status bar (persistent, non-blocking)
   // Uses context to share single instance with IPhoneSyncFlow
   const { syncStatus, progress, error, cancelSync } = useIPhoneSyncContext();
+
+  // Hide banner when dashboard is visible without a full-screen modal covering it.
+  // When a modal (Transactions, Contacts) is open, the dashboard card is behind it,
+  // so we show the banner instead.
+  const isDashboardBare =
+    currentStep === "dashboard" &&
+    !modalState.showTransactions &&
+    !modalState.showContacts;
 
   // PRIMARY DATABASE INITIALIZATION GATE
   // Block all content for authenticated users until database is ready
@@ -133,19 +141,15 @@ export function AppShell({ app, children }: AppShellProps) {
           />
         )}
 
-      {/* TASK-2116b: Unified sync indicator - shows email/contacts AND iPhone sync */}
-      {isAuthenticated && currentStep !== "login" && (
-        <div className="flex-shrink-0 px-4 pt-2">
-          <SyncStatusIndicator
-            isTourActive={isTourActive}
-            iPhoneSyncStatus={syncStatus}
-            iPhoneProgress={progress}
-            iPhoneError={error}
-            onViewIPhoneDetails={openIPhoneSync}
-            onCancelIPhoneSync={cancelSync}
-            onOpenSettings={openSettings}
-          />
-        </div>
+      {/* Sync status banner — shown on all screens EXCEPT bare dashboard (which has its own card) */}
+      {isAuthenticated && currentStep !== "login" && !isDashboardBare && (
+        <SyncStatusBanner
+          iPhoneSyncStatus={syncStatus}
+          iPhoneProgress={progress}
+          iPhoneError={error}
+          onViewDetails={openIPhoneSync}
+          onCancel={cancelSync}
+        />
       )}
 
       {/* Scrollable Content Area */}
