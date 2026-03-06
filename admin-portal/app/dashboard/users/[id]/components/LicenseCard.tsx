@@ -1,7 +1,7 @@
 /**
  * LicenseCard - Displays user's license/subscription information
  *
- * Shows license tier, status, and expiry.
+ * Shows license tier, status, and expiry. Edit button is on the card header.
  */
 
 import { Shield } from 'lucide-react';
@@ -43,12 +43,28 @@ function getStatusColor(status: string | null): string {
 }
 
 export function LicenseCard({ licenses }: { licenses: License[] }) {
+  // Use first license for the header edit button
+  const primaryLicense = licenses[0] ?? null;
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider flex items-center gap-2">
-        <Shield className="h-4 w-4 text-gray-400" />
-        Licenses
-      </h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+          <Shield className="h-4 w-4 text-gray-400" />
+          Licenses
+        </h3>
+        {primaryLicense && (
+          <EditLicenseDialog
+            license={{
+              id: primaryLicense.id,
+              status: primaryLicense.status,
+              expires_at: primaryLicense.expires_at,
+              license_type: primaryLicense.license_type,
+              transaction_limit: primaryLicense.transaction_limit,
+            }}
+          />
+        )}
+      </div>
 
       {licenses.length === 0 ? (
         <p className="mt-4 text-sm text-gray-500">No licenses found.</p>
@@ -68,22 +84,11 @@ export function LicenseCard({ licenses }: { licenses: License[] }) {
                     <p className="text-xs text-gray-400 font-mono">{lic.license_key}</p>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(lic.status)}`}
-                  >
-                    {lic.status || 'unknown'}
-                  </span>
-                  <EditLicenseDialog
-                    license={{
-                      id: lic.id,
-                      status: lic.status,
-                      expires_at: lic.expires_at,
-                      license_type: lic.license_type,
-                      transaction_limit: lic.transaction_limit,
-                    }}
-                  />
-                </div>
+                <span
+                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(lic.status)}`}
+                >
+                  {lic.status || 'unknown'}
+                </span>
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500">
                 <span>Expires: {lic.expires_at ? formatDate(lic.expires_at) : 'No expiration'}</span>
