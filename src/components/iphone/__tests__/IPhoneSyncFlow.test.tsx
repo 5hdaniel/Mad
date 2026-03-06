@@ -73,33 +73,30 @@ describe("IPhoneSyncFlow", () => {
 
   it("shows sync progress when re-opening modal during active sync", () => {
     const onClose = jest.fn();
+    const onSyncStarted = jest.fn();
 
-    // Simulate state after sync has started and modal was auto-closed:
-    // - syncStatus is "syncing"
-    // - progress is in backing_up phase
+    // Start from idle (modal opened before sync starts)
+    const { rerender } = render(
+      <IPhoneSyncFlow onClose={onClose} onSyncStarted={onSyncStarted} />
+    );
+
+    // Transition to syncing (user clicked Sync — wasAlreadySyncingOnMount is false)
     mockContextValue = {
       ...mockSyncReturn,
       syncStatus: "syncing",
       progress: {
         phase: "backing_up",
         percent: 30,
-        message: "Exporting...",
+        message: "Importing...",
       },
     };
 
-    // First render triggers the onSyncStarted callback (simulating auto-close)
-    const onSyncStarted = jest.fn();
-    const { rerender } = render(
+    rerender(
       <IPhoneSyncFlow onClose={onClose} onSyncStarted={onSyncStarted} />
     );
 
     // onSyncStarted should have been called (triggering modal auto-close)
     expect(onSyncStarted).toHaveBeenCalledTimes(1);
-
-    // Re-render (simulating user re-opening the modal while sync is still running)
-    rerender(
-      <IPhoneSyncFlow onClose={onClose} onSyncStarted={onSyncStarted} />
-    );
 
     // Should show the SyncProgress component (full details in modal)
     expect(screen.getByTestId("sync-progress")).toBeInTheDocument();
@@ -109,7 +106,11 @@ describe("IPhoneSyncFlow", () => {
     const onClose = jest.fn();
     const onSyncStarted = jest.fn();
 
-    // Start in backing_up to trigger onSyncStarted
+    // Start from idle, then transition to syncing
+    const { rerender } = render(
+      <IPhoneSyncFlow onClose={onClose} onSyncStarted={onSyncStarted} />
+    );
+
     mockContextValue = {
       ...mockSyncReturn,
       syncStatus: "syncing",
@@ -119,7 +120,7 @@ describe("IPhoneSyncFlow", () => {
       },
     };
 
-    const { rerender } = render(
+    rerender(
       <IPhoneSyncFlow onClose={onClose} onSyncStarted={onSyncStarted} />
     );
 
