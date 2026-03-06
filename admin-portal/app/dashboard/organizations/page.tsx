@@ -24,7 +24,7 @@ export default async function OrganizationsPage() {
 
   const { data: internalRole } = await supabase
     .from('internal_roles')
-    .select('role')
+    .select('role_id')
     .eq('user_id', adminUser.id)
     .single();
 

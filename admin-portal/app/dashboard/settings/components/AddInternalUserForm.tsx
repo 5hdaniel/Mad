@@ -3,28 +3,23 @@
 /**
  * AddInternalUserForm - Form to add a new internal user
  *
- * Email input + role dropdown. Calls admin_add_internal_user RPC.
- * Shows success/error messages inline.
+ * Email input + role dropdown (from admin_roles table). Calls admin_add_internal_user RPC.
  */
 
 import { useState, type FormEvent } from 'react';
 import { UserPlus } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import type { AdminRole } from '../page';
 
 interface AddInternalUserFormProps {
   onSuccess: () => void;
+  roles: AdminRole[];
 }
 
-const roles = [
-  { value: 'support_agent', label: 'Support Agent' },
-  { value: 'support_admin', label: 'Support Admin' },
-  { value: 'super_admin', label: 'Super Admin' },
-  { value: 'sales', label: 'Sales' },
-];
-
-export function AddInternalUserForm({ onSuccess }: AddInternalUserFormProps) {
+export function AddInternalUserForm({ onSuccess, roles }: AddInternalUserFormProps) {
+  const defaultSlug = roles.find(r => r.slug === 'support-agent')?.slug || roles[0]?.slug || '';
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState('support_agent');
+  const [selectedSlug, setSelectedSlug] = useState(defaultSlug);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -46,21 +41,20 @@ export function AddInternalUserForm({ onSuccess }: AddInternalUserFormProps) {
       const supabase = createClient();
       const { data, error: rpcError } = await supabase.rpc('admin_add_internal_user', {
         p_email: trimmedEmail,
-        p_role: role,
+        p_role: selectedSlug,
       });
 
       if (rpcError) {
-        // Extract the useful part of the error message
-        const msg = rpcError.message || 'Failed to add user';
-        setError(msg);
+        setError(rpcError.message || 'Failed to add user');
         return;
       }
 
       const result = data as { success: boolean; user_id: string; role: string } | null;
       if (result?.success) {
-        setSuccess(`Successfully added ${trimmedEmail} as ${role.replace(/_/g, ' ')}`);
+        const roleName = roles.find(r => r.slug === selectedSlug)?.name || selectedSlug;
+        setSuccess(`Successfully added ${trimmedEmail} as ${roleName}`);
         setEmail('');
-        setRole('support_agent');
+        setSelectedSlug(defaultSlug);
         onSuccess();
       }
     } catch (err) {
@@ -99,20 +93,20 @@ export function AddInternalUserForm({ onSuccess }: AddInternalUserFormProps) {
             />
           </div>
 
-          <div className="w-48">
+          <div className="w-52">
             <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">
               Role
             </label>
             <select
               id="role"
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
+              value={selectedSlug}
+              onChange={(e) => setSelectedSlug(e.target.value)}
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none bg-white"
               disabled={isSubmitting}
             >
               {roles.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
+                <option key={r.slug} value={r.slug}>
+                  {r.name}
                 </option>
               ))}
             </select>
@@ -128,7 +122,6 @@ export function AddInternalUserForm({ onSuccess }: AddInternalUserFormProps) {
           </button>
         </div>
 
-        {/* Status messages */}
         {error && (
           <div className="mt-3 rounded-md bg-red-50 border border-red-200 px-4 py-3">
             <p className="text-sm text-red-700">{error}</p>

@@ -70,7 +70,7 @@ export function RemoveUserDialog({ user, onConfirm, onCancel }: RemoveUserDialog
               the internal users? They will lose access to the admin portal.
             </p>
             <p className="mt-1 text-sm text-gray-500">
-              Current role: <span className="font-medium">{user.role.replace(/_/g, ' ')}</span>
+              Current role: <span className="font-medium">{user.role_name}</span>
             </p>
 
             {error && (

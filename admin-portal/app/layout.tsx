@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/components/providers/AuthProvider';
+import { PermissionsProvider } from '@/components/providers/PermissionsProvider';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -19,7 +20,9 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <AuthProvider>
-          <main className="min-h-screen">{children}</main>
+          <PermissionsProvider>
+            <main className="min-h-screen">{children}</main>
+          </PermissionsProvider>
         </AuthProvider>
       </body>
     </html>

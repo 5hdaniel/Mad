@@ -33,7 +33,7 @@ export async function GET(request: Request) {
       // Check for internal role
       const { data: internalRole } = await supabase
         .from('internal_roles')
-        .select('role')
+        .select('role_id')
         .eq('user_id', user.id)
         .single();
 
