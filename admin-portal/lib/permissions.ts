@@ -35,6 +35,5 @@ export const PERMISSION_CATEGORIES = [
   { key: 'organizations', label: 'Organizations' },
   { key: 'analytics', label: 'Analytics' },
   { key: 'audit', label: 'Audit' },
-  { key: 'internal_users', label: 'Internal Users' },
-  { key: 'roles', label: 'Roles' },
+  { key: 'settings', label: 'Settings' },
 ] as const;
