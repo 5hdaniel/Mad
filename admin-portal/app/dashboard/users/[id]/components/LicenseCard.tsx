@@ -1,10 +1,11 @@
 /**
  * LicenseCard - Displays user's license/subscription information
  *
- * Shows license tier, status, and expiry.
+ * Shows license tier, status, and expiry. Edit button is on the card header.
  */
 
 import { Shield } from 'lucide-react';
+import { EditLicenseDialog } from './EditLicenseDialog';
 
 interface License {
   id: string;
@@ -42,12 +43,28 @@ function getStatusColor(status: string | null): string {
 }
 
 export function LicenseCard({ licenses }: { licenses: License[] }) {
+  // Use first license for the header edit button
+  const primaryLicense = licenses[0] ?? null;
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider flex items-center gap-2">
-        <Shield className="h-4 w-4 text-gray-400" />
-        Licenses
-      </h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+          <Shield className="h-4 w-4 text-gray-400" />
+          Licenses
+        </h3>
+        {primaryLicense && (
+          <EditLicenseDialog
+            license={{
+              id: primaryLicense.id,
+              status: primaryLicense.status,
+              expires_at: primaryLicense.expires_at,
+              license_type: primaryLicense.license_type,
+              transaction_limit: primaryLicense.transaction_limit,
+            }}
+          />
+        )}
+      </div>
 
       {licenses.length === 0 ? (
         <p className="mt-4 text-sm text-gray-500">No licenses found.</p>

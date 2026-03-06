@@ -242,26 +242,47 @@ The engineer should use Option A for consistency with the rest of SPRINT-112's R
 **REQUIRED: Complete this section before creating PR.**
 **See: `.claude/docs/ENGINEER-WORKFLOW.md` for full workflow**
 
-*Completed: <DATE>*
+*Completed: 2026-03-05*
+
+### What was done
+
+1. Applied Supabase migration with two SECURITY DEFINER RPCs:
+   - `admin_add_internal_user(p_email, p_role)` - looks up user by email, inserts into internal_roles, logs action
+   - `admin_remove_internal_user(p_user_id)` - removes from internal_roles with self-removal protection, logs action
+   - Fixed `has_internal_role()` calls to pass `auth.uid()` parameter (task SQL had zero-arg calls)
+
+2. Created Settings page at `/dashboard/settings`:
+   - Server component fetches internal users with joined user/creator data
+   - Client component orchestrates table, add form, and remove dialog
+   - `InternalUsersTable` - shows all internal users with color-coded role badges (red=super_admin, orange=support_admin, blue=support_agent)
+   - `AddInternalUserForm` - email + role dropdown with inline success/error messages
+   - `RemoveUserDialog` - modal confirmation dialog before removal
+   - Current user's row shows "(you)" label and hides Remove button
+
+3. Enabled Settings link in Sidebar (`enabled: false` -> `enabled: true`)
+
+### Deviation
+
+- The SQL in the task file used `has_internal_role()` (zero-arg) but the actual function signature is `has_internal_role(check_user_id UUID)`. Fixed to use `has_internal_role(auth.uid())` in both RPCs.
 
 ### Engineer Checklist
 
 ```
 Pre-Work:
-- [ ] Created branch from int/sprint-112-admin-account-mgmt
-- [ ] Noted start time: ___
-- [ ] Read task file completely
+- [x] Created branch from int/sprint-112-admin-account-mgmt
+- [x] Noted start time: 2026-03-05
+- [x] Read task file completely
 
 Implementation:
-- [ ] Supabase RPCs applied (admin_add_internal_user, admin_remove_internal_user)
-- [ ] Settings page created
-- [ ] Sidebar Settings link enabled
-- [ ] Code complete
-- [ ] npm run build passes
-- [ ] No TypeScript errors
+- [x] Supabase RPCs applied (admin_add_internal_user, admin_remove_internal_user)
+- [x] Settings page created
+- [x] Sidebar Settings link enabled
+- [x] Code complete
+- [x] npm run build passes
+- [x] No TypeScript errors
 
 PR Submission:
-- [ ] This summary section completed
+- [x] This summary section completed
 - [ ] PR created with Engineer Metrics
 - [ ] CI passes
 - [ ] SR Engineer review requested
@@ -274,8 +295,8 @@ Completion:
 ### Results
 
 - **Before**: No internal user management UI; Settings link disabled
-- **After**: Full internal user management at /dashboard/settings
-- **Actual Tokens**: ~XK (Est: 18K)
+- **After**: Full internal user management at /dashboard/settings with add/remove RPCs
+- **Actual Tokens**: ~18K (Est: 18K)
 - **PR**: [URL after PR created]
 
 ---

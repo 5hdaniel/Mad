@@ -2,7 +2,10 @@
  * UserProfileCard - Displays user profile information
  *
  * Shows name, email, avatar, auth provider, and key dates.
+ * Includes suspend/unsuspend action button via SuspendDialog client component.
  */
+
+import { SuspendDialog } from './SuspendDialog';
 
 interface UserProfile {
   id: string;
@@ -64,9 +67,16 @@ export function UserProfileCard({ user }: { user: UserProfile }) {
         )}
 
         <div className="flex-1 min-w-0">
-          <h2 className="text-xl font-bold text-gray-900 truncate">
-            {displayName}
-          </h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-xl font-bold text-gray-900 truncate">
+              {displayName}
+            </h2>
+            <SuspendDialog
+              userId={user.id}
+              userName={displayName}
+              isSuspended={user.status === 'suspended'}
+            />
+          </div>
           {user.email && (
             <p className="text-sm text-gray-500 truncate">{user.email}</p>
           )}
