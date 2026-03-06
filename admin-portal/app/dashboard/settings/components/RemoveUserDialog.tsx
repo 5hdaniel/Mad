@@ -7,7 +7,7 @@
  * admin_remove_internal_user RPC.
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { InternalUser } from '../page';
@@ -21,6 +21,23 @@ interface RemoveUserDialogProps {
 export function RemoveUserDialog({ user, onConfirm, onCancel }: RemoveUserDialogProps) {
   const [isRemoving, setIsRemoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // Focus the dialog container on mount for focus management
+  useEffect(() => {
+    dialogRef.current?.focus();
+  }, []);
+
+  // Escape key handler
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !isRemoving) {
+        onCancel();
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isRemoving, onCancel]);
 
   async function handleRemove() {
     setError(null);
@@ -56,13 +73,20 @@ export function RemoveUserDialog({ user, onConfirm, onCancel }: RemoveUserDialog
       />
 
       {/* Dialog */}
-      <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+      <div
+        ref={dialogRef}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="remove-user-dialog-title"
+        tabIndex={-1}
+        className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6 outline-none"
+      >
         <div className="flex items-start gap-4">
           <div className="flex-shrink-0 h-10 w-10 rounded-full bg-red-100 flex items-center justify-center">
             <AlertTriangle className="h-5 w-5 text-red-600" />
           </div>
           <div className="flex-1">
-            <h3 className="text-lg font-semibold text-gray-900">
+            <h3 id="remove-user-dialog-title" className="text-lg font-semibold text-gray-900">
               Remove Internal User
             </h3>
             <p className="mt-2 text-sm text-gray-500">
