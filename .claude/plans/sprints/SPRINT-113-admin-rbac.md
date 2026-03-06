@@ -2,7 +2,7 @@
 
 **Status:** Planned
 **Created:** 2026-03-05
-**Backlog Item:** BACKLOG-842
+**Backlog Item:** BACKLOG-850
 **Integration Branch:** `int/sprint-113-admin-rbac`
 **Merge Target:** `develop`
 
@@ -15,8 +15,8 @@ Evolve the admin portal's simple 3-role system (`support_agent`, `support_admin`
 ## Dependencies
 
 - **SPRINT-111** (P0 features) — must be complete (establishes the pages/features to gate)
-- **SPRINT-112** (account management) — must be complete (establishes the write actions to gate)
-- **BACKLOG-842** — parent backlog item
+- **SPRINT-112** (account management) — recommended but not a hard dependency. RBAC can be implemented without account management existing first, though the recommended sprint order is 112 -> 113 -> impersonation. If SPRINT-112 is not yet complete, RBAC permissions for write actions (e.g., `users.suspend`, `licenses.edit`) can be seeded but will have no effect until the write RPCs from SPRINT-112 exist.
+- **BACKLOG-850** — parent backlog item
 
 ## Context
 
