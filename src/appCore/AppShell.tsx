@@ -12,7 +12,7 @@ import React from "react";
 import type { AppStateMachine } from "./state/types";
 import { OfflineBanner } from "./shell";
 import SystemHealthMonitor from "../components/SystemHealthMonitor";
-import { SyncStatusBar } from "../components/iphone/SyncStatusBar";
+import { SyncStatusIndicator } from "../components/dashboard/SyncStatusIndicator";
 import { isOnboardingStep } from "./routing";
 import { useSessionValidator } from "../hooks/useSessionValidator";
 import { IPhoneSyncProvider, useIPhoneSyncContext } from "../contexts/IPhoneSyncContext";
@@ -41,6 +41,7 @@ export function AppShell({ app, children }: AppShellProps) {
     isChecking,
     openProfile,
     openSettings,
+    openIPhoneSync,
     handleRetryConnection,
     handleLogout,
     getPageTitle,
@@ -132,14 +133,19 @@ export function AppShell({ app, children }: AppShellProps) {
           />
         )}
 
-      {/* TASK-2116: iPhone Sync Status Bar - persistent progress indicator */}
+      {/* TASK-2116b: Unified sync indicator - shows email/contacts AND iPhone sync */}
       {isAuthenticated && currentStep !== "login" && (
-        <SyncStatusBar
-          syncStatus={syncStatus}
-          progress={progress}
-          error={error}
-          onCancel={cancelSync}
-        />
+        <div className="flex-shrink-0 px-4 pt-2">
+          <SyncStatusIndicator
+            isTourActive={isTourActive}
+            iPhoneSyncStatus={syncStatus}
+            iPhoneProgress={progress}
+            iPhoneError={error}
+            onViewIPhoneDetails={openIPhoneSync}
+            onCancelIPhoneSync={cancelSync}
+            onOpenSettings={openSettings}
+          />
+        </div>
       )}
 
       {/* Scrollable Content Area */}

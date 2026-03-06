@@ -378,6 +378,7 @@ describe("DeviceService", () => {
       await deviceService.updateDeviceHeartbeat("user-123");
 
       expect(mockClient.update).toHaveBeenCalledWith({
+        app_version: expect.any(String),
         last_seen_at: expect.any(String),
       });
     });
