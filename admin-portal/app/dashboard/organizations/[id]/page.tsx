@@ -3,6 +3,7 @@ import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Building2 } from 'lucide-react';
 import { MembersTable, type MemberRow } from './components/MembersTable';
+import { formatDate } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -72,15 +73,6 @@ export default async function OrganizationDetailPage({
       status: user?.status ?? null,
     };
   });
-
-  function formatDate(dateStr: string | null): string {
-    if (!dateStr) return 'Unknown';
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">

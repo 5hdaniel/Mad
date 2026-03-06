@@ -13,6 +13,7 @@ import { createClient } from '@/lib/supabase/client';
 import type { InternalUser, AdminRole } from '../page';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
 import { PERMISSIONS } from '@/lib/permissions';
+import { formatDate } from '@/lib/format';
 
 interface InternalUsersTableProps {
   users: InternalUser[];
@@ -47,14 +48,6 @@ function RoleBadge({ slug, name }: { slug: string; name: string }) {
       {name}
     </span>
   );
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
 }
 
 function UserAvatar({ name, avatarUrl }: { name: string | null; avatarUrl: string | null }) {
