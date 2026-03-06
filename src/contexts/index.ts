@@ -21,3 +21,5 @@ export {
   useCanSubmit,
   useCanAutoDetect,
 } from "./LicenseContext";
+
+export { IPhoneSyncProvider, useIPhoneSyncContext } from "./IPhoneSyncContext";
