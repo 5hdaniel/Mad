@@ -178,24 +178,87 @@ Integration branch: `int/sprint-113-admin-rbac` → merge to `develop` after all
 
 ## Testing Plan
 
-- [ ] Existing admin portal functionality unaffected after schema migration
-- [ ] Super admin retains full access after migration
-- [ ] New role created via UI → user assigned → permissions enforced correctly
-- [ ] Removing a permission from a role immediately restricts access
-- [ ] System role (super_admin) cannot be deleted
-- [ ] Non-super-admin cannot access role management
-- [ ] `npm run build` passes
-- [ ] No TypeScript errors
+- [x] Existing admin portal functionality unaffected after schema migration
+- [x] Super admin retains full access after migration
+- [x] New role created via UI → user assigned → permissions enforced correctly
+- [x] Removing a permission from a role immediately restricts access
+- [x] System role (super_admin) cannot be deleted
+- [x] Non-super-admin cannot access role management
+- [x] `npm run build` passes
+- [x] No TypeScript errors
 
 ---
 
 ## Acceptance Criteria
 
-- [ ] Custom roles can be created/edited/deleted by super admins
-- [ ] Each role has a granular permission matrix
-- [ ] Default roles seeded (Support Rep, Support Supervisor, R&D, L&D, Sales, Marketing, Executive)
-- [ ] Internal users assigned to roles via admin_roles (not TEXT column)
-- [ ] Middleware checks permissions for page access
-- [ ] RPCs check permissions for data access
-- [ ] Super admin role is protected (cannot be deleted, always has all permissions)
-- [ ] Existing admin portal functionality preserved
+- [x] Custom roles can be created/edited/deleted by super admins
+- [x] Each role has a granular permission matrix
+- [ ] Default roles seeded (Support Rep, Support Supervisor, R&D, L&D, Sales, Marketing, Executive) — L&D missing, fix/QA-113-002 in progress
+- [x] Internal users assigned to roles via admin_roles (not TEXT column)
+- [x] Middleware checks permissions for page access
+- [x] RPCs check permissions for data access
+- [x] Super admin role is protected (cannot be deleted, always has all permissions)
+- [x] Existing admin portal functionality preserved
+
+---
+
+## QA Results
+
+**QA Completed:** 2026-03-06
+**Pass Rate:** 13/14 run tests (93%) — 4 skipped
+
+### Test Results
+
+| Test ID | Title | Status | Notes |
+|---------|-------|--------|-------|
+| TEST-113-001 | Super Admin Retains Full Dashboard Access | PASS | All 6 sidebar items, role label correct |
+| TEST-113-002 | Seeded Default Roles Present | FAIL | L&D role missing from seed — fix/QA-113-002 open |
+| TEST-113-003 | Permission Matrix Correct for Seeded Roles | PASS | Support Rep and Marketing permissions verified |
+| TEST-113-004 | Create a Custom Role | PASS | Name, description, empty matrix, permissions persist |
+| TEST-113-005 | Assign Custom Role and Verify Enforcement | PASS | Critical bug found and fixed: `is_super_admin()` TEXT ref |
+| TEST-113-006 | Remove Permission and Verify Immediate Restriction | PASS | Sidebar and middleware both enforce immediately |
+| TEST-113-007 | Super Admin Role Cannot Be Deleted or Edited | PASS | System badge, read-only matrix, no delete button |
+| TEST-113-008 | Non-Super-Admin Cannot Access Role Management | PASS | Settings hidden; Roles tab hidden without roles.view |
+| TEST-113-009 | Delete a Custom Role | PASS | Confirmation dialog; RPC blocks deletion with active users |
+| TEST-113-010 | Audit Log Page Loads and Displays Entries | PASS | 23 entries, all action types captured, badges correct |
+| TEST-113-011 | Audit Log Filters Work Correctly | PASS | Search RPC fixed to partial match across actor/metadata |
+| TEST-113-012 | Audit Log Pagination | SKIP | Only 23 entries; threshold is 25 |
+| TEST-113-013 | Impersonate Button Visibility | SKIP | Feature scrapped — BACKLOG-838 deferred |
+| TEST-113-014 | Start Impersonation Session | SKIP | Feature scrapped — BACKLOG-838 deferred |
+| TEST-113-015 | Impersonation View and End Session | SKIP | Feature scrapped — BACKLOG-838 deferred |
+| TEST-113-016 | Add User Flow Uses Role Slugs | PASS | Dropdown shows display names, submits slugs correctly |
+| TEST-113-017 | Audit Log Blocked Without audit.view | PASS | Covered by TEST-113-006 evidence |
+| TEST-113-018 | Build Passes With No TypeScript Errors | PASS | tsc --noEmit clean, npm run build clean |
+
+### Bugs Found During QA
+
+| Severity | Description | Resolution |
+|----------|-------------|------------|
+| Critical | `is_super_admin()` RLS function still referenced old TEXT `role` column after migration, breaking super admin RLS policies | Fixed: function updated to join on `admin_roles.is_system = TRUE` |
+| Medium | `admin_get_audit_logs` search did exact match on `target_id` only; actor email/name search non-functional | Fixed: broadened to partial match across `target_id`, `metadata`, actor email, actor display name |
+
+### Behaviour Changes Noted
+
+| Description |
+|-------------|
+| Delete role RPC blocks deletion when users are still assigned (safer than silent auto-reassign) |
+| Permission editor opens below roles list — minor scroll UX friction, not a blocker |
+
+### Issues Found
+
+| Test | Issue | Fix Branch | Fix Status |
+|------|-------|------------|------------|
+| TEST-113-002 | "Learning & Development" role missing from database seed | fix/QA-113-002-seed-learning-and-development | PR pending — not merged |
+
+### Deferred Items
+
+| Test | Reason | Target |
+|------|--------|--------|
+| TEST-113-012 | Pagination requires 25+ entries; only 23 in session | Retry with populated dataset |
+| TEST-113-013/014/015 | Impersonation scrapped — admin-portal-only view insufficient | BACKLOG-866: broker portal impersonation |
+
+### Merge Recommendation
+
+PR #1062 can merge to `develop` once:
+1. `fix/QA-113-002` PR merged (or L&D role inserted directly via Supabase)
+2. The two in-session critical fixes (`is_super_admin()` + audit log search) confirmed committed to the branch

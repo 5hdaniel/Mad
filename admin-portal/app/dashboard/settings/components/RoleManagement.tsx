@@ -400,7 +400,7 @@ function DeleteRoleDialog({
         <h3 className="text-lg font-semibold text-gray-900">Delete Role</h3>
         <p className="mt-2 text-sm text-gray-500">
           Are you sure you want to delete <span className="font-medium text-gray-700">{role.name}</span>?
-          Any users assigned to this role will be reassigned to Support Agent.
+          This action cannot be undone. The role must have no users assigned to it.
         </p>
         <div className="mt-6 flex justify-end gap-3">
           <button onClick={onCancel} disabled={deleting} className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors">

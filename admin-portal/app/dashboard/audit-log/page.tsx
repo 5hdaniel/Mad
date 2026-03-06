@@ -40,6 +40,7 @@ const ACTION_LABELS: Record<string, { label: string; color: string }> = {
 };
 
 const PAGE_SIZE = 25;
+const INITIAL_DISPLAY = 5;
 
 export default function AuditLogPage() {
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
@@ -47,6 +48,7 @@ export default function AuditLogPage() {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [displayCount, setDisplayCount] = useState(INITIAL_DISPLAY);
 
   // Filters
   const [actionFilter, setActionFilter] = useState<string>('');
@@ -88,9 +90,12 @@ export default function AuditLogPage() {
   }, [supabase, page, actionFilter, searchTarget, dateFrom, dateTo]);
 
   useEffect(() => {
+    setDisplayCount(INITIAL_DISPLAY);
     fetchLogs();
   }, [fetchLogs]);
 
+  const visibleLogs = logs.slice(0, displayCount);
+  const hasMore = displayCount < logs.length;
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const uniqueActions = useMemo(() => {
     return Object.keys(ACTION_LABELS);
@@ -251,33 +256,45 @@ export default function AuditLogPage() {
             <p className="mt-4 text-sm text-gray-500">No audit log entries found.</p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-100">
-            {logs.map((entry) => (
-              <div key={entry.id} className="px-6 py-4 hover:bg-gray-50">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      {renderActionBadge(entry.action)}
-                      <span className="text-sm text-gray-500">
-                        on <span className="font-medium text-gray-700">{entry.target_type}</span>
-                      </span>
+          <>
+            <div className="divide-y divide-gray-100">
+              {visibleLogs.map((entry) => (
+                <div key={entry.id} className="px-6 py-4 hover:bg-gray-50">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        {renderActionBadge(entry.action)}
+                        <span className="text-sm text-gray-500">
+                          on <span className="font-medium text-gray-700">{entry.target_type}</span>
+                        </span>
+                      </div>
+                      {renderMetadata(entry.metadata)}
                     </div>
-                    {renderMetadata(entry.metadata)}
-                  </div>
-                  <div className="text-right shrink-0">
-                    <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                      <User className="h-3 w-3" />
-                      <span>{entry.actor_name || entry.actor_email || 'Unknown'}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-1">
-                      <Clock className="h-3 w-3" />
-                      <span>{formatTimestamp(entry.created_at)}</span>
+                    <div className="text-right shrink-0">
+                      <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                        <User className="h-3 w-3" />
+                        <span>{entry.actor_name || entry.actor_email || 'Unknown'}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-1">
+                        <Clock className="h-3 w-3" />
+                        <span>{formatTimestamp(entry.created_at)}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
+              ))}
+            </div>
+            {hasMore && (
+              <div className="px-6 py-3 border-t border-gray-100">
+                <button
+                  onClick={() => setDisplayCount(logs.length)}
+                  className="w-full text-center text-sm text-primary-600 hover:text-primary-800 font-medium py-1.5"
+                >
+                  Show {logs.length - displayCount} more {logs.length - displayCount === 1 ? 'entry' : 'entries'}
+                </button>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
       </div>
     </div>
