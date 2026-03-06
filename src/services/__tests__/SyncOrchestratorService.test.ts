@@ -411,4 +411,150 @@ describe('SyncOrchestratorService', () => {
       expect(stateHistory[stateHistory.length - 1].currentSync).toBeNull();
     });
   });
+
+  // ===========================================================================
+  // TASK-2119: External Sync Registration API Tests
+  // ===========================================================================
+
+  describe('external sync API (TASK-2119)', () => {
+    it('should register an external sync and set isRunning to true', () => {
+      syncOrchestrator.registerExternalSync('iphone');
+
+      const state = syncOrchestrator.getState();
+      expect(state.isRunning).toBe(true);
+      expect(state.queue).toHaveLength(1);
+      expect(state.queue[0]).toMatchObject({
+        type: 'iphone',
+        status: 'running',
+        progress: 0,
+        external: true,
+      });
+    });
+
+    it('should be idempotent -- re-registering a running external sync is a no-op', () => {
+      syncOrchestrator.registerExternalSync('iphone');
+      syncOrchestrator.registerExternalSync('iphone');
+
+      const state = syncOrchestrator.getState();
+      expect(state.queue).toHaveLength(1);
+      expect(state.queue[0].type).toBe('iphone');
+    });
+
+    it('should replace a completed external sync when re-registering', () => {
+      syncOrchestrator.registerExternalSync('iphone');
+      syncOrchestrator.completeExternalSync('iphone', { status: 'complete' });
+
+      // Re-register (e.g., new sync started)
+      syncOrchestrator.registerExternalSync('iphone');
+
+      const state = syncOrchestrator.getState();
+      expect(state.isRunning).toBe(true);
+      expect(state.queue).toHaveLength(1);
+      expect(state.queue[0].status).toBe('running');
+    });
+
+    it('should update progress/phase of an external sync', () => {
+      syncOrchestrator.registerExternalSync('iphone');
+
+      syncOrchestrator.updateExternalSync('iphone', { progress: 45, phase: 'Importing' });
+
+      const state = syncOrchestrator.getState();
+      expect(state.queue[0].progress).toBe(45);
+      expect(state.queue[0].phase).toBe('Importing');
+    });
+
+    it('should ignore update for non-existent external sync', () => {
+      // No external sync registered, so this should be a no-op
+      syncOrchestrator.updateExternalSync('iphone', { progress: 50 });
+
+      const state = syncOrchestrator.getState();
+      expect(state.queue).toHaveLength(0);
+    });
+
+    it('should complete an external sync and set isRunning to false', () => {
+      syncOrchestrator.registerExternalSync('iphone');
+      expect(syncOrchestrator.getState().isRunning).toBe(true);
+
+      syncOrchestrator.completeExternalSync('iphone', { status: 'complete' });
+
+      const state = syncOrchestrator.getState();
+      expect(state.isRunning).toBe(false);
+      expect(state.queue[0].status).toBe('complete');
+      expect(state.queue[0].progress).toBe(100);
+    });
+
+    it('should complete an external sync with error', () => {
+      syncOrchestrator.registerExternalSync('iphone');
+
+      syncOrchestrator.completeExternalSync('iphone', { status: 'error', error: 'Device disconnected' });
+
+      const state = syncOrchestrator.getState();
+      expect(state.isRunning).toBe(false);
+      expect(state.queue[0].status).toBe('error');
+      expect(state.queue[0].error).toBe('Device disconnected');
+    });
+
+    it('should NOT cancel external syncs when cancel() is called', () => {
+      syncOrchestrator.registerExternalSync('iphone');
+      expect(syncOrchestrator.getState().isRunning).toBe(true);
+
+      syncOrchestrator.cancel();
+
+      const state = syncOrchestrator.getState();
+      // External item should still be in the queue
+      expect(state.queue).toHaveLength(1);
+      expect(state.queue[0].type).toBe('iphone');
+      expect(state.queue[0].status).toBe('running');
+      // isRunning should still be true because external sync is still running
+      expect(state.isRunning).toBe(true);
+    });
+
+    it('should keep external sync in queue when internal sync starts', async () => {
+      // Register iPhone external sync first
+      syncOrchestrator.registerExternalSync('iphone');
+
+      // Register and start internal contacts sync
+      syncOrchestrator.registerSyncFunction('contacts', async (_userId: string, onProgress: (p: number) => void) => {
+        onProgress(100);
+      });
+
+      // Note: requestSync will see isRunning=true (from iPhone) and queue as pending
+      // Use forceSync instead to bypass the running check
+      syncOrchestrator.forceSync({ types: ['contacts'], userId: 'test-user' });
+
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      const state = syncOrchestrator.getState();
+      // iPhone should still be in queue alongside contacts
+      const iPhoneItem = state.queue.find(item => item.type === 'iphone');
+      expect(iPhoneItem).toBeDefined();
+      expect(iPhoneItem!.status).toBe('running');
+      expect(iPhoneItem!.external).toBe(true);
+
+      // isRunning should be true because iPhone is still running
+      expect(state.isRunning).toBe(true);
+    });
+
+    it('should set isRunning to false when both internal and external syncs complete', async () => {
+      // Register iPhone external sync
+      syncOrchestrator.registerExternalSync('iphone');
+
+      // Register and start internal contacts sync
+      syncOrchestrator.registerSyncFunction('contacts', async (_userId: string, onProgress: (p: number) => void) => {
+        onProgress(100);
+      });
+
+      syncOrchestrator.forceSync({ types: ['contacts'], userId: 'test-user' });
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      // iPhone is still running, so isRunning should be true
+      expect(syncOrchestrator.getState().isRunning).toBe(true);
+
+      // Now complete iPhone sync
+      syncOrchestrator.completeExternalSync('iphone', { status: 'complete' });
+
+      const state = syncOrchestrator.getState();
+      expect(state.isRunning).toBe(false);
+    });
+  });
 });

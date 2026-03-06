@@ -6,6 +6,7 @@ import type {
   UseIPhoneSyncReturn,
 } from "../types/iphone";
 import logger from '../utils/logger';
+import { syncOrchestrator } from '../services/SyncOrchestratorService';
 
 /**
  * Module-level sync state ref for cross-hook communication.
@@ -96,6 +97,8 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
         setSyncStatus((current) => {
           if (current === "idle") {
             logger.info("[useIPhoneSync] Reconnecting to in-progress iPhone sync");
+            // TASK-2119: Also register with orchestrator on reconnect
+            syncOrchestrator.registerExternalSync('iphone');
             return "syncing";
           }
           return current;
@@ -188,6 +191,11 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
               // Only show error if still in backup phase (device required)
               if (currentPhase === "backing_up" || currentPhase === "preparing") {
                 setError("Device disconnected during sync");
+                // TASK-2119: Notify orchestrator of disconnect error
+                syncOrchestrator.completeExternalSync('iphone', {
+                  status: 'error',
+                  error: 'Device disconnected during sync',
+                });
                 return "error";
               }
               // In extracting/storing phases, disconnect is fine - just log it
@@ -233,14 +241,18 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
 
           // Update ref for disconnect handler (avoids stale closure)
           progressPhaseRef.current = phase;
+          const percent = syncProgress.overallProgress ?? 0;
           setProgress({
             phase,
-            percent: syncProgress.overallProgress ?? 0,
+            percent,
             message: syncProgress.message,
             bytesProcessed: progressWithBackup.backupProgress?.bytesTransferred,
             processedFiles: progressWithBackup.backupProgress?.filesTransferred,
             estimatedTotalBytes: progressWithBackup.estimatedTotalBytes,
           });
+
+          // TASK-2119: Update orchestrator with progress
+          syncOrchestrator.updateExternalSync('iphone', { progress: percent, phase });
         });
         cleanups.push(unsub);
       }
@@ -288,6 +300,9 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
           logger.error("[useIPhoneSync] Sync error:", err.message);
           setSyncStatus("error");
           setError(err.message);
+
+          // TASK-2119: Notify orchestrator of error
+          syncOrchestrator.completeExternalSync('iphone', { status: 'error', error: err.message });
         });
         cleanups.push(unsub);
       }
@@ -354,6 +369,9 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
             percent: 100,
             message: `Saved ${result.messagesStored.toLocaleString()} messages and ${result.contactsStored} contacts`,
           });
+
+          // TASK-2119: Notify orchestrator that iPhone sync is complete
+          syncOrchestrator.completeExternalSync('iphone', { status: 'complete' });
         });
         cleanups.push(unsub);
       }
@@ -369,6 +387,9 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
             percent: 100,
             message: "Messages extracted but failed to save to database",
           });
+
+          // TASK-2119: Notify orchestrator (storage error is still "complete" from sync perspective)
+          syncOrchestrator.completeExternalSync('iphone', { status: 'complete' });
         });
         cleanups.push(unsub);
       }
@@ -521,6 +542,9 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       message: "Preparing to sync...",
     });
 
+    // TASK-2119: Register with orchestrator so iPhone appears in unified sync UI
+    syncOrchestrator.registerExternalSync('iphone');
+
     try {
       logger.info("[useIPhoneSync] Starting sync for device:", device.udid);
 
@@ -637,6 +661,9 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     setNeedsPassword(false);
     setError(null);
     setPendingPassword(null);
+
+    // TASK-2119: Notify orchestrator that iPhone sync was cancelled
+    syncOrchestrator.completeExternalSync('iphone', { status: 'complete' });
   }, []);
 
   return {

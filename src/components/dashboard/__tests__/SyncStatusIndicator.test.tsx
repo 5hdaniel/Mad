@@ -2,13 +2,15 @@
  * SyncStatusIndicator Tests
  *
  * TASK-1785: Tests for sync progress indicators on Dashboard
- * Updated to use SyncOrchestrator instead of SyncQueue
+ * TASK-2119: Updated to render iPhone from orchestrator queue (no more iPhone-specific props)
  *
  * Key test cases:
  * 1. Progress shows for ALL users (not gated by license)
  * 2. AI-specific features (pending count, Review Now) only show with AI add-on
  * 3. Pills display in queue order
  * 4. Error state shows red pill with tooltip
+ * 5. iPhone renders as a standard queue pill
+ * 6. "Details" link dispatches via onViewSyncDetails
  */
 
 import { render, screen, fireEvent, act } from "@testing-library/react";
@@ -32,12 +34,16 @@ const createSyncItem = (
   type: SyncType,
   status: 'pending' | 'running' | 'complete' | 'error' = 'pending',
   progress = 0,
-  error?: string
+  error?: string,
+  external?: boolean,
+  phase?: string,
 ): SyncItem => ({
   type,
   status,
   progress,
   error,
+  external,
+  phase,
 });
 
 // Helper to create orchestrator state
@@ -674,20 +680,20 @@ describe("SyncStatusIndicator", () => {
 
       render(<SyncStatusIndicator />);
 
-      // Progress bar is hidden — only % text is shown
+      // Progress bar is hidden -- only % text is shown
       const progressBar = screen.getByTestId("sync-status-indicator").querySelector('.bg-blue-500');
       expect(progressBar).toBeNull();
     });
   });
 
-  describe("iPhone sync integration (TASK-2116b)", () => {
-    it("should show iPhone pill when iPhone is syncing", () => {
-      render(
-        <SyncStatusIndicator
-          iPhoneSyncStatus="syncing"
-          iPhoneProgress={{ phase: "backing_up", percent: 30 }}
-        />
-      );
+  describe("iPhone sync via orchestrator queue (TASK-2119)", () => {
+    it("should show iPhone pill when iPhone is in the queue as running", () => {
+      const queue = [
+        createSyncItem('iphone', 'running', 30, undefined, true, 'Importing'),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 30));
+
+      render(<SyncStatusIndicator />);
 
       expect(screen.getByTestId("sync-status-indicator")).toBeInTheDocument();
       expect(screen.getByTestId("sync-pill-iphone")).toBeInTheDocument();
@@ -695,87 +701,63 @@ describe("SyncStatusIndicator", () => {
     });
 
     it("should show iPhone pill with green checkmark when complete", () => {
-      render(
-        <SyncStatusIndicator
-          iPhoneSyncStatus="complete"
-          iPhoneProgress={{ phase: "complete", percent: 100 }}
-        />
-      );
+      const queue = [
+        createSyncItem('iphone', 'complete', 100, undefined, true),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, false, 100));
 
-      expect(screen.getByTestId("sync-pill-iphone")).toBeInTheDocument();
+      render(<SyncStatusIndicator />);
+
       const pill = screen.getByTestId("sync-pill-iphone");
       expect(pill).toHaveClass("bg-green-100", "text-green-700");
     });
 
-    it("should show iPhone pill with red X when error", () => {
-      render(
-        <SyncStatusIndicator
-          iPhoneSyncStatus="error"
-          iPhoneError="Device disconnected"
-        />
-      );
+    it("should show iPhone pill with red styling when error", () => {
+      const queue = [
+        createSyncItem('iphone', 'error', 0, 'Device disconnected', true),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, false, 0));
 
-      expect(screen.getByTestId("sync-pill-iphone")).toBeInTheDocument();
+      render(<SyncStatusIndicator />);
+
       const pill = screen.getByTestId("sync-pill-iphone");
       expect(pill).toHaveClass("bg-red-100", "text-red-700");
       expect(pill).toHaveAttribute("title", "Device disconnected");
     });
 
-    it("should not show iPhone pill when idle", () => {
-      render(
-        <SyncStatusIndicator
-          iPhoneSyncStatus="idle"
-        />
-      );
+    it("should not show iPhone pill when not in queue", () => {
+      const queue: SyncItem[] = [];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, false, 0));
+
+      render(<SyncStatusIndicator />);
 
       expect(screen.queryByTestId("sync-pill-iphone")).not.toBeInTheDocument();
     });
 
-    it("should show View Details button when iPhone is active", () => {
-      const onViewDetails = jest.fn();
-      render(
-        <SyncStatusIndicator
-          iPhoneSyncStatus="syncing"
-          iPhoneProgress={{ phase: "extracting", percent: 50 }}
-          onViewIPhoneDetails={onViewDetails}
-        />
-      );
+    it("should show Details link when iPhone is active and onViewSyncDetails provided", () => {
+      const onViewSyncDetails = jest.fn();
+      const queue = [
+        createSyncItem('iphone', 'running', 50, undefined, true, 'Reading'),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 50));
 
-      const btn = screen.getByTestId("sync-iphone-view-details");
+      render(<SyncStatusIndicator onViewSyncDetails={onViewSyncDetails} />);
+
+      const btn = screen.getByTestId("sync-view-details");
       expect(btn).toBeInTheDocument();
       fireEvent.click(btn);
-      expect(onViewDetails).toHaveBeenCalledTimes(1);
-    });
-
-    it("should show Cancel button during iPhone sync", () => {
-      const onCancel = jest.fn();
-      render(
-        <SyncStatusIndicator
-          iPhoneSyncStatus="syncing"
-          iPhoneProgress={{ phase: "backing_up", percent: 20 }}
-          onCancelIPhoneSync={onCancel}
-        />
-      );
-
-      const btn = screen.getByTestId("sync-iphone-cancel");
-      expect(btn).toBeInTheDocument();
-      fireEvent.click(btn);
-      expect(onCancel).toHaveBeenCalledTimes(1);
+      expect(onViewSyncDetails).toHaveBeenCalledWith('iphone');
     });
 
     it("should show iPhone pill alongside email/contacts pills during simultaneous sync", () => {
       const queue = [
         createSyncItem('contacts', 'running', 50),
         createSyncItem('emails', 'pending', 0),
+        createSyncItem('iphone', 'running', 70, undefined, true, 'Saving'),
       ];
-      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 25));
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 40));
 
-      render(
-        <SyncStatusIndicator
-          iPhoneSyncStatus="syncing"
-          iPhoneProgress={{ phase: "storing", percent: 70 }}
-        />
-      );
+      render(<SyncStatusIndicator />);
 
       // Both email/contacts and iPhone should be visible
       expect(screen.getByText("Contacts")).toBeInTheDocument();
@@ -785,69 +767,41 @@ describe("SyncStatusIndicator", () => {
     });
 
     it("should use blue background when only iPhone is active", () => {
-      render(
-        <SyncStatusIndicator
-          iPhoneSyncStatus="syncing"
-          iPhoneProgress={{ phase: "preparing", percent: 0 }}
-        />
-      );
-
-      const indicator = screen.getByTestId("sync-status-indicator");
-      expect(indicator).toHaveClass("bg-blue-50", "border-blue-200");
-    });
-
-    it("should use blue background when both email and iPhone sync are active", () => {
       const queue = [
-        createSyncItem('contacts', 'running', 50),
+        createSyncItem('iphone', 'running', 0, undefined, true, 'Preparing'),
       ];
-      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 50));
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 0));
 
-      render(
-        <SyncStatusIndicator
-          iPhoneSyncStatus="syncing"
-          iPhoneProgress={{ phase: "backing_up", percent: 30 }}
-        />
-      );
+      render(<SyncStatusIndicator />);
 
       const indicator = screen.getByTestId("sync-status-indicator");
       expect(indicator).toHaveClass("bg-blue-50", "border-blue-200");
     });
 
     it("should not show iPhone progress percentage (unreliable)", () => {
-      render(
-        <SyncStatusIndicator
-          iPhoneSyncStatus="syncing"
-          iPhoneProgress={{ phase: "extracting", percent: 45 }}
-        />
-      );
+      const queue = [
+        createSyncItem('iphone', 'running', 45, undefined, true, 'Reading'),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 45));
 
-      // iPhone percentage is not shown (unreliable data from idevicebackup2)
+      render(<SyncStatusIndicator />);
+
+      // iPhone is external, so its percentage should not show (activeProgress only for non-external)
       expect(screen.queryByText("45%")).not.toBeInTheDocument();
     });
 
-    it("should show View Details for completed iPhone sync", () => {
-      const onViewDetails = jest.fn();
-      render(
-        <SyncStatusIndicator
-          iPhoneSyncStatus="complete"
-          iPhoneProgress={{ phase: "complete", percent: 100 }}
-          onViewIPhoneDetails={onViewDetails}
-        />
-      );
+    it("should show spinner for external running pills", () => {
+      const queue = [
+        createSyncItem('iphone', 'running', 30, undefined, true, 'Importing'),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 30));
 
-      expect(screen.getByTestId("sync-iphone-view-details")).toBeInTheDocument();
-    });
+      render(<SyncStatusIndicator />);
 
-    it("should not show Cancel button when iPhone sync is complete", () => {
-      render(
-        <SyncStatusIndicator
-          iPhoneSyncStatus="complete"
-          iPhoneProgress={{ phase: "complete", percent: 100 }}
-          onCancelIPhoneSync={jest.fn()}
-        />
-      );
-
-      expect(screen.queryByTestId("sync-iphone-cancel")).not.toBeInTheDocument();
+      const pill = screen.getByTestId("sync-pill-iphone");
+      // Should contain a spinner div
+      const spinner = pill.querySelector('.animate-spin');
+      expect(spinner).toBeInTheDocument();
     });
   });
 });

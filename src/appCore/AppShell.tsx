@@ -10,11 +10,10 @@
 
 import React from "react";
 import type { AppStateMachine } from "./state/types";
-import { OfflineBanner, SyncStatusBanner } from "./shell";
+import { OfflineBanner } from "./shell";
 import SystemHealthMonitor from "../components/SystemHealthMonitor";
 import { isOnboardingStep } from "./routing";
 import { useSessionValidator } from "../hooks/useSessionValidator";
-import { IPhoneSyncProvider, useIPhoneSyncContext } from "../contexts/IPhoneSyncContext";
 
 // OAuthProvider type to match SystemHealthMonitor expectations
 // Note: 'azure' is Microsoft's Azure AD provider
@@ -28,7 +27,6 @@ interface AppShellProps {
 export function AppShell({ app, children }: AppShellProps) {
   const {
     currentStep,
-    modalState,
     isAuthenticated,
     isDatabaseInitialized,
     currentUser,
@@ -41,7 +39,6 @@ export function AppShell({ app, children }: AppShellProps) {
     isChecking,
     openProfile,
     openSettings,
-    openIPhoneSync,
     handleRetryConnection,
     handleLogout,
     getPageTitle,
@@ -52,18 +49,6 @@ export function AppShell({ app, children }: AppShellProps) {
     isAuthenticated,
     onSessionInvalidated: handleLogout,
   });
-
-  // TASK-2116: iPhone sync status bar (persistent, non-blocking)
-  // Uses context to share single instance with IPhoneSyncFlow
-  const { syncStatus, progress, error, cancelSync } = useIPhoneSyncContext();
-
-  // Hide banner when dashboard is visible without a full-screen modal covering it.
-  // When a modal (Transactions, Contacts) is open, the dashboard card is behind it,
-  // so we show the banner instead.
-  const isDashboardBare =
-    currentStep === "dashboard" &&
-    !modalState.showTransactions &&
-    !modalState.showContacts;
 
   // PRIMARY DATABASE INITIALIZATION GATE
   // Block all content for authenticated users until database is ready
@@ -140,17 +125,6 @@ export function AppShell({ app, children }: AppShellProps) {
             onOpenSettings={openSettings}
           />
         )}
-
-      {/* Sync status banner — shown on all screens EXCEPT bare dashboard (which has its own card) */}
-      {isAuthenticated && currentStep !== "login" && !isDashboardBare && (
-        <SyncStatusBanner
-          iPhoneSyncStatus={syncStatus}
-          iPhoneProgress={progress}
-          iPhoneError={error}
-          onViewDetails={openIPhoneSync}
-          onCancel={cancelSync}
-        />
-      )}
 
       {/* Scrollable Content Area */}
       <div className="flex-1 min-h-0 overflow-y-auto relative">

@@ -4,7 +4,6 @@ import { useTour } from "../hooks/useTour";
 import { usePendingTransactionCount } from "../hooks/usePendingTransactionCount";
 import { useSyncOrchestrator } from "../hooks/useSyncOrchestrator";
 import { SyncStatusIndicator } from "./dashboard/index";
-import { useIPhoneSyncContext } from "../contexts/IPhoneSyncContext";
 import StartNewAuditModal from "./StartNewAuditModal";
 import { LicenseGate } from "./common/LicenseGate";
 import { AlertBanner, AlertIcons } from "./common/AlertBanner";
@@ -69,9 +68,6 @@ function Dashboard({
 
   // Get sync state from SyncOrchestrator (single source of truth for sync status)
   const { isRunning: isAnySyncing } = useSyncOrchestrator();
-
-  // iPhone sync state for unified indicator
-  const { syncStatus: iPhoneSyncStatus, progress: iPhoneProgress, error: iPhoneError, cancelSync } = useIPhoneSyncContext();
 
   // Initialize the onboarding tour for first-time users
   const { runTour, handleJoyrideCallback } = useTour(
@@ -230,11 +226,11 @@ function Dashboard({
             onViewPending={handleViewPending}
             onOpenSettings={onOpenSettings}
             isTourActive={runTour}
-            iPhoneSyncStatus={iPhoneSyncStatus}
-            iPhoneProgress={iPhoneProgress}
-            iPhoneError={iPhoneError}
-            onViewIPhoneDetails={onSyncPhone}
-            onCancelIPhoneSync={cancelSync}
+            onViewSyncDetails={(type) => {
+              if (type === 'iphone' && onSyncPhone) {
+                onSyncPhone();
+              }
+            }}
           />
         </div>
 
