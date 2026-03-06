@@ -138,7 +138,7 @@ export async function middleware(request: NextRequest) {
 
       if (internalRole) {
         const rawRedirect = request.nextUrl.searchParams.get('redirectTo') ?? '/dashboard';
-        const redirectTo = rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') ? rawRedirect : '/dashboard';
+        const redirectTo = /^\/[a-zA-Z0-9\-_\/\?\&\=\#\.]+$/.test(rawRedirect) ? rawRedirect : '/dashboard';
         return NextResponse.redirect(new URL(redirectTo, request.url));
       }
     }

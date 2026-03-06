@@ -135,8 +135,8 @@ export function AddInternalUserForm({ onSuccess, roles }: AddInternalUserFormPro
       setSelectedSlug(defaultSlug);
       onSuccess();
       setTimeout(() => setIsOpen(false), 1500);
-    } finally {
-      setIsSubmitting(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     }
   }
 
