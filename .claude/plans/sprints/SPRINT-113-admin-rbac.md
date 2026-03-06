@@ -1,6 +1,6 @@
 # SPRINT-113: Admin Portal Granular RBAC System
 
-**Status:** Planned
+**Status:** Testing
 **Created:** 2026-03-05
 **Backlog Item:** BACKLOG-850
 **Integration Branch:** `int/sprint-113-admin-rbac`
