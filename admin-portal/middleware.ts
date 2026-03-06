@@ -108,17 +108,10 @@ export async function middleware(request: NextRequest) {
       // Check route-level permissions (skip for /dashboard root — always allowed for internal users)
       for (const [routePrefix, requiredPermissions] of Object.entries(ROUTE_PERMISSIONS)) {
         if (pathname.startsWith(routePrefix)) {
-          let hasAnyPerm = false;
-          for (const perm of requiredPermissions) {
-            const { data: hasPerm } = await supabase.rpc('has_permission', {
-              check_user_id: user.id,
-              required_permission: perm,
-            });
-            if (hasPerm) {
-              hasAnyPerm = true;
-              break;
-            }
-          }
+          const { data: hasAnyPerm } = await supabase.rpc('has_any_permission', {
+            check_user_id: user.id,
+            permission_keys: requiredPermissions,
+          });
 
           if (!hasAnyPerm) {
             return NextResponse.redirect(new URL('/dashboard?error=insufficient_permissions', request.url));
