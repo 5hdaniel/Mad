@@ -69,16 +69,17 @@ export const IPhoneSyncFlow: React.FC<IPhoneSyncFlowProps> = ({ onClose, onSyncS
 
   return (
     <div className="iphone-sync-flow">
-      {/* TASK-910: Sync Lock Banner - Shown when another sync is in progress */}
-      {syncLocked && !isSyncing && (
+      {/* TASK-910: Sync Lock Banner - Shown when a non-iPhone sync is blocking.
+          If the lock IS the iPhone sync (we have progress), show progress instead. */}
+      {syncLocked && !isSyncing && !progress && (
         <SyncLockBanner
           operationName={lockReason || "Another sync operation"}
           onRetry={checkSyncStatus}
         />
       )}
 
-      {/* Connection Status - Shown when idle (not syncing, not complete, not error) */}
-      {!isSyncing && !isComplete && !isError && (
+      {/* Connection Status - Shown when truly idle */}
+      {!isSyncing && !isComplete && !isError && !syncLocked && !progress && (
         <ConnectionStatus
           isConnected={isConnected}
           device={device}
@@ -87,39 +88,9 @@ export const IPhoneSyncFlow: React.FC<IPhoneSyncFlowProps> = ({ onClose, onSyncS
         />
       )}
 
-      {/* TASK-2116: If user reopens modal during active sync (after backing_up started),
-          show a message directing them to the status bar */}
-      {isSyncing && progress && !needsPassword && !isWaitingForPasscode &&
-        (progress.phase === "backing_up" || progress.phase === "extracting" || progress.phase === "storing") &&
-        hasCalledSyncStarted.current && (
-        <div className="flex flex-col items-center justify-center p-8 text-center">
-          <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center mb-4">
-            <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-800">Sync in progress</h3>
-          <p className="text-sm text-gray-500 mt-2">
-            Check the status bar at the top of the screen for progress details.
-          </p>
-          <button
-            onClick={onClose}
-            className="mt-6 px-6 py-3 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors"
-          >
-            Close
-          </button>
-        </div>
-      )}
-
-      {/* Sync Progress - Shown during sync (only for phases before backing_up, or passcode/password) */}
-      {isSyncing && progress && !hasCalledSyncStarted.current && (
-        <SyncProgress
-          progress={progress}
-          onCancel={cancelSync}
-          isWaitingForPasscode={isWaitingForPasscode}
-        />
-      )}
-
-      {/* Sync Progress - Shown during passcode/password waiting even after auto-close */}
-      {isSyncing && progress && hasCalledSyncStarted.current && (needsPassword || isWaitingForPasscode) && (
+      {/* Sync Progress - Shown during active sync OR when reopening modal during sync
+          (syncLocked may be true but we have progress from the shared context) */}
+      {(isSyncing || (syncLocked && progress)) && progress && (
         <SyncProgress
           progress={progress}
           onCancel={cancelSync}

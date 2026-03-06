@@ -71,13 +71,12 @@ describe("IPhoneSyncFlow", () => {
     expect(screen.getByTestId("connection-status")).toBeInTheDocument();
   });
 
-  it("shows redirect message when re-opening modal during active sync", () => {
+  it("shows sync progress when re-opening modal during active sync", () => {
     const onClose = jest.fn();
 
     // Simulate state after sync has started and modal was auto-closed:
     // - syncStatus is "syncing"
     // - progress is in backing_up phase
-    // - The component has already called onSyncStarted (hasCalledSyncStarted.current = true)
     mockContextValue = {
       ...mockSyncReturn,
       syncStatus: "syncing",
@@ -102,19 +101,11 @@ describe("IPhoneSyncFlow", () => {
       <IPhoneSyncFlow onClose={onClose} onSyncStarted={onSyncStarted} />
     );
 
-    // Should show the redirect message
-    expect(screen.getByText("Sync in progress")).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Check the status bar at the top of the screen for progress details."
-      )
-    ).toBeInTheDocument();
-
-    // Close button should be present
-    expect(screen.getByText("Close")).toBeInTheDocument();
+    // Should show the SyncProgress component (full details in modal)
+    expect(screen.getByTestId("sync-progress")).toBeInTheDocument();
   });
 
-  it("shows redirect message during extracting phase after auto-close", () => {
+  it("shows sync progress during extracting phase after auto-close", () => {
     const onClose = jest.fn();
     const onSyncStarted = jest.fn();
 
@@ -149,7 +140,7 @@ describe("IPhoneSyncFlow", () => {
       <IPhoneSyncFlow onClose={onClose} onSyncStarted={onSyncStarted} />
     );
 
-    // Should still show redirect message (not SyncProgress)
-    expect(screen.getByText("Sync in progress")).toBeInTheDocument();
+    // Should show SyncProgress component with full details
+    expect(screen.getByTestId("sync-progress")).toBeInTheDocument();
   });
 });

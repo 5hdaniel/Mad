@@ -10,9 +10,8 @@
 
 import React from "react";
 import type { AppStateMachine } from "./state/types";
-import { OfflineBanner } from "./shell";
+import { OfflineBanner, SyncStatusBanner } from "./shell";
 import SystemHealthMonitor from "../components/SystemHealthMonitor";
-import { SyncStatusIndicator } from "../components/dashboard/SyncStatusIndicator";
 import { isOnboardingStep } from "./routing";
 import { useSessionValidator } from "../hooks/useSessionValidator";
 import { IPhoneSyncProvider, useIPhoneSyncContext } from "../contexts/IPhoneSyncContext";
@@ -133,19 +132,15 @@ export function AppShell({ app, children }: AppShellProps) {
           />
         )}
 
-      {/* TASK-2116b: Unified sync indicator - shows email/contacts AND iPhone sync */}
-      {isAuthenticated && currentStep !== "login" && (
-        <div className="flex-shrink-0 px-4 pt-2">
-          <SyncStatusIndicator
-            isTourActive={isTourActive}
-            iPhoneSyncStatus={syncStatus}
-            iPhoneProgress={progress}
-            iPhoneError={error}
-            onViewIPhoneDetails={openIPhoneSync}
-            onCancelIPhoneSync={cancelSync}
-            onOpenSettings={openSettings}
-          />
-        </div>
+      {/* Sync status banner — only shown when NOT on dashboard (dashboard has its own card-style indicator) */}
+      {isAuthenticated && currentStep !== "login" && currentStep !== "dashboard" && (
+        <SyncStatusBanner
+          iPhoneSyncStatus={syncStatus}
+          iPhoneProgress={progress}
+          iPhoneError={error}
+          onViewDetails={openIPhoneSync}
+          onCancel={cancelSync}
+        />
       )}
 
       {/* Scrollable Content Area */}
