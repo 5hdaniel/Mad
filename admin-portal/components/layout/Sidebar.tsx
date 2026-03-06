@@ -5,11 +5,13 @@
  *
  * Left sidebar with navigation items.
  * Items are permission-gated based on the user's RBAC role.
+ * Settings-related items are grouped under a collapsible section.
  */
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, BarChart3, Users, Building2, Settings, LogOut, PanelLeftClose, PanelLeftOpen, FileText } from 'lucide-react';
+import { LayoutDashboard, BarChart3, Users, Building2, Settings, LogOut, PanelLeftClose, PanelLeftOpen, FileText, ChevronDown, ChevronRight, Shield } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
 import type { PermissionKey } from '@/lib/permissions';
@@ -22,13 +24,26 @@ interface NavItem {
   permission: PermissionKey;
 }
 
-const navItems: NavItem[] = [
+/** Top-level nav items (not grouped) */
+const mainNavItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, permission: PERMISSIONS.DASHBOARD_VIEW },
   { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart3, permission: PERMISSIONS.ANALYTICS_VIEW },
   { label: 'Users', href: '/dashboard/users', icon: Users, permission: PERMISSIONS.USERS_VIEW },
   { label: 'Organizations', href: '/dashboard/organizations', icon: Building2, permission: PERMISSIONS.ORGANIZATIONS_VIEW },
+];
+
+/** Sub-items under the collapsible "Settings" section */
+const settingsSubItems: NavItem[] = [
+  { label: 'Internal Users', href: '/dashboard/settings', icon: Users, permission: PERMISSIONS.INTERNAL_USERS_VIEW },
+  { label: 'Roles & Permissions', href: '/dashboard/settings?tab=roles', icon: Shield, permission: PERMISSIONS.ROLES_VIEW },
   { label: 'Audit Log', href: '/dashboard/audit-log', icon: FileText, permission: PERMISSIONS.AUDIT_VIEW },
-  { label: 'Settings', href: '/dashboard/settings', icon: Settings, permission: PERMISSIONS.INTERNAL_USERS_VIEW },
+];
+
+/** Permissions that grant visibility to the Settings section */
+const settingsSectionPermissions: PermissionKey[] = [
+  PERMISSIONS.INTERNAL_USERS_VIEW,
+  PERMISSIONS.ROLES_VIEW,
+  PERMISSIONS.AUDIT_VIEW,
 ];
 
 interface SidebarProps {
@@ -40,6 +55,73 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const { signOut } = useAuth();
   const { hasPermission, roleName, loading } = usePermissions();
+
+  // Check if any settings sub-item route is active
+  const isSettingsActive = pathname.startsWith('/dashboard/settings') || pathname.startsWith('/dashboard/audit-log');
+
+  // Auto-expand when a settings route is active; allow manual toggle otherwise
+  const [settingsExpanded, setSettingsExpanded] = useState(isSettingsActive);
+
+  // Keep expanded state in sync when navigating to/from settings routes
+  useEffect(() => {
+    if (isSettingsActive) {
+      setSettingsExpanded(true);
+    }
+  }, [isSettingsActive]);
+
+  // Whether the user can see the settings section at all
+  const canSeeSettings = loading || settingsSectionPermissions.some((p) => hasPermission(p));
+
+  const renderNavItem = (item: NavItem, isSubItem = false) => {
+    // While permissions are loading, show all items to prevent flash
+    if (!loading && !hasPermission(item.permission)) return null;
+
+    // For sub-items with query params (e.g., ?tab=roles), match on pathname + search
+    const itemPath = item.href.split('?')[0];
+    const itemQuery = item.href.includes('?') ? item.href.split('?')[1] : null;
+    let isActive: boolean;
+
+    if (itemQuery) {
+      // Match path and ensure query param is present
+      isActive = pathname === itemPath;
+      // For tab-based routes, we check if this is the specific tab
+      // The "Internal Users" item (no query) is active when on /dashboard/settings without ?tab=roles
+      // The "Roles & Permissions" item (?tab=roles) is active when on /dashboard/settings?tab=roles
+      // Since usePathname doesn't include search params, we rely on the pathname match
+      // and differentiate at render time by checking if the default tab
+      if (isActive && itemQuery === 'tab=roles') {
+        // This will be highlighted via CSS; both settings sub-items share the same path
+        // We mark it active only if the URL has the tab=roles param
+        // Since Next.js usePathname doesn't include query, we use a workaround
+        isActive = typeof window !== 'undefined' && window.location.search.includes('tab=roles');
+      } else if (isActive && !itemQuery) {
+        // Default tab (Internal Users) - active when no tab=roles in URL
+        isActive = typeof window === 'undefined' || !window.location.search.includes('tab=roles');
+      }
+    } else {
+      isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
+    }
+
+    const Icon = item.icon;
+
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        className={`flex items-center rounded-md text-sm font-medium transition-colors ${
+          collapsed ? 'justify-center px-2 py-2' : isSubItem ? 'gap-3 pl-9 pr-3 py-2' : 'gap-3 px-3 py-2'
+        } ${
+          isActive
+            ? 'bg-gray-800 text-white'
+            : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+        }`}
+        title={collapsed ? item.label : undefined}
+      >
+        <Icon className={`shrink-0 ${isSubItem ? 'h-4 w-4' : 'h-5 w-5'}`} />
+        {!collapsed && <span>{item.label}</span>}
+      </Link>
+    );
+  };
 
   return (
     <aside className={`sticky top-0 h-screen flex flex-col bg-gray-900 text-white transition-all duration-200 ${collapsed ? 'w-16' : 'w-64'}`}>
@@ -62,31 +144,51 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
       {/* Navigation */}
       <nav className={`flex-1 py-4 space-y-1 overflow-y-auto ${collapsed ? 'px-2' : 'px-3'}`}>
-        {navItems.map((item) => {
-          // While permissions are loading, show all items to prevent flash
-          if (!loading && !hasPermission(item.permission)) return null;
+        {/* Main nav items */}
+        {mainNavItems.map((item) => renderNavItem(item))}
 
-          const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
-          const Icon = item.icon;
-
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center rounded-md text-sm font-medium transition-colors ${
+        {/* Collapsible Settings section */}
+        {canSeeSettings && (
+          <div>
+            <button
+              onClick={() => {
+                if (collapsed) {
+                  // When collapsed, expand the sidebar instead of toggling sub-items
+                  onToggle();
+                  setSettingsExpanded(true);
+                } else {
+                  setSettingsExpanded(!settingsExpanded);
+                }
+              }}
+              className={`flex items-center w-full rounded-md text-sm font-medium transition-colors ${
                 collapsed ? 'justify-center px-2 py-2' : 'gap-3 px-3 py-2'
               } ${
-                isActive
+                isSettingsActive
                   ? 'bg-gray-800 text-white'
                   : 'text-gray-300 hover:bg-gray-800 hover:text-white'
               }`}
-              title={collapsed ? item.label : undefined}
+              title={collapsed ? 'Settings' : undefined}
             >
-              <Icon className="h-5 w-5 shrink-0" />
-              {!collapsed && <span>{item.label}</span>}
-            </Link>
-          );
-        })}
+              <Settings className="h-5 w-5 shrink-0" />
+              {!collapsed && (
+                <>
+                  <span className="flex-1 text-left">Settings</span>
+                  {settingsExpanded
+                    ? <ChevronDown className="h-4 w-4 shrink-0" />
+                    : <ChevronRight className="h-4 w-4 shrink-0" />
+                  }
+                </>
+              )}
+            </button>
+
+            {/* Sub-items (only visible when expanded and sidebar not collapsed) */}
+            {settingsExpanded && !collapsed && (
+              <div className="mt-1 space-y-1">
+                {settingsSubItems.map((item) => renderNavItem(item, true))}
+              </div>
+            )}
+          </div>
+        )}
       </nav>
 
       {/* Role badge + Sign Out */}
