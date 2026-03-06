@@ -11,6 +11,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { FileText, ChevronLeft, ChevronRight, Filter, Clock, User, Search } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { formatTimestamp } from '@/lib/format';
 
 interface AuditLogEntry {
   id: string;
@@ -98,17 +99,6 @@ export function AuditLogContent({ embedded = false }: { embedded?: boolean } = {
   const uniqueActions = useMemo(() => {
     return Object.keys(ACTION_LABELS);
   }, []);
-
-  function formatTimestamp(ts: string): string {
-    return new Date(ts).toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-  }
 
   function renderActionBadge(action: string) {
     const config = ACTION_LABELS[action] || { label: action, color: 'bg-gray-100 text-gray-700' };
