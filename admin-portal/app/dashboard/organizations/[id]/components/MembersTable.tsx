@@ -98,7 +98,8 @@ function SortIcon({ field, currentField, dir }: { field: SortField; currentField
 }
 
 // Classify a license status into a filter category
-function classifyLicense(status: string | null): LicenseFilter {
+type LicenseCategory = 'active' | 'trial' | 'expired' | 'none';
+function classifyLicense(status: string | null): LicenseCategory {
   const s = (status || '').toLowerCase();
   if (s === 'active' || s === 'assigned') return 'active';
   if (s === 'expired' || s === 'revoked') return 'expired';
