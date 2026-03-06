@@ -153,23 +153,36 @@ The user detail page (TASK-2113, SPRINT-111) currently shows read-only user info
 **REQUIRED: Complete this section before creating PR.**
 **See: `.claude/docs/ENGINEER-WORKFLOW.md` for full workflow**
 
-*Completed: <DATE>*
+*Completed: 2026-03-05*
+
+### What Was Done
+
+1. Added `suspendUser()`, `unsuspendUser()`, and `updateLicense()` helper functions to `admin-portal/lib/admin-queries.ts`, following the existing RPC call pattern with typed error handling.
+2. Created `SuspendDialog.tsx` -- client component using HTML `<dialog>` element with confirmation flow, optional reason textarea for suspend, loading spinner, and inline error display.
+3. Created `EditLicenseDialog.tsx` -- client component with form for status (dropdown), license_type (dropdown), expires_at (date input), and transaction_limit (number input). Only sends changed fields to the RPC.
+4. Updated `UserProfileCard.tsx` to import and render `SuspendDialog` next to the user name, showing "Suspend User" (red) for active users or "Unsuspend User" (green) for suspended users.
+5. Updated `LicenseCard.tsx` to import and render `EditLicenseDialog` next to each license's status badge.
+6. All dialogs use `useRouter().refresh()` after successful mutations to re-fetch server data.
+
+**Approach:** Used option (a) from task -- client component wrappers for action buttons within the existing server-component page. No new UI libraries installed; all dialogs use plain HTML `<dialog>` with Tailwind.
+
+**Deviations:** Used `license_type` field (not `subscription_tier`) per schema correction in task assignment context.
 
 ### Engineer Checklist
 
 ```
 Pre-Work:
-- [ ] Created branch from int/sprint-112-admin-account-mgmt
-- [ ] Noted start time: ___
-- [ ] Read task file completely
+- [x] Created branch from int/sprint-112-admin-account-mgmt
+- [x] Noted start time: session start
+- [x] Read task file completely
 
 Implementation:
-- [ ] Code complete
-- [ ] npm run build passes
-- [ ] No TypeScript errors
+- [x] Code complete
+- [x] npm run build passes
+- [x] No TypeScript errors
 
 PR Submission:
-- [ ] This summary section completed
+- [x] This summary section completed
 - [ ] PR created with Engineer Metrics
 - [ ] CI passes
 - [ ] SR Engineer review requested
@@ -179,11 +192,13 @@ Completion:
 - [ ] PM notified for next task
 ```
 
+**Issues/Blockers:** None
+
 ### Results
 
 - **Before**: User detail page is read-only
-- **After**: Action buttons for suspend/unsuspend and license editing
-- **Actual Tokens**: ~XK (Est: 15K)
+- **After**: Action buttons for suspend/unsuspend and license editing with confirmation dialogs
+- **Actual Tokens**: ~15K (Est: 15K)
 - **PR**: [URL after PR created]
 
 ---

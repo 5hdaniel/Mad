@@ -50,3 +50,90 @@ export async function searchUsers(
 
   return { data: data as AdminSearchUser[], error: null };
 }
+
+// ---------------------------------------------------------------------------
+// Write Operations (Suspend / Unsuspend / License Edit)
+// ---------------------------------------------------------------------------
+
+interface RpcResult<T = Record<string, unknown>> {
+  data: T | null;
+  error: Error | null;
+}
+
+/**
+ * Suspend a user via admin_suspend_user RPC.
+ *
+ * @param userId - The target user's UUID
+ * @param reason - Optional reason for suspension
+ */
+export async function suspendUser(
+  userId: string,
+  reason?: string
+): Promise<RpcResult<{ success: boolean; previous_status: string }>> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc('admin_suspend_user', {
+    p_user_id: userId,
+    ...(reason ? { p_reason: reason } : {}),
+  });
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  return { data: data as { success: boolean; previous_status: string }, error: null };
+}
+
+/**
+ * Unsuspend a user via admin_unsuspend_user RPC.
+ *
+ * @param userId - The target user's UUID
+ */
+export async function unsuspendUser(
+  userId: string
+): Promise<RpcResult<{ success: boolean; previous_status: string }>> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc('admin_unsuspend_user', {
+    p_user_id: userId,
+  });
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  return { data: data as { success: boolean; previous_status: string }, error: null };
+}
+
+/**
+ * Update a license via admin_update_license RPC.
+ *
+ * @param licenseId - The license UUID
+ * @param changes - Object of fields to update (status, expires_at, license_type, transaction_limit)
+ */
+export async function updateLicense(
+  licenseId: string,
+  changes: Record<string, unknown>
+): Promise<
+  RpcResult<{ success: boolean; old_values: Record<string, unknown>; new_values: Record<string, unknown> }>
+> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc('admin_update_license', {
+    p_license_id: licenseId,
+    p_changes: changes,
+  });
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  return {
+    data: data as {
+      success: boolean;
+      old_values: Record<string, unknown>;
+      new_values: Record<string, unknown>;
+    },
+    error: null,
+  };
+}
