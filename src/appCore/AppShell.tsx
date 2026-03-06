@@ -28,6 +28,7 @@ interface AppShellProps {
 export function AppShell({ app, children }: AppShellProps) {
   const {
     currentStep,
+    modalState,
     isAuthenticated,
     isDatabaseInitialized,
     currentUser,
@@ -55,6 +56,14 @@ export function AppShell({ app, children }: AppShellProps) {
   // TASK-2116: iPhone sync status bar (persistent, non-blocking)
   // Uses context to share single instance with IPhoneSyncFlow
   const { syncStatus, progress, error, cancelSync } = useIPhoneSyncContext();
+
+  // Hide banner when dashboard is visible without a full-screen modal covering it.
+  // When a modal (Transactions, Contacts) is open, the dashboard card is behind it,
+  // so we show the banner instead.
+  const isDashboardBare =
+    currentStep === "dashboard" &&
+    !modalState.showTransactions &&
+    !modalState.showContacts;
 
   // PRIMARY DATABASE INITIALIZATION GATE
   // Block all content for authenticated users until database is ready
@@ -132,8 +141,8 @@ export function AppShell({ app, children }: AppShellProps) {
           />
         )}
 
-      {/* Sync status banner — only shown when NOT on dashboard (dashboard has its own card-style indicator) */}
-      {isAuthenticated && currentStep !== "login" && currentStep !== "dashboard" && (
+      {/* Sync status banner — shown on all screens EXCEPT bare dashboard (which has its own card) */}
+      {isAuthenticated && currentStep !== "login" && !isDashboardBare && (
         <SyncStatusBanner
           iPhoneSyncStatus={syncStatus}
           iPhoneProgress={progress}

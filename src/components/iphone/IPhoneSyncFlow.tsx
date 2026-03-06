@@ -49,13 +49,17 @@ export const IPhoneSyncFlow: React.FC<IPhoneSyncFlowProps> = ({ onClose, onSyncS
   const isError = syncStatus === "error";
 
   // TASK-2116: Auto-close modal when sync enters backing_up phase
+  // Track whether sync was already running when the modal opened — if so,
+  // don't auto-close (the user deliberately reopened it to see progress).
   const hasCalledSyncStarted = useRef(false);
+  const wasAlreadySyncingOnMount = useRef(isSyncing);
   useEffect(() => {
     if (
       isSyncing &&
       progress?.phase === "backing_up" &&
       !needsPassword &&
       !hasCalledSyncStarted.current &&
+      !wasAlreadySyncingOnMount.current &&
       onSyncStarted
     ) {
       hasCalledSyncStarted.current = true;
@@ -64,6 +68,7 @@ export const IPhoneSyncFlow: React.FC<IPhoneSyncFlowProps> = ({ onClose, onSyncS
     // Reset when sync ends so it can fire again for future syncs
     if (!isSyncing) {
       hasCalledSyncStarted.current = false;
+      wasAlreadySyncingOnMount.current = false;
     }
   }, [isSyncing, progress?.phase, needsPassword, onSyncStarted]);
 
