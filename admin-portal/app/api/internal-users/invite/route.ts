@@ -69,7 +69,6 @@ export async function POST(request: NextRequest) {
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const adminClient: SupabaseClient<any> = createAdminClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
