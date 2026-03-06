@@ -27,7 +27,7 @@ This sprint addresses them in dependency order: quick fixes first (848, 849), th
 | TASK-2115 | BACKLOG-849 | Unit tests for ACID rollback logic | Low | Medium | Completed | `test/TASK-2115-rollback-tests` |
 | TASK-2116 | BACKLOG-847 | Persistent sync status bar (replaces modal) | High | High | Completed | `feature/TASK-2116-sync-status-bar` |
 | TASK-2117 | BACKLOG-846 | Reconnect renderer to in-progress sync | High | Medium | Subsumed by TASK-2119 | — |
-| TASK-2119 | BACKLOG-853 | Integrate iPhone sync into SyncOrchestrator | High | High | In Progress | `feature/TASK-2119-iphone-orchestrator` |
+| TASK-2119 | BACKLOG-853 | Integrate iPhone sync into SyncOrchestrator | High | High | Testing | `feature/TASK-2119-iphone-orchestrator` |
 
 ## Out of Scope / Deferred
 
