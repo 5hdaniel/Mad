@@ -24,7 +24,7 @@ const navItems: NavItem[] = [
   { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart3, enabled: true },
   { label: 'Users', href: '/dashboard/users', icon: Users, enabled: true },
   { label: 'Organizations', href: '/dashboard/organizations', icon: Building2, enabled: true },
-  { label: 'Settings', href: '/dashboard/settings', icon: Settings, enabled: false },
+  { label: 'Settings', href: '/dashboard/settings', icon: Settings, enabled: true },
 ];
 
 interface SidebarProps {
