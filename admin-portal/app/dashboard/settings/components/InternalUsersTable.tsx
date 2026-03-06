@@ -19,6 +19,7 @@ interface InternalUsersTableProps {
   users: InternalUser[];
   currentUserId: string | null;
   onRemoveClick: (user: InternalUser) => void;
+  onBulkRemoveClick: (users: InternalUser[]) => void;
   roles: AdminRole[];
   onRoleChange: () => void;
   externalRoleFilter?: string | null;
@@ -81,7 +82,7 @@ function SortIcon({ field, currentField, dir }: { field: SortField; currentField
     : <ArrowDown className="h-3 w-3 ml-1" />;
 }
 
-export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles, onRoleChange, externalRoleFilter, onClearExternalRoleFilter, addUserButton }: InternalUsersTableProps) {
+export function InternalUsersTable({ users, currentUserId, onRemoveClick, onBulkRemoveClick, roles, onRoleChange, externalRoleFilter, onClearExternalRoleFilter, addUserButton }: InternalUsersTableProps) {
   const { hasPermission } = usePermissions();
   const canManage = hasPermission(PERMISSIONS.INTERNAL_USERS_MANAGE);
   const [sortField, setSortField] = useState<SortField | null>(null);
@@ -279,7 +280,7 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles,
             type="button"
             onClick={() => {
               const usersToRemove = filteredUsers.filter((u) => selected.has(u.id));
-              for (const u of usersToRemove) onRemoveClick(u);
+              onBulkRemoveClick(usersToRemove);
               setSelected(new Set());
             }}
             className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-red-600 bg-white border border-red-200 hover:bg-red-50 transition-colors"

@@ -31,7 +31,7 @@ export function SettingsManager({ initialUsers, currentUserId, initialRoles, per
   const { hasPermission } = usePermissions();
   const [activeTab, setActiveTab] = useState<Tab>('users');
   const [users, setUsers] = useState<InternalUser[]>(initialUsers);
-  const [userToRemove, setUserToRemove] = useState<InternalUser | null>(null);
+  const [usersToRemove, setUsersToRemove] = useState<InternalUser[]>([]);
   const [roleFilter, setRoleFilter] = useState<string | null>(null);
 
   const handleNavigateToUsersWithRole = useCallback((roleSlug: string) => {
@@ -102,17 +102,18 @@ export function SettingsManager({ initialUsers, currentUserId, initialRoles, per
             ) : undefined}
             users={users}
             currentUserId={currentUserId}
-            onRemoveClick={(user) => setUserToRemove(user)}
+            onRemoveClick={(user) => setUsersToRemove([user])}
+            onBulkRemoveClick={(users) => setUsersToRemove(users)}
             roles={initialRoles}
             onRoleChange={handleRefresh}
             externalRoleFilter={roleFilter}
             onClearExternalRoleFilter={() => setRoleFilter(null)}
           />
-          {userToRemove && (
+          {usersToRemove.length > 0 && (
             <RemoveUserDialog
-              user={userToRemove}
-              onConfirm={() => { setUserToRemove(null); router.refresh(); }}
-              onCancel={() => setUserToRemove(null)}
+              users={usersToRemove}
+              onConfirm={() => { setUsersToRemove([]); router.refresh(); }}
+              onCancel={() => setUsersToRemove([])}
             />
           )}
         </div>
