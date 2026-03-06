@@ -7,9 +7,9 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { Plus, Pencil, Trash2, Shield, ShieldAlert, Check, X, Lock } from 'lucide-react';
+import { Plus, Pencil, Trash2, Shield, ShieldAlert, Check, X, Lock, Users } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import type { AdminRole, AdminPermission } from '../page';
+import type { AdminRole, AdminPermission, InternalUser } from '../page';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
 import { PERMISSIONS, PERMISSION_CATEGORIES } from '@/lib/permissions';
 
@@ -17,15 +17,26 @@ interface RoleManagementProps {
   roles: AdminRole[];
   permissions: AdminPermission[];
   onRefresh: () => void;
+  users?: InternalUser[];
+  onNavigateToUsersWithRole?: (roleSlug: string) => void;
 }
 
-export function RoleManagement({ roles, permissions, onRefresh }: RoleManagementProps) {
+export function RoleManagement({ roles, permissions, onRefresh, users = [], onNavigateToUsersWithRole }: RoleManagementProps) {
   const { hasPermission } = usePermissions();
   const canManage = hasPermission(PERMISSIONS.ROLES_MANAGE);
   const [editingRole, setEditingRole] = useState<AdminRole | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<AdminRole | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Count users per role id
+  const userCountByRoleId = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const u of users) {
+      counts[u.role_id] = (counts[u.role_id] || 0) + 1;
+    }
+    return counts;
+  }, [users]);
 
   // Group permissions by category
   const groupedPermissions = useMemo(() => {
@@ -64,7 +75,9 @@ export function RoleManagement({ roles, permissions, onRefresh }: RoleManagement
         </div>
 
         <div className="divide-y divide-gray-200">
-          {roles.map((role) => (
+          {roles.map((role) => {
+            const userCount = userCountByRoleId[role.id] || 0;
+            return (
             <div key={role.id} className="px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 {role.is_system ? (
@@ -79,6 +92,22 @@ export function RoleManagement({ roles, permissions, onRefresh }: RoleManagement
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700">
                         <Lock className="h-2.5 w-2.5" />
                         System
+                      </span>
+                    )}
+                    {onNavigateToUsersWithRole ? (
+                      <button
+                        type="button"
+                        onClick={() => onNavigateToUsersWithRole(role.slug)}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-600 hover:bg-primary-100 hover:text-primary-700 transition-colors cursor-pointer"
+                        title={`View ${userCount} user${userCount !== 1 ? 's' : ''} with this role`}
+                      >
+                        <Users className="h-2.5 w-2.5" />
+                        {userCount} user{userCount !== 1 ? 's' : ''}
+                      </button>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-600">
+                        <Users className="h-2.5 w-2.5" />
+                        {userCount} user{userCount !== 1 ? 's' : ''}
                       </span>
                     )}
                   </div>
@@ -116,7 +145,7 @@ export function RoleManagement({ roles, permissions, onRefresh }: RoleManagement
                 </button>
               )}
             </div>
-          ))}
+          ); })}
         </div>
       </div>
 

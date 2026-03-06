@@ -15,6 +15,8 @@ import { RoleManagement } from './RoleManagement';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
 import { PERMISSIONS } from '@/lib/permissions';
 
+type Tab = 'users' | 'roles';
+
 interface SettingsManagerProps {
   initialUsers: InternalUser[];
   currentUserId: string | null;
@@ -22,13 +24,17 @@ interface SettingsManagerProps {
   permissions: AdminPermission[];
 }
 
-type Tab = 'users' | 'roles';
-
 export function SettingsManager({ initialUsers, currentUserId, initialRoles, permissions }: SettingsManagerProps) {
   const router = useRouter();
   const { hasPermission } = usePermissions();
   const [activeTab, setActiveTab] = useState<Tab>('users');
   const [userToRemove, setUserToRemove] = useState<InternalUser | null>(null);
+  const [roleFilter, setRoleFilter] = useState<string | null>(null);
+
+  const handleNavigateToUsersWithRole = useCallback((roleSlug: string) => {
+    setRoleFilter(roleSlug);
+    setActiveTab('users');
+  }, []);
 
   const canManageUsers = hasPermission(PERMISSIONS.INTERNAL_USERS_MANAGE);
   const canViewRoles = hasPermission(PERMISSIONS.ROLES_VIEW) || hasPermission(PERMISSIONS.ROLES_MANAGE);
@@ -85,6 +91,8 @@ export function SettingsManager({ initialUsers, currentUserId, initialRoles, per
             onRemoveClick={(user) => setUserToRemove(user)}
             roles={initialRoles}
             onRoleChange={handleRefresh}
+            externalRoleFilter={roleFilter}
+            onClearExternalRoleFilter={() => setRoleFilter(null)}
           />
           {userToRemove && (
             <RemoveUserDialog
@@ -101,6 +109,8 @@ export function SettingsManager({ initialUsers, currentUserId, initialRoles, per
           roles={initialRoles}
           permissions={permissions}
           onRefresh={handleRefresh}
+          users={initialUsers}
+          onNavigateToUsersWithRole={handleNavigateToUsersWithRole}
         />
       )}
     </div>
