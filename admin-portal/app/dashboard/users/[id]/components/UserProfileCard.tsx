@@ -6,6 +6,7 @@
  */
 
 import { SuspendDialog } from './SuspendDialog';
+import { ImpersonateButton } from './ImpersonateButton';
 
 interface UserProfile {
   id: string;
@@ -71,11 +72,14 @@ export function UserProfileCard({ user }: { user: UserProfile }) {
             <h2 className="text-xl font-bold text-gray-900 truncate">
               {displayName}
             </h2>
-            <SuspendDialog
-              userId={user.id}
-              userName={displayName}
-              isSuspended={user.status === 'suspended'}
-            />
+            <div className="flex items-center gap-2">
+              <ImpersonateButton userId={user.id} userName={displayName} />
+              <SuspendDialog
+                userId={user.id}
+                userName={displayName}
+                isSuspended={user.status === 'suspended'}
+              />
+            </div>
           </div>
           {user.email && (
             <p className="text-sm text-gray-500 truncate">{user.email}</p>

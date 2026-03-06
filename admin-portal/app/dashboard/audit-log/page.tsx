@@ -35,6 +35,8 @@ const ACTION_LABELS: Record<string, { label: string; color: string }> = {
   'role.update': { label: 'Role Updated', color: 'bg-indigo-100 text-indigo-700' },
   'role.update_permissions': { label: 'Permissions Updated', color: 'bg-indigo-100 text-indigo-700' },
   'role.delete': { label: 'Role Deleted', color: 'bg-red-100 text-red-700' },
+  'impersonation.start': { label: 'Impersonation Started', color: 'bg-purple-100 text-purple-700' },
+  'impersonation.end': { label: 'Impersonation Ended', color: 'bg-purple-100 text-purple-700' },
 };
 
 const PAGE_SIZE = 25;
