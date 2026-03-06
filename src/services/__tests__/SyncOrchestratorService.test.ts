@@ -518,9 +518,10 @@ describe('SyncOrchestratorService', () => {
         onProgress(100);
       });
 
-      // Note: requestSync will see isRunning=true (from iPhone) and queue as pending
-      // Use forceSync instead to bypass the running check
-      syncOrchestrator.forceSync({ types: ['contacts'], userId: 'test-user' });
+      // BACKLOG-855: requestSync no longer blocks when only external syncs are running
+      const result = syncOrchestrator.requestSync({ types: ['contacts'], userId: 'test-user' });
+      expect(result.started).toBe(true);
+      expect(result.needsConfirmation).toBe(false);
 
       await new Promise(resolve => setTimeout(resolve, 0));
 
@@ -544,7 +545,8 @@ describe('SyncOrchestratorService', () => {
         onProgress(100);
       });
 
-      syncOrchestrator.forceSync({ types: ['contacts'], userId: 'test-user' });
+      // BACKLOG-855: requestSync works when only external syncs are running
+      syncOrchestrator.requestSync({ types: ['contacts'], userId: 'test-user' });
       await new Promise(resolve => setTimeout(resolve, 0));
 
       // iPhone is still running, so isRunning should be true
@@ -555,6 +557,56 @@ describe('SyncOrchestratorService', () => {
 
       const state = syncOrchestrator.getState();
       expect(state.isRunning).toBe(false);
+    });
+
+    it('should allow requestSync when only external syncs are running (BACKLOG-855)', async () => {
+      // Register iPhone external sync (sets isRunning = true)
+      syncOrchestrator.registerExternalSync('iphone');
+      expect(syncOrchestrator.getState().isRunning).toBe(true);
+
+      // Register an internal sync function
+      syncOrchestrator.registerSyncFunction('contacts', async (_userId: string, onProgress: (p: number) => void) => {
+        onProgress(100);
+      });
+
+      // requestSync should start immediately, NOT queue as pending
+      const result = syncOrchestrator.requestSync({ types: ['contacts'], userId: 'test-user' });
+      expect(result.started).toBe(true);
+      expect(result.needsConfirmation).toBe(false);
+
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      // Both should be in the queue
+      const state = syncOrchestrator.getState();
+      const iphone = state.queue.find(item => item.type === 'iphone');
+      const contacts = state.queue.find(item => item.type === 'contacts');
+      expect(iphone).toBeDefined();
+      expect(iphone!.status).toBe('running');
+      expect(contacts).toBeDefined();
+      expect(contacts!.status).toBe('complete');
+    });
+
+    it('should still block requestSync when an internal sync is running', async () => {
+      let resolveSync: (() => void) | null = null;
+      syncOrchestrator.registerSyncFunction('contacts', async () => {
+        await new Promise<void>(resolve => {
+          resolveSync = resolve;
+        });
+      });
+
+      // Start an internal sync
+      syncOrchestrator.requestSync({ types: ['contacts'], userId: 'test-user' });
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(syncOrchestrator.getState().isRunning).toBe(true);
+
+      // Try to request another sync - should be blocked by the internal running sync
+      const result = syncOrchestrator.requestSync({ types: ['contacts'], userId: 'test-user' });
+      expect(result.started).toBe(false);
+      expect(result.needsConfirmation).toBe(true);
+
+      // Clean up
+      syncOrchestrator.cancel();
+      if (resolveSync) resolveSync();
     });
   });
 });

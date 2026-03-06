@@ -315,6 +315,12 @@ class SyncOrchestratorServiceClass {
    * Returns true if sync started, false if queued (needs user decision).
    */
   requestSync(request: SyncRequest): { started: boolean; needsConfirmation: boolean } {
+    // Only block if an internal sync is running. External syncs (e.g., iPhone)
+    // use different resources and can run in parallel with internal syncs.
+    const internalRunning = this.state.queue.some(
+      (item) => !item.external && item.status === 'running'
+    );
+
     Sentry.addBreadcrumb({
       category: 'sync',
       message: `Sync requested: ${request.types.join(', ')}`,
@@ -323,11 +329,12 @@ class SyncOrchestratorServiceClass {
         syncTypes: request.types,
         userId: request.userId.substring(0, 8) + '...',
         alreadyRunning: this.state.isRunning,
+        internalRunning,
       },
     });
 
-    if (this.state.isRunning) {
-      // Sync in progress - queue this request for user decision
+    if (internalRunning) {
+      // Internal sync in progress - queue this request for user decision
       this.setState({ pendingRequest: request });
       return { started: false, needsConfirmation: true };
     }
