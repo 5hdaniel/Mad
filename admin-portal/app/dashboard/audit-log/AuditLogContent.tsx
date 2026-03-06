@@ -54,8 +54,17 @@ export function AuditLogContent({ embedded = false }: { embedded?: boolean } = {
   // Filters
   const [actionFilter, setActionFilter] = useState<string>('');
   const [searchTarget, setSearchTarget] = useState('');
+  const [debouncedSearchTarget, setDebouncedSearchTarget] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+
+  // Debounce searchTarget by 300ms before using it in fetchLogs
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTarget(searchTarget);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTarget]);
 
   const supabase = useMemo(() => createClient(), []);
 
@@ -69,7 +78,7 @@ export function AuditLogContent({ embedded = false }: { embedded?: boolean } = {
         p_offset: page * pageSize,
       };
       if (actionFilter) params.p_action = actionFilter;
-      if (searchTarget.trim()) params.p_target_id = searchTarget.trim();
+      if (debouncedSearchTarget.trim()) params.p_target_id = debouncedSearchTarget.trim();
       if (dateFrom) params.p_date_from = new Date(dateFrom).toISOString();
       if (dateTo) params.p_date_to = new Date(dateTo + 'T23:59:59').toISOString();
 
@@ -88,7 +97,7 @@ export function AuditLogContent({ embedded = false }: { embedded?: boolean } = {
     } finally {
       setLoading(false);
     }
-  }, [supabase, page, pageSize, actionFilter, searchTarget, dateFrom, dateTo]);
+  }, [supabase, page, pageSize, actionFilter, debouncedSearchTarget, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchLogs();
