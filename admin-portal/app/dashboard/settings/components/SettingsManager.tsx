@@ -4,7 +4,7 @@
  * SettingsManager - Tabbed settings page with Internal Users and Role Management.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Users, ShieldCheck } from 'lucide-react';
 import type { InternalUser, AdminRole, AdminPermission } from '../page';
@@ -28,7 +28,13 @@ export function SettingsManager({ initialUsers, currentUserId, initialRoles, per
   const router = useRouter();
   const { hasPermission } = usePermissions();
   const [activeTab, setActiveTab] = useState<Tab>('users');
+  const [users, setUsers] = useState<InternalUser[]>(initialUsers);
   const [userToRemove, setUserToRemove] = useState<InternalUser | null>(null);
+
+  // Sync local state when the server component passes fresh data after router.refresh()
+  useEffect(() => {
+    setUsers(initialUsers);
+  }, [initialUsers]);
 
   const canManageUsers = hasPermission(PERMISSIONS.INTERNAL_USERS_MANAGE);
   const canViewRoles = hasPermission(PERMISSIONS.ROLES_VIEW) || hasPermission(PERMISSIONS.ROLES_MANAGE);
@@ -38,7 +44,7 @@ export function SettingsManager({ initialUsers, currentUserId, initialRoles, per
   }, [router]);
 
   const tabs = [
-    { key: 'users' as Tab, label: 'Internal Users', icon: Users, count: initialUsers.length },
+    { key: 'users' as Tab, label: 'Internal Users', icon: Users, count: users.length },
     ...(canViewRoles ? [{ key: 'roles' as Tab, label: 'Roles & Permissions', icon: ShieldCheck, count: initialRoles.length }] : []),
   ];
 
@@ -80,7 +86,7 @@ export function SettingsManager({ initialUsers, currentUserId, initialRoles, per
             <AddInternalUserForm onSuccess={handleRefresh} roles={initialRoles} />
           )}
           <InternalUsersTable
-            users={initialUsers}
+            users={users}
             currentUserId={currentUserId}
             onRemoveClick={(user) => setUserToRemove(user)}
             roles={initialRoles}
