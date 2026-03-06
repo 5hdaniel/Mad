@@ -215,14 +215,12 @@ export function MembersTable({ members }: MembersTableProps) {
 
   // License summary counts (always from full members list)
   const licenseSummary = useMemo(() => {
-    return members.reduce(
-      (acc, m) => {
-        const cat = classifyLicense(m.license_status);
-        acc[cat]++;
-        return acc;
-      },
-      { active: 0, trial: 0, expired: 0, none: 0 } as Record<'active' | 'trial' | 'expired' | 'none', number>
-    );
+    const counts = { active: 0, trial: 0, expired: 0, none: 0 };
+    for (const m of members) {
+      const cat = classifyLicense(m.license_status);
+      counts[cat]++;
+    }
+    return counts;
   }, [members]);
 
   // Filter + sort members
