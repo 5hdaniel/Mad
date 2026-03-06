@@ -12,8 +12,10 @@ import React from "react";
 import type { AppStateMachine } from "./state/types";
 import { OfflineBanner } from "./shell";
 import SystemHealthMonitor from "../components/SystemHealthMonitor";
+import { SyncStatusBar } from "../components/iphone/SyncStatusBar";
 import { isOnboardingStep } from "./routing";
 import { useSessionValidator } from "../hooks/useSessionValidator";
+import { IPhoneSyncProvider, useIPhoneSyncContext } from "../contexts/IPhoneSyncContext";
 
 // OAuthProvider type to match SystemHealthMonitor expectations
 // Note: 'azure' is Microsoft's Azure AD provider
@@ -49,6 +51,10 @@ export function AppShell({ app, children }: AppShellProps) {
     isAuthenticated,
     onSessionInvalidated: handleLogout,
   });
+
+  // TASK-2116: iPhone sync status bar (persistent, non-blocking)
+  // Uses context to share single instance with IPhoneSyncFlow
+  const { syncStatus, progress, error, cancelSync } = useIPhoneSyncContext();
 
   // PRIMARY DATABASE INITIALIZATION GATE
   // Block all content for authenticated users until database is ready
@@ -125,6 +131,16 @@ export function AppShell({ app, children }: AppShellProps) {
             onOpenSettings={openSettings}
           />
         )}
+
+      {/* TASK-2116: iPhone Sync Status Bar - persistent progress indicator */}
+      {isAuthenticated && currentStep !== "login" && (
+        <SyncStatusBar
+          syncStatus={syncStatus}
+          progress={progress}
+          error={error}
+          onCancel={cancelSync}
+        />
+      )}
 
       {/* Scrollable Content Area */}
       <div className="flex-1 min-h-0 overflow-y-auto relative">

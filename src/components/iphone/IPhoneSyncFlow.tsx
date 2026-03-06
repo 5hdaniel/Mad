@@ -1,5 +1,5 @@
-import React from "react";
-import { useIPhoneSync } from "../../hooks/useIPhoneSync";
+import React, { useEffect, useRef } from "react";
+import { useIPhoneSyncContext } from "../../contexts/IPhoneSyncContext";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { SyncProgress } from "./SyncProgress";
 import { BackupPasswordModal } from "./BackupPasswordModal";
@@ -8,6 +8,8 @@ import { SyncLockBanner } from "../sync/SyncLockBanner";
 interface IPhoneSyncFlowProps {
   /** Callback when sync is complete and user clicks Continue */
   onClose?: () => void;
+  /** TASK-2116: Called when sync starts backing_up phase (modal auto-closes) */
+  onSyncStarted?: () => void;
 }
 
 /**
@@ -23,7 +25,7 @@ interface IPhoneSyncFlowProps {
  * This component ties together the useIPhoneSync hook with
  * the individual UI components for a complete user experience.
  */
-export const IPhoneSyncFlow: React.FC<IPhoneSyncFlowProps> = ({ onClose }) => {
+export const IPhoneSyncFlow: React.FC<IPhoneSyncFlowProps> = ({ onClose, onSyncStarted }) => {
   const {
     isConnected,
     device,
@@ -39,12 +41,31 @@ export const IPhoneSyncFlow: React.FC<IPhoneSyncFlowProps> = ({ onClose }) => {
     submitPassword,
     cancelSync,
     checkSyncStatus,
-  } = useIPhoneSync();
+  } = useIPhoneSyncContext();
 
   // Determine if we're actively syncing
   const isSyncing = syncStatus === "syncing";
   const isComplete = syncStatus === "complete";
   const isError = syncStatus === "error";
+
+  // TASK-2116: Auto-close modal when sync enters backing_up phase
+  const hasCalledSyncStarted = useRef(false);
+  useEffect(() => {
+    if (
+      isSyncing &&
+      progress?.phase === "backing_up" &&
+      !needsPassword &&
+      !hasCalledSyncStarted.current &&
+      onSyncStarted
+    ) {
+      hasCalledSyncStarted.current = true;
+      onSyncStarted();
+    }
+    // Reset when sync ends so it can fire again for future syncs
+    if (!isSyncing) {
+      hasCalledSyncStarted.current = false;
+    }
+  }, [isSyncing, progress?.phase, needsPassword, onSyncStarted]);
 
   return (
     <div className="iphone-sync-flow">
@@ -66,8 +87,39 @@ export const IPhoneSyncFlow: React.FC<IPhoneSyncFlowProps> = ({ onClose }) => {
         />
       )}
 
-      {/* Sync Progress - Shown during sync */}
-      {isSyncing && progress && (
+      {/* TASK-2116: If user reopens modal during active sync (after backing_up started),
+          show a message directing them to the status bar */}
+      {isSyncing && progress && !needsPassword && !isWaitingForPasscode &&
+        (progress.phase === "backing_up" || progress.phase === "extracting" || progress.phase === "storing") &&
+        hasCalledSyncStarted.current && (
+        <div className="flex flex-col items-center justify-center p-8 text-center">
+          <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center mb-4">
+            <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-800">Sync in progress</h3>
+          <p className="text-sm text-gray-500 mt-2">
+            Check the status bar at the top of the screen for progress details.
+          </p>
+          <button
+            onClick={onClose}
+            className="mt-6 px-6 py-3 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      )}
+
+      {/* Sync Progress - Shown during sync (only for phases before backing_up, or passcode/password) */}
+      {isSyncing && progress && !hasCalledSyncStarted.current && (
+        <SyncProgress
+          progress={progress}
+          onCancel={cancelSync}
+          isWaitingForPasscode={isWaitingForPasscode}
+        />
+      )}
+
+      {/* Sync Progress - Shown during passcode/password waiting even after auto-close */}
+      {isSyncing && progress && hasCalledSyncStarted.current && (needsPassword || isWaitingForPasscode) && (
         <SyncProgress
           progress={progress}
           onCancel={cancelSync}
@@ -187,5 +239,3 @@ export const IPhoneSyncFlow: React.FC<IPhoneSyncFlowProps> = ({ onClose }) => {
     </div>
   );
 };
-
-export default IPhoneSyncFlow;
