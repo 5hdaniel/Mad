@@ -27,17 +27,7 @@ export const PERMISSIONS = {
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 
-/** Maps sidebar routes to required permissions */
-export const ROUTE_PERMISSIONS: Record<string, PermissionKey> = {
-  '/dashboard': PERMISSIONS.DASHBOARD_VIEW,
-  '/dashboard/analytics': PERMISSIONS.ANALYTICS_VIEW,
-  '/dashboard/users': PERMISSIONS.USERS_VIEW,
-  '/dashboard/organizations': PERMISSIONS.ORGANIZATIONS_VIEW,
-  '/dashboard/settings': PERMISSIONS.INTERNAL_USERS_VIEW,
-  '/dashboard/audit-log': PERMISSIONS.AUDIT_VIEW,
-};
-
-/** Permission categories for the role management UI */
+/** Permission categories for the role management UI (must match admin_permissions.category values) */
 export const PERMISSION_CATEGORIES = [
   { key: 'dashboard', label: 'Dashboard' },
   { key: 'users', label: 'Users' },
@@ -45,5 +35,6 @@ export const PERMISSION_CATEGORIES = [
   { key: 'organizations', label: 'Organizations' },
   { key: 'analytics', label: 'Analytics' },
   { key: 'audit', label: 'Audit' },
-  { key: 'settings', label: 'Settings' },
+  { key: 'internal_users', label: 'Internal Users' },
+  { key: 'roles', label: 'Roles' },
 ] as const;

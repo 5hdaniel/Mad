@@ -36,6 +36,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  // 1b. Verify the caller has internal_users.manage permission
+  const { data: hasPerm } = await supabase.rpc('has_permission', {
+    check_user_id: user.id,
+    required_permission: 'internal_users.manage',
+  });
+  if (!hasPerm) {
+    return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+  }
+
   // 2. Parse and validate request body
   let email: string;
   let roleSlug: string;

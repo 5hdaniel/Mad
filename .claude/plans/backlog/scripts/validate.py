@@ -16,7 +16,7 @@ from pathlib import Path
 
 # Valid enum values (case-insensitive, allow markdown formatting)
 VALID_TYPES = {'bug', 'feature', 'chore', 'refactor', 'test', 'docs'}
-VALID_AREAS = {'ui', 'electron', 'infra', 'service', 'security', 'schema', 'ipc'}
+VALID_AREAS = {'ui', 'electron', 'infra', 'service', 'security', 'schema', 'ipc', 'admin-portal'}
 VALID_PRIORITIES = {'critical', 'high', 'medium', 'low'}
 VALID_STATUSES = {
     'pending', 'in-progress', 'in progress', 'completed', 'blocked', 'deferred',

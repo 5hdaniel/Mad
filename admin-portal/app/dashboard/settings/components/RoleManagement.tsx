@@ -215,8 +215,8 @@ function RoleEditor({
 
   const toggleCategory = useCallback((category: string) => {
     const categoryPerms = groupedPermissions[category] || [];
-    const allSelected = categoryPerms.every((p) => selectedPerms.has(p.key));
     setSelectedPerms((prev) => {
+      const allSelected = categoryPerms.every((p) => prev.has(p.key));
       const next = new Set(prev);
       for (const p of categoryPerms) {
         if (allSelected) next.delete(p.key);
@@ -224,7 +224,7 @@ function RoleEditor({
       }
       return next;
     });
-  }, [groupedPermissions, selectedPerms]);
+  }, [groupedPermissions]);
 
   const handleSave = useCallback(async () => {
     if (!name.trim()) {
@@ -420,7 +420,7 @@ function DeleteRoleDialog({
       onError(err instanceof Error ? err.message : 'Failed to delete role');
       setDeleting(false);
     }
-  }, [role.id, onConfirm, onError]);
+  }, [role.id, onConfirm, onCancel, onError]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">

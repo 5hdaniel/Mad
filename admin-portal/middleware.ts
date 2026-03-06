@@ -137,7 +137,8 @@ export async function middleware(request: NextRequest) {
         .single();
 
       if (internalRole) {
-        const redirectTo = request.nextUrl.searchParams.get('redirectTo') ?? '/dashboard';
+        const rawRedirect = request.nextUrl.searchParams.get('redirectTo') ?? '/dashboard';
+        const redirectTo = rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') ? rawRedirect : '/dashboard';
         return NextResponse.redirect(new URL(redirectTo, request.url));
       }
     }

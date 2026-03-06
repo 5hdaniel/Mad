@@ -96,6 +96,7 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles,
   const [searchQuery, setSearchQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [changingRole, setChangingRole] = useState<string | null>(null);
+  const [roleChangeError, setRoleChangeError] = useState<string | null>(null);
 
   const roleCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -190,6 +191,7 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles,
 
   const handleRoleChange = useCallback(async (userId: string, newRoleSlug: string) => {
     setChangingRole(userId);
+    setRoleChangeError(null);
     try {
       const supabase = createClient();
       const { error } = await supabase.rpc('admin_update_internal_user_role', {
@@ -197,7 +199,7 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles,
         p_role_slug: newRoleSlug,
       });
       if (error) {
-        console.error('Failed to change role:', error.message);
+        setRoleChangeError(error.message);
       } else {
         onRoleChange();
       }
@@ -283,7 +285,8 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles,
             type="button"
             onClick={() => {
               const usersToRemove = filteredUsers.filter((u) => selected.has(u.id));
-              if (usersToRemove.length > 0) onRemoveClick(usersToRemove[0]);
+              for (const u of usersToRemove) onRemoveClick(u);
+              setSelected(new Set());
             }}
             className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-red-600 bg-white border border-red-200 hover:bg-red-50 transition-colors"
           >
@@ -298,6 +301,13 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles,
       {(effectiveRoleFilter || trimmedSearch) && (
         <div className="mb-3 text-sm text-gray-500">
           Showing {filteredUsers.length} of {users.length} user{users.length !== 1 ? 's' : ''}
+        </div>
+      )}
+
+      {roleChangeError && (
+        <div className="mb-3 rounded-md bg-red-50 border border-red-200 px-4 py-3 flex items-center justify-between">
+          <p className="text-sm text-red-700">Failed to change role: {roleChangeError}</p>
+          <button onClick={() => setRoleChangeError(null)} className="text-red-500 hover:text-red-700 text-xs font-medium">Dismiss</button>
         </div>
       )}
 

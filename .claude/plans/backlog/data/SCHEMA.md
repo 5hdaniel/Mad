@@ -41,6 +41,7 @@ The main backlog table. Source of truth for all items.
 - `security` - Auth, encryption, tokens, permissions
 - `schema` - Database schema, migrations, RLS
 - `ipc` - IPC layer, handler bridges between main/renderer
+- `admin-portal` - Admin portal (Next.js), RBAC, internal tools
 
 **priority:**
 - `critical` - Must be done immediately
