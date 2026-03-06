@@ -17,7 +17,7 @@ interface EditLicenseDialogProps {
 }
 
 const LICENSE_STATUSES = ['active', 'suspended', 'expired', 'cancelled'] as const;
-const LICENSE_TYPES = ['free', 'pro', 'enterprise'] as const;
+const LICENSE_TYPES = ['trial', 'individual', 'team'] as const;
 
 /**
  * EditLicenseDialog - Modal form for editing license fields.
