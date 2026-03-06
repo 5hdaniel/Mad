@@ -97,19 +97,27 @@ function RowActionMenu({
   loading: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
   const router = useRouter();
 
   const isSuspended = member.status === 'suspended';
 
+  const handleOpen = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setMenuPos({ top: rect.bottom + 4, left: rect.right - 192 }); // 192 = w-48
+    }
+    setOpen(!open);
+  }, [open]);
+
   return (
-    <div className="relative" ref={menuRef}>
+    <div>
       <button
+        ref={btnRef}
         type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen(!open);
-        }}
+        onClick={handleOpen}
         className="p-1 rounded hover:bg-gray-100 transition-colors"
         aria-label="Actions"
       >
@@ -119,8 +127,11 @@ function RowActionMenu({
       {open && (
         <>
           {/* Click-away backdrop */}
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-20 mt-1 w-48 rounded-md bg-white shadow-lg border border-gray-200 py-1">
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div
+            className="fixed z-50 w-48 rounded-md bg-white shadow-lg border border-gray-200 py-1"
+            style={{ top: menuPos.top, left: menuPos.left }}
+          >
             <button
               type="button"
               onClick={(e) => {
@@ -353,7 +364,7 @@ export function MembersTable({ members }: MembersTableProps) {
         </div>
       )}
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
