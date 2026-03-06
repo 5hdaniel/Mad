@@ -1,7 +1,7 @@
 # SPRINT-114: iPhone Sync Hardening
 
 **Created:** 2026-03-05
-**Status:** Ready
+**Status:** In Progress
 **Goal:** Harden iPhone sync UX with network resilience, test coverage, and persistent progress visibility
 **Parent:** SPRINT-110 (discovered items)
 
@@ -21,13 +21,13 @@ This sprint addresses them in dependency order: quick fixes first (848, 849), th
 
 ## In-Scope
 
-| Task ID | Backlog | Title | Priority | Est. Complexity | Branch |
-|---------|---------|-------|----------|-----------------|--------|
-| TASK-2114 | BACKLOG-848 | Session validator network change resilience | Medium | Low | `fix/TASK-2114-session-validator-retry` |
-| TASK-2115 | BACKLOG-849 | Unit tests for ACID rollback logic | Low | Medium | `test/TASK-2115-rollback-tests` |
-| TASK-2116 | BACKLOG-847 | Persistent sync status bar (replaces modal) | High | High | `feature/TASK-2116-sync-status-bar` |
-| TASK-2117 | BACKLOG-846 | Reconnect renderer to in-progress sync | High | Medium | `feature/TASK-2117-sync-reconnect` |
-| TASK-2119 | BACKLOG-853 | Integrate iPhone sync into SyncOrchestrator | High | High | `feature/TASK-2119-iphone-orchestrator` |
+| Task ID | Backlog | Title | Priority | Est. Complexity | Status | Branch |
+|---------|---------|-------|----------|-----------------|--------|--------|
+| TASK-2114 | BACKLOG-848 | Session validator network change resilience | Medium | Low | Completed | `fix/TASK-2114-session-validator-retry` |
+| TASK-2115 | BACKLOG-849 | Unit tests for ACID rollback logic | Low | Medium | Completed | `test/TASK-2115-rollback-tests` |
+| TASK-2116 | BACKLOG-847 | Persistent sync status bar (replaces modal) | High | High | Completed | `feature/TASK-2116-sync-status-bar` |
+| TASK-2117 | BACKLOG-846 | Reconnect renderer to in-progress sync | High | Medium | Subsumed by TASK-2119 | — |
+| TASK-2119 | BACKLOG-853 | Integrate iPhone sync into SyncOrchestrator | High | High | In Progress | `feature/TASK-2119-iphone-orchestrator` |
 
 ## Out of Scope / Deferred
 
