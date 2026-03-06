@@ -285,10 +285,7 @@ export function SyncStatusBar({
                 <div className="w-full h-1.5 bg-purple-200 rounded-full overflow-hidden">
                   {isIndeterminate ? (
                     <div
-                      className="h-full w-1/3 bg-purple-500 rounded-full"
-                      style={{
-                        animation: "indeterminate 1.5s ease-in-out infinite",
-                      }}
+                      className="h-full w-1/3 bg-purple-500 rounded-full animate-indeterminate"
                     />
                   ) : (
                     <div
@@ -334,15 +331,6 @@ export function SyncStatusBar({
         </button>
       </div>
 
-      {/* Indeterminate animation keyframes */}
-      <style>{`
-        @keyframes indeterminate {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(400%); }
-        }
-      `}</style>
     </div>
   );
 }
-
-export default SyncStatusBar;

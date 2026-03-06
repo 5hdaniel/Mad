@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { useIPhoneSync } from "../../hooks/useIPhoneSync";
+import { useIPhoneSyncContext } from "../../contexts/IPhoneSyncContext";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { SyncProgress } from "./SyncProgress";
 import { BackupPasswordModal } from "./BackupPasswordModal";
@@ -41,7 +41,7 @@ export const IPhoneSyncFlow: React.FC<IPhoneSyncFlowProps> = ({ onClose, onSyncS
     submitPassword,
     cancelSync,
     checkSyncStatus,
-  } = useIPhoneSync();
+  } = useIPhoneSyncContext();
 
   // Determine if we're actively syncing
   const isSyncing = syncStatus === "syncing";
@@ -239,5 +239,3 @@ export const IPhoneSyncFlow: React.FC<IPhoneSyncFlowProps> = ({ onClose, onSyncS
     </div>
   );
 };
-
-export default IPhoneSyncFlow;

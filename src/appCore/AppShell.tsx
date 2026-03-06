@@ -15,7 +15,7 @@ import SystemHealthMonitor from "../components/SystemHealthMonitor";
 import { SyncStatusBar } from "../components/iphone/SyncStatusBar";
 import { isOnboardingStep } from "./routing";
 import { useSessionValidator } from "../hooks/useSessionValidator";
-import { useIPhoneSync } from "../hooks/useIPhoneSync";
+import { IPhoneSyncProvider, useIPhoneSyncContext } from "../contexts/IPhoneSyncContext";
 
 // OAuthProvider type to match SystemHealthMonitor expectations
 // Note: 'azure' is Microsoft's Azure AD provider
@@ -53,7 +53,8 @@ export function AppShell({ app, children }: AppShellProps) {
   });
 
   // TASK-2116: iPhone sync status bar (persistent, non-blocking)
-  const { syncStatus, progress, error, cancelSync } = useIPhoneSync();
+  // Uses context to share single instance with IPhoneSyncFlow
+  const { syncStatus, progress, error, cancelSync } = useIPhoneSyncContext();
 
   // PRIMARY DATABASE INITIALIZATION GATE
   // Block all content for authenticated users until database is ready

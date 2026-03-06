@@ -24,6 +24,7 @@ import {
   useAppStateMachine,
 } from "./appCore";
 import { NotificationProvider } from "./contexts/NotificationContext";
+import { IPhoneSyncProvider } from "./contexts/IPhoneSyncContext";
 import { LicenseGate, TrialStatusBanner } from "./components/license";
 import UpdateNotification from "./components/UpdateNotification";
 
@@ -36,11 +37,13 @@ function App() {
           so it's visible even when license is blocked/loading or user is stuck */}
       <UpdateNotification />
       <LicenseGate>
-        <AppShell app={app}>
-          <TrialStatusBanner />
-          <AppRouter app={app} />
-          <AppModals app={app} />
-        </AppShell>
+        <IPhoneSyncProvider>
+          <AppShell app={app}>
+            <TrialStatusBanner />
+            <AppRouter app={app} />
+            <AppModals app={app} />
+          </AppShell>
+        </IPhoneSyncProvider>
       </LicenseGate>
     </NotificationProvider>
   );

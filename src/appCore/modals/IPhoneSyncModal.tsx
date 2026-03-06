@@ -6,7 +6,7 @@
  */
 
 import React from "react";
-import IPhoneSyncFlow from "../../components/iphone/IPhoneSyncFlow";
+import { IPhoneSyncFlow } from "../../components/iphone/IPhoneSyncFlow";
 
 interface IPhoneSyncModalProps {
   onClose: () => void;
