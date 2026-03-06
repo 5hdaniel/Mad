@@ -1,10 +1,10 @@
 /**
- * API Route: Invite Internal User
+ * API Route: Create & Add Internal User
  *
  * Handles the case where an email address is not yet registered in public.users.
  * Uses the Supabase service role key to:
- *   1. Verify the caller has an internal role (via anon client + session cookie)
- *   2. Invite the user by email (creates auth.users entry + sends invite email)
+ *   1. Verify the caller has internal_users.manage permission
+ *   2. Create the auth user (they'll log in via SSO — no password needed)
  *   3. Call admin_add_internal_user RPC to assign the internal role
  *
  * POST /api/internal-users/invite
@@ -24,16 +24,6 @@ export async function POST(request: NextRequest) {
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { data: role } = await supabase
-    .from('internal_roles')
-    .select('role_id')
-    .eq('user_id', user.id)
-    .single();
-
-  if (!role) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   // 1b. Verify the caller has internal_users.manage permission
@@ -66,38 +56,38 @@ export async function POST(request: NextRequest) {
   // 3. Require the service role key (server-side only)
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceRoleKey) {
-    console.error('[invite] SUPABASE_SERVICE_ROLE_KEY is not configured');
+    console.error('[create-internal-user] SUPABASE_SERVICE_ROLE_KEY is not configured');
     return NextResponse.json(
-      { error: 'Server misconfiguration: invite feature is not enabled' },
+      { error: 'Server configuration missing — contact an administrator' },
       { status: 503 }
     );
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 
-  // 4. Use admin client to invite the user by email
-  //    This creates an auth.users entry and sends the invite email.
+  // 4. Use admin client to create the user (no password — they log in via SSO)
   //    The handle_new_user trigger will automatically create the public.users record.
   const adminClient = createAdminClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
+  const { data: createData, error: createError } = await adminClient.auth.admin.createUser({
     email,
-    { data: { invited_as_internal_user: true } }
-  );
+    email_confirm: true,
+    user_metadata: { created_as_internal_user: true },
+  });
 
-  if (inviteError) {
-    console.error('[invite] inviteUserByEmail error:', inviteError.message);
+  if (createError) {
+    console.error('[create-internal-user] createUser error:', createError.message);
     return NextResponse.json(
-      { error: inviteError.message || 'Failed to invite user' },
+      { error: createError.message || 'Failed to create user' },
       { status: 500 }
     );
   }
 
-  const invitedUserId = inviteData.user?.id;
-  if (!invitedUserId) {
-    return NextResponse.json({ error: 'Invite succeeded but no user ID returned' }, { status: 500 });
+  const createdUserId = createData.user?.id;
+  if (!createdUserId) {
+    return NextResponse.json({ error: 'User created but no user ID returned' }, { status: 500 });
   }
 
   // 5. Assign the internal role via the existing RPC.
@@ -109,13 +99,11 @@ export async function POST(request: NextRequest) {
   });
 
   if (rpcError) {
-    console.error('[invite] admin_add_internal_user error:', rpcError.message);
-    // The invite was sent but role assignment failed — surface this clearly
+    console.error('[create-internal-user] admin_add_internal_user error:', rpcError.message);
     return NextResponse.json(
       {
-        error: `User invited but role assignment failed: ${rpcError.message}`,
-        invited: true,
-        user_id: invitedUserId,
+        error: `User created but role assignment failed: ${rpcError.message}`,
+        user_id: createdUserId,
       },
       { status: 500 }
     );
@@ -125,8 +113,7 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     success: true,
-    invited: true,
-    user_id: result?.user_id ?? invitedUserId,
+    user_id: result?.user_id ?? createdUserId,
     role: result?.role ?? roleSlug,
   });
 }
