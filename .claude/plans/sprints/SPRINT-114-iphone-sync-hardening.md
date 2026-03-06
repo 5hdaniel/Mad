@@ -27,6 +27,7 @@ This sprint addresses them in dependency order: quick fixes first (848, 849), th
 | TASK-2115 | BACKLOG-849 | Unit tests for ACID rollback logic | Low | Medium | `test/TASK-2115-rollback-tests` |
 | TASK-2116 | BACKLOG-847 | Persistent sync status bar (replaces modal) | High | High | `feature/TASK-2116-sync-status-bar` |
 | TASK-2117 | BACKLOG-846 | Reconnect renderer to in-progress sync | High | Medium | `feature/TASK-2117-sync-reconnect` |
+| TASK-2119 | BACKLOG-853 | Integrate iPhone sync into SyncOrchestrator | High | High | `feature/TASK-2119-iphone-orchestrator` |
 
 ## Out of Scope / Deferred
 
@@ -48,9 +49,13 @@ This sprint addresses them in dependency order: quick fixes first (848, 849), th
   - Allow navigation while sync runs
   - Clicking expands to full details
 
-### Phase 3: Reconnect (builds on Phase 2)
-- **TASK-2117**: On renderer mount, query main process for active sync state and reconnect to progress events
-  - Depends on TASK-2116 (status bar is the reconnect target)
+### Phase 3: Orchestrator Integration (builds on Phase 2)
+- **TASK-2119**: Register iPhone sync with SyncOrchestrator
+  - iPhone appears as standard pill in SyncStatusIndicator
+  - `isRunning` includes iPhone → buttons disable naturally
+  - Remove SyncStatusBanner, remove bolted-on iPhone props
+  - Keep IPhoneSyncFlow modal with "Details" button
+  - Subsumes TASK-2117 reconnect (orchestrator + hook reconnect handles it)
 
 ---
 
