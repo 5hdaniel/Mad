@@ -45,6 +45,11 @@ export function AddInternalUserForm({ onSuccess, roles }: AddInternalUserFormPro
       });
 
       if (rpcError) {
+        // If the user doesn't have a Keepr account yet, send them an invite
+        if (rpcError.message?.includes('No user found with email')) {
+          await inviteNewUser(trimmedEmail);
+          return;
+        }
         setError(rpcError.message || 'Failed to add user');
         return;
       }
@@ -64,11 +69,44 @@ export function AddInternalUserForm({ onSuccess, roles }: AddInternalUserFormPro
     }
   }
 
+  async function inviteNewUser(trimmedEmail: string) {
+    try {
+      const response = await fetch('/api/internal-users/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: trimmedEmail, role: selectedSlug }),
+      });
+
+      const json = await response.json() as {
+        success?: boolean;
+        invited?: boolean;
+        error?: string;
+      };
+
+      if (!response.ok || !json.success) {
+        setError(json.error || 'Failed to invite user');
+        return;
+      }
+
+      const roleName = roles.find(r => r.slug === selectedSlug)?.name || selectedSlug;
+      setSuccess(
+        `Invited ${trimmedEmail} as ${roleName} — they'll receive an email to set their password`
+      );
+      setEmail('');
+      setSelectedSlug(defaultSlug);
+      onSuccess();
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-200">
         <h2 className="text-lg font-semibold text-gray-900">Add Internal User</h2>
-        <p className="text-sm text-gray-500">Grant admin portal access to an existing user by email</p>
+        <p className="text-sm text-gray-500">
+          Add an existing Keepr user by email, or invite a new user to create an account.
+        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="px-6 py-4">
