@@ -88,7 +88,7 @@ export function AddInternalUserForm({ onSuccess, roles }: AddInternalUserFormPro
 
       if (rpcError) {
         if (rpcError.message?.includes('No user found with email')) {
-          await inviteNewUser(trimmedEmail);
+          setError(`No Keepr account found for "${trimmedEmail}". The user must sign up for Keepr first before they can be added as an internal user.`);
           return;
         }
         setError(rpcError.message || 'Failed to add user');
@@ -111,37 +111,6 @@ export function AddInternalUserForm({ onSuccess, roles }: AddInternalUserFormPro
     }
   }
 
-  async function inviteNewUser(trimmedEmail: string) {
-    try {
-      const response = await fetch('/api/internal-users/invite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: trimmedEmail, role: selectedSlug }),
-      });
-
-      const json = await response.json() as {
-        success?: boolean;
-        invited?: boolean;
-        error?: string;
-      };
-
-      if (!response.ok || !json.success) {
-        setError(json.error || 'Failed to invite user');
-        return;
-      }
-
-      const roleName = roles.find(r => r.slug === selectedSlug)?.name || selectedSlug;
-      setSuccess(
-        `Invited ${trimmedEmail} as ${roleName} — they'll receive an email to set their password`
-      );
-      setEmail('');
-      setSelectedSlug(defaultSlug);
-      onSuccess();
-      setTimeout(() => setIsOpen(false), 2500);
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
 
   return (
     <>
