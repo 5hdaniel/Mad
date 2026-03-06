@@ -534,29 +534,31 @@ export function SyncStatusIndicator({
 
       {/* Progress bar hidden — IPC flushing issue causes jumpy updates (BACKLOG-824) */}
 
-      {/* Action buttons row */}
-      <div className="flex items-center gap-2">
-        {/* View Details button - shown when iPhone sync is active */}
-        {isIPhoneActive && onViewIPhoneDetails && (
-          <button
-            onClick={onViewIPhoneDetails}
-            className="text-xs font-medium text-purple-700 hover:text-purple-900 hover:bg-purple-100 px-2 py-1 rounded transition-colors"
-            data-testid="sync-iphone-view-details"
-          >
-            View Details
-          </button>
-        )}
-        {/* Cancel button for iPhone sync */}
-        {isIPhoneSyncing && onCancelIPhoneSync && (
-          <button
-            onClick={onCancelIPhoneSync}
-            className="text-xs font-medium text-purple-700 hover:text-purple-900 hover:bg-purple-100 px-2 py-1 rounded transition-colors"
-            data-testid="sync-iphone-cancel"
-          >
-            Cancel
-          </button>
-        )}
-      </div>
+      {/* Action buttons row - only render when iPhone sync is active */}
+      {isIPhoneActive && (
+        <div className="flex items-center gap-2">
+          {/* View Details button - shown when iPhone sync is active */}
+          {onViewIPhoneDetails && (
+            <button
+              onClick={onViewIPhoneDetails}
+              className="text-xs font-medium text-purple-700 hover:text-purple-900 hover:bg-purple-100 px-2 py-1 rounded transition-colors"
+              data-testid="sync-iphone-view-details"
+            >
+              View Details
+            </button>
+          )}
+          {/* Cancel button for iPhone sync */}
+          {isIPhoneSyncing && onCancelIPhoneSync && (
+            <button
+              onClick={onCancelIPhoneSync}
+              className="text-xs font-medium text-purple-700 hover:text-purple-900 hover:bg-purple-100 px-2 py-1 rounded transition-colors"
+              data-testid="sync-iphone-cancel"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Disabled tools notice - only show when syncing */}
       {isAnySyncing && (
