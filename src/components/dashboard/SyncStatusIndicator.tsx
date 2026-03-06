@@ -24,6 +24,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useLicense } from "../../contexts/LicenseContext";
 import { useSyncOrchestrator } from "../../hooks/useSyncOrchestrator";
 import type { SyncType, SyncItemStatus } from "../../services/SyncOrchestratorService";
+import type { SyncStatus as IPhoneSyncStatus, BackupProgress } from "../../types/iphone";
 
 interface SyncStatusIndicatorProps {
   /** Pending transaction count (shown in completion message) */
@@ -34,6 +35,16 @@ interface SyncStatusIndicatorProps {
   onOpenSettings?: () => void;
   /** When true, suppress auto-dismiss so the tour anchor stays visible (TASK-2081) */
   isTourActive?: boolean;
+  /** iPhone sync status (from IPhoneSyncContext) */
+  iPhoneSyncStatus?: IPhoneSyncStatus;
+  /** iPhone sync progress details */
+  iPhoneProgress?: BackupProgress | null;
+  /** iPhone sync error message */
+  iPhoneError?: string | null;
+  /** Callback when user clicks "View Details" for iPhone sync */
+  onViewIPhoneDetails?: () => void;
+  /** Callback to cancel iPhone sync */
+  onCancelIPhoneSync?: () => void;
 }
 
 /**
@@ -53,11 +64,42 @@ const getLabelForType = (type: SyncType): string => {
 };
 
 /**
+ * Get display label for iPhone sync phase
+ */
+const getIPhonePhaseLabel = (phase: BackupProgress["phase"]): string => {
+  switch (phase) {
+    case "preparing":
+      return "Preparing";
+    case "backing_up":
+      return "Exporting";
+    case "extracting":
+      return "Reading";
+    case "storing":
+      return "Saving";
+    case "complete":
+      return "Complete";
+    case "error":
+      return "Failed";
+    default:
+      return "Processing";
+  }
+};
+
+/**
  * Status to color mapping for pills
  */
 const statusColors: Record<SyncItemStatus, string> = {
   pending: 'bg-gray-100 text-gray-500',
   running: 'bg-blue-100 text-blue-700',
+  complete: 'bg-green-100 text-green-700',
+  error: 'bg-red-100 text-red-700',
+};
+
+/**
+ * iPhone-specific status colors (purple theme)
+ */
+const iPhoneStatusColors: Record<string, string> = {
+  syncing: 'bg-purple-100 text-purple-700',
   complete: 'bg-green-100 text-green-700',
   error: 'bg-red-100 text-red-700',
 };
@@ -71,6 +113,11 @@ export function SyncStatusIndicator({
   onViewPending,
   onOpenSettings,
   isTourActive = false,
+  iPhoneSyncStatus,
+  iPhoneProgress,
+  iPhoneError,
+  onViewIPhoneDetails,
+  onCancelIPhoneSync,
 }: SyncStatusIndicatorProps) {
   const [showCompletion, setShowCompletion] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -83,8 +130,15 @@ export function SyncStatusIndicator({
   // Use SyncOrchestrator as single source of truth for sync state
   const { queue, isRunning } = useSyncOrchestrator();
 
+  // iPhone sync derived state
+  const isIPhoneSyncing = iPhoneSyncStatus === 'syncing';
+  const isIPhoneComplete = iPhoneSyncStatus === 'complete';
+  const isIPhoneError = iPhoneSyncStatus === 'error';
+  const isIPhoneActive = isIPhoneSyncing || isIPhoneComplete || isIPhoneError;
+
   // Use isRunning from SyncOrchestrator as authoritative "is syncing" state
-  const isAnySyncing = isRunning;
+  // Include iPhone sync as part of overall "syncing" determination
+  const isAnySyncing = isRunning || isIPhoneSyncing;
 
   // Check if any sync in the queue has an error
   const hasError = queue.some(item => item.status === 'error');
@@ -158,8 +212,8 @@ export function SyncStatusIndicator({
     setDismissed(true);
   }, []);
 
-  // Don't render if dismissed and not syncing
-  if (dismissed && !isAnySyncing) {
+  // Don't render if dismissed and not syncing (and no iPhone activity)
+  if (dismissed && !isAnySyncing && !isIPhoneActive) {
     return null;
   }
 
@@ -299,14 +353,67 @@ export function SyncStatusIndicator({
     );
   }
 
-  // Don't render if no sync is in progress and queue is empty
-  if (!isAnySyncing && queue.length === 0) {
+  // Don't render if no sync is in progress and queue is empty and no iPhone activity
+  if (!isAnySyncing && queue.length === 0 && !isIPhoneActive) {
     return null;
   }
 
   // Get the currently running sync's progress for display
   const runningItem = queue.find(item => item.status === 'running');
   const activeProgress = runningItem?.progress ?? null;
+
+  // Render iPhone sync pill
+  const renderIPhonePill = () => {
+    if (!isIPhoneActive) return null;
+
+    const phase = iPhoneProgress?.phase;
+    const phaseLabel = phase ? getIPhonePhaseLabel(phase) : '';
+
+    // Error state
+    if (isIPhoneError) {
+      return (
+        <span
+          key="iphone"
+          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${iPhoneStatusColors.error} cursor-help`}
+          title={iPhoneError || 'iPhone sync failed'}
+          data-testid="sync-pill-iphone"
+        >
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+          iPhone
+        </span>
+      );
+    }
+
+    // Complete state
+    if (isIPhoneComplete) {
+      return (
+        <span
+          key="iphone"
+          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${iPhoneStatusColors.complete}`}
+          data-testid="sync-pill-iphone"
+        >
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          iPhone
+        </span>
+      );
+    }
+
+    // Syncing state (purple with spinner)
+    return (
+      <span
+        key="iphone"
+        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${iPhoneStatusColors.syncing}`}
+        data-testid="sync-pill-iphone"
+      >
+        <div className="w-3 h-3 border border-purple-500 border-t-transparent rounded-full animate-spin" />
+        {phaseLabel ? `iPhone - ${phaseLabel}` : 'iPhone'}
+      </span>
+    );
+  };
 
   // Render a status pill for each sync item in queue order
   const renderPill = (type: SyncType, status: SyncItemStatus, progress: number, error?: string, phase?: string) => {
@@ -369,17 +476,39 @@ export function SyncStatusIndicator({
     );
   };
 
+  // Determine overall error state (email/contacts OR iPhone)
+  const hasIPhoneError = isIPhoneError;
+  const anyError = hasError || hasIPhoneError;
+
+  // Determine background color: purple if only iPhone active, red if error, blue default
+  const onlyIPhoneActive = !isRunning && queue.length === 0 && isIPhoneActive;
+  const bgClass = anyError
+    ? 'bg-red-50 border-red-200'
+    : onlyIPhoneActive
+      ? 'bg-purple-50 border-purple-200'
+      : 'bg-blue-50 border-blue-200';
+  const textClass = anyError
+    ? 'text-red-800'
+    : onlyIPhoneActive
+      ? 'text-purple-800'
+      : 'text-blue-800';
+  const iconClass = anyError
+    ? 'text-red-600'
+    : onlyIPhoneActive
+      ? 'text-purple-600'
+      : 'text-blue-600';
+
   // Show compact sync progress
   return (
     <div
-      className={`${hasError ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-200'} border rounded-lg px-3 py-2 mb-3 animate-fade-in`}
+      className={`${bgClass} border rounded-lg px-3 py-2 mb-3 animate-fade-in`}
       data-testid="sync-status-indicator"
     >
       {/* Status pills row - render in queue order */}
       <div className="flex items-center gap-2 mb-2">
         {/* Spinning sync icon (counter-clockwise) */}
         <svg
-          className={`w-4 h-4 ${hasError ? 'text-red-600' : 'text-blue-600'} ${isAnySyncing ? 'animate-spin' : ''} flex-shrink-0`}
+          className={`w-4 h-4 ${iconClass} ${isAnySyncing ? 'animate-spin' : ''} flex-shrink-0`}
           style={isAnySyncing ? { animationDirection: 'reverse' } : undefined}
           fill="none"
           stroke="currentColor"
@@ -387,21 +516,53 @@ export function SyncStatusIndicator({
         >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
-        <span className={`text-xs font-medium ${hasError ? 'text-red-800' : 'text-blue-800'}`}>
-          {isAnySyncing ? 'Syncing:' : hasError ? 'Sync Error:' : 'Sync:'}
+        <span className={`text-xs font-medium ${textClass}`}>
+          {isAnySyncing ? 'Syncing:' : anyError ? 'Sync Error:' : 'Sync:'}
         </span>
-        {/* Render pills in queue order */}
+        {/* Render email/contacts/messages pills in queue order */}
         {queue.map((item) => renderPill(item.type, item.status, item.progress, item.error, item.phase))}
-        {activeProgress !== null && (
+        {/* Render iPhone pill when active */}
+        {isIPhoneActive && renderIPhonePill()}
+        {/* Show progress percentage */}
+        {activeProgress !== null && !onlyIPhoneActive && (
           <span className="text-xs text-blue-600 ml-auto">{activeProgress}%</span>
+        )}
+        {isIPhoneSyncing && iPhoneProgress && iPhoneProgress.percent > 0 && (
+          <span className="text-xs text-purple-600 ml-auto">{iPhoneProgress.percent}%</span>
         )}
       </div>
 
       {/* Progress bar hidden — IPC flushing issue causes jumpy updates (BACKLOG-824) */}
 
+      {/* Action buttons row - only render when iPhone sync is active */}
+      {isIPhoneActive && (
+        <div className="flex items-center gap-2">
+          {/* View Details button - shown when iPhone sync is active */}
+          {onViewIPhoneDetails && (
+            <button
+              onClick={onViewIPhoneDetails}
+              className="text-xs font-medium text-purple-700 hover:text-purple-900 hover:bg-purple-100 px-2 py-1 rounded transition-colors"
+              data-testid="sync-iphone-view-details"
+            >
+              View Details
+            </button>
+          )}
+          {/* Cancel button for iPhone sync */}
+          {isIPhoneSyncing && onCancelIPhoneSync && (
+            <button
+              onClick={onCancelIPhoneSync}
+              className="text-xs font-medium text-purple-700 hover:text-purple-900 hover:bg-purple-100 px-2 py-1 rounded transition-colors"
+              data-testid="sync-iphone-cancel"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Disabled tools notice - only show when syncing */}
       {isAnySyncing && (
-        <p className="text-xs text-blue-600 mt-2 text-center">
+        <p className={`text-xs ${onlyIPhoneActive ? 'text-purple-600' : 'text-blue-600'} mt-2 text-center`}>
           Audit tools are disabled during sync to ensure accurate data
         </p>
       )}

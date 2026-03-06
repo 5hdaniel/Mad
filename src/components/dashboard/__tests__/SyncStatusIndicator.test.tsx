@@ -679,4 +679,174 @@ describe("SyncStatusIndicator", () => {
       expect(progressBar).toBeNull();
     });
   });
+
+  describe("iPhone sync integration (TASK-2116b)", () => {
+    it("should show iPhone pill when iPhone is syncing", () => {
+      render(
+        <SyncStatusIndicator
+          iPhoneSyncStatus="syncing"
+          iPhoneProgress={{ phase: "backing_up", percent: 30 }}
+        />
+      );
+
+      expect(screen.getByTestId("sync-status-indicator")).toBeInTheDocument();
+      expect(screen.getByTestId("sync-pill-iphone")).toBeInTheDocument();
+      expect(screen.getByText(/iPhone - Exporting/)).toBeInTheDocument();
+    });
+
+    it("should show iPhone pill with green checkmark when complete", () => {
+      render(
+        <SyncStatusIndicator
+          iPhoneSyncStatus="complete"
+          iPhoneProgress={{ phase: "complete", percent: 100 }}
+        />
+      );
+
+      expect(screen.getByTestId("sync-pill-iphone")).toBeInTheDocument();
+      const pill = screen.getByTestId("sync-pill-iphone");
+      expect(pill).toHaveClass("bg-green-100", "text-green-700");
+    });
+
+    it("should show iPhone pill with red X when error", () => {
+      render(
+        <SyncStatusIndicator
+          iPhoneSyncStatus="error"
+          iPhoneError="Device disconnected"
+        />
+      );
+
+      expect(screen.getByTestId("sync-pill-iphone")).toBeInTheDocument();
+      const pill = screen.getByTestId("sync-pill-iphone");
+      expect(pill).toHaveClass("bg-red-100", "text-red-700");
+      expect(pill).toHaveAttribute("title", "Device disconnected");
+    });
+
+    it("should not show iPhone pill when idle", () => {
+      render(
+        <SyncStatusIndicator
+          iPhoneSyncStatus="idle"
+        />
+      );
+
+      expect(screen.queryByTestId("sync-pill-iphone")).not.toBeInTheDocument();
+    });
+
+    it("should show View Details button when iPhone is active", () => {
+      const onViewDetails = jest.fn();
+      render(
+        <SyncStatusIndicator
+          iPhoneSyncStatus="syncing"
+          iPhoneProgress={{ phase: "extracting", percent: 50 }}
+          onViewIPhoneDetails={onViewDetails}
+        />
+      );
+
+      const btn = screen.getByTestId("sync-iphone-view-details");
+      expect(btn).toBeInTheDocument();
+      fireEvent.click(btn);
+      expect(onViewDetails).toHaveBeenCalledTimes(1);
+    });
+
+    it("should show Cancel button during iPhone sync", () => {
+      const onCancel = jest.fn();
+      render(
+        <SyncStatusIndicator
+          iPhoneSyncStatus="syncing"
+          iPhoneProgress={{ phase: "backing_up", percent: 20 }}
+          onCancelIPhoneSync={onCancel}
+        />
+      );
+
+      const btn = screen.getByTestId("sync-iphone-cancel");
+      expect(btn).toBeInTheDocument();
+      fireEvent.click(btn);
+      expect(onCancel).toHaveBeenCalledTimes(1);
+    });
+
+    it("should show iPhone pill alongside email/contacts pills during simultaneous sync", () => {
+      const queue = [
+        createSyncItem('contacts', 'running', 50),
+        createSyncItem('emails', 'pending', 0),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 25));
+
+      render(
+        <SyncStatusIndicator
+          iPhoneSyncStatus="syncing"
+          iPhoneProgress={{ phase: "storing", percent: 70 }}
+        />
+      );
+
+      // Both email/contacts and iPhone should be visible
+      expect(screen.getByText("Contacts")).toBeInTheDocument();
+      expect(screen.getByText("Emails")).toBeInTheDocument();
+      expect(screen.getByTestId("sync-pill-iphone")).toBeInTheDocument();
+      expect(screen.getByText(/iPhone - Saving/)).toBeInTheDocument();
+    });
+
+    it("should use purple background when only iPhone is active", () => {
+      render(
+        <SyncStatusIndicator
+          iPhoneSyncStatus="syncing"
+          iPhoneProgress={{ phase: "preparing", percent: 0 }}
+        />
+      );
+
+      const indicator = screen.getByTestId("sync-status-indicator");
+      expect(indicator).toHaveClass("bg-purple-50", "border-purple-200");
+    });
+
+    it("should use blue background when both email and iPhone sync are active", () => {
+      const queue = [
+        createSyncItem('contacts', 'running', 50),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 50));
+
+      render(
+        <SyncStatusIndicator
+          iPhoneSyncStatus="syncing"
+          iPhoneProgress={{ phase: "backing_up", percent: 30 }}
+        />
+      );
+
+      const indicator = screen.getByTestId("sync-status-indicator");
+      expect(indicator).toHaveClass("bg-blue-50", "border-blue-200");
+    });
+
+    it("should show iPhone progress percentage", () => {
+      render(
+        <SyncStatusIndicator
+          iPhoneSyncStatus="syncing"
+          iPhoneProgress={{ phase: "extracting", percent: 45 }}
+        />
+      );
+
+      expect(screen.getByText("45%")).toBeInTheDocument();
+    });
+
+    it("should show View Details for completed iPhone sync", () => {
+      const onViewDetails = jest.fn();
+      render(
+        <SyncStatusIndicator
+          iPhoneSyncStatus="complete"
+          iPhoneProgress={{ phase: "complete", percent: 100 }}
+          onViewIPhoneDetails={onViewDetails}
+        />
+      );
+
+      expect(screen.getByTestId("sync-iphone-view-details")).toBeInTheDocument();
+    });
+
+    it("should not show Cancel button when iPhone sync is complete", () => {
+      render(
+        <SyncStatusIndicator
+          iPhoneSyncStatus="complete"
+          iPhoneProgress={{ phase: "complete", percent: 100 }}
+          onCancelIPhoneSync={jest.fn()}
+        />
+      );
+
+      expect(screen.queryByTestId("sync-iphone-cancel")).not.toBeInTheDocument();
+    });
+  });
 });
