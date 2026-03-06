@@ -5,6 +5,7 @@
  */
 
 import { Shield } from 'lucide-react';
+import { EditLicenseDialog } from './EditLicenseDialog';
 
 interface License {
   id: string;
@@ -67,11 +68,22 @@ export function LicenseCard({ licenses }: { licenses: License[] }) {
                     <p className="text-xs text-gray-400 font-mono">{lic.license_key}</p>
                   )}
                 </div>
-                <span
-                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(lic.status)}`}
-                >
-                  {lic.status || 'unknown'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(lic.status)}`}
+                  >
+                    {lic.status || 'unknown'}
+                  </span>
+                  <EditLicenseDialog
+                    license={{
+                      id: lic.id,
+                      status: lic.status,
+                      expires_at: lic.expires_at,
+                      license_type: lic.license_type,
+                      transaction_limit: lic.transaction_limit,
+                    }}
+                  />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500">
                 <span>Expires: {lic.expires_at ? formatDate(lic.expires_at) : 'No expiration'}</span>
