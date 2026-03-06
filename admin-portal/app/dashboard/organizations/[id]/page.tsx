@@ -143,7 +143,7 @@ export default async function OrganizationDetailPage({
         <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="rounded-lg bg-success-50 p-4 text-center">
             <p className="text-2xl font-bold text-success-600">{licenseSummary.active}</p>
-            <p className="text-xs text-success-700 mt-1">Active</p>
+            <p className="text-xs text-success-600 mt-1">Active</p>
           </div>
           <div className="rounded-lg bg-yellow-50 p-4 text-center">
             <p className="text-2xl font-bold text-yellow-600">{licenseSummary.trial}</p>
@@ -151,7 +151,7 @@ export default async function OrganizationDetailPage({
           </div>
           <div className="rounded-lg bg-danger-50 p-4 text-center">
             <p className="text-2xl font-bold text-danger-600">{licenseSummary.expired}</p>
-            <p className="text-xs text-danger-700 mt-1">Expired / Revoked</p>
+            <p className="text-xs text-danger-600 mt-1">Expired / Revoked</p>
           </div>
           <div className="rounded-lg bg-gray-50 p-4 text-center">
             <p className="text-2xl font-bold text-gray-600">{licenseSummary.none}</p>
