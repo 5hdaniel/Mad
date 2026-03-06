@@ -2,10 +2,10 @@
 
 ---
 
-## STATUS: Completed
+## STATUS: Pending
 
-**Completed:** 2026-03-05
-**Sprint:** SPRINT-111
+**Previously blocked by:** SPRINT-109 / TASK-2106 (admin portal scaffold) -- now unblocked.
+SPRINT-109 is complete (PR #1038 merged to develop 2026-03-05). Admin portal deployed at admin.keeprcompliance.com.
 
 ---
 
@@ -81,24 +81,26 @@ Add a system-wide analytics/stats page to the admin portal at `/dashboard/analyt
 
 - `admin-portal/app/dashboard/analytics/page.tsx` — main page
 - `admin-portal/app/dashboard/analytics/components/` — dashboard section components
-- `admin-portal/lib/sentry.ts` — Sentry API client helper
+- `admin-portal/lib/sentry.ts` — Sentry API client helper (may already exist from TASK-2113 — reuse if present)
 - `admin-portal/lib/analytics-queries.ts` — Supabase query helpers
+- `admin-portal/components/layout/Sidebar.tsx` — add "Analytics" nav item
+- `admin-portal/package.json` — add `recharts` dependency
 
 ## Acceptance Criteria
 
-- [x] Analytics page accessible at `/dashboard/analytics` for authenticated internal users
-- [x] Active users by version displayed with counts and percentages
-- [x] Total users/orgs/devices counts displayed
-- [x] Sentry error rates by version displayed (or graceful fallback if API unavailable)
-- [x] Platform breakdown displayed
-- [x] License utilization displayed
-- [x] Page is responsive and matches admin portal design patterns
-- [x] `npm run build` passes in `admin-portal/`
-- [x] No TypeScript errors
+- [ ] Analytics page accessible at `/dashboard/analytics` for authenticated internal users
+- [ ] Active users by version displayed with counts and percentages
+- [ ] Total users/orgs/devices counts displayed
+- [ ] Sentry error rates by version displayed (or graceful fallback if API unavailable)
+- [ ] Platform breakdown displayed
+- [ ] License utilization displayed
+- [ ] Page is responsive and matches admin portal design patterns
+- [ ] `npm run build` passes in `admin-portal/`
+- [ ] No TypeScript errors
 
 ## Integration Notes
 
-- **Blocked by:** SPRINT-109 / TASK-2106 (admin portal scaffold)
+- **Previously blocked by:** SPRINT-109 / TASK-2106 (admin portal scaffold) -- now unblocked
 - **Depends on:** TASK-2107 (app_version data in devices table)
 - **Sentry API:** Org slug `keeprcompliancecom`, user set via `Sentry.setUser({ id, email })`
 - **Note from SPRINT-109 plan:** Originally slated for SPRINT-111 but moved up per user request

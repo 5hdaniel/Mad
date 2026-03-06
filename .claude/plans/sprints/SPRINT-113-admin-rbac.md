@@ -14,9 +14,9 @@ Evolve the admin portal's simple 3-role system (`support_agent`, `support_admin`
 
 ## Dependencies
 
-- **SPRINT-111** (P0 features) -- must be complete (establishes the pages/features to gate)
-- **SPRINT-112** (account management) -- must be complete (establishes the write actions to gate)
-- **BACKLOG-842** -- parent backlog item
+- **SPRINT-111** (P0 features) — must be complete (establishes the pages/features to gate)
+- **SPRINT-112** (account management) — must be complete (establishes the write actions to gate)
+- **BACKLOG-842** — parent backlog item
 
 ## Context
 
@@ -148,19 +148,19 @@ ALTER TABLE public.internal_roles ADD COLUMN role_id UUID REFERENCES public.admi
 
 ## Out of Scope / Deferred
 
-- **Role inheritance / hierarchy** -- Flat permission model for v1. Hierarchy (e.g., supervisor inherits rep permissions) is a future enhancement.
-- **Field-level permissions** -- v1 gates at page/section level, not individual fields.
-- **API rate limiting per role** -- Not needed yet.
-- **Audit log for permission changes** -- Will use existing admin_audit_logs from SPRINT-112.
+- **Role inheritance / hierarchy** — Flat permission model for v1. Hierarchy (e.g., supervisor inherits rep permissions) is a future enhancement.
+- **Field-level permissions** — v1 gates at page/section level, not individual fields.
+- **API rate limiting per role** — Not needed yet.
+- **Audit log for permission changes** — Will use existing admin_audit_logs from SPRINT-112.
 
 ---
 
 ## Merge Plan
 
-1. **Phase 1 (Schema):** TASK-2119 + TASK-2120 + TASK-2121 -- applied via Supabase MCP, no app code
-2. **Phase 2 (UI + Enforcement):** TASK-2122 + TASK-2123 + TASK-2124 -- parallel engineer agents with worktree isolation
+1. **Phase 1 (Schema):** TASK-2119 + TASK-2120 + TASK-2121 — applied via Supabase MCP, no app code
+2. **Phase 2 (UI + Enforcement):** TASK-2122 + TASK-2123 + TASK-2124 — parallel engineer agents with worktree isolation
 
-Integration branch: `int/sprint-113-admin-rbac` -> merge to `develop` after all tasks complete.
+Integration branch: `int/sprint-113-admin-rbac` → merge to `develop` after all tasks complete.
 
 ---
 
@@ -179,7 +179,7 @@ Integration branch: `int/sprint-113-admin-rbac` -> merge to `develop` after all 
 
 - [ ] Existing admin portal functionality unaffected after schema migration
 - [ ] Super admin retains full access after migration
-- [ ] New role created via UI -> user assigned -> permissions enforced correctly
+- [ ] New role created via UI → user assigned → permissions enforced correctly
 - [ ] Removing a permission from a role immediately restricts access
 - [ ] System role (super_admin) cannot be deleted
 - [ ] Non-super-admin cannot access role management

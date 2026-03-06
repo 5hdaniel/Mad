@@ -1,8 +1,12 @@
 # TASK-2110: Admin RLS Policies and has_internal_role() Function
 
-**Status:** Completed
-**Completed:** 2026-03-05
-**Sprint:** SPRINT-111
+---
+
+## WORKFLOW REQUIREMENT
+
+**This task is a Supabase migration — can be applied via MCP.**
+
+No application code changes. PM applies directly using `mcp__supabase__apply_migration`.
 
 ---
 
@@ -12,7 +16,7 @@ Create a generalized `has_internal_role(user_id UUID)` SECURITY DEFINER function
 
 ## Non-Goals
 
-- Do NOT add write (INSERT/UPDATE/DELETE) policies -- that's SPRINT-112
+- Do NOT add write (INSERT/UPDATE/DELETE) policies — that's SPRINT-112
 - Do NOT modify existing RLS policies
 - Do NOT add policies on `internal_roles` (already handled)
 
@@ -58,13 +62,27 @@ CREATE POLICY "internal_users_can_read_all_audit_logs"
   USING (has_internal_role(auth.uid()));
 ```
 
+## Why `has_internal_role()` vs `is_super_admin()`
+
+- `is_super_admin()` checks for `role = 'super_admin'` specifically
+- All three roles (support_agent, support_admin, super_admin) need read access
+- `has_internal_role()` checks for ANY entry in `internal_roles`
+- Role-based differentiation (read vs write) will be added in SPRINT-112
+
+## Security Notes
+
+- SELECT-only — no write access granted
+- SECURITY DEFINER bypasses RLS on `internal_roles` to avoid recursion (same pattern as `is_super_admin()`)
+- Regular users (no internal role) are completely unaffected — these are additive permissive policies
+- The anon key can only exercise these policies with a valid internal role session
+
 ## Acceptance Criteria
 
-- [x] `has_internal_role()` function exists
-- [x] All 6 tables have admin SELECT policy
-- [x] Internal user can `SELECT * FROM users` and see all rows (not just own org)
-- [x] Regular user still sees only org-scoped data
-- [x] No existing policies modified
+- [ ] `has_internal_role()` function exists
+- [ ] All 6 tables have admin SELECT policy
+- [ ] Internal user can `SELECT * FROM users` and see all rows (not just own org)
+- [ ] Regular user still sees only org-scoped data
+- [ ] No existing policies modified
 
 ## Integration Notes
 
@@ -78,4 +96,4 @@ CREATE POLICY "internal_users_can_read_all_audit_logs"
 **Category:** `schema`
 **Estimated Tokens:** ~5K (single migration via MCP)
 **Token Cap:** 20K
-**Confidence:** High
+**Confidence:** High — straightforward DDL, proven pattern from `is_super_admin()`.
