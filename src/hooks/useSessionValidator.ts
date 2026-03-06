@@ -18,6 +18,14 @@ import { syncStateRef, setDeferredLogoutCallback } from "./useIPhoneSync";
 /** Polling interval: 60 seconds */
 const POLL_INTERVAL_MS = 60_000;
 
+/** TASK-2114: Retry constants for network resilience */
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 3_000;
+
+/** Simple delay helper */
+const delay = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
 interface UseSessionValidatorOptions {
   /** Whether the user is currently authenticated */
   isAuthenticated: boolean;
@@ -47,9 +55,35 @@ export function useSessionValidator({
   const checkSession = useCallback(async () => {
     if (isLoggingOut.current) return;
 
-    try {
-      const result = await window.api.auth.validateRemoteSession();
-      if (!result.valid && !isLoggingOut.current) {
+    // TASK-2114: Retry loop for network resilience.
+    // When the network source changes (e.g., iPhone tethering), the Supabase
+    // getUser() call may transiently fail, returning { valid: false }.
+    // We retry up to MAX_RETRIES times with a delay before treating it as
+    // a genuine session invalidation.
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      if (isLoggingOut.current) return;
+
+      try {
+        const result = await window.api.auth.validateRemoteSession();
+
+        if (result.valid) {
+          // Session is valid -- nothing to do
+          return;
+        }
+
+        // Session reported as invalid. If we have retries left, wait and retry
+        // (the invalidation could be caused by a transient network change).
+        if (attempt < MAX_RETRIES) {
+          logger.info(
+            `[SessionValidator] Validation failed (attempt ${attempt}/${MAX_RETRIES}), retrying in ${RETRY_DELAY_MS / 1000}s...`
+          );
+          await delay(RETRY_DELAY_MS);
+          continue;
+        }
+
+        // All retries exhausted -- session is genuinely invalid
+        if (isLoggingOut.current) return;
+
         // TASK-2109: Defer logout if iPhone sync is active
         if (syncStateRef.isActive) {
           syncStateRef.deferredLogout = true;
@@ -70,12 +104,14 @@ export function useSessionValidator({
         );
 
         await onSessionInvalidated();
+        return;
+      } catch {
+        // Network or IPC error -- skip this check entirely, don't logout
+        logger.debug(
+          "[SessionValidator] Validation check failed (network/IPC error), skipping"
+        );
+        return;
       }
-    } catch {
-      // Network or IPC error -- skip this check, don't logout
-      logger.debug(
-        "[SessionValidator] Validation check failed (network/IPC error), skipping"
-      );
     }
   }, [onSessionInvalidated]);
 

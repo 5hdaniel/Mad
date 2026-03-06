@@ -118,12 +118,16 @@ class IPhoneSyncStorageService {
    * @param result Sync result containing messages, contacts, and conversations
    * @param backupPath Path to iOS backup for attachment extraction (SPRINT-068)
    * @param onProgress Progress callback
+   * @param sessionId TASK-2110: Sync session ID for ACID rollback
+   * @param cancelSignal TASK-2110: Cancel signal ref checked between phases/batches
    */
   async persistSyncResult(
     userId: string,
     result: SyncResult,
     backupPath?: string,
-    onProgress?: StorageProgressCallback
+    onProgress?: StorageProgressCallback,
+    sessionId?: string,
+    cancelSignal?: { cancelled: boolean }
   ): Promise<PersistResult> {
     const startTime = Date.now();
 
@@ -140,7 +144,14 @@ class IPhoneSyncStorageService {
         conversations: result.conversations.length,
         attachments: totalAttachments,
         hasBackupPath: !!backupPath,
+        sessionId: sessionId || "none",
       });
+
+      // TASK-2110: Check cancel signal before messages phase
+      if (cancelSignal?.cancelled) {
+        log.info(`[${IPhoneSyncStorageService.SERVICE_NAME}] Cancelled before messages phase`);
+        return this.cancelledResult(Date.now() - startTime);
+      }
 
       // Store messages first (larger dataset)
       const messageResult = await this.storeMessages(
@@ -154,8 +165,17 @@ class IPhoneSyncStorageService {
             total,
             percent: Math.round((current / total) * 100),
           });
-        }
+        },
+        sessionId,
+        cancelSignal
       );
+
+      // TASK-2110: Check cancel signal between messages and contacts phases
+      if (cancelSignal?.cancelled) {
+        log.info(`[${IPhoneSyncStorageService.SERVICE_NAME}] Cancelled after messages phase, rolling back`);
+        await this.rollbackSession(userId, sessionId);
+        return this.cancelledResult(Date.now() - startTime);
+      }
 
       // Store contacts
       const contactResult = await this.storeContacts(
@@ -168,8 +188,16 @@ class IPhoneSyncStorageService {
             total,
             percent: Math.round((current / total) * 100),
           });
-        }
+        },
+        sessionId
       );
+
+      // TASK-2110: Check cancel signal between contacts and attachments phases
+      if (cancelSignal?.cancelled) {
+        log.info(`[${IPhoneSyncStorageService.SERVICE_NAME}] Cancelled after contacts phase, rolling back`);
+        await this.rollbackSession(userId, sessionId);
+        return this.cancelledResult(Date.now() - startTime);
+      }
 
       // SPRINT-068: Store attachments (if backupPath available)
       let attachmentResult = { stored: 0, skipped: 0 };
@@ -185,8 +213,17 @@ class IPhoneSyncStorageService {
               total,
               percent: Math.round((current / total) * 100),
             });
-          }
+          },
+          sessionId,
+          cancelSignal
         );
+
+        // TASK-2110: Check cancel signal after attachments phase
+        if (cancelSignal?.cancelled) {
+          log.info(`[${IPhoneSyncStorageService.SERVICE_NAME}] Cancelled after attachments phase, rolling back`);
+          await this.rollbackSession(userId, sessionId);
+          return this.cancelledResult(Date.now() - startTime);
+        }
       }
 
       const duration = Date.now() - startTime;
@@ -235,6 +272,69 @@ class IPhoneSyncStorageService {
   }
 
   /**
+   * TASK-2110: Roll back all data inserted during a sync session.
+   * Deletes messages, attachments (with orphaned file cleanup), and new contacts.
+   */
+  private async rollbackSession(userId: string, sessionId?: string): Promise<void> {
+    if (!sessionId) {
+      log.warn(`[${IPhoneSyncStorageService.SERVICE_NAME}] No session ID for rollback, skipping`);
+      return;
+    }
+
+    log.info(`[${IPhoneSyncStorageService.SERVICE_NAME}] Rolling back session ${sessionId}`);
+
+    try {
+      // 1. Delete attachments and get orphaned file paths
+      const attachmentResult = databaseService.deleteAttachmentsBySessionId(sessionId);
+
+      // 2. Delete orphaned attachment files from disk
+      for (const filePath of attachmentResult.orphanedFiles) {
+        try {
+          await fs.promises.unlink(filePath);
+          log.debug(`[${IPhoneSyncStorageService.SERVICE_NAME}] Deleted orphaned file: ${filePath}`);
+        } catch (err) {
+          // File may already be deleted or inaccessible
+          log.debug(`[${IPhoneSyncStorageService.SERVICE_NAME}] Could not delete file: ${filePath}`);
+        }
+      }
+
+      // 3. Delete messages
+      const messagesDeleted = databaseService.deleteMessagesBySessionId(userId, sessionId);
+
+      // 4. Delete new contacts (only those newly inserted, not updated ones)
+      const contactsDeleted = externalContactDb.deleteBySessionId(userId, sessionId);
+
+      log.info(`[${IPhoneSyncStorageService.SERVICE_NAME}] Rollback complete for session ${sessionId}`, {
+        messagesDeleted,
+        attachmentsDeleted: attachmentResult.deleted,
+        orphanedFilesDeleted: attachmentResult.orphanedFiles.length,
+        contactsDeleted,
+      });
+    } catch (error) {
+      log.error(`[${IPhoneSyncStorageService.SERVICE_NAME}] Rollback failed for session ${sessionId}`, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  /**
+   * TASK-2110: Create a cancelled PersistResult
+   */
+  private cancelledResult(duration: number): PersistResult {
+    return {
+      success: false,
+      messagesStored: 0,
+      messagesSkipped: 0,
+      contactsStored: 0,
+      contactsSkipped: 0,
+      attachmentsStored: 0,
+      attachmentsSkipped: 0,
+      duration,
+      error: "Sync cancelled by user",
+    };
+  }
+
+  /**
    * Store messages to the database with bulk insert
    * Uses async yielding to prevent blocking
    *
@@ -245,7 +345,9 @@ class IPhoneSyncStorageService {
     userId: string,
     messages: iOSMessage[],
     conversations: iOSConversation[],
-    onProgress?: (current: number, total: number) => void
+    onProgress?: (current: number, total: number) => void,
+    sessionId?: string,
+    cancelSignal?: { cancelled: boolean }
   ): Promise<{ stored: number; skipped: number }> {
     if (messages.length === 0) {
       return { stored: 0, skipped: 0 };
@@ -373,7 +475,9 @@ class IPhoneSyncStorageService {
     if (messagesToInsert.length > 0) {
       const result = databaseService.batchInsertMessages(
         messagesToInsert,
-        IPhoneSyncStorageService.BATCH_SIZE
+        IPhoneSyncStorageService.BATCH_SIZE,
+        sessionId,
+        cancelSignal
       );
       stored = result.stored;
       // Add DB-level skips (UNIQUE constraint) to our pre-filter skips
@@ -400,7 +504,8 @@ class IPhoneSyncStorageService {
   private async storeContacts(
     userId: string,
     contacts: iOSContact[],
-    onProgress?: (current: number, total: number) => void
+    onProgress?: (current: number, total: number) => void,
+    sessionId?: string
   ): Promise<{ stored: number; skipped: number }> {
     if (contacts.length === 0) {
       return { stored: 0, skipped: 0 };
@@ -439,7 +544,7 @@ class IPhoneSyncStorageService {
 
     // Use the externalContactDbService to upsert contacts
     // This handles deduplication via UNIQUE(user_id, source, external_record_id)
-    const stored = externalContactDb.upsertFromiPhone(userId, iPhoneContacts);
+    const stored = externalContactDb.upsertFromiPhone(userId, iPhoneContacts, sessionId);
 
     // Report completion
     onProgress?.(contacts.length, contacts.length);
@@ -457,7 +562,9 @@ class IPhoneSyncStorageService {
     userId: string,
     messages: iOSMessage[],
     backupPath: string,
-    onProgress?: (current: number, total: number) => void
+    onProgress?: (current: number, total: number) => void,
+    sessionId?: string,
+    cancelSignal?: { cancelled: boolean }
   ): Promise<{ stored: number; skipped: number }> {
     // Collect all attachments with their message info
     const attachmentsToStore: Array<{
@@ -503,6 +610,12 @@ class IPhoneSyncStorageService {
     let skipped = 0;
 
     for (let i = 0; i < attachmentsToStore.length; i++) {
+      // TASK-2110: Check cancel signal between attachments
+      if (cancelSignal?.cancelled) {
+        log.info(`[${IPhoneSyncStorageService.SERVICE_NAME}] Attachment storage cancelled at ${i}/${attachmentsToStore.length}`);
+        break;
+      }
+
       const { attachment, messageGuid } = attachmentsToStore[i];
 
       try {
@@ -575,6 +688,7 @@ class IPhoneSyncStorageService {
           mimeType: attachment.mimeType || this.getMimeType(ext),
           fileSizeBytes: stats.size,
           storagePath: destPath,
+          sessionId,
         });
 
         existingRecords.add(`${internalMessageId}:${filename}`);

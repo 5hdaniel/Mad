@@ -265,6 +265,9 @@ CREATE TABLE IF NOT EXISTS messages (
 
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
+  -- Sync session tracking (TASK-2110: ACID rollback on cancelled sync)
+  sync_session_id TEXT,
+
   FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
   FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL
 );
@@ -297,6 +300,9 @@ CREATE TABLE IF NOT EXISTS attachments (
   -- Analysis Results (JSON)
   -- Contains extracted fields: dates, amounts, parties, etc.
   analysis_metadata TEXT,
+
+  -- Sync session tracking (TASK-2110: ACID rollback on cancelled sync)
+  sync_session_id TEXT,
 
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
@@ -751,12 +757,16 @@ CREATE INDEX IF NOT EXISTS idx_messages_participants_flat ON messages(participan
 CREATE INDEX IF NOT EXISTS idx_messages_message_id_header ON messages(message_id_header);
 CREATE INDEX IF NOT EXISTS idx_messages_content_hash ON messages(content_hash);
 CREATE INDEX IF NOT EXISTS idx_messages_duplicate_of ON messages(duplicate_of);
+-- Sync session indexes (TASK-2110: ACID rollback on cancelled sync)
+CREATE INDEX IF NOT EXISTS idx_messages_sync_session ON messages(user_id, sync_session_id);
 
 -- Attachments
 CREATE INDEX IF NOT EXISTS idx_attachments_message_id ON attachments(message_id);
 CREATE INDEX IF NOT EXISTS idx_attachments_email_id ON attachments(email_id);  -- TASK-1775
 CREATE INDEX IF NOT EXISTS idx_attachments_external_message_id ON attachments(external_message_id);
 CREATE INDEX IF NOT EXISTS idx_attachments_document_type ON attachments(document_type);
+-- Sync session indexes (TASK-2110: ACID rollback on cancelled sync)
+CREATE INDEX IF NOT EXISTS idx_attachments_sync_session ON attachments(sync_session_id);
 
 -- Transactions
 CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
@@ -989,6 +999,8 @@ CREATE TABLE IF NOT EXISTS external_contacts (
   external_record_id TEXT,
   source TEXT DEFAULT 'macos',
   synced_at DATETIME,
+  -- Sync session tracking (TASK-2110: ACID rollback on cancelled sync)
+  sync_session_id TEXT,
   FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
   UNIQUE(user_id, source, external_record_id)
 );
@@ -996,6 +1008,8 @@ CREATE TABLE IF NOT EXISTS external_contacts (
 CREATE INDEX IF NOT EXISTS idx_external_contacts_user ON external_contacts(user_id);
 CREATE INDEX IF NOT EXISTS idx_external_contacts_last_msg ON external_contacts(user_id, last_message_at DESC);
 CREATE INDEX IF NOT EXISTS idx_external_contacts_source ON external_contacts(user_id, source);
+-- Sync session indexes (TASK-2110: ACID rollback on cancelled sync)
+CREATE INDEX IF NOT EXISTS idx_external_contacts_sync_session ON external_contacts(user_id, sync_session_id);
 
 -- ============================================
 -- VIEWS (Convenient queries for common operations)
@@ -1043,5 +1057,5 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 
 -- Initialize schema version if not exists
--- Version 29: Consolidated schema (all migrations through 28 folded in)
-INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 29);
+-- Version 32: Consolidated schema (includes sync_session_id columns from TASK-2110)
+INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 32);
