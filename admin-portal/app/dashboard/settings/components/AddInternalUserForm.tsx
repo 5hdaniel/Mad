@@ -107,7 +107,7 @@ export function AddInternalUserForm({ onSuccess }: AddInternalUserFormProps) {
               id="role"
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none bg-white"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none bg-white"
               disabled={isSubmitting}
             >
               {roles.map((r) => (

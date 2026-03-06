@@ -129,7 +129,8 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick }: Inte
     return list;
   }, [users, roleFilter, sortField, sortDir]);
 
-  const allSelected = filteredUsers.length > 0 && selected.size === filteredUsers.filter((u) => u.user_id !== currentUserId).length;
+  const selectableUsers = filteredUsers.filter((u) => u.user_id !== currentUserId);
+  const allSelected = selectableUsers.length > 0 && selected.size === selectableUsers.length;
   const someSelected = selected.size > 0;
 
   const toggleSort = useCallback((field: SortField) => {
