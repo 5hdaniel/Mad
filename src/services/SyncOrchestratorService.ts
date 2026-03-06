@@ -599,15 +599,14 @@ class SyncOrchestratorServiceClass {
   }
 
   private updateOverallProgress(): void {
-    const { queue } = this.state;
-    if (queue.length === 0) {
+    const internalItems = this.state.queue.filter((item) => !item.external);
+    if (internalItems.length === 0) {
       this.setState({ overallProgress: 0 });
       return;
     }
 
-    // Calculate weighted progress
-    const totalProgress = queue.reduce((sum, item) => sum + item.progress, 0);
-    const overallProgress = Math.round(totalProgress / queue.length);
+    const totalProgress = internalItems.reduce((sum, item) => sum + item.progress, 0);
+    const overallProgress = Math.round(totalProgress / internalItems.length);
     this.setState({ overallProgress });
   }
 }

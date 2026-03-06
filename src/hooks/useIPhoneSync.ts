@@ -661,6 +661,8 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     setNeedsPassword(false);
     setError(null);
     setPendingPassword(null);
+    setSyncLocked(false);
+    setLockReason(null);
 
     // TASK-2119: Notify orchestrator that iPhone sync was cancelled
     syncOrchestrator.completeExternalSync('iphone', { status: 'complete' });
