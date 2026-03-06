@@ -29,6 +29,18 @@ git branch -a | grep "int/"
   - Explicit merge order
   - Contract ownership assignment
 
+- **Default to sequential when tasks share files.** When two tasks modify the
+  same file and neither can be scoped to avoid the overlap, execute them
+  sequentially. The cost of manual diff surgery after a semantic conflict
+  exceeds the time saved by parallel execution. Parallel execution with
+  shared files is only permitted when SR Engineer explicitly approves it
+  with file-ownership constraints documented in each task's "File Boundaries"
+  section.
+
+  > **Incident ref:** BACKLOG-883/889 -- two parallel agents both modified
+  > `SettingsManager.tsx`, producing a semantic conflict that Git could not
+  > detect. See `.claude/plans/investigations/parallel-shared-file-conflict-analysis.md`.
+
 ## Phase design
 
 Each phase must include:
