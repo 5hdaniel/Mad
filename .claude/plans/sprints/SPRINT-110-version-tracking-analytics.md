@@ -10,7 +10,7 @@
 
 ## Context
 
-Three backlog items spanning Electron, admin portal, and infra. BACKLOG-840 is blocked by SPRINT-109 (admin portal scaffold doesn't exist yet) — task file created for planning but implementation deferred.
+Three backlog items spanning Electron, admin portal, and infra. BACKLOG-840 was previously blocked by SPRINT-109 (admin portal scaffold) -- now unblocked since SPRINT-109 is complete (PR #1038 merged).
 
 ---
 
@@ -19,7 +19,7 @@ Three backlog items spanning Electron, admin portal, and infra. BACKLOG-840 is b
 | # | Task | Backlog | Status | Blocker |
 |---|------|---------|--------|---------|
 | 1 | TASK-2107: Populate app_version on device check-in | BACKLOG-839 | Pending | None |
-| 2 | TASK-2108: Admin portal analytics dashboard (plan only) | BACKLOG-840 | Blocked | SPRINT-109 |
+| 2 | TASK-2108: Admin portal analytics dashboard (plan only) | BACKLOG-840 | Pending | None (SPRINT-109 complete) |
 | 3 | TASK-2109: Verify invite links on app.keeprcompliance.com | BACKLOG-841 | Pending | None |
 
 ## Out of Scope / Deferred
@@ -37,11 +37,11 @@ TASK-2107 (app_version in device check-in) ──┐
                                               ├── Independent, run in parallel
 TASK-2109 (verify invite links)         ──────┘
 
-TASK-2108 (analytics dashboard) ── BLOCKED by SPRINT-109/TASK-2106
+TASK-2108 (analytics dashboard) ── Pending (SPRINT-109 complete, unblocked)
 ```
 
 TASK-2107 and TASK-2109 have no dependencies and can execute in parallel.
-TASK-2108 is blocked until the admin portal exists.
+TASK-2108 is now unblocked (SPRINT-109 complete, admin portal deployed).
 
 ---
 
@@ -59,9 +59,9 @@ git worktree add ../Mad-task-2107 -b feature/task-2107-device-app-version develo
 git worktree add ../Mad-task-2109 -b chore/task-2109-verify-invite-links develop
 ```
 
-### Phase 2: TASK-2108 (deferred)
+### Phase 2: TASK-2108 (unblocked)
 
-Implementation starts after SPRINT-109 completes. Task file created now for planning.
+SPRINT-109 is complete. Admin portal scaffold is deployed. TASK-2108 can now proceed.
 
 ---
 
@@ -69,7 +69,7 @@ Implementation starts after SPRINT-109 completes. Task file created now for plan
 
 1. TASK-2107: PR `feature/task-2107-device-app-version` -> `develop`
 2. TASK-2109: PR `chore/task-2109-verify-invite-links` -> `develop` (if any code changes needed; otherwise just verification)
-3. TASK-2108: Deferred to post-SPRINT-109
+3. TASK-2108: PR `feature/task-2108-admin-analytics` -> `develop` (unblocked, ready for implementation)
 
 ---
 

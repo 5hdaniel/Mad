@@ -38,8 +38,8 @@ The codebase has two categories of `www.keeprcompliance.com` references:
 
 | # | Task | Backlog | Status |
 |---|------|---------|--------|
-| 1 | TASK-2103: Infrastructure setup (Vercel, Supabase, OAuth) | BACKLOG-836 | Pending |
-| 2 | TASK-2104: Code changes (URLs, env vars, tests) | BACKLOG-836 | Pending |
+| 1 | TASK-2103: Infrastructure setup (Vercel, Supabase, OAuth) | BACKLOG-836 | Completed |
+| 2 | TASK-2104: Code changes (URLs, env vars, tests) | BACKLOG-836 | Completed |
 
 ## Out of Scope / Deferred
 
