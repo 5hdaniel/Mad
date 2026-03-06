@@ -5,7 +5,7 @@
  * in a 3-column card grid.
  */
 
-import { Users, Building2, Monitor } from 'lucide-react';
+import { Users, Building2, Monitor, UserCheck } from 'lucide-react';
 import type { SystemCounts as SystemCountsData } from '@/lib/analytics-queries';
 
 interface Props {
@@ -17,9 +17,17 @@ const cards = [
     key: 'active_users' as const,
     label: 'Active Users',
     subtitle: 'Last 30 days',
-    icon: Users,
+    icon: UserCheck,
     color: 'text-primary-600',
     bg: 'bg-primary-50',
+  },
+  {
+    key: 'total_users' as const,
+    label: 'Total Users',
+    subtitle: 'All time',
+    icon: Users,
+    color: 'text-blue-600',
+    bg: 'bg-blue-50',
   },
   {
     key: 'total_orgs' as const,
@@ -41,7 +49,7 @@ const cards = [
 
 export function SystemCounts({ data }: Props) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {cards.map((card) => {
         const Icon = card.icon;
         const value = data[card.key];

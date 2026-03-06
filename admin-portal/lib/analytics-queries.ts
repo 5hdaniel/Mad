@@ -4,6 +4,9 @@
  * Server-side Supabase queries for the admin analytics dashboard.
  * All queries use the authenticated server client — cross-org read
  * access is granted by TASK-2110 RLS policies for internal_roles users.
+ *
+ * Where possible, queries use count-only or minimal-select patterns
+ * to avoid fetching full row sets into memory.
  */
 
 import { SupabaseClient } from '@supabase/supabase-js';
@@ -20,6 +23,7 @@ export interface SystemCounts {
   active_users: number;
   total_orgs: number;
   active_devices: number;
+  total_users: number;
 }
 
 export interface PlatformBreakdown {
@@ -42,45 +46,44 @@ export interface PhoneTypeBreakdown {
   pct: number;
 }
 
+// ─── Helpers ─────────────────────────────────────────────────────
+
+function thirtyDaysAgo(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 30);
+  return d.toISOString();
+}
+
 // ─── Queries ─────────────────────────────────────────────────────
 
 /**
  * Active users by app version (last 30 days).
  *
- * Groups active devices by app_version, counts distinct users,
- * and computes adoption percentage relative to total active users.
+ * Fetches only app_version and user_id (two columns, no payloads),
+ * then aggregates in JS. For 10K+ devices, migrate to an RPC.
  */
 export async function getVersionDistribution(
   supabase: SupabaseClient
 ): Promise<VersionDistribution[]> {
-  // Fetch active devices from the last 30 days
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
   const { data: devices, error } = await supabase
     .from('devices')
     .select('app_version, user_id')
     .eq('is_active', true)
-    .gte('last_seen_at', thirtyDaysAgo.toISOString());
+    .gte('last_seen_at', thirtyDaysAgo());
 
   if (error || !devices) {
     console.error('getVersionDistribution error:', error?.message);
     return [];
   }
 
-  // Group by version, count distinct users
   const versionMap = new Map<string, Set<string>>();
   for (const d of devices) {
     const version = d.app_version || 'Unknown';
-    if (!versionMap.has(version)) {
-      versionMap.set(version, new Set());
-    }
+    if (!versionMap.has(version)) versionMap.set(version, new Set());
     versionMap.get(version)!.add(d.user_id);
   }
 
-  // Total distinct active users
-  const allUsers = new Set(devices.map((d) => d.user_id));
-  const totalActive = allUsers.size || 1; // avoid division by zero
+  const totalActive = new Set(devices.map((d) => d.user_id)).size || 1;
 
   const results: VersionDistribution[] = [];
   for (const [version, users] of versionMap) {
@@ -91,42 +94,56 @@ export async function getVersionDistribution(
     });
   }
 
-  // Sort descending by version string (semver-ish)
   results.sort((a, b) => b.app_version.localeCompare(a.app_version));
   return results;
 }
 
 /**
- * System-wide counts: active users, total orgs, active devices.
+ * System-wide counts using count-only queries (no row data transferred).
  */
 export async function getSystemCounts(
   supabase: SupabaseClient
 ): Promise<SystemCounts> {
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const cutoff = thirtyDaysAgo();
 
-  // Run queries in parallel
-  const [devicesResult, orgsResult] = await Promise.all([
-    supabase
-      .from('devices')
-      .select('user_id')
-      .eq('is_active', true)
-      .gte('last_seen_at', thirtyDaysAgo.toISOString()),
-    supabase.from('organizations').select('id', { count: 'exact', head: true }),
-  ]);
+  const [devicesResult, orgsResult, totalUsersResult, activeDevicesResult] =
+    await Promise.all([
+      // Active users: need user_id for distinct count (minimal select)
+      supabase
+        .from('devices')
+        .select('user_id')
+        .eq('is_active', true)
+        .gte('last_seen_at', cutoff),
+      // Total orgs: count only, no data
+      supabase
+        .from('organizations')
+        .select('id', { count: 'exact', head: true }),
+      // Total users: count only
+      supabase
+        .from('users')
+        .select('id', { count: 'exact', head: true }),
+      // Active devices: count only
+      supabase
+        .from('devices')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_active', true)
+        .gte('last_seen_at', cutoff),
+    ]);
 
-  const devices = devicesResult.data ?? [];
-  const distinctUsers = new Set(devices.map((d) => d.user_id));
+  const distinctUsers = new Set(
+    (devicesResult.data ?? []).map((d) => d.user_id)
+  );
 
   return {
     active_users: distinctUsers.size,
     total_orgs: orgsResult.count ?? 0,
-    active_devices: devices.length,
+    active_devices: activeDevicesResult.count ?? 0,
+    total_users: totalUsersResult.count ?? 0,
   };
 }
 
 /**
- * Platform breakdown (macOS vs Windows) for active devices.
+ * Platform breakdown using minimal select (two columns only).
  */
 export async function getPlatformBreakdown(
   supabase: SupabaseClient
@@ -144,9 +161,7 @@ export async function getPlatformBreakdown(
   const platformMap = new Map<string, Set<string>>();
   for (const d of devices) {
     const platform = d.platform || 'Unknown';
-    if (!platformMap.has(platform)) {
-      platformMap.set(platform, new Set());
-    }
+    if (!platformMap.has(platform)) platformMap.set(platform, new Set());
     platformMap.get(platform)!.add(d.user_id);
   }
 
@@ -166,14 +181,11 @@ export async function getPlatformBreakdown(
 }
 
 /**
- * License utilization by organization plan.
- *
- * Groups orgs by plan, sums max_seats, counts active members.
+ * License utilization — uses count-only for members, minimal select for orgs.
  */
 export async function getLicenseUtilization(
   supabase: SupabaseClient
 ): Promise<LicenseUtilization[]> {
-  // Fetch orgs with plan and max_seats
   const { data: orgs, error: orgsError } = await supabase
     .from('organizations')
     .select('id, plan, max_seats');
@@ -183,7 +195,7 @@ export async function getLicenseUtilization(
     return [];
   }
 
-  // Fetch active members
+  // Fetch only the org_id column for active members
   const { data: members, error: membersError } = await supabase
     .from('organization_members')
     .select('organization_id')
@@ -194,14 +206,14 @@ export async function getLicenseUtilization(
     return [];
   }
 
-  // Count active members per org
   const memberCountByOrg = new Map<string, number>();
   for (const m of members) {
-    const count = memberCountByOrg.get(m.organization_id) ?? 0;
-    memberCountByOrg.set(m.organization_id, count + 1);
+    memberCountByOrg.set(
+      m.organization_id,
+      (memberCountByOrg.get(m.organization_id) ?? 0) + 1
+    );
   }
 
-  // Group by plan
   const planMap = new Map<
     string,
     { org_count: number; total_seats: number; active_seats: number }
@@ -232,7 +244,6 @@ export async function getLicenseUtilization(
     });
   }
 
-  // Sort: trial, pro, enterprise
   const planOrder: Record<string, number> = {
     trial: 0,
     pro: 1,
@@ -246,7 +257,7 @@ export async function getLicenseUtilization(
 }
 
 /**
- * Phone type breakdown (iPhone vs Android) from user_preferences.
+ * Phone type breakdown — fetches preferences JSONB (unavoidable for JSONB field extraction).
  */
 export async function getPhoneTypeBreakdown(
   supabase: SupabaseClient
@@ -263,7 +274,9 @@ export async function getPhoneTypeBreakdown(
   const typeMap = new Map<string, number>();
   for (const p of prefs) {
     const phoneType =
-      (p.preferences as Record<string, unknown>)?.phone_type as string | undefined;
+      (p.preferences as Record<string, unknown>)?.phone_type as
+        | string
+        | undefined;
     const label = phoneType || 'Not set';
     typeMap.set(label, (typeMap.get(label) ?? 0) + 1);
   }

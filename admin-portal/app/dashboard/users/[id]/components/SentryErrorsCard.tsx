@@ -8,7 +8,9 @@
  */
 
 import { useEffect, useState } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+
+const INITIAL_COUNT = 5;
 
 interface SentryIssue {
   id: string;
@@ -47,6 +49,7 @@ export function SentryErrorsCard({ email }: { email: string }) {
   const [issues, setIssues] = useState<SentryIssue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     async function fetchIssues() {
@@ -99,43 +102,63 @@ export function SentryErrorsCard({ email }: { email: string }) {
       )}
 
       {!loading && !error && issues.length > 0 && (
-        <ul className="mt-4 space-y-2">
-          {issues.map((issue) => (
-            <li
-              key={issue.id}
-              className="p-3 rounded-md bg-gray-50 hover:bg-gray-100 transition-colors"
+        <>
+          <ul className="mt-4 space-y-2">
+            {(expanded ? issues : issues.slice(0, INITIAL_COUNT)).map((issue) => (
+              <li
+                key={issue.id}
+                className="p-3 rounded-md bg-gray-50 hover:bg-gray-100 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <a
+                      href={issue.permalink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-medium text-gray-900 hover:text-primary-600 truncate block"
+                    >
+                      {issue.title}
+                    </a>
+                    <p className="text-xs text-gray-500 truncate mt-0.5">
+                      {issue.culprit}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getLevelColor(issue.level)}`}
+                    >
+                      {issue.level}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      {issue.count}x
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  Last seen {formatDate(issue.lastSeen)}
+                </p>
+              </li>
+            ))}
+          </ul>
+          {issues.length > INITIAL_COUNT && (
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="mt-3 flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 font-medium transition-colors"
             >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <a
-                    href={issue.permalink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm font-medium text-gray-900 hover:text-primary-600 truncate block"
-                  >
-                    {issue.title}
-                  </a>
-                  <p className="text-xs text-gray-500 truncate mt-0.5">
-                    {issue.culprit}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getLevelColor(issue.level)}`}
-                  >
-                    {issue.level}
-                  </span>
-                  <span className="text-xs text-gray-400">
-                    {issue.count}x
-                  </span>
-                </div>
-              </div>
-              <p className="text-xs text-gray-400 mt-1">
-                Last seen {formatDate(issue.lastSeen)}
-              </p>
-            </li>
-          ))}
-        </ul>
+              {expanded ? (
+                <>
+                  <ChevronUp className="h-4 w-4" />
+                  Show less
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-4 w-4" />
+                  Show all {issues.length} errors
+                </>
+              )}
+            </button>
+          )}
+        </>
       )}
     </div>
   );

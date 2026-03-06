@@ -33,11 +33,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  // Get email parameter
+  // Get and validate email parameter
   const email = request.nextUrl.searchParams.get('email');
-  if (!email) {
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return NextResponse.json(
-      { error: 'Missing email parameter' },
+      { error: 'Missing or invalid email parameter' },
       { status: 400 }
     );
   }
