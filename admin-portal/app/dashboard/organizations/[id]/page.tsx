@@ -48,7 +48,7 @@ export default async function OrganizationDetailPage({
       .single(),
     supabase
       .from('organization_members')
-      .select('user_id, role, license_status, joined_at, users(id, email, display_name)')
+      .select('user_id, role, license_status, joined_at, users(id, email, display_name, status, suspended_at)')
       .eq('organization_id', id)
       .order('joined_at', { ascending: false }),
   ]);
@@ -61,7 +61,7 @@ export default async function OrganizationDetailPage({
 
   // Transform members to include user info
   const members: MemberRow[] = (membersResult.data ?? []).map((m) => {
-    const user = m.users as unknown as { id: string; email: string | null; display_name: string | null } | null;
+    const user = m.users as unknown as { id: string; email: string | null; display_name: string | null; status: string | null; suspended_at: string | null } | null;
     return {
       user_id: m.user_id ?? user?.id ?? '',
       display_name: user?.display_name ?? null,
@@ -69,6 +69,7 @@ export default async function OrganizationDetailPage({
       role: m.role,
       license_status: m.license_status,
       joined_at: m.joined_at,
+      status: user?.status ?? null,
     };
   });
 
