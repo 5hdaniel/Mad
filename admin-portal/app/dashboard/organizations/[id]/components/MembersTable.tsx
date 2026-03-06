@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Users, MoreVertical, ExternalLink, Ban, CheckCircle } from 'lucide-react';
+import { Users, MoreVertical, ExternalLink, Ban, CheckCircle, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { suspendUser, unsuspendUser } from '@/lib/admin-queries';
 
 export interface MemberRow {
@@ -18,6 +18,10 @@ export interface MemberRow {
 interface MembersTableProps {
   members: MemberRow[];
 }
+
+type SortField = 'name' | 'email' | 'role' | 'license' | 'joined';
+type SortDir = 'asc' | 'desc';
+type LicenseFilter = 'all' | 'active' | 'trial' | 'expired' | 'none';
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return 'Unknown';
@@ -86,6 +90,22 @@ function UserInitials({ name }: { name: string | null }) {
   );
 }
 
+function SortIcon({ field, currentField, dir }: { field: SortField; currentField: SortField | null; dir: SortDir }) {
+  if (currentField !== field) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
+  return dir === 'asc'
+    ? <ArrowUp className="h-3 w-3 ml-1" />
+    : <ArrowDown className="h-3 w-3 ml-1" />;
+}
+
+// Classify a license status into a filter category
+function classifyLicense(status: string | null): LicenseFilter {
+  const s = (status || '').toLowerCase();
+  if (s === 'active' || s === 'assigned') return 'active';
+  if (s === 'expired' || s === 'revoked') return 'expired';
+  if (s === 'pending' || s === 'trial') return 'trial';
+  return 'none';
+}
+
 // Per-row action menu
 function RowActionMenu({
   member,
@@ -107,7 +127,7 @@ function RowActionMenu({
     e.stopPropagation();
     if (btnRef.current) {
       const rect = btnRef.current.getBoundingClientRect();
-      setMenuPos({ top: rect.bottom + 4, left: rect.right - 192 }); // 192 = w-48
+      setMenuPos({ top: rect.bottom + 4, left: rect.right - 192 });
     }
     setOpen(!open);
   }, [open]);
@@ -126,7 +146,6 @@ function RowActionMenu({
 
       {open && (
         <>
-          {/* Click-away backdrop */}
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div
             className="fixed z-50 w-48 rounded-md bg-white shadow-lg border border-gray-200 py-1"
@@ -182,6 +201,9 @@ export function MembersTable({ members }: MembersTableProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [licenseFilter, setLicenseFilter] = useState<LicenseFilter>('all');
 
   const confirmRef = useRef<HTMLDialogElement>(null);
   const [confirmAction, setConfirmAction] = useState<{
@@ -191,16 +213,84 @@ export function MembersTable({ members }: MembersTableProps) {
   } | null>(null);
   const [confirmReason, setConfirmReason] = useState('');
 
-  const allSelected = members.length > 0 && selected.size === members.length;
+  // License summary counts (always from full members list)
+  const licenseSummary = useMemo(() => {
+    return members.reduce(
+      (acc, m) => {
+        const cat = classifyLicense(m.license_status);
+        acc[cat]++;
+        return acc;
+      },
+      { active: 0, trial: 0, expired: 0, none: 0 } as Record<'active' | 'trial' | 'expired' | 'none', number>
+    );
+  }, [members]);
+
+  // Filter + sort members
+  const filteredMembers = useMemo(() => {
+    let list = members;
+    if (licenseFilter !== 'all') {
+      list = list.filter((m) => classifyLicense(m.license_status) === licenseFilter);
+    }
+
+    if (sortField) {
+      list = [...list].sort((a, b) => {
+        let aVal = '';
+        let bVal = '';
+        switch (sortField) {
+          case 'name':
+            aVal = (a.display_name || '').toLowerCase();
+            bVal = (b.display_name || '').toLowerCase();
+            break;
+          case 'email':
+            aVal = (a.email || '').toLowerCase();
+            bVal = (b.email || '').toLowerCase();
+            break;
+          case 'role':
+            aVal = a.role;
+            bVal = b.role;
+            break;
+          case 'license':
+            aVal = (a.license_status || '').toLowerCase();
+            bVal = (b.license_status || '').toLowerCase();
+            break;
+          case 'joined':
+            aVal = a.joined_at || '';
+            bVal = b.joined_at || '';
+            break;
+        }
+        const cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+        return sortDir === 'asc' ? cmp : -cmp;
+      });
+    }
+    return list;
+  }, [members, licenseFilter, sortField, sortDir]);
+
+  const allSelected = filteredMembers.length > 0 && selected.size === filteredMembers.length;
   const someSelected = selected.size > 0;
+
+  const toggleSort = useCallback((field: SortField) => {
+    setSortField((prev) => {
+      if (prev === field) {
+        setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+        return field;
+      }
+      setSortDir('asc');
+      return field;
+    });
+  }, []);
+
+  const toggleFilter = useCallback((filter: LicenseFilter) => {
+    setLicenseFilter((prev) => (prev === filter ? 'all' : filter));
+    setSelected(new Set());
+  }, []);
 
   const toggleAll = useCallback(() => {
     if (allSelected) {
       setSelected(new Set());
     } else {
-      setSelected(new Set(members.map((m) => m.user_id)));
+      setSelected(new Set(filteredMembers.map((m) => m.user_id)));
     }
-  }, [allSelected, members]);
+  }, [allSelected, filteredMembers]);
 
   const toggleOne = useCallback((userId: string) => {
     setSelected((prev) => {
@@ -211,7 +301,6 @@ export function MembersTable({ members }: MembersTableProps) {
     });
   }, []);
 
-  // Open confirmation dialog
   const openConfirm = useCallback(
     (type: 'suspend' | 'unsuspend', userIds: string[]) => {
       const names = userIds
@@ -233,7 +322,6 @@ export function MembersTable({ members }: MembersTableProps) {
     [members]
   );
 
-  // Execute confirmed action
   const executeAction = useCallback(async () => {
     if (!confirmAction) return;
     setLoading(true);
@@ -273,7 +361,6 @@ export function MembersTable({ members }: MembersTableProps) {
     router.refresh();
   }, [confirmAction, confirmReason, router]);
 
-  // Individual row action handler
   const handleSuspendToggle = useCallback(
     (userId: string, isSuspended: boolean) => {
       openConfirm(isSuspended ? 'unsuspend' : 'suspend', [userId]);
@@ -292,16 +379,53 @@ export function MembersTable({ members }: MembersTableProps) {
     );
   }
 
-  // Selected members info for bulk actions
-  const selectedSuspended = members.filter(
+  const selectedSuspended = filteredMembers.filter(
     (m) => selected.has(m.user_id) && m.status === 'suspended'
   );
-  const selectedActive = members.filter(
+  const selectedActive = filteredMembers.filter(
     (m) => selected.has(m.user_id) && m.status !== 'suspended'
   );
 
+  const filterCards: { key: LicenseFilter; label: string; count: number; bg: string; text: string; activeBorder: string }[] = [
+    { key: 'active', label: 'Active', count: licenseSummary.active, bg: 'bg-success-50', text: 'text-success-600', activeBorder: 'ring-2 ring-success-500' },
+    { key: 'trial', label: 'Trial / Pending', count: licenseSummary.trial, bg: 'bg-yellow-50', text: 'text-yellow-600', activeBorder: 'ring-2 ring-yellow-500' },
+    { key: 'expired', label: 'Expired / Revoked', count: licenseSummary.expired, bg: 'bg-danger-50', text: 'text-danger-600', activeBorder: 'ring-2 ring-danger-500' },
+    { key: 'none', label: 'No License', count: licenseSummary.none, bg: 'bg-gray-50', text: 'text-gray-600', activeBorder: 'ring-2 ring-gray-400' },
+  ];
+
   return (
     <>
+      {/* License summary filter cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        {filterCards.map((card) => (
+          <button
+            key={card.key}
+            type="button"
+            onClick={() => toggleFilter(card.key)}
+            className={`rounded-lg ${card.bg} p-4 text-center transition-all cursor-pointer hover:shadow-md ${
+              licenseFilter === card.key ? card.activeBorder : 'ring-1 ring-transparent'
+            }`}
+          >
+            <p className={`text-2xl font-bold ${card.text}`}>{card.count}</p>
+            <p className={`text-xs ${card.text} mt-1`}>{card.label}</p>
+          </button>
+        ))}
+      </div>
+
+      {/* Active filter indicator */}
+      {licenseFilter !== 'all' && (
+        <div className="mb-3 flex items-center gap-2 text-sm text-gray-500">
+          Showing {filteredMembers.length} of {members.length} members
+          <button
+            type="button"
+            onClick={() => setLicenseFilter('all')}
+            className="text-primary-600 hover:text-primary-800 underline"
+          >
+            Clear filter
+          </button>
+        </div>
+      )}
+
       {/* Bulk action bar */}
       {someSelected && (
         <div className="mb-3 flex items-center gap-3 rounded-lg bg-primary-50 border border-primary-200 px-4 py-2.5">
@@ -377,28 +501,31 @@ export function MembersTable({ members }: MembersTableProps) {
                   aria-label="Select all members"
                 />
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Name
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Email
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Role
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                License
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Joined
-              </th>
+              {([
+                ['name', 'Name'],
+                ['email', 'Email'],
+                ['role', 'Role'],
+                ['license', 'License'],
+                ['joined', 'Joined'],
+              ] as [SortField, string][]).map(([field, label]) => (
+                <th
+                  key={field}
+                  onClick={() => toggleSort(field)}
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none"
+                >
+                  <span className="inline-flex items-center">
+                    {label}
+                    <SortIcon field={field} currentField={sortField} dir={sortDir} />
+                  </span>
+                </th>
+              ))}
               <th className="w-10 px-3 py-3">
                 <span className="sr-only">Actions</span>
               </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {members.map((member) => (
+            {filteredMembers.map((member) => (
               <tr
                 key={member.user_id}
                 onClick={() => router.push(`/dashboard/users/${member.user_id}`)}

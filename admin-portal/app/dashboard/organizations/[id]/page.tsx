@@ -73,19 +73,6 @@ export default async function OrganizationDetailPage({
     };
   });
 
-  // License summary from member license_status
-  const licenseSummary = members.reduce(
-    (acc, m) => {
-      const status = (m.license_status || 'none').toLowerCase();
-      if (status === 'active' || status === 'assigned') acc.active++;
-      else if (status === 'expired' || status === 'revoked') acc.expired++;
-      else if (status === 'pending' || status === 'trial') acc.trial++;
-      else acc.none++;
-      return acc;
-    },
-    { active: 0, expired: 0, trial: 0, none: 0 }
-  );
-
   function formatDate(dateStr: string | null): string {
     if (!dateStr) return 'Unknown';
     return new Date(dateStr).toLocaleDateString('en-US', {
@@ -138,30 +125,7 @@ export default async function OrganizationDetailPage({
         </div>
       </div>
 
-      {/* License summary */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">License Summary</h2>
-        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="rounded-lg bg-success-50 p-4 text-center">
-            <p className="text-2xl font-bold text-success-600">{licenseSummary.active}</p>
-            <p className="text-xs text-success-600 mt-1">Active</p>
-          </div>
-          <div className="rounded-lg bg-yellow-50 p-4 text-center">
-            <p className="text-2xl font-bold text-yellow-600">{licenseSummary.trial}</p>
-            <p className="text-xs text-yellow-700 mt-1">Trial / Pending</p>
-          </div>
-          <div className="rounded-lg bg-danger-50 p-4 text-center">
-            <p className="text-2xl font-bold text-danger-600">{licenseSummary.expired}</p>
-            <p className="text-xs text-danger-600 mt-1">Expired / Revoked</p>
-          </div>
-          <div className="rounded-lg bg-gray-50 p-4 text-center">
-            <p className="text-2xl font-bold text-gray-600">{licenseSummary.none}</p>
-            <p className="text-xs text-gray-500 mt-1">No License</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Members table */}
+      {/* Members table (includes license summary filter cards) */}
       <div>
         <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4">
           Members ({members.length})
