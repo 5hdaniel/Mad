@@ -96,10 +96,10 @@ export function SettingsManager({ initialUsers, currentUserId, initialRoles, per
       {/* Tab Content */}
       {activeTab === 'users' && (
         <div className="space-y-6">
-          {canManageUsers && (
-            <AddInternalUserForm onSuccess={handleRefresh} roles={initialRoles} />
-          )}
           <InternalUsersTable
+            addUserButton={canManageUsers ? (
+              <AddInternalUserForm onSuccess={handleRefresh} roles={initialRoles} />
+            ) : undefined}
             users={users}
             currentUserId={currentUserId}
             onRemoveClick={(user) => setUserToRemove(user)}

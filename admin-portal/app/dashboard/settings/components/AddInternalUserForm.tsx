@@ -1,12 +1,14 @@
 'use client';
 
 /**
- * AddInternalUserForm - Form to add a new internal user
+ * AddInternalUserForm - Dialog to add a new internal user
  *
- * Email input + role dropdown (from admin_roles table). Calls admin_add_internal_user RPC.
+ * Renders a trigger button that opens a modal dialog with
+ * email input + role dropdown. Calls admin_add_internal_user RPC.
+ * Falls back to invite API if user doesn't have a Keepr account.
  */
 
-import { useState, type FormEvent } from 'react';
+import { useState, useCallback, useEffect, useRef, type FormEvent } from 'react';
 import { UserPlus } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { AdminRole } from '../page';
@@ -18,11 +20,51 @@ interface AddInternalUserFormProps {
 
 export function AddInternalUserForm({ onSuccess, roles }: AddInternalUserFormProps) {
   const defaultSlug = roles.find(r => r.slug === 'support-agent')?.slug || roles[0]?.slug || '';
+  const [isOpen, setIsOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [selectedSlug, setSelectedSlug] = useState(defaultSlug);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  const resetForm = useCallback(() => {
+    setEmail('');
+    setSelectedSlug(defaultSlug);
+    setError(null);
+    setSuccess(null);
+    setIsSubmitting(false);
+  }, [defaultSlug]);
+
+  const handleOpen = useCallback(() => {
+    resetForm();
+    setIsOpen(true);
+  }, [resetForm]);
+
+  const handleClose = useCallback(() => {
+    if (!isSubmitting) {
+      setIsOpen(false);
+    }
+  }, [isSubmitting]);
+
+  // Focus dialog on open
+  useEffect(() => {
+    if (isOpen) {
+      dialogRef.current?.focus();
+    }
+  }, [isOpen]);
+
+  // Escape key handler
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !isSubmitting) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isSubmitting]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -45,7 +87,6 @@ export function AddInternalUserForm({ onSuccess, roles }: AddInternalUserFormPro
       });
 
       if (rpcError) {
-        // If the user doesn't have a Keepr account yet, send them an invite
         if (rpcError.message?.includes('No user found with email')) {
           await inviteNewUser(trimmedEmail);
           return;
@@ -61,6 +102,7 @@ export function AddInternalUserForm({ onSuccess, roles }: AddInternalUserFormPro
         setEmail('');
         setSelectedSlug(defaultSlug);
         onSuccess();
+        setTimeout(() => setIsOpen(false), 1500);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
@@ -95,82 +137,126 @@ export function AddInternalUserForm({ onSuccess, roles }: AddInternalUserFormPro
       setEmail('');
       setSelectedSlug(defaultSlug);
       onSuccess();
+      setTimeout(() => setIsOpen(false), 2500);
     } finally {
       setIsSubmitting(false);
     }
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-900">Add Internal User</h2>
-        <p className="text-sm text-gray-500">
-          Add an existing Keepr user by email, or invite a new user to create an account.
-        </p>
-      </div>
+    <>
+      {/* Trigger button */}
+      <button
+        onClick={handleOpen}
+        className="inline-flex items-center gap-2 rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors"
+      >
+        <UserPlus className="h-4 w-4" />
+        Add User
+      </button>
 
-      <form onSubmit={handleSubmit} className="px-6 py-4">
-        <div className="flex items-end gap-4">
-          <div className="flex-1">
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-              Email address
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                setError(null);
-                setSuccess(null);
-              }}
-              placeholder="user@example.com"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none"
-              disabled={isSubmitting}
-              required
-            />
-          </div>
+      {/* Dialog overlay */}
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={handleClose}
+          />
 
-          <div className="w-52">
-            <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">
-              Role
-            </label>
-            <select
-              id="role"
-              value={selectedSlug}
-              onChange={(e) => setSelectedSlug(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none bg-white"
-              disabled={isSubmitting}
-            >
-              {roles.map((r) => (
-                <option key={r.slug} value={r.slug}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="inline-flex items-center gap-2 rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          {/* Dialog */}
+          <div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-user-dialog-title"
+            tabIndex={-1}
+            className="relative bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 p-6 outline-none"
           >
-            <UserPlus className="h-4 w-4" />
-            {isSubmitting ? 'Adding...' : 'Add User'}
-          </button>
-        </div>
+            <div className="mb-4">
+              <h3 id="add-user-dialog-title" className="text-lg font-semibold text-gray-900">
+                Add Internal User
+              </h3>
+              <p className="mt-1 text-sm text-gray-500">
+                Add an existing Keepr user by email, or invite a new user to create an account.
+              </p>
+            </div>
 
-        {error && (
-          <div className="mt-3 rounded-md bg-red-50 border border-red-200 px-4 py-3">
-            <p className="text-sm text-red-700">{error}</p>
+            <form onSubmit={handleSubmit}>
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="add-user-email" className="block text-sm font-medium text-gray-700 mb-1">
+                    Email address
+                  </label>
+                  <input
+                    id="add-user-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setError(null);
+                      setSuccess(null);
+                    }}
+                    placeholder="user@example.com"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none"
+                    disabled={isSubmitting}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="add-user-role" className="block text-sm font-medium text-gray-700 mb-1">
+                    Role
+                  </label>
+                  <select
+                    id="add-user-role"
+                    value={selectedSlug}
+                    onChange={(e) => setSelectedSlug(e.target.value)}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none bg-white"
+                    disabled={isSubmitting}
+                  >
+                    {roles.map((r) => (
+                      <option key={r.slug} value={r.slug}>
+                        {r.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Status messages */}
+              {error && (
+                <div className="mt-4 rounded-md bg-red-50 border border-red-200 px-4 py-3">
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
+              )}
+              {success && (
+                <div className="mt-4 rounded-md bg-green-50 border border-green-200 px-4 py-3">
+                  <p className="text-sm text-green-700">{success}</p>
+                </div>
+              )}
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  disabled={isSubmitting}
+                  className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="inline-flex items-center gap-2 rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  {isSubmitting ? 'Adding...' : 'Add User'}
+                </button>
+              </div>
+            </form>
           </div>
-        )}
-        {success && (
-          <div className="mt-3 rounded-md bg-green-50 border border-green-200 px-4 py-3">
-            <p className="text-sm text-green-700">{success}</p>
-          </div>
-        )}
-      </form>
-    </div>
+        </div>
+      )}
+    </>
   );
 }

@@ -23,6 +23,7 @@ interface InternalUsersTableProps {
   onRoleChange: () => void;
   externalRoleFilter?: string | null;
   onClearExternalRoleFilter?: () => void;
+  addUserButton?: React.ReactNode;
 }
 
 type SortField = 'name' | 'role' | 'added' | 'added_by';
@@ -80,7 +81,7 @@ function SortIcon({ field, currentField, dir }: { field: SortField; currentField
     : <ArrowDown className="h-3 w-3 ml-1" />;
 }
 
-export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles, onRoleChange, externalRoleFilter, onClearExternalRoleFilter }: InternalUsersTableProps) {
+export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles, onRoleChange, externalRoleFilter, onClearExternalRoleFilter, addUserButton }: InternalUsersTableProps) {
   const { hasPermission } = usePermissions();
   const canManage = hasPermission(PERMISSIONS.INTERNAL_USERS_MANAGE);
   const [sortField, setSortField] = useState<SortField | null>(null);
@@ -305,9 +306,12 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, roles,
       )}
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-x-auto">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Internal Users</h2>
-          <p className="text-sm text-gray-500">{users.length} user{users.length !== 1 ? 's' : ''} with portal access</p>
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Internal Users</h2>
+            <p className="text-sm text-gray-500">{users.length} user{users.length !== 1 ? 's' : ''} with portal access</p>
+          </div>
+          {addUserButton}
         </div>
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
