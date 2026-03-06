@@ -4,13 +4,12 @@
  * AddInternalUserForm - Dialog to add a new internal user
  *
  * Renders a trigger button that opens a modal dialog with
- * email input + role dropdown. Calls admin_add_internal_user RPC.
- * Falls back to invite API if user doesn't have a Keepr account.
+ * email input + role dropdown. All logic is handled server-side
+ * via the /api/internal-users/invite route (BACKLOG-885).
  */
 
 import { useState, useCallback, useEffect, useRef, type FormEvent } from 'react';
 import { UserPlus } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
 import type { AdminRole } from '../page';
 
 interface AddInternalUserFormProps {
@@ -80,63 +79,32 @@ export function AddInternalUserForm({ onSuccess, roles }: AddInternalUserFormPro
     setIsSubmitting(true);
 
     try {
-      const supabase = createClient();
-      const { data, error: rpcError } = await supabase.rpc('admin_add_internal_user', {
-        p_email: trimmedEmail,
-        p_role: selectedSlug,
-      });
-
-      if (rpcError) {
-        if (rpcError.message?.includes('No user found with email')) {
-          await createAndAddUser(trimmedEmail);
-          return;
-        }
-        setError(rpcError.message || 'Failed to add user');
-        return;
-      }
-
-      const result = data as { success: boolean; user_id: string; role: string } | null;
-      if (result?.success) {
-        const roleName = roles.find(r => r.slug === selectedSlug)?.name || selectedSlug;
-        setSuccess(`Successfully added ${trimmedEmail} as ${roleName}`);
-        setEmail('');
-        setSelectedSlug(defaultSlug);
-        onSuccess();
-        setTimeout(() => setIsOpen(false), 1500);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  async function createAndAddUser(trimmedEmail: string) {
-    try {
       const response = await fetch('/api/internal-users/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: trimmedEmail, role: selectedSlug }),
       });
 
-      const json = await response.json() as {
+      const json = (await response.json()) as {
         success?: boolean;
         error?: string;
       };
 
       if (!response.ok || !json.success) {
-        setError(json.error || 'Failed to create user');
+        setError(json.error || 'Failed to add user');
         return;
       }
 
-      const roleName = roles.find(r => r.slug === selectedSlug)?.name || selectedSlug;
-      setSuccess(`Created account and added ${trimmedEmail} as ${roleName}`);
+      const roleName = roles.find((r) => r.slug === selectedSlug)?.name || selectedSlug;
+      setSuccess(`Successfully added ${trimmedEmail} as ${roleName}`);
       setEmail('');
       setSelectedSlug(defaultSlug);
       onSuccess();
       setTimeout(() => setIsOpen(false), 1500);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
