@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const adminClient: SupabaseClient<any> = createAdminClient(supabaseUrl, serviceRoleKey, {
+  const adminClient = createAdminClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
@@ -207,8 +207,7 @@ export async function POST(request: NextRequest) {
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AdminSupabaseClient = SupabaseClient<any>;
+type AdminSupabaseClient = SupabaseClient;
 
 /**
  * Insert a row into public.users for a user that exists in auth.users
