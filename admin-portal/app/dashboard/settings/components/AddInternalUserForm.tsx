@@ -19,6 +19,7 @@ const roles = [
   { value: 'support_agent', label: 'Support Agent' },
   { value: 'support_admin', label: 'Support Admin' },
   { value: 'super_admin', label: 'Super Admin' },
+  { value: 'sales', label: 'Sales' },
 ];
 
 export function AddInternalUserForm({ onSuccess }: AddInternalUserFormProps) {
@@ -92,7 +93,7 @@ export function AddInternalUserForm({ onSuccess }: AddInternalUserFormProps) {
                 setSuccess(null);
               }}
               placeholder="user@example.com"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
               disabled={isSubmitting}
               required
             />
