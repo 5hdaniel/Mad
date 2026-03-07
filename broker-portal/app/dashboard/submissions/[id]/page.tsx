@@ -6,6 +6,8 @@ import { MessageList } from '@/components/submission/MessageList';
 import { ReviewActions } from '@/components/submission/ReviewActions';
 import { AttachmentList } from '@/components/submission/AttachmentList';
 import { StatusHistory } from '@/components/submission/StatusHistory';
+import { getDataClient } from '@/lib/impersonation-guards';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -45,10 +47,8 @@ interface Attachment {
   document_type: string | null;
 }
 
-async function getSubmission(id: string) {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
+async function getSubmission(id: string, client: SupabaseClient) {
+  const { data, error } = await client
     .from('transaction_submissions')
     .select('*')
     .eq('id', id)
@@ -64,8 +64,12 @@ async function getSubmission(id: string) {
 /**
  * Mark submission as under_review when broker first opens it.
  * This prevents agent from resubmitting while broker is reviewing.
+ * Skipped during impersonation sessions (read-only).
  */
-async function markAsUnderReview(submission: { id: string; status: string }) {
+async function markAsUnderReview(submission: { id: string; status: string }, isImpersonating: boolean) {
+  // Never write during impersonation
+  if (isImpersonating) return;
+
   // Only transition from 'submitted' or 'resubmitted' to 'under_review'
   if (submission.status !== 'submitted' && submission.status !== 'resubmitted') {
     return;
@@ -81,10 +85,8 @@ async function markAsUnderReview(submission: { id: string; status: string }) {
     .eq('id', submission.id);
 }
 
-async function getMessages(submissionId: string): Promise<Message[]> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
+async function getMessages(submissionId: string, client: SupabaseClient): Promise<Message[]> {
+  const { data, error } = await client
     .from('submission_messages')
     .select('*')
     .eq('submission_id', submissionId)
@@ -98,10 +100,8 @@ async function getMessages(submissionId: string): Promise<Message[]> {
   return data || [];
 }
 
-async function getAttachments(submissionId: string): Promise<Attachment[]> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
+async function getAttachments(submissionId: string, client: SupabaseClient): Promise<Attachment[]> {
+  const { data, error } = await client
     .from('submission_attachments')
     .select('*')
     .eq('submission_id', submissionId);
@@ -128,10 +128,11 @@ type HistoryEntry = {
  * Tags "resubmitted" entries with the parent submission ID for linking.
  */
 async function getFullStatusHistory(
-  submission: { id: string; parent_submission_id?: string | null; status_history?: HistoryEntry[]; created_at: string }
+  submission: { id: string; parent_submission_id?: string | null; status_history?: HistoryEntry[]; created_at: string },
+  client: SupabaseClient,
 ): Promise<{ history: HistoryEntry[]; rootCreatedAt: string }> {
   const allEntries: HistoryEntry[] = [];
-  const supabase = await createClient();
+  const supabase = client;
   let rootCreatedAt = submission.created_at;
 
   // Walk parent chain to collect history from all versions
@@ -194,10 +195,13 @@ async function getFullStatusHistory(
 
 export default async function SubmissionDetailPage({ params }: PageProps) {
   const { id } = await params;
+  const { client, impersonation } = await getDataClient();
+  const isImpersonating = !!impersonation;
+
   const [submission, messages, attachments] = await Promise.all([
-    getSubmission(id),
-    getMessages(id),
-    getAttachments(id),
+    getSubmission(id, client),
+    getMessages(id, client),
+    getAttachments(id, client),
   ]);
 
   if (!submission) {
@@ -205,11 +209,12 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
   }
 
   // Build full status history by walking the parent submission chain
-  const { history: fullHistory, rootCreatedAt } = await getFullStatusHistory(submission);
+  const { history: fullHistory, rootCreatedAt } = await getFullStatusHistory(submission, client);
 
   // Mark as under_review when broker first opens (don't await - fire and forget)
   // This prevents agent from resubmitting while broker is reviewing
-  markAsUnderReview(submission);
+  // Skipped during impersonation (read-only)
+  markAsUnderReview(submission, isImpersonating);
 
   return (
     <div className="space-y-6 pb-24">
@@ -258,15 +263,17 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
 
       </div>
 
-      {/* Review Actions */}
-      <ReviewActions
-        submission={{
-          id: submission.id,
-          status: submission.status,
-          organization_id: submission.organization_id,
-        }}
-        disabled={submission.status === 'approved' || submission.status === 'rejected'}
-      />
+      {/* Review Actions - hidden during impersonation (read-only) */}
+      {!isImpersonating && (
+        <ReviewActions
+          submission={{
+            id: submission.id,
+            status: submission.status,
+            organization_id: submission.organization_id,
+          }}
+          disabled={submission.status === 'approved' || submission.status === 'rejected'}
+        />
+      )}
 
       {/* Status History Timeline */}
       <StatusHistory

@@ -13,6 +13,7 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import UserListClient from '@/components/users/UserListClient';
 import type { OrganizationMember, Role } from '@/lib/types/users';
+import { getImpersonationSession } from '@/lib/impersonation';
 
 interface AccessCheckResult {
   allowed: true;
@@ -128,6 +129,12 @@ async function getOrganizationMembers(
 }
 
 export default async function UsersPage() {
+  // Block users management during impersonation (read-only session)
+  const impersonation = await getImpersonationSession();
+  if (impersonation) {
+    redirect('/dashboard');
+  }
+
   const access = await checkUserAccess();
 
   if (!access.allowed) {

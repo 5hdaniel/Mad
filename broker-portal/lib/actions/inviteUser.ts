@@ -11,6 +11,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { randomBytes } from 'crypto';
+import { blockWriteDuringImpersonation } from '@/lib/impersonation-guards';
 
 // ============================================================================
 // Types
@@ -51,6 +52,10 @@ function isValidEmail(email: string): boolean {
  * @returns Result with invite link or error
  */
 export async function inviteUser(input: InviteUserInput): Promise<InviteUserResult> {
+  // Block during impersonation (read-only session)
+  const blocked = await blockWriteDuringImpersonation();
+  if (blocked) return { success: false, error: blocked.error };
+
   const supabase = await createClient();
 
   // Validate email format

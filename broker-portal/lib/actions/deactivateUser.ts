@@ -11,6 +11,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import type { Role } from '@/lib/types/users';
+import { blockWriteDuringImpersonation } from '@/lib/impersonation-guards';
 
 // ============================================================================
 // Types
@@ -36,6 +37,10 @@ interface DeactivateResult {
  * @returns Result with success or error
  */
 export async function deactivateUser(input: DeactivateInput): Promise<DeactivateResult> {
+  // Block during impersonation (read-only session)
+  const blocked = await blockWriteDuringImpersonation();
+  if (blocked) return { success: false, error: blocked.error };
+
   const supabase = await createClient();
 
   // Get current user

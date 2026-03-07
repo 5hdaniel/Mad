@@ -8,6 +8,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import type { Role } from '@/lib/types/users';
+import { blockWriteDuringImpersonation } from '@/lib/impersonation-guards';
 
 interface BulkUpdateRoleInput {
   memberIds: string[];
@@ -23,6 +24,10 @@ interface BulkUpdateRoleResult {
 export async function bulkUpdateRole(
   input: BulkUpdateRoleInput
 ): Promise<BulkUpdateRoleResult> {
+  // Block during impersonation (read-only session)
+  const blocked = await blockWriteDuringImpersonation();
+  if (blocked) return { success: false, error: blocked.error };
+
   const supabase = await createClient();
 
   // Verify current user is admin/it_admin
