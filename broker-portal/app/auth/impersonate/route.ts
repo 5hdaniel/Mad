@@ -24,9 +24,9 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/login?error=missing_token`);
   }
 
-  // Validate UUID format to prevent injection
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (!uuidRegex.test(token)) {
+  // Validate hex token format to prevent injection (64-char hex from gen_random_bytes(32))
+  const hexRegex = /^[0-9a-f]{64}$/i;
+  if (!hexRegex.test(token)) {
     return NextResponse.redirect(`${origin}/login?error=impersonation_invalid_token`);
   }
 
@@ -39,8 +39,8 @@ export async function GET(request: Request) {
     });
 
     if (error) {
-      console.error('Impersonation token validation error:', error);
-      return NextResponse.redirect(`${origin}/login?error=impersonation_failed`);
+      console.error('Impersonation token validation error:', JSON.stringify(error));
+      return NextResponse.redirect(`${origin}/login?error=impersonation_failed&detail=${encodeURIComponent(error.message || 'unknown')}`);
     }
 
     if (!data?.valid) {
@@ -70,7 +70,8 @@ export async function GET(request: Request) {
 
     return response;
   } catch (err) {
-    console.error('Impersonation route error:', err);
-    return NextResponse.redirect(`${origin}/login?error=impersonation_failed`);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('Impersonation route error:', msg);
+    return NextResponse.redirect(`${origin}/login?error=impersonation_failed&detail=${encodeURIComponent(msg)}`);
   }
 }
