@@ -26,3 +26,15 @@ CREATE POLICY "service_role_full_access_invitations"
   TO service_role
   USING (true)
   WITH CHECK (true);
+
+-- Allow new users to read and delete their own invitation on first login
+-- (before they have an internal role, so the main policy doesn't apply)
+CREATE POLICY "users_can_read_own_invitation"
+  ON pending_internal_invitations
+  FOR SELECT
+  USING (email = (SELECT email FROM auth.users WHERE id = auth.uid()));
+
+CREATE POLICY "users_can_delete_own_invitation"
+  ON pending_internal_invitations
+  FOR DELETE
+  USING (email = (SELECT email FROM auth.users WHERE id = auth.uid()));

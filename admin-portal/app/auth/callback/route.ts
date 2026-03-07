@@ -14,7 +14,8 @@ import { NextResponse } from 'next/server';
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
-  const next = searchParams.get('next') ?? '/dashboard';
+  const rawNext = searchParams.get('next') ?? '/dashboard';
+  const next = /^\/[a-zA-Z0-9\-_\/\?\&\=\#\.]+$/.test(rawNext) ? rawNext : '/dashboard';
 
   if (code) {
     const supabase = await createClient();
@@ -32,7 +33,8 @@ export async function GET(request: Request) {
 
     if (user) {
       // Process any pending internal invitation for this user
-      await processPendingInvitation(supabase, user.id, user.email ?? '');
+      const oauthProvider = user.app_metadata?.provider ?? 'azure';
+      await processPendingInvitation(supabase, user.id, user.email ?? '', oauthProvider);
 
       // Check for internal role
       const { data: internalRole } = await supabase
@@ -69,7 +71,8 @@ export async function GET(request: Request) {
 async function processPendingInvitation(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
-  email: string
+  email: string,
+  provider: string
 ) {
   if (!email) return;
 
@@ -95,7 +98,7 @@ async function processPendingInvitation(
       const { error: insertError } = await supabase.from('users').insert({
         id: userId,
         email: email.toLowerCase(),
-        oauth_provider: 'azure',
+        oauth_provider: provider,
         oauth_id: userId,
         status: 'active',
         is_active: true,
