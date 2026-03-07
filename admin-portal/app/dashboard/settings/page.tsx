@@ -36,6 +36,14 @@ export interface AdminRole {
   permission_keys: string[];
 }
 
+export interface PendingInvitation {
+  id: string;
+  email: string;
+  role_name: string;
+  role_slug: string;
+  created_at: string;
+}
+
 export interface AdminPermission {
   id: string;
   key: string;
@@ -90,6 +98,36 @@ async function getInternalUsers(): Promise<InternalUser[]> {
       display_name: (user?.display_name as string | null) ?? null,
       avatar_url: (user?.avatar_url as string | null) ?? null,
       created_by_email: (creator?.email as string | null) ?? null,
+    };
+  });
+}
+
+async function getPendingInvitations(): Promise<PendingInvitation[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from('pending_internal_invitations')
+    .select(`
+      id,
+      email,
+      created_at,
+      role:admin_roles(name, slug)
+    `)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Failed to fetch pending invitations:', error.message);
+    return [];
+  }
+
+  return (data || []).map((row: Record<string, unknown>) => {
+    const role = row.role as Record<string, unknown> | null;
+    return {
+      id: row.id as string,
+      email: row.email as string,
+      role_name: (role?.name as string) ?? 'Unknown',
+      role_slug: (role?.slug as string) ?? 'unknown',
+      created_at: row.created_at as string,
     };
   });
 }
@@ -185,11 +223,12 @@ export default async function SettingsPage() {
     redirect('/dashboard?error=insufficient_permissions');
   }
 
-  const [internalUsers, currentUserId, roles, permissions] = await Promise.all([
+  const [internalUsers, currentUserId, roles, permissions, pendingInvitations] = await Promise.all([
     getInternalUsers(),
     getCurrentUserId(),
     getRoles(),
     getPermissions(),
+    getPendingInvitations(),
   ]);
 
   return (
@@ -206,6 +245,7 @@ export default async function SettingsPage() {
         currentUserId={currentUserId}
         initialRoles={roles}
         permissions={permissions}
+        pendingInvitations={pendingInvitations}
       />
     </div>
   );

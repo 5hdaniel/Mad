@@ -7,7 +7,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Users, ShieldCheck, FileText } from 'lucide-react';
-import type { InternalUser, AdminRole, AdminPermission } from '../page';
+import type { InternalUser, AdminRole, AdminPermission, PendingInvitation } from '../page';
 import { InternalUsersTable } from './InternalUsersTable';
 import { AddInternalUserForm } from './AddInternalUserForm';
 import { RemoveUserDialog } from './RemoveUserDialog';
@@ -23,9 +23,10 @@ interface SettingsManagerProps {
   currentUserId: string | null;
   initialRoles: AdminRole[];
   permissions: AdminPermission[];
+  pendingInvitations: PendingInvitation[];
 }
 
-export function SettingsManager({ initialUsers, currentUserId, initialRoles, permissions }: SettingsManagerProps) {
+export function SettingsManager({ initialUsers, currentUserId, initialRoles, permissions, pendingInvitations }: SettingsManagerProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { hasPermission, refreshPermissions } = usePermissions();
@@ -109,6 +110,7 @@ export function SettingsManager({ initialUsers, currentUserId, initialRoles, per
             onRoleChange={handleRefresh}
             externalRoleFilter={roleFilter}
             onClearExternalRoleFilter={() => setRoleFilter(null)}
+            pendingInvitations={pendingInvitations}
           />
           {usersToRemove.length > 0 && (
             <RemoveUserDialog

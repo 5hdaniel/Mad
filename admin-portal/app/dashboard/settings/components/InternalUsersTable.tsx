@@ -8,9 +8,9 @@
  */
 
 import { useState, useMemo, useCallback } from 'react';
-import { Shield, ShieldAlert, ShieldCheck, ArrowUpDown, ArrowUp, ArrowDown, Search } from 'lucide-react';
+import { Shield, ShieldAlert, ShieldCheck, ArrowUpDown, ArrowUp, ArrowDown, Search, Clock, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import type { InternalUser, AdminRole } from '../page';
+import type { InternalUser, AdminRole, PendingInvitation } from '../page';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
 import { PERMISSIONS } from '@/lib/permissions';
 import { formatTimestamp } from '@/lib/format';
@@ -25,6 +25,7 @@ interface InternalUsersTableProps {
   externalRoleFilter?: string | null;
   onClearExternalRoleFilter?: () => void;
   addUserButton?: React.ReactNode;
+  pendingInvitations: PendingInvitation[];
 }
 
 type SortField = 'name' | 'role' | 'added' | 'added_by';
@@ -82,7 +83,7 @@ function SortIcon({ field, currentField, dir }: { field: SortField; currentField
     : <ArrowDown className="h-3 w-3 ml-1" />;
 }
 
-export function InternalUsersTable({ users, currentUserId, onRemoveClick, onBulkRemoveClick, roles, onRoleChange, externalRoleFilter, onClearExternalRoleFilter, addUserButton }: InternalUsersTableProps) {
+export function InternalUsersTable({ users, currentUserId, onRemoveClick, onBulkRemoveClick, roles, onRoleChange, externalRoleFilter, onClearExternalRoleFilter, addUserButton, pendingInvitations }: InternalUsersTableProps) {
   const { hasPermission } = usePermissions();
   const canManage = hasPermission(PERMISSIONS.INTERNAL_USERS_MANAGE);
   const [sortField, setSortField] = useState<SortField | null>(null);
@@ -92,6 +93,25 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, onBulk
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [changingRole, setChangingRole] = useState<string | null>(null);
   const [roleChangeError, setRoleChangeError] = useState<string | null>(null);
+  const [cancellingInvitation, setCancellingInvitation] = useState<string | null>(null);
+
+  const handleCancelInvitation = useCallback(async (invitationId: string) => {
+    setCancellingInvitation(invitationId);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('pending_internal_invitations')
+        .delete()
+        .eq('id', invitationId);
+      if (error) {
+        setRoleChangeError(`Failed to cancel invitation: ${error.message}`);
+      } else {
+        onRoleChange(); // triggers router.refresh()
+      }
+    } finally {
+      setCancellingInvitation(null);
+    }
+  }, [onRoleChange]);
 
   const roleCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -146,6 +166,18 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, onBulk
     }
     return list;
   }, [users, effectiveRoleFilter, searchQuery, sortField, sortDir]);
+
+  const filteredPending = useMemo(() => {
+    let list = pendingInvitations;
+    if (effectiveRoleFilter) {
+      list = list.filter((p) => p.role_slug === effectiveRoleFilter);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      list = list.filter((p) => p.email.toLowerCase().includes(q));
+    }
+    return list;
+  }, [pendingInvitations, effectiveRoleFilter, searchQuery]);
 
   const selectableUsers = filteredUsers.filter((u) => u.user_id !== currentUserId);
   const allSelected = selectableUsers.length > 0 && selected.size === selectableUsers.length;
@@ -203,7 +235,7 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, onBulk
     }
   }, [onRoleChange]);
 
-  if (users.length === 0) {
+  if (users.length === 0 && pendingInvitations.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
         <Shield className="mx-auto h-12 w-12 text-gray-300" />
@@ -295,7 +327,7 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, onBulk
 
       {(effectiveRoleFilter || trimmedSearch) && (
         <div className="mb-3 text-sm text-gray-500">
-          Showing {filteredUsers.length} of {users.length} user{users.length !== 1 ? 's' : ''}
+          Showing {filteredUsers.length + filteredPending.length} of {users.length + pendingInvitations.length} user{(users.length + pendingInvitations.length) !== 1 ? 's' : ''}
         </div>
       )}
 
@@ -310,7 +342,12 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, onBulk
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Internal Users</h2>
-            <p className="text-sm text-gray-500">{users.length} user{users.length !== 1 ? 's' : ''} with portal access</p>
+            <p className="text-sm text-gray-500">
+              {users.length} user{users.length !== 1 ? 's' : ''} with portal access
+              {pendingInvitations.length > 0 && (
+                <span className="text-amber-600"> + {pendingInvitations.length} pending</span>
+              )}
+            </p>
           </div>
           {addUserButton}
         </div>
@@ -344,7 +381,7 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, onBulk
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredUsers.length === 0 && (
+            {filteredUsers.length === 0 && filteredPending.length === 0 && (
               <tr>
                 <td colSpan={canManage ? 6 : 4} className="px-6 py-12 text-center text-sm text-gray-500">
                   {trimmedSearch
@@ -417,6 +454,47 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, onBulk
                 </tr>
               );
             })}
+            {filteredPending.map((invitation) => (
+              <tr key={`pending-${invitation.id}`} className="hover:bg-gray-50 bg-amber-50/30">
+                {canManage && (
+                  <td className="px-3 py-4">
+                    <div className="h-4 w-4" />
+                  </td>
+                )}
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center">
+                      <Clock className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                        {invitation.email}
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                          Invited — pending login
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <RoleBadge slug={invitation.role_slug} name={invitation.role_name} />
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatTimestamp(invitation.created_at)}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">--</td>
+                {canManage && (
+                  <td className="px-6 py-4 whitespace-nowrap text-right">
+                    <button
+                      onClick={() => handleCancelInvitation(invitation.id)}
+                      disabled={cancellingInvitation === invitation.id}
+                      className="inline-flex items-center gap-1 text-sm text-red-600 hover:text-red-800 font-medium transition-colors disabled:opacity-50"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                      {cancellingInvitation === invitation.id ? 'Cancelling...' : 'Cancel'}
+                    </button>
+                  </td>
+                )}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
