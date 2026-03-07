@@ -87,6 +87,21 @@ CREATE TABLE IF NOT EXISTS devices (
 );
 
 -- ============================================
+-- IPHONE SYNC DEVICES TABLE (TASK-2121)
+-- Tracks per-iPhone sync timestamps, separate from desktop `devices` table
+-- ============================================
+CREATE TABLE IF NOT EXISTS iphone_sync_devices (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  device_udid TEXT NOT NULL,
+  device_name TEXT,
+  last_sync_time TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, device_udid)
+);
+
+-- ============================================
 -- ANALYTICS EVENTS TABLE
 -- ============================================
 CREATE TABLE IF NOT EXISTS analytics_events (
@@ -156,6 +171,7 @@ CREATE INDEX IF NOT EXISTS idx_api_usage_created_at ON api_usage(created_at);
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE licenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE devices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE iphone_sync_devices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE analytics_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_preferences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE api_usage ENABLE ROW LEVEL SECURITY;
@@ -164,6 +180,7 @@ ALTER TABLE api_usage ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Service role has full access" ON users;
 DROP POLICY IF EXISTS "Service role has full access" ON licenses;
 DROP POLICY IF EXISTS "Service role has full access" ON devices;
+DROP POLICY IF EXISTS "Service role has full access" ON iphone_sync_devices;
 DROP POLICY IF EXISTS "Service role has full access" ON analytics_events;
 DROP POLICY IF EXISTS "Service role has full access" ON user_preferences;
 DROP POLICY IF EXISTS "Service role has full access" ON api_usage;
@@ -176,6 +193,9 @@ CREATE POLICY "Service role has full access" ON licenses
   FOR ALL USING (true);
 
 CREATE POLICY "Service role has full access" ON devices
+  FOR ALL USING (true);
+
+CREATE POLICY "Service role has full access" ON iphone_sync_devices
   FOR ALL USING (true);
 
 CREATE POLICY "Service role has full access" ON analytics_events

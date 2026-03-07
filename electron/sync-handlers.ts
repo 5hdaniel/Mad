@@ -19,12 +19,16 @@ import sessionService from "./services/sessionService";
 import type { iOSDevice } from "./types/device";
 import { rateLimiters } from "./utils/rateLimit";
 import { syncStatusService } from "./services/syncStatusService";
+import supabaseService from "./services/supabaseService";
 
 let orchestrator: DeviceSyncOrchestrator | null = null;
 let mainWindowRef: BrowserWindow | null = null;
 let currentUserId: string | null = null;
 // Track user ID at sync start to prevent race conditions
 let syncSessionUserId: string | null = null;
+// TASK-2121: Track device info at sync start for Supabase persistence
+let syncSessionDeviceUdid: string | null = null;
+let syncSessionDeviceName: string | null = null;
 // TASK-2110: Cancellation signal ref shared between sync:cancel and persistence
 const persistCancelSignal = { cancelled: false };
 
@@ -123,6 +127,9 @@ export function registerSyncHandlers(mainWindow: BrowserWindow, userId?: string)
         log.info("[SyncHandlers] User ID captured for sync persistence", { userId: redactId(syncSessionUserId) });
       }
 
+      // TASK-2121: Capture device UDID for Supabase lastSyncTime persistence
+      syncSessionDeviceUdid = options.udid;
+
       // Check if sync is stuck and force reset if needed
       const status = orchestrator?.getStatus();
       if (status?.isRunning) {
@@ -138,6 +145,8 @@ export function registerSyncHandlers(mainWindow: BrowserWindow, userId?: string)
         // Reset state on error
         orchestrator?.forceReset();
         syncSessionUserId = null; // Clear session user ID on error
+        syncSessionDeviceUdid = null; // TASK-2121: Clear device UDID on error
+        syncSessionDeviceName = null;
         return {
           success: false,
           messages: [],
@@ -249,6 +258,30 @@ export function registerSyncHandlers(mainWindow: BrowserWindow, userId?: string)
     return { success: true };
   });
 
+  // TASK-2121: Get last sync time for an iPhone device from Supabase
+  ipcMain.handle("sync:get-iphone-last-sync-time", async (_, udid: string) => {
+    const userId = await getCurrentUserIdForSync();
+    if (!userId) return { lastSyncTime: null };
+
+    try {
+      const { data, error } = await supabaseService
+        .getClient()
+        .from("iphone_sync_devices")
+        .select("last_sync_time")
+        .eq("user_id", userId)
+        .eq("device_udid", udid)
+        .single();
+
+      if (error && error.code !== "PGRST116") {
+        log.warn("[SyncHandlers] Failed to get iPhone last sync time", { error: error.message });
+      }
+      return { lastSyncTime: data?.last_sync_time ?? null };
+    } catch (err) {
+      log.warn("[SyncHandlers] Error fetching iPhone last sync time", { err });
+      return { lastSyncTime: null };
+    }
+  });
+
   log.info("[SyncHandlers] Registered sync IPC handlers");
 }
 
@@ -274,6 +307,8 @@ function setupEventForwarding(): void {
       name: device.name,
       udid: device.udid,
     });
+    // TASK-2121: Capture device name for Supabase persistence
+    syncSessionDeviceName = device.name;
     sendToRenderer("sync:device-connected", device);
   });
 
@@ -405,6 +440,33 @@ function setupEventForwarding(): void {
           duration: persistResult.duration,
         });
         log.info("[SyncHandlers] sync:storage-complete sent successfully");
+
+        // TASK-2121: Fire-and-forget upsert of lastSyncTime to Supabase
+        const deviceUdid = syncSessionDeviceUdid;
+        const deviceName = syncSessionDeviceName;
+        syncSessionDeviceUdid = null;
+        syncSessionDeviceName = null;
+        if (userIdForPersistence && deviceUdid) {
+          void (async () => {
+            try {
+              const { error: upsertError } = await supabaseService
+                .getClient()
+                .from("iphone_sync_devices")
+                .upsert({
+                  user_id: userIdForPersistence,
+                  device_udid: deviceUdid,
+                  device_name: deviceName ?? null,
+                  last_sync_time: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                }, { onConflict: "user_id,device_udid" });
+
+              if (upsertError) log.warn("[SyncHandlers] Failed to persist iPhone lastSyncTime", { error: upsertError.message });
+              else log.info("[SyncHandlers] iPhone lastSyncTime persisted to Supabase");
+            } catch (err) {
+              log.warn("[SyncHandlers] Error persisting iPhone lastSyncTime", { err });
+            }
+          })();
+        }
       } catch (error) {
         log.error("[SyncHandlers] Database persistence failed", {
           error: error instanceof Error ? error.message : "Unknown error",
@@ -444,6 +506,8 @@ export function cleanupSyncHandlers(): void {
   mainWindowRef = null;
   currentUserId = null;
   syncSessionUserId = null;
+  syncSessionDeviceUdid = null;
+  syncSessionDeviceName = null;
   persistCancelSignal.cancelled = false;
 
   // Remove IPC handlers
@@ -456,6 +520,7 @@ export function cleanupSyncHandlers(): void {
   ipcMain.removeHandler("sync:devices");
   ipcMain.removeHandler("sync:start-detection");
   ipcMain.removeHandler("sync:stop-detection");
+  ipcMain.removeHandler("sync:get-iphone-last-sync-time");
 
   log.info("[SyncHandlers] Cleaned up sync handlers");
 }
