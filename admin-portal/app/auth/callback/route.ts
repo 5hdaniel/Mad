@@ -3,13 +3,38 @@
  *
  * Handles the OAuth redirect from Supabase Auth:
  * 1. Exchanges authorization code for session
- * 2. Processes pending internal invitations (auto-assigns role on first login)
- * 3. Verifies user has an internal_roles entry
- * 4. Redirects to dashboard or login with error
+ * 2. Logs authentication events (success/failure) for SOC 2 CC6.2
+ * 3. Processes pending internal invitations (auto-assigns role on first login)
+ * 4. Verifies user has an internal_roles entry
+ * 5. Redirects to dashboard or login with error
  */
 
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+
+/**
+ * Log an authentication event to admin_audit_logs.
+ * Never blocks the auth flow - failures are caught and logged to console.
+ */
+async function logAuthEvent(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  action: string,
+  targetType: string,
+  targetId: string,
+  metadata: Record<string, unknown>
+) {
+  try {
+    await supabase.rpc('log_admin_action', {
+      p_action: action,
+      p_target_type: targetType,
+      p_target_id: targetId,
+      p_metadata: metadata,
+    });
+  } catch (err) {
+    // Never block auth flow for audit logging failures
+    console.error('[auth-callback] Failed to log auth event:', err);
+  }
+}
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -23,6 +48,12 @@ export async function GET(request: Request) {
 
     if (error) {
       console.error('Auth exchange error:', error);
+      // Log failed auth exchange
+      await logAuthEvent(supabase, 'auth.login_failed', 'auth', 'unknown', {
+        error: error.message,
+        source: 'admin_portal',
+        stage: 'code_exchange',
+      });
       return NextResponse.redirect(`${origin}/login?error=auth_failed`);
     }
 
@@ -32,6 +63,13 @@ export async function GET(request: Request) {
     } = await supabase.auth.getUser();
 
     if (user) {
+      // Log successful login
+      await logAuthEvent(supabase, 'auth.login', 'user', user.id, {
+        email: user.email,
+        source: 'admin_portal',
+        provider: user.app_metadata?.provider || 'unknown',
+      });
+
       // Process any pending internal invitation for this user
       const oauthProvider = user.app_metadata?.provider ?? 'azure';
       await processPendingInvitation(supabase, user.id, user.email ?? '', oauthProvider);
@@ -49,6 +87,11 @@ export async function GET(request: Request) {
       }
 
       // User does not have an internal role - sign them out and reject
+      await logAuthEvent(supabase, 'auth.login_denied', 'user', user.id, {
+        email: user.email,
+        source: 'admin_portal',
+        reason: 'no_internal_role',
+      });
       await supabase.auth.signOut();
       return NextResponse.redirect(`${origin}/login?error=not_authorized`);
     }
