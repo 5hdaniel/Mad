@@ -4,7 +4,7 @@
  */
 
 import { renderHook, act } from "@testing-library/react";
-import { useIPhoneSync } from "../useIPhoneSync";
+import { useIPhoneSync, syncStateRef } from "../useIPhoneSync";
 
 describe("useIPhoneSync", () => {
   let consoleErrorSpy: jest.SpyInstance;
@@ -88,6 +88,10 @@ describe("useIPhoneSync", () => {
   beforeEach(() => {
     jest.useFakeTimers();
 
+    // Reset sync state ref
+    syncStateRef.isActive = false;
+    syncStateRef.deferredLogout = false;
+
     // Reset callbacks
     deviceConnectedCallback = null;
     deviceDisconnectedCallback = null;
@@ -129,6 +133,7 @@ describe("useIPhoneSync", () => {
     consoleErrorSpy.mockRestore();
     consoleWarnSpy.mockRestore();
     consoleLogSpy.mockRestore();
+    syncStateRef.isActive = false;
   });
 
   describe("initialization", () => {
@@ -209,7 +214,7 @@ describe("useIPhoneSync", () => {
       await result.current.startSync();
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        "[ERROR] [useIPhoneSync] Cannot start sync: No device connected",
+        expect.stringContaining("[ERROR] [useIPhoneSync] Cannot start sync: No device connected"),
       );
     });
 
@@ -219,7 +224,7 @@ describe("useIPhoneSync", () => {
       await result.current.submitPassword("test-password");
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        "[ERROR] [useIPhoneSync] Cannot submit password: No device connected",
+        expect.stringContaining("[ERROR] [useIPhoneSync] Cannot submit password: No device connected"),
       );
     });
   });
@@ -326,22 +331,21 @@ describe("useIPhoneSync", () => {
 
     it("should fetch last sync time on device connect", async () => {
       const syncApi = setupSyncApiMock();
-      const checkStatusMock = jest.fn().mockResolvedValue({
-        success: true,
+      const getIPhoneLastSyncTimeMock = jest.fn().mockResolvedValue({
         lastSyncTime: "2024-01-15T10:00:00Z",
       });
-      (window as any).api = { sync: syncApi, backup: { checkStatus: checkStatusMock } };
+      (syncApi as any).getIPhoneLastSyncTime = getIPhoneLastSyncTimeMock;
+      (window as any).api = { sync: syncApi };
 
       renderHook(() => useIPhoneSync());
 
       await act(async () => {
         deviceConnectedCallback?.(mockDevice);
-        // Allow the async checkStatus to be called
         await Promise.resolve();
         await Promise.resolve();
       });
 
-      expect(checkStatusMock).toHaveBeenCalledWith(mockDevice.udid);
+      expect(getIPhoneLastSyncTimeMock).toHaveBeenCalledWith(mockDevice.udid);
     });
   });
 
@@ -357,6 +361,9 @@ describe("useIPhoneSync", () => {
         deviceConnectedCallback?.(mockDevice);
         await Promise.resolve();
       });
+
+      // syncStateRef.isActive must be true for progress events to be processed
+      syncStateRef.isActive = true;
 
       act(() => {
         syncProgressCallback?.({
@@ -381,6 +388,7 @@ describe("useIPhoneSync", () => {
       (window as any).api = { sync: syncApi };
 
       const { result } = renderHook(() => useIPhoneSync());
+      syncStateRef.isActive = true;
 
       act(() => {
         syncProgressCallback?.({
@@ -398,6 +406,7 @@ describe("useIPhoneSync", () => {
       (window as any).api = { sync: syncApi };
 
       const { result } = renderHook(() => useIPhoneSync());
+      syncStateRef.isActive = true;
 
       act(() => {
         syncProgressCallback?.({
@@ -433,6 +442,7 @@ describe("useIPhoneSync", () => {
       (window as any).api = { sync: syncApi };
 
       const { result } = renderHook(() => useIPhoneSync());
+      syncStateRef.isActive = true;
 
       act(() => {
         syncProgressCallback?.({
@@ -451,6 +461,7 @@ describe("useIPhoneSync", () => {
       (window as any).api = { sync: syncApi };
 
       const { result } = renderHook(() => useIPhoneSync());
+      syncStateRef.isActive = true;
 
       act(() => {
         syncProgressCallback?.({
@@ -516,13 +527,14 @@ describe("useIPhoneSync", () => {
       (window as any).api = { sync: syncApi };
 
       const { result } = renderHook(() => useIPhoneSync());
+      syncStateRef.isActive = true;
 
       act(() => {
         waitingForPasscodeCallback?.();
       });
 
       expect(result.current.isWaitingForPasscode).toBe(true);
-      expect(result.current.progress?.message).toContain("passcode");
+      expect(result.current.progress?.message).toContain("preparing the export");
     });
 
     it("should clear isWaitingForPasscode when passcode entered", () => {
@@ -530,6 +542,7 @@ describe("useIPhoneSync", () => {
       (window as any).api = { sync: syncApi };
 
       const { result } = renderHook(() => useIPhoneSync());
+      syncStateRef.isActive = true;
 
       act(() => {
         waitingForPasscodeCallback?.();
@@ -750,6 +763,29 @@ describe("useIPhoneSync", () => {
 
       expect(result.current.syncStatus).toBe("error");
       expect(result.current.error).toBe("Connection timeout");
+    });
+
+    it("should block sync when deferredLogout is pending (TASK-2109)", async () => {
+      const syncApi = setupSyncApiMock();
+      (window as any).api = { sync: syncApi, backup: { checkStatus: jest.fn().mockResolvedValue({ success: true }) } };
+
+      const { result } = renderHook(() => useIPhoneSync());
+
+      // Connect device
+      await act(async () => {
+        deviceConnectedCallback?.(mockDevice);
+        await Promise.resolve();
+      });
+
+      // Set deferred logout flag
+      syncStateRef.deferredLogout = true;
+
+      await act(async () => {
+        await result.current.startSync();
+      });
+
+      expect(syncApi.start).not.toHaveBeenCalled();
+      expect(result.current.error).toBe("Session expired. Please sign in again.");
     });
   });
 

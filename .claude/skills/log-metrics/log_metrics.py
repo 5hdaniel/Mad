@@ -48,6 +48,51 @@ def ensure_csv_exists():
             writer.writerow(COLUMNS)
 
 
+def label_existing_row(agent_id: str, agent_type: str, task_id: str, description: str):
+    """Find an auto-captured row by agent_id and fill in the blank label fields.
+
+    Returns True if a row was updated, False if no matching row found.
+    """
+    if not CSV_PATH.exists():
+        return False
+
+    with open(CSV_PATH, "r", newline="") as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+
+    updated = False
+    for row in rows:
+        if row.get("agent_id") == agent_id and not row.get("agent_type"):
+            row["agent_type"] = agent_type
+            row["task_id"] = task_id
+            row["description"] = description
+            updated = True
+            # Print the actual token values from the auto-captured row
+            input_t = int(row.get("input_tokens") or 0)
+            output_t = int(row.get("output_tokens") or 0)
+            total_t = int(row.get("total_tokens") or 0)
+            api = int(row.get("api_calls") or 0)
+            dur = int(row.get("duration_secs") or 0)
+            print(f"Labeled existing metrics for {agent_type}")
+            print(f"  Agent ID: {agent_id}")
+            print(f"  Task: {task_id or '(none)'}")
+            print(f"  Description: {description or '(none)'}")
+            print(f"  Tokens: {total_t:,} total ({input_t:,} in, {output_t:,} out)")
+            if api:
+                print(f"  API Calls: {api}")
+            if dur:
+                print(f"  Duration: {dur}s")
+            break
+
+    if updated:
+        with open(CSV_PATH, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=COLUMNS)
+            writer.writeheader()
+            writer.writerows(rows)
+
+    return updated
+
+
 def log_metrics(
     agent_type: str,
     task_id: str = "",
@@ -63,8 +108,12 @@ def log_metrics(
     started_at: str = "",
     ended_at: str = ""
 ):
-    """Append a metrics row to tokens.csv."""
+    """Append a metrics row to tokens.csv, or label an existing auto-captured row."""
     ensure_csv_exists()
+
+    # If agent_id provided, try to label an existing auto-captured row first
+    if agent_id and label_existing_row(agent_id, agent_type, task_id, description):
+        return
 
     total_tokens = input_tokens + output_tokens + cache_read + cache_create
     billable_tokens = input_tokens + output_tokens

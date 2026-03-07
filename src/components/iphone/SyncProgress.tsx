@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useEffect } from "react";
 import type { SyncProgressProps } from "../../types/iphone";
+import logger from "../../utils/logger";
 
 /**
  * Format bytes to human readable string
@@ -31,6 +32,14 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
   onCancel,
   isWaitingForPasscode = false,
 }) => {
+  useEffect(() => {
+    logger.info("[SyncProgress] Mounted", { phase: progress.phase, percent: progress.percent });
+    return () => logger.info("[SyncProgress] Unmounted");
+  }, []);
+
+  useEffect(() => {
+    logger.debug(`[SyncProgress] Phase: ${progress.phase}, ${progress.percent}%`, { isWaitingForPasscode });
+  }, [progress.phase, progress.percent, isWaitingForPasscode]);
   /**
    * Option C: 2-Level Progress Display
    * Level 1: Combined title + context (bold, larger)
@@ -39,14 +48,14 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
   const getPhaseTitle = (): string => {
     // Special state: waiting for passcode
     if (isWaitingForPasscode) {
-      return "Enter passcode on iPhone";
+      return "Waiting for iPhone";
     }
 
     switch (progress.phase) {
       case "preparing":
-        return "Preparing backup...";
+        return "Preparing export...";
       case "backing_up":
-        return "Backing up - Keep connected";
+        return "Exporting - Keep connected";
       case "extracting":
         return "Reading messages - Safe to disconnect";
       case "storing":
@@ -150,38 +159,17 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
         </p>
       )}
 
-      {/* Progress Bar - shown during backup phase */}
+      {/* Progress Bar - shown during backup phase (always indeterminate since idevicebackup2 estimates are unreliable) */}
       {!isComplete && !isError && isBackingUp && (
         <div className="mb-4">
-          {/* Determinate progress bar when we have estimated size */}
-          {progress.estimatedTotalBytes && progress.estimatedTotalBytes > 0 && (progress.bytesProcessed ?? 0) > 0 ? (
-            <>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-gray-500">Progress</span>
-                <span className="text-xs font-medium text-gray-600">
-                  {Math.min(Math.round(((progress.bytesProcessed ?? 0) / progress.estimatedTotalBytes) * 100), 99)}%
-                </span>
-              </div>
-              <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-purple-500 to-indigo-600 rounded-full transition-all duration-500"
-                  style={{
-                    width: `${Math.min(((progress.bytesProcessed ?? 0) / progress.estimatedTotalBytes) * 100, 99)}%`
-                  }}
-                />
-              </div>
-            </>
-          ) : (
-            /* Indeterminate progress bar when we don't have estimated size yet */
-            <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-              <div
-                className="h-full w-1/3 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-full"
-                style={{
-                  animation: 'indeterminate 1.5s ease-in-out infinite'
-                }}
-              />
-            </div>
-          )}
+          <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div
+              className="h-full w-1/3 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-full"
+              style={{
+                animation: 'indeterminate 1.5s ease-in-out infinite'
+              }}
+            />
+          </div>
           <style>{`
             @keyframes indeterminate {
               0% { transform: translateX(-100%); }
@@ -196,11 +184,6 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
         <div className="text-center mb-4">
           <p className="text-2xl font-bold text-gray-800">
             {formatBytes(progress.bytesProcessed)}
-            {progress.estimatedTotalBytes && progress.estimatedTotalBytes > 0 && (
-              <span className="text-lg font-normal text-gray-400">
-                {" "}/ ~{formatBytes(progress.estimatedTotalBytes)}
-              </span>
-            )}
           </p>
           <p className="text-sm text-gray-500">
             transferred
@@ -244,8 +227,7 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
           </svg>
           <div className="text-sm text-amber-700">
             <p className="text-xs text-amber-600">
-              After entering your passcode, it may take several minutes before the sync starts.
-              Please don't disconnect or close this window.
+              Enter your passcode on your iPhone if prompted. It may take up to 10 minutes for the iPhone to report back that the passcode was entered as it indexes and prepares the export. This is normal — please don't disconnect or cancel.
             </p>
           </div>
         </div>
@@ -290,7 +272,7 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
             />
           </svg>
           <p className="text-sm text-gray-600">
-            Please keep your iPhone connected until backup completes.
+            Please keep your iPhone connected until export completes.
           </p>
         </div>
       )}
@@ -299,7 +281,7 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
       {onCancel && !isComplete && !isError && (
         <div className="mt-6 flex justify-center">
           <button
-            onClick={onCancel}
+            onClick={() => { logger.info("[SyncProgress] Cancel button clicked"); onCancel(); }}
             className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm font-medium transition-colors"
           >
             Cancel

@@ -311,7 +311,7 @@ export class BackupService extends EventEmitter {
         // Progress bars look like: [====] XX% (X.X MB/Y.Y MB)
         const isProgressBar = /\[=*\s*\]\s*\d+%/.test(output);
         if (!isProgressBar && output.trim()) {
-          log.debug("[BackupService] stdout:", output.trim());
+          log.info("[BackupService] stdout:", output.trim());
         }
 
         const progress = this.parseProgress(output);
@@ -498,8 +498,9 @@ export class BackupService extends EventEmitter {
    * Cancel an in-progress backup
    */
   cancelBackup(): void {
+    log.info("[BackupService] Cancelling backup");
+
     if (this.currentProcess) {
-      log.info("[BackupService] Cancelling backup");
       this.currentProcess.kill("SIGTERM");
 
       // Give it a moment, then force kill if needed
@@ -508,9 +509,10 @@ export class BackupService extends EventEmitter {
           this.currentProcess.kill("SIGKILL");
         }
       }, 5000);
-
-      this.isRunning = false;
     }
+
+    // Always reset state — even if process is null (race between spawn and cancel)
+    this.isRunning = false;
   }
 
   /**

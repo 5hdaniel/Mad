@@ -419,7 +419,7 @@ describe("SyncProgress", () => {
 
     render(<SyncProgress progress={progress} onCancel={mockOnCancel} />);
 
-    expect(screen.getByText(/preparing backup/i)).toBeInTheDocument();
+    expect(screen.getByText(/preparing export/i)).toBeInTheDocument();
   });
 
   it("should show backing up phase", () => {
@@ -431,7 +431,7 @@ describe("SyncProgress", () => {
     render(<SyncProgress progress={progress} onCancel={mockOnCancel} />);
 
     // Option C 2-tier UI shows combined title+context
-    expect(screen.getByText(/backing up/i)).toBeInTheDocument();
+    expect(screen.getByText(/exporting/i)).toBeInTheDocument();
     expect(screen.getByText(/keep connected/i)).toBeInTheDocument();
   });
 
@@ -557,5 +557,69 @@ describe("SyncProgress", () => {
     expect(
       screen.queryByRole("button", { name: /cancel/i }),
     ).not.toBeInTheDocument();
+  });
+
+  describe("backup phase progress display", () => {
+    it("should never show size estimate during backup phase (estimates are unreliable)", () => {
+      const progress: BackupProgress = {
+        phase: "backing_up",
+        percent: 50,
+        bytesProcessed: 1_000_000_000, // 1 GB
+        estimatedTotalBytes: 2_000_000_000, // 2 GB
+      };
+
+      render(<SyncProgress progress={progress} onCancel={mockOnCancel} />);
+
+      // Should NOT show estimate text even when estimate is available
+      expect(screen.queryByText(/\/ ~/)).not.toBeInTheDocument();
+      // Should NOT show percentage (always indeterminate during backup)
+      expect(screen.queryByText(/50%/)).not.toBeInTheDocument();
+      // Should show transferred amount
+      expect(screen.getByText(/transferred/)).toBeInTheDocument();
+    });
+
+    it("should show only transferred amount when bytesProcessed exceeds estimate", () => {
+      const progress: BackupProgress = {
+        phase: "backing_up",
+        percent: 99,
+        bytesProcessed: 10_700_000_000, // 10.7 GB - exceeds estimate
+        estimatedTotalBytes: 1_900_000_000, // 1.9 GB
+      };
+
+      render(<SyncProgress progress={progress} onCancel={mockOnCancel} />);
+
+      expect(screen.queryByText(/\/ ~/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/\d+%/)).not.toBeInTheDocument();
+      expect(screen.getByText(/transferred/)).toBeInTheDocument();
+    });
+
+    it("should show indeterminate bar when estimatedTotalBytes is 0", () => {
+      const progress: BackupProgress = {
+        phase: "backing_up",
+        percent: 0,
+        bytesProcessed: 500_000_000,
+        estimatedTotalBytes: 0,
+      };
+
+      render(<SyncProgress progress={progress} onCancel={mockOnCancel} />);
+
+      expect(screen.queryByText(/\/ ~/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/\d+%/)).not.toBeInTheDocument();
+    });
+
+    it("should show indeterminate bar when estimatedTotalBytes is undefined", () => {
+      const progress: BackupProgress = {
+        phase: "backing_up",
+        percent: 0,
+        bytesProcessed: 500_000_000,
+      };
+
+      render(<SyncProgress progress={progress} onCancel={mockOnCancel} />);
+
+      // Should NOT show estimate text
+      expect(screen.queryByText(/\/ ~/)).not.toBeInTheDocument();
+      // Should NOT show percentage
+      expect(screen.queryByText(/\d+%/)).not.toBeInTheDocument();
+    });
   });
 });

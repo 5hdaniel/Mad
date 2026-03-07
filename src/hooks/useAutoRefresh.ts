@@ -316,12 +316,15 @@ export function useAutoRefresh({
   // Send OS notification when sync completes (gated on user preference)
   useEffect(() => {
     // Detect transition from syncing to not syncing
-    if (wasSyncingRef.current && !isRunning && notificationsEnabled) {
-      // Sync just completed - send notification
-      window.api.notification?.send(
-        "Sync Complete",
-        "Keepr is ready to use. Your data has been synchronized."
-      ).catch((notifError: unknown) => {
+    const hasCompleted = queue.some(item => item.status === 'complete');
+    const hasErrors = queue.some(item => item.status === 'error');
+    // Only notify if items actually completed/errored — not if they were removed (cancel)
+    if (wasSyncingRef.current && !isRunning && (hasCompleted || hasErrors) && notificationsEnabled) {
+      const title = hasErrors ? "Sync Failed" : "Sync Complete";
+      const body = hasErrors
+        ? "One or more sync operations failed. Open Keepr for details."
+        : "Keepr is ready to use. Your data has been synchronized.";
+      window.api.notification?.send(title, body).catch((notifError: unknown) => {
         // Track notification failures but don't disrupt UX
         Sentry.captureException(notifError, {
           tags: { sync_type: "auto_refresh" },
@@ -334,7 +337,7 @@ export function useAutoRefresh({
       });
     }
     wasSyncingRef.current = isRunning;
-  }, [isRunning, notificationsEnabled]);
+  }, [isRunning, notificationsEnabled, queue]);
 
   // Derive syncStatus from orchestrator queue for backward compatibility
   const syncStatus: SyncStatus = {

@@ -15,18 +15,34 @@ function shouldLog(level: LogLevel): boolean {
   return LOG_LEVELS[level] >= LOG_LEVELS[MIN_LEVEL];
 }
 
+function timestamp(): string {
+  return new Date().toISOString().slice(11, 23);
+}
+
+function relay(level: LogLevel, msg: string, args: unknown[]): void {
+  try {
+    const argsStr = args.length > 0
+      ? ' ' + args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ')
+      : '';
+    (window as unknown as { api?: { log?: { send: (level: string, message: string) => void } } })
+      .api?.log?.send(level, `[${timestamp()}] ${msg}${argsStr}`);
+  } catch {
+    // IPC not available (e.g. tests) — ignore
+  }
+}
+
 export const logger = {
   debug: (msg: string, ...args: unknown[]) => {
-    if (shouldLog('debug')) console.debug(`[DEBUG] ${msg}`, ...args);
+    if (shouldLog('debug')) { console.debug(`[${timestamp()}] [DEBUG] ${msg}`, ...args); relay('debug', msg, args); }
   },
   info: (msg: string, ...args: unknown[]) => {
-    if (shouldLog('info')) console.info(`[INFO] ${msg}`, ...args);
+    if (shouldLog('info')) { console.info(`[${timestamp()}] [INFO] ${msg}`, ...args); relay('info', msg, args); }
   },
   warn: (msg: string, ...args: unknown[]) => {
-    if (shouldLog('warn')) console.warn(`[WARN] ${msg}`, ...args);
+    if (shouldLog('warn')) { console.warn(`[${timestamp()}] [WARN] ${msg}`, ...args); relay('warn', msg, args); }
   },
   error: (msg: string, ...args: unknown[]) => {
-    if (shouldLog('error')) console.error(`[ERROR] ${msg}`, ...args);
+    if (shouldLog('error')) { console.error(`[${timestamp()}] [ERROR] ${msg}`, ...args); relay('error', msg, args); }
   },
 };
 

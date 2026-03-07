@@ -60,10 +60,10 @@ Before starting sprint work, engineers must:
 
 | ID | Backlog | Title | Task(s) | Est Tokens | Actual Tokens | Status |
 |----|---------|-------|---------|-----------|---------------|--------|
-| 1 | BACKLOG-238 | Break Down Oversized Flow Hooks | TASK-2099 | ~25K | - | In Progress |
-| 2 | BACKLOG-239 | Reduce Direct Database Access Pattern | TASK-2100 | ~30K | - | In Progress |
-| 3 | BACKLOG-241 | Add Startup Health Checks (Phase 1) | TASK-2101 | ~22K | - | In Progress |
-| 4 | BACKLOG-795 | Add Sentry Instrumentation to Sync Paths | TASK-2102 | ~10K | - | In Progress |
+| 1 | BACKLOG-238 | Break Down Oversized Flow Hooks | TASK-2099 | ~25K | N/A (not labeled) | Completed |
+| 2 | BACKLOG-239 | Reduce Direct Database Access Pattern | TASK-2100 | ~30K | N/A (not labeled) | Completed |
+| 3 | BACKLOG-241 | Add Startup Health Checks (Phase 1) | TASK-2101 | ~22K | N/A (not labeled) | Completed |
+| 4 | BACKLOG-795 | Add Sentry Instrumentation to Sync Paths | TASK-2102 | ~10K | N/A (not labeled) | Completed |
 
 **Total Estimated (implementation):** ~87K tokens (SR-adjusted)
 **SR Review Overhead:** ~60K tokens (4 tasks x ~15K avg)
@@ -253,35 +253,45 @@ The following MUST pass before merge:
 
 | Task | Est Tokens | Actual Tokens | Variance | Notes |
 |------|-----------|---------------|----------|-------|
-| TASK-2099 | ~25K | - | - | - |
-| TASK-2100 | ~30K | - | - | - |
-| TASK-2101 | ~22K | - | - | SR-adjusted from ~18K |
-| TASK-2102 | ~10K | - | - | - |
+| TASK-2099 | ~25K | N/A | N/A | Metrics not labeled in tokens.jsonl |
+| TASK-2100 | ~30K | N/A | N/A | Metrics not labeled in tokens.jsonl |
+| TASK-2101 | ~22K | N/A | N/A | Metrics not labeled in tokens.jsonl (SR-adjusted from ~18K) |
+| TASK-2102 | ~10K | N/A | N/A | Metrics not labeled in tokens.jsonl |
+
+**Note:** Agent metrics were not labeled with task IDs during execution, so actual token usage cannot be attributed to individual tasks. This is a process gap -- future sprints must ensure `log_metrics.py --label` is run after each agent completes.
 
 ### Issues Encountered
 
 | # | Task | Issue | Severity | Resolution | Time Impact |
 |---|------|-------|----------|------------|-------------|
-| - | - | - | - | - | - |
+| 1 | TASK-2100 | Test files needed mock updates despite "don't modify test files" instruction | Low | Updated 4 test files to use new service methods (necessary consequence of refactor) | Minimal |
+| 2 | TASK-2100 | Worktree did not have node_modules | Low | Symlinked from main repo for type-checking/testing | Minimal |
+| 3 | All | Agent metrics not labeled with task IDs | Medium | Unable to report actual token usage per task | N/A |
 
 ### What Went Well
-- (to be filled at sprint close)
+- All 4 tasks were parallel-safe as predicted by SR review -- zero file conflicts
+- Clean integration via PR #1027 with all CI checks passing
+- SR technical review caught important corrections before implementation (TASK-2100 scope reduction, TASK-2102 double-reporting risk)
+- No unplanned work was needed during the sprint
 
 ### What Didn't Go Well
-- (to be filled at sprint close)
+- Agent metrics were not labeled post-execution, preventing actual token tracking
+- Sprint closure was delayed (docs not updated at time of merge)
 
 ### Lessons for Future Sprints
-- (to be filled at sprint close)
+- Immediately label agent metrics after each agent completes using `log_metrics.py --label`
+- Close out sprint documentation on the same day as the final merge
+- SR pre-implementation review is high-value: caught scope issues in 2 of 4 tasks
 
 ## End-of-Sprint Validation Checklist
 
-- [ ] All tasks merged to develop
-- [ ] All CI checks passing
-- [ ] All acceptance criteria verified
-- [ ] Testing requirements met
-- [ ] No unresolved conflicts
-- [ ] Documentation updated (if applicable)
-- [ ] **Worktree cleanup complete** (see below)
+- [x] All tasks merged to develop (via integration PR #1027, merged 2026-03-05)
+- [x] All CI checks passing
+- [x] All acceptance criteria verified
+- [x] Testing requirements met
+- [x] No unresolved conflicts
+- [x] Documentation updated (if applicable)
+- [x] **Worktree cleanup complete** (see below)
 
 ## Worktree Cleanup (Post-Sprint)
 

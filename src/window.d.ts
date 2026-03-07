@@ -766,6 +766,14 @@ interface MainAPI {
 
     /** Subscribe to storage error events */
     onStorageError: (callback: (error: { error: string }) => void) => () => void;
+
+    /**
+     * Get the last sync time for an iPhone device from Supabase
+     * TASK-2121: Persisted per user_id + device_udid
+     * @param udid - Device UDID
+     * @returns Object with lastSyncTime (ISO string or null)
+     */
+    getIPhoneLastSyncTime: (udid: string) => Promise<{ lastSyncTime: string | null }>;
   };
 
   // Event listeners for login completion

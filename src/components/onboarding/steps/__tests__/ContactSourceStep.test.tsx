@@ -88,18 +88,32 @@ describe("ContactSourceStep", () => {
   // =========================================================================
 
   describe("Content - macOS", () => {
-    it("renders both source cards on macOS", () => {
+    it("renders macOS Contacts and Outlook on macOS with Microsoft auth", () => {
       (usePlatform as jest.Mock).mockReturnValue({ isMacOS: true });
 
       render(
         <ContactSourceStep.Content
-          context={createMockContext()}
+          context={createMockContext({ authProvider: "microsoft" })}
           onAction={jest.fn()}
         />
       );
 
       expect(screen.getByText("macOS Contacts App")).toBeInTheDocument();
       expect(screen.getByText("Outlook / Microsoft 365")).toBeInTheDocument();
+    });
+
+    it("renders macOS Contacts but not Outlook on macOS with Google auth", () => {
+      (usePlatform as jest.Mock).mockReturnValue({ isMacOS: true });
+
+      render(
+        <ContactSourceStep.Content
+          context={createMockContext({ authProvider: "google" })}
+          onAction={jest.fn()}
+        />
+      );
+
+      expect(screen.getByText("macOS Contacts App")).toBeInTheDocument();
+      expect(screen.queryByText("Outlook / Microsoft 365")).not.toBeInTheDocument();
     });
 
     it("renders heading text", () => {
@@ -117,20 +131,84 @@ describe("ContactSourceStep", () => {
   });
 
   describe("Content - Windows", () => {
-    it("renders only Outlook on Windows", () => {
+    it("renders Outlook on Windows with Microsoft auth", () => {
       (usePlatform as jest.Mock).mockReturnValue({ isMacOS: false });
 
       render(
         <ContactSourceStep.Content
-          context={createMockContext({ platform: "windows" })}
+          context={createMockContext({ platform: "windows", authProvider: "microsoft" })}
           onAction={jest.fn()}
         />
       );
 
-      // macOS Contacts should NOT appear on Windows
       expect(screen.queryByText("macOS Contacts App")).not.toBeInTheDocument();
-      // Outlook should appear
       expect(screen.getByText("Outlook / Microsoft 365")).toBeInTheDocument();
+    });
+
+    it("does not render Outlook on Windows with Google auth", () => {
+      (usePlatform as jest.Mock).mockReturnValue({ isMacOS: false });
+
+      render(
+        <ContactSourceStep.Content
+          context={createMockContext({ platform: "windows", authProvider: "google" })}
+          onAction={jest.fn()}
+        />
+      );
+
+      expect(screen.queryByText("Outlook / Microsoft 365")).not.toBeInTheDocument();
+    });
+
+    it("renders iPhone Contacts when phone type is iPhone", () => {
+      (usePlatform as jest.Mock).mockReturnValue({ isMacOS: false });
+
+      render(
+        <ContactSourceStep.Content
+          context={createMockContext({ platform: "windows", phoneType: "iphone" })}
+          onAction={jest.fn()}
+        />
+      );
+
+      expect(screen.getByText("iPhone Contacts")).toBeInTheDocument();
+    });
+
+    it("does not render iPhone Contacts when phone type is Android", () => {
+      (usePlatform as jest.Mock).mockReturnValue({ isMacOS: false });
+
+      render(
+        <ContactSourceStep.Content
+          context={createMockContext({ platform: "windows", phoneType: "android" })}
+          onAction={jest.fn()}
+        />
+      );
+
+      expect(screen.queryByText("iPhone Contacts")).not.toBeInTheDocument();
+    });
+
+    it("renders Google Contacts as coming soon for Google auth users", () => {
+      (usePlatform as jest.Mock).mockReturnValue({ isMacOS: false });
+
+      render(
+        <ContactSourceStep.Content
+          context={createMockContext({ platform: "windows", authProvider: "google" })}
+          onAction={jest.fn()}
+        />
+      );
+
+      expect(screen.getByText("Google Contacts")).toBeInTheDocument();
+      expect(screen.getByText("Coming Soon")).toBeInTheDocument();
+    });
+
+    it("does not render Google Contacts for Microsoft auth users", () => {
+      (usePlatform as jest.Mock).mockReturnValue({ isMacOS: false });
+
+      render(
+        <ContactSourceStep.Content
+          context={createMockContext({ platform: "windows", authProvider: "microsoft" })}
+          onAction={jest.fn()}
+        />
+      );
+
+      expect(screen.queryByText("Google Contacts")).not.toBeInTheDocument();
     });
   });
 
@@ -145,7 +223,7 @@ describe("ContactSourceStep", () => {
 
       render(
         <ContactSourceStep.Content
-          context={createMockContext()}
+          context={createMockContext({ authProvider: "microsoft" })}
           onAction={onAction}
         />
       );
@@ -154,7 +232,7 @@ describe("ContactSourceStep", () => {
       fireEvent.click(screen.getByText("Continue"));
 
       await waitFor(() => {
-        // Should save preferences with both sources enabled (default)
+        // Should save preferences with visible sources enabled (default)
         expect(window.api.preferences.update).toHaveBeenCalledWith(
           "test-user-123",
           {
@@ -180,7 +258,7 @@ describe("ContactSourceStep", () => {
 
       render(
         <ContactSourceStep.Content
-          context={createMockContext()}
+          context={createMockContext({ authProvider: "microsoft" })}
           onAction={onAction}
         />
       );

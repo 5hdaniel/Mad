@@ -100,8 +100,8 @@ function Dashboard({
 
   // Memoize tour steps to avoid recreating on every render
   const tourSteps = useMemo(
-    () => getDashboardTourSteps({ hasAIAddon, isMacOS, notificationsEnabled }),
-    [hasAIAddon, isMacOS, notificationsEnabled],
+    () => getDashboardTourSteps({ hasAIAddon, isMacOS, notificationsEnabled, hasIPhoneSync: !!onSyncPhone }),
+    [hasAIAddon, isMacOS, notificationsEnabled, onSyncPhone],
   );
 
   // Derive display name for personalized greeting
@@ -178,7 +178,7 @@ function Dashboard({
   }, [runTour, onTourStateChange]);
 
   return (
-    <div className="h-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-8">
+    <div className="min-h-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-8">
       {/* Onboarding Tour */}
       <Joyride
         steps={tourSteps}
@@ -226,6 +226,11 @@ function Dashboard({
             onViewPending={handleViewPending}
             onOpenSettings={onOpenSettings}
             isTourActive={runTour}
+            onViewSyncDetails={(type) => {
+              if (type === 'iphone' && onSyncPhone) {
+                onSyncPhone();
+              }
+            }}
           />
         </div>
 

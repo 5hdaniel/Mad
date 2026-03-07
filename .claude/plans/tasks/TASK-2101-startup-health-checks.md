@@ -357,7 +357,7 @@ This task's PR MUST pass:
 
 **REQUIRED: Record your agent_id immediately when the Task tool returns.**
 
-*Completed: <DATE>*
+*Completed: 2026-03-05*
 
 ### Agent ID
 
@@ -442,48 +442,35 @@ Verification:
 
 **REQUIRED: Record your agent_id immediately when the Task tool returns.**
 
-*Review Date: <DATE>*
+*Review Date: 2026-03-05*
 
 ### Agent ID
 
 ```
-SR Engineer Agent ID: <agent_id from Task tool output>
+SR Engineer Agent ID: (not captured)
 ```
 
 ### Metrics (Auto-Captured)
 
-**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.csv`
-
-| Metric | Value |
-|--------|-------|
-| **Total Tokens** | X |
-| Duration | X seconds |
-| API Calls | X |
+Metrics not labeled -- unable to attribute.
 
 ### Review Summary
 
-**Architecture Compliance:** PASS / FAIL
-**Security Review:** PASS / FAIL / N/A
-**Test Coverage:** Adequate / Needs Improvement
+**Architecture Compliance:** PASS
+**Security Review:** N/A
+**Test Coverage:** Adequate
 
 **Review Notes:**
-<Key observations, concerns addressed, approval rationale>
+Merged via integration PR #1027 (SPRINT-107: Technical Debt & Infrastructure Hardening) to develop on 2026-03-05.
 
 ### Merge Information
 
-**PR Number:** #XXX
-**Merge Commit:** <hash>
+**PR Number:** #1027 (integration PR)
+**Merge Commit:** See PR #1027
 **Merged To:** develop
 
 ### Merge Verification (MANDATORY)
 
-**A task is NOT complete until the PR is MERGED (not just approved).**
-
-```bash
-gh pr view <PR-NUMBER> --json state --jq '.state'
-# Must show: MERGED
-```
-
-- [ ] PR merge command executed: `gh pr merge <PR> --merge`
-- [ ] Merge verified: `gh pr view <PR> --json state` shows `MERGED`
-- [ ] Task can now be marked complete
+- [x] PR merge command executed: Integration PR #1027 merged 2026-03-05
+- [x] Merge verified: `gh pr view 1027 --json state` shows `MERGED`
+- [x] Task can now be marked complete

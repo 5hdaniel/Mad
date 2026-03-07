@@ -13,6 +13,7 @@
  */
 
 import { EventEmitter } from "events";
+import crypto from "crypto";
 import log from "electron-log";
 import * as Sentry from "@sentry/electron/main";
 import checkDiskSpace from "check-disk-space";
@@ -75,6 +76,8 @@ export interface SyncResult {
   backupPath?: string;
   /** Whether backup was encrypted (cleanup needed after persistence) */
   needsCleanup?: boolean;
+  /** Unique session ID for ACID rollback on cancel (TASK-2110) */
+  sessionId?: string;
 }
 
 /**
@@ -231,7 +234,10 @@ export class DeviceSyncOrchestrator extends EventEmitter {
     this.startTime = Date.now();
     this.estimatedBackupSize = 0;
 
-    log.info("[DeviceSyncOrchestrator] Starting sync", { udid: options.udid });
+    // TASK-2110: Generate session ID for ACID rollback on cancel
+    const sessionId = crypto.randomUUID();
+
+    log.info("[DeviceSyncOrchestrator] Starting sync", { udid: options.udid, sessionId });
 
     try {
       // Step 0: Check for existing/interrupted backups
@@ -556,6 +562,7 @@ export class DeviceSyncOrchestrator extends EventEmitter {
         duration,
         backupPath,  // SPRINT-068: Pass for attachment extraction
         needsCleanup, // SPRINT-068: Caller should cleanup after persistence
+        sessionId,   // TASK-2110: For ACID rollback on cancel
       };
 
       this.emit("complete", result);
@@ -588,13 +595,11 @@ export class DeviceSyncOrchestrator extends EventEmitter {
    * Cancel the current sync operation
    */
   cancel(): void {
-    if (!this.isRunning) {
-      return;
-    }
-
     log.info("[DeviceSyncOrchestrator] Cancelling sync");
     this.isCancelled = true;
     this.isRunning = false;
+    // Always cancel backup service — even if orchestrator thinks it's not running,
+    // the backup process may still be alive (race condition on disconnect/error)
     this.backupService.cancelBackup();
     this.setPhase("idle");
   }
@@ -912,6 +917,9 @@ export class DeviceSyncOrchestrator extends EventEmitter {
     this.isCancelled = false;
     this.startTime = Date.now();
 
+    // TASK-2110: Generate session ID for ACID rollback on cancel
+    const sessionId = crypto.randomUUID();
+
     try {
       // Get backup path - construct from app's userData folder
       const { app } = await import("electron");
@@ -1129,6 +1137,7 @@ export class DeviceSyncOrchestrator extends EventEmitter {
         conversations: resolvedConversations,
         error: null,
         duration,
+        sessionId,   // TASK-2110: For ACID rollback on cancel
       };
 
       this.emit("complete", result);

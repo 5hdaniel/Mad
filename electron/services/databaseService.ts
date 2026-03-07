@@ -18,6 +18,7 @@
 
 import Database from "better-sqlite3-multiple-ciphers";
 import type { Database as DatabaseType } from "better-sqlite3";
+import log from "electron-log";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
@@ -152,6 +153,7 @@ class DatabaseService implements IDatabaseService {
         await this.runMigrations();
       } catch (migrationError) {
         // Migration failed -- attempt auto-restore from pre-migration backup
+        log.error("[DatabaseService] Migration FAILED:", migrationError instanceof Error ? migrationError.message : String(migrationError));
         await logService.error("Migration failed, attempting auto-restore", "DatabaseService", {
           error: migrationError instanceof Error ? migrationError.message : String(migrationError),
         });
@@ -627,6 +629,30 @@ class DatabaseService implements IDatabaseService {
           );
           CREATE INDEX IF NOT EXISTS idx_failure_log_timestamp ON failure_log(timestamp);
           CREATE INDEX IF NOT EXISTS idx_failure_log_acknowledged ON failure_log(acknowledged);
+        `);
+      },
+    },
+    {
+      version: 32,
+      description: "Add sync_session_id columns and indexes for ACID rollback on cancelled iPhone sync (TASK-2110)",
+      migrate: (d) => {
+        // Add columns individually — ALTER TABLE can't be batched in SQLite,
+        // and we use try/catch per column so re-runs are idempotent.
+        const columns: [string, string][] = [
+          ["messages", "sync_session_id"],
+          ["attachments", "sync_session_id"],
+          ["external_contacts", "sync_session_id"],
+        ];
+        for (const [table, col] of columns) {
+          const info = d.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+          if (!info.some((c) => c.name === col)) {
+            d.exec(`ALTER TABLE ${table} ADD COLUMN ${col} TEXT`);
+          }
+        }
+        d.exec(`
+          CREATE INDEX IF NOT EXISTS idx_messages_sync_session ON messages(user_id, sync_session_id);
+          CREATE INDEX IF NOT EXISTS idx_attachments_sync_session ON attachments(sync_session_id);
+          CREATE INDEX IF NOT EXISTS idx_external_contacts_sync_session ON external_contacts(user_id, sync_session_id);
         `);
       },
     },
@@ -2612,15 +2638,17 @@ class DatabaseService implements IDatabaseService {
       messageType: string | null;
       metadata: string | null;
     }[],
-    batchSize: number
+    batchSize: number,
+    sessionId?: string,
+    cancelSignal?: { cancelled: boolean }
   ): { stored: number; skipped: number } {
     const db = this._ensureDb();
     const insertStmt = db.prepare(`
       INSERT OR IGNORE INTO messages (
         id, user_id, channel, external_id, direction,
         body_text, participants, participants_flat, thread_id, sent_at,
-        has_attachments, message_type, metadata, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        has_attachments, message_type, metadata, sync_session_id, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `);
 
     let stored = 0;
@@ -2628,6 +2656,15 @@ class DatabaseService implements IDatabaseService {
     const totalBatches = Math.ceil(messages.length / batchSize);
 
     for (let batchNum = 0; batchNum < totalBatches; batchNum++) {
+      // TASK-2110: Check cancel signal between batches
+      if (cancelSignal?.cancelled) {
+        logService.info(
+          `Batch insert cancelled after ${batchNum}/${totalBatches} batches (${stored} stored)`,
+          "DatabaseService"
+        );
+        break;
+      }
+
       const start = batchNum * batchSize;
       const end = Math.min(start + batchSize, messages.length);
       const batch = messages.slice(start, end);
@@ -2647,7 +2684,8 @@ class DatabaseService implements IDatabaseService {
             msg.sentAt,
             msg.hasAttachments,
             msg.messageType,
-            msg.metadata
+            msg.metadata,
+            sessionId || null
           );
           if (result.changes > 0) {
             stored++;
@@ -2707,12 +2745,13 @@ class DatabaseService implements IDatabaseService {
     mimeType: string;
     fileSizeBytes: number;
     storagePath: string;
+    sessionId?: string;
   }): void {
     const db = this._ensureDb();
     db.prepare(
       `INSERT OR IGNORE INTO attachments (
-        id, message_id, external_message_id, filename, mime_type, file_size_bytes, storage_path, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+        id, message_id, external_message_id, filename, mime_type, file_size_bytes, storage_path, sync_session_id, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
     ).run(
       params.id,
       params.messageId,
@@ -2720,8 +2759,90 @@ class DatabaseService implements IDatabaseService {
       params.filename,
       params.mimeType,
       params.fileSizeBytes,
-      params.storagePath
+      params.storagePath,
+      params.sessionId || null
     );
+  }
+
+  // ============================================
+  // SYNC SESSION ROLLBACK (TASK-2110)
+  // ============================================
+
+  /**
+   * Delete all messages inserted during a specific sync session.
+   * Used for ACID rollback when user cancels iPhone sync.
+   */
+  deleteMessagesBySessionId(userId: string, sessionId: string): number {
+    const db = this._ensureDb();
+    const result = db.prepare(
+      `DELETE FROM messages WHERE user_id = ? AND sync_session_id = ?`
+    ).run(userId, sessionId);
+    logService.info(
+      `Deleted ${result.changes} messages for session ${sessionId}`,
+      "DatabaseService"
+    );
+    return result.changes;
+  }
+
+  /**
+   * Delete all attachments inserted during a specific sync session.
+   * Returns the storage_path values so callers can clean up orphaned files.
+   *
+   * TASK-2110: Content-addressed files are only deleted if no other
+   * attachment record references the same storage_path.
+   */
+  deleteAttachmentsBySessionId(sessionId: string): { deleted: number; orphanedFiles: string[] } {
+    const db = this._ensureDb();
+
+    // Step 1: Get storage paths for attachments in this session
+    const sessionAttachments = db.prepare(
+      `SELECT id, storage_path FROM attachments WHERE sync_session_id = ?`
+    ).all(sessionId) as { id: string; storage_path: string | null }[];
+
+    if (sessionAttachments.length === 0) {
+      return { deleted: 0, orphanedFiles: [] };
+    }
+
+    // Step 2: Delete the attachment records
+    const deleteResult = db.prepare(
+      `DELETE FROM attachments WHERE sync_session_id = ?`
+    ).run(sessionId);
+
+    // Step 3: Find orphaned files (no other attachment references the same storage_path)
+    const orphanedFiles: string[] = [];
+    const checkStmt = db.prepare(
+      `SELECT COUNT(*) as cnt FROM attachments WHERE storage_path = ?`
+    );
+
+    for (const att of sessionAttachments) {
+      if (!att.storage_path) continue;
+      const row = checkStmt.get(att.storage_path) as { cnt: number };
+      if (row.cnt === 0) {
+        orphanedFiles.push(att.storage_path);
+      }
+    }
+
+    logService.info(
+      `Deleted ${deleteResult.changes} attachments for session ${sessionId}, ${orphanedFiles.length} orphaned files`,
+      "DatabaseService"
+    );
+
+    return { deleted: deleteResult.changes, orphanedFiles };
+  }
+
+  /**
+   * Delete all external contacts inserted during a specific sync session.
+   */
+  deleteContactsBySessionId(userId: string, sessionId: string): number {
+    const db = this._ensureDb();
+    const result = db.prepare(
+      `DELETE FROM external_contacts WHERE user_id = ? AND sync_session_id = ?`
+    ).run(userId, sessionId);
+    logService.info(
+      `Deleted ${result.changes} contacts for session ${sessionId}`,
+      "DatabaseService"
+    );
+    return result.changes;
   }
 
   // ============================================

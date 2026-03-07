@@ -26,7 +26,7 @@ import logger from "../../../utils/logger";
 // =============================================================================
 
 interface SourceConfig {
-  key: "macosContacts" | "outlookContacts";
+  key: "macosContacts" | "outlookContacts" | "iphoneContacts" | "googleContacts";
   label: string;
   description: string;
   icon: React.ReactNode;
@@ -34,6 +34,14 @@ interface SourceConfig {
   selectedBg: string;
   /** Only show on these platforms. Undefined = all platforms. */
   platforms?: ("macos" | "windows")[];
+  /** Only show when user selected this phone type. Undefined = always show. */
+  phoneType?: "iphone" | "android";
+  /** Only show when user authenticated with this provider. Undefined = always show. */
+  authProvider?: "google" | "microsoft";
+  /** Hidden sources are registered but not shown in UI yet. */
+  hidden?: boolean;
+  /** Show as disabled with a "Coming Soon" badge. */
+  comingSoon?: boolean;
 }
 
 const SOURCE_OPTIONS: SourceConfig[] = [
@@ -74,6 +82,42 @@ const SOURCE_OPTIONS: SourceConfig[] = [
     ),
     selectedBorder: "border-blue-400",
     selectedBg: "bg-blue-50",
+    authProvider: "microsoft",
+  },
+  {
+    key: "iphoneContacts",
+    label: "iPhone Contacts",
+    description: "Import contacts from your synced iPhone",
+    icon: (
+      <svg className="w-7 h-7 text-gray-700" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.5}
+          d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"
+        />
+      </svg>
+    ),
+    selectedBorder: "border-gray-400",
+    selectedBg: "bg-gray-50",
+    phoneType: "iphone",
+  },
+  {
+    key: "googleContacts",
+    label: "Google Contacts",
+    description: "Sync contacts from your Google account",
+    icon: (
+      <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none">
+        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
+        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A10.96 10.96 0 001 12c0 1.77.42 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05" />
+        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+      </svg>
+    ),
+    selectedBorder: "border-green-400",
+    selectedBg: "bg-green-50",
+    authProvider: "google",
+    comingSoon: true,
   },
 ];
 
@@ -120,6 +164,25 @@ function SourceCard({
   onToggle: () => void;
   isSaving: boolean;
 }) {
+  if (source.comingSoon) {
+    return (
+      <div className="w-full p-4 rounded-xl border-2 border-gray-200 bg-gray-50 text-left flex items-center gap-4 opacity-60 cursor-not-allowed">
+        <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 bg-gray-100">
+          {source.icon}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h4 className="text-sm font-semibold text-gray-500">{source.label}</h4>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 bg-gray-200 px-1.5 py-0.5 rounded">
+              Coming Soon
+            </span>
+          </div>
+          <p className="text-xs text-gray-400 mt-0.5">{source.description}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <button
       type="button"
@@ -181,20 +244,25 @@ export function Content({
   const { isMacOS } = usePlatform();
   const [isSaving, setIsSaving] = useState(false);
 
-  // Default both sources to selected (fail-open)
+  // Default all sources to selected (fail-open)
   const [selected, setSelected] = useState<Record<string, boolean>>({
     macosContacts: true,
     outlookContacts: true,
+    iphoneContacts: true,
+    googleContacts: true,
   });
 
-  // Filter sources by current platform (memoized to avoid re-creation every render)
+  // Filter sources by platform, phone type, auth provider, and visibility
   const visibleSources = useMemo(
     () =>
       SOURCE_OPTIONS.filter((source) => {
-        if (!source.platforms) return true;
-        return source.platforms.includes(isMacOS ? "macos" : "windows");
+        if (source.hidden) return false;
+        if (source.platforms && !source.platforms.includes(isMacOS ? "macos" : "windows")) return false;
+        if (source.phoneType && source.phoneType !== context.phoneType) return false;
+        if (source.authProvider && source.authProvider !== context.authProvider) return false;
+        return true;
       }),
-    [isMacOS]
+    [isMacOS, context.phoneType, context.authProvider]
   );
 
   const handleToggle = useCallback((key: string) => {
@@ -210,9 +278,10 @@ export function Content({
 
     setIsSaving(true);
     try {
-      // Build preferences object for visible sources only
+      // Build preferences object for active (non-coming-soon) visible sources only
       const directPrefs: Record<string, boolean> = {};
       for (const source of visibleSources) {
+        if (source.comingSoon) continue;
         directPrefs[source.key] = selected[source.key] ?? true;
       }
 

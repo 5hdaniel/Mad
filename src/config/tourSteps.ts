@@ -14,6 +14,8 @@ export interface DashboardTourOptions {
   isMacOS: boolean;
   /** True when OS notifications are already enabled for this app */
   notificationsEnabled: boolean;
+  /** True when the iPhone sync card is visible on the dashboard */
+  hasIPhoneSync?: boolean;
 }
 
 /**
@@ -82,7 +84,7 @@ export const getDashboardTourSteps = (
       ? { hasAIAddon: optionsOrHasAIAddon, isMacOS: false, notificationsEnabled: true }
       : optionsOrHasAIAddon;
 
-  const { hasAIAddon, isMacOS, notificationsEnabled } = options;
+  const { hasAIAddon, isMacOS, notificationsEnabled, hasIPhoneSync } = options;
 
   // Show notification step only on macOS when notifications are not yet enabled
   const showNotificationStep = isMacOS && !notificationsEnabled;
@@ -147,6 +149,18 @@ export const getDashboardTourSteps = (
     spotlightClicks: true,
     disableBeacon: true,
   },
+  ...(hasIPhoneSync
+    ? [
+        {
+          target: '[data-tour="sync-phone-card"]',
+          content:
+            "Connect your iPhone to sync text messages directly. Plug in your phone via USB and click here to import your iMessage conversations for auditing.",
+          placement: "top" as const,
+          spotlightClicks: true,
+          disableBeacon: true,
+        },
+      ]
+    : []),
   {
     target: '[data-tour="profile-button"]',
     content:

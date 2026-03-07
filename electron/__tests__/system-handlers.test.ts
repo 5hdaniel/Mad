@@ -22,6 +22,7 @@ jest.mock("os", () => ({
 jest.mock("electron", () => ({
   ipcMain: {
     handle: mockIpcHandle,
+    on: jest.fn(),
   },
   app: {
     getPath: jest.fn().mockReturnValue("/tmp/test-user-data"),

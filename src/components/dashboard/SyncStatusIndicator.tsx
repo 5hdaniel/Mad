@@ -8,6 +8,9 @@
  * AI-specific features (pending transaction count, "Review Now" button) are
  * gated internally via useLicense() hook.
  *
+ * TASK-2119: iPhone sync is now rendered from the orchestrator queue like
+ * contacts/emails/messages. No more iPhone-specific props.
+ *
  * Flow:
  * 1. During sync: Shows progress bar with current operation (all users)
  * 2. After sync: Shows completion message with dismiss button (all users)
@@ -24,6 +27,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useLicense } from "../../contexts/LicenseContext";
 import { useSyncOrchestrator } from "../../hooks/useSyncOrchestrator";
 import type { SyncType, SyncItemStatus } from "../../services/SyncOrchestratorService";
+import logger from "../../utils/logger";
 
 interface SyncStatusIndicatorProps {
   /** Pending transaction count (shown in completion message) */
@@ -34,6 +38,8 @@ interface SyncStatusIndicatorProps {
   onOpenSettings?: () => void;
   /** When true, suppress auto-dismiss so the tour anchor stays visible (TASK-2081) */
   isTourActive?: boolean;
+  /** Callback when user clicks "Details" on a sync pill (e.g., iPhone) */
+  onViewSyncDetails?: (type: SyncType) => void;
 }
 
 /**
@@ -47,6 +53,8 @@ const getLabelForType = (type: SyncType): string => {
       return 'Emails';
     case 'messages':
       return 'Messages';
+    case 'iphone':
+      return 'iPhone';
     default:
       return type;
   }
@@ -64,13 +72,15 @@ const statusColors: Record<SyncItemStatus, string> = {
 
 /**
  * Unified sync notification - handles progress and completion.
- * Replaces the need for separate AIStatusCard for sync status.
+ * All sync types (contacts, emails, messages, iphone) render from the
+ * orchestrator queue. No type-specific props needed.
  */
 export function SyncStatusIndicator({
   pendingCount = 0,
   onViewPending,
   onOpenSettings,
   isTourActive = false,
+  onViewSyncDetails,
 }: SyncStatusIndicatorProps) {
   const [showCompletion, setShowCompletion] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -83,8 +93,21 @@ export function SyncStatusIndicator({
   // Use SyncOrchestrator as single source of truth for sync state
   const { queue, isRunning } = useSyncOrchestrator();
 
-  // Use isRunning from SyncOrchestrator as authoritative "is syncing" state
+  // isRunning from SyncOrchestrator now naturally includes all sync types (including iPhone)
   const isAnySyncing = isRunning;
+
+  useEffect(() => {
+    logger.info("[SyncStatusIndicator] Mounted");
+    return () => logger.info("[SyncStatusIndicator] Unmounted");
+  }, []);
+
+  useEffect(() => {
+    const view = (dismissed && !isAnySyncing && queue.length === 0) ? "hidden(dismissed)" :
+      (showCompletion && !isAnySyncing) ? "completion" :
+      (!isAnySyncing && queue.length === 0) ? "hidden(empty)" :
+      "progress";
+    logger.debug(`[SyncStatusIndicator] Rendering: ${view}`, { isRunning, queueLen: queue.length, showCompletion, dismissed });
+  }, [isAnySyncing, queue.length, showCompletion, dismissed]);
 
   // Check if any sync in the queue has an error
   const hasError = queue.some(item => item.status === 'error');
@@ -106,8 +129,8 @@ export function SyncStatusIndicator({
         autoDismissTimerRef.current = null;
       }
       setShowCompletion(false);
-    } else if (wasSyncingRef.current && !isAnySyncing) {
-      // Just finished syncing - show completion message
+    } else if (wasSyncingRef.current && !isAnySyncing && (queue.length === 0 || queue.some(item => item.status === 'complete' || item.status === 'error'))) {
+      // Just finished syncing - show completion message (queue may be empty if items auto-cleaned)
       setShowCompletion(true);
       wasSyncingRef.current = false;
 
@@ -150,6 +173,7 @@ export function SyncStatusIndicator({
 
   // Handle manual dismiss (also cancels auto-dismiss timer)
   const handleDismiss = useCallback(() => {
+    logger.info("[SyncStatusIndicator] Dismiss clicked");
     if (autoDismissTimerRef.current) {
       clearTimeout(autoDismissTimerRef.current);
       autoDismissTimerRef.current = null;
@@ -159,7 +183,7 @@ export function SyncStatusIndicator({
   }, []);
 
   // Don't render if dismissed and not syncing
-  if (dismissed && !isAnySyncing) {
+  if (dismissed && !isAnySyncing && queue.length === 0) {
     return null;
   }
 
@@ -304,15 +328,22 @@ export function SyncStatusIndicator({
     return null;
   }
 
-  // Get the currently running sync's progress for display
-  const runningItem = queue.find(item => item.status === 'running');
-  const activeProgress = runningItem?.progress ?? null;
+  // Get the currently running non-external sync's progress for percentage display
+  const runningInternalItem = queue.find(item => item.status === 'running' && !item.external);
+  const activeProgress = runningInternalItem?.progress ?? null;
 
   // Render a status pill for each sync item in queue order
-  const renderPill = (type: SyncType, status: SyncItemStatus, progress: number, error?: string, phase?: string) => {
+  const renderPill = (type: SyncType, status: SyncItemStatus, progress: number, error?: string, phase?: string, isExternal?: boolean) => {
     const baseLabel = getLabelForType(type);
-    // Show phase for running messages sync (e.g., "Messages - querying")
-    const label = status === 'running' && phase ? `${baseLabel} - ${phase}` : baseLabel;
+    // Show phase for running syncs (e.g., "Messages - querying", "iPhone - Exporting")
+    const friendlyPhase = phase ? ({
+      backing_up: 'Exporting',
+      preparing: 'Preparing',
+      extracting: 'Reading messages',
+      storing: 'Saving',
+      complete: 'Done',
+    }[phase] ?? phase) : undefined;
+    const label = status === 'running' && friendlyPhase ? `${baseLabel} - ${friendlyPhase}` : baseLabel;
     const colorClass = statusColors[status];
 
     // Error state - red with tooltip
@@ -322,6 +353,7 @@ export function SyncStatusIndicator({
           key={type}
           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${colorClass} cursor-help`}
           title={error || 'Sync failed'}
+          data-testid={`sync-pill-${type}`}
         >
           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -337,6 +369,7 @@ export function SyncStatusIndicator({
         <span
           key={type}
           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${colorClass}`}
+          data-testid={`sync-pill-${type}`}
         >
           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -346,13 +379,17 @@ export function SyncStatusIndicator({
       );
     }
 
-    // Running state - blue with optional phase (progress shown separately)
+    // Running state - blue with spinner for external syncs, plain for internal
     if (status === 'running') {
       return (
         <span
           key={type}
-          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${colorClass}`}
+          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${colorClass}`}
+          data-testid={`sync-pill-${type}`}
         >
+          {isExternal && (
+            <div className="w-3 h-3 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin" />
+          )}
           {label}
         </span>
       );
@@ -363,23 +400,38 @@ export function SyncStatusIndicator({
       <span
         key={type}
         className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${colorClass}`}
+        data-testid={`sync-pill-${type}`}
       >
         {baseLabel}
       </span>
     );
   };
 
+  // Determine background color: red if error, blue default
+  const bgClass = hasError
+    ? 'bg-red-50 border-red-200'
+    : 'bg-blue-50 border-blue-200';
+  const textClass = hasError
+    ? 'text-red-800'
+    : 'text-blue-800';
+  const iconClass = hasError
+    ? 'text-red-600'
+    : 'text-blue-600';
+
+  // Check if any external sync (e.g., iPhone) is active for "Details" link
+  const activeExternalItem = queue.find(item => item.external && (item.status === 'running' || item.status === 'complete' || item.status === 'error'));
+
   // Show compact sync progress
   return (
     <div
-      className={`${hasError ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-200'} border rounded-lg px-3 py-2 mb-3 animate-fade-in`}
+      className={`${bgClass} border rounded-lg px-3 py-2 mb-3 animate-fade-in`}
       data-testid="sync-status-indicator"
     >
       {/* Status pills row - render in queue order */}
       <div className="flex items-center gap-2 mb-2">
         {/* Spinning sync icon (counter-clockwise) */}
         <svg
-          className={`w-4 h-4 ${hasError ? 'text-red-600' : 'text-blue-600'} ${isAnySyncing ? 'animate-spin' : ''} flex-shrink-0`}
+          className={`w-4 h-4 ${iconClass} ${isAnySyncing ? 'animate-spin' : ''} flex-shrink-0`}
           style={isAnySyncing ? { animationDirection: 'reverse' } : undefined}
           fill="none"
           stroke="currentColor"
@@ -387,17 +439,31 @@ export function SyncStatusIndicator({
         >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
-        <span className={`text-xs font-medium ${hasError ? 'text-red-800' : 'text-blue-800'}`}>
+        <span className={`text-xs font-medium ${textClass}`}>
           {isAnySyncing ? 'Syncing:' : hasError ? 'Sync Error:' : 'Sync:'}
         </span>
-        {/* Render pills in queue order */}
-        {queue.map((item) => renderPill(item.type, item.status, item.progress, item.error, item.phase))}
+        {/* Render all pills in queue order (contacts, emails, messages, iphone) */}
+        {queue.map((item) => renderPill(item.type, item.status, item.progress, item.error, item.phase, item.external))}
+        {/* Show progress percentage for internal syncs only */}
         {activeProgress !== null && (
-          <span className="text-xs text-blue-600 ml-auto">{activeProgress}%</span>
+          <span className="text-xs text-blue-600 ml-auto">{Math.round(activeProgress)}%</span>
+        )}
+        {/* "Details" link for external syncs (e.g., iPhone) */}
+        {activeExternalItem && onViewSyncDetails && (
+          <button
+            onClick={() => { logger.info("[SyncStatusIndicator] Details clicked", activeExternalItem.type); onViewSyncDetails(activeExternalItem.type); }}
+            className="ml-auto p-0.5 text-blue-500 hover:text-blue-700 transition-colors"
+            data-testid="sync-view-details"
+            title="View sync details"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </button>
         )}
       </div>
 
-      {/* Progress bar hidden — IPC flushing issue causes jumpy updates (BACKLOG-824) */}
+      {/* Progress bar hidden -- IPC flushing issue causes jumpy updates (BACKLOG-824) */}
 
       {/* Disabled tools notice - only show when syncing */}
       {isAnySyncing && (

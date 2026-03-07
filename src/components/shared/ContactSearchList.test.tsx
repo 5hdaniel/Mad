@@ -539,7 +539,7 @@ describe("ContactSearchList", () => {
 
       await waitFor(() => {
         expect(consoleSpy).toHaveBeenCalledWith(
-          "[ERROR] Failed to import contact:",
+          expect.stringContaining("[ERROR] Failed to import contact:"),
           expect.any(Error)
         );
       });
