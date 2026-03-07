@@ -3,9 +3,14 @@
  *
  * Tests for the rollback logic added in TASK-2110b:
  * - rollbackSession() (tested indirectly through persistSyncResult)
- * - Cancel signal at different phases
+ * - Cancel signal at different phases (before, between, during)
  * - Content-addressed file safety (orphaned file detection)
  * - cancelledResult() output format
+ * - Error-path behavior (exception vs cancel)
+ * - Partial failures with rollback
+ * - Successful batch commit with messages, contacts, and attachments
+ *
+ * TASK-2115: Expanded coverage for ACID rollback edge cases
  */
 
 // Polyfill setImmediate for Jest (used by yieldToEventLoop)
@@ -516,5 +521,519 @@ describe("persistSyncResult without cancel", () => {
     // No rollback should have been called
     expect(mockDbService.deleteAttachmentsBySessionId).not.toHaveBeenCalled();
     expect(mockDbService.deleteMessagesBySessionId).not.toHaveBeenCalled();
+  });
+
+  it("should store messages and contacts with correct counts", async () => {
+    const messages = [makeMessage(1, "guid-1"), makeMessage(2, "guid-2"), makeMessage(3, "guid-3")];
+    const conversations = [makeConversation(1, messages)];
+    const contacts = [makeContact(1), makeContact(2)];
+
+    mockDbService.batchInsertMessages.mockReturnValue({ stored: 3, skipped: 0 });
+    mockExternalContactDb.upsertFromiPhone.mockReturnValue(2);
+
+    const result = await iPhoneSyncStorageService.persistSyncResult(
+      "user-1",
+      makeSyncResult({ messages, conversations, contacts }),
+      undefined,
+      undefined,
+      "session-full"
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.messagesStored).toBe(3);
+    expect(result.messagesSkipped).toBe(0);
+    expect(result.contactsStored).toBe(2);
+    expect(result.error).toBeUndefined();
+    expect(result.duration).toBeGreaterThanOrEqual(0);
+
+    // No rollback should have been called
+    expect(mockDbService.deleteAttachmentsBySessionId).not.toHaveBeenCalled();
+    expect(mockDbService.deleteMessagesBySessionId).not.toHaveBeenCalled();
+    expect(mockExternalContactDb.deleteBySessionId).not.toHaveBeenCalled();
+  });
+
+  it("should handle mixed stored/skipped messages correctly", async () => {
+    const messages = [makeMessage(1, "guid-1"), makeMessage(2, "guid-2")];
+    const conversations = [makeConversation(1, messages)];
+
+    // 1 stored, 1 skipped (duplicate)
+    mockDbService.batchInsertMessages.mockReturnValue({ stored: 1, skipped: 1 });
+
+    const result = await iPhoneSyncStorageService.persistSyncResult(
+      "user-1",
+      makeSyncResult({ messages, conversations }),
+      undefined,
+      undefined,
+      "session-mixed"
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.messagesStored).toBe(1);
+    expect(result.messagesSkipped).toBe(1);
+  });
+
+  it("should pass sessionId to batchInsertMessages for tagging", async () => {
+    const messages = [makeMessage(1, "guid-1")];
+    const conversations = [makeConversation(1, messages)];
+
+    mockDbService.batchInsertMessages.mockReturnValue({ stored: 1, skipped: 0 });
+
+    await iPhoneSyncStorageService.persistSyncResult(
+      "user-1",
+      makeSyncResult({ messages, conversations }),
+      undefined,
+      undefined,
+      "session-tag-123"
+    );
+
+    // sessionId should be passed to batchInsertMessages for DB tagging
+    expect(mockDbService.batchInsertMessages).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.any(Number),
+      "session-tag-123",
+      undefined // no cancel signal
+    );
+  });
+
+  it("should work correctly without sessionId or cancelSignal", async () => {
+    const messages = [makeMessage(1, "guid-1")];
+    const conversations = [makeConversation(1, messages)];
+
+    mockDbService.batchInsertMessages.mockReturnValue({ stored: 1, skipped: 0 });
+
+    const result = await iPhoneSyncStorageService.persistSyncResult(
+      "user-1",
+      makeSyncResult({ messages, conversations })
+      // no backupPath, no onProgress, no sessionId, no cancelSignal
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.messagesStored).toBe(1);
+  });
+});
+
+// ============================================
+// 6. Error-path behavior (exception vs cancel)
+// ============================================
+
+describe("error-path behavior (exception handling)", () => {
+  it("should return error result when storeMessages throws (no rollback on error)", async () => {
+    const messages = [makeMessage(1, "guid-1")];
+    const conversations = [makeConversation(1, messages)];
+
+    // Simulate an exception during message storage
+    mockDbService.getExistingMessageExternalIds.mockImplementation(() => {
+      throw new Error("Database corruption");
+    });
+
+    const result = await iPhoneSyncStorageService.persistSyncResult(
+      "user-1",
+      makeSyncResult({ messages, conversations }),
+      undefined,
+      undefined,
+      "session-err-msg"
+    );
+
+    // Error path: returns failure but does NOT trigger rollback
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Database corruption");
+    expect(result.messagesStored).toBe(0);
+    expect(result.contactsStored).toBe(0);
+    expect(result.attachmentsStored).toBe(0);
+
+    // Rollback should NOT be called on exceptions (only on cancel)
+    expect(mockDbService.deleteAttachmentsBySessionId).not.toHaveBeenCalled();
+    expect(mockDbService.deleteMessagesBySessionId).not.toHaveBeenCalled();
+    expect(mockExternalContactDb.deleteBySessionId).not.toHaveBeenCalled();
+  });
+
+  it("should return error result when batchInsertMessages throws", async () => {
+    const messages = [makeMessage(1, "guid-1")];
+    const conversations = [makeConversation(1, messages)];
+
+    mockDbService.batchInsertMessages.mockImplementation(() => {
+      throw new Error("Disk full");
+    });
+
+    const result = await iPhoneSyncStorageService.persistSyncResult(
+      "user-1",
+      makeSyncResult({ messages, conversations }),
+      undefined,
+      undefined,
+      "session-err-batch"
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Disk full");
+    expect(result.messagesStored).toBe(0);
+
+    // No rollback on exception
+    expect(mockDbService.deleteMessagesBySessionId).not.toHaveBeenCalled();
+  });
+
+  it("should return error result when storeContacts throws after messages succeed", async () => {
+    const messages = [makeMessage(1, "guid-1")];
+    const conversations = [makeConversation(1, messages)];
+    const contacts = [makeContact(1)];
+
+    // Messages succeed
+    mockDbService.batchInsertMessages.mockReturnValue({ stored: 1, skipped: 0 });
+
+    // Contacts throw
+    mockExternalContactDb.upsertFromiPhone.mockImplementation(() => {
+      throw new Error("Contact table locked");
+    });
+
+    const result = await iPhoneSyncStorageService.persistSyncResult(
+      "user-1",
+      makeSyncResult({ messages, conversations, contacts }),
+      undefined,
+      undefined,
+      "session-err-contacts"
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Contact table locked");
+    // On exception, all counts reset to 0 (try/catch returns zeroed result)
+    expect(result.messagesStored).toBe(0);
+    expect(result.contactsStored).toBe(0);
+
+    // No rollback on exception (rollback only for cancel)
+    expect(mockDbService.deleteMessagesBySessionId).not.toHaveBeenCalled();
+  });
+
+  it("should not throw when unknown error type is caught", async () => {
+    const messages = [makeMessage(1, "guid-1")];
+    const conversations = [makeConversation(1, messages)];
+
+    // Throw a non-Error object
+    mockDbService.getExistingMessageExternalIds.mockImplementation(() => {
+      throw "string error"; // eslint-disable-line no-throw-literal
+    });
+
+    const result = await iPhoneSyncStorageService.persistSyncResult(
+      "user-1",
+      makeSyncResult({ messages, conversations }),
+      undefined,
+      undefined,
+      "session-err-unknown"
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Unknown error");
+  });
+});
+
+// ============================================
+// 7. Partial success then cancel (rollback correctness)
+// ============================================
+
+describe("partial success then cancel", () => {
+  it("should roll back messages stored in first batch when cancel triggers mid-way", async () => {
+    const messages: iOSMessage[] = [];
+    for (let i = 1; i <= 10; i++) {
+      messages.push(makeMessage(i, `guid-${i}`));
+    }
+    const conversations = [makeConversation(1, messages)];
+    const cancelSignal = { cancelled: false };
+
+    // Simulate: batchInsertMessages stores some messages then cancel triggers
+    mockDbService.batchInsertMessages.mockImplementation(() => {
+      cancelSignal.cancelled = true;
+      return { stored: 7, skipped: 3 }; // Some stored, some duplicates
+    });
+
+    mockDbService.deleteAttachmentsBySessionId.mockReturnValue({ deleted: 0, orphanedFiles: [] });
+    mockDbService.deleteMessagesBySessionId.mockReturnValue(7); // Should delete the 7 stored
+    mockExternalContactDb.deleteBySessionId.mockReturnValue(0);
+
+    const result = await iPhoneSyncStorageService.persistSyncResult(
+      "user-1",
+      makeSyncResult({ messages, conversations }),
+      undefined,
+      undefined,
+      "session-partial",
+      cancelSignal
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Sync cancelled by user");
+
+    // Rollback should delete the 7 messages that were stored
+    expect(mockDbService.deleteMessagesBySessionId).toHaveBeenCalledWith("user-1", "session-partial");
+  });
+
+  it("should roll back both messages and contacts when cancel after contacts phase", async () => {
+    const messages = [makeMessage(1, "guid-1"), makeMessage(2, "guid-2")];
+    const conversations = [makeConversation(1, messages)];
+    const contacts = [makeContact(1), makeContact(2), makeContact(3)];
+    const cancelSignal = { cancelled: false };
+
+    // Messages succeed
+    mockDbService.batchInsertMessages.mockReturnValue({ stored: 2, skipped: 0 });
+
+    // Contacts succeed, then cancel triggers
+    mockExternalContactDb.upsertFromiPhone.mockImplementation(() => {
+      cancelSignal.cancelled = true;
+      return 3; // All 3 contacts stored
+    });
+
+    mockDbService.deleteAttachmentsBySessionId.mockReturnValue({ deleted: 0, orphanedFiles: [] });
+    mockDbService.deleteMessagesBySessionId.mockReturnValue(2);
+    mockExternalContactDb.deleteBySessionId.mockReturnValue(3);
+
+    const result = await iPhoneSyncStorageService.persistSyncResult(
+      "user-1",
+      makeSyncResult({ messages, conversations, contacts }),
+      undefined,
+      undefined,
+      "session-partial-contacts",
+      cancelSignal
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Sync cancelled by user");
+
+    // Both messages and contacts should be rolled back
+    expect(mockDbService.deleteMessagesBySessionId).toHaveBeenCalledWith("user-1", "session-partial-contacts");
+    expect(mockExternalContactDb.deleteBySessionId).toHaveBeenCalledWith("user-1", "session-partial-contacts");
+
+    // Attachments should also be rolled back (session-level cleanup)
+    expect(mockDbService.deleteAttachmentsBySessionId).toHaveBeenCalledWith("session-partial-contacts");
+  });
+
+  it("should report correct duration in cancelled result", async () => {
+    const cancelSignal = { cancelled: false };
+    const messages = [makeMessage(1, "guid-1")];
+    const conversations = [makeConversation(1, messages)];
+
+    mockDbService.batchInsertMessages.mockImplementation(() => {
+      cancelSignal.cancelled = true;
+      return { stored: 1, skipped: 0 };
+    });
+    mockDbService.deleteAttachmentsBySessionId.mockReturnValue({ deleted: 0, orphanedFiles: [] });
+    mockDbService.deleteMessagesBySessionId.mockReturnValue(1);
+    mockExternalContactDb.deleteBySessionId.mockReturnValue(0);
+
+    const result = await iPhoneSyncStorageService.persistSyncResult(
+      "user-1",
+      makeSyncResult({ messages, conversations }),
+      undefined,
+      undefined,
+      "session-duration",
+      cancelSignal
+    );
+
+    expect(result.duration).toBeGreaterThanOrEqual(0);
+    expect(typeof result.duration).toBe("number");
+  });
+});
+
+// ============================================
+// 8. Rollback order verification
+// ============================================
+
+describe("rollback execution order", () => {
+  it("should delete attachments before messages before contacts during rollback", async () => {
+    const cancelSignal = { cancelled: false };
+    const messages = [makeMessage(1, "guid-1")];
+    const conversations = [makeConversation(1, messages)];
+
+    mockDbService.batchInsertMessages.mockImplementation(() => {
+      cancelSignal.cancelled = true;
+      return { stored: 1, skipped: 0 };
+    });
+
+    const callOrder: string[] = [];
+
+    mockDbService.deleteAttachmentsBySessionId.mockImplementation(() => {
+      callOrder.push("deleteAttachments");
+      return { deleted: 0, orphanedFiles: [] };
+    });
+    mockDbService.deleteMessagesBySessionId.mockImplementation(() => {
+      callOrder.push("deleteMessages");
+      return 1;
+    });
+    mockExternalContactDb.deleteBySessionId.mockImplementation(() => {
+      callOrder.push("deleteContacts");
+      return 0;
+    });
+
+    await iPhoneSyncStorageService.persistSyncResult(
+      "user-1",
+      makeSyncResult({ messages, conversations }),
+      undefined,
+      undefined,
+      "session-order",
+      cancelSignal
+    );
+
+    // Verify order: attachments -> messages -> contacts
+    expect(callOrder).toEqual(["deleteAttachments", "deleteMessages", "deleteContacts"]);
+  });
+});
+
+// ============================================
+// 9. Cancel during attachments phase
+// ============================================
+
+describe("cancel during attachments phase", () => {
+  it("should roll back all data when cancel signal triggers after attachments phase", async () => {
+    const cancelSignal = { cancelled: false };
+    const msg1 = makeMessage(1, "guid-1");
+    // Add an attachment to the message
+    msg1.attachments = [{
+      id: 1,
+      filename: "~/Library/test.jpg",
+      transferName: "photo.jpg",
+      mimeType: "image/jpeg",
+      fileSize: 1024,
+      isSticker: false,
+    }] as unknown as iOSMessage["attachments"];
+
+    const messages = [msg1];
+    const conversations = [makeConversation(1, messages)];
+
+    // Messages succeed
+    mockDbService.batchInsertMessages.mockReturnValue({ stored: 1, skipped: 0 });
+    // Contacts succeed
+    mockExternalContactDb.upsertFromiPhone.mockReturnValue(0);
+
+    // Attachment storage needs additional mocks
+    mockDbService.getMessageIdMap.mockReturnValue(new Map([["guid-1", "internal-id-1"]]));
+    mockDbService.getAttachmentStoragePaths.mockReturnValue([]);
+    mockDbService.getExistingAttachmentRecords.mockReturnValue(new Set());
+    mockDbService.insertAttachment.mockImplementation(() => {
+      // Cancel triggers during attachment storage
+      cancelSignal.cancelled = true;
+    });
+
+    // Mock iOSMessagesParser for attachment resolution
+    const { iOSMessagesParser } = require("../iosMessagesParser");
+    iOSMessagesParser.resolveAttachmentPath.mockReturnValue("/mock/backup/test.jpg");
+
+    // Mock crypto for streaming hash
+    const mockStream = {
+      on: jest.fn().mockImplementation(function (this: Record<string, unknown>, event: string, cb: (...args: unknown[]) => void) {
+        if (event === "data") cb(Buffer.from("test"));
+        if (event === "end") cb();
+        return this;
+      }),
+    };
+    (fs.createReadStream as jest.Mock).mockReturnValue(mockStream);
+
+    // Rollback mocks
+    mockDbService.deleteAttachmentsBySessionId.mockReturnValue({
+      deleted: 1,
+      orphanedFiles: ["/mock/userData/message-attachments/abc123.jpg"],
+    });
+    mockDbService.deleteMessagesBySessionId.mockReturnValue(1);
+    mockExternalContactDb.deleteBySessionId.mockReturnValue(0);
+
+    const result = await iPhoneSyncStorageService.persistSyncResult(
+      "user-1",
+      makeSyncResult({ messages, conversations }),
+      "/mock/backup",
+      undefined,
+      "session-att-cancel",
+      cancelSignal
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Sync cancelled by user");
+
+    // All rollback methods should have been called
+    expect(mockDbService.deleteAttachmentsBySessionId).toHaveBeenCalledWith("session-att-cancel");
+    expect(mockDbService.deleteMessagesBySessionId).toHaveBeenCalledWith("user-1", "session-att-cancel");
+    expect(mockExternalContactDb.deleteBySessionId).toHaveBeenCalledWith("user-1", "session-att-cancel");
+
+    // Orphaned files should be cleaned up
+    expect(mockFsPromises.unlink).toHaveBeenCalledWith("/mock/userData/message-attachments/abc123.jpg");
+  });
+});
+
+// ============================================
+// 10. Empty data edge cases
+// ============================================
+
+describe("empty data edge cases", () => {
+  it("should succeed with empty messages, contacts, and conversations", async () => {
+    const result = await iPhoneSyncStorageService.persistSyncResult(
+      "user-1",
+      makeSyncResult({ messages: [], contacts: [], conversations: [] }),
+      undefined,
+      undefined,
+      "session-empty"
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.messagesStored).toBe(0);
+    expect(result.contactsStored).toBe(0);
+    expect(result.attachmentsStored).toBe(0);
+
+    // batchInsertMessages should not be called with empty messages
+    // (storeMessages returns early for empty array)
+    expect(mockDbService.batchInsertMessages).not.toHaveBeenCalled();
+    expect(mockDbService.deleteAttachmentsBySessionId).not.toHaveBeenCalled();
+  });
+
+  it("should not trigger rollback when cancelled with empty sync data", async () => {
+    const cancelSignal = { cancelled: true };
+
+    const result = await iPhoneSyncStorageService.persistSyncResult(
+      "user-1",
+      makeSyncResult({ messages: [], contacts: [], conversations: [] }),
+      undefined,
+      undefined,
+      "session-empty-cancel",
+      cancelSignal
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Sync cancelled by user");
+    // No rollback needed (cancel before any storage started)
+    expect(mockDbService.deleteAttachmentsBySessionId).not.toHaveBeenCalled();
+    expect(mockDbService.deleteMessagesBySessionId).not.toHaveBeenCalled();
+  });
+});
+
+// ============================================
+// 11. Progress callback during cancel
+// ============================================
+
+describe("progress callback behavior", () => {
+  it("should invoke progress callback before cancel takes effect", async () => {
+    const cancelSignal = { cancelled: false };
+    const messages = [makeMessage(1, "guid-1")];
+    const conversations = [makeConversation(1, messages)];
+
+    const progressCalls: Array<{ phase: string; current: number; total: number }> = [];
+
+    mockDbService.batchInsertMessages.mockImplementation(() => {
+      cancelSignal.cancelled = true;
+      return { stored: 1, skipped: 0 };
+    });
+    mockDbService.deleteAttachmentsBySessionId.mockReturnValue({ deleted: 0, orphanedFiles: [] });
+    mockDbService.deleteMessagesBySessionId.mockReturnValue(1);
+    mockExternalContactDb.deleteBySessionId.mockReturnValue(0);
+
+    await iPhoneSyncStorageService.persistSyncResult(
+      "user-1",
+      makeSyncResult({ messages, conversations }),
+      undefined,
+      (progress) => {
+        progressCalls.push({ phase: progress.phase, current: progress.current, total: progress.total });
+      },
+      "session-progress",
+      cancelSignal
+    );
+
+    // Messages phase progress should have been reported at least once
+    const messageProgressCalls = progressCalls.filter(p => p.phase === "messages");
+    expect(messageProgressCalls.length).toBeGreaterThanOrEqual(1);
+
+    // Contacts phase should NOT have progress (cancelled before contacts)
+    const contactProgressCalls = progressCalls.filter(p => p.phase === "contacts");
+    expect(contactProgressCalls.length).toBe(0);
   });
 });
