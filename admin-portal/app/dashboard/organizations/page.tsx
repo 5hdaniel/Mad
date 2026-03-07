@@ -24,12 +24,21 @@ export default async function OrganizationsPage() {
 
   const { data: internalRole } = await supabase
     .from('internal_roles')
-    .select('role')
+    .select('role_id')
     .eq('user_id', adminUser.id)
     .single();
 
   if (!internalRole) {
     redirect('/login?error=not_authorized');
+  }
+
+  // Defense-in-depth: verify page-level permission
+  const { data: hasPerm } = await supabase.rpc('has_permission', {
+    check_user_id: adminUser.id,
+    required_permission: 'organizations.view',
+  });
+  if (!hasPerm) {
+    redirect('/dashboard?error=insufficient_permissions');
   }
 
   // Fetch all organizations with member counts

@@ -70,6 +70,38 @@ dependency_graph:
       reason: "Both touch shared-types/"
 ```
 
+## File-Overlap Matrix (Required Before Parallel Approval)
+
+Before approving any tasks for parallel execution within a phase, produce a
+file-overlap matrix listing every file modified by more than one task.
+
+### Template
+
+```markdown
+### Shared File Analysis
+
+| File | Modified By | Conflict Type |
+|------|-------------|---------------|
+| src/path/to/file.tsx | TASK-XXX, TASK-YYY | semantic / textual / none |
+
+**Recommendation:** Sequential / Parallel with owner constraints / Safe parallel
+```
+
+### Rules
+
+- If any file appears in more than one task's modification list, classify the
+  overlap as **semantic** (same component, different concerns), **textual**
+  (likely merge conflict), or **none** (different exports in same file).
+- Semantic or textual overlap **defaults to sequential execution** unless SR
+  Engineer explicitly approves parallel with file-ownership constraints.
+- When parallel execution is approved despite overlap, each task file must
+  populate its "File Boundaries" section with owned and restricted files.
+- If no files overlap across tasks in a phase, state "No shared files -- safe
+  for parallel execution" and skip the matrix.
+
+> **Incident ref:** BACKLOG-883/889 -- semantic conflict in `SettingsManager.tsx`.
+> See `.claude/plans/investigations/parallel-shared-file-conflict-analysis.md`.
+
 ## Validation rules
 
 - No circular dependencies

@@ -5,6 +5,7 @@
  */
 
 import { Monitor } from 'lucide-react';
+import { formatTimestamp } from '@/lib/format';
 
 interface Device {
   id: string;
@@ -13,17 +14,6 @@ interface Device {
   app_version: string | null;
   last_seen_at: string | null;
   created_at: string;
-}
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return 'Never';
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 }
 
 export function DevicesTable({ devices }: { devices: Device[] }) {
@@ -73,10 +63,10 @@ export function DevicesTable({ devices }: { devices: Device[] }) {
                     </code>
                   </td>
                   <td className="px-3 py-2 text-sm text-gray-600 whitespace-nowrap">
-                    {formatDate(device.last_seen_at)}
+                    {formatTimestamp(device.last_seen_at, 'Never')}
                   </td>
                   <td className="px-3 py-2 text-sm text-gray-500 whitespace-nowrap">
-                    {formatDate(device.created_at)}
+                    {formatTimestamp(device.created_at, 'Never')}
                   </td>
                 </tr>
               ))}

@@ -33,6 +33,16 @@ Check that all acceptance criteria from the task file are met."
 - **PR:** #XXX (if created)
 - **Plan File:** `/path/to/plan.md` (if in planning phase)
 
+### File Boundaries (Parallel Tasks Only)
+
+If this task runs in parallel with other tasks, confirm file scope compliance:
+
+- [ ] I only modified files listed in the "Files to modify" section of the task file
+- [ ] I did NOT modify any files listed in "Files this task must NOT modify"
+- [ ] If I needed a restricted file, I stopped and notified PM
+
+If sequential execution (no parallel peers): "N/A -- sequential execution."
+
 ### Issues/Blockers
 
 [Document any problems encountered during this phase]

@@ -6,6 +6,7 @@
  */
 
 import { SuspendDialog } from './SuspendDialog';
+import { formatTimestamp } from '@/lib/format';
 
 interface UserProfile {
   id: string;
@@ -17,17 +18,6 @@ interface UserProfile {
   subscription_tier: string | null;
   created_at: string;
   last_login_at: string | null;
-}
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return 'Never';
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 }
 
 function getInitials(name: string | null, email: string | null): string {
@@ -71,11 +61,13 @@ export function UserProfileCard({ user }: { user: UserProfile }) {
             <h2 className="text-xl font-bold text-gray-900 truncate">
               {displayName}
             </h2>
-            <SuspendDialog
-              userId={user.id}
-              userName={displayName}
-              isSuspended={user.status === 'suspended'}
-            />
+            <div className="flex items-center gap-2">
+              <SuspendDialog
+                userId={user.id}
+                userName={displayName}
+                isSuspended={user.status === 'suspended'}
+              />
+            </div>
           </div>
           {user.email && (
             <p className="text-sm text-gray-500 truncate">{user.email}</p>
@@ -97,7 +89,7 @@ export function UserProfileCard({ user }: { user: UserProfile }) {
             Created
           </dt>
           <dd className="mt-1 text-sm text-gray-900">
-            {formatDate(user.created_at)}
+            {formatTimestamp(user.created_at, 'Never')}
           </dd>
         </div>
         <div>
@@ -105,7 +97,7 @@ export function UserProfileCard({ user }: { user: UserProfile }) {
             Last Sign In
           </dt>
           <dd className="mt-1 text-sm text-gray-900">
-            {formatDate(user.last_login_at)}
+            {formatTimestamp(user.last_login_at, 'Never')}
           </dd>
         </div>
         <div>

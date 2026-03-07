@@ -46,10 +46,17 @@ function LoginForm() {
     setLoading(provider);
     setError(null);
 
+    // Forward redirectTo param so the callback can redirect to the intended page
+    const redirectTo = searchParams.get('redirectTo') || '/dashboard';
+    const callbackUrl = new URL('/auth/callback', window.location.origin);
+    if (redirectTo !== '/dashboard') {
+      callbackUrl.searchParams.set('next', redirectTo);
+    }
+
     const { error: authError } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: callbackUrl.toString(),
         queryParams: {
           prompt: 'select_account',
         },

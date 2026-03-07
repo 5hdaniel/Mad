@@ -37,12 +37,21 @@ export default async function AnalyticsPage() {
   // Verify internal role
   const { data: internalRole } = await supabase
     .from('internal_roles')
-    .select('role')
+    .select('role_id')
     .eq('user_id', user.id)
     .single();
 
   if (!internalRole) {
     redirect('/login?error=not_authorized');
+  }
+
+  // Defense-in-depth: verify page-level permission
+  const { data: hasPerm } = await supabase.rpc('has_permission', {
+    check_user_id: user.id,
+    required_permission: 'analytics.view',
+  });
+  if (!hasPerm) {
+    redirect('/dashboard?error=insufficient_permissions');
   }
 
   // Fetch all analytics data in parallel

@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Users, MoreVertical, ExternalLink, Ban, CheckCircle, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { suspendUser, unsuspendUser } from '@/lib/admin-queries';
+import { formatDate } from '@/lib/format';
 
 export interface MemberRow {
   user_id: string;
@@ -22,15 +23,6 @@ interface MembersTableProps {
 type SortField = 'name' | 'email' | 'role' | 'license' | 'joined';
 type SortDir = 'asc' | 'desc';
 type LicenseFilter = 'all' | 'active' | 'trial' | 'expired' | 'none';
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return 'Unknown';
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-}
 
 function getRoleBadgeColor(role: string): string {
   switch (role) {

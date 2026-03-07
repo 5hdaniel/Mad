@@ -1,16 +1,16 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
-import { UsersPageClient } from './components/UsersPageClient';
+import { AuditLogContent } from './AuditLogContent';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Users Page - Admin Portal
+ * Audit Log Page - Admin Portal
  *
  * Server component that verifies authentication and permissions,
- * then renders the client-side search interface.
+ * then renders the client-side audit log viewer.
  */
-export default async function UsersPage() {
+export default async function AuditLogPage() {
   const supabase = await createClient();
 
   // Verify authentication
@@ -36,11 +36,11 @@ export default async function UsersPage() {
   // Defense-in-depth: verify page-level permission
   const { data: hasPerm } = await supabase.rpc('has_permission', {
     check_user_id: user.id,
-    required_permission: 'users.view',
+    required_permission: 'audit.view',
   });
   if (!hasPerm) {
     redirect('/dashboard?error=insufficient_permissions');
   }
 
-  return <UsersPageClient />;
+  return <AuditLogContent />;
 }

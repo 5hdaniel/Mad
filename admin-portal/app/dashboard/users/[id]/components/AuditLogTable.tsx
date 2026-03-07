@@ -8,6 +8,7 @@
 
 import { useState } from 'react';
 import { FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { formatTimestamp } from '@/lib/format';
 
 interface AuditLogEntry {
   id: string;
@@ -19,15 +20,6 @@ interface AuditLogEntry {
 }
 
 const INITIAL_COUNT = 5;
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
 
 function getActionColor(action: string): string {
   if (action.startsWith('delete') || action.startsWith('remove')) {
@@ -99,7 +91,7 @@ export function AuditLogTable({ entries }: { entries: AuditLogEntry[] }) {
                       )}
                     </td>
                     <td className="px-3 py-2 text-sm text-gray-500 whitespace-nowrap">
-                      {formatDate(entry.created_at)}
+                      {formatTimestamp(entry.created_at)}
                     </td>
                   </tr>
                 ))}

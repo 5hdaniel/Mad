@@ -9,6 +9,7 @@
 
 import { useEffect, useState } from 'react';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { formatTimestamp } from '@/lib/format';
 
 const INITIAL_COUNT = 5;
 
@@ -21,15 +22,6 @@ interface SentryIssue {
   count: string;
   lastSeen: string;
   permalink: string;
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 }
 
 function getLevelColor(level: string): string {
@@ -135,7 +127,7 @@ export function SentryErrorsCard({ email }: { email: string }) {
                   </div>
                 </div>
                 <p className="text-xs text-gray-400 mt-1">
-                  Last seen {formatDate(issue.lastSeen)}
+                  Last seen {formatTimestamp(issue.lastSeen)}
                 </p>
               </li>
             ))}

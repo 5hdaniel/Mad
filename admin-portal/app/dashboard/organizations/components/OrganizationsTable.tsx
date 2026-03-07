@@ -10,6 +10,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Building2, Search } from 'lucide-react';
+import { formatDate } from '@/lib/format';
 
 export interface OrganizationRow {
   id: string;
@@ -22,15 +23,6 @@ export interface OrganizationRow {
 
 interface OrganizationsTableProps {
   organizations: OrganizationRow[];
-}
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return 'Unknown';
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
 }
 
 function PlanBadge({ plan }: { plan: string | null }) {

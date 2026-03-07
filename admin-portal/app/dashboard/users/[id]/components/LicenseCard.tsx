@@ -6,6 +6,7 @@
 
 import { Shield } from 'lucide-react';
 import { EditLicenseDialog } from './EditLicenseDialog';
+import { formatDate } from '@/lib/format';
 
 interface License {
   id: string;
@@ -18,15 +19,6 @@ interface License {
   transaction_limit: number | null;
   expires_at: string | null;
   created_at: string;
-}
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return 'N/A';
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
 }
 
 function getStatusColor(status: string | null): string {
@@ -91,7 +83,7 @@ export function LicenseCard({ licenses }: { licenses: License[] }) {
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500">
-                <span>Expires: {lic.expires_at ? formatDate(lic.expires_at) : 'No expiration'}</span>
+                <span>Expires: {lic.expires_at ? formatDate(lic.expires_at, 'N/A') : 'No expiration'}</span>
                 <span>
                   Transactions: {lic.transaction_count ?? 0}
                   {lic.transaction_limit && lic.transaction_limit < 999999
@@ -101,7 +93,7 @@ export function LicenseCard({ licenses }: { licenses: License[] }) {
                 {lic.trial_status && (
                   <>
                     <span>Trial: {lic.trial_status}</span>
-                    <span>Trial expires: {formatDate(lic.trial_expires_at)}</span>
+                    <span>Trial expires: {formatDate(lic.trial_expires_at, 'N/A')}</span>
                   </>
                 )}
               </div>
