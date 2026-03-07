@@ -44,6 +44,25 @@ Use the Task tool to spawn the engineer agent instead.
 1. New file: `<path/to/file.ts>`
 2. Update: `<path/to/existing.ts>`
 
+## File Boundaries
+
+> **Purpose:** Prevents semantic conflicts when tasks run in parallel. If this task
+> runs sequentially (no parallel peers), this section can be marked "N/A -- sequential execution."
+
+### Files to modify (owned by this task):
+
+- `<path/to/file1.ts>`
+- `<path/to/file2.tsx>`
+
+### Files this task must NOT modify:
+
+- `<path/to/shared-component.tsx>` -- Owned by TASK-XXX in this sprint
+- `<path/to/types.ts>` -- Frozen; changes require sequential resequencing
+
+### If you need to modify a restricted file:
+
+**STOP** and notify PM. The task may need to be resequenced.
+
 ## Acceptance Criteria
 
 <Checkboxes that must ALL be true for the task to be complete>
@@ -51,6 +70,7 @@ Use the Task tool to spawn the engineer agent instead.
 - [ ] Criterion 1
 - [ ] Criterion 2
 - [ ] Criterion 3
+- [ ] No modifications to files outside the "Files to modify" list (parallel tasks only)
 - [ ] All CI checks pass
 
 ## Implementation Notes

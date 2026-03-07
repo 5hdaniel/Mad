@@ -5,21 +5,13 @@
  */
 
 import { Building2 } from 'lucide-react';
+import { formatDate } from '@/lib/format';
 
 interface OrgMembership {
   organization_id: string;
   org_name: string | null;
   role: string | null;
   joined_at: string | null;
-}
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return 'Unknown';
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
 }
 
 function getRoleBadgeColor(role: string | null): string {

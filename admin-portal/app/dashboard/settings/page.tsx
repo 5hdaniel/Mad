@@ -1,17 +1,21 @@
 /**
- * Settings Page - Internal User Management
+ * Settings Page - Internal User Management + Role Management
  *
- * Server component that fetches the list of internal users and renders
- * the management UI. Add/remove operations use RPCs via client components.
+ * Server component that fetches internal users (with role from admin_roles)
+ * and renders the management UI with tabs for users and roles.
  */
 
 import { createClient } from '@/lib/supabase/server';
-import { InternalUsersManager } from './components/InternalUsersManager';
+import { SettingsManager } from './components/SettingsManager';
+
+export const dynamic = 'force-dynamic';
 
 export interface InternalUser {
   id: string;
   user_id: string;
-  role: string;
+  role_id: string;
+  role_name: string;
+  role_slug: string;
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -19,6 +23,24 @@ export interface InternalUser {
   display_name: string | null;
   avatar_url: string | null;
   created_by_email: string | null;
+}
+
+export interface AdminRole {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  is_system: boolean;
+  created_at: string;
+  permission_keys: string[];
+}
+
+export interface AdminPermission {
+  id: string;
+  key: string;
+  label: string;
+  description: string | null;
+  category: string;
 }
 
 async function getInternalUsers(): Promise<InternalUser[]> {
@@ -29,10 +51,11 @@ async function getInternalUsers(): Promise<InternalUser[]> {
     .select(`
       id,
       user_id,
-      role,
+      role_id,
       created_at,
       updated_at,
       created_by,
+      role:admin_roles(name, slug),
       user:users!internal_roles_user_id_fkey (
         email,
         display_name,
@@ -49,23 +72,81 @@ async function getInternalUsers(): Promise<InternalUser[]> {
     return [];
   }
 
-  // Flatten the joined data
   return (data || []).map((row: Record<string, unknown>) => {
     const user = row.user as Record<string, unknown> | null;
     const creator = row.creator as Record<string, unknown> | null;
+    const role = row.role as Record<string, unknown> | null;
     return {
       id: row.id as string,
       user_id: row.user_id as string,
-      role: row.role as string,
+      role_id: row.role_id as string,
+      role_name: (role?.name as string) ?? 'Unknown',
+      role_slug: (role?.slug as string) ?? 'unknown',
       created_at: row.created_at as string,
       updated_at: row.updated_at as string,
       created_by: row.created_by as string | null,
-      email: user?.email as string | null ?? null,
-      display_name: user?.display_name as string | null ?? null,
-      avatar_url: user?.avatar_url as string | null ?? null,
-      created_by_email: creator?.email as string | null ?? null,
+      email: (user?.email as string | null) ?? null,
+      display_name: (user?.display_name as string | null) ?? null,
+      avatar_url: (user?.avatar_url as string | null) ?? null,
+      created_by_email: (creator?.email as string | null) ?? null,
     };
   });
+}
+
+async function getRoles(): Promise<AdminRole[]> {
+  const supabase = await createClient();
+
+  const { data: roles, error: rolesError } = await supabase
+    .from('admin_roles')
+    .select('id, name, slug, description, is_system, created_at')
+    .order('is_system', { ascending: false })
+    .order('name');
+
+  if (rolesError) {
+    console.error('Failed to fetch roles:', rolesError.message);
+    return [];
+  }
+
+  const { data: mappings } = await supabase
+    .from('admin_role_permissions')
+    .select('role_id, permission:admin_permissions(key)');
+
+  const rolePermMap = new Map<string, string[]>();
+  for (const m of mappings || []) {
+    const perm = m.permission as unknown as { key: string } | null;
+    if (perm) {
+      const existing = rolePermMap.get(m.role_id) || [];
+      existing.push(perm.key);
+      rolePermMap.set(m.role_id, existing);
+    }
+  }
+
+  return (roles || []).map((r) => ({
+    id: r.id,
+    name: r.name,
+    slug: r.slug,
+    description: r.description,
+    is_system: r.is_system,
+    created_at: r.created_at,
+    permission_keys: rolePermMap.get(r.id) || [],
+  }));
+}
+
+async function getPermissions(): Promise<AdminPermission[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from('admin_permissions')
+    .select('id, key, label, description, category')
+    .order('category')
+    .order('key');
+
+  if (error) {
+    console.error('Failed to fetch permissions:', error.message);
+    return [];
+  }
+
+  return data || [];
 }
 
 async function getCurrentUserId(): Promise<string | null> {
@@ -75,9 +156,11 @@ async function getCurrentUserId(): Promise<string | null> {
 }
 
 export default async function SettingsPage() {
-  const [internalUsers, currentUserId] = await Promise.all([
+  const [internalUsers, currentUserId, roles, permissions] = await Promise.all([
     getInternalUsers(),
     getCurrentUserId(),
+    getRoles(),
+    getPermissions(),
   ]);
 
   return (
@@ -85,13 +168,15 @@ export default async function SettingsPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Manage internal users who have access to the admin portal.
+          Manage internal users, roles, and permissions.
         </p>
       </div>
 
-      <InternalUsersManager
+      <SettingsManager
         initialUsers={internalUsers}
         currentUserId={currentUserId}
+        initialRoles={roles}
+        permissions={permissions}
       />
     </div>
   );
