@@ -15,6 +15,7 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/service';
 import { IMPERSONATION_COOKIE_NAME, type ImpersonationSession } from '@/lib/impersonation';
+import { signCookieValue } from '@/lib/cookie-signing';
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -59,8 +60,11 @@ export async function GET(request: Request) {
       started_at: data.started_at,
     };
 
+    // TASK-2131: Sign the cookie payload with HMAC-SHA256 to prevent tampering
+    const signedValue = signCookieValue(JSON.stringify(impersonationData));
+
     const response = NextResponse.redirect(`${origin}/dashboard`);
-    response.cookies.set(IMPERSONATION_COOKIE_NAME, JSON.stringify(impersonationData), {
+    response.cookies.set(IMPERSONATION_COOKIE_NAME, signedValue, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
