@@ -6,6 +6,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
+import { redirect } from 'next/navigation';
 import { SettingsManager } from './components/SettingsManager';
 
 export const dynamic = 'force-dynamic';
@@ -33,6 +34,14 @@ export interface AdminRole {
   is_system: boolean;
   created_at: string;
   permission_keys: string[];
+}
+
+export interface PendingInvitation {
+  id: string;
+  email: string;
+  role_name: string;
+  role_slug: string;
+  created_at: string;
 }
 
 export interface AdminPermission {
@@ -89,6 +98,36 @@ async function getInternalUsers(): Promise<InternalUser[]> {
       display_name: (user?.display_name as string | null) ?? null,
       avatar_url: (user?.avatar_url as string | null) ?? null,
       created_by_email: (creator?.email as string | null) ?? null,
+    };
+  });
+}
+
+async function getPendingInvitations(): Promise<PendingInvitation[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from('pending_internal_invitations')
+    .select(`
+      id,
+      email,
+      created_at,
+      role:admin_roles(name, slug)
+    `)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Failed to fetch pending invitations:', error.message);
+    return [];
+  }
+
+  return (data || []).map((row: Record<string, unknown>) => {
+    const role = row.role as Record<string, unknown> | null;
+    return {
+      id: row.id as string,
+      email: row.email as string,
+      role_name: (role?.name as string) ?? 'Unknown',
+      role_slug: (role?.slug as string) ?? 'unknown',
+      created_at: row.created_at as string,
     };
   });
 }
@@ -156,11 +195,40 @@ async function getCurrentUserId(): Promise<string | null> {
 }
 
 export default async function SettingsPage() {
-  const [internalUsers, currentUserId, roles, permissions] = await Promise.all([
+  // Defense-in-depth: verify auth, internal role, and page-level permission
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect('/login');
+  }
+
+  const { data: internalRole } = await supabase
+    .from('internal_roles')
+    .select('role_id')
+    .eq('user_id', user.id)
+    .single();
+
+  if (!internalRole) {
+    redirect('/login?error=not_authorized');
+  }
+
+  const { data: hasAnyPerm } = await supabase.rpc('has_any_permission', {
+    check_user_id: user.id,
+    permission_keys: ['internal_users.view', 'roles.view', 'audit.view'],
+  });
+  if (!hasAnyPerm) {
+    redirect('/dashboard?error=insufficient_permissions');
+  }
+
+  const [internalUsers, currentUserId, roles, permissions, pendingInvitations] = await Promise.all([
     getInternalUsers(),
     getCurrentUserId(),
     getRoles(),
     getPermissions(),
+    getPendingInvitations(),
   ]);
 
   return (
@@ -177,6 +245,7 @@ export default async function SettingsPage() {
         currentUserId={currentUserId}
         initialRoles={roles}
         permissions={permissions}
+        pendingInvitations={pendingInvitations}
       />
     </div>
   );

@@ -32,9 +32,9 @@ CREATE POLICY "service_role_full_access_invitations"
 CREATE POLICY "users_can_read_own_invitation"
   ON pending_internal_invitations
   FOR SELECT
-  USING (email = (SELECT email FROM auth.users WHERE id = auth.uid()));
+  USING (email = (auth.jwt() ->> 'email'));
 
 CREATE POLICY "users_can_delete_own_invitation"
   ON pending_internal_invitations
   FOR DELETE
-  USING (email = (SELECT email FROM auth.users WHERE id = auth.uid()));
+  USING (email = (auth.jwt() ->> 'email'));

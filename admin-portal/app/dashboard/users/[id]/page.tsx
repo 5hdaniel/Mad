@@ -45,6 +45,15 @@ export default async function UserDetailPage({
     redirect('/login?error=not_authorized');
   }
 
+  // Defense-in-depth: verify page-level permission
+  const { data: hasPerm } = await supabase.rpc('has_permission', {
+    check_user_id: adminUser.id,
+    required_permission: 'users.view',
+  });
+  if (!hasPerm) {
+    redirect('/dashboard?error=insufficient_permissions');
+  }
+
   // Fetch target user profile from auth.users via admin RPC or profiles table
   // Using parallel queries for performance
   const [profileResult, orgsResult, licensesResult, devicesResult, auditResult] =
