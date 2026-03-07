@@ -32,6 +32,15 @@ export default async function OrganizationsPage() {
     redirect('/login?error=not_authorized');
   }
 
+  // Defense-in-depth: verify page-level permission
+  const { data: hasPerm } = await supabase.rpc('has_permission', {
+    check_user_id: adminUser.id,
+    required_permission: 'organizations.view',
+  });
+  if (!hasPerm) {
+    redirect('/dashboard?error=insufficient_permissions');
+  }
+
   // Fetch all organizations with member counts
   const { data: orgs, error } = await supabase
     .from('organizations')
