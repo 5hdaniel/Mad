@@ -1,7 +1,7 @@
 # SPRINT-114: iPhone Sync Hardening
 
 **Created:** 2026-03-05
-**Status:** QA Passed -- Awaiting SR Engineer Review
+**Status:** Completed
 **Goal:** Harden iPhone sync UX with network resilience, test coverage, and persistent progress visibility
 **Parent:** SPRINT-110 (discovered items)
 
