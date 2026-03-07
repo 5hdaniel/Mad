@@ -34,7 +34,7 @@ Make the impersonation token single-use by adding a status transition in `admin_
 
 ## Deliverables
 
-1. New: `supabase/migrations/YYYYMMDD_single_use_impersonation_token.sql` -- ALTER function + status constraint
+1. New: `supabase/migrations/YYYYMMDD_single_use_impersonation_token.sql` -- ALTER token column type (UUID->TEXT), add `session_expires_at` column, ALTER function + status constraint
 
 ## File Boundaries
 
@@ -54,6 +54,10 @@ Make the impersonation token single-use by adding a status transition in `admin_
 
 ## Acceptance Criteria
 
+- [ ] Migration ALTERs `token` column from UUID to TEXT with default `encode(gen_random_bytes(32), 'hex')::text`
+- [ ] Migration adds `session_expires_at` column (timestamptz, NOT NULL) to `impersonation_sessions`
+- [ ] `admin_start_impersonation` sets both `expires_at` (token expiry) and `session_expires_at = now() + interval '30 minutes'` (session expiry)
+- [ ] `admin_validate_impersonation_token` returns `session_expires_at` in its response JSON
 - [ ] New migration file adds `validated` to status CHECK constraint on `impersonation_sessions`
 - [ ] `admin_validate_impersonation_token` RPC updates status to `validated` after successful SELECT
 - [ ] First call to validate token succeeds and returns session data
@@ -64,10 +68,48 @@ Make the impersonation token single-use by adding a status transition in `admin_
 
 ## Implementation Notes
 
+### CRITICAL: Token Column Type Mismatch (SR Blocking Issue #1)
+
+The existing migration (`20260307_impersonation_sessions.sql`) defines the `token` column as `UUID DEFAULT gen_random_uuid()`. However, the route handler validates 64-char hex tokens, and the `admin_start_impersonation` RPC was created with a `TEXT` parameter and generates hex tokens via `encode(gen_random_bytes(32), 'hex')`.
+
+**You MUST include an ALTER COLUMN in this migration:**
+- Change `token` from `UUID` to `TEXT`
+- Change the default from `gen_random_uuid()` to `encode(gen_random_bytes(32), 'hex')::text`
+
+### CRITICAL: Add session_expires_at Column (SR Blocking Issue #2)
+
+TASK-2135 will shorten `expires_at` to 60 seconds (token-only expiry). TASK-2133 validates session expiry on every page load. If both use `expires_at`, all sessions would break after 60 seconds once TASK-2135 lands.
+
+**Solution:** This migration MUST add a `session_expires_at` column to separate token expiry from session expiry:
+- `expires_at` = token expiry (currently 30 min, TASK-2135 will shorten to 60s)
+- `session_expires_at` = session expiry (always 30 minutes)
+
+The `admin_start_impersonation` RPC must set `session_expires_at = now() + interval '30 minutes'` when creating a session.
+
 ### Migration SQL
 
 ```sql
--- Add 'validated' to status enum/check constraint
+-- 1. Fix token column type: UUID -> TEXT with hex default
+ALTER TABLE public.impersonation_sessions
+  ALTER COLUMN token TYPE text USING token::text;
+
+ALTER TABLE public.impersonation_sessions
+  ALTER COLUMN token SET DEFAULT encode(gen_random_bytes(32), 'hex')::text;
+
+-- 2. Add session_expires_at column (separate from token expires_at)
+ALTER TABLE public.impersonation_sessions
+  ADD COLUMN IF NOT EXISTS session_expires_at timestamptz;
+
+-- Backfill existing rows: set session_expires_at = expires_at for any existing sessions
+UPDATE public.impersonation_sessions
+  SET session_expires_at = expires_at
+  WHERE session_expires_at IS NULL;
+
+-- Make session_expires_at NOT NULL going forward
+ALTER TABLE public.impersonation_sessions
+  ALTER COLUMN session_expires_at SET NOT NULL;
+
+-- 3. Add 'validated' to status enum/check constraint
 ALTER TABLE public.impersonation_sessions
   DROP CONSTRAINT IF EXISTS impersonation_sessions_status_check;
 
@@ -75,7 +117,45 @@ ALTER TABLE public.impersonation_sessions
   ADD CONSTRAINT impersonation_sessions_status_check
   CHECK (status IN ('active', 'validated', 'ended', 'expired'));
 
--- Update the validate function to consume the token
+-- 4. Update admin_start_impersonation to set session_expires_at
+CREATE OR REPLACE FUNCTION public.admin_start_impersonation(
+  p_admin_user_id uuid,
+  p_target_user_id uuid,
+  p_target_email text DEFAULT NULL,
+  p_target_name text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_token text;
+  v_session_id uuid;
+BEGIN
+  v_token := encode(gen_random_bytes(32), 'hex');
+
+  INSERT INTO public.impersonation_sessions (
+    admin_user_id, target_user_id, target_email, target_name,
+    token, status, expires_at, session_expires_at
+  )
+  VALUES (
+    p_admin_user_id, p_target_user_id, p_target_email, p_target_name,
+    v_token, 'active',
+    now() + interval '30 minutes',       -- token expiry (TASK-2135 will shorten to 60s)
+    now() + interval '30 minutes'        -- session expiry (always 30 min)
+  )
+  RETURNING id INTO v_session_id;
+
+  RETURN jsonb_build_object(
+    'session_id', v_session_id,
+    'token', v_token,
+    'expires_at', (now() + interval '30 minutes')::text,
+    'session_expires_at', (now() + interval '30 minutes')::text
+  );
+END;
+$$;
+
+-- 5. Update the validate function to consume the token (single-use)
 CREATE OR REPLACE FUNCTION public.admin_validate_impersonation_token(p_token text)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -100,14 +180,15 @@ BEGIN
   SET status = 'validated'
   WHERE id = v_session.id;
 
-  -- Return session data
+  -- Return session data (include session_expires_at for cookie creation)
   RETURN jsonb_build_object(
     'session_id', v_session.id,
     'admin_user_id', v_session.admin_user_id,
     'target_user_id', v_session.target_user_id,
     'target_email', v_session.target_email,
     'target_name', v_session.target_name,
-    'expires_at', v_session.expires_at
+    'expires_at', v_session.expires_at,
+    'session_expires_at', v_session.session_expires_at
   );
 END;
 $$;
@@ -119,6 +200,9 @@ $$;
 - The WHERE clause `status = 'active'` ensures the UPDATE only succeeds on the first call.
 - After validation, the cookie (signed by TASK-2131) carries the session forward. The token URL is dead.
 - The function must check the EXISTING migration file (`20260307_impersonation_sessions.sql`) to understand the current schema. Use `CREATE OR REPLACE FUNCTION` to override the existing implementation.
+- The `session_expires_at` column is set to 30 minutes at session creation and never changes. This is what TASK-2133 will validate against on each page load.
+- The `expires_at` column is for token expiry only. TASK-2135 will shorten this to 60 seconds.
+- The token column ALTER from UUID to TEXT is safe because the RPC already generates hex tokens via `encode(gen_random_bytes(32), 'hex')` -- the column type just needs to match.
 
 ## Integration Notes
 
@@ -139,8 +223,8 @@ $$;
 ### Don't:
 
 - Do NOT modify the existing migration file (`20260307_impersonation_sessions.sql`)
-- Do NOT change the `admin_start_impersonation` RPC (it should still create `active` tokens)
-- Do NOT add a separate RPC -- modify the existing validate function
+- Do NOT add a separate RPC -- modify the existing functions via CREATE OR REPLACE
+- Do NOT change the token generation logic (still `encode(gen_random_bytes(32), 'hex')`)
 
 ## When to Stop and Ask
 
@@ -221,6 +305,13 @@ Engineer Agent ID: <agent_id from Task tool output>
 ```
 Files created:
 - [ ] supabase/migrations/YYYYMMDD_single_use_impersonation_token.sql
+
+Migration includes:
+- [ ] ALTER token column from UUID to TEXT
+- [ ] ADD session_expires_at column (timestamptz, NOT NULL)
+- [ ] ADD 'validated' to status CHECK constraint
+- [ ] CREATE OR REPLACE admin_start_impersonation (sets session_expires_at)
+- [ ] CREATE OR REPLACE admin_validate_impersonation_token (returns session_expires_at, single-use)
 
 Verification:
 - [ ] npm run type-check passes

@@ -1,7 +1,7 @@
 # SPRINT-118: Impersonation Security Hardening
 
 **Created:** 2026-03-07
-**Status:** Planned
+**Status:** Active
 **Goal:** Fix critical and high-priority security vulnerabilities in the impersonation system identified during SR Engineer security review of Sprint 116, before impersonation goes to production.
 
 ---
@@ -26,7 +26,7 @@ This sprint addresses all 8 findings in priority order. P0 items (cookie signing
 
 | Task | Backlog | Priority | Title | Est. Tokens | Status |
 |------|---------|----------|-------|-------------|--------|
-| TASK-2131 | BACKLOG-891 | P0 | Sign impersonation cookie (HMAC-SHA256) | ~8K | Pending |
+| TASK-2131 | BACKLOG-891 | P0 | Sign impersonation cookie (HMAC-SHA256) | ~8K | In Progress |
 | TASK-2132 | BACKLOG-892 | P0 | Make impersonation token single-use | ~6K | Pending |
 | TASK-2133 | BACKLOG-893 | P0 | Validate impersonation session against DB | ~8K | Pending |
 | TASK-2134 | BACKLOG-894 | P1 | Replace service-role client with scoped RLS | ~16K | Pending |

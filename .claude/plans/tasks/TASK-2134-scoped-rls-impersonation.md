@@ -149,13 +149,38 @@ Before writing the migration, list all tables queried by impersonation dashboard
 
 Each table that is queried needs an impersonation-aware RLS policy.
 
-### Important: Transaction Safety
+### Important: Transaction Safety & Connection Pooling (SR Review)
 
 The `set_config` with `local=true` is scoped to the transaction. In serverless/edge environments, connections are pooled. Verify that:
 1. Each request starts a fresh transaction context
 2. The session variable does not leak to other requests on the same connection
 
-If using Supabase JS client with connection pooling (Supavisor), each `.rpc()` call runs in its own transaction by default, so this should be safe. But verify.
+**CRITICAL CONCERN (SR Review):** With Supavisor connection pooling, each `.rpc()` call runs in its own transaction by default. This means the `set_impersonation_context` RPC and the subsequent data query may run in **different transactions on different connections**, so the session variable set in one would not be visible in the other.
+
+**Recommended approach: Investigate a single-RPC pattern** that combines `set_config` + data query in one function call, ensuring they share the same transaction. For example:
+
+```sql
+-- Single RPC that sets context AND returns data in one transaction
+CREATE OR REPLACE FUNCTION public.query_as_impersonated_user(
+  p_target_user_id uuid,
+  p_table_name text,
+  p_filters jsonb DEFAULT '{}'
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  PERFORM set_config('app.impersonated_user_id', p_target_user_id::text, true);
+  -- Now query within the same transaction where the session variable is set
+  -- ...
+END;
+$$;
+```
+
+Alternatively, if the Supabase JS client supports explicit transactions (e.g., via `supabase.rpc()` with a wrapper function), that would also work. **The engineer must verify which approach is feasible and document the decision.**
+
+If a single-RPC approach is not viable, document why and what alternative ensures transaction-scoped safety.
 
 ## Integration Notes
 

@@ -23,7 +23,9 @@ Direct implementation is PROHIBITED. See TASK-2131 for full workflow reference.
 
 ## Goal
 
-Add server-side validation of the impersonation session against the database on each page load. Instead of trusting the cookie's self-reported `expires_at` and `target_user_id`, verify the session is still active and not ended/expired in the database.
+Add server-side validation of the impersonation session against the database on each page load. Instead of trusting the cookie's self-reported expiry and `target_user_id`, verify the session is still active and not ended/expired in the database.
+
+**IMPORTANT (SR Review -- Blocking Issue):** Validate against `session_expires_at` (NOT `expires_at`). TASK-2132 added a separate `session_expires_at` column (30-minute session expiry) to avoid conflict with `expires_at` (which TASK-2135 will shorten to 60 seconds for token-only expiry). If you validate against `expires_at`, all sessions would break after 60 seconds once TASK-2135 lands.
 
 ## Non-Goals
 
@@ -34,9 +36,9 @@ Add server-side validation of the impersonation session against the database on 
 
 ## Deliverables
 
-1. Update: `broker-portal/lib/impersonation.ts` -- add DB validation to `getImpersonationSession()`
+1. Update: `broker-portal/lib/impersonation.ts` -- add DB validation to `getImpersonationSession()` (PRIMARY approach -- page-level Node.js check)
 2. Update: `broker-portal/lib/impersonation-guards.ts` -- `getDataClient()` uses validated session
-3. Update: `broker-portal/middleware.ts` -- replace cookie-only expiry check with DB check
+3. Update: `broker-portal/middleware.ts` -- lightweight cookie-exists check only (NOT full DB validation)
 
 ## File Boundaries
 
@@ -62,12 +64,22 @@ Add server-side validation of the impersonation session against the database on 
 - [ ] `getImpersonationSession()` queries DB to verify session is still active before returning session data
 - [ ] If session status is `ended` or `expired` in DB, returns null and clears the cookie
 - [ ] If `target_user_id` in cookie does not match DB record, returns null (tamper detection, defense-in-depth alongside TASK-2131 signature)
-- [ ] DB query checks `status IN ('active', 'validated')` AND `expires_at > now()`
-- [ ] Middleware DB check prevents access to dashboard routes with an ended session
+- [ ] DB query checks `status IN ('active', 'validated')` AND `session_expires_at > now()` (NOT `expires_at`)
+- [ ] Middleware is a lightweight cookie-exists check only (no DB call); page-level `getImpersonationSession()` is the authoritative check
 - [ ] Cookie clearing happens automatically when DB says session is invalid
 - [ ] All CI checks pass
 
 ## Implementation Notes
+
+### Architecture: Page-Level DB Check is PRIMARY (SR Review)
+
+The page-level `getImpersonationSession()` is the **authoritative** security check. Middleware is a **lightweight cookie-exists check only**.
+
+**Why:** Next.js middleware runs in Edge Runtime, which has limited Supabase client support. The page-level function runs in Node.js server components where full DB access is available. Making middleware the primary check would be fragile.
+
+**Two-layer approach:**
+1. **Middleware** (Edge Runtime): Lightweight cookie-exists check. If cookie is missing/expired (client-side timestamp check only), redirect to login. No DB call.
+2. **`getImpersonationSession()`** (Node.js): Full DB validation. This is the authoritative check. Queries `impersonation_sessions` table, verifies status and `session_expires_at`.
 
 ### DB Validation in getImpersonationSession()
 
@@ -84,14 +96,16 @@ export async function getImpersonationSession(): Promise<ImpersonationSession | 
 
   const session = JSON.parse(payload);
 
-  // Step 2: Validate against DB
+  // Step 2: Validate against DB using session_expires_at (NOT expires_at)
+  // expires_at is for token expiry only (will become 60s in TASK-2135)
+  // session_expires_at is for session expiry (30 minutes, set by TASK-2132)
   const supabase = createServiceClient();
   const { data } = await supabase
     .from('impersonation_sessions')
-    .select('status, expires_at, target_user_id')
+    .select('status, session_expires_at, target_user_id')
     .eq('id', session.session_id)
     .in('status', ['active', 'validated'])
-    .gt('expires_at', new Date().toISOString())
+    .gt('session_expires_at', new Date().toISOString())
     .single();
 
   if (!data || data.target_user_id !== session.target_user_id) {
@@ -108,21 +122,26 @@ export async function getImpersonationSession(): Promise<ImpersonationSession | 
 
 `getImpersonationSession()` is currently synchronous (cookie-only check). This task makes it `async` because it needs to query the database. All callers must be updated to `await` the result:
 - `getDataClient()` in `impersonation-guards.ts`
-- Any middleware checks in `middleware.ts`
+- Middleware should NOT call this async function -- keep middleware as a lightweight cookie-exists check
 
 Check all call sites and ensure they handle the async conversion.
 
 ### Middleware Update
 
-The middleware currently checks `expires_at` from the cookie directly. Update to use the async DB validation or, if middleware cannot await (Next.js Edge Runtime limitation), keep a basic cookie check in middleware and rely on the page-level `getImpersonationSession()` for the authoritative DB check.
+The middleware should be a **lightweight cookie-exists check only**:
+- Check if `impersonation_session` cookie exists
+- Optionally verify the signature (if `crypto` is available in Edge Runtime)
+- Do NOT query the database from middleware
+- Redirect to admin portal if cookie is missing for impersonation-guarded routes
 
-**Important:** Next.js middleware runs in the Edge Runtime. Supabase client may or may not work there. If it does not, keep middleware as a lightweight cookie-exists check and move the authoritative DB validation to `getImpersonationSession()` which runs in Node.js server components.
+The authoritative DB validation happens in `getImpersonationSession()` at the page level.
 
 ### Key Details
 
 - The `validated` status (from TASK-2132) is a valid active state -- include it in the status check
 - Use `createServiceClient()` for the DB check (we need to read impersonation_sessions which is admin-only)
 - This adds one DB query per page load during impersonation (~5ms). This is acceptable for the 30-minute session duration.
+- **Use `session_expires_at` NOT `expires_at`** for the expiry check. `expires_at` is token expiry (will become 60s in TASK-2135). `session_expires_at` is session expiry (30 minutes, set by TASK-2132).
 
 ## Integration Notes
 
@@ -138,13 +157,15 @@ The middleware currently checks `expires_at` from the cookie directly. Update to
 - Convert `getImpersonationSession()` to async
 - Update ALL callers to await the result
 - Clear the cookie when DB says session is invalid
-- Handle the Edge Runtime limitation in middleware gracefully
+- Keep middleware as a lightweight cookie-exists check (no DB call)
+- Use `session_expires_at` (not `expires_at`) for the DB expiry check
 
 ### Don't:
 
 - Do NOT cache the DB result across requests (each page load should verify)
 - Do NOT add a new RPC for this -- use direct table query
-- Do NOT block on this in middleware if Edge Runtime does not support Supabase client
+- Do NOT make middleware the primary validation layer -- page-level is primary
+- Do NOT use `expires_at` for session validation -- that is token expiry only
 
 ## When to Stop and Ask
 

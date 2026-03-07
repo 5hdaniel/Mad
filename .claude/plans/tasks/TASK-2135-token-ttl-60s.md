@@ -25,12 +25,15 @@ Direct implementation is PROHIBITED. See TASK-2131 for full workflow reference.
 
 Shorten the impersonation token's `expires_at` from 30 minutes to 60 seconds. The token only needs to survive the redirect from admin portal to broker portal. The session (cookie) still lasts 30 minutes.
 
+**IMPORTANT (SR Review):** TASK-2132 already added a `session_expires_at` column to separate token expiry from session expiry. This task ONLY needs to change `expires_at` in `admin_start_impersonation` from `interval '30 minutes'` to `interval '60 seconds'`. The `session_expires_at` column remains at 30 minutes and is already handled by TASK-2132. No new column is needed.
+
 ## Non-Goals
 
 - Do NOT change the session/cookie duration (still 30 minutes)
 - Do NOT change the token validation logic (TASK-2132)
 - Do NOT change cookie signing (TASK-2131)
-- Do NOT add a separate `token_expires_at` column unless required
+- Do NOT add any new columns -- `session_expires_at` already exists from TASK-2132
+- Do NOT modify `session_expires_at` -- it stays at 30 minutes
 
 ## Deliverables
 
@@ -84,19 +87,21 @@ BEGIN
   -- but the session itself lasts 30 minutes (tracked by cookie)
   INSERT INTO public.impersonation_sessions (
     admin_user_id, target_user_id, target_email, target_name,
-    token, status, expires_at
+    token, status, expires_at, session_expires_at
   )
   VALUES (
     p_admin_user_id, p_target_user_id, p_target_email, p_target_name,
     v_token, 'active',
-    now() + interval '60 seconds'  -- Changed from 30 minutes
+    now() + interval '60 seconds',       -- Token expiry: Changed from 30 minutes to 60 seconds
+    now() + interval '30 minutes'        -- Session expiry: unchanged (from TASK-2132)
   )
   RETURNING id INTO v_session_id;
 
   RETURN jsonb_build_object(
     'session_id', v_session_id,
     'token', v_token,
-    'expires_at', (now() + interval '60 seconds')::text
+    'expires_at', (now() + interval '60 seconds')::text,
+    'session_expires_at', (now() + interval '30 minutes')::text
   );
 END;
 $$;
@@ -104,26 +109,12 @@ $$;
 
 ### Key Details
 
-- The `expires_at` column currently serves double duty: token expiry AND session expiry. After this change, it only controls token expiry (the 60-second redirect window).
+- TASK-2132 already added `session_expires_at` to separate token expiry from session expiry. This is already resolved.
+- `expires_at` is now ONLY for token expiry. This task changes it from 30 minutes to 60 seconds.
+- `session_expires_at` (30 minutes) is used by TASK-2133 for page-load validation. Do NOT touch it.
 - The session duration is controlled by the cookie's `maxAge` (30 minutes), set in `route.ts` (TASK-2131).
-- If the existing schema uses `expires_at` for both purposes, you may need to add a `session_expires_at` column. Check the existing migration and the DB validation query from TASK-2133 to see if `expires_at` is used for session validation.
-- **IMPORTANT:** If TASK-2133 checks `expires_at > now()` for session validation on page loads, changing the token TTL to 60 seconds would cause all sessions to expire after 60 seconds. In that case, add a separate `session_expires_at` column set to 30 minutes.
-
-### If Separate Columns Are Needed
-
-```sql
-ALTER TABLE public.impersonation_sessions
-  ADD COLUMN IF NOT EXISTS session_expires_at timestamptz;
-
--- Update start RPC to set both
--- token expires_at: 60 seconds
--- session_expires_at: 30 minutes
-
--- Update validate RPC to check token expires_at
--- Update TASK-2133's DB validation to check session_expires_at instead
-```
-
-If you need a separate column, update `broker-portal/lib/impersonation.ts` to check `session_expires_at` instead of `expires_at` for the DB validation query. This is the ONLY broker-portal file change allowed.
+- No broker-portal changes needed -- TASK-2133 already validates against `session_expires_at`, not `expires_at`.
+- The INSERT must still include `session_expires_at = now() + interval '30 minutes'` (unchanged from TASK-2132).
 
 ## Integration Notes
 
@@ -137,18 +128,20 @@ If you need a separate column, update `broker-portal/lib/impersonation.ts` to ch
 ### Do:
 
 - Read the existing `admin_start_impersonation` function carefully before modifying
-- Check whether `expires_at` is used for session validation (TASK-2133 code)
-- Add a `session_expires_at` column if needed to separate token TTL from session TTL
+- Keep `session_expires_at = now() + interval '30 minutes'` unchanged in the INSERT
+- Only change `expires_at` from 30 minutes to 60 seconds
 
 ### Don't:
 
 - Do NOT change the cookie's `maxAge` (still 30 minutes)
 - Do NOT modify `admin_validate_impersonation_token` (it already checks `expires_at > now()`)
 - Do NOT modify existing migration files
+- Do NOT add any new columns -- `session_expires_at` already exists from TASK-2132
+- Do NOT change `session_expires_at` value (always 30 minutes)
 
 ## When to Stop and Ask
 
-- If `expires_at` is used for session validation (TASK-2133) and cannot be separated from token TTL cleanly
+- If `session_expires_at` column does not exist (TASK-2132 should have added it)
 - If the existing function signature differs significantly from what is shown here
 
 ## Testing Expectations (MANDATORY)

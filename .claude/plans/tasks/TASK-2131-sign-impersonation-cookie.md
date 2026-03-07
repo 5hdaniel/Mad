@@ -5,7 +5,7 @@
 **Phase:** Phase 1 - Cookie Security (Sequential, first)
 **Depends On:** None (first task in sprint)
 **Branch:** `fix/task-2131-sign-impersonation-cookie`
-**Branch From:** `int/sprint-116-impersonation`
+**Branch From:** `int/sprint-118-security-hardening`
 **Branch Into:** `int/sprint-118-security-hardening`
 **Estimated Tokens:** ~8K (security category x 0.4)
 
