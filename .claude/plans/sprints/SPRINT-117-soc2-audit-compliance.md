@@ -1,7 +1,8 @@
 # SPRINT-117: SOC 2 Audit Compliance
 
 **Created:** 2026-03-07
-**Status:** In Progress
+**Status:** Completed
+**Completed:** 2026-03-07
 **Goal:** Close critical SOC 2 audit gaps in logging, immutability, and export capabilities
 **Integration Branch:** `int/sprint-117-soc2-compliance`
 
@@ -19,10 +20,10 @@ SOC 2 Type II audit readiness requires robust audit logging with specific proper
 
 | Backlog | Task | Title | Priority | Est. Tokens | Status | Execution |
 |---------|------|-------|----------|-------------|--------|-----------|
-| BACKLOG-855 | TASK-2137 | Capture IP address in audit logs | Critical | ~20K | Pending | Parallel |
-| BACKLOG-856 | TASK-2138 | Enable authentication event logging | Critical | ~25K | Pending | Parallel |
-| BACKLOG-857 | TASK-2139 | Make audit logs immutable (block DELETE/UPDATE) | Critical | ~10K | Pending | Parallel |
-| BACKLOG-858 | TASK-2140 | Add audit log CSV/JSON export for auditors | Critical | ~25K | Pending | Parallel |
+| BACKLOG-855 | TASK-2137 | Capture IP address in audit logs | Critical | ~20K | Completed (PR #1082) | Parallel |
+| BACKLOG-856 | TASK-2138 | Enable authentication event logging | Critical | ~25K | Completed (PR #1083) | Parallel |
+| BACKLOG-857 | TASK-2139 | Make audit logs immutable (block DELETE/UPDATE) | Critical | ~10K | Completed (PR #1081) | Parallel |
+| BACKLOG-858 | TASK-2140 | Add audit log CSV/JSON export for auditors | Critical | ~25K | Completed (PR #1084) | Parallel |
 
 **Phase 1 Execution:** All 4 tasks can run in parallel. They touch independent files:
 - TASK-2137: `admin-portal/app/api/audit-log/route.ts` (NEW), `admin-portal/lib/audit.ts` (NEW), migration
@@ -36,9 +37,9 @@ SOC 2 Type II audit readiness requires robust audit logging with specific proper
 
 | Backlog | Task | Title | Priority | Est. Tokens | Status | Execution |
 |---------|------|-------|----------|-------------|--------|-----------|
-| BACKLOG-859 | TASK-2141 | Define audit log retention policy | High | ~10K | Pending | Parallel |
-| BACKLOG-860 | TASK-2142 | Capture user agent in audit logs | High | ~12K | Pending | Sequential (after TASK-2137) |
-| BACKLOG-861 | TASK-2143 | Add alerting for high-risk admin actions | High | ~32K | Pending | Sequential (after TASK-2137, TASK-2138) |
+| BACKLOG-859 | TASK-2141 | Define audit log retention policy | High | ~10K | Completed (PR #1085) | Parallel |
+| BACKLOG-860 | TASK-2142 | Capture user agent in audit logs | High | ~12K | Completed (PR #1086) | Sequential (after TASK-2137) |
+| BACKLOG-861 | TASK-2143 | Add alerting for high-risk admin actions | High | ~32K | Completed (PR #1087) | Sequential (after TASK-2137, TASK-2138) |
 
 **Phase 2 Execution:**
 - TASK-2141 (retention policy) is independent -- can run anytime (docs + SQL comment only)
