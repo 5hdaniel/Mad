@@ -16,6 +16,8 @@ export interface DashboardTourOptions {
   notificationsEnabled: boolean;
   /** True when the iPhone sync card is visible on the dashboard */
   hasIPhoneSync?: boolean;
+  /** True when the sync status bar is visible (a sync is running or completion is showing) */
+  hasSyncVisible?: boolean;
 }
 
 /**
@@ -84,7 +86,7 @@ export const getDashboardTourSteps = (
       ? { hasAIAddon: optionsOrHasAIAddon, isMacOS: false, notificationsEnabled: true }
       : optionsOrHasAIAddon;
 
-  const { hasAIAddon, isMacOS, notificationsEnabled, hasIPhoneSync } = options;
+  const { hasAIAddon, isMacOS, notificationsEnabled, hasIPhoneSync, hasSyncVisible } = options;
 
   // Show notification step only on macOS when notifications are not yet enabled
   const showNotificationStep = isMacOS && !notificationsEnabled;
@@ -97,21 +99,25 @@ export const getDashboardTourSteps = (
     placement: "center",
     disableBeacon: true,
   },
-  {
-    target: '[data-tour="sync-status"]',
-    content:
-      "During data syncs, the audit tools will be temporarily disabled to ensure compliance accuracy. The interface will activate automatically when the sync completes. Enable notifications in Settings to be alerted when syncing finishes.",
-    placement: "bottom",
-    disableBeacon: true,
-  },
-  ...(showNotificationStep
+  ...(hasSyncVisible
     ? [
         {
           target: '[data-tour="sync-status"]',
-          content: React.createElement(NotificationStepContent),
+          content:
+            "During data syncs, the audit tools will be temporarily disabled to ensure compliance accuracy. The interface will activate automatically when the sync completes. Enable notifications in Settings to be alerted when syncing finishes.",
           placement: "bottom" as const,
           disableBeacon: true,
         },
+        ...(showNotificationStep
+          ? [
+              {
+                target: '[data-tour="sync-status"]',
+                content: React.createElement(NotificationStepContent),
+                placement: "bottom" as const,
+                disableBeacon: true,
+              },
+            ]
+          : []),
       ]
     : []),
   {
