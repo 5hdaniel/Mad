@@ -1,7 +1,8 @@
 # SPRINT-116: Broker Portal Impersonation
 
 **Created:** 2026-03-07
-**Status:** In Progress
+**Status:** Completed
+**Completed:** 2026-03-07
 **Goal:** Enable admin support staff to view the broker portal as any user for support/debugging
 **Integration Branch:** `int/sprint-116-impersonation`
 
@@ -125,6 +126,57 @@ TASK-2122 (Schema & RPCs)
 | Cross-portal auth complexity | Medium | Use UUID tokens looked up server-side, not JWTs; service role client for data access |
 | RLS data access during impersonation | Medium | Use Supabase service role client to bypass RLS; only used server-side |
 | Write operation leakage | Medium | Three-layer defense: UI hiding, server component guards, API route guards |
+
+---
+
+## Task Execution Summary
+
+| Task | Title | PR | Status |
+|------|-------|----|--------|
+| TASK-2122 | Impersonation schema + RPCs | #1077 | Merged |
+| TASK-2123 | Admin portal "View as User" button | #1078 | Merged |
+| TASK-2124 | Broker portal impersonation session | #1079 | Merged |
+| TASK-2125 | E2E read-only enforcement | #1080 | Merged |
+
+---
+
+## QA Results (2026-03-07)
+
+All 7 test scenarios passed.
+
+| # | Test Case | Result |
+|---|-----------|--------|
+| 001 | Full impersonation flow (admin → broker portal) | PASS |
+| 002 | Purple banner content & countdown timer | PASS |
+| 003 | Write operations blocked (nav hidden + URL redirect) | PASS |
+| 004 | End session button (clears cookie, redirects to admin) | PASS |
+| 005 | Audit logging (start + end events recorded) | PASS |
+| 006 | Permission gate (Support Agent role cannot impersonate) | PASS |
+| 007 | Data isolation (Cbolympia data shown, not Izzyrescue) | PASS |
+
+### Bugs Found and Fixed During QA
+
+| Fix | Description |
+|-----|-------------|
+| Token validation regex | Route expected UUID format but tokens are 64-char hex — fixed to hex regex |
+| Missing RPC | `admin_validate_impersonation_token` not applied to database — created with TEXT parameter |
+| Column name mismatch | RPC referenced `started_at` but table uses `created_at` — fixed |
+| Missing env var | `SUPABASE_SERVICE_ROLE_KEY` not set in Vercel production — added |
+
+### Security Findings (SR Engineer Review)
+
+Documented as BACKLOG-891 through BACKLOG-897 (P0/P1 security hardening). Must be addressed before production use:
+
+| Backlog | Title | Priority |
+|---------|-------|----------|
+| BACKLOG-891 | Sign/encrypt impersonation cookie | Critical |
+| BACKLOG-892 | Make token single-use | Critical |
+| BACKLOG-893 | Validate session against DB on each page load | Critical |
+| BACKLOG-894 | Replace service-role client with scoped RLS | High |
+| BACKLOG-895 | Shorten token TTL to 60 seconds | High |
+| BACKLOG-896 | Add rate limiting to impersonation route | Medium |
+| BACKLOG-897 | Add CSRF protection to end-session route | Low |
+| BACKLOG-898 | Show Users/Settings tabs read-only during impersonation | High |
 
 ---
 
