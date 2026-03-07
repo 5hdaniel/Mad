@@ -45,6 +45,15 @@ export default async function AnalyticsPage() {
     redirect('/login?error=not_authorized');
   }
 
+  // Defense-in-depth: verify page-level permission
+  const { data: hasPerm } = await supabase.rpc('has_permission', {
+    check_user_id: user.id,
+    required_permission: 'analytics.view',
+  });
+  if (!hasPerm) {
+    redirect('/dashboard?error=insufficient_permissions');
+  }
+
   // Fetch all analytics data in parallel
   const [versionData, systemCounts, platformData, licenseData, phoneTypeData] =
     await Promise.all([

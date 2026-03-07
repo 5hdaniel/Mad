@@ -6,6 +6,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
+import { redirect } from 'next/navigation';
 import { SettingsManager } from './components/SettingsManager';
 
 export const dynamic = 'force-dynamic';
@@ -156,6 +157,34 @@ async function getCurrentUserId(): Promise<string | null> {
 }
 
 export default async function SettingsPage() {
+  // Defense-in-depth: verify auth, internal role, and page-level permission
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect('/login');
+  }
+
+  const { data: internalRole } = await supabase
+    .from('internal_roles')
+    .select('role_id')
+    .eq('user_id', user.id)
+    .single();
+
+  if (!internalRole) {
+    redirect('/login?error=not_authorized');
+  }
+
+  const { data: hasAnyPerm } = await supabase.rpc('has_any_permission', {
+    check_user_id: user.id,
+    permission_keys: ['internal_users.view', 'roles.view', 'audit.view'],
+  });
+  if (!hasAnyPerm) {
+    redirect('/dashboard?error=insufficient_permissions');
+  }
+
   const [internalUsers, currentUserId, roles, permissions] = await Promise.all([
     getInternalUsers(),
     getCurrentUserId(),
