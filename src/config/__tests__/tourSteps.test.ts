@@ -83,11 +83,13 @@ describe("tourSteps configuration", () => {
         hasAIAddon: false,
         isMacOS: true,
         notificationsEnabled: false,
+        hasSyncVisible: true,
       });
       const stepsWithout = getDashboardTourSteps({
         hasAIAddon: false,
         isMacOS: false,
         notificationsEnabled: true,
+        hasSyncVisible: true,
       });
       expect(stepsWithNotification.length).toBe(stepsWithout.length + 1);
     });
@@ -97,11 +99,13 @@ describe("tourSteps configuration", () => {
         hasAIAddon: false,
         isMacOS: false,
         notificationsEnabled: false,
+        hasSyncVisible: true,
       });
       const macSteps = getDashboardTourSteps({
         hasAIAddon: false,
         isMacOS: true,
         notificationsEnabled: false,
+        hasSyncVisible: true,
       });
       expect(macSteps.length).toBe(steps.length + 1);
     });
@@ -111,11 +115,13 @@ describe("tourSteps configuration", () => {
         hasAIAddon: false,
         isMacOS: true,
         notificationsEnabled: true,
+        hasSyncVisible: true,
       });
       const stepsDisabled = getDashboardTourSteps({
         hasAIAddon: false,
         isMacOS: true,
         notificationsEnabled: false,
+        hasSyncVisible: true,
       });
       expect(stepsDisabled.length).toBe(stepsEnabled.length + 1);
     });
@@ -125,6 +131,7 @@ describe("tourSteps configuration", () => {
         hasAIAddon: false,
         isMacOS: true,
         notificationsEnabled: false,
+        hasSyncVisible: true,
       });
       // Step 0: welcome (body), Step 1: sync-status, Step 2: notification (also targets sync-status)
       expect(steps[1].target).toBe('[data-tour="sync-status"]');
@@ -138,6 +145,7 @@ describe("tourSteps configuration", () => {
         hasAIAddon: false,
         isMacOS: true,
         notificationsEnabled: false,
+        hasSyncVisible: true,
       });
       // The notification step is at index 2
       expect(steps[2].disableBeacon).toBe(true);
@@ -148,6 +156,7 @@ describe("tourSteps configuration", () => {
         hasAIAddon: false,
         isMacOS: true,
         notificationsEnabled: false,
+        hasSyncVisible: true,
       });
       // The notification step is at index 2
       expect(typeof steps[2].content).not.toBe("string");
@@ -162,6 +171,40 @@ describe("tourSteps configuration", () => {
         notificationsEnabled: true,
       });
       expect(stepsBoolean.length).toBe(stepsNoNotif.length);
+    });
+  });
+
+  describe("sync-status tour step", () => {
+    it("should include sync-status step when hasSyncVisible is true", () => {
+      const steps = getDashboardTourSteps({
+        hasAIAddon: false,
+        isMacOS: false,
+        notificationsEnabled: true,
+        hasSyncVisible: true,
+      });
+      const syncStep = steps.find((s) => s.target === '[data-tour="sync-status"]');
+      expect(syncStep).toBeDefined();
+    });
+
+    it("should exclude sync-status step when hasSyncVisible is false", () => {
+      const steps = getDashboardTourSteps({
+        hasAIAddon: false,
+        isMacOS: false,
+        notificationsEnabled: true,
+        hasSyncVisible: false,
+      });
+      const syncStep = steps.find((s) => s.target === '[data-tour="sync-status"]');
+      expect(syncStep).toBeUndefined();
+    });
+
+    it("should exclude sync-status step when hasSyncVisible is undefined", () => {
+      const steps = getDashboardTourSteps({
+        hasAIAddon: false,
+        isMacOS: false,
+        notificationsEnabled: true,
+      });
+      const syncStep = steps.find((s) => s.target === '[data-tour="sync-status"]');
+      expect(syncStep).toBeUndefined();
     });
   });
 
