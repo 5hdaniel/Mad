@@ -129,8 +129,8 @@ export function SyncStatusIndicator({
         autoDismissTimerRef.current = null;
       }
       setShowCompletion(false);
-    } else if (wasSyncingRef.current && !isAnySyncing && queue.some(item => item.status === 'complete' || item.status === 'error')) {
-      // Just finished syncing - show completion message (not on cancel, which removes items)
+    } else if (wasSyncingRef.current && !isAnySyncing && (queue.length === 0 || queue.some(item => item.status === 'complete' || item.status === 'error'))) {
+      // Just finished syncing - show completion message (queue may be empty if items auto-cleaned)
       setShowCompletion(true);
       wasSyncingRef.current = false;
 
