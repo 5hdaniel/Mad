@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import UserMenu from '@/components/UserMenu';
+import { ImpersonationBanner } from '@/components/ImpersonationBanner';
+import { getImpersonationSession } from '@/lib/impersonation';
 
 async function getUserWithRole() {
   const supabase = await createClient();
@@ -28,14 +30,31 @@ export default async function DashboardLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const impersonation = await getImpersonationSession();
+  const isImpersonating = !!impersonation;
+
+  // During impersonation, we don't need a real auth session
+  // The impersonation cookie provides the identity
   const user = await getUserWithRole();
 
-  if (!user) {
+  if (!user && !isImpersonating) {
     redirect('/login');
   }
 
+  // During impersonation, use target user info from the session
+  const displayEmail = isImpersonating
+    ? impersonation.target_email
+    : (user?.email || '');
+  const displayName = isImpersonating
+    ? impersonation.target_name
+    : user?.name;
+  const displayRole = isImpersonating ? undefined : user?.role;
+
   return (
     <div className="min-h-screen bg-gray-100">
+      {/* Impersonation Banner */}
+      <ImpersonationBanner />
+
       {/* Top Navigation */}
       <nav className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -51,7 +70,7 @@ export default async function DashboardLayout({
                 </span>
               </Link>
               <div className="hidden sm:ml-10 sm:flex sm:space-x-8">
-                {user.role !== 'it_admin' && (
+                {(!user || user.role !== 'it_admin') && (
                   <>
                     <Link
                       href="/dashboard"
@@ -67,7 +86,8 @@ export default async function DashboardLayout({
                     </Link>
                   </>
                 )}
-                {(user.role === 'admin' || user.role === 'it_admin') && (
+                {/* Hide write-action links (Users, Settings) during impersonation */}
+                {!isImpersonating && (user?.role === 'admin' || user?.role === 'it_admin') && (
                   <>
                     <Link
                       href="/dashboard/users"
@@ -89,9 +109,9 @@ export default async function DashboardLayout({
             {/* User Menu */}
             <div className="flex items-center">
               <UserMenu
-                email={user.email || ''}
-                name={user.name}
-                role={user.role}
+                email={displayEmail}
+                name={displayName}
+                role={displayRole}
               />
             </div>
           </div>
