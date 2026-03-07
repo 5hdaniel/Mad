@@ -22,7 +22,7 @@ interface RoleManagementProps {
 }
 
 export function RoleManagement({ roles, permissions, onRefresh, users = [], onNavigateToUsersWithRole }: RoleManagementProps) {
-  const { hasPermission, refreshPermissions } = usePermissions();
+  const { hasPermission } = usePermissions();
   const canManage = hasPermission(PERMISSIONS.ROLES_MANAGE);
   const [editingRole, setEditingRole] = useState<AdminRole | null>(null);
   const [isCreating, setIsCreating] = useState(false);

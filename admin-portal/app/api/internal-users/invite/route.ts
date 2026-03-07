@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (!email || !email.includes('@') || email.length > 254) {
     return NextResponse.json({ error: 'Missing or invalid email' }, { status: 400 });
   }
   if (!roleSlug) {
