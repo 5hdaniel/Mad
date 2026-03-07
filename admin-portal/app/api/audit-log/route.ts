@@ -1,14 +1,14 @@
 /**
  * API Route: Audit Log Entry
  *
- * Server-side route that captures the client IP address from request headers
- * and writes an audit log entry via the log_admin_action RPC.
+ * Server-side route that captures the client IP address and User-Agent from
+ * request headers and writes an audit log entry via the log_admin_action RPC.
  *
  * POST /api/audit-log
  * Body: { action: string, target_type: string, target_id: string, metadata?: object }
  *
  * SOC 2 Control: CC6.1 - Security event logging with source identification
- * Task: TASK-2137 / BACKLOG-855
+ * Task: TASK-2137 / BACKLOG-855, TASK-2142 / BACKLOG-860
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -59,13 +59,18 @@ export async function POST(request: NextRequest) {
     ? forwarded.split(',')[0].trim()
     : request.headers.get('x-real-ip') || 'unknown';
 
-  // 4. Call RPC to insert audit log entry with IP
+  // 4. Extract User-Agent from request headers (SOC 2 CC6.1 - TASK-2142)
+  // Browsers send this automatically; stored as-is without parsing.
+  const userAgent = request.headers.get('user-agent') || null;
+
+  // 5. Call RPC to insert audit log entry with IP and user agent
   const { error } = await supabase.rpc('log_admin_action', {
     p_action: action,
     p_target_type: targetType,
     p_target_id: targetId,
     p_metadata: metadata,
     p_ip_address: ip,
+    p_user_agent: userAgent,
   });
 
   if (error) {
