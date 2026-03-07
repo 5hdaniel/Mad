@@ -133,6 +133,7 @@ describe("useIPhoneSync", () => {
     consoleErrorSpy.mockRestore();
     consoleWarnSpy.mockRestore();
     consoleLogSpy.mockRestore();
+    syncStateRef.isActive = false;
   });
 
   describe("initialization", () => {
@@ -213,7 +214,7 @@ describe("useIPhoneSync", () => {
       await result.current.startSync();
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        "[ERROR] [useIPhoneSync] Cannot start sync: No device connected",
+        expect.stringContaining("[ERROR] [useIPhoneSync] Cannot start sync: No device connected"),
       );
     });
 
@@ -223,7 +224,7 @@ describe("useIPhoneSync", () => {
       await result.current.submitPassword("test-password");
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        "[ERROR] [useIPhoneSync] Cannot submit password: No device connected",
+        expect.stringContaining("[ERROR] [useIPhoneSync] Cannot submit password: No device connected"),
       );
     });
   });
@@ -330,22 +331,21 @@ describe("useIPhoneSync", () => {
 
     it("should fetch last sync time on device connect", async () => {
       const syncApi = setupSyncApiMock();
-      const checkStatusMock = jest.fn().mockResolvedValue({
-        success: true,
+      const getIPhoneLastSyncTimeMock = jest.fn().mockResolvedValue({
         lastSyncTime: "2024-01-15T10:00:00Z",
       });
-      (window as any).api = { sync: syncApi, backup: { checkStatus: checkStatusMock } };
+      (syncApi as any).getIPhoneLastSyncTime = getIPhoneLastSyncTimeMock;
+      (window as any).api = { sync: syncApi };
 
       renderHook(() => useIPhoneSync());
 
       await act(async () => {
         deviceConnectedCallback?.(mockDevice);
-        // Allow the async checkStatus to be called
         await Promise.resolve();
         await Promise.resolve();
       });
 
-      expect(checkStatusMock).toHaveBeenCalledWith(mockDevice.udid);
+      expect(getIPhoneLastSyncTimeMock).toHaveBeenCalledWith(mockDevice.udid);
     });
   });
 
@@ -361,6 +361,9 @@ describe("useIPhoneSync", () => {
         deviceConnectedCallback?.(mockDevice);
         await Promise.resolve();
       });
+
+      // syncStateRef.isActive must be true for progress events to be processed
+      syncStateRef.isActive = true;
 
       act(() => {
         syncProgressCallback?.({
@@ -385,6 +388,7 @@ describe("useIPhoneSync", () => {
       (window as any).api = { sync: syncApi };
 
       const { result } = renderHook(() => useIPhoneSync());
+      syncStateRef.isActive = true;
 
       act(() => {
         syncProgressCallback?.({
@@ -402,6 +406,7 @@ describe("useIPhoneSync", () => {
       (window as any).api = { sync: syncApi };
 
       const { result } = renderHook(() => useIPhoneSync());
+      syncStateRef.isActive = true;
 
       act(() => {
         syncProgressCallback?.({
@@ -437,6 +442,7 @@ describe("useIPhoneSync", () => {
       (window as any).api = { sync: syncApi };
 
       const { result } = renderHook(() => useIPhoneSync());
+      syncStateRef.isActive = true;
 
       act(() => {
         syncProgressCallback?.({
@@ -455,6 +461,7 @@ describe("useIPhoneSync", () => {
       (window as any).api = { sync: syncApi };
 
       const { result } = renderHook(() => useIPhoneSync());
+      syncStateRef.isActive = true;
 
       act(() => {
         syncProgressCallback?.({
@@ -520,13 +527,14 @@ describe("useIPhoneSync", () => {
       (window as any).api = { sync: syncApi };
 
       const { result } = renderHook(() => useIPhoneSync());
+      syncStateRef.isActive = true;
 
       act(() => {
         waitingForPasscodeCallback?.();
       });
 
       expect(result.current.isWaitingForPasscode).toBe(true);
-      expect(result.current.progress?.message).toContain("passcode");
+      expect(result.current.progress?.message).toContain("preparing the export");
     });
 
     it("should clear isWaitingForPasscode when passcode entered", () => {
@@ -534,6 +542,7 @@ describe("useIPhoneSync", () => {
       (window as any).api = { sync: syncApi };
 
       const { result } = renderHook(() => useIPhoneSync());
+      syncStateRef.isActive = true;
 
       act(() => {
         waitingForPasscodeCallback?.();

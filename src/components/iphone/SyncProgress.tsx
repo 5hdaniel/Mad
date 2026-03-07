@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useEffect } from "react";
 import type { SyncProgressProps } from "../../types/iphone";
+import logger from "../../utils/logger";
 
 /**
  * Format bytes to human readable string
@@ -31,6 +32,14 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
   onCancel,
   isWaitingForPasscode = false,
 }) => {
+  useEffect(() => {
+    logger.info("[SyncProgress] Mounted", { phase: progress.phase, percent: progress.percent });
+    return () => logger.info("[SyncProgress] Unmounted");
+  }, []);
+
+  useEffect(() => {
+    logger.debug(`[SyncProgress] Phase: ${progress.phase}, ${progress.percent}%`, { isWaitingForPasscode });
+  }, [progress.phase, progress.percent, isWaitingForPasscode]);
   /**
    * Option C: 2-Level Progress Display
    * Level 1: Combined title + context (bold, larger)
@@ -39,7 +48,7 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
   const getPhaseTitle = (): string => {
     // Special state: waiting for passcode
     if (isWaitingForPasscode) {
-      return "Enter passcode on iPhone";
+      return "Waiting for iPhone";
     }
 
     switch (progress.phase) {
@@ -218,8 +227,7 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
           </svg>
           <div className="text-sm text-amber-700">
             <p className="text-xs text-amber-600">
-              After entering your passcode, it may take several minutes before the sync starts.
-              Please don't disconnect or close this window.
+              Enter your passcode on your iPhone if prompted. It may take up to 10 minutes for the iPhone to report back that the passcode was entered as it indexes and prepares the export. This is normal — please don't disconnect or cancel.
             </p>
           </div>
         </div>
@@ -273,7 +281,7 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
       {onCancel && !isComplete && !isError && (
         <div className="mt-6 flex justify-center">
           <button
-            onClick={onCancel}
+            onClick={() => { logger.info("[SyncProgress] Cancel button clicked"); onCancel(); }}
             className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm font-medium transition-colors"
           >
             Cancel

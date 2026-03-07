@@ -6,6 +6,7 @@ import type {
   UseIPhoneSyncReturn,
 } from "../types/iphone";
 import logger from '../utils/logger';
+import { syncOrchestrator } from '../services/SyncOrchestratorService';
 
 /**
  * Module-level sync state ref for cross-hook communication.
@@ -100,6 +101,9 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
           }
           return current;
         });
+        // Defer orchestrator registration to next microtask so React finishes
+        // batching the state updates above before notifyListeners fires setState in App
+        queueMicrotask(() => syncOrchestrator.registerExternalSync('iphone'));
         setProgress((current) => {
           if (!current) {
             return { phase: "backing_up", percent: 0, message: "Reconnecting to sync..." };
@@ -141,26 +145,24 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       setError(null);
       logger.debug("[useIPhoneSync] Device connected:", mappedDevice.name);
 
-      // Fetch last sync time for this device
+      // TASK-2121: Fetch persisted lastSyncTime from Supabase for this device
       try {
-        // Use type assertion to access checkStatus which may not be in older type definitions
-        const backupApi = window.api?.backup as {
-          checkStatus?: (udid: string) => Promise<{
-            success: boolean;
-            lastSyncTime?: string | null;
-          }>;
+        const syncApi = window.api?.sync as {
+          getIPhoneLastSyncTime?: (udid: string) => Promise<{ lastSyncTime: string | null }>;
         } | undefined;
-        if (backupApi?.checkStatus) {
-          const status = await backupApi.checkStatus(connectedDevice.udid);
-          if (status?.success && status.lastSyncTime) {
-            setLastSyncTime(new Date(status.lastSyncTime));
-            logger.info("[useIPhoneSync] Last sync time:", status.lastSyncTime);
+
+        if (syncApi?.getIPhoneLastSyncTime) {
+          const result = await syncApi.getIPhoneLastSyncTime(connectedDevice.udid);
+          if (result.lastSyncTime) {
+            setLastSyncTime(new Date(result.lastSyncTime));
           } else {
             setLastSyncTime(null);
           }
+        } else {
+          setLastSyncTime(null);
         }
       } catch (err) {
-        logger.warn("[useIPhoneSync] Failed to fetch backup status:", err);
+        logger.warn("[useIPhoneSync] Failed to fetch last sync time from Supabase:", err);
         setLastSyncTime(null);
       }
     };
@@ -188,6 +190,13 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
               // Only show error if still in backup phase (device required)
               if (currentPhase === "backing_up" || currentPhase === "preparing") {
                 setError("Device disconnected during sync");
+                // Defer orchestrator notification to avoid setState-during-render
+                queueMicrotask(() => {
+                  syncOrchestrator.completeExternalSync('iphone', {
+                    status: 'error',
+                    error: 'Device disconnected during sync',
+                  });
+                });
                 return "error";
               }
               // In extracting/storing phases, disconnect is fine - just log it
@@ -202,6 +211,8 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       // Sync progress updates
       if (syncApi.onProgress) {
         const unsub = syncApi.onProgress((syncProgress) => {
+          // Ignore progress events after cancel
+          if (!syncStateRef.isActive) return;
           // Map sync progress to BackupProgress format
           let phase: BackupProgress["phase"] = "backing_up";
           if (syncProgress.phase === "backup") {
@@ -233,14 +244,18 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
 
           // Update ref for disconnect handler (avoids stale closure)
           progressPhaseRef.current = phase;
+          const percent = syncProgress.overallProgress ?? 0;
           setProgress({
             phase,
-            percent: syncProgress.overallProgress ?? 0,
+            percent,
             message: syncProgress.message,
             bytesProcessed: progressWithBackup.backupProgress?.bytesTransferred,
             processedFiles: progressWithBackup.backupProgress?.filesTransferred,
             estimatedTotalBytes: progressWithBackup.estimatedTotalBytes,
           });
+
+          // TASK-2119: Update orchestrator with progress
+          syncOrchestrator.updateExternalSync('iphone', { progress: percent, phase });
         });
         cleanups.push(unsub);
       }
@@ -262,7 +277,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
           setProgress((prev) => ({
             phase: "backing_up",
             percent: prev?.percent ?? 0,
-            message: "Waiting for passcode input on your iPhone...",
+            message: "Your iPhone is preparing the export...",
           }));
         });
         cleanups.push(unsub);
@@ -285,9 +300,17 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       // Sync error events
       if (syncApi.onError) {
         const unsub = syncApi.onError((err) => {
+          // Ignore errors from a cancelled sync — cancelSync already reset state
+          if (err.message?.toLowerCase().includes("cancelled") || err.message?.toLowerCase().includes("canceled")) {
+            logger.info("[useIPhoneSync] Ignoring error from cancelled sync:", err.message);
+            return;
+          }
           logger.error("[useIPhoneSync] Sync error:", err.message);
           setSyncStatus("error");
           setError(err.message);
+
+          // TASK-2119: Notify orchestrator of error
+          syncOrchestrator.completeExternalSync('iphone', { status: 'error', error: err.message });
         });
         cleanups.push(unsub);
       }
@@ -354,6 +377,9 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
             percent: 100,
             message: `Saved ${result.messagesStored.toLocaleString()} messages and ${result.contactsStored} contacts`,
           });
+
+          // TASK-2119: Notify orchestrator that iPhone sync is complete
+          syncOrchestrator.completeExternalSync('iphone', { status: 'complete' });
         });
         cleanups.push(unsub);
       }
@@ -369,6 +395,9 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
             percent: 100,
             message: "Messages extracted but failed to save to database",
           });
+
+          // TASK-2119: Notify orchestrator (storage error is still "complete" from sync perspective)
+          syncOrchestrator.completeExternalSync('iphone', { status: 'complete' });
         });
         cleanups.push(unsub);
       }
@@ -521,6 +550,9 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       message: "Preparing to sync...",
     });
 
+    // TASK-2119: Register with orchestrator so iPhone appears in unified sync UI
+    syncOrchestrator.registerExternalSync('iphone');
+
     try {
       logger.info("[useIPhoneSync] Starting sync for device:", device.udid);
 
@@ -544,6 +576,11 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       // Result handling is done via onComplete callback
       // But we handle immediate errors here
       if (!result.success && result.error) {
+        // If the error is from a cancel, treat as clean idle — not an error
+        if (result.error.toLowerCase().includes("cancelled")) {
+          logger.info("[useIPhoneSync] Sync was cancelled, ignoring error result");
+          return;
+        }
         logger.error("[useIPhoneSync] Sync failed:", result.error);
         setSyncStatus("error");
         setError(result.error);
@@ -551,6 +588,10 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "An unexpected error occurred";
+      if (errorMessage.toLowerCase().includes("cancelled") || errorMessage.toLowerCase().includes("canceled")) {
+        logger.info("[useIPhoneSync] Sync was cancelled, ignoring catch error");
+        return;
+      }
       logger.error("[useIPhoneSync] Sync error:", errorMessage);
       setSyncStatus("error");
       setError(errorMessage);
@@ -622,6 +663,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
   // Cancel ongoing sync
   const cancelSync = useCallback(async () => {
     logger.info("[useIPhoneSync] Cancelling sync");
+    syncStateRef.isActive = false;
 
     try {
       const syncApi = window.api?.sync;
@@ -637,6 +679,19 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     setNeedsPassword(false);
     setError(null);
     setPendingPassword(null);
+    setSyncLocked(false);
+    setLockReason(null);
+
+    // TASK-2119: Remove iPhone from orchestrator queue (cancel ≠ complete)
+    syncOrchestrator.removeExternalSync('iphone');
+  }, []);
+
+  /** Reset state after user acknowledges sync completion (clicks Continue) */
+  const dismissSync = useCallback(() => {
+    logger.info("[useIPhoneSync] Dismissing sync result");
+    setSyncStatus("idle");
+    setProgress(null);
+    setError(null);
   }, []);
 
   return {
@@ -654,6 +709,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     startSync,
     submitPassword,
     cancelSync,
+    dismissSync,
     checkSyncStatus,
   };
 }

@@ -417,4 +417,13 @@ export const syncBridge = {
     ipcRenderer.on("sync:storage-error", listener);
     return () => ipcRenderer.removeListener("sync:storage-error", listener);
   },
+
+  /**
+   * Gets the last sync time for an iPhone device from Supabase
+   * TASK-2121: Persisted per user_id + device_udid
+   * @param udid - Device UDID
+   * @returns Object with lastSyncTime (ISO string or null)
+   */
+  getIPhoneLastSyncTime: (udid: string): Promise<{ lastSyncTime: string | null }> =>
+    ipcRenderer.invoke("sync:get-iphone-last-sync-time", udid),
 };

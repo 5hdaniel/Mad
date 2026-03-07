@@ -325,7 +325,7 @@ describe("transactionService", () => {
       // Feedback failure is silent - returns success
       expect(result.success).toBe(true);
       expect(mockConsoleError).toHaveBeenCalledWith(
-        "[ERROR] Failed to record feedback:",
+        expect.stringContaining("[ERROR] Failed to record feedback:"),
         "Feedback service unavailable"
       );
     });

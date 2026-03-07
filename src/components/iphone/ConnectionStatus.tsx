@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useEffect } from "react";
 import type { ConnectionStatusProps } from "../../types/iphone";
 import { TrustComputerHint } from "./TrustComputerHint";
+import logger from "../../utils/logger";
 
 /**
  * ConnectionStatus Component
@@ -37,6 +38,10 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
   onSyncClick,
   lastSyncTime,
 }) => {
+  useEffect(() => {
+    logger.info("[ConnectionStatus] Mounted", { isConnected, device: device?.name, lastSyncTime });
+    return () => logger.info("[ConnectionStatus] Unmounted");
+  }, []);
   if (!isConnected) {
     return (
       <div className="flex flex-col items-center justify-center p-8 text-center">
@@ -113,7 +118,7 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
       )}
 
       <button
-        onClick={onSyncClick}
+        onClick={() => { logger.info("[ConnectionStatus] Sync iPhone clicked"); onSyncClick(); }}
         className="mt-6 px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-medium rounded-lg hover:from-purple-600 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg"
       >
         {lastSyncTime ? "Sync New Data" : "Sync Messages & Contacts"}

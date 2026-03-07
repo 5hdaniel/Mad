@@ -19,7 +19,7 @@ import { isMacOS } from '../utils/platform';
 import type { ImportSource, UserPreferences } from './settingsService';
 import logger from '../utils/logger';
 
-export type SyncType = 'contacts' | 'emails' | 'messages';
+export type SyncType = 'contacts' | 'emails' | 'messages' | 'iphone';
 
 export type SyncItemStatus = 'pending' | 'running' | 'complete' | 'error';
 
@@ -32,6 +32,8 @@ export interface SyncItem {
   phase?: string;
   /** Optional warning message (e.g., message cap exceeded) */
   warning?: string;
+  /** True for externally-managed syncs (e.g., iPhone) that the orchestrator does not drive */
+  external?: boolean;
 }
 
 export interface SyncOrchestratorState {
@@ -313,6 +315,12 @@ class SyncOrchestratorServiceClass {
    * Returns true if sync started, false if queued (needs user decision).
    */
   requestSync(request: SyncRequest): { started: boolean; needsConfirmation: boolean } {
+    // Only block if an internal sync is running. External syncs (e.g., iPhone)
+    // use different resources and can run in parallel with internal syncs.
+    const internalRunning = this.state.queue.some(
+      (item) => !item.external && item.status === 'running'
+    );
+
     Sentry.addBreadcrumb({
       category: 'sync',
       message: `Sync requested: ${request.types.join(', ')}`,
@@ -321,11 +329,12 @@ class SyncOrchestratorServiceClass {
         syncTypes: request.types,
         userId: request.userId.substring(0, 8) + '...',
         alreadyRunning: this.state.isRunning,
+        internalRunning,
       },
     });
 
-    if (this.state.isRunning) {
-      // Sync in progress - queue this request for user decision
+    if (internalRunning) {
+      // Internal sync in progress - queue this request for user decision
       this.setState({ pendingRequest: request });
       return { started: false, needsConfirmation: true };
     }
@@ -361,8 +370,109 @@ class SyncOrchestratorServiceClass {
     this.setState({ pendingRequest: null });
   }
 
+  // =========================================================================
+  // External sync registration API (TASK-2119)
+  //
+  // External syncs (e.g., iPhone) are managed by their own hooks/contexts.
+  // The orchestrator only tracks them in the queue for unified UI display
+  // and to include them in the isRunning state.
+  // =========================================================================
+
   /**
-   * Cancel current sync
+   * Register an external sync in the queue.
+   * Idempotent: if an item for this type already exists with status 'running',
+   * the call is a no-op (safe for hot-reload reconnect).
+   */
+  registerExternalSync(type: SyncType): void {
+    const existing = this.state.queue.find((item) => item.type === type);
+    if (existing && existing.status === 'running') {
+      logger.debug(`[SyncOrchestrator] External sync '${type}' already registered, skipping`);
+      return;
+    }
+
+    // Remove any stale item for this type (e.g., previous complete/error)
+    const queue = this.state.queue.filter((item) => item.type !== type);
+    queue.push({
+      type,
+      status: 'running',
+      progress: 0,
+      external: true,
+    });
+
+    logger.info(`[SyncOrchestrator] Registered external sync: ${type}`);
+    this.setState({
+      isRunning: true,
+      queue,
+    });
+  }
+
+  /**
+   * Update progress/phase for an external sync.
+   */
+  updateExternalSync(type: SyncType, updates: Partial<Pick<SyncItem, 'progress' | 'phase'>>): void {
+    const existing = this.state.queue.find((item) => item.type === type && item.external);
+    if (!existing) return;
+
+    this.updateQueueItem(type, updates);
+  }
+
+  /**
+   * Mark an external sync as complete or error.
+   * After completion, recalculates isRunning from remaining queue items.
+   */
+  completeExternalSync(type: SyncType, result: { status: 'complete' | 'error'; error?: string }): void {
+    const existing = this.state.queue.find((item) => item.type === type && item.external);
+    if (!existing) return;
+
+    logger.info(`[SyncOrchestrator] External sync '${type}' completed with status: ${result.status}`);
+
+    this.updateQueueItem(type, {
+      status: result.status,
+      progress: result.status === 'complete' ? 100 : existing.progress,
+      error: result.error,
+      phase: undefined,
+    });
+
+    // Recalculate isRunning: true if any item is still running
+    const stillRunning = this.state.queue.some((item) => item.status === 'running');
+    if (!stillRunning && !this.abortController) {
+      this.setState({ isRunning: false, currentSync: null });
+    }
+
+    // Auto-remove completed/errored external items after a short delay
+    setTimeout(() => {
+      const queue = this.state.queue.filter(
+        (item) => !(item.type === type && item.external && (item.status === 'complete' || item.status === 'error'))
+      );
+      if (queue.length !== this.state.queue.length) {
+        this.setState({ queue });
+      }
+    }, 3000);
+  }
+
+  /**
+   * Remove an external sync from the queue immediately (used for cancel).
+   * Unlike completeExternalSync, this does not mark it as complete — it just removes it.
+   */
+  removeExternalSync(type: SyncType): void {
+    const queue = this.state.queue.filter(
+      (item) => !(item.type === type && item.external)
+    );
+    if (queue.length === this.state.queue.length) return;
+
+    logger.info(`[SyncOrchestrator] External sync '${type}' removed (cancelled)`);
+
+    const stillRunning = queue.some((item) => item.status === 'running');
+    this.setState({
+      queue,
+      isRunning: stillRunning || !!this.abortController,
+      currentSync: stillRunning ? this.state.currentSync : null,
+    });
+  }
+
+  /**
+   * Cancel current sync (internal syncs only).
+   * External syncs are NOT cancelled by this method -- they manage their own lifecycle.
    */
   cancel(): void {
     Sentry.addBreadcrumb({
@@ -379,20 +489,35 @@ class SyncOrchestratorServiceClass {
       this.abortController.abort();
       this.abortController = null;
     }
+
+    // Preserve external sync items (e.g., iPhone) -- they manage their own lifecycle
+    const externalItems = this.state.queue.filter((item) => item.external);
+    const stillRunning = externalItems.some((item) => item.status === 'running');
+
     this.setState({
-      isRunning: false,
-      queue: [],
+      isRunning: stillRunning,
+      queue: externalItems,
       currentSync: null,
       overallProgress: 0,
     });
   }
 
   /**
-   * Reset state (e.g., on logout)
+   * Reset ALL state (e.g., on logout).
+   * Unlike cancel(), this clears external sync items too.
    */
   reset(): void {
-    this.cancel();
-    this.setState({ pendingRequest: null });
+    if (this.abortController) {
+      this.abortController.abort();
+      this.abortController = null;
+    }
+    this.setState({
+      isRunning: false,
+      queue: [],
+      currentSync: null,
+      overallProgress: 0,
+      pendingRequest: null,
+    });
   }
 
   /**
@@ -408,12 +533,18 @@ class SyncOrchestratorServiceClass {
       return;
     }
 
-    // Initialize queue with pending status
-    const queue: SyncItem[] = validTypes.map((type) => ({
-      type,
-      status: 'pending',
-      progress: 0,
-    }));
+    // Preserve any external sync items already in the queue
+    const externalItems = this.state.queue.filter((item) => item.external);
+
+    // Initialize queue with pending status for internal syncs + existing external items
+    const queue: SyncItem[] = [
+      ...validTypes.map((type) => ({
+        type,
+        status: 'pending' as SyncItemStatus,
+        progress: 0,
+      })),
+      ...externalItems,
+    ];
 
     this.abortController = new AbortController();
     this.setState({
@@ -484,11 +615,13 @@ class SyncOrchestratorServiceClass {
         this.updateOverallProgress();
       }
     } finally {
-      // Defensive: ALWAYS reset isRunning when startSync exits, regardless of
-      // how the loop terminates (normal completion, cancellation, or unexpected error).
-      // This prevents the UI from getting stuck in a permanent "syncing" state.
+      // Defensive: ALWAYS reset currentSync and abortController when startSync exits.
+      // isRunning depends on whether external syncs are still active.
+      const stillRunning = this.state.queue.some(
+        (item) => item.external && item.status === 'running'
+      );
       this.setState({
-        isRunning: false,
+        isRunning: stillRunning,
         currentSync: null,
       });
       this.abortController = null;
@@ -503,15 +636,14 @@ class SyncOrchestratorServiceClass {
   }
 
   private updateOverallProgress(): void {
-    const { queue } = this.state;
-    if (queue.length === 0) {
+    const internalItems = this.state.queue.filter((item) => !item.external);
+    if (internalItems.length === 0) {
       this.setState({ overallProgress: 0 });
       return;
     }
 
-    // Calculate weighted progress
-    const totalProgress = queue.reduce((sum, item) => sum + item.progress, 0);
-    const overallProgress = Math.round(totalProgress / queue.length);
+    const totalProgress = internalItems.reduce((sum, item) => sum + item.progress, 0);
+    const overallProgress = Math.round(totalProgress / internalItems.length);
     this.setState({ overallProgress });
   }
 }

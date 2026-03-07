@@ -18,6 +18,7 @@
 
 import Database from "better-sqlite3-multiple-ciphers";
 import type { Database as DatabaseType } from "better-sqlite3";
+import log from "electron-log";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
@@ -152,6 +153,7 @@ class DatabaseService implements IDatabaseService {
         await this.runMigrations();
       } catch (migrationError) {
         // Migration failed -- attempt auto-restore from pre-migration backup
+        log.error("[DatabaseService] Migration FAILED:", migrationError instanceof Error ? migrationError.message : String(migrationError));
         await logService.error("Migration failed, attempting auto-restore", "DatabaseService", {
           error: migrationError instanceof Error ? migrationError.message : String(migrationError),
         });
@@ -634,11 +636,20 @@ class DatabaseService implements IDatabaseService {
       version: 32,
       description: "Add sync_session_id columns and indexes for ACID rollback on cancelled iPhone sync (TASK-2110)",
       migrate: (d) => {
+        // Add columns individually — ALTER TABLE can't be batched in SQLite,
+        // and we use try/catch per column so re-runs are idempotent.
+        const columns: [string, string][] = [
+          ["messages", "sync_session_id"],
+          ["attachments", "sync_session_id"],
+          ["external_contacts", "sync_session_id"],
+        ];
+        for (const [table, col] of columns) {
+          const info = d.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+          if (!info.some((c) => c.name === col)) {
+            d.exec(`ALTER TABLE ${table} ADD COLUMN ${col} TEXT`);
+          }
+        }
         d.exec(`
-          ALTER TABLE messages ADD COLUMN sync_session_id TEXT;
-          ALTER TABLE attachments ADD COLUMN sync_session_id TEXT;
-          ALTER TABLE external_contacts ADD COLUMN sync_session_id TEXT;
-
           CREATE INDEX IF NOT EXISTS idx_messages_sync_session ON messages(user_id, sync_session_id);
           CREATE INDEX IF NOT EXISTS idx_attachments_sync_session ON attachments(sync_session_id);
           CREATE INDEX IF NOT EXISTS idx_external_contacts_sync_session ON external_contacts(user_id, sync_session_id);

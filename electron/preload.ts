@@ -56,6 +56,7 @@ import {
   databaseBackupBridge,
   privacyBridge,
   failureLogBridge,
+  logBridge,
 } from "./preload/index";
 
 // Expose protected methods that allow the renderer process to use
@@ -135,4 +136,7 @@ contextBridge.exposeInMainWorld("api", {
 
   // Failure log for offline diagnostics (TASK-2058)
   failureLog: failureLogBridge,
+
+  // Renderer log relay — pipes to main process log file
+  log: logBridge,
 });
