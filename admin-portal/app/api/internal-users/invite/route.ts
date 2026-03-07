@@ -74,7 +74,9 @@ export async function POST(request: NextRequest) {
   });
 
   // ── 4. Validate roleSlug against admin_roles table (BACKLOG-886) ──
-  const { data: roleRow, error: roleError } = await adminClient
+  // Use the authenticated user's client (not adminClient) because admin_roles
+  // has RLS policies that require has_internal_role(auth.uid()).
+  const { data: roleRow, error: roleError } = await supabase
     .from('admin_roles')
     .select('id, slug')
     .eq('slug', roleSlug)
