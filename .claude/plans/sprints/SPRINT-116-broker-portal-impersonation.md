@@ -1,7 +1,8 @@
 # SPRINT-116: Broker Portal Impersonation
 
 **Created:** 2026-03-07
-**Status:** Planned
+**Status:** Completed
+**Completed:** 2026-03-07
 **Goal:** Enable admin support staff to view the broker portal as any user for support/debugging
 
 ---
@@ -14,10 +15,19 @@ Support staff need to see exactly what a broker sees — not just their data in 
 
 ## In-Scope
 
-| Backlog | Title | Priority | Est. Complexity |
-|---------|-------|----------|-----------------|
-| BACKLOG-866 | Broker portal impersonation for support | High | High |
-| BACKLOG-838 | Add impersonation support to admin portal (UI + schema) | High | High |
+| Backlog | Title | Priority | Est. Complexity | Status |
+|---------|-------|----------|-----------------|--------|
+| BACKLOG-866 | Broker portal impersonation for support | High | High | Completed |
+| BACKLOG-838 | Add impersonation support to admin portal (UI + schema) | High | High | Completed |
+
+### Task Execution Summary
+
+| Task | Title | PR | Status |
+|------|-------|----|--------|
+| TASK-2122 | Impersonation schema + RPCs | #1077 | Merged |
+| TASK-2123 | Admin portal "View as User" button | #1078 | Merged |
+| TASK-2124 | Broker portal impersonation session | #1079 | Merged |
+| TASK-2125 | E2E read-only enforcement | #1080 | Merged |
 
 ### Key Deliverables
 
