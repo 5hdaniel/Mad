@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { formatRelativeTime, getStatusColor, formatStatus } from '@/lib/utils';
+import { getDataClient } from '@/lib/impersonation-guards';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 interface SubmissionStats {
   total: number;
@@ -12,14 +14,19 @@ interface SubmissionStats {
   rejected: number;
 }
 
-async function getStats(): Promise<SubmissionStats> {
-  const supabase = await createClient();
-
+async function getStats(client: SupabaseClient, orgId?: string): Promise<SubmissionStats> {
   // Get all submissions for the user's organization (exclude incomplete uploads)
-  const { data, error } = await supabase
+  let query = client
     .from('transaction_submissions')
     .select('status')
     .neq('status', 'uploading');
+
+  // During impersonation, filter by organization
+  if (orgId) {
+    query = query.eq('organization_id', orgId);
+  }
+
+  const { data, error } = await query;
 
   if (error || !data) {
     console.error('Error fetching stats:', error);
@@ -43,15 +50,19 @@ async function getStats(): Promise<SubmissionStats> {
   };
 }
 
-async function getRecentSubmissions() {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
+async function getRecentSubmissions(client: SupabaseClient, orgId?: string) {
+  let query = client
     .from('transaction_submissions')
     .select('*')
     .neq('status', 'uploading')
     .order('created_at', { ascending: false })
     .limit(5);
+
+  if (orgId) {
+    query = query.eq('organization_id', orgId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error('Error fetching recent submissions:', error);
@@ -62,23 +73,38 @@ async function getRecentSubmissions() {
 }
 
 export default async function DashboardPage() {
-  // IT admins only manage users — redirect to Users page
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (user) {
-    const { data: membership } = await supabase
-      .from('organization_members')
-      .select('role')
-      .eq('user_id', user.id)
-      .maybeSingle();
-    if (membership?.role === 'it_admin') {
-      redirect('/dashboard/users');
+  const { client, impersonation, targetUserId } = await getDataClient();
+
+  // IT admins only manage users — redirect to Users page (skip during impersonation)
+  if (!impersonation) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: membership } = await supabase
+        .from('organization_members')
+        .select('role')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (membership?.role === 'it_admin') {
+        redirect('/dashboard/users');
+      }
     }
   }
 
+  // During impersonation, find the target user's organization
+  let orgId: string | undefined;
+  if (impersonation && targetUserId) {
+    const { data: membership } = await client
+      .from('organization_members')
+      .select('organization_id')
+      .eq('user_id', targetUserId)
+      .maybeSingle();
+    orgId = membership?.organization_id;
+  }
+
   const [stats, recentSubmissions] = await Promise.all([
-    getStats(),
-    getRecentSubmissions(),
+    getStats(client, orgId),
+    getRecentSubmissions(client, orgId),
   ]);
 
   return (

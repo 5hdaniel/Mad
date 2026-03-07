@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { getConsentStatus, getRetentionPolicy, updateRetentionPolicy, getJitStatus, updateJitStatus } from '@/lib/actions/scim';
 import { SignOutAllButton } from '@/components/SignOutAllButton';
 import { ActiveSessionsList } from '@/components/ActiveSessionsList';
+import { useImpersonation } from '@/components/providers/ImpersonationProvider';
 
 interface ConsentInfo {
   organizationId: string;
@@ -23,6 +25,8 @@ const RETENTION_OPTIONS = [
 ];
 
 export default function SettingsPage() {
+  const { isImpersonating } = useImpersonation();
+  const router = useRouter();
   const [consent, setConsent] = useState<ConsentInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [retentionYears, setRetentionYears] = useState(7);
@@ -33,6 +37,13 @@ export default function SettingsPage() {
   const [savingJit, setSavingJit] = useState(false);
 
   const desktopClientId = process.env.NEXT_PUBLIC_DESKTOP_CLIENT_ID || '';
+
+  // Block settings access during impersonation (read-only session)
+  useEffect(() => {
+    if (isImpersonating) {
+      router.replace('/dashboard');
+    }
+  }, [isImpersonating, router]);
 
   useEffect(() => {
     async function load() {
@@ -68,6 +79,17 @@ export default function SettingsPage() {
     } finally {
       setSavingRetention(false);
     }
+  }
+
+  if (isImpersonating) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+          <p className="mt-1 text-sm text-gray-500">Settings are not accessible during impersonation sessions.</p>
+        </div>
+      </div>
+    );
   }
 
   if (loading) {

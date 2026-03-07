@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   generateScimToken,
   revokeScimToken,
   listScimTokens,
   listScimSyncLogs,
 } from '@/lib/actions/scim';
+import { useImpersonation } from '@/components/providers/ImpersonationProvider';
 
 interface ScimToken {
   id: string;
@@ -29,6 +31,8 @@ interface SyncLogEntry {
 }
 
 export default function ScimSettingsPage() {
+  const { isImpersonating } = useImpersonation();
+  const router = useRouter();
   const [tokens, setTokens] = useState<ScimToken[]>([]);
   const [syncLogs, setSyncLogs] = useState<SyncLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,6 +44,13 @@ export default function ScimSettingsPage() {
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
+
+  // Block SCIM settings access during impersonation (read-only session)
+  useEffect(() => {
+    if (isImpersonating) {
+      router.replace('/dashboard');
+    }
+  }, [isImpersonating, router]);
 
   const scimEndpoint = `${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim()}/functions/v1/scim/v2/Users`;
 
