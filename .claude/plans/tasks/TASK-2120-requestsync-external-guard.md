@@ -2,7 +2,7 @@
 
 **Backlog:** BACKLOG-855
 **Sprint:** SPRINT-114
-**Status:** In Progress
+**Status:** QA Passed
 **Branch:** `feature/TASK-2119-iphone-orchestrator` (same PR #1063)
 **Estimated Tokens:** ~15K (service category x0.5 = ~8K engineer + ~7K SR review)
 **Token Cap:** 60K
@@ -150,4 +150,24 @@ Fixes BACKLOG-855
 
 ## Implementation Summary
 
-_To be filled by engineer after implementation._
+*Completed: 2026-03-06*
+
+**Commit:** `ca3ccc24` — fix: requestSync should not block on external-only running state
+
+### Changes Made
+
+| File | Change |
+|------|--------|
+| `src/services/SyncOrchestratorService.ts` | Changed `requestSync` guard from `this.state.isRunning` to `queue.some(!external && running)`; updated Sentry breadcrumb to log `internalRunning` |
+| `src/services/__tests__/SyncOrchestratorService.test.ts` | Added dedicated BACKLOG-855 test, regression test confirming internal syncs still block, updated existing tests to use `requestSync` instead of `forceSync` workaround |
+
+### Results
+
+- **Before**: `requestSync` blocked when any sync (including external/iPhone) was running, requiring unnecessary user confirmation
+- **After**: `requestSync` only blocks on internal running syncs; external syncs run in parallel
+- **Lines changed**: +65 / -6 across 2 files
+- **All acceptance criteria met**: requestSync starts immediately with external-only running, still queues with internal running, tests pass
+
+### Issues/Blockers
+
+None
