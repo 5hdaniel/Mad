@@ -67,6 +67,8 @@ export async function POST(request: NextRequest) {
       { status: 503 }
     );
   }
+  // Temporary diagnostic logging — remove after debugging
+  console.log('[invite-internal-user] Key prefix:', serviceRoleKey.substring(0, 10), 'length:', serviceRoleKey.length);
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const adminClient = createAdminClient(supabaseUrl, serviceRoleKey, {
@@ -94,7 +96,8 @@ export async function POST(request: NextRequest) {
   }
 
   // ── 5. Check if user exists in public.users ───────────────────────
-  const { data: existingUser, error: userLookupError } = await adminClient
+  // Use authenticated client — internal users have SELECT on all users via RLS
+  const { data: existingUser, error: userLookupError } = await supabase
     .from('users')
     .select('id, email')
     .eq('email', email)
@@ -111,7 +114,7 @@ export async function POST(request: NextRequest) {
   try {
     if (existingUser) {
       // ── Case A: User exists in public.users -> call RPC directly ──
-      return await callRpcAndRespond(adminClient, email, roleSlug);
+      return await callRpcAndRespond(supabase, email, roleSlug);
     }
 
     // ── User NOT in public.users — check auth.users ─────────────────
@@ -119,7 +122,7 @@ export async function POST(request: NextRequest) {
       await adminClient.auth.admin.listUsers({ perPage: 1000 });
 
     if (listError) {
-      console.error('[invite-internal-user] listUsers error:', listError.message);
+      console.error('[invite-internal-user] listUsers error:', JSON.stringify(listError));
       return NextResponse.json({ error: 'Failed to check auth users' }, { status: 500 });
     }
 
@@ -137,7 +140,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      return await callRpcAndRespond(adminClient, email, roleSlug);
+      return await callRpcAndRespond(supabase, email, roleSlug);
     }
 
     // ── Case C: User exists in neither — create from scratch ────────
@@ -176,7 +179,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Assign the internal role
-    const rpcResult = await callRpc(adminClient, email, roleSlug);
+    const rpcResult = await callRpc(supabase, email, roleSlug);
     if (rpcResult.error) {
       // BACKLOG-887: Rollback — delete both public.users and auth user
       await adminClient.from('users').delete().eq('id', createdAuthUserId);
