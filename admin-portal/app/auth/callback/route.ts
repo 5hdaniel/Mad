@@ -3,8 +3,9 @@
  *
  * Handles the OAuth redirect from Supabase Auth:
  * 1. Exchanges authorization code for session
- * 2. Verifies user has an internal_roles entry
- * 3. Redirects to dashboard or login with error
+ * 2. Processes pending internal invitations (auto-assigns role on first login)
+ * 3. Verifies user has an internal_roles entry
+ * 4. Redirects to dashboard or login with error
  */
 
 import { createClient } from '@/lib/supabase/server';
@@ -30,6 +31,9 @@ export async function GET(request: Request) {
     } = await supabase.auth.getUser();
 
     if (user) {
+      // Process any pending internal invitation for this user
+      await processPendingInvitation(supabase, user.id, user.email ?? '');
+
       // Check for internal role
       const { data: internalRole } = await supabase
         .from('internal_roles')
@@ -50,4 +54,90 @@ export async function GET(request: Request) {
 
   // No code provided or auth failed
   return NextResponse.redirect(`${origin}/login?error=auth_failed`);
+}
+
+/**
+ * Check for a pending invitation and auto-assign the internal role.
+ *
+ * When an admin invites a user who doesn't have a Keepr account yet,
+ * we store the invitation in pending_internal_invitations. On first
+ * SSO login, this function picks it up:
+ *   1. Ensures public.users record exists
+ *   2. Assigns the internal role
+ *   3. Deletes the invitation
+ */
+async function processPendingInvitation(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  email: string
+) {
+  if (!email) return;
+
+  try {
+    // Check for pending invitation
+    const { data: invitation } = await supabase
+      .from('pending_internal_invitations')
+      .select('id, role_id, email')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+
+    if (!invitation) return;
+
+    // Ensure public.users record exists
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (!existingUser) {
+      // Create public.users record for this user
+      const { error: insertError } = await supabase.from('users').insert({
+        id: userId,
+        email: email.toLowerCase(),
+        oauth_provider: 'azure',
+        oauth_id: userId,
+        status: 'active',
+        is_active: true,
+      });
+
+      if (insertError) {
+        console.error('[auth-callback] Failed to create public.users record:', insertError.message);
+        return;
+      }
+    }
+
+    // Look up the role slug for the RPC
+    const { data: role } = await supabase
+      .from('admin_roles')
+      .select('slug')
+      .eq('id', invitation.role_id)
+      .single();
+
+    if (!role) {
+      console.error('[auth-callback] Invitation references unknown role_id:', invitation.role_id);
+      return;
+    }
+
+    // Assign the internal role via RPC
+    const { error: rpcError } = await supabase.rpc('admin_add_internal_user', {
+      p_email: email.toLowerCase(),
+      p_role: role.slug,
+    });
+
+    if (rpcError) {
+      console.error('[auth-callback] Failed to assign internal role:', rpcError.message);
+      return;
+    }
+
+    // Delete the processed invitation
+    await supabase
+      .from('pending_internal_invitations')
+      .delete()
+      .eq('id', invitation.id);
+
+    console.log(`[auth-callback] Processed invitation: ${email} assigned role ${role.slug}`);
+  } catch (err) {
+    console.error('[auth-callback] Error processing pending invitation:', err);
+  }
 }

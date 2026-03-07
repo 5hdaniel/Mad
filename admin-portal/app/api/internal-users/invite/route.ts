@@ -1,16 +1,10 @@
 /**
- * API Route: Add Internal User (Overhaul)
+ * API Route: Add Internal User
  *
- * Handles ALL cases server-side:
- *   1. User exists in public.users -> call RPC directly
- *   2. User exists in auth.users but NOT public.users -> create public.users row, then RPC
- *   3. User exists in neither -> create auth user, create public.users row, then RPC
- *   4. User already has the role -> return graceful error
- *
- * BACKLOG-885: Fix broken flow where admin.createUser() fires trigger creating
- *              profiles but NOT public.users, causing RPC to fail.
- * BACKLOG-886: Validate roleSlug against admin_roles table.
- * BACKLOG-887: Rollback auth user creation if subsequent steps fail.
+ * Handles two cases:
+ *   1. User exists in public.users -> call RPC to assign role directly
+ *   2. User NOT in public.users -> create a pending invitation
+ *      (role is auto-assigned on first SSO login via /auth/callback)
  *
  * POST /api/internal-users/invite
  * Body: { email: string, role: string }
@@ -18,7 +12,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { createClient as createAdminClient, type SupabaseClient } from '@supabase/supabase-js';
 
 export async function POST(request: NextRequest) {
   // ── 1. Auth check ──────────────────────────────────────────────────
@@ -58,24 +51,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing role' }, { status: 400 });
   }
 
-  // ── 3. Admin client setup ─────────────────────────────────────────
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!serviceRoleKey) {
-    console.error('[invite-internal-user] SUPABASE_SERVICE_ROLE_KEY is not configured');
-    return NextResponse.json(
-      { error: 'Server configuration missing — contact an administrator' },
-      { status: 503 }
-    );
-  }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const adminClient = createAdminClient(supabaseUrl, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-
-  // ── 4. Validate roleSlug against admin_roles table (BACKLOG-886) ──
-  // Use the authenticated user's client (not adminClient) because admin_roles
-  // has RLS policies that require has_internal_role(auth.uid()).
+  // ── 3. Validate roleSlug against admin_roles table ────────────────
   const { data: roleRow, error: roleError } = await supabase
     .from('admin_roles')
     .select('id, slug')
@@ -93,8 +69,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // ── 5. Check if user exists in public.users ───────────────────────
-  // Use authenticated client — internal users have SELECT on all users via RLS
+  // ── 4. Check if user exists in public.users ───────────────────────
   const { data: existingUser, error: userLookupError } = await supabase
     .from('users')
     .select('id, email')
@@ -106,216 +81,72 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to look up user' }, { status: 500 });
   }
 
-  // Track whether we created an auth user (for BACKLOG-887 rollback)
-  let createdAuthUserId: string | null = null;
+  if (existingUser) {
+    // ── Case A: User exists → assign role directly via RPC ────────
+    const { data, error } = await supabase.rpc('admin_add_internal_user', {
+      p_email: email,
+      p_role: roleSlug,
+    });
 
-  try {
-    if (existingUser) {
-      // ── Case A: User exists in public.users -> call RPC directly ──
-      return await callRpcAndRespond(supabase, email, roleSlug);
-    }
+    if (error) {
+      console.error('[invite-internal-user] RPC error:', error.message);
 
-    // ── User NOT in public.users — check auth.users ─────────────────
-    const { data: allAuthUsers, error: listError } =
-      await adminClient.auth.admin.listUsers({ perPage: 1000 });
-
-    if (listError) {
-      console.error('[invite-internal-user] listUsers error:', listError.message);
-      return NextResponse.json({ error: 'Failed to check auth users' }, { status: 500 });
-    }
-
-    const matchingAuthUser = allAuthUsers?.users?.find(
-      (u) => u.email?.toLowerCase() === email.toLowerCase()
-    );
-
-    if (matchingAuthUser) {
-      // ── Case B: In auth.users but NOT public.users ────────────────
-      const insertError = await createPublicUsersRecord(adminClient, matchingAuthUser.id, email);
-      if (insertError) {
+      if (error.message?.includes('already has') || error.message?.includes('already an internal')) {
         return NextResponse.json(
-          { error: `Failed to create user record: ${insertError}` },
-          { status: 500 }
+          { error: `${email} already has an internal role assigned.` },
+          { status: 409 }
         );
       }
 
-      return await callRpcAndRespond(supabase, email, roleSlug);
-    }
-
-    // ── Case C: User exists in neither — create from scratch ────────
-    const { data: createData, error: createError } =
-      await adminClient.auth.admin.createUser({
-        email,
-        email_confirm: true,
-        user_metadata: { created_as_internal_user: true },
-      });
-
-    if (createError) {
-      console.error('[invite-internal-user] createUser error:', createError.message);
       return NextResponse.json(
-        { error: createError.message || 'Failed to create auth user' },
+        { error: error.message || 'Failed to assign role' },
         { status: 500 }
       );
     }
 
-    createdAuthUserId = createData.user?.id ?? null;
-    if (!createdAuthUserId) {
-      return NextResponse.json(
-        { error: 'Auth user created but no ID returned' },
-        { status: 500 }
-      );
-    }
-
-    // Create the public.users record
-    const insertError = await createPublicUsersRecord(adminClient, createdAuthUserId, email);
-    if (insertError) {
-      // BACKLOG-887: Rollback — delete the auth user we just created
-      await rollbackAuthUser(adminClient, createdAuthUserId);
-      return NextResponse.json(
-        { error: `Failed to create user record: ${insertError}` },
-        { status: 500 }
-      );
-    }
-
-    // Assign the internal role
-    const rpcResult = await callRpc(supabase, email, roleSlug);
-    if (rpcResult.error) {
-      // BACKLOG-887: Rollback — delete both public.users and auth user
-      await adminClient.from('users').delete().eq('id', createdAuthUserId);
-      await rollbackAuthUser(adminClient, createdAuthUserId);
-      return NextResponse.json(
-        { error: `Role assignment failed: ${rpcResult.error}` },
-        { status: rpcResult.status }
-      );
-    }
-
+    const result = data as { success: boolean; user_id: string; role: string } | null;
     return NextResponse.json({
       success: true,
-      user_id: rpcResult.userId ?? createdAuthUserId,
-      role: rpcResult.role ?? roleSlug,
-      created: true,
+      user_id: result?.user_id,
+      role: result?.role ?? roleSlug,
     });
-  } catch (err) {
-    // BACKLOG-887: If anything unexpected fails, try to clean up
-    if (createdAuthUserId) {
-      await adminClient.from('users').delete().eq('id', createdAuthUserId);
-      await rollbackAuthUser(adminClient, createdAuthUserId);
-    }
-    console.error('[invite-internal-user] Unexpected error:', err);
+  }
+
+  // ── Case B: User not in system → create pending invitation ──────
+  // Check if already invited
+  const { data: existingInvite } = await supabase
+    .from('pending_internal_invitations')
+    .select('id, email')
+    .eq('email', email)
+    .maybeSingle();
+
+  if (existingInvite) {
     return NextResponse.json(
-      { error: 'An unexpected error occurred' },
+      { error: `${email} already has a pending invitation.` },
+      { status: 409 }
+    );
+  }
+
+  const { error: inviteError } = await supabase
+    .from('pending_internal_invitations')
+    .insert({
+      email,
+      role_id: roleRow.id,
+      invited_by: user.id,
+    });
+
+  if (inviteError) {
+    console.error('[invite-internal-user] invitation insert error:', inviteError.message);
+    return NextResponse.json(
+      { error: 'Failed to create invitation' },
       { status: 500 }
     );
   }
-}
 
-// ── Helpers ───────────────────────────────────────────────────────────
-
-type AdminSupabaseClient = SupabaseClient;
-
-/**
- * Insert a row into public.users for a user that exists in auth.users
- * but not yet in public.users.
- */
-async function createPublicUsersRecord(
-  client: AdminSupabaseClient,
-  userId: string,
-  email: string
-): Promise<string | null> {
-  const { error } = await client.from('users').insert({
-    id: userId,
-    email,
-    // The CHECK constraint on the live DB allows 'azure' (used by SCIM + JIT).
-    // We use 'azure' as a placeholder; it will be updated on first SSO login.
-    oauth_provider: 'azure',
-    oauth_id: userId, // Placeholder — updated on first SSO login
-    status: 'active',
-    is_active: true,
-  });
-
-  if (error) {
-    console.error('[invite-internal-user] public.users insert error:', error.message);
-    return error.message;
-  }
-  return null;
-}
-
-/**
- * Call admin_add_internal_user RPC and return a NextResponse.
- */
-async function callRpcAndRespond(
-  client: AdminSupabaseClient,
-  email: string,
-  roleSlug: string
-): Promise<NextResponse> {
-  const result = await callRpc(client, email, roleSlug);
-  if (result.error) {
-    return NextResponse.json({ error: result.error }, { status: result.status });
-  }
+  const roleName = roleRow.slug;
   return NextResponse.json({
     success: true,
-    user_id: result.userId,
-    role: result.role ?? roleSlug,
+    pending: true,
+    message: `Invitation created for ${email} as ${roleName}. Role will be assigned on first login.`,
   });
-}
-
-/**
- * Call admin_add_internal_user RPC, returning a structured result.
- */
-async function callRpc(
-  client: AdminSupabaseClient,
-  email: string,
-  roleSlug: string
-): Promise<{
-  error: string | null;
-  status: number;
-  userId: string | null;
-  role: string | null;
-}> {
-  const { data, error } = await client.rpc('admin_add_internal_user', {
-    p_email: email,
-    p_role: roleSlug,
-  });
-
-  if (error) {
-    console.error('[invite-internal-user] RPC error:', error.message);
-
-    // Handle "already has role" gracefully
-    if (error.message?.includes('already has') || error.message?.includes('already an internal')) {
-      return {
-        error: `${email} already has an internal role assigned.`,
-        status: 409,
-        userId: null,
-        role: null,
-      };
-    }
-
-    return {
-      error: error.message || 'Failed to assign role',
-      status: 500,
-      userId: null,
-      role: null,
-    };
-  }
-
-  const result = data as { success: boolean; user_id: string; role: string } | null;
-  return {
-    error: null,
-    status: 200,
-    userId: result?.user_id ?? null,
-    role: result?.role ?? null,
-  };
-}
-
-/**
- * BACKLOG-887: Rollback — delete an auth user we created.
- */
-async function rollbackAuthUser(
-  client: AdminSupabaseClient,
-  userId: string
-): Promise<void> {
-  try {
-    await client.auth.admin.deleteUser(userId);
-  } catch (err) {
-    console.error('[invite-internal-user] Rollback failed for auth user:', userId, err);
-  }
 }

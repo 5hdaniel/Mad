@@ -87,6 +87,8 @@ export function AddInternalUserForm({ onSuccess, roles }: AddInternalUserFormPro
 
       const json = (await response.json()) as {
         success?: boolean;
+        pending?: boolean;
+        message?: string;
         error?: string;
       };
 
@@ -95,12 +97,16 @@ export function AddInternalUserForm({ onSuccess, roles }: AddInternalUserFormPro
         return;
       }
 
-      const roleName = roles.find((r) => r.slug === selectedSlug)?.name || selectedSlug;
-      setSuccess(`Successfully added ${trimmedEmail} as ${roleName}`);
+      if (json.pending) {
+        setSuccess(json.message || `Invitation created for ${trimmedEmail}. Role will be assigned on first login.`);
+      } else {
+        const roleName = roles.find((r) => r.slug === selectedSlug)?.name || selectedSlug;
+        setSuccess(`Successfully added ${trimmedEmail} as ${roleName}`);
+      }
       setEmail('');
       setSelectedSlug(defaultSlug);
       onSuccess();
-      setTimeout(() => setIsOpen(false), 1500);
+      setTimeout(() => setIsOpen(false), 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
