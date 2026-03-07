@@ -108,9 +108,9 @@ export interface UseIPhoneSyncReturn {
   syncLocked: boolean;
   /** Human-readable description of the blocking operation (TASK-910) */
   lockReason: string | null;
-  startSync: () => void;
+  startSync: () => Promise<void>;
   submitPassword: (password: string) => void;
-  cancelSync: () => void;
+  cancelSync: () => Promise<void>;
   /** Reset state after user acknowledges sync completion */
   dismissSync: () => void;
   /** Refresh the sync lock status (TASK-910) */

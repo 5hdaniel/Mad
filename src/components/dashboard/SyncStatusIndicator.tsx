@@ -387,6 +387,9 @@ export function SyncStatusIndicator({
           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${colorClass}`}
           data-testid={`sync-pill-${type}`}
         >
+          {isExternal && (
+            <div className="w-3 h-3 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin" />
+          )}
           {label}
         </span>
       );
