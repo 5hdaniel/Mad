@@ -133,6 +133,8 @@ ALTER TABLE public.internal_roles ADD COLUMN role_id UUID REFERENCES public.admi
 
 ## In-Scope Tasks
 
+### Original Tasks (Phase 1-2)
+
 | Task | Title | Type | Est. Tokens | Status |
 |------|-------|------|-------------|--------|
 | TASK-2119 | RBAC schema migration (permissions, roles, role_permissions tables) | schema | ~8K | Pending |
@@ -143,7 +145,36 @@ ALTER TABLE public.internal_roles ADD COLUMN role_id UUID REFERENCES public.admi
 | TASK-2124 | Update internal user management to assign roles from admin_roles | service | ~10K | Pending |
 | TASK-2125 | Group Settings sidebar items under collapsible sub-nav | service | ~8K | In Progress |
 
-**Total Estimated:** ~86K tokens
+### SR Engineer Findings - Pre-Merge Blockers (Phase 3)
+
+Added 2026-03-06 from SR Engineer code review. ALL items must be resolved before sprint merges to develop.
+
+**CRITICAL (P0) - Functional bugs / broken flows:**
+
+| Backlog | Title | Type | Est. Tokens | Status |
+|---------|-------|------|-------------|--------|
+| BACKLOG-880 | Middleware N+1 RPC calls - create `has_any_permission` batch RPC | bug | ~15K | Pending |
+| BACKLOG-883 | Bulk remove only removes last selected user (state overwrites) | bug | ~10K | Pending |
+| BACKLOG-884 | isSubmitting double-set in AddInternalUserForm | bug | ~3K | Pending |
+| BACKLOG-885 | Create-user flow broken - public.users not populated by trigger | bug | ~25K | Pending |
+
+**HIGH (P1) - Security / reliability issues:**
+
+| Backlog | Title | Type | Est. Tokens | Status |
+|---------|-------|------|-------------|--------|
+| BACKLOG-886 | Create-user route does not validate roleSlug against admin_roles | bug | ~5K | Pending |
+| BACKLOG-887 | Orphaned auth user on role assignment failure | bug | ~8K | Pending |
+| BACKLOG-888 | Open redirect protection incomplete - backslash and encoded chars bypass | bug | ~3K | Pending |
+| BACKLOG-889 | Permissions cached indefinitely - stale after role change | bug | ~8K | Pending |
+
+**Phase 3 Subtotal:** ~77K tokens
+**Notes:**
+- BACKLOG-885 + BACKLOG-886 + BACKLOG-887 share the invite route and can be addressed in a single task
+- BACKLOG-880 was previously logged as Medium priority; upgraded to Critical per SR findings
+- BACKLOG-883 supersedes incomplete fix in BACKLOG-869
+- BACKLOG-888 is a follow-up to incomplete fix in BACKLOG-867
+
+**Total Estimated (all phases):** ~163K tokens
 
 ---
 
@@ -160,8 +191,26 @@ ALTER TABLE public.internal_roles ADD COLUMN role_id UUID REFERENCES public.admi
 
 1. **Phase 1 (Schema):** TASK-2119 + TASK-2120 + TASK-2121 — applied via Supabase MCP, no app code
 2. **Phase 2 (UI + Enforcement):** TASK-2122 + TASK-2123 + TASK-2124 — parallel engineer agents with worktree isolation
+3. **Phase 3 (SR Findings - Pre-Merge Fixes):** BACKLOG-880 through BACKLOG-889 — fix critical bugs and security issues found during SR review
 
-Integration branch: `int/sprint-113-admin-rbac` → merge to `develop` after all tasks complete.
+**Phase 3 Dependency Graph:**
+```
+BACKLOG-884 (isSubmitting fix)          -- independent, trivial
+BACKLOG-888 (open redirect fix)         -- independent, trivial
+BACKLOG-880 (has_any_permission RPC)    -- independent (middleware + new RPC)
+BACKLOG-883 (bulk remove fix)           -- independent (InternalUsersTable + SettingsManager)
+BACKLOG-889 (permissions cache refresh) -- independent (PermissionsProvider)
+BACKLOG-885 (create-user flow)   ─┐
+BACKLOG-886 (roleSlug validation) ├──── same file: invite/route.ts (sequential or combined)
+BACKLOG-887 (orphaned auth user)  ┘
+```
+
+**Recommended execution:**
+- **Parallel batch A:** BACKLOG-884, BACKLOG-888 (trivial fixes, ~3K each)
+- **Parallel batch B:** BACKLOG-880, BACKLOG-883, BACKLOG-889 (independent files)
+- **Sequential:** BACKLOG-885 + BACKLOG-886 + BACKLOG-887 (combined into single task on invite route)
+
+Integration branch: `int/sprint-113-admin-rbac` → merge to `develop` after all phases complete.
 
 ---
 
@@ -173,6 +222,10 @@ Integration branch: `int/sprint-113-admin-rbac` → merge to `develop` after all
 | Existing has_internal_role() breaks | High | Update function to check admin_roles table instead of TEXT column; backwards-compatible |
 | Permission explosion (too many fine-grained permissions) | Medium | Start with ~18 permissions covering current features; add more as features grow |
 | Super admin locked out during migration | High | Migration seeds super-admin role and maps existing super_admin users first |
+| Create-user flow fails silently (BACKLOG-885) | Critical | handle_new_user trigger creates profiles not public.users; invite route must handle all 3 existence states |
+| Open redirect bypass (BACKLOG-888) | High | Current fix only blocks `//`; must also block `\` and encoded chars via stricter regex |
+| Orphaned auth users on partial failure (BACKLOG-887) | Medium | Invite route needs rollback/cleanup if RPC fails after createUser succeeds |
+| Stale permissions after role change (BACKLOG-889) | Medium | PermissionsProvider caches forever; needs refetch mechanism |
 
 ---
 
@@ -259,6 +312,18 @@ Integration branch: `int/sprint-113-admin-rbac` → merge to `develop` after all
 
 ### Merge Recommendation
 
-PR #1062 can merge to `develop` once:
+**BLOCKED** -- PR #1062 cannot merge to `develop` until ALL of the following are resolved:
+
+**From QA:**
 1. `fix/QA-113-002` PR merged (or L&D role inserted directly via Supabase)
 2. The two in-session critical fixes (`is_super_admin()` + audit log search) confirmed committed to the branch
+
+**From SR Engineer Code Review (2026-03-06) -- 8 new blockers:**
+3. BACKLOG-880: Middleware N+1 RPC calls (P0)
+4. BACKLOG-883: Bulk remove only removes last user (P0)
+5. BACKLOG-884: isSubmitting double-set (P0)
+6. BACKLOG-885: Create-user flow broken (P0)
+7. BACKLOG-886: roleSlug not validated (P1)
+8. BACKLOG-887: Orphaned auth user on failure (P1)
+9. BACKLOG-888: Open redirect bypass via backslash/encoding (P1)
+10. BACKLOG-889: Permissions cached indefinitely (P1)
