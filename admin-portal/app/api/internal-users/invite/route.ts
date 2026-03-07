@@ -67,8 +67,6 @@ export async function POST(request: NextRequest) {
       { status: 503 }
     );
   }
-  // Temporary diagnostic logging — remove after debugging
-  console.log('[invite-internal-user] Key prefix:', serviceRoleKey.substring(0, 10), 'length:', serviceRoleKey.length);
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const adminClient = createAdminClient(supabaseUrl, serviceRoleKey, {
@@ -122,7 +120,7 @@ export async function POST(request: NextRequest) {
       await adminClient.auth.admin.listUsers({ perPage: 1000 });
 
     if (listError) {
-      console.error('[invite-internal-user] listUsers error:', JSON.stringify(listError));
+      console.error('[invite-internal-user] listUsers error:', listError.message);
       return NextResponse.json({ error: 'Failed to check auth users' }, { status: 500 });
     }
 
