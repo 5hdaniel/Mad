@@ -67,6 +67,27 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isProtectedRoute = pathname.startsWith('/dashboard');
   const isAuthRoute = pathname === '/login' || pathname === '/setup';
+  const isImpersonationRoute = pathname === '/auth/impersonate';
+
+  // Allow impersonation entry route without any auth check
+  if (isImpersonationRoute) {
+    return response;
+  }
+
+  // Check for impersonation cookie on protected routes
+  // If present and valid, allow access without normal auth
+  const impersonationCookie = request.cookies.get('impersonation_session');
+  if (isProtectedRoute && impersonationCookie) {
+    try {
+      const session = JSON.parse(impersonationCookie.value);
+      if (session.expires_at && new Date(session.expires_at) > new Date()) {
+        // Valid impersonation session -- allow access
+        return response;
+      }
+    } catch {
+      // Invalid cookie JSON, fall through to normal auth
+    }
+  }
 
   try {
     // Refresh session (important for token refresh)
