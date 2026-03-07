@@ -6,8 +6,9 @@
  * Super admins can manage roles. Other users with roles.view can see them read-only.
  */
 
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { Plus, Pencil, Trash2, Shield, ShieldAlert, Check, X, Lock, Users } from 'lucide-react';
+import { ConfirmationDialog } from '@/components/shared/ConfirmationDialog';
 import { createClient } from '@/lib/supabase/client';
 import type { AdminRole, AdminPermission, InternalUser } from '../page';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
@@ -406,23 +407,6 @@ function DeleteRoleDialog({
 }) {
   const { refreshPermissions } = usePermissions();
   const [deleting, setDeleting] = useState(false);
-  const dialogRef = useRef<HTMLDivElement>(null);
-
-  // Focus the dialog container on mount for focus management
-  useEffect(() => {
-    dialogRef.current?.focus();
-  }, []);
-
-  // Escape key handler
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape' && !deleting) {
-        onCancel();
-      }
-    }
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [deleting, onCancel]);
 
   const handleDelete = useCallback(async () => {
     setDeleting(true);
@@ -445,30 +429,15 @@ function DeleteRoleDialog({
   }, [role.id, onConfirm, onCancel, onError, refreshPermissions]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={!deleting ? onCancel : undefined} />
-      <div
-        ref={dialogRef}
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="delete-role-dialog-title"
-        tabIndex={-1}
-        className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6 outline-none"
-      >
-        <h3 id="delete-role-dialog-title" className="text-lg font-semibold text-gray-900">Delete Role</h3>
-        <p className="mt-2 text-sm text-gray-500">
-          Are you sure you want to delete <span className="font-medium text-gray-700">{role.name}</span>?
-          This action cannot be undone. The role must have no users assigned to it.
-        </p>
-        <div className="mt-6 flex justify-end gap-3">
-          <button onClick={onCancel} disabled={deleting} className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors">
-            Cancel
-          </button>
-          <button onClick={handleDelete} disabled={deleting} className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors">
-            {deleting ? 'Deleting...' : 'Delete Role'}
-          </button>
-        </div>
-      </div>
-    </div>
+    <ConfirmationDialog
+      title="Delete Role"
+      description={`Are you sure you want to delete ${role.name}? This action cannot be undone. The role must have no users assigned to it.`}
+      confirmLabel={deleting ? 'Deleting...' : 'Delete Role'}
+      cancelLabel="Cancel"
+      onConfirm={handleDelete}
+      onCancel={onCancel}
+      isDestructive
+      isLoading={deleting}
+    />
   );
 }
