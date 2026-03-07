@@ -90,10 +90,10 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'user_not_found');
   END IF;
 
-  -- End any existing active sessions for this admin
+  -- End any existing active or validated sessions for this admin
   UPDATE public.impersonation_sessions
   SET status = 'ended', ended_at = now()
-  WHERE admin_user_id = v_admin_id AND status = 'active';
+  WHERE admin_user_id = v_admin_id AND status IN ('active', 'validated');
 
   -- Create new session
   -- expires_at = token expiry (30 min now, TASK-2135 will shorten to 60s)
@@ -212,8 +212,64 @@ END;
 $$;
 
 -- ============================================================================
--- 6. Grants (re-apply for updated function signatures)
+-- 6. Update admin_end_impersonation to handle 'validated' status
+-- ============================================================================
+-- After token validation, status transitions from 'active' to 'validated'.
+-- admin_end_impersonation must find sessions in either state, otherwise ending
+-- a session after validation silently fails (session_not_found).
+
+CREATE OR REPLACE FUNCTION public.admin_end_impersonation(
+  p_session_id UUID
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_admin_id UUID;
+  v_session RECORD;
+BEGIN
+  v_admin_id := auth.uid();
+  IF v_admin_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'not_authenticated');
+  END IF;
+
+  -- Find the session (must belong to this admin, active or validated)
+  SELECT * INTO v_session
+  FROM public.impersonation_sessions
+  WHERE id = p_session_id AND admin_user_id = v_admin_id AND status IN ('active', 'validated');
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'session_not_found');
+  END IF;
+
+  -- End the session
+  UPDATE public.impersonation_sessions
+  SET status = 'ended', ended_at = now()
+  WHERE id = p_session_id;
+
+  -- Audit log
+  INSERT INTO public.admin_audit_logs (actor_id, action, target_type, target_id, metadata)
+  VALUES (
+    v_admin_id,
+    'user.impersonate.end',
+    'user',
+    v_session.target_user_id::text,
+    jsonb_build_object(
+      'session_id', p_session_id,
+      'target_user_id', v_session.target_user_id,
+      'duration_seconds', EXTRACT(EPOCH FROM (now() - v_session.started_at))::int
+    )
+  );
+
+  RETURN jsonb_build_object('success', true, 'session_id', p_session_id);
+END;
+$$;
+
+-- ============================================================================
+-- 7. Grants (re-apply for updated function signatures)
 -- ============================================================================
 
 GRANT EXECUTE ON FUNCTION public.admin_start_impersonation(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_end_impersonation(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.admin_validate_impersonation_token(TEXT) TO authenticated;
