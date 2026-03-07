@@ -111,6 +111,8 @@ export interface UseIPhoneSyncReturn {
   startSync: () => void;
   submitPassword: (password: string) => void;
   cancelSync: () => void;
+  /** Reset state after user acknowledges sync completion */
+  dismissSync: () => void;
   /** Refresh the sync lock status (TASK-910) */
   checkSyncStatus: () => Promise<void>;
 }

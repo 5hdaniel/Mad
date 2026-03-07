@@ -27,6 +27,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useLicense } from "../../contexts/LicenseContext";
 import { useSyncOrchestrator } from "../../hooks/useSyncOrchestrator";
 import type { SyncType, SyncItemStatus } from "../../services/SyncOrchestratorService";
+import logger from "../../utils/logger";
 
 interface SyncStatusIndicatorProps {
   /** Pending transaction count (shown in completion message) */
@@ -95,6 +96,19 @@ export function SyncStatusIndicator({
   // isRunning from SyncOrchestrator now naturally includes all sync types (including iPhone)
   const isAnySyncing = isRunning;
 
+  useEffect(() => {
+    logger.info("[SyncStatusIndicator] Mounted");
+    return () => logger.info("[SyncStatusIndicator] Unmounted");
+  }, []);
+
+  useEffect(() => {
+    const view = (dismissed && !isAnySyncing && queue.length === 0) ? "hidden(dismissed)" :
+      (showCompletion && !isAnySyncing) ? "completion" :
+      (!isAnySyncing && queue.length === 0) ? "hidden(empty)" :
+      "progress";
+    logger.debug(`[SyncStatusIndicator] Rendering: ${view}`, { isRunning, queueLen: queue.length, showCompletion, dismissed });
+  }, [isAnySyncing, queue.length, showCompletion, dismissed]);
+
   // Check if any sync in the queue has an error
   const hasError = queue.some(item => item.status === 'error');
 
@@ -115,8 +129,8 @@ export function SyncStatusIndicator({
         autoDismissTimerRef.current = null;
       }
       setShowCompletion(false);
-    } else if (wasSyncingRef.current && !isAnySyncing) {
-      // Just finished syncing - show completion message
+    } else if (wasSyncingRef.current && !isAnySyncing && queue.some(item => item.status === 'complete' || item.status === 'error')) {
+      // Just finished syncing - show completion message (not on cancel, which removes items)
       setShowCompletion(true);
       wasSyncingRef.current = false;
 
@@ -159,6 +173,7 @@ export function SyncStatusIndicator({
 
   // Handle manual dismiss (also cancels auto-dismiss timer)
   const handleDismiss = useCallback(() => {
+    logger.info("[SyncStatusIndicator] Dismiss clicked");
     if (autoDismissTimerRef.current) {
       clearTimeout(autoDismissTimerRef.current);
       autoDismissTimerRef.current = null;
@@ -320,8 +335,15 @@ export function SyncStatusIndicator({
   // Render a status pill for each sync item in queue order
   const renderPill = (type: SyncType, status: SyncItemStatus, progress: number, error?: string, phase?: string, isExternal?: boolean) => {
     const baseLabel = getLabelForType(type);
-    // Show phase for running syncs (e.g., "Messages - querying", "iPhone - Importing")
-    const label = status === 'running' && phase ? `${baseLabel} - ${phase}` : baseLabel;
+    // Show phase for running syncs (e.g., "Messages - querying", "iPhone - Exporting")
+    const friendlyPhase = phase ? ({
+      backing_up: 'Exporting',
+      preparing: 'Preparing',
+      extracting: 'Reading messages',
+      storing: 'Saving',
+      complete: 'Done',
+    }[phase] ?? phase) : undefined;
+    const label = status === 'running' && friendlyPhase ? `${baseLabel} - ${friendlyPhase}` : baseLabel;
     const colorClass = statusColors[status];
 
     // Error state - red with tooltip
@@ -365,9 +387,6 @@ export function SyncStatusIndicator({
           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${colorClass}`}
           data-testid={`sync-pill-${type}`}
         >
-          {isExternal && (
-            <div className="w-3 h-3 border border-blue-500 border-t-transparent rounded-full animate-spin" />
-          )}
           {label}
         </span>
       );
@@ -428,15 +447,16 @@ export function SyncStatusIndicator({
         )}
         {/* "Details" link for external syncs (e.g., iPhone) */}
         {activeExternalItem && onViewSyncDetails && (
-          <div className="flex items-center gap-1 ml-auto">
-            <button
-              onClick={() => onViewSyncDetails(activeExternalItem.type)}
-              className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline"
-              data-testid="sync-view-details"
-            >
-              Details
-            </button>
-          </div>
+          <button
+            onClick={() => { logger.info("[SyncStatusIndicator] Details clicked", activeExternalItem.type); onViewSyncDetails(activeExternalItem.type); }}
+            className="ml-auto p-0.5 text-blue-500 hover:text-blue-700 transition-colors"
+            data-testid="sync-view-details"
+            title="View sync details"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </button>
         )}
       </div>
 

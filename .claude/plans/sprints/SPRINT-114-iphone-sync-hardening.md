@@ -29,6 +29,7 @@ This sprint addresses them in dependency order: quick fixes first (848, 849), th
 | TASK-2117 | BACKLOG-846 | Reconnect renderer to in-progress sync | High | Medium | Subsumed by TASK-2119 | — |
 | TASK-2119 | BACKLOG-853 | Integrate iPhone sync into SyncOrchestrator | High | High | Testing | `feature/TASK-2119-iphone-orchestrator` |
 | TASK-2120 | BACKLOG-855 | requestSync: don't block on external-only running | Medium | Low | In Progress | `feature/TASK-2119-iphone-orchestrator` |
+| TASK-2121 | BACKLOG-857 | Persist iPhone lastSyncTime in Supabase per device | Medium | Low | Ready | `feature/TASK-2119-iphone-orchestrator` |
 
 ## Out of Scope / Deferred
 
@@ -58,6 +59,13 @@ This sprint addresses them in dependency order: quick fixes first (848, 849), th
   - Keep IPhoneSyncFlow modal with "Details" button
   - Subsumes TASK-2117 reconnect (orchestrator + hook reconnect handles it)
 
+### Phase 4: Data Persistence (builds on Phase 3)
+- **TASK-2121**: Persist iPhone lastSyncTime in Supabase per device
+  - New `iphone_sync_devices` table with RLS
+  - Write lastSyncTime on storage-complete (fire-and-forget)
+  - Read lastSyncTime on device connect via IPC
+  - Graceful offline fallback (null if Supabase unreachable)
+
 ---
 
 ## Merge Plan
@@ -78,6 +86,7 @@ This sprint addresses them in dependency order: quick fixes first (848, 849), th
 | TASK-2115 | Integration | Test rollback deletes, orphan file safety, cancel mid-batch |
 | TASK-2116 | Unit + Manual | Status bar renders, progress updates, navigation works during sync |
 | TASK-2117 | Integration + Manual | Reload during sync reconnects to progress, status bar shows live data |
+| TASK-2121 | Manual | Sync iPhone, restart app, reconnect iPhone -- lastSyncTime should persist |
 
 ---
 
@@ -98,6 +107,8 @@ This sprint addresses them in dependency order: quick fixes first (848, 849), th
 | SPRINT-114 not 113 | 113 already reserved for admin RBAC in unmerged PR #1045 |
 | 848+849 before 847+846 | Quick fixes first, larger UI work depends on understanding the sync state flow |
 | 847 before 846 | Persistent status bar (847) largely solves reconnect (846) — build the target first |
+| New table vs devices column for 857 | iPhone UDIDs are a different concept from desktop device_id (machine ID). Separate table avoids coupling and schema migration risk |
+| TASK-2121 on same branch as TASK-2119 | Both modify sync-handlers.ts and useIPhoneSync.ts; same branch avoids merge conflicts |
 
 ---
 

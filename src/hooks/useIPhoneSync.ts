@@ -686,6 +686,14 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     syncOrchestrator.removeExternalSync('iphone');
   }, []);
 
+  /** Reset state after user acknowledges sync completion (clicks Continue) */
+  const dismissSync = useCallback(() => {
+    logger.info("[useIPhoneSync] Dismissing sync result");
+    setSyncStatus("idle");
+    setProgress(null);
+    setError(null);
+  }, []);
+
   return {
     isConnected,
     device,
@@ -701,6 +709,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     startSync,
     submitPassword,
     cancelSync,
+    dismissSync,
     checkSyncStatus,
   };
 }

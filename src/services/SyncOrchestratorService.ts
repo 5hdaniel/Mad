@@ -386,7 +386,7 @@ class SyncOrchestratorServiceClass {
   registerExternalSync(type: SyncType): void {
     const existing = this.state.queue.find((item) => item.type === type);
     if (existing && existing.status === 'running') {
-      logger.info(`[SyncOrchestrator] External sync '${type}' already registered, skipping`);
+      logger.debug(`[SyncOrchestrator] External sync '${type}' already registered, skipping`);
       return;
     }
 
@@ -438,6 +438,36 @@ class SyncOrchestratorServiceClass {
     if (!stillRunning && !this.abortController) {
       this.setState({ isRunning: false, currentSync: null });
     }
+
+    // Auto-remove completed/errored external items after a short delay
+    setTimeout(() => {
+      const queue = this.state.queue.filter(
+        (item) => !(item.type === type && item.external && (item.status === 'complete' || item.status === 'error'))
+      );
+      if (queue.length !== this.state.queue.length) {
+        this.setState({ queue });
+      }
+    }, 3000);
+  }
+
+  /**
+   * Remove an external sync from the queue immediately (used for cancel).
+   * Unlike completeExternalSync, this does not mark it as complete — it just removes it.
+   */
+  removeExternalSync(type: SyncType): void {
+    const queue = this.state.queue.filter(
+      (item) => !(item.type === type && item.external)
+    );
+    if (queue.length === this.state.queue.length) return;
+
+    logger.info(`[SyncOrchestrator] External sync '${type}' removed (cancelled)`);
+
+    const stillRunning = queue.some((item) => item.status === 'running');
+    this.setState({
+      queue,
+      isRunning: stillRunning || !!this.abortController,
+      currentSync: stillRunning ? this.state.currentSync : null,
+    });
   }
 
   /**

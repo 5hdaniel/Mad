@@ -23,6 +23,7 @@ import { initializeDatabase } from "../auth-handlers";
 import { getAndClearPendingDeepLinkUser } from "../main";
 import { initializePool } from "../workers/contactWorkerPool";
 import { getDbPath, getEncryptionKey } from "../services/db/core/dbConnection";
+import log from "electron-log";
 import logService from "../services/logService";
 import failureLogService from "../services/failureLogService";
 import { wrapHandler } from "../utils/wrapHandler";
@@ -1066,4 +1067,15 @@ export function registerSystemHandlers(): void {
       return { success: true };
     }, { module: "System" }),
   );
+
+  // Renderer log relay — pipes renderer console logs to main process log file
+  ipcMain.on("log:renderer", (_event, level: string, message: string) => {
+    const prefix = `[Renderer] ${message}`;
+    switch (level) {
+      case "debug": log.debug(prefix); break;
+      case "warn": log.warn(prefix); break;
+      case "error": log.error(prefix); break;
+      default: log.info(prefix); break;
+    }
+  });
 }

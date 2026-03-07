@@ -119,6 +119,16 @@ export const notificationBridge = {
 };
 
 /**
+ * Renderer Log Bridge
+ * Relays renderer logs to main process log file for debugging
+ */
+export const logBridge = {
+  send: (level: string, message: string): void => {
+    ipcRenderer.send("log:renderer", level, message);
+  },
+};
+
+/**
  * Shell Bridge
  * Interaction with system shell and external applications
  */

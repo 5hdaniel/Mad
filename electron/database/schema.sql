@@ -757,16 +757,14 @@ CREATE INDEX IF NOT EXISTS idx_messages_participants_flat ON messages(participan
 CREATE INDEX IF NOT EXISTS idx_messages_message_id_header ON messages(message_id_header);
 CREATE INDEX IF NOT EXISTS idx_messages_content_hash ON messages(content_hash);
 CREATE INDEX IF NOT EXISTS idx_messages_duplicate_of ON messages(duplicate_of);
--- Sync session indexes (TASK-2110: ACID rollback on cancelled sync)
-CREATE INDEX IF NOT EXISTS idx_messages_sync_session ON messages(user_id, sync_session_id);
+-- Sync session indexes created by migration 32 (not here — column may not exist yet)
 
 -- Attachments
 CREATE INDEX IF NOT EXISTS idx_attachments_message_id ON attachments(message_id);
 CREATE INDEX IF NOT EXISTS idx_attachments_email_id ON attachments(email_id);  -- TASK-1775
 CREATE INDEX IF NOT EXISTS idx_attachments_external_message_id ON attachments(external_message_id);
 CREATE INDEX IF NOT EXISTS idx_attachments_document_type ON attachments(document_type);
--- Sync session indexes (TASK-2110: ACID rollback on cancelled sync)
-CREATE INDEX IF NOT EXISTS idx_attachments_sync_session ON attachments(sync_session_id);
+-- Sync session indexes created by migration 32 (not here — column may not exist yet)
 
 -- Transactions
 CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
@@ -1008,8 +1006,7 @@ CREATE TABLE IF NOT EXISTS external_contacts (
 CREATE INDEX IF NOT EXISTS idx_external_contacts_user ON external_contacts(user_id);
 CREATE INDEX IF NOT EXISTS idx_external_contacts_last_msg ON external_contacts(user_id, last_message_at DESC);
 CREATE INDEX IF NOT EXISTS idx_external_contacts_source ON external_contacts(user_id, source);
--- Sync session indexes (TASK-2110: ACID rollback on cancelled sync)
-CREATE INDEX IF NOT EXISTS idx_external_contacts_sync_session ON external_contacts(user_id, sync_session_id);
+-- Sync session indexes created by migration 32 (not here — column may not exist yet)
 
 -- ============================================
 -- VIEWS (Convenient queries for common operations)

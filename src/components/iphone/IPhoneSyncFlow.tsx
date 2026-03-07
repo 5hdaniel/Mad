@@ -4,6 +4,7 @@ import { ConnectionStatus } from "./ConnectionStatus";
 import { SyncProgress } from "./SyncProgress";
 import { BackupPasswordModal } from "./BackupPasswordModal";
 import { SyncLockBanner } from "../sync/SyncLockBanner";
+import logger from "../../utils/logger";
 
 interface IPhoneSyncFlowProps {
   /** Callback when sync is complete and user clicks Continue */
@@ -40,6 +41,7 @@ export const IPhoneSyncFlow: React.FC<IPhoneSyncFlowProps> = ({ onClose, onSyncS
     startSync,
     submitPassword,
     cancelSync,
+    dismissSync,
     checkSyncStatus,
   } = useIPhoneSyncContext();
 
@@ -47,6 +49,23 @@ export const IPhoneSyncFlow: React.FC<IPhoneSyncFlowProps> = ({ onClose, onSyncS
   const isSyncing = syncStatus === "syncing";
   const isComplete = syncStatus === "complete";
   const isError = syncStatus === "error";
+
+  useEffect(() => {
+    logger.info("[IPhoneSyncFlow] Mounted");
+    return () => logger.info("[IPhoneSyncFlow] Unmounted");
+  }, []);
+
+  // Log which view branch will render
+  useEffect(() => {
+    const view =
+      (syncLocked && !isSyncing && !progress) ? "SyncLockBanner" :
+      (!isSyncing && !isComplete && !isError && !syncLocked && !progress) ? "ConnectionStatus" :
+      ((isSyncing || (syncLocked && progress)) && !isError) ? "SyncProgress" :
+      (isComplete && progress) ? "SuccessState" :
+      (isError && !needsPassword) ? "ErrorState" :
+      "None/PasswordModal";
+    logger.info(`[IPhoneSyncFlow] Rendering: ${view}`, { syncStatus, syncLocked, hasProgress: !!progress, isConnected, needsPassword });
+  }, [syncStatus, syncLocked, progress, isComplete, isError, isSyncing, isConnected, needsPassword]);
 
   // TASK-2116: Auto-close modal when sync enters backing_up phase
   // Track whether sync was already running when the modal opened — if so,
@@ -95,10 +114,10 @@ export const IPhoneSyncFlow: React.FC<IPhoneSyncFlowProps> = ({ onClose, onSyncS
 
       {/* Sync Progress - Shown during active sync OR when reopening modal during sync
           (syncLocked may be true but we have progress from the shared context) */}
-      {(isSyncing || (syncLocked && progress)) && progress && (
+      {(isSyncing || (syncLocked && progress)) && !isError && (
         <SyncProgress
-          progress={progress}
-          onCancel={cancelSync}
+          progress={progress || { phase: "backing_up", percent: 0, message: "Starting sync..." }}
+          onCancel={() => { logger.info("[IPhoneSyncFlow] Cancel clicked"); cancelSync().then(() => onClose?.()); }}
           isWaitingForPasscode={isWaitingForPasscode}
         />
       )}
@@ -154,7 +173,7 @@ export const IPhoneSyncFlow: React.FC<IPhoneSyncFlowProps> = ({ onClose, onSyncS
           </div>
 
           <button
-            onClick={onClose}
+            onClick={() => { logger.info("[IPhoneSyncFlow] Continue (success) clicked"); dismissSync(); onClose?.(); }}
             className="mt-6 px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-medium rounded-lg hover:from-purple-600 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg"
           >
             Continue
@@ -186,14 +205,14 @@ export const IPhoneSyncFlow: React.FC<IPhoneSyncFlowProps> = ({ onClose, onSyncS
           )}
           <div className="flex gap-3 mt-6">
             <button
-              onClick={cancelSync}
+              onClick={() => { logger.info("[IPhoneSyncFlow] Error Close clicked"); cancelSync(); onClose?.(); }}
               className="px-6 py-3 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors"
             >
               Close
             </button>
             {isConnected && (
               <button
-                onClick={startSync}
+                onClick={() => { logger.info("[IPhoneSyncFlow] Try Again clicked"); startSync(); }}
                 className="px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-medium rounded-lg hover:from-purple-600 hover:to-indigo-700 transition-all"
               >
                 Try Again

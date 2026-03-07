@@ -595,13 +595,11 @@ export class DeviceSyncOrchestrator extends EventEmitter {
    * Cancel the current sync operation
    */
   cancel(): void {
-    if (!this.isRunning) {
-      return;
-    }
-
     log.info("[DeviceSyncOrchestrator] Cancelling sync");
     this.isCancelled = true;
     this.isRunning = false;
+    // Always cancel backup service — even if orchestrator thinks it's not running,
+    // the backup process may still be alive (race condition on disconnect/error)
     this.backupService.cancelBackup();
     this.setPhase("idle");
   }
