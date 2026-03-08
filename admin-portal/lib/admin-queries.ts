@@ -137,3 +137,36 @@ export async function updateLicense(
     error: null,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Impersonation
+// ---------------------------------------------------------------------------
+
+interface ImpersonationResult {
+  success: boolean;
+  token: string;
+  session_id: string;
+  expires_at: string;
+  error?: string;
+}
+
+/**
+ * Start an impersonation session via admin_start_impersonation RPC.
+ *
+ * @param targetUserId - The target user's UUID to impersonate
+ */
+export async function startImpersonation(
+  targetUserId: string
+): Promise<RpcResult<ImpersonationResult>> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc('admin_start_impersonation', {
+    p_target_user_id: targetUserId,
+  });
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  return { data: data as ImpersonationResult, error: null };
+}

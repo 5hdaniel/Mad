@@ -1,6 +1,6 @@
 {
   "name": "keepr",
-  "version": "2.9.0",
+  "version": "2.9.1",
   "description": "Keepr - Export and archive iMessage conversations and emails",
   "main": "electron/main.js",
   "engines": {
@@ -82,6 +82,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "babel-jest": "^29.7.0",
+    "canvas-confetti": "^1.9.3",
     "concurrently": "^9.1.0",
     "cross-env": "^7.0.3",
     "depcheck": "^1.4.7",
@@ -97,6 +98,10 @@
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
     "postcss": "^8.4.49",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-joyride": "^2.9.2",
+    "react-pdf": "^10.3.0",
     "tailwindcss": "^3.4.17",
     "ts-jest": "^29.4.5",
     "ts-node": "^10.9.2",
@@ -112,7 +117,6 @@
     "@supabase/supabase-js": "^2.38.0",
     "axios": "^1.13.5",
     "better-sqlite3-multiple-ciphers": "^12.5.0",
-    "canvas-confetti": "^1.9.3",
     "check-disk-space": "^3.4.0",
     "cli-progress": "^3.12.0",
     "dompurify": "^3.3.1",
@@ -127,10 +131,6 @@
     "node-machine-id": "^1.1.12",
     "openai": "^6.14.0",
     "pdf-lib": "^1.17.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-joyride": "^2.9.2",
-    "react-pdf": "^10.3.0",
     "simple-plist": "^1.3.1",
     "sqlite3": "^5.1.7"
   },
@@ -174,15 +174,13 @@
         {
           "target": "dmg",
           "arch": [
-            "arm64",
-            "x64"
+            "arm64"
           ]
         },
         {
           "target": "zip",
           "arch": [
-            "arm64",
-            "x64"
+            "arm64"
           ]
         }
       ]

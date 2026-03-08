@@ -12,6 +12,7 @@ import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 import UserDetailsCard, { type MemberDetailsData } from '@/components/users/UserDetailsCard';
 import type { Role } from '@/lib/types/users';
+import { getImpersonationSession } from '@/lib/impersonation';
 
 // ============================================================================
 // Types
@@ -171,6 +172,12 @@ function getBreadcrumbName(member: MemberDetailsData): string {
 // ============================================================================
 
 export default async function UserDetailsPage({ params }: PageProps) {
+  // Block user details during impersonation (read-only session)
+  const impersonationSession = await getImpersonationSession();
+  if (impersonationSession) {
+    redirect('/dashboard');
+  }
+
   const { id } = await params;
 
   // Validate UUID format early

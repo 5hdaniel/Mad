@@ -54,9 +54,8 @@ export default async function UserDetailPage({
     redirect('/dashboard?error=insufficient_permissions');
   }
 
-  // Fetch target user profile from auth.users via admin RPC or profiles table
-  // Using parallel queries for performance
-  const [profileResult, orgsResult, licensesResult, devicesResult, auditResult] =
+  // Fetch target user profile and check permissions in parallel
+  const [profileResult, orgsResult, licensesResult, devicesResult, auditResult, impersonatePermResult] =
     await Promise.all([
       supabase
         .from('users')
@@ -82,6 +81,10 @@ export default async function UserDetailPage({
         .eq('user_id', id)
         .order('created_at', { ascending: false })
         .limit(20),
+      supabase.rpc('has_permission', {
+        check_user_id: adminUser.id,
+        required_permission: 'users.impersonate',
+      }),
     ]);
 
   if (!profileResult.data) {
@@ -113,7 +116,11 @@ export default async function UserDetailPage({
       </Link>
 
       {/* Profile card */}
-      <UserProfileCard user={profile} />
+      <UserProfileCard
+        user={profile}
+        canImpersonate={impersonatePermResult.data === true}
+        isOwnProfile={adminUser.id === id}
+      />
 
       {/* Two-column grid for org + license */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -100,8 +100,8 @@ function Dashboard({
 
   // Memoize tour steps to avoid recreating on every render
   const tourSteps = useMemo(
-    () => getDashboardTourSteps({ hasAIAddon, isMacOS, notificationsEnabled, hasIPhoneSync: !!onSyncPhone }),
-    [hasAIAddon, isMacOS, notificationsEnabled, onSyncPhone],
+    () => getDashboardTourSteps({ hasAIAddon, isMacOS, notificationsEnabled, hasIPhoneSync: !!onSyncPhone, hasSyncVisible: isAnySyncing }),
+    [hasAIAddon, isMacOS, notificationsEnabled, onSyncPhone, isAnySyncing],
   );
 
   // Derive display name for personalized greeting
