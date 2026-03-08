@@ -5,10 +5,8 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 interface ImpersonationState {
   isImpersonating: boolean;
   sessionId: string | null;
-  targetUserId: string | null;
   targetEmail: string | null;
   targetName: string | null;
-  adminUserId: string | null;
   expiresAt: Date | null;
   remainingSeconds: number;
   endSession: () => Promise<void>;
@@ -17,26 +15,29 @@ interface ImpersonationState {
 const ImpersonationContext = createContext<ImpersonationState>({
   isImpersonating: false,
   sessionId: null,
-  targetUserId: null,
   targetEmail: null,
   targetName: null,
-  adminUserId: null,
   expiresAt: null,
   remainingSeconds: 0,
   endSession: async () => {},
 });
 
+/**
+ * Client-safe session shape. admin_user_id and target_user_id are
+ * intentionally omitted — they must not appear in the RSC payload.
+ */
+interface ClientImpersonationSession {
+  session_id: string;
+  target_email: string;
+  target_name: string;
+  expires_at: string;
+  started_at?: string;
+}
+
 /** Props are passed from the server component that reads the cookie */
 interface ImpersonationProviderProps {
   children: ReactNode;
-  session?: {
-    session_id: string;
-    target_user_id: string;
-    target_email: string;
-    target_name: string;
-    admin_user_id: string;
-    expires_at: string;
-  } | null;
+  session?: ClientImpersonationSession | null;
 }
 
 export function ImpersonationProvider({ children, session }: ImpersonationProviderProps) {
@@ -67,6 +68,9 @@ export function ImpersonationProvider({ children, session }: ImpersonationProvid
       await fetch('/api/impersonation/end', { method: 'POST' });
     } catch (e) {
       console.error('Failed to end impersonation session:', e);
+      // Clear the impersonation cookie client-side so the user doesn't stay
+      // in a broken impersonation state when the API call fails.
+      document.cookie = 'impersonation_session=; Max-Age=0; path=/;';
     }
 
     // Redirect to admin portal
@@ -74,13 +78,34 @@ export function ImpersonationProvider({ children, session }: ImpersonationProvid
     window.location.href = `${adminUrl}/dashboard/users`;
   }, [isEnding]);
 
+  // BACKLOG-904: Auto-end session when client-side timer expires.
+  // This prevents continued browsing after the 30-min session_expires_at.
+  useEffect(() => {
+    if (!session) return;
+
+    const expiresAt = new Date(session.expires_at).getTime();
+    const now = Date.now();
+    const msRemaining = expiresAt - now;
+
+    // Already expired -- end immediately
+    if (msRemaining <= 0) {
+      endSession();
+      return;
+    }
+
+    // Schedule auto-end at expiry
+    const timer = setTimeout(() => {
+      endSession();
+    }, msRemaining);
+
+    return () => clearTimeout(timer);
+  }, [session, endSession]);
+
   const value: ImpersonationState = {
     isImpersonating: !!session,
     sessionId: session?.session_id || null,
-    targetUserId: session?.target_user_id || null,
     targetEmail: session?.target_email || null,
     targetName: session?.target_name || null,
-    adminUserId: session?.admin_user_id || null,
     expiresAt: session ? new Date(session.expires_at) : null,
     remainingSeconds,
     endSession,

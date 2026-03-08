@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { getConsentStatus, getRetentionPolicy, updateRetentionPolicy, getJitStatus, updateJitStatus } from '@/lib/actions/scim';
 import { SignOutAllButton } from '@/components/SignOutAllButton';
 import { ActiveSessionsList } from '@/components/ActiveSessionsList';
@@ -26,7 +25,6 @@ const RETENTION_OPTIONS = [
 
 export default function SettingsPage() {
   const { isImpersonating } = useImpersonation();
-  const router = useRouter();
   const [consent, setConsent] = useState<ConsentInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [retentionYears, setRetentionYears] = useState(7);
@@ -37,13 +35,6 @@ export default function SettingsPage() {
   const [savingJit, setSavingJit] = useState(false);
 
   const desktopClientId = process.env.NEXT_PUBLIC_DESKTOP_CLIENT_ID || '';
-
-  // Block settings access during impersonation (read-only session)
-  useEffect(() => {
-    if (isImpersonating) {
-      router.replace('/dashboard');
-    }
-  }, [isImpersonating, router]);
 
   useEffect(() => {
     async function load() {
@@ -81,17 +72,6 @@ export default function SettingsPage() {
     }
   }
 
-  if (isImpersonating) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-          <p className="mt-1 text-sm text-gray-500">Settings are not accessible during impersonation sessions.</p>
-        </div>
-      </div>
-    );
-  }
-
   if (loading) {
     return (
       <div className="space-y-6">
@@ -111,6 +91,13 @@ export default function SettingsPage() {
           Manage your organization settings
         </p>
       </div>
+
+      {/* Read-only banner during impersonation */}
+      {isImpersonating && (
+        <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-sm text-amber-800">
+          Read-only during support session
+        </div>
+      )}
 
       {/* Desktop App Permissions */}
       {consent && (
@@ -146,7 +133,8 @@ export default function SettingsPage() {
                       const consentUrl = `https://login.microsoftonline.com/${consent.tenantId}/adminconsent?client_id=${desktopClientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${consent.organizationId}`;
                       window.location.href = consentUrl;
                     }}
-                    className="text-sm text-gray-500 hover:text-gray-700"
+                    disabled={isImpersonating}
+                    className="text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Re-grant
                   </button>
@@ -169,7 +157,8 @@ export default function SettingsPage() {
                       const consentUrl = `https://login.microsoftonline.com/${consent.tenantId}/adminconsent?client_id=${desktopClientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${consent.organizationId}`;
                       window.location.href = consentUrl;
                     }}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+                    disabled={isImpersonating}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <svg className="h-4 w-4" viewBox="0 0 23 23">
                       <path fill="#f35325" d="M1 1h10v10H1z" />
@@ -222,7 +211,7 @@ export default function SettingsPage() {
                   setSavingJit(false);
                 }
               }}
-              disabled={savingJit}
+              disabled={savingJit || isImpersonating}
               className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 ${
                 jitEnabled ? 'bg-blue-600' : 'bg-gray-200'
               }`}
@@ -262,7 +251,8 @@ export default function SettingsPage() {
                 id="retention-years"
                 value={retentionYears}
                 onChange={(e) => setRetentionYears(Number(e.target.value))}
-                className="block w-48 px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                disabled={isImpersonating}
+                className="block w-48 px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {RETENTION_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -273,7 +263,7 @@ export default function SettingsPage() {
             </div>
             <button
               onClick={handleRetentionSave}
-              disabled={savingRetention || retentionYears === savedRetention}
+              disabled={savingRetention || retentionYears === savedRetention || isImpersonating}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {savingRetention ? 'Saving...' : 'Save'}
@@ -302,13 +292,15 @@ export default function SettingsPage() {
           {/* Active Sessions */}
           <ActiveSessionsList />
 
-          {/* Sign Out All Devices */}
-          <div className="pt-4 border-t border-gray-200">
-            <p className="text-sm text-gray-700 mb-3">
-              Sign out of all devices, including desktop apps and other browser sessions.
-            </p>
-            <SignOutAllButton />
-          </div>
+          {/* Sign Out All Devices (hidden during impersonation) */}
+          {!isImpersonating && (
+            <div className="pt-4 border-t border-gray-200">
+              <p className="text-sm text-gray-700 mb-3">
+                Sign out of all devices, including desktop apps and other browser sessions.
+              </p>
+              <SignOutAllButton />
+            </div>
+          )}
         </div>
       </div>
 

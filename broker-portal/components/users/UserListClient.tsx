@@ -54,6 +54,7 @@ interface UserListClientProps {
   currentUserId: string;
   currentUserRole: Role;
   organizationId: string;
+  readOnly?: boolean;
 }
 
 export default function UserListClient({
@@ -61,6 +62,7 @@ export default function UserListClient({
   currentUserId,
   currentUserRole,
   organizationId,
+  readOnly = false,
 }: UserListClientProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
@@ -100,7 +102,7 @@ export default function UserListClient({
   const hasFilters =
     searchQuery !== '' || roleFilter !== 'all' || statusFilter !== 'all';
   const canManage =
-    currentUserRole === 'admin' || currentUserRole === 'it_admin';
+    !readOnly && (currentUserRole === 'admin' || currentUserRole === 'it_admin');
 
   // Bulk selection helpers
   const toggleSelect = (id: string) => {

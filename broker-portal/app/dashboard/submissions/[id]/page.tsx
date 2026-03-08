@@ -77,12 +77,16 @@ async function markAsUnderReview(submission: { id: string; status: string }, isI
 
   const supabase = await createClient();
 
-  await supabase
+  const { error } = await supabase
     .from('transaction_submissions')
     .update({
       status: 'under_review',
     })
     .eq('id', submission.id);
+
+  if (error) {
+    console.error('Failed to mark submission as under_review:', error.message, { submissionId: submission.id });
+  }
 }
 
 async function getMessages(submissionId: string, client: SupabaseClient): Promise<Message[]> {
@@ -214,7 +218,9 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
   // Mark as under_review when broker first opens (don't await - fire and forget)
   // This prevents agent from resubmitting while broker is reviewing
   // Skipped during impersonation (read-only)
-  markAsUnderReview(submission, isImpersonating);
+  markAsUnderReview(submission, isImpersonating).catch((e) => {
+    console.error('Unhandled error in markAsUnderReview:', e);
+  });
 
   return (
     <div className="space-y-6 pb-24">
@@ -264,6 +270,7 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
       </div>
 
       {/* Review Actions - hidden during impersonation (read-only) */}
+      {/* BACKLOG-899: isImpersonating prop provides defense-in-depth write guard */}
       {!isImpersonating && (
         <ReviewActions
           submission={{
@@ -272,6 +279,7 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
             organization_id: submission.organization_id,
           }}
           disabled={submission.status === 'approved' || submission.status === 'rejected'}
+          isImpersonating={isImpersonating}
         />
       )}
 

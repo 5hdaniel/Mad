@@ -60,19 +60,28 @@ export function ImpersonateButton({ userId, userName, isOwnProfile }: Impersonat
     }
   }, [userId, closeDialog]);
 
-  // Cannot impersonate yourself
-  if (isOwnProfile) return null;
-
   return (
     <>
-      <button
-        type="button"
-        onClick={openDialog}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-purple-700 bg-purple-50 rounded-md hover:bg-purple-100 transition-colors"
-      >
-        <Eye className="h-4 w-4" />
-        View as User
-      </button>
+      <div className="relative group">
+        <button
+          type="button"
+          onClick={openDialog}
+          disabled={isOwnProfile}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+            isOwnProfile
+              ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+              : 'text-purple-700 bg-purple-50 hover:bg-purple-100'
+          }`}
+        >
+          <Eye className="h-4 w-4" />
+          View as User
+        </button>
+        {isOwnProfile && (
+          <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+            Cannot impersonate your own account
+          </span>
+        )}
+      </div>
 
       <dialog
         ref={dialogRef}

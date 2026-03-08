@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { formatRelativeTime, getStatusColor, formatStatus } from '@/lib/utils';
-import { getDataClient } from '@/lib/impersonation-guards';
+import { getDataClient, getTargetOrganizationId } from '@/lib/impersonation-guards';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 interface SubmissionStats {
@@ -73,7 +73,7 @@ async function getRecentSubmissions(client: SupabaseClient, orgId?: string) {
 }
 
 export default async function DashboardPage() {
-  const { client, impersonation, targetUserId } = await getDataClient();
+  const { client, impersonation, organizationId } = await getDataClient();
 
   // IT admins only manage users — redirect to Users page (skip during impersonation)
   if (!impersonation) {
@@ -91,16 +91,8 @@ export default async function DashboardPage() {
     }
   }
 
-  // During impersonation, find the target user's organization
-  let orgId: string | undefined;
-  if (impersonation && targetUserId) {
-    const { data: membership } = await client
-      .from('organization_members')
-      .select('organization_id')
-      .eq('user_id', targetUserId)
-      .maybeSingle();
-    orgId = membership?.organization_id;
-  }
+  // BACKLOG-908: Use deduped helper for org ID resolution
+  const orgId = getTargetOrganizationId(organizationId);
 
   const [stats, recentSubmissions] = await Promise.all([
     getStats(client, orgId),

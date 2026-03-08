@@ -276,50 +276,75 @@ If a single-RPC approach is not viable, document why and what alternative ensure
 
 ## Implementation Summary (Engineer-Owned)
 
-*Completed: <DATE>*
+*Completed: 2026-03-07*
 
 ### Agent ID
 
 ```
-Engineer Agent ID: <agent_id from Task tool output>
+Engineer Agent ID: agent-a483272b
 ```
 
 ### Checklist
 
 ```
 Files created:
-- [ ] supabase/migrations/YYYYMMDD_set_impersonation_context.sql
-- [ ] supabase/migrations/YYYYMMDD_impersonation_scoped_rls.sql
+- [x] broker-portal/lib/scoped-client.ts (Proxy-based scoped client wrapper)
 
 Files modified:
-- [ ] broker-portal/lib/impersonation-guards.ts
+- [x] broker-portal/lib/impersonation-guards.ts
+- [x] broker-portal/app/dashboard/page.tsx (use organizationId from getDataClient)
+- [x] broker-portal/app/dashboard/submissions/page.tsx (use organizationId from getDataClient)
 
 Verification:
-- [ ] npm run type-check passes
-- [ ] npm run lint passes
-- [ ] npm test passes
+- [x] npx tsc --noEmit passes (no new errors, pre-existing test file errors only)
+- [x] npm run portal:lint passes for modified files (pre-existing errors in other files only)
+- [x] npm test passes (cookie-signing test)
 ```
 
 ### Metrics (Auto-Captured)
 
 | Metric | Value |
 |--------|-------|
-| **Total Tokens** | X |
-| Duration | X seconds |
-| API Calls | X |
+| **Total Tokens** | (auto-captured) |
+| Duration | (auto-captured) |
+| API Calls | (auto-captured) |
 
 **Variance:** PM Est ~16K vs Actual ~XK
 
 ### Notes
 
-**Tables audited for RLS:**
-<List all tables that needed impersonation-aware policies>
+**Tables audited for impersonation access:**
+- `transaction_submissions` - org-scoped (auto-filter by organization_id)
+- `organization_members` - user-scoped (auto-filter by user_id)
+- `profiles` - id-scoped (auto-filter by id)
+- `submission_messages` - submission-child (scoped via parent submission)
+- `submission_attachments` - submission-child (scoped via parent submission)
 
-**Planning notes:** <Key decisions>
-**Deviations from plan:** <None or explanation>
-**Design decisions:** <Decisions made>
-**Issues encountered:** <Issues found>
-**Reviewer notes:** <For reviewer>
+**Deviations from plan:**
+- Used Proxy-based client wrapper instead of Postgres session variables + RLS migration.
+- Reason: The task file itself documented the critical concern that Supavisor connection pooling
+  means `set_config` in one RPC call may not be visible in the subsequent data query
+  (different transactions on different connections). The Proxy approach provides the same
+  security guarantee (data scoping) without requiring cross-transaction state.
+- No migration files needed -- all scoping is enforced at the application layer.
+- This approach was explicitly listed as an acceptable alternative in the task assignment.
+
+**Design decisions:**
+1. `createScopedClient()` wraps service-role client in a Proxy that intercepts `.from()`
+2. Auto-injects `.eq('organization_id', orgId)` on org-scoped tables
+3. Auto-injects `.eq('user_id', targetUserId)` on user-scoped tables
+4. Blocks all write operations (.insert/.update/.delete/.upsert) with thrown errors
+5. Blocks access to unknown/unallowed tables entirely
+6. Resolves organizationId inside `getDataClient()` so pages don't duplicate the lookup
+7. Existing manual `.eq()` filters in pages are preserved (defense in depth)
+8. Auth operations are restricted to read-only during impersonation
+
+**Issues encountered:** None
+
+**Reviewer notes:**
+- Pre-existing build failure in broker-portal due to lint warnings in UserCard.tsx,
+  UserActionsDropdown.tsx, ReviewActions.tsx (not introduced by this PR)
+- Pre-existing type errors in test files (Duplicate identifier 'Role') also not related
 
 ---
 

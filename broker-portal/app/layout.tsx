@@ -20,6 +20,15 @@ export default async function RootLayout({
 }>) {
   const impersonationSession = await getImpersonationSession();
 
+  // Strip server-side-only fields before passing to the client component.
+  // admin_user_id and target_user_id must never appear in the RSC payload.
+  const clientSession = impersonationSession
+    ? (() => {
+        const { admin_user_id: _a, target_user_id: _t, ...rest } = impersonationSession;
+        return rest;
+      })()
+    : null;
+
   return (
     <html lang="en">
       <body className={inter.className}>
@@ -27,7 +36,7 @@ export default async function RootLayout({
           <ClarityAnalytics projectId={process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID} />
         )}
         <AuthProvider>
-          <ImpersonationProvider session={impersonationSession}>
+          <ImpersonationProvider session={clientSession}>
             <main className="min-h-screen">{children}</main>
           </ImpersonationProvider>
         </AuthProvider>
