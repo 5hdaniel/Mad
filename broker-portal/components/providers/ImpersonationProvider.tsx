@@ -67,6 +67,9 @@ export function ImpersonationProvider({ children, session }: ImpersonationProvid
       await fetch('/api/impersonation/end', { method: 'POST' });
     } catch (e) {
       console.error('Failed to end impersonation session:', e);
+      // Clear the impersonation cookie client-side so the user doesn't stay
+      // in a broken impersonation state when the API call fails.
+      document.cookie = 'impersonation_session=; Max-Age=0; path=/;';
     }
 
     // Redirect to admin portal

@@ -9,6 +9,7 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { IMPERSONATION_COOKIE_NAME } from '@/lib/constants';
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -78,7 +79,7 @@ export async function middleware(request: NextRequest) {
   // Middleware runs in Edge Runtime where DB access is limited.
   // The page-level getImpersonationSession() is the authoritative check
   // (validates signature via TASK-2131 and DB session via TASK-2133).
-  const impersonationCookie = request.cookies.get('impersonation_session');
+  const impersonationCookie = request.cookies.get(IMPERSONATION_COOKIE_NAME);
   if (isProtectedRoute && impersonationCookie?.value) {
     // Cookie exists -- allow access through to the page, where full
     // signature + DB validation will occur via getImpersonationSession().
