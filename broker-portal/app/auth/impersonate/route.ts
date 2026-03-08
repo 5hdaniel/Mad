@@ -65,7 +65,7 @@ export async function GET(request: Request) {
       admin_user_id: data.admin_user_id,
       target_email: data.target_email,
       target_name: data.target_name || '',
-      expires_at: data.expires_at,
+      expires_at: data.session_expires_at,
       started_at: data.started_at,
     };
 
@@ -78,7 +78,7 @@ export async function GET(request: Request) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
       path: '/',
-      expires: new Date(data.expires_at),
+      expires: new Date(data.session_expires_at),
     });
 
     return response;
