@@ -59,6 +59,29 @@ export function ImpersonationProvider({ children, session }: ImpersonationProvid
     return () => clearInterval(interval);
   }, [session]);
 
+  // BACKLOG-904: Auto-end session when client-side timer expires.
+  // This prevents continued browsing after the 30-min session_expires_at.
+  useEffect(() => {
+    if (!session) return;
+
+    const expiresAt = new Date(session.expires_at).getTime();
+    const now = Date.now();
+    const msRemaining = expiresAt - now;
+
+    // Already expired -- end immediately
+    if (msRemaining <= 0) {
+      endSession();
+      return;
+    }
+
+    // Schedule auto-end at expiry
+    const timer = setTimeout(() => {
+      endSession();
+    }, msRemaining);
+
+    return () => clearTimeout(timer);
+  }, [session, endSession]);
+
   const endSession = useCallback(async () => {
     if (isEnding) return;
     setIsEnding(true);
