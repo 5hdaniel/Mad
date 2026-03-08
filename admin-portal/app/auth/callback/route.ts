@@ -21,14 +21,24 @@ async function logAuthEvent(
   action: string,
   targetType: string,
   targetId: string,
-  metadata: Record<string, unknown>
+  metadata: Record<string, unknown>,
+  request?: Request
 ) {
   try {
+    const ip = request
+      ? (request.headers.get('x-forwarded-for')?.split(',')[0].trim() ??
+        request.headers.get('x-real-ip') ??
+        'unknown')
+      : null;
+    const userAgent = request?.headers.get('user-agent') ?? null;
+
     await supabase.rpc('log_admin_action', {
       p_action: action,
       p_target_type: targetType,
       p_target_id: targetId,
       p_metadata: metadata,
+      p_ip_address: ip,
+      p_user_agent: userAgent,
     });
   } catch (err) {
     // Never block auth flow for audit logging failures
@@ -53,7 +63,7 @@ export async function GET(request: Request) {
         error: error.message,
         source: 'admin_portal',
         stage: 'code_exchange',
-      });
+      }, request);
       return NextResponse.redirect(`${origin}/login?error=auth_failed`);
     }
 
@@ -68,7 +78,7 @@ export async function GET(request: Request) {
         email: user.email,
         source: 'admin_portal',
         provider: user.app_metadata?.provider || 'unknown',
-      });
+      }, request);
 
       // Process any pending internal invitation for this user
       const oauthProvider = user.app_metadata?.provider ?? 'azure';
@@ -91,7 +101,7 @@ export async function GET(request: Request) {
         email: user.email,
         source: 'admin_portal',
         reason: 'no_internal_role',
-      });
+      }, request);
       await supabase.auth.signOut();
       return NextResponse.redirect(`${origin}/login?error=not_authorized`);
     }
