@@ -73,7 +73,7 @@ async function getRecentSubmissions(client: SupabaseClient, orgId?: string) {
 }
 
 export default async function DashboardPage() {
-  const { client, impersonation, targetUserId } = await getDataClient();
+  const { client, impersonation, organizationId } = await getDataClient();
 
   // IT admins only manage users — redirect to Users page (skip during impersonation)
   if (!impersonation) {
@@ -91,16 +91,8 @@ export default async function DashboardPage() {
     }
   }
 
-  // During impersonation, find the target user's organization
-  let orgId: string | undefined;
-  if (impersonation && targetUserId) {
-    const { data: membership } = await client
-      .from('organization_members')
-      .select('organization_id')
-      .eq('user_id', targetUserId)
-      .maybeSingle();
-    orgId = membership?.organization_id;
-  }
+  // During impersonation, organizationId is resolved by getDataClient()
+  const orgId = organizationId || undefined;
 
   const [stats, recentSubmissions] = await Promise.all([
     getStats(client, orgId),

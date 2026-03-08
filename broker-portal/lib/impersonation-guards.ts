@@ -7,33 +7,61 @@
  * 3. Blocking write operations during impersonation sessions
  *
  * TASK-2125: Impersonation E2E Read-Only Enforcement
+ * TASK-2134: Replace service-role client with scoped RLS for impersonation
  */
 
 import { getImpersonationSession, type ImpersonationSession } from './impersonation';
 import { createServiceClient } from './supabase/service';
 import { createClient } from './supabase/server';
+import { createScopedClient } from './scoped-client';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
  * Returns the appropriate Supabase client for data loading.
  *
- * During impersonation: returns the service role client (bypasses RLS)
- * along with the target_user_id for filtering queries.
+ * During impersonation: returns a scoped client that automatically restricts
+ * all queries to the target user's organization. Write operations are blocked.
+ * The underlying service-role client is never exposed directly.
  *
  * Normal session: returns the standard server client with no target override.
+ *
+ * Also resolves the target user's organization_id during impersonation,
+ * so pages don't need to look it up separately.
  */
 export async function getDataClient(): Promise<{
   client: SupabaseClient;
   impersonation: ImpersonationSession | null;
   targetUserId: string | null;
+  organizationId: string | null;
 }> {
   const impersonation = await getImpersonationSession();
 
   if (impersonation) {
+    const serviceClient = createServiceClient();
+    const targetUserId = impersonation.target_user_id;
+
+    // Resolve the target user's organization (needed for scoping)
+    const { data: membership } = await serviceClient
+      .from('organization_members')
+      .select('organization_id')
+      .eq('user_id', targetUserId)
+      .maybeSingle();
+
+    const organizationId = membership?.organization_id || null;
+
+    if (!organizationId) {
+      // If user has no organization, return a client that blocks everything.
+      // This is a safety net -- impersonation should only target users with orgs.
+      throw new Error(
+        `Cannot create scoped impersonation client: target user ${targetUserId} has no organization`
+      );
+    }
+
     return {
-      client: createServiceClient(),
+      client: createScopedClient(serviceClient, targetUserId, organizationId),
       impersonation,
-      targetUserId: impersonation.target_user_id,
+      targetUserId,
+      organizationId,
     };
   }
 
@@ -41,6 +69,7 @@ export async function getDataClient(): Promise<{
     client: await createClient(),
     impersonation: null,
     targetUserId: null,
+    organizationId: null,
   };
 }
 

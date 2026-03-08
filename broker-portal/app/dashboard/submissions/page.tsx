@@ -1,4 +1,3 @@
-import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
 import { formatCurrency, formatRelativeTime, getStatusColor, formatStatus } from '@/lib/utils';
 import { SubmissionListClient } from '@/components/submission/SubmissionListClient';
@@ -108,18 +107,10 @@ export default async function SubmissionsPage({ searchParams }: PageProps) {
   const currentPage = Math.max(1, Number(pageParam) || 1);
   const currentStatus = status || 'all';
 
-  const { client, impersonation, targetUserId } = await getDataClient();
+  const { client, organizationId } = await getDataClient();
 
-  // During impersonation, find the target user's organization
-  let orgId: string | undefined;
-  if (impersonation && targetUserId) {
-    const { data: membership } = await client
-      .from('organization_members')
-      .select('organization_id')
-      .eq('user_id', targetUserId)
-      .maybeSingle();
-    orgId = membership?.organization_id;
-  }
+  // During impersonation, organizationId is resolved by getDataClient()
+  const orgId = organizationId || undefined;
 
   const { submissions, totalCount } = await getSubmissions(client, status, currentPage, orgId);
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
