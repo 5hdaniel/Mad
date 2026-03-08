@@ -330,6 +330,15 @@ export function SyncStatusIndicator({
     return null;
   }
 
+  // Don't render stale completed/errored pills after remount (e.g., parent re-render
+  // after sync already completed and auto-dismissed). If we never saw a sync in this
+  // mount cycle (wasSyncingRef is false) and all items are done, this is stale state
+  // from a previous sync cycle — hide it until the orchestrator cleans up the queue.
+  if (!isAnySyncing && !showCompletion && !wasSyncingRef.current &&
+      queue.length > 0 && queue.every(item => item.status === 'complete' || item.status === 'error')) {
+    return null;
+  }
+
   // Get the currently running non-external sync's progress for percentage display
   const runningInternalItem = queue.find(item => item.status === 'running' && !item.external);
   const activeProgress = runningInternalItem?.progress ?? null;

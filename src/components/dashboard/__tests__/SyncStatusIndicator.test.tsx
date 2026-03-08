@@ -216,9 +216,10 @@ describe("SyncStatusIndicator", () => {
     it("should show error pills with red styling and X icon", () => {
       const queue = [
         createSyncItem('contacts', 'complete', 100),
+        createSyncItem('emails', 'running', 50),
         createSyncItem('messages', 'error', 0, 'Database connection failed'),
       ];
-      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, false, 50));
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 50));
 
       render(<SyncStatusIndicator />);
 
@@ -233,9 +234,10 @@ describe("SyncStatusIndicator", () => {
     it("should show red background when there is an error", () => {
       const queue = [
         createSyncItem('contacts', 'complete', 100),
+        createSyncItem('emails', 'running', 50),
         createSyncItem('messages', 'error', 0, 'Import failed'),
       ];
-      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, false, 50));
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 50));
 
       render(<SyncStatusIndicator />);
 
@@ -245,10 +247,10 @@ describe("SyncStatusIndicator", () => {
 
     it("should show 'Sync Error:' label when there is an error", () => {
       const queue = [
-        createSyncItem('contacts', 'complete', 100),
+        createSyncItem('contacts', 'pending', 0),
         createSyncItem('messages', 'error', 0, 'Import failed'),
       ];
-      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, false, 50));
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, false, 0));
 
       render(<SyncStatusIndicator />);
 
@@ -737,9 +739,10 @@ describe("SyncStatusIndicator", () => {
 
     it("should show iPhone pill with green checkmark when complete", () => {
       const queue = [
+        createSyncItem('contacts', 'running', 50),
         createSyncItem('iphone', 'complete', 100, undefined, true),
       ];
-      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, false, 100));
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 100));
 
       render(<SyncStatusIndicator />);
 
@@ -749,9 +752,10 @@ describe("SyncStatusIndicator", () => {
 
     it("should show iPhone pill with red styling when error", () => {
       const queue = [
+        createSyncItem('contacts', 'running', 50),
         createSyncItem('iphone', 'error', 0, 'Device disconnected', true),
       ];
-      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, false, 0));
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 0));
 
       render(<SyncStatusIndicator />);
 
