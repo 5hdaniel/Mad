@@ -8,7 +8,6 @@ interface ImpersonationState {
   targetUserId: string | null;
   targetEmail: string | null;
   targetName: string | null;
-  adminUserId: string | null;
   expiresAt: Date | null;
   remainingSeconds: number;
   endSession: () => Promise<void>;
@@ -20,7 +19,6 @@ const ImpersonationContext = createContext<ImpersonationState>({
   targetUserId: null,
   targetEmail: null,
   targetName: null,
-  adminUserId: null,
   expiresAt: null,
   remainingSeconds: 0,
   endSession: async () => {},
@@ -106,7 +104,6 @@ export function ImpersonationProvider({ children, session }: ImpersonationProvid
     targetUserId: session?.target_user_id || null,
     targetEmail: session?.target_email || null,
     targetName: session?.target_name || null,
-    adminUserId: session?.admin_user_id || null,
     expiresAt: session ? new Date(session.expires_at) : null,
     remainingSeconds,
     endSession,
