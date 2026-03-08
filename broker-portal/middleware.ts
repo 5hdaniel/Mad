@@ -9,6 +9,7 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { IMPERSONATION_COOKIE_NAME } from '@/lib/constants';
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -67,6 +68,23 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isProtectedRoute = pathname.startsWith('/dashboard');
   const isAuthRoute = pathname === '/login' || pathname === '/setup';
+  const isImpersonationRoute = pathname === '/auth/impersonate';
+
+  // Allow impersonation entry route without any auth check
+  if (isImpersonationRoute) {
+    return response;
+  }
+
+  // TASK-2133: Lightweight cookie-exists check only.
+  // Middleware runs in Edge Runtime where DB access is limited.
+  // The page-level getImpersonationSession() is the authoritative check
+  // (validates signature via TASK-2131 and DB session via TASK-2133).
+  const impersonationCookie = request.cookies.get(IMPERSONATION_COOKIE_NAME);
+  if (isProtectedRoute && impersonationCookie?.value) {
+    // Cookie exists -- allow access through to the page, where full
+    // signature + DB validation will occur via getImpersonationSession().
+    return response;
+  }
 
   try {
     // Refresh session (important for token refresh)

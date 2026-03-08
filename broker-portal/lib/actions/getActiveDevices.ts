@@ -3,9 +3,13 @@
 /**
  * TASK-2062: Get active devices for the current user.
  * Queries the devices table from Supabase to show active sessions.
+ *
+ * BACKLOG-916: Returns empty list during impersonation since there is
+ * no authenticated user in that context.
  */
 
 import { createClient } from '@/lib/supabase/server';
+import { getImpersonationSession } from '@/lib/impersonation';
 
 interface DeviceSession {
   device_id: string;
@@ -20,6 +24,13 @@ export async function getActiveDevices(): Promise<{
   devices?: DeviceSession[];
   error?: string;
 }> {
+  // BACKLOG-916: During impersonation there is no authenticated user,
+  // so Supabase auth calls will fail. Return empty list gracefully.
+  const impersonation = await getImpersonationSession();
+  if (impersonation) {
+    return { success: true, devices: [] };
+  }
+
   const supabase = await createClient();
 
   // Get the current user

@@ -7,7 +7,7 @@
  * Uses debounced client-side search via the admin_search_users RPC.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { UserSearchBar } from './UserSearchBar';
 import { UserResultsTable } from './UserResultsTable';
 import { searchUsers, type AdminSearchUser } from '@/lib/admin-queries';
@@ -15,19 +15,26 @@ import { searchUsers, type AdminSearchUser } from '@/lib/admin-queries';
 export function UsersPageClient() {
   const [query, setQuery] = useState('');
   const [users, setUsers] = useState<AdminSearchUser[] | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Load all users on mount
+  useEffect(() => {
+    async function loadAll() {
+      const { data, error: searchError } = await searchUsers('');
+      if (searchError) {
+        setError(searchError.message);
+      } else {
+        setUsers(data);
+      }
+      setIsLoading(false);
+    }
+    loadAll();
+  }, []);
 
   const handleSearch = useCallback(async (searchQuery: string) => {
     setQuery(searchQuery);
     setError(null);
-
-    if (!searchQuery) {
-      setUsers(null);
-      setIsLoading(false);
-      return;
-    }
-
     setIsLoading(true);
 
     const { data, error: searchError } = await searchUsers(searchQuery);

@@ -6,6 +6,7 @@
  */
 
 import { SuspendDialog } from './SuspendDialog';
+import { ImpersonateButton } from './ImpersonateButton';
 import { formatTimestamp } from '@/lib/format';
 
 interface UserProfile {
@@ -35,7 +36,13 @@ function getInitials(name: string | null, email: string | null): string {
   return '?';
 }
 
-export function UserProfileCard({ user }: { user: UserProfile }) {
+interface UserProfileCardProps {
+  user: UserProfile;
+  canImpersonate?: boolean;
+  isOwnProfile?: boolean;
+}
+
+export function UserProfileCard({ user, canImpersonate = false, isOwnProfile = false }: UserProfileCardProps) {
   const displayName = user.display_name || user.email || 'Unknown User';
   const initials = getInitials(user.display_name, user.email);
 
@@ -62,6 +69,13 @@ export function UserProfileCard({ user }: { user: UserProfile }) {
               {displayName}
             </h2>
             <div className="flex items-center gap-2">
+              {canImpersonate && user.status !== 'suspended' && user.status !== 'banned' && (
+                <ImpersonateButton
+                  userId={user.id}
+                  userName={displayName}
+                  isOwnProfile={isOwnProfile}
+                />
+              )}
               <SuspendDialog
                 userId={user.id}
                 userName={displayName}
