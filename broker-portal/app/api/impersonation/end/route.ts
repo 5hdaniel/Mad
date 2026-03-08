@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
           ended_at: new Date().toISOString(),
         })
         .eq('id', session.session_id)
-        .eq('status', 'active');
+        .in('status', ['active', 'validated']);
 
       if (error) {
         console.error('Error ending impersonation session:', error);
