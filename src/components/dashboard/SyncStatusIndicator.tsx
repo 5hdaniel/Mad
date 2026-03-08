@@ -102,7 +102,7 @@ export function SyncStatusIndicator({
   }, []);
 
   useEffect(() => {
-    const view = (dismissed && !isAnySyncing && queue.length === 0) ? "hidden(dismissed)" :
+    const view = (dismissed && !isAnySyncing) ? "hidden(dismissed)" :
       (showCompletion && !isAnySyncing) ? "completion" :
       (!isAnySyncing && queue.length === 0) ? "hidden(empty)" :
       "progress";
@@ -183,7 +183,9 @@ export function SyncStatusIndicator({
   }, []);
 
   // Don't render if dismissed and not syncing
-  if (dismissed && !isAnySyncing && queue.length === 0) {
+  // Note: queue may still contain completed items (internal syncs don't auto-clean),
+  // but once dismissed, we should hide regardless of queue contents.
+  if (dismissed && !isAnySyncing) {
     return null;
   }
 
