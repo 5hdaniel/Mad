@@ -70,7 +70,9 @@ export default async function DashboardLayout({
                 </span>
               </Link>
               <div className="hidden sm:ml-10 sm:flex sm:space-x-8">
-                {(!user || user.role !== 'it_admin') && (
+                {/* BACKLOG-907: During impersonation, show only target-user nav (Dashboard, Submissions).
+                    Admin-only items (Users, Settings) are hidden so the admin sees what the target user sees. */}
+                {(isImpersonating || !user || user.role !== 'it_admin') && (
                   <>
                     <Link
                       href="/dashboard"
@@ -86,8 +88,8 @@ export default async function DashboardLayout({
                     </Link>
                   </>
                 )}
-                {/* Show Users/Settings nav links for admins and during impersonation (read-only) */}
-                {(isImpersonating || user?.role === 'admin' || user?.role === 'it_admin') && (
+                {/* Show Users/Settings nav links for admins only — NOT during impersonation */}
+                {(!isImpersonating && (user?.role === 'admin' || user?.role === 'it_admin')) && (
                   <>
                     <Link
                       href="/dashboard/users"
