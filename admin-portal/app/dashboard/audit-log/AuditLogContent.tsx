@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { FileText, ChevronLeft, ChevronRight, Filter, Clock, User, Search } from 'lucide-react';
+import { FileText, ChevronLeft, ChevronRight, Filter, Clock, User, Search, Download } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { formatTimestamp } from '@/lib/format';
 
@@ -108,6 +108,14 @@ export function AuditLogContent({ embedded = false }: { embedded?: boolean } = {
   const uniqueActions = useMemo(() => {
     return Object.keys(ACTION_LABELS);
   }, []);
+
+  function handleExport(format: 'csv' | 'json') {
+    const params = new URLSearchParams();
+    params.set('format', format);
+    if (dateFrom) params.set('from', dateFrom);
+    if (dateTo) params.set('to', dateTo);
+    window.open(`/api/audit-log/export?${params.toString()}`, '_blank');
+  }
 
   function renderActionBadge(action: string) {
     const config = ACTION_LABELS[action] || { label: action, color: 'bg-gray-100 text-gray-700' };
@@ -225,6 +233,22 @@ export function AuditLogContent({ embedded = false }: { embedded?: boolean } = {
             <p className="text-sm text-gray-500">{total} entr{total === 1 ? 'y' : 'ies'} found</p>
           </div>
           <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleExport('csv')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export CSV
+              </button>
+              <button
+                onClick={() => handleExport('json')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export JSON
+              </button>
+            </div>
             <div className="flex items-center gap-2">
               <label className="text-xs text-gray-500">Show</label>
               <select
