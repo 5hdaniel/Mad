@@ -69,7 +69,7 @@ export function UserProfileCard({ user, canImpersonate = false, isOwnProfile = f
               {displayName}
             </h2>
             <div className="flex items-center gap-2">
-              {canImpersonate && (
+              {canImpersonate && user.status !== 'suspended' && user.status !== 'banned' && (
                 <ImpersonateButton
                   userId={user.id}
                   userName={displayName}
