@@ -16,8 +16,16 @@ import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/service';
 import { IMPERSONATION_COOKIE_NAME, type ImpersonationSession } from '@/lib/impersonation';
 import { signCookieValue } from '@/lib/cookie-signing';
+import { impersonationRateLimiter } from '@/lib/rate-limiter';
 
 export async function GET(request: Request) {
+  // Rate limit: 5 attempts per IP per minute to prevent brute-force token probing
+  const forwarded = request.headers.get('x-forwarded-for');
+  const ip = forwarded?.split(',')[0]?.trim() || 'unknown';
+  if (!impersonationRateLimiter.check(ip)) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
+
   const { searchParams, origin } = new URL(request.url);
   const token = searchParams.get('token');
 
