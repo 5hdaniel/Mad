@@ -3,7 +3,7 @@ import { formatCurrency, formatRelativeTime, getStatusColor, formatStatus } from
 import { SubmissionListClient } from '@/components/submission/SubmissionListClient';
 import { EmptySubmissions } from '@/components/ui/EmptyState';
 import { SubmissionPagination } from '@/components/submission/SubmissionPagination';
-import { getDataClient } from '@/lib/impersonation-guards';
+import { getDataClient, getTargetOrganizationId } from '@/lib/impersonation-guards';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 interface Submission {
@@ -109,8 +109,8 @@ export default async function SubmissionsPage({ searchParams }: PageProps) {
 
   const { client, organizationId } = await getDataClient();
 
-  // During impersonation, organizationId is resolved by getDataClient()
-  const orgId = organizationId || undefined;
+  // BACKLOG-908: Use deduped helper for org ID resolution
+  const orgId = getTargetOrganizationId(organizationId);
 
   const { submissions, totalCount } = await getSubmissions(client, status, currentPage, orgId);
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));

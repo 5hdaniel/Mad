@@ -86,3 +86,21 @@ export async function blockWriteDuringImpersonation(): Promise<{ error: string }
   }
   return null;
 }
+
+/**
+ * Extracts the target organization ID for data queries.
+ *
+ * During impersonation, getDataClient() resolves the target user's org.
+ * Normal sessions return null (RLS handles scoping).
+ *
+ * Returns undefined (not null) so callers can pass it directly to
+ * Supabase .eq() filters — undefined is simply ignored.
+ *
+ * BACKLOG-908: Deduplicated from dashboard/page.tsx, submissions/page.tsx,
+ * and submissions/[id]/page.tsx which all had `organizationId || undefined`.
+ */
+export function getTargetOrganizationId(
+  organizationId: string | null,
+): string | undefined {
+  return organizationId || undefined;
+}
