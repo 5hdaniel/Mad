@@ -19,11 +19,15 @@ interface ReviewActionsProps {
     organization_id: string;
   };
   disabled?: boolean;
+  /** BACKLOG-899: Defense-in-depth write block during impersonation.
+   *  The parent page already hides this component when impersonating,
+   *  but this prop provides a code-level guard inside the write handler. */
+  isImpersonating?: boolean;
 }
 
 type ReviewAction = 'approve' | 'reject' | 'changes' | null;
 
-export function ReviewActions({ submission, disabled }: ReviewActionsProps) {
+export function ReviewActions({ submission, disabled, isImpersonating }: ReviewActionsProps) {
   const [action, setAction] = useState<ReviewAction>(null);
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
@@ -34,6 +38,21 @@ export function ReviewActions({ submission, disabled }: ReviewActionsProps) {
 
   const handleSubmitReview = async () => {
     if (!action) return;
+
+    // BACKLOG-899: Defense-in-depth — block writes during impersonation.
+    // The UI hides this component during impersonation, but if somehow
+    // rendered (e.g., stale cache, prop bypass), refuse the write.
+    if (isImpersonating) {
+      setError('Write operations are not allowed during impersonation sessions.');
+      return;
+    }
+
+    // Secondary check: detect impersonation cookie on the client side.
+    // This catches edge cases where the prop isn't passed correctly.
+    if (typeof document !== 'undefined' && document.cookie.includes('impersonation_session=')) {
+      setError('Write operations are not allowed during impersonation sessions.');
+      return;
+    }
 
     // For reject, show confirmation first
     if (action === 'reject' && !showConfirm) {

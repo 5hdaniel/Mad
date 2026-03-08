@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { formatRelativeTime, getStatusColor, formatStatus } from '@/lib/utils';
-import { getDataClient } from '@/lib/impersonation-guards';
+import { getDataClient, getTargetOrganizationId } from '@/lib/impersonation-guards';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 interface SubmissionStats {
@@ -91,8 +91,8 @@ export default async function DashboardPage() {
     }
   }
 
-  // During impersonation, organizationId is resolved by getDataClient()
-  const orgId = organizationId || undefined;
+  // BACKLOG-908: Use deduped helper for org ID resolution
+  const orgId = getTargetOrganizationId(organizationId);
 
   const [stats, recentSubmissions] = await Promise.all([
     getStats(client, orgId),

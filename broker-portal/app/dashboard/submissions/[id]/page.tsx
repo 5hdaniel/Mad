@@ -264,6 +264,7 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
       </div>
 
       {/* Review Actions - hidden during impersonation (read-only) */}
+      {/* BACKLOG-899: isImpersonating prop provides defense-in-depth write guard */}
       {!isImpersonating && (
         <ReviewActions
           submission={{
@@ -272,6 +273,7 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
             organization_id: submission.organization_id,
           }}
           disabled={submission.status === 'approved' || submission.status === 'rejected'}
+          isImpersonating={isImpersonating}
         />
       )}
 
