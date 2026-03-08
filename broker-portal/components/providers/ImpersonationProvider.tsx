@@ -5,7 +5,6 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 interface ImpersonationState {
   isImpersonating: boolean;
   sessionId: string | null;
-  targetUserId: string | null;
   targetEmail: string | null;
   targetName: string | null;
   expiresAt: Date | null;
@@ -16,7 +15,6 @@ interface ImpersonationState {
 const ImpersonationContext = createContext<ImpersonationState>({
   isImpersonating: false,
   sessionId: null,
-  targetUserId: null,
   targetEmail: null,
   targetName: null,
   expiresAt: null,
@@ -24,17 +22,22 @@ const ImpersonationContext = createContext<ImpersonationState>({
   endSession: async () => {},
 });
 
+/**
+ * Client-safe session shape. admin_user_id and target_user_id are
+ * intentionally omitted — they must not appear in the RSC payload.
+ */
+interface ClientImpersonationSession {
+  session_id: string;
+  target_email: string;
+  target_name: string;
+  expires_at: string;
+  started_at?: string;
+}
+
 /** Props are passed from the server component that reads the cookie */
 interface ImpersonationProviderProps {
   children: ReactNode;
-  session?: {
-    session_id: string;
-    target_user_id: string;
-    target_email: string;
-    target_name: string;
-    admin_user_id: string;
-    expires_at: string;
-  } | null;
+  session?: ClientImpersonationSession | null;
 }
 
 export function ImpersonationProvider({ children, session }: ImpersonationProviderProps) {
@@ -101,7 +104,6 @@ export function ImpersonationProvider({ children, session }: ImpersonationProvid
   const value: ImpersonationState = {
     isImpersonating: !!session,
     sessionId: session?.session_id || null,
-    targetUserId: session?.target_user_id || null,
     targetEmail: session?.target_email || null,
     targetName: session?.target_name || null,
     expiresAt: session ? new Date(session.expires_at) : null,
