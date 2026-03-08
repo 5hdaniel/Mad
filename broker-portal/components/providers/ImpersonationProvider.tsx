@@ -57,6 +57,24 @@ export function ImpersonationProvider({ children, session }: ImpersonationProvid
     return () => clearInterval(interval);
   }, [session]);
 
+  const endSession = useCallback(async () => {
+    if (isEnding) return;
+    setIsEnding(true);
+
+    try {
+      await fetch('/api/impersonation/end', { method: 'POST' });
+    } catch (e) {
+      console.error('Failed to end impersonation session:', e);
+      // Clear the impersonation cookie client-side so the user doesn't stay
+      // in a broken impersonation state when the API call fails.
+      document.cookie = 'impersonation_session=; Max-Age=0; path=/;';
+    }
+
+    // Redirect to admin portal
+    const adminUrl = process.env.NEXT_PUBLIC_ADMIN_PORTAL_URL || 'https://admin.keeprcompliance.com';
+    window.location.href = `${adminUrl}/dashboard/users`;
+  }, [isEnding]);
+
   // BACKLOG-904: Auto-end session when client-side timer expires.
   // This prevents continued browsing after the 30-min session_expires_at.
   useEffect(() => {
@@ -79,24 +97,6 @@ export function ImpersonationProvider({ children, session }: ImpersonationProvid
 
     return () => clearTimeout(timer);
   }, [session, endSession]);
-
-  const endSession = useCallback(async () => {
-    if (isEnding) return;
-    setIsEnding(true);
-
-    try {
-      await fetch('/api/impersonation/end', { method: 'POST' });
-    } catch (e) {
-      console.error('Failed to end impersonation session:', e);
-      // Clear the impersonation cookie client-side so the user doesn't stay
-      // in a broken impersonation state when the API call fails.
-      document.cookie = 'impersonation_session=; Max-Age=0; path=/;';
-    }
-
-    // Redirect to admin portal
-    const adminUrl = process.env.NEXT_PUBLIC_ADMIN_PORTAL_URL || 'https://admin.keeprcompliance.com';
-    window.location.href = `${adminUrl}/dashboard/users`;
-  }, [isEnding]);
 
   const value: ImpersonationState = {
     isImpersonating: !!session,
