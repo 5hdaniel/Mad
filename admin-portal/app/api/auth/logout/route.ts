@@ -10,9 +10,9 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   const supabase = await createClient();
 
   // Get the current user before signing out
@@ -21,6 +21,13 @@ export async function POST() {
   } = await supabase.auth.getUser();
 
   if (user) {
+    // Extract IP and user-agent for SOC 2 CC6.1 audit trail
+    const forwarded = request.headers.get('x-forwarded-for');
+    const ip = forwarded
+      ? forwarded.split(',')[0].trim()
+      : request.headers.get('x-real-ip') || 'unknown';
+    const userAgent = request.headers.get('user-agent') || null;
+
     // Log the logout event - never block signOut if this fails
     try {
       await supabase.rpc('log_admin_action', {
@@ -31,6 +38,8 @@ export async function POST() {
           email: user.email,
           source: 'admin_portal',
         },
+        p_ip_address: ip,
+        p_user_agent: userAgent,
       });
     } catch (err) {
       console.error('[auth-logout] Failed to log logout event:', err);

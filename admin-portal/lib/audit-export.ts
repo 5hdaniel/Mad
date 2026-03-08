@@ -15,6 +15,7 @@ const CSV_HEADERS = [
   'actor_email',
   'actor_name',
   'ip_address',
+  'user_agent',
   'metadata',
 ] as const;
 
