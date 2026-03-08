@@ -32,16 +32,17 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Use service role client since the RPC is only granted to 'authenticated'
-    // and this route has no user session
+    // Use service role client — the RPC is restricted to service_role only
+    // (BACKLOG-910 revoked access from authenticated role)
     const supabase = createServiceClient();
     const { data, error } = await supabase.rpc('admin_validate_impersonation_token', {
       p_token: token,
     });
 
     if (error) {
+      // BACKLOG-906: Log full error server-side only; never expose details in redirect URL
       console.error('Impersonation token validation error:', JSON.stringify(error));
-      return NextResponse.redirect(`${origin}/login?error=impersonation_failed&detail=${encodeURIComponent(error.message || 'unknown')}`);
+      return NextResponse.redirect(`${origin}/login?error=impersonation_validation_failed`);
     }
 
     if (!data?.valid) {
@@ -74,8 +75,8 @@ export async function GET(request: Request) {
 
     return response;
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error('Impersonation route error:', msg);
-    return NextResponse.redirect(`${origin}/login?error=impersonation_failed&detail=${encodeURIComponent(msg)}`);
+    // BACKLOG-906: Log full error server-side only; never expose details in redirect URL
+    console.error('Impersonation route error:', err instanceof Error ? err.message : String(err));
+    return NextResponse.redirect(`${origin}/login?error=impersonation_server_error`);
   }
 }
