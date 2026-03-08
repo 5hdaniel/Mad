@@ -86,8 +86,8 @@ export default async function DashboardLayout({
                     </Link>
                   </>
                 )}
-                {/* Hide write-action links (Users, Settings) during impersonation */}
-                {!isImpersonating && (user?.role === 'admin' || user?.role === 'it_admin') && (
+                {/* Show Users/Settings nav links for admins and during impersonation (read-only) */}
+                {(isImpersonating || user?.role === 'admin' || user?.role === 'it_admin') && (
                   <>
                     <Link
                       href="/dashboard/users"
