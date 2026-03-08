@@ -625,6 +625,17 @@ class SyncOrchestratorServiceClass {
         currentSync: null,
       });
       this.abortController = null;
+
+      // Auto-clear completed/errored internal items after delay
+      // (mirrors external sync cleanup in completeExternalSync)
+      setTimeout(() => {
+        const queue = this.state.queue.filter(
+          (item) => item.external || (item.status !== 'complete' && item.status !== 'error')
+        );
+        if (queue.length !== this.state.queue.length) {
+          this.setState({ queue });
+        }
+      }, 5000); // 5s — outlasts the 3s UI auto-dismiss timer
     }
   }
 
