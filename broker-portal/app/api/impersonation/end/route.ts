@@ -10,9 +10,24 @@
 import { cookies } from 'next/headers';
 import { createServiceClient } from '@/lib/supabase/service';
 import { getImpersonationSession, IMPERSONATION_COOKIE_NAME } from '@/lib/impersonation';
-import { NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  // CSRF defense-in-depth: verify Origin/Referer matches app domain
+  const origin = request.headers.get('origin');
+  const referer = request.headers.get('referer');
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+  const appOrigin = new URL(appUrl).origin;
+
+  if (!origin && !referer) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  const requestOrigin = origin || new URL(referer!).origin;
+  if (requestOrigin !== appOrigin) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
   const session = await getImpersonationSession();
 
   if (session) {
