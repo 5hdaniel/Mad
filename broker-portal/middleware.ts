@@ -74,19 +74,15 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  // Check for impersonation cookie on protected routes
-  // If present and valid, allow access without normal auth
+  // TASK-2133: Lightweight cookie-exists check only.
+  // Middleware runs in Edge Runtime where DB access is limited.
+  // The page-level getImpersonationSession() is the authoritative check
+  // (validates signature via TASK-2131 and DB session via TASK-2133).
   const impersonationCookie = request.cookies.get('impersonation_session');
-  if (isProtectedRoute && impersonationCookie) {
-    try {
-      const session = JSON.parse(impersonationCookie.value);
-      if (session.expires_at && new Date(session.expires_at) > new Date()) {
-        // Valid impersonation session -- allow access
-        return response;
-      }
-    } catch {
-      // Invalid cookie JSON, fall through to normal auth
-    }
+  if (isProtectedRoute && impersonationCookie?.value) {
+    // Cookie exists -- allow access through to the page, where full
+    // signature + DB validation will occur via getImpersonationSession().
+    return response;
   }
 
   try {
