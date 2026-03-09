@@ -102,7 +102,7 @@ export function SyncStatusIndicator({
   }, []);
 
   useEffect(() => {
-    const view = (dismissed && !isAnySyncing && queue.length === 0) ? "hidden(dismissed)" :
+    const view = (dismissed && !isAnySyncing) ? "hidden(dismissed)" :
       (showCompletion && !isAnySyncing) ? "completion" :
       (!isAnySyncing && queue.length === 0) ? "hidden(empty)" :
       "progress";
@@ -183,7 +183,9 @@ export function SyncStatusIndicator({
   }, []);
 
   // Don't render if dismissed and not syncing
-  if (dismissed && !isAnySyncing && queue.length === 0) {
+  // Note: queue may still contain completed items (internal syncs don't auto-clean),
+  // but once dismissed, we should hide regardless of queue contents.
+  if (dismissed && !isAnySyncing) {
     return null;
   }
 
@@ -325,6 +327,15 @@ export function SyncStatusIndicator({
 
   // Don't render if no sync is in progress and queue is empty
   if (!isAnySyncing && queue.length === 0) {
+    return null;
+  }
+
+  // Don't render stale completed/errored pills after remount (e.g., parent re-render
+  // after sync already completed and auto-dismissed). If we never saw a sync in this
+  // mount cycle (wasSyncingRef is false) and all items are done, this is stale state
+  // from a previous sync cycle — hide it until the orchestrator cleans up the queue.
+  if (!isAnySyncing && !showCompletion && !wasSyncingRef.current &&
+      queue.length > 0 && queue.every(item => item.status === 'complete' || item.status === 'error')) {
     return null;
   }
 

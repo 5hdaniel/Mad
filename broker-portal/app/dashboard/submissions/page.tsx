@@ -1,9 +1,10 @@
-import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
 import { formatCurrency, formatRelativeTime, getStatusColor, formatStatus } from '@/lib/utils';
 import { SubmissionListClient } from '@/components/submission/SubmissionListClient';
 import { EmptySubmissions } from '@/components/ui/EmptyState';
 import { SubmissionPagination } from '@/components/submission/SubmissionPagination';
+import { getDataClient, getTargetOrganizationId } from '@/lib/impersonation-guards';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 interface Submission {
   id: string;
@@ -36,16 +37,16 @@ const STATUSES = [
 ];
 
 async function getSubmissions(
+  client: SupabaseClient,
   status?: string,
-  page: number = 1
+  page: number = 1,
+  orgId?: string,
 ): Promise<{ submissions: Submission[]; totalCount: number }> {
-  const supabase = await createClient();
-
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 
   // Data query with pagination range
-  let query = supabase
+  let query = client
     .from('transaction_submissions')
     .select('*')
     .neq('status', 'uploading')  // Hide incomplete uploads (two-phase commit)
@@ -53,10 +54,16 @@ async function getSubmissions(
     .range(from, to);
 
   // Count query (separate for total)
-  let countQuery = supabase
+  let countQuery = client
     .from('transaction_submissions')
     .select('*', { count: 'exact', head: true })
     .neq('status', 'uploading');
+
+  // During impersonation, filter by organization
+  if (orgId) {
+    query = query.eq('organization_id', orgId);
+    countQuery = countQuery.eq('organization_id', orgId);
+  }
 
   // Apply status filter if provided and not 'all'
   if (status && status !== 'all') {
@@ -100,7 +107,12 @@ export default async function SubmissionsPage({ searchParams }: PageProps) {
   const currentPage = Math.max(1, Number(pageParam) || 1);
   const currentStatus = status || 'all';
 
-  const { submissions, totalCount } = await getSubmissions(status, currentPage);
+  const { client, organizationId } = await getDataClient();
+
+  // BACKLOG-908: Use deduped helper for org ID resolution
+  const orgId = getTargetOrganizationId(organizationId);
+
+  const { submissions, totalCount } = await getSubmissions(client, status, currentPage, orgId);
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   // If requested page exceeds total pages (and there are results), clamp to last page
@@ -109,7 +121,7 @@ export default async function SubmissionsPage({ searchParams }: PageProps) {
   // Re-fetch if we clamped the page (edge case: items deleted while on last page)
   let displaySubmissions = submissions;
   if (effectivePage !== currentPage && totalCount > 0) {
-    const refetch = await getSubmissions(status, effectivePage);
+    const refetch = await getSubmissions(client, status, effectivePage, orgId);
     displaySubmissions = refetch.submissions;
   }
 

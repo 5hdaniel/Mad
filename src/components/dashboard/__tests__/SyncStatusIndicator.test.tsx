@@ -216,9 +216,10 @@ describe("SyncStatusIndicator", () => {
     it("should show error pills with red styling and X icon", () => {
       const queue = [
         createSyncItem('contacts', 'complete', 100),
+        createSyncItem('emails', 'running', 50),
         createSyncItem('messages', 'error', 0, 'Database connection failed'),
       ];
-      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, false, 50));
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 50));
 
       render(<SyncStatusIndicator />);
 
@@ -233,9 +234,10 @@ describe("SyncStatusIndicator", () => {
     it("should show red background when there is an error", () => {
       const queue = [
         createSyncItem('contacts', 'complete', 100),
+        createSyncItem('emails', 'running', 50),
         createSyncItem('messages', 'error', 0, 'Import failed'),
       ];
-      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, false, 50));
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 50));
 
       render(<SyncStatusIndicator />);
 
@@ -245,10 +247,10 @@ describe("SyncStatusIndicator", () => {
 
     it("should show 'Sync Error:' label when there is an error", () => {
       const queue = [
-        createSyncItem('contacts', 'complete', 100),
+        createSyncItem('contacts', 'pending', 0),
         createSyncItem('messages', 'error', 0, 'Import failed'),
       ];
-      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, false, 50));
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, false, 0));
 
       render(<SyncStatusIndicator />);
 
@@ -468,6 +470,41 @@ describe("SyncStatusIndicator", () => {
         jest.advanceTimersByTime(5000);
       });
       // No error means cleanup worked
+    });
+
+    it("should auto-dismiss even when queue still has completed items", () => {
+      mockUseLicense.mockReturnValue({
+        hasAIAddon: false,
+        licenseType: "individual",
+        isLoading: false,
+      });
+      // Start with running state
+      const runningQueue = [
+        createSyncItem('contacts', 'running', 50),
+        createSyncItem('messages', 'pending', 0),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(runningQueue, true, 25));
+
+      const { rerender } = render(<SyncStatusIndicator />);
+
+      // Transition to not syncing BUT leave completed items in queue
+      // (this is what the orchestrator does for internal syncs)
+      const completedQueue = [
+        createSyncItem('contacts', 'complete', 100),
+        createSyncItem('messages', 'complete', 100),
+      ];
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(completedQueue, false, 100));
+      rerender(<SyncStatusIndicator />);
+
+      expect(screen.getByTestId("sync-status-complete")).toBeInTheDocument();
+
+      // Advance past 3s - should auto-dismiss even though queue has completed items
+      act(() => {
+        jest.advanceTimersByTime(3100);
+      });
+      expect(screen.queryByTestId("sync-status-complete")).not.toBeInTheDocument();
+      // Should not fall through to progress view with stale green pills
+      expect(screen.queryByTestId("sync-status-indicator")).not.toBeInTheDocument();
     });
 
     it("should allow manual dismiss of completion message", () => {
@@ -702,9 +739,10 @@ describe("SyncStatusIndicator", () => {
 
     it("should show iPhone pill with green checkmark when complete", () => {
       const queue = [
+        createSyncItem('contacts', 'running', 50),
         createSyncItem('iphone', 'complete', 100, undefined, true),
       ];
-      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, false, 100));
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 100));
 
       render(<SyncStatusIndicator />);
 
@@ -714,9 +752,10 @@ describe("SyncStatusIndicator", () => {
 
     it("should show iPhone pill with red styling when error", () => {
       const queue = [
+        createSyncItem('contacts', 'running', 50),
         createSyncItem('iphone', 'error', 0, 'Device disconnected', true),
       ];
-      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, false, 0));
+      mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState(queue, true, 0));
 
       render(<SyncStatusIndicator />);
 

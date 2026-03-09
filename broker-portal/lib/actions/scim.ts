@@ -2,8 +2,13 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { randomBytes, createHash } from 'crypto';
+import { blockWriteDuringImpersonation } from '@/lib/impersonation-guards';
 
 export async function generateScimToken(description: string) {
+  // Block during impersonation (read-only session)
+  const blocked = await blockWriteDuringImpersonation();
+  if (blocked) throw new Error(blocked.error);
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -35,6 +40,10 @@ export async function generateScimToken(description: string) {
 }
 
 export async function revokeScimToken(tokenId: string) {
+  // Block during impersonation (read-only session)
+  const blocked = await blockWriteDuringImpersonation();
+  if (blocked) throw new Error(blocked.error);
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -115,6 +124,10 @@ export async function getRetentionPolicy() {
 }
 
 export async function updateRetentionPolicy(retentionYears: number) {
+  // Block during impersonation (read-only session)
+  const blocked = await blockWriteDuringImpersonation();
+  if (blocked) throw new Error(blocked.error);
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -201,6 +214,10 @@ export async function getJitStatus() {
 }
 
 export async function updateJitStatus(enabled: boolean) {
+  // Block during impersonation (read-only session)
+  const blocked = await blockWriteDuringImpersonation();
+  if (blocked) throw new Error(blocked.error);
+
   const supabase = await createClient();
   const {
     data: { user },

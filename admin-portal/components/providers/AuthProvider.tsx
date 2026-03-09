@@ -54,7 +54,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [supabase.auth]);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      // Use server-side logout route to capture auth.logout audit event
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // If the API route fails, still sign out client-side
+      await supabase.auth.signOut();
+    }
     window.location.href = '/login';
   };
 
