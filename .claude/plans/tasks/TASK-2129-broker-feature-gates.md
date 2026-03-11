@@ -1,13 +1,18 @@
 # TASK-2129: Broker Portal Feature Gate Enforcement
 
+> **[UPDATED 2026-03-11]** Moved from SPRINT-122 to SPRINT-126 Phase 2. Blocked until TASK-2153
+> (TASK-2128 rework) merges. The `get_org_features` RPC has a critical bug (C4) that is fixed
+> live but needs a corrective migration before this task can be meaningfully QA tested.
+
 **Backlog ID:** BACKLOG-926
-**Sprint:** SPRINT-122
-**Phase:** Phase 1 - All Tasks (Parallel with TASK-2127, TASK-2128)
-**Depends On:** TASK-2126 (SPRINT-121 -- schema + RPCs must be merged first)
+**Sprint:** SPRINT-126 (moved from SPRINT-122)
+**Phase:** Phase 2 -- QA + Merge (after TASK-2153 merges)
+**Depends On:** TASK-2126 (SPRINT-121 -- merged), TASK-2153 (SPRINT-126 Phase 1 -- RPC fix must merge first)
 **Branch:** `feature/task-2129-broker-feature-gates`
 **Branch From:** `develop`
 **Branch Into:** `develop`
 **Estimated Tokens:** ~20K (service category x 0.5 = ~10K base, +10K for UI gating = ~25K adjusted)
+**Worktree:** `Mad-TASK-2129`
 
 ---
 
