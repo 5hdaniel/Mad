@@ -319,10 +319,10 @@ export function AuditLogContent({ embedded = false }: { embedded?: boolean } = {
                 Columns
               </button>
               {showColumnPicker && (
-                <div className="absolute right-0 mt-1 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-20 py-2">
+                <div className="absolute right-0 mt-1 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-20 py-2">
                   <div className="px-3 pb-2 border-b border-gray-100">
                     <span className="text-xs font-medium text-gray-500">Presets</span>
-                    <div className="flex gap-1 mt-1">
+                    <div className="flex flex-wrap gap-1 mt-1">
                       {Object.entries(PRESETS).map(([key, preset]) => (
                         <button
                           key={key}
