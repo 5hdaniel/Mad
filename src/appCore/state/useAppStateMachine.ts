@@ -11,7 +11,7 @@
  * - Handler methods for complex operations
  */
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth, useNetwork, usePlatform, useLicense } from "../../contexts";
 import {
   useSecureStorage,
@@ -34,6 +34,8 @@ import {
   constructHandlers,
 } from "./returnHelpers";
 import type { AppStateMachine } from "./types";
+import type { ImportSource, UserPreferences } from "../../services/settingsService";
+import logger from "../../utils/logger";
 
 export function useAppStateMachine(): AppStateMachine {
   // ============================================
@@ -86,6 +88,30 @@ export function useAppStateMachine(): AppStateMachine {
   // PHONE TYPE API (existing)
   // ============================================
   const phoneTypeApi = usePhoneTypeApi({ userId: currentUser?.id, isWindows });
+
+  // ============================================
+  // IMPORT SOURCE PREFERENCE (TASK-2152)
+  // macOS users can choose "iphone-sync" to show the iPhone sync button
+  // ============================================
+  const [importSource, setImportSource] = useState<ImportSource>("macos-native");
+
+  useEffect(() => {
+    if (!isMacOS || !currentUser?.id) return;
+
+    const loadImportSource = async () => {
+      try {
+        const result = await window.api.preferences.get(currentUser.id);
+        const prefs = result.preferences as UserPreferences | undefined;
+        if (result.success && prefs?.messages?.source) {
+          setImportSource(prefs.messages.source);
+        }
+      } catch (error) {
+        logger.error("[useAppStateMachine] Failed to load import source:", error);
+      }
+    };
+
+    loadImportSource();
+  }, [isMacOS, currentUser?.id]);
 
   // ============================================
   // AUTH FLOW
@@ -318,6 +344,7 @@ export function useAppStateMachine(): AppStateMachine {
         exportFlow,
         modal,
         autoSync,
+        importSource,
       ),
       ...constructModalTransitions(modal),
       ...constructHandlers(
@@ -344,6 +371,7 @@ export function useAppStateMachine(): AppStateMachine {
       exportFlow,
       modal,
       autoSync,
+      importSource,
       phoneHandlers,
       emailHandlers,
       keychainHandlers,

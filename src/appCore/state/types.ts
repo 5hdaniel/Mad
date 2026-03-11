@@ -9,6 +9,7 @@ import type { Conversation } from "../../hooks/useConversations";
 import type { Subscription } from "../../../electron/types/models";
 import type { PendingOAuthData, DeepLinkAuthData } from "../../components/Login";
 import type { SyncStatus } from "../../hooks/useAutoRefresh";
+import type { ImportSource } from "../../services/settingsService";
 
 // Application navigation steps
 export type AppStep =
@@ -139,6 +140,9 @@ export interface AppStateMachine {
   selectedPhoneType: "iphone" | "android" | null;
   isLoadingPhoneType: boolean;
   needsDriverSetup: boolean;
+
+  // Import source preference (macOS only, TASK-2152)
+  importSource: ImportSource;
 
   // New user flow state
   isNewUserFlow: boolean;

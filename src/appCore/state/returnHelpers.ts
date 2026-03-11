@@ -17,6 +17,7 @@ import type {
   Conversation,
 } from "./types";
 import type { SyncStatus } from "../../hooks/useAutoRefresh";
+import type { ImportSource } from "../../services/settingsService";
 
 // ============================================
 // TYPE DEFINITIONS FOR FLOW RETURNS
@@ -175,6 +176,7 @@ export function constructStateProps(
   exportFlow: Pick<ExportFlowReturn, "exportResult" | "conversations" | "selectedConversationIds" | "outlookConnected">,
   modal: Pick<ModalFlowReturn, "modalState">,
   autoSync: AutoSyncReturn,
+  importSource: ImportSource,
 ): Pick<
   AppStateMachine,
   | "currentStep"
@@ -202,6 +204,7 @@ export function constructStateProps(
   | "selectedPhoneType"
   | "isLoadingPhoneType"
   | "needsDriverSetup"
+  | "importSource"
   | "isNewUserFlow"
   | "pendingOAuthData"
   | "pendingOnboardingData"
@@ -258,6 +261,9 @@ export function constructStateProps(
     selectedPhoneType: phoneTypeApi.selectedPhoneType,
     isLoadingPhoneType: phoneTypeApi.isLoadingPhoneType,
     needsDriverSetup: phoneTypeApi.needsDriverSetup,
+
+    // Import source preference (TASK-2152)
+    importSource,
 
     // New user flow state
     isNewUserFlow: auth.isNewUserFlow,

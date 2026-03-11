@@ -30,8 +30,8 @@ interface AppRouterProps {
 export function AppRouter({ app }: AppRouterProps) {
   const {
     // State
-    currentStep, isWindows, isOnline, isChecking, connectionError,
-    currentUser, selectedPhoneType,
+    currentStep, isWindows, isMacOS, isOnline, isChecking, connectionError,
+    currentUser, selectedPhoneType, importSource,
     hasEmailConnected, showSetupPromptDismissed, exportResult, conversations,
     selectedConversationIds, outlookConnected,
     // Handlers
@@ -129,8 +129,10 @@ export function AppRouter({ app }: AppRouterProps) {
 
   // Dashboard
   if (currentStep === "dashboard") {
-    // Show iPhone sync button for Windows + iPhone users
-    const showIPhoneSyncButton = isWindows && selectedPhoneType === "iphone";
+    // Show iPhone sync button for Windows + iPhone users, or macOS + iphone-sync import source
+    const showIPhoneSyncButton =
+      (isWindows && selectedPhoneType === "iphone") ||
+      (isMacOS && importSource === "iphone-sync");
 
     // Handler to open Settings and scroll to Email Connections section
     const handleContinueSetup = () => {
