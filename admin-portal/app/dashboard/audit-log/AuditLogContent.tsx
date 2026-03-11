@@ -47,6 +47,13 @@ const ACTION_LABELS: Record<string, { label: string; color: string }> = {
   'impersonation.end': { label: 'Impersonation Ended', color: 'bg-purple-100 text-purple-700' },
 };
 
+const TARGET_TYPE_LABELS: Record<string, string> = {
+  admin_role: 'Role',
+  user: 'User',
+  license: 'License',
+  internal_user: 'Internal User',
+};
+
 // Column definitions
 type ColumnKey = 'action' | 'target' | 'metadata' | 'ip_address' | 'user_agent' | 'actor' | 'timestamp';
 
@@ -213,9 +220,24 @@ export function AuditLogContent({ embedded = false }: { embedded?: boolean } = {
         </span>
       );
     }
+    const typeLabel = TARGET_TYPE_LABELS[entry.target_type] || entry.target_type;
+    const metaName = entry.metadata
+      ? (entry.metadata.name as string) || (entry.metadata.slug as string) || (entry.metadata.email as string) || null
+      : null;
+
+    if (metaName) {
+      return (
+        <span className="text-sm text-gray-500">
+          on <span className="font-medium text-gray-700">{typeLabel}</span>
+          <span className="mx-1">&mdash;</span>
+          <span className="font-medium text-gray-700">{metaName}</span>
+        </span>
+      );
+    }
+
     return (
       <span className="text-sm text-gray-500">
-        on <span className="font-medium text-gray-700">{entry.target_type}</span>
+        on <span className="font-medium text-gray-700">{typeLabel}</span>
         {entry.target_id && (
           <span className="ml-1 text-xs text-gray-400" title={entry.target_id}>
             ({entry.target_id.slice(0, 8)}&hellip;)
