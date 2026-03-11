@@ -212,39 +212,47 @@ export function AuditLogContent({ embedded = false }: { embedded?: boolean } = {
   }
 
   function renderTarget(entry: AuditLogEntry) {
-    const name = entry.target_name || entry.target_email;
-    if (name) {
-      return (
-        <span className="text-sm text-gray-500">
-          on <span className="font-medium text-gray-700">{name}</span>
-        </span>
-      );
+    // User targets: show "on [name/email]" since the action badge doesn't convey who
+    if (entry.target_type === 'user') {
+      const name = entry.target_name || entry.target_email;
+      if (name) {
+        return (
+          <span className="text-sm text-gray-500">
+            on <span className="font-medium text-gray-700">{name}</span>
+          </span>
+        );
+      }
     }
-    const typeLabel = TARGET_TYPE_LABELS[entry.target_type] || entry.target_type;
+
+    // Non-user targets: skip "on [Type]" prefix — the action badge already says the type.
+    // Try to find a descriptive name from metadata.
     const metaName = entry.metadata
       ? (entry.metadata.name as string) || (entry.metadata.slug as string) || (entry.metadata.email as string) || null
       : null;
+    const displayName = entry.target_name || entry.target_email || metaName;
 
-    if (metaName) {
+    if (displayName) {
       return (
         <span className="text-sm text-gray-500">
-          on <span className="font-medium text-gray-700">{typeLabel}</span>
           <span className="mx-1">&mdash;</span>
-          <span className="font-medium text-gray-700">{metaName}</span>
+          <span className="font-medium text-gray-700">{displayName}</span>
         </span>
       );
     }
 
-    return (
-      <span className="text-sm text-gray-500">
-        on <span className="font-medium text-gray-700">{typeLabel}</span>
-        {entry.target_id && (
-          <span className="ml-1 text-xs text-gray-400" title={entry.target_id}>
+    // Fallback: truncated target ID only
+    if (entry.target_id) {
+      return (
+        <span className="text-sm text-gray-500">
+          <span className="mx-1">&mdash;</span>
+          <span className="text-xs text-gray-400" title={entry.target_id}>
             ({entry.target_id.slice(0, 8)}&hellip;)
           </span>
-        )}
-      </span>
-    );
+        </span>
+      );
+    }
+
+    return null;
   }
 
   function renderMetadata(metadata: Record<string, unknown> | null) {
