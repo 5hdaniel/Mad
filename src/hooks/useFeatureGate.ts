@@ -21,12 +21,9 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import type { FeatureAccess } from "../../electron/types/featureGate";
 
-interface FeatureAccess {
-  allowed: boolean;
-  value: string;
-  source: "plan" | "override" | "default";
-}
+export type { FeatureAccess } from "../../electron/types/featureGate";
 
 interface UseFeatureGateReturn {
   /** Check if a feature is allowed. Returns true for unknown features (fail-open). */

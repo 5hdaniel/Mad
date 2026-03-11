@@ -6,6 +6,7 @@
 import type { GetConversationsResult } from "./hooks/useConversations";
 import type { iOSDevice, BackupProgress } from "./types/iphone";
 import type { Transaction } from "../electron/types/models";
+import type { FeatureAccess } from "../electron/types/featureGate";
 
 /**
  * Backup progress details from idevicebackup2
@@ -2056,17 +2057,9 @@ interface MainAPI {
   // Feature Gate API (SPRINT-122)
   featureGate: {
     /** Check access to a specific feature */
-    check: (featureKey: string) => Promise<{
-      allowed: boolean;
-      value: string;
-      source: "plan" | "override" | "default";
-    }>;
+    check: (featureKey: string) => Promise<FeatureAccess>;
     /** Get all features for the current organization */
-    getAll: () => Promise<Record<string, {
-      allowed: boolean;
-      value: string;
-      source: "plan" | "override" | "default";
-    }>>;
+    getAll: () => Promise<Record<string, FeatureAccess>>;
     /** Invalidate the feature gate cache */
     invalidateCache: () => Promise<void>;
   };

@@ -6,12 +6,10 @@
  */
 
 import { ipcRenderer } from "electron";
+import type { FeatureAccess } from "../types/featureGate";
 
-export interface FeatureAccessResult {
-  allowed: boolean;
-  value: string;
-  source: "plan" | "override" | "default";
-}
+// Re-export for backwards compatibility
+export type { FeatureAccess as FeatureAccessResult } from "../types/featureGate";
 
 export const featureGateBridge = {
   /**
@@ -19,14 +17,14 @@ export const featureGateBridge = {
    * @param featureKey - Feature key to check (e.g., "text_export", "email_export")
    * @returns Feature access result with allowed status
    */
-  check: (featureKey: string): Promise<FeatureAccessResult> =>
+  check: (featureKey: string): Promise<FeatureAccess> =>
     ipcRenderer.invoke("feature-gate:check", featureKey),
 
   /**
    * Get all features for the current organization
    * @returns Record of feature keys to access results
    */
-  getAll: (): Promise<Record<string, FeatureAccessResult>> =>
+  getAll: (): Promise<Record<string, FeatureAccess>> =>
     ipcRenderer.invoke("feature-gate:get-all"),
 
   /**

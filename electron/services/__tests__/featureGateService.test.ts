@@ -75,6 +75,24 @@ jest.mock("../supabaseService", () => ({
 // Instead, we'll use the module and manage state via clearCache
 import featureGateService from "../featureGateService";
 
+/**
+ * Helper: Build a mock RPC response matching the JSONB shape
+ * returned by get_org_features.
+ */
+function mockOrgFeaturesResponse(
+  features: Record<string, { enabled: boolean; value: string; source: string }>
+) {
+  return {
+    data: {
+      org_id: "org-mock",
+      plan_name: "Trial",
+      plan_tier: "trial",
+      features,
+    },
+    error: null,
+  };
+}
+
 describe("FeatureGateService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -94,23 +112,12 @@ describe("FeatureGateService", () => {
 
   describe("checkFeature", () => {
     it("should fetch from Supabase on first call and cache the result", async () => {
-      mockRpc.mockResolvedValue({
-        data: [
-          {
-            feature_key: "text_export",
-            enabled: true,
-            value: "unlimited",
-            source: "plan",
-          },
-          {
-            feature_key: "email_export",
-            enabled: false,
-            value: "",
-            source: "plan",
-          },
-        ],
-        error: null,
-      });
+      mockRpc.mockResolvedValue(
+        mockOrgFeaturesResponse({
+          text_export: { enabled: true, value: "unlimited", source: "plan" },
+          email_export: { enabled: false, value: "", source: "plan" },
+        })
+      );
 
       const result = await featureGateService.checkFeature(
         "org-1",
@@ -128,17 +135,11 @@ describe("FeatureGateService", () => {
     });
 
     it("should return cached value on subsequent calls within TTL", async () => {
-      mockRpc.mockResolvedValue({
-        data: [
-          {
-            feature_key: "text_export",
-            enabled: true,
-            value: "",
-            source: "plan",
-          },
-        ],
-        error: null,
-      });
+      mockRpc.mockResolvedValue(
+        mockOrgFeaturesResponse({
+          text_export: { enabled: true, value: "", source: "plan" },
+        })
+      );
 
       // First call: fetches from Supabase
       await featureGateService.checkFeature("org-1", "text_export");
@@ -154,17 +155,11 @@ describe("FeatureGateService", () => {
     });
 
     it("should return default (allowed) for unknown features", async () => {
-      mockRpc.mockResolvedValue({
-        data: [
-          {
-            feature_key: "text_export",
-            enabled: true,
-            value: "",
-            source: "plan",
-          },
-        ],
-        error: null,
-      });
+      mockRpc.mockResolvedValue(
+        mockOrgFeaturesResponse({
+          text_export: { enabled: true, value: "", source: "plan" },
+        })
+      );
 
       const result = await featureGateService.checkFeature(
         "org-1",
@@ -179,17 +174,11 @@ describe("FeatureGateService", () => {
     });
 
     it("should return feature as blocked when RPC says disabled", async () => {
-      mockRpc.mockResolvedValue({
-        data: [
-          {
-            feature_key: "email_export",
-            enabled: false,
-            value: "",
-            source: "plan",
-          },
-        ],
-        error: null,
-      });
+      mockRpc.mockResolvedValue(
+        mockOrgFeaturesResponse({
+          email_export: { enabled: false, value: "", source: "plan" },
+        })
+      );
 
       const result = await featureGateService.checkFeature(
         "org-1",
@@ -252,32 +241,20 @@ describe("FeatureGateService", () => {
 
     it("should refetch when cache is for a different org", async () => {
       // First call: org-1
-      mockRpc.mockResolvedValue({
-        data: [
-          {
-            feature_key: "text_export",
-            enabled: true,
-            value: "",
-            source: "plan",
-          },
-        ],
-        error: null,
-      });
+      mockRpc.mockResolvedValue(
+        mockOrgFeaturesResponse({
+          text_export: { enabled: true, value: "", source: "plan" },
+        })
+      );
       await featureGateService.checkFeature("org-1", "text_export");
       expect(mockRpc).toHaveBeenCalledTimes(1);
 
       // Second call: different org
-      mockRpc.mockResolvedValue({
-        data: [
-          {
-            feature_key: "text_export",
-            enabled: false,
-            value: "",
-            source: "plan",
-          },
-        ],
-        error: null,
-      });
+      mockRpc.mockResolvedValue(
+        mockOrgFeaturesResponse({
+          text_export: { enabled: false, value: "", source: "plan" },
+        })
+      );
       const result = await featureGateService.checkFeature(
         "org-2",
         "text_export"
@@ -320,29 +297,13 @@ describe("FeatureGateService", () => {
 
   describe("getAllFeatures", () => {
     it("should return all features from Supabase", async () => {
-      mockRpc.mockResolvedValue({
-        data: [
-          {
-            feature_key: "text_export",
-            enabled: true,
-            value: "",
-            source: "plan",
-          },
-          {
-            feature_key: "email_export",
-            enabled: false,
-            value: "",
-            source: "plan",
-          },
-          {
-            feature_key: "call_log",
-            enabled: true,
-            value: "basic",
-            source: "override",
-          },
-        ],
-        error: null,
-      });
+      mockRpc.mockResolvedValue(
+        mockOrgFeaturesResponse({
+          text_export: { enabled: true, value: "", source: "plan" },
+          email_export: { enabled: false, value: "", source: "plan" },
+          call_log: { enabled: true, value: "basic", source: "override" },
+        })
+      );
 
       const result = await featureGateService.getAllFeatures("org-1");
 
@@ -364,17 +325,11 @@ describe("FeatureGateService", () => {
     });
 
     it("should use cached features on subsequent calls", async () => {
-      mockRpc.mockResolvedValue({
-        data: [
-          {
-            feature_key: "text_export",
-            enabled: true,
-            value: "",
-            source: "plan",
-          },
-        ],
-        error: null,
-      });
+      mockRpc.mockResolvedValue(
+        mockOrgFeaturesResponse({
+          text_export: { enabled: true, value: "", source: "plan" },
+        })
+      );
 
       await featureGateService.getAllFeatures("org-1");
       await featureGateService.getAllFeatures("org-1");
@@ -389,17 +344,11 @@ describe("FeatureGateService", () => {
 
   describe("cache behavior", () => {
     it("should persist cache to disk after fetch", async () => {
-      mockRpc.mockResolvedValue({
-        data: [
-          {
-            feature_key: "text_export",
-            enabled: true,
-            value: "",
-            source: "plan",
-          },
-        ],
-        error: null,
-      });
+      mockRpc.mockResolvedValue(
+        mockOrgFeaturesResponse({
+          text_export: { enabled: true, value: "", source: "plan" },
+        })
+      );
 
       await featureGateService.checkFeature("org-1", "text_export");
 
@@ -419,17 +368,11 @@ describe("FeatureGateService", () => {
     });
 
     it("should invalidate cache on invalidateCache()", async () => {
-      mockRpc.mockResolvedValue({
-        data: [
-          {
-            feature_key: "text_export",
-            enabled: true,
-            value: "",
-            source: "plan",
-          },
-        ],
-        error: null,
-      });
+      mockRpc.mockResolvedValue(
+        mockOrgFeaturesResponse({
+          text_export: { enabled: true, value: "", source: "plan" },
+        })
+      );
 
       await featureGateService.checkFeature("org-1", "text_export");
       expect(mockRpc).toHaveBeenCalledTimes(1);
@@ -441,10 +384,9 @@ describe("FeatureGateService", () => {
     });
 
     it("should clear both memory and disk cache on clearCache()", async () => {
-      mockRpc.mockResolvedValue({
-        data: [],
-        error: null,
-      });
+      mockRpc.mockResolvedValue(
+        mockOrgFeaturesResponse({})
+      );
 
       await featureGateService.checkFeature("org-1", "text_export");
 
@@ -470,6 +412,58 @@ describe("FeatureGateService", () => {
       ).resolves.toBeUndefined();
     });
 
+    it("should discard persisted cache older than 7 days", async () => {
+      // Supabase fails
+      mockRpc.mockRejectedValue(new Error("Network error"));
+
+      // Persisted cache is 8 days old
+      const eightDaysAgo = Date.now() - 8 * 24 * 60 * 60 * 1000;
+      const persistedCache = {
+        features: {
+          text_export: { allowed: false, value: "", source: "plan" as const },
+        },
+        fetchedAt: eightDaysAgo,
+        orgId: "org-1",
+      };
+      mockFs.readFile.mockResolvedValue(JSON.stringify(persistedCache));
+
+      const result = await featureGateService.checkFeature(
+        "org-1",
+        "text_export"
+      );
+
+      // Stale cache discarded => fail-open
+      expect(result.allowed).toBe(true);
+      expect(result.source).toBe("default");
+      // Should have tried to clean up the stale file
+      expect(mockFs.unlink).toHaveBeenCalled();
+    });
+
+    it("should use persisted cache within 7 days", async () => {
+      // Supabase fails
+      mockRpc.mockRejectedValue(new Error("Network error"));
+
+      // Persisted cache is 6 days old (within limit)
+      const sixDaysAgo = Date.now() - 6 * 24 * 60 * 60 * 1000;
+      const persistedCache = {
+        features: {
+          text_export: { allowed: false, value: "", source: "plan" as const },
+        },
+        fetchedAt: sixDaysAgo,
+        orgId: "org-1",
+      };
+      mockFs.readFile.mockResolvedValue(JSON.stringify(persistedCache));
+
+      const result = await featureGateService.checkFeature(
+        "org-1",
+        "text_export"
+      );
+
+      // Cache is valid, should use it (feature is blocked)
+      expect(result.allowed).toBe(false);
+      expect(result.source).toBe("plan");
+    });
+
     it("should handle concurrent fetches without duplicate requests", async () => {
       // Make the RPC slow
       mockRpc.mockImplementation(
@@ -477,17 +471,11 @@ describe("FeatureGateService", () => {
           new Promise((resolve) =>
             setTimeout(
               () =>
-                resolve({
-                  data: [
-                    {
-                      feature_key: "text_export",
-                      enabled: true,
-                      value: "",
-                      source: "plan",
-                    },
-                  ],
-                  error: null,
-                }),
+                resolve(
+                  mockOrgFeaturesResponse({
+                    text_export: { enabled: true, value: "", source: "plan" },
+                  })
+                ),
               50
             )
           )
@@ -551,17 +539,11 @@ describe("FeatureGateService", () => {
     });
 
     it("should handle features with null values gracefully", async () => {
-      mockRpc.mockResolvedValue({
-        data: [
-          {
-            feature_key: "text_export",
-            enabled: true,
-            value: null,
-            source: null,
-          },
-        ],
-        error: null,
-      });
+      mockRpc.mockResolvedValue(
+        mockOrgFeaturesResponse({
+          text_export: { enabled: true, value: null as unknown as string, source: null as unknown as string },
+        })
+      );
 
       const result = await featureGateService.checkFeature(
         "org-1",
@@ -580,17 +562,11 @@ describe("FeatureGateService", () => {
 
   describe("persistence error handling", () => {
     it("should not throw when cache write fails", async () => {
-      mockRpc.mockResolvedValue({
-        data: [
-          {
-            feature_key: "text_export",
-            enabled: true,
-            value: "",
-            source: "plan",
-          },
-        ],
-        error: null,
-      });
+      mockRpc.mockResolvedValue(
+        mockOrgFeaturesResponse({
+          text_export: { enabled: true, value: "", source: "plan" },
+        })
+      );
       mockFs.writeFile.mockRejectedValue(new Error("Disk full"));
 
       const result = await featureGateService.checkFeature(

@@ -18,16 +18,14 @@ import { app } from "electron";
 import * as Sentry from "@sentry/electron/main";
 import supabaseService from "./supabaseService";
 import logService from "./logService";
+import type { FeatureAccess } from "../types/featureGate";
+
+// Re-export so existing consumers can still import from here
+export type { FeatureAccess } from "../types/featureGate";
 
 // ============================================
 // Types
 // ============================================
-
-export interface FeatureAccess {
-  allowed: boolean;
-  value: string;
-  source: "plan" | "override" | "default";
-}
 
 interface FeatureCache {
   features: Record<string, FeatureAccess>;
@@ -41,6 +39,10 @@ interface FeatureCache {
 
 /** Cache time-to-live: 5 minutes */
 const CACHE_TTL_MS = 5 * 60 * 1000;
+
+/** Maximum age for persisted disk cache: 7 days.
+ *  If the app is offline longer than this, discard stale cache and fail-open. */
+const PERSISTED_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** Cache file name (stored in app userData directory) */
 const FEATURE_CACHE_FILENAME = "feature-cache.json";
@@ -238,14 +240,17 @@ class FeatureGateService {
     }
 
     // Transform RPC response into feature map
+    // get_org_features returns JSONB: { org_id, plan_name, plan_tier, features: { [key]: { enabled, value, source, ... } } }
     const features: Record<string, FeatureAccess> = {};
+    const featuresData = data?.features;
 
-    if (Array.isArray(data)) {
-      for (const row of data) {
-        features[row.feature_key] = {
-          allowed: row.enabled === true,
-          value: String(row.value ?? ""),
-          source: row.source ?? "plan",
+    if (featuresData && typeof featuresData === "object") {
+      for (const [key, feature] of Object.entries(featuresData)) {
+        const f = feature as { enabled: boolean; value: string; source: string };
+        features[key] = {
+          allowed: f.enabled === true,
+          value: String(f.value ?? ""),
+          source: (f.source as "plan" | "override" | "default") ?? "plan",
         };
       }
     }
@@ -315,6 +320,26 @@ class FeatureGateService {
           "[FeatureGate] Persisted cache is for different org, ignoring",
           "FeatureGateService"
         );
+        return null;
+      }
+
+      // Discard cache older than 7 days (fail-open safety net)
+      const cacheAge = Date.now() - cache.fetchedAt;
+      if (cacheAge > PERSISTED_CACHE_MAX_AGE_MS) {
+        logService.info(
+          "[FeatureGate] Persisted cache too old, discarding (fail-open)",
+          "FeatureGateService",
+          {
+            orgId,
+            ageDays: Math.round(cacheAge / (24 * 60 * 60 * 1000)),
+          }
+        );
+        // Clean up stale cache file
+        try {
+          await fs.unlink(this.getCacheFilePath());
+        } catch {
+          // Ignore cleanup errors
+        }
         return null;
       }
 
