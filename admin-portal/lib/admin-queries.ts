@@ -139,6 +139,245 @@ export async function updateLicense(
 }
 
 // ---------------------------------------------------------------------------
+// Plan Management
+// ---------------------------------------------------------------------------
+
+export interface Plan {
+  id: string;
+  name: string;
+  tier: string;
+  description: string | null;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FeatureDefinition {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  category: string;
+  value_type: string;
+  default_value: string | null;
+  created_at: string;
+}
+
+export interface PlanFeature {
+  id: string;
+  plan_id: string;
+  feature_id: string;
+  enabled: boolean;
+  value: string | null;
+  feature_definitions: FeatureDefinition;
+}
+
+export interface PlanWithFeatureCount extends Plan {
+  feature_count: number;
+}
+
+export interface OrganizationPlan {
+  id: string;
+  organization_id: string;
+  plan_id: string;
+  assigned_at: string;
+  assigned_by: string | null;
+  plans: Plan;
+}
+
+/**
+ * Fetch all plans with feature counts.
+ */
+export async function getPlans(): Promise<{ data: PlanWithFeatureCount[] | null; error: Error | null }> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from('plans')
+    .select('*, plan_features(count)')
+    .order('sort_order');
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  const plans: PlanWithFeatureCount[] = (data ?? []).map((plan) => {
+    const featureAgg = plan.plan_features as unknown as { count: number }[];
+    return {
+      id: plan.id,
+      name: plan.name,
+      tier: plan.tier,
+      description: plan.description,
+      is_active: plan.is_active,
+      sort_order: plan.sort_order,
+      created_at: plan.created_at,
+      updated_at: plan.updated_at,
+      feature_count: featureAgg?.[0]?.count ?? 0,
+    };
+  });
+
+  return { data: plans, error: null };
+}
+
+/**
+ * Fetch a single plan with all its feature assignments and definitions.
+ */
+export async function getPlanWithFeatures(
+  planId: string
+): Promise<{ data: { plan: Plan; features: PlanFeature[]; allFeatures: FeatureDefinition[] } | null; error: Error | null }> {
+  const supabase = createClient();
+
+  const [planResult, featuresResult, allFeaturesResult] = await Promise.all([
+    supabase.from('plans').select('*').eq('id', planId).single(),
+    supabase
+      .from('plan_features')
+      .select('*, feature_definitions(*)')
+      .eq('plan_id', planId),
+    supabase.from('feature_definitions').select('*').order('category').order('name'),
+  ]);
+
+  if (planResult.error) {
+    return { data: null, error: new Error(planResult.error.message) };
+  }
+
+  return {
+    data: {
+      plan: planResult.data as Plan,
+      features: (featuresResult.data ?? []) as unknown as PlanFeature[],
+      allFeatures: (allFeaturesResult.data ?? []) as FeatureDefinition[],
+    },
+    error: null,
+  };
+}
+
+/**
+ * Update a single plan feature (upsert enabled + value).
+ */
+export async function updatePlanFeature(
+  planId: string,
+  featureId: string,
+  enabled: boolean,
+  value?: string | null
+): Promise<RpcResult> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from('plan_features')
+    .upsert(
+      {
+        plan_id: planId,
+        feature_id: featureId,
+        enabled,
+        value: value ?? null,
+      },
+      { onConflict: 'plan_id,feature_id' }
+    )
+    .select()
+    .single();
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  return { data: data as Record<string, unknown>, error: null };
+}
+
+/**
+ * Create a new plan.
+ */
+export async function createPlan(
+  name: string,
+  tier: string,
+  description?: string
+): Promise<RpcResult<Plan>> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from('plans')
+    .insert({
+      name,
+      tier,
+      description: description || null,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  return { data: data as Plan, error: null };
+}
+
+/**
+ * Assign a plan to an organization (upsert so changing plan just updates).
+ */
+export async function assignOrgPlan(
+  orgId: string,
+  planId: string
+): Promise<RpcResult> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from('organization_plans')
+    .upsert(
+      {
+        organization_id: orgId,
+        plan_id: planId,
+      },
+      { onConflict: 'organization_id' }
+    )
+    .select()
+    .single();
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  return { data: data as Record<string, unknown>, error: null };
+}
+
+/**
+ * Get the current plan assignment for an organization.
+ */
+export async function getOrgPlan(
+  orgId: string
+): Promise<{ data: OrganizationPlan | null; error: Error | null }> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from('organization_plans')
+    .select('*, plans(*)')
+    .eq('organization_id', orgId)
+    .maybeSingle();
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  return { data: data as OrganizationPlan | null, error: null };
+}
+
+/**
+ * Fetch all active plans (for dropdown selectors).
+ */
+export async function getActivePlans(): Promise<{ data: Plan[] | null; error: Error | null }> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from('plans')
+    .select('*')
+    .eq('is_active', true)
+    .order('sort_order');
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  return { data: data as Plan[], error: null };
+}
+
+// ---------------------------------------------------------------------------
 // Impersonation
 // ---------------------------------------------------------------------------
 

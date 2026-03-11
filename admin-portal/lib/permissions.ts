@@ -23,6 +23,8 @@ export const PERMISSIONS = {
   ROLES_MANAGE: 'roles.manage',
   INTERNAL_USERS_VIEW: 'internal_users.view',
   INTERNAL_USERS_MANAGE: 'internal_users.manage',
+  PLANS_VIEW: 'plans.view',
+  PLANS_MANAGE: 'plans.manage',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
