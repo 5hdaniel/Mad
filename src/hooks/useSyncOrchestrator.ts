@@ -25,6 +25,7 @@ import {
   syncOrchestrator,
   SyncOrchestratorState,
   SyncType,
+  SyncRequest,
 } from '../services/SyncOrchestratorService';
 
 export interface UseSyncOrchestratorReturn {
@@ -37,8 +38,8 @@ export interface UseSyncOrchestratorReturn {
   pendingRequest: SyncOrchestratorState['pendingRequest'];
 
   // Actions
-  requestSync: (types: SyncType[], userId: string) => { started: boolean; needsConfirmation: boolean };
-  forceSync: (types: SyncType[], userId: string) => void;
+  requestSync: (types: SyncType[], userId: string, options?: SyncRequest['options']) => { started: boolean; needsConfirmation: boolean };
+  forceSync: (types: SyncType[], userId: string, options?: SyncRequest['options']) => void;
   acceptPending: () => void;
   rejectPending: () => void;
   cancel: () => void;
@@ -57,12 +58,12 @@ export function useSyncOrchestrator(): UseSyncOrchestratorReturn {
   }, []);
 
   // Convenience methods
-  const requestSync = useCallback((types: SyncType[], userId: string) => {
-    return syncOrchestrator.requestSync({ types, userId });
+  const requestSync = useCallback((types: SyncType[], userId: string, options?: SyncRequest['options']) => {
+    return syncOrchestrator.requestSync({ types, userId, options });
   }, []);
 
-  const forceSync = useCallback((types: SyncType[], userId: string) => {
-    syncOrchestrator.forceSync({ types, userId });
+  const forceSync = useCallback((types: SyncType[], userId: string, options?: SyncRequest['options']) => {
+    syncOrchestrator.forceSync({ types, userId, options });
   }, []);
 
   const acceptPending = useCallback(() => {

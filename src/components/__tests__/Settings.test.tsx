@@ -672,9 +672,11 @@ describe("Settings", () => {
         .closest("button");
       await userEvent.click(reindexButton!);
 
+      // TASK-2150: Reindex now goes through orchestrator, so the success message
+      // is simplified (detailed result data like indexesRebuilt is not surfaced)
       await waitFor(() => {
         expect(
-          screen.getByText(/database optimized.*14 indexes rebuilt/i),
+          screen.getByText(/database optimized successfully/i),
         ).toBeInTheDocument();
       });
 

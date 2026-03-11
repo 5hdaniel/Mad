@@ -55,6 +55,14 @@ const getLabelForType = (type: SyncType): string => {
       return 'Messages';
     case 'iphone':
       return 'iPhone';
+    case 'reindex':
+      return 'Reindex';
+    case 'backup':
+      return 'Backup';
+    case 'restore':
+      return 'Restore';
+    case 'ccpa-export':
+      return 'Data Export';
     default:
       return type;
   }
