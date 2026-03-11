@@ -635,6 +635,7 @@ describe('SyncOrchestratorService', () => {
         'test-user',
         expect.any(Function),
         { forceReimport: true },
+        expect.any(Object), // AbortSignal
       );
     });
 
@@ -653,7 +654,75 @@ describe('SyncOrchestratorService', () => {
         'test-user',
         expect.any(Function),
         undefined,
+        expect.any(Object), // AbortSignal
       );
+    });
+  });
+
+  // ===========================================================================
+  // TASK-2151: AbortSignal propagation tests
+  // ===========================================================================
+
+  describe('AbortSignal propagation (TASK-2151)', () => {
+    it('should pass AbortSignal to sync functions', async () => {
+      let receivedSignal: AbortSignal | undefined;
+      syncOrchestrator.registerSyncFunction('contacts', async (_userId: string, onProgress: (p: number) => void, _options?: unknown, signal?: AbortSignal) => {
+        receivedSignal = signal;
+        onProgress(100);
+      });
+
+      syncOrchestrator.requestSync({ types: ['contacts'], userId: 'test-user' });
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      expect(receivedSignal).toBeDefined();
+      expect(receivedSignal).toBeInstanceOf(AbortSignal);
+      expect(receivedSignal!.aborted).toBe(false);
+    });
+
+    it('should abort the signal when cancel() is called', async () => {
+      let receivedSignal: AbortSignal | undefined;
+      let resolveSync: (() => void) | null = null;
+
+      syncOrchestrator.registerSyncFunction('contacts', async (_userId: string, _onProgress: (p: number) => void, _options?: unknown, signal?: AbortSignal) => {
+        receivedSignal = signal;
+        await new Promise<void>(resolve => {
+          resolveSync = resolve;
+        });
+      });
+
+      syncOrchestrator.requestSync({ types: ['contacts'], userId: 'test-user' });
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      expect(receivedSignal).toBeDefined();
+      expect(receivedSignal!.aborted).toBe(false);
+
+      // Cancel the sync
+      syncOrchestrator.cancel();
+
+      // The signal should now be aborted
+      expect(receivedSignal!.aborted).toBe(true);
+
+      // Clean up
+      if (resolveSync) resolveSync();
+    });
+
+    it('should skip sync function when signal is already aborted before execution', async () => {
+      const syncFn1 = jest.fn().mockImplementation(async (_userId: string, _onProgress: (p: number) => void) => {
+        // First sync runs, then we cancel
+        syncOrchestrator.cancel();
+      });
+      const syncFn2 = jest.fn().mockResolvedValue(undefined);
+
+      syncOrchestrator.registerSyncFunction('contacts', syncFn1);
+      syncOrchestrator.registerSyncFunction('emails', syncFn2);
+
+      syncOrchestrator.requestSync({ types: ['contacts', 'emails'], userId: 'test-user' });
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      // contacts sync ran
+      expect(syncFn1).toHaveBeenCalled();
+      // emails sync should NOT have run because signal was aborted
+      expect(syncFn2).not.toHaveBeenCalled();
     });
   });
 
