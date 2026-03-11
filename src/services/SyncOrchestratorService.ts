@@ -282,7 +282,13 @@ class SyncOrchestratorServiceClass {
 
         try {
           // TASK-2150: Pass forceReimport option through to IPC call
-          const result = await window.api.messages.importMacOSMessages(userId, options?.forceReimport);
+          // Type assertion: window.d.ts has the correct 2-arg signature but electron/types/ipc.ts
+          // only declares 1 arg. The preload bridge accepts both. See BACKLOG-199.
+          const importFn = window.api.messages.importMacOSMessages as (
+            userId: string,
+            forceReimport?: boolean
+          ) => Promise<{ success: boolean; messagesImported: number; error?: string; wasCapped?: boolean; totalAvailable?: number }>;
+          const result = await importFn(userId, options?.forceReimport);
           if (!result.success) {
             throw new Error(result.error || 'Message import failed');
           }
