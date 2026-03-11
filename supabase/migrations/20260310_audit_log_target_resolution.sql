@@ -65,7 +65,7 @@ BEGIN
       tu.raw_user_meta_data->>'full_name' as target_name
     FROM public.admin_audit_logs a
     LEFT JOIN auth.users u ON u.id = a.actor_id
-    LEFT JOIN auth.users tu ON tu.id = a.target_id::uuid
+    LEFT JOIN auth.users tu ON a.target_type = 'user' AND tu.id = a.target_id::uuid
     WHERE (p_action IS NULL OR a.action = p_action)
       AND (p_target_id IS NULL OR a.target_id ILIKE '%' || p_target_id || '%')
       AND (p_date_from IS NULL OR a.created_at >= p_date_from)

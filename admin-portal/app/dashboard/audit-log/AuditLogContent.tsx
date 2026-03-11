@@ -97,6 +97,17 @@ export function AuditLogContent({ embedded = false }: { embedded?: boolean } = {
   const [selectedColumns, setSelectedColumns] = useState<ColumnKey[]>(PRESETS.default.columns);
   const [showColumnPicker, setShowColumnPicker] = useState(false);
 
+  // Close column picker on click outside
+  useEffect(() => {
+    if (!showColumnPicker) return;
+    function handleClick(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-column-picker]')) setShowColumnPicker(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showColumnPicker]);
+
   // Debounce searchTarget by 300ms before using it in fetchLogs
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -148,9 +159,14 @@ export function AuditLogContent({ embedded = false }: { embedded?: boolean } = {
   }, []);
 
   function toggleColumn(key: ColumnKey) {
-    setSelectedColumns((prev) =>
-      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
-    );
+    setSelectedColumns((prev) => {
+      if (prev.includes(key)) {
+        // Prevent deselecting all columns — keep at least 2
+        if (prev.length <= 2) return prev;
+        return prev.filter((k) => k !== key);
+      }
+      return [...prev, key];
+    });
   }
 
   function applyPreset(presetKey: string) {
@@ -162,6 +178,7 @@ export function AuditLogContent({ embedded = false }: { embedded?: boolean } = {
     const params = new URLSearchParams();
     params.set('format', format);
     params.set('columns', selectedColumns.join(','));
+    if (actionFilter) params.set('action', actionFilter);
     if (dateFrom) params.set('from', dateFrom);
     if (dateTo) params.set('to', dateTo);
     window.open(`/api/audit-log/export?${params.toString()}`, '_blank');
@@ -310,7 +327,7 @@ export function AuditLogContent({ embedded = false }: { embedded?: boolean } = {
           </div>
           <div className="flex items-center gap-4">
             {/* Column picker */}
-            <div className="relative">
+            <div className="relative" data-column-picker>
               <button
                 onClick={() => setShowColumnPicker(!showColumnPicker)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"

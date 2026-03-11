@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
   const format = searchParams.get('format') || 'csv';
   const dateFrom = searchParams.get('from');
   const dateTo = searchParams.get('to');
+  const actionFilter = searchParams.get('action');
   const columnsParam = searchParams.get('columns');
 
   if (format !== 'csv' && format !== 'json') {
@@ -81,6 +82,7 @@ export async function GET(request: NextRequest) {
     p_offset: 0,
   };
 
+  if (actionFilter) params.p_action = actionFilter;
   if (dateFrom) params.p_date_from = new Date(dateFrom).toISOString();
   if (dateTo) params.p_date_to = new Date(dateTo + 'T23:59:59').toISOString();
 
