@@ -2282,6 +2282,24 @@ export interface WindowApi {
       error?: string;
     }>;
   };
+
+  // Feature Gate API (SPRINT-122)
+  featureGate: {
+    /** Check access to a specific feature */
+    check: (featureKey: string) => Promise<{
+      allowed: boolean;
+      value: string;
+      source: "plan" | "override" | "default";
+    }>;
+    /** Get all features for the current organization */
+    getAll: () => Promise<Record<string, {
+      allowed: boolean;
+      value: string;
+      source: "plan" | "override" | "default";
+    }>>;
+    /** Invalidate the feature gate cache */
+    invalidateCache: () => Promise<void>;
+  };
 }
 
 // Augment Window interface

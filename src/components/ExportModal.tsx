@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import type { Transaction } from "../../electron/types/models";
 import logger from '../utils/logger';
+import { useFeatureGate } from "../hooks/useFeatureGate";
+import { UpgradePrompt } from "./common/UpgradePrompt";
 
 interface ExportModalProps {
   transaction: Transaction;
@@ -60,6 +62,12 @@ function ExportModal({
     message: string;
   } | null>(null);
   const [exportedPath, setExportedPath] = useState<string | null>(null);
+
+  // Feature gate check
+  const { isAllowed, loading: featureGateLoading } = useFeatureGate();
+  const canExportText = isAllowed("text_export");
+  const canExportEmail = isAllowed("email_export");
+  const canExport = canExportText || canExportEmail;
 
   // Formats that are currently implemented
   const implementedFormats = ["pdf", "folder"];
@@ -231,6 +239,54 @@ function ExportModal({
       return { text: "Medium", color: "text-yellow-600 bg-yellow-50" };
     return { text: "Low", color: "text-red-600 bg-red-50" };
   };
+
+  // C6: When feature is gated, render ONLY UpgradePrompt with title and close button
+  if (!featureGateLoading && !canExport) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-purple-500 to-indigo-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
+            <div>
+              <h3 className="text-xl font-bold text-white">
+                Export Transaction Audit
+              </h3>
+              <p className="text-purple-100 text-sm">
+                {transaction.property_address}
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
+            >
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
+
+          {/* Gated content: only UpgradePrompt */}
+          <div className="p-6">
+            <UpgradePrompt
+              featureName="Export"
+              description="Exporting transaction audits is not available on your current plan."
+              onDismiss={onClose}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
@@ -595,7 +651,7 @@ function ExportModal({
             <button
               onClick={step === 1 ? handleDateVerification : handleExport}
               disabled={
-                step === 1 && (!startDate || !endDate)
+                (step === 1 && (!startDate || !endDate))
               }
               className={`px-6 py-2 rounded-lg font-semibold transition-all ${
                 step === 1 && (!startDate || !endDate)

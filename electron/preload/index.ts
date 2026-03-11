@@ -21,3 +21,4 @@ export { resetBridge } from "./resetBridge";
 export { databaseBackupBridge } from "./databaseBackupBridge";
 export { privacyBridge } from "./privacyBridge";
 export { failureLogBridge } from "./failureLogBridge";
+export { featureGateBridge } from "./featureGateBridge";

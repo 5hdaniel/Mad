@@ -56,6 +56,7 @@ import {
   databaseBackupBridge,
   privacyBridge,
   failureLogBridge,
+  featureGateBridge,
   logBridge,
 } from "./preload/index";
 
@@ -136,6 +137,9 @@ contextBridge.exposeInMainWorld("api", {
 
   // Failure log for offline diagnostics (TASK-2058)
   failureLog: failureLogBridge,
+
+  // Feature gate enforcement (SPRINT-122)
+  featureGate: featureGateBridge,
 
   // Renderer log relay — pipes to main process log file
   log: logBridge,
