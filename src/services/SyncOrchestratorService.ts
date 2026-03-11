@@ -19,7 +19,8 @@ import { isMacOS } from '../utils/platform';
 import type { ImportSource, UserPreferences } from './settingsService';
 import logger from '../utils/logger';
 
-export type SyncType = 'contacts' | 'emails' | 'messages' | 'iphone';
+export type SyncType = 'contacts' | 'emails' | 'messages' | 'iphone'
+  | 'reindex' | 'backup' | 'restore' | 'ccpa-export';
 
 export type SyncItemStatus = 'pending' | 'running' | 'complete' | 'error';
 
@@ -47,10 +48,18 @@ export interface SyncOrchestratorState {
 export interface SyncRequest {
   types: SyncType[];
   userId: string;
+  options?: {
+    forceReimport?: boolean;
+    overrideCap?: boolean;
+  };
 }
 
 /** Sync functions can optionally return a warning string (e.g., "cap exceeded") */
-type SyncFunction = (userId: string, onProgress: (percent: number, phase?: string) => void) => Promise<string | void>;
+type SyncFunction = (
+  userId: string,
+  onProgress: (percent: number, phase?: string) => void,
+  options?: SyncRequest['options']
+) => Promise<string | void>;
 
 type StateListener = (state: SyncOrchestratorState) => void;
 
@@ -151,9 +160,18 @@ class SyncOrchestratorServiceClass {
     // Register contacts sync (macOS Contacts + Outlook contacts on all platforms)
     // TASK-1953: Always register contacts sync so Outlook contacts work on all platforms
     // TASK-2098: Read contact source preferences to conditionally skip phases
-    this.registerSyncFunction('contacts', async (userId, onProgress) => {
-      logger.info('[SyncOrchestrator] Starting contacts sync');
+    this.registerSyncFunction('contacts', async (userId, onProgress, options) => {
+      logger.info('[SyncOrchestrator] Starting contacts sync, forceReimport:', !!options?.forceReimport);
       onProgress(0);
+
+      // TASK-2150: Handle force re-import by wiping contacts first
+      if (options?.forceReimport) {
+        const wipeResult = await window.api.contacts.forceReimport(userId);
+        if (!wipeResult.success) {
+          throw new Error(wipeResult.error || 'Failed to clear contacts for re-import');
+        }
+        logger.info('[SyncOrchestrator] Contacts wiped for force re-import');
+      }
 
       // TASK-2098: Read both import source and contact source preferences in one IPC call
       const { importSource, contactSources: sourcePrefs } = await this.getContactsSyncPreferences(userId);
@@ -226,8 +244,8 @@ class SyncOrchestratorServiceClass {
 
     // Register messages sync (macOS only - local iMessage database)
     if (macOS) {
-      this.registerSyncFunction('messages', async (userId, onProgress) => {
-        logger.info('[SyncOrchestrator] Starting messages sync');
+      this.registerSyncFunction('messages', async (userId, onProgress, options) => {
+        logger.info('[SyncOrchestrator] Starting messages sync, forceReimport:', !!options?.forceReimport);
 
         // TASK-1979: Skip macOS Messages import when iphone-sync is selected
         const importSource = await this.getImportSource(userId);
@@ -263,7 +281,14 @@ class SyncOrchestratorServiceClass {
         });
 
         try {
-          const result = await window.api.messages.importMacOSMessages(userId);
+          // TASK-2150: Pass forceReimport option through to IPC call
+          // Type assertion: window.d.ts has the correct 2-arg signature but electron/types/ipc.ts
+          // only declares 1 arg. The preload bridge accepts both. See BACKLOG-199.
+          const importFn = window.api.messages.importMacOSMessages as (
+            userId: string,
+            forceReimport?: boolean
+          ) => Promise<{ success: boolean; messagesImported: number; error?: string; wasCapped?: boolean; totalAvailable?: number }>;
+          const result = await importFn(userId, options?.forceReimport);
           if (!result.success) {
             throw new Error(result.error || 'Message import failed');
           }
@@ -280,6 +305,67 @@ class SyncOrchestratorServiceClass {
         }
       });
     }
+
+    // =========================================================================
+    // TASK-2150: Maintenance / utility operations
+    // These operations bypass the orchestrator today. Registering them here
+    // makes them visible in the dashboard sync indicator.
+    // =========================================================================
+
+    // Register reindex (all platforms)
+    this.registerSyncFunction('reindex', async (_userId, onProgress) => {
+      onProgress(0, 'optimizing');
+      const result = await window.api.system.reindexDatabase();
+      if (!result.success) {
+        throw new Error(result.error || 'Database reindex failed');
+      }
+      onProgress(100);
+    });
+
+    // Register backup (all platforms)
+    // Note: The IPC call opens an OS save dialog. While the dialog is open,
+    // the sync indicator shows "Backup - backing up". Acceptable for v1.
+    this.registerSyncFunction('backup', async (_userId, onProgress) => {
+      onProgress(0, 'backing up');
+      const result = await window.api.databaseBackup.backup();
+      if (result.cancelled) return 'cancelled'; // User cancelled dialog -- not an error
+      if (!result.success) {
+        throw new Error(result.error || 'Backup failed');
+      }
+      onProgress(100);
+    });
+
+    // Register restore (all platforms)
+    // Note: Same dialog pattern as backup.
+    this.registerSyncFunction('restore', async (_userId, onProgress) => {
+      onProgress(0, 'restoring');
+      const result = await window.api.databaseBackup.restore();
+      if (result.cancelled) return 'cancelled'; // User cancelled dialog -- not an error
+      if (!result.success) {
+        throw new Error(result.error || 'Restore failed');
+      }
+      onProgress(100);
+    });
+
+    // Register CCPA data export (all platforms)
+    this.registerSyncFunction('ccpa-export', async (userId, onProgress) => {
+      onProgress(0, 'exporting');
+      const cleanup = window.api.privacy?.onExportProgress?.(
+        (progress: { category: string; progress: number }) => {
+          onProgress(progress.progress, progress.category);
+        }
+      );
+      try {
+        const result = await window.api.privacy.exportData(userId);
+        if (result.error === 'Export cancelled by user') return 'cancelled';
+        if (!result.success) {
+          throw new Error(result.error || 'CCPA export failed');
+        }
+        onProgress(100);
+      } finally {
+        if (cleanup) cleanup();
+      }
+    });
 
     this.initialized = true;
     logger.info('[SyncOrchestrator] Sync functions initialized');
@@ -587,7 +673,7 @@ class SyncOrchestratorServiceClass {
           const warning = await syncFn(userId, (percent, phase) => {
             this.updateQueueItem(type, { progress: percent, phase });
             this.updateOverallProgress();
-          });
+          }, request.options);
 
           Sentry.addBreadcrumb({
             category: 'sync',

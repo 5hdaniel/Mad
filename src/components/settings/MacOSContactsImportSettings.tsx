@@ -239,28 +239,22 @@ export function ContactsImportSettings({
     if (hasOutlook && outlookContactsEnabled) handleOutlookSync();
   }, [anySyncing, isOtherSyncRunning, hasMacOS, hasOutlook, macosContactsEnabled, outlookContactsEnabled, handleSync, handleOutlookSync, userId]);
 
-  // Force re-import: wipe ALL sources, then import from enabled sources
+  // Force re-import: TASK-2150 -- route through orchestrator with forceReimport option.
+  // The contacts sync function handles the wipe + re-sync flow internally.
   const [forceReimporting, setForceReimporting] = useState(false);
   const handleForceReimport = useCallback(async () => {
     if (anySyncing || isOtherSyncRunning || forceReimporting) return;
     setForceReimporting(true);
-    try {
-      const wipeResult = await window.api.contacts.forceReimport(userId);
-      if (!wipeResult.success) {
-        setLastResult({ success: false, error: wipeResult.error || "Failed to clear contacts" });
-        return;
-      }
-      // Now trigger normal import to re-fetch fresh data
-      await handleImportAll();
-    } catch (error) {
-      setLastResult({
-        success: false,
-        error: error instanceof Error ? error.message : "Force re-import failed",
-      });
-    } finally {
-      setForceReimporting(false);
-    }
-  }, [anySyncing, isOtherSyncRunning, forceReimporting, userId, handleImportAll]);
+    setLastResult(null);
+
+    // Route through orchestrator -- the contacts sync function handles
+    // forceReimport (wipe + re-import) when the option is set.
+    requestSync(['contacts'], userId, { forceReimport: true });
+
+    // forceReimporting is for immediate UI feedback. The orchestrator
+    // manages the actual running state. Clear after kick-off.
+    setForceReimporting(false);
+  }, [anySyncing, isOtherSyncRunning, forceReimporting, userId, requestSync]);
 
   const [showInfoTooltip, setShowInfoTooltip] = useState(false);
 

@@ -43,10 +43,13 @@ Object.defineProperty(global, 'window', {
   value: {
     api: {
       preferences: { get: jest.fn() },
-      contacts: { syncExternal: jest.fn(), syncOutlookContacts: jest.fn() },
+      contacts: { syncExternal: jest.fn(), syncOutlookContacts: jest.fn(), forceReimport: jest.fn() },
       transactions: { scan: jest.fn() },
       messages: { importMacOSMessages: jest.fn(), onImportProgress: jest.fn() },
       notification: { send: jest.fn() },
+      system: { reindexDatabase: jest.fn() },
+      databaseBackup: { backup: jest.fn(), restore: jest.fn() },
+      privacy: { exportData: jest.fn(), onExportProgress: jest.fn() },
     },
   },
   writable: true,
@@ -608,6 +611,283 @@ describe('SyncOrchestratorService', () => {
       // Clean up
       syncOrchestrator.cancel();
       if (resolveSync) resolveSync();
+    });
+  });
+
+  // ===========================================================================
+  // TASK-2150: New sync types and options tests
+  // ===========================================================================
+
+  describe('SyncRequest options (TASK-2150)', () => {
+    it('should pass options through to sync function', async () => {
+      const syncFn = jest.fn().mockResolvedValue(undefined);
+      syncOrchestrator.registerSyncFunction('contacts', syncFn);
+
+      syncOrchestrator.requestSync({
+        types: ['contacts'],
+        userId: 'test-user',
+        options: { forceReimport: true },
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      expect(syncFn).toHaveBeenCalledWith(
+        'test-user',
+        expect.any(Function),
+        { forceReimport: true },
+      );
+    });
+
+    it('should pass undefined options when not provided', async () => {
+      const syncFn = jest.fn().mockResolvedValue(undefined);
+      syncOrchestrator.registerSyncFunction('emails', syncFn);
+
+      syncOrchestrator.requestSync({
+        types: ['emails'],
+        userId: 'test-user',
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      expect(syncFn).toHaveBeenCalledWith(
+        'test-user',
+        expect.any(Function),
+        undefined,
+      );
+    });
+  });
+
+  describe('new sync types (TASK-2150)', () => {
+    it('should register and execute reindex sync function', async () => {
+      (window as any).api.system.reindexDatabase.mockResolvedValue({ success: true });
+
+      syncOrchestrator.initializeSyncFunctions();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const syncFn = (syncOrchestrator as any).syncFunctions.get('reindex');
+      expect(syncFn).toBeDefined();
+
+      const onProgress = jest.fn();
+      await syncFn('test-user', onProgress);
+
+      expect((window as any).api.system.reindexDatabase).toHaveBeenCalled();
+      expect(onProgress).toHaveBeenCalledWith(0, 'optimizing');
+      expect(onProgress).toHaveBeenCalledWith(100);
+    });
+
+    it('should throw on reindex failure', async () => {
+      (window as any).api.system.reindexDatabase.mockResolvedValue({
+        success: false,
+        error: 'DB locked',
+      });
+
+      syncOrchestrator.initializeSyncFunctions();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const syncFn = (syncOrchestrator as any).syncFunctions.get('reindex');
+      await expect(syncFn('test-user', jest.fn())).rejects.toThrow('DB locked');
+    });
+
+    it('should register and execute backup sync function', async () => {
+      (window as any).api.databaseBackup.backup.mockResolvedValue({ success: true });
+
+      syncOrchestrator.initializeSyncFunctions();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const syncFn = (syncOrchestrator as any).syncFunctions.get('backup');
+      expect(syncFn).toBeDefined();
+
+      const onProgress = jest.fn();
+      await syncFn('test-user', onProgress);
+
+      expect((window as any).api.databaseBackup.backup).toHaveBeenCalled();
+      expect(onProgress).toHaveBeenCalledWith(0, 'backing up');
+      expect(onProgress).toHaveBeenCalledWith(100);
+    });
+
+    it('should handle cancelled backup dialog gracefully (no error)', async () => {
+      (window as any).api.databaseBackup.backup.mockResolvedValue({ cancelled: true });
+
+      syncOrchestrator.initializeSyncFunctions();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const syncFn = (syncOrchestrator as any).syncFunctions.get('backup');
+      const onProgress = jest.fn();
+
+      // Should not throw
+      await expect(syncFn('test-user', onProgress)).resolves.toBeUndefined();
+
+      // Should NOT call onProgress(100) since it was cancelled
+      expect(onProgress).toHaveBeenCalledWith(0, 'backing up');
+      expect(onProgress).not.toHaveBeenCalledWith(100);
+    });
+
+    it('should register and execute restore sync function', async () => {
+      (window as any).api.databaseBackup.restore.mockResolvedValue({ success: true });
+
+      syncOrchestrator.initializeSyncFunctions();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const syncFn = (syncOrchestrator as any).syncFunctions.get('restore');
+      expect(syncFn).toBeDefined();
+
+      const onProgress = jest.fn();
+      await syncFn('test-user', onProgress);
+
+      expect((window as any).api.databaseBackup.restore).toHaveBeenCalled();
+      expect(onProgress).toHaveBeenCalledWith(0, 'restoring');
+      expect(onProgress).toHaveBeenCalledWith(100);
+    });
+
+    it('should handle cancelled restore dialog gracefully (no error)', async () => {
+      (window as any).api.databaseBackup.restore.mockResolvedValue({ cancelled: true });
+
+      syncOrchestrator.initializeSyncFunctions();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const syncFn = (syncOrchestrator as any).syncFunctions.get('restore');
+      const onProgress = jest.fn();
+
+      await expect(syncFn('test-user', onProgress)).resolves.toBeUndefined();
+      expect(onProgress).not.toHaveBeenCalledWith(100);
+    });
+
+    it('should register and execute ccpa-export sync function', async () => {
+      (window as any).api.privacy.exportData.mockResolvedValue({ success: true });
+      (window as any).api.privacy.onExportProgress.mockReturnValue(jest.fn()); // cleanup fn
+
+      syncOrchestrator.initializeSyncFunctions();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const syncFn = (syncOrchestrator as any).syncFunctions.get('ccpa-export');
+      expect(syncFn).toBeDefined();
+
+      const onProgress = jest.fn();
+      await syncFn('test-user', onProgress);
+
+      expect((window as any).api.privacy.exportData).toHaveBeenCalledWith('test-user');
+      expect(onProgress).toHaveBeenCalledWith(0, 'exporting');
+      expect(onProgress).toHaveBeenCalledWith(100);
+    });
+
+    it('should handle cancelled CCPA export gracefully', async () => {
+      (window as any).api.privacy.exportData.mockResolvedValue({
+        success: false,
+        error: 'Export cancelled by user',
+      });
+      (window as any).api.privacy.onExportProgress.mockReturnValue(jest.fn());
+
+      syncOrchestrator.initializeSyncFunctions();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const syncFn = (syncOrchestrator as any).syncFunctions.get('ccpa-export');
+      const onProgress = jest.fn();
+
+      // Should not throw for user cancellation
+      await expect(syncFn('test-user', onProgress)).resolves.toBeUndefined();
+    });
+
+    it('should throw on CCPA export failure', async () => {
+      (window as any).api.privacy.exportData.mockResolvedValue({
+        success: false,
+        error: 'Disk full',
+      });
+      (window as any).api.privacy.onExportProgress.mockReturnValue(jest.fn());
+
+      syncOrchestrator.initializeSyncFunctions();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const syncFn = (syncOrchestrator as any).syncFunctions.get('ccpa-export');
+      await expect(syncFn('test-user', jest.fn())).rejects.toThrow('Disk full');
+    });
+  });
+
+  describe('contacts forceReimport option (TASK-2150)', () => {
+    beforeEach(() => {
+      (window as any).api.contacts.syncExternal = jest.fn().mockResolvedValue({ success: true });
+      (window as any).api.contacts.syncOutlookContacts = jest.fn().mockResolvedValue({ success: true, count: 5 });
+      (window as any).api.contacts.forceReimport = jest.fn().mockResolvedValue({ success: true });
+      (window as any).api.preferences.get = jest.fn().mockResolvedValue({ success: true, preferences: {} });
+
+      const platformMock = require('../../utils/platform');
+      platformMock.isMacOS.mockReturnValue(true);
+    });
+
+    it('should call forceReimport before normal sync when option is set', async () => {
+      syncOrchestrator.initializeSyncFunctions();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const syncFn = (syncOrchestrator as any).syncFunctions.get('contacts');
+      await syncFn('test-user', jest.fn(), { forceReimport: true });
+
+      // forceReimport should be called first
+      expect((window as any).api.contacts.forceReimport).toHaveBeenCalledWith('test-user');
+      // Then normal sync should proceed
+      expect((window as any).api.contacts.syncExternal).toHaveBeenCalledWith('test-user');
+    });
+
+    it('should NOT call forceReimport when option is not set', async () => {
+      syncOrchestrator.initializeSyncFunctions();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const syncFn = (syncOrchestrator as any).syncFunctions.get('contacts');
+      await syncFn('test-user', jest.fn());
+
+      expect((window as any).api.contacts.forceReimport).not.toHaveBeenCalled();
+      expect((window as any).api.contacts.syncExternal).toHaveBeenCalled();
+    });
+
+    it('should throw when forceReimport fails', async () => {
+      (window as any).api.contacts.forceReimport.mockResolvedValue({
+        success: false,
+        error: 'Wipe failed',
+      });
+
+      syncOrchestrator.initializeSyncFunctions();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const syncFn = (syncOrchestrator as any).syncFunctions.get('contacts');
+      await expect(syncFn('test-user', jest.fn(), { forceReimport: true }))
+        .rejects.toThrow('Wipe failed');
+    });
+  });
+
+  describe('messages forceReimport option (TASK-2150)', () => {
+    beforeEach(() => {
+      (window as any).api.messages.importMacOSMessages = jest.fn().mockResolvedValue({
+        success: true,
+        messagesImported: 100,
+      });
+      (window as any).api.messages.onImportProgress = jest.fn().mockReturnValue(jest.fn());
+      (window as any).api.preferences.get = jest.fn().mockResolvedValue({
+        success: true,
+        preferences: { messages: { source: 'macos-native' } },
+      });
+
+      const platformMock = require('../../utils/platform');
+      platformMock.isMacOS.mockReturnValue(true);
+    });
+
+    it('should pass forceReimport to importMacOSMessages when option is set', async () => {
+      syncOrchestrator.initializeSyncFunctions();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const syncFn = (syncOrchestrator as any).syncFunctions.get('messages');
+      await syncFn('test-user', jest.fn(), { forceReimport: true });
+
+      expect((window as any).api.messages.importMacOSMessages)
+        .toHaveBeenCalledWith('test-user', true);
+    });
+
+    it('should pass undefined forceReimport when option is not set', async () => {
+      syncOrchestrator.initializeSyncFunctions();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const syncFn = (syncOrchestrator as any).syncFunctions.get('messages');
+      await syncFn('test-user', jest.fn());
+
+      expect((window as any).api.messages.importMacOSMessages)
+        .toHaveBeenCalledWith('test-user', undefined);
     });
   });
 });
