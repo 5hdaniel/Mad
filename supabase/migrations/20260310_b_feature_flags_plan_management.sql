@@ -85,17 +85,16 @@ CREATE TABLE public.organization_plans (
 -- INDEXES
 -- ============================================
 
--- Fast feature lookups by key
-CREATE INDEX idx_feature_definitions_key ON public.feature_definitions(key);
-
--- Fast plan lookups by slug
-CREATE INDEX idx_plans_slug ON public.plans(slug);
-
--- Fast org plan lookups
-CREATE INDEX idx_organization_plans_org ON public.organization_plans(organization_id);
-
--- Fast plan-feature lookups
+-- Fast plan-feature lookups (not covered by UNIQUE constraint which is on (plan_id, feature_id))
 CREATE INDEX idx_plan_features_plan ON public.plan_features(plan_id);
+
+-- Ensure only one plan can be the default at any time
+CREATE UNIQUE INDEX idx_plans_single_default ON public.plans (is_default) WHERE is_default = true;
+
+-- NOTE: Redundant indexes removed per SR review:
+-- idx_feature_definitions_key: covered by UNIQUE constraint on feature_definitions(key)
+-- idx_plans_slug: covered by UNIQUE constraint on plans(slug)
+-- idx_organization_plans_org: covered by UNIQUE constraint on organization_plans(organization_id)
 
 -- ============================================
 -- ROW LEVEL SECURITY
@@ -156,6 +155,14 @@ DECLARE
   v_result_enabled BOOLEAN;
   v_result_value TEXT;
 BEGIN
+  -- 0. Verify caller is a member of the organization
+  IF NOT EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE user_id = auth.uid() AND organization_id = p_org_id
+  ) THEN
+    RETURN jsonb_build_object('allowed', false, 'error', 'not_authorized');
+  END IF;
+
   -- 1. Get the feature definition
   SELECT * INTO v_feature
   FROM public.feature_definitions
@@ -238,6 +245,14 @@ DECLARE
   v_value TEXT;
   v_source TEXT;
 BEGIN
+  -- Verify caller is a member of the organization
+  IF NOT EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE user_id = auth.uid() AND organization_id = p_org_id
+  ) THEN
+    RETURN jsonb_build_object('error', 'not_authorized', 'features', '[]'::jsonb);
+  END IF;
+
   -- Get org's plan
   SELECT op.*, p.name as plan_name, p.tier as plan_tier INTO v_org_plan
   FROM public.organization_plans op
