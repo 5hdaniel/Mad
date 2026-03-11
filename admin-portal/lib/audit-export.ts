@@ -11,6 +11,8 @@ const CSV_HEADERS = [
   'action',
   'target_type',
   'target_id',
+  'target_email',
+  'target_name',
   'actor_id',
   'actor_email',
   'actor_name',
@@ -44,18 +46,21 @@ function escapeCSVField(value: unknown): string {
 /**
  * Convert an array of audit log entries to CSV format.
  *
- * Headers: id, created_at, action, target_type, target_id, actor_id, actor_email, actor_name, ip_address, metadata
+ * When `columns` is provided, only those fields are included in the CSV.
+ * Otherwise all CSV_HEADERS are used.
  * Metadata (JSONB) is serialized as a JSON string in CSV.
  */
-export function convertToCSV(logs: Array<Record<string, unknown>>): string {
+export function convertToCSV(logs: Array<Record<string, unknown>>, columns?: string[]): string {
+  const headers = columns ?? [...CSV_HEADERS];
+
   if (logs.length === 0) {
-    return CSV_HEADERS.join(',');
+    return headers.join(',');
   }
 
-  const headerRow = CSV_HEADERS.join(',');
+  const headerRow = headers.join(',');
 
   const dataRows = logs.map((log) =>
-    CSV_HEADERS.map((header) => escapeCSVField(log[header])).join(',')
+    headers.map((header) => escapeCSVField(log[header])).join(',')
   );
 
   return [headerRow, ...dataRows].join('\n');

@@ -1,16 +1,30 @@
 /**
  * API Route: Audit Log Export
  *
- * GET /api/audit-log/export?format=csv|json&from=YYYY-MM-DD&to=YYYY-MM-DD
+ * GET /api/audit-log/export?format=csv|json&from=YYYY-MM-DD&to=YYYY-MM-DD&columns=action,target,...
  *
  * Server-side download route for SOC 2 auditors to extract audit logs.
  * Enforces authentication and audit.view permission.
  * Returns a downloadable CSV or JSON file for the specified date range.
+ *
+ * BACKLOG-921: Respects column selection from the UI.
+ * BACKLOG-922: Filename includes export datetime.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { convertToCSV } from '@/lib/audit-export';
+
+// Map UI column keys to data field names for filtering
+const COLUMN_TO_FIELDS: Record<string, string[]> = {
+  action: ['action'],
+  target: ['target_type', 'target_id', 'target_email', 'target_name'],
+  metadata: ['metadata'],
+  ip_address: ['ip_address'],
+  user_agent: ['user_agent'],
+  actor: ['actor_id', 'actor_email', 'actor_name'],
+  timestamp: ['created_at'],
+};
 
 export async function GET(request: NextRequest) {
   // ── 1. Auth check ──────────────────────────────────────────────────
@@ -38,6 +52,7 @@ export async function GET(request: NextRequest) {
   const format = searchParams.get('format') || 'csv';
   const dateFrom = searchParams.get('from');
   const dateTo = searchParams.get('to');
+  const columnsParam = searchParams.get('columns');
 
   if (format !== 'csv' && format !== 'json') {
     return NextResponse.json(
@@ -46,7 +61,21 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // ── 4. Fetch audit logs for the date range ─────────────────────────
+  // ── 4. Resolve selected columns to data fields ────────────────────
+  let selectedFields: string[] | null = null;
+  if (columnsParam) {
+    const columnKeys = columnsParam.split(',').filter(Boolean);
+    const fields = new Set<string>();
+    // Always include id for uniqueness
+    fields.add('id');
+    for (const key of columnKeys) {
+      const mapped = COLUMN_TO_FIELDS[key];
+      if (mapped) mapped.forEach((f) => fields.add(f));
+    }
+    selectedFields = Array.from(fields);
+  }
+
+  // ── 5. Fetch audit logs for the date range ─────────────────────────
   const params: Record<string, unknown> = {
     p_limit: 100000,
     p_offset: 0,
@@ -62,14 +91,26 @@ export async function GET(request: NextRequest) {
   }
 
   const result = data as { logs: Array<Record<string, unknown>>; total: number };
-  const logs = result.logs || [];
+  let logs = result.logs || [];
 
-  // ── 5. Build filename with date range ──────────────────────────────
+  // Filter to selected columns if specified
+  if (selectedFields) {
+    logs = logs.map((log) => {
+      const filtered: Record<string, unknown> = {};
+      for (const field of selectedFields!) {
+        if (field in log) filtered[field] = log[field];
+      }
+      return filtered;
+    });
+  }
+
+  // ── 6. Build filename with date range and export timestamp ─────────
   const fromStr = dateFrom || 'all';
   const toStr = dateTo || 'now';
-  const filename = `audit-log-${fromStr}-to-${toStr}`;
+  const exportTime = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const filename = `audit-log-${fromStr}-to-${toStr}_exported-${exportTime}`;
 
-  // ── 6. Return formatted response ───────────────────────────────────
+  // ── 7. Return formatted response ───────────────────────────────────
   if (format === 'json') {
     return new NextResponse(JSON.stringify(logs, null, 2), {
       headers: {
@@ -79,7 +120,7 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  const csv = convertToCSV(logs);
+  const csv = convertToCSV(logs, selectedFields ?? undefined);
   return new NextResponse(csv, {
     headers: {
       'Content-Type': 'text/csv',
