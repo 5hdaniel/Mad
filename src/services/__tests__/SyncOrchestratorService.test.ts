@@ -784,7 +784,7 @@ describe('SyncOrchestratorService', () => {
       const onProgress = jest.fn();
 
       // Should not throw
-      await expect(syncFn('test-user', onProgress)).resolves.toBeUndefined();
+      await expect(syncFn('test-user', onProgress)).resolves.toBe('cancelled');
 
       // Should NOT call onProgress(100) since it was cancelled
       expect(onProgress).toHaveBeenCalledWith(0, 'backing up');
@@ -817,7 +817,7 @@ describe('SyncOrchestratorService', () => {
       const syncFn = (syncOrchestrator as any).syncFunctions.get('restore');
       const onProgress = jest.fn();
 
-      await expect(syncFn('test-user', onProgress)).resolves.toBeUndefined();
+      await expect(syncFn('test-user', onProgress)).resolves.toBe('cancelled');
       expect(onProgress).not.toHaveBeenCalledWith(100);
     });
 
@@ -853,7 +853,7 @@ describe('SyncOrchestratorService', () => {
       const onProgress = jest.fn();
 
       // Should not throw for user cancellation
-      await expect(syncFn('test-user', onProgress)).resolves.toBeUndefined();
+      await expect(syncFn('test-user', onProgress)).resolves.toBe('cancelled');
     });
 
     it('should throw on CCPA export failure', async () => {
