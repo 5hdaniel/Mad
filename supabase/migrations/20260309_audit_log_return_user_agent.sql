@@ -9,7 +9,13 @@
 -- admin_get_audit_logs RPC omits it from its SELECT clause. This migration
 -- redefines the function to include a.user_agent so auditors can see and
 -- export the data.
+--
+-- Also drops the stale 7-param overload (with p_actor_id) that was causing
+-- "could not choose the best candidate function" ambiguity errors.
 -- ============================================
+
+-- Drop stale overload with p_actor_id parameter (never used by admin portal)
+DROP FUNCTION IF EXISTS public.admin_get_audit_logs(integer, integer, text, uuid, text, timestamptz, timestamptz);
 
 CREATE OR REPLACE FUNCTION public.admin_get_audit_logs(
   p_limit int DEFAULT 25,
