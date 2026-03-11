@@ -97,6 +97,17 @@ export function AuditLogContent({ embedded = false }: { embedded?: boolean } = {
   const [selectedColumns, setSelectedColumns] = useState<ColumnKey[]>(PRESETS.default.columns);
   const [showColumnPicker, setShowColumnPicker] = useState(false);
 
+  // Determine which preset (if any) matches the current selectedColumns
+  const activePreset = useMemo(() => {
+    const selected = new Set(selectedColumns);
+    for (const [key, preset] of Object.entries(PRESETS)) {
+      if (preset.columns.length === selected.size && preset.columns.every((c) => selected.has(c))) {
+        return key;
+      }
+    }
+    return null;
+  }, [selectedColumns]);
+
   // Close column picker on click outside
   useEffect(() => {
     if (!showColumnPicker) return;
@@ -344,7 +355,11 @@ export function AuditLogContent({ embedded = false }: { embedded?: boolean } = {
                         <button
                           key={key}
                           onClick={() => applyPreset(key)}
-                          className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 text-gray-700"
+                          className={
+                            activePreset === key
+                              ? 'px-2 py-1 text-xs rounded bg-primary-100 text-primary-700 ring-1 ring-primary-400'
+                              : 'px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 text-gray-700'
+                          }
                         >
                           {preset.label}
                         </button>
