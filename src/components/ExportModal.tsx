@@ -614,7 +614,8 @@ function ExportModal({
             <button
               onClick={step === 1 ? handleDateVerification : handleExport}
               disabled={
-                step === 1 && (!startDate || !endDate)
+                (!canExport) ||
+                (step === 1 && (!startDate || !endDate))
               }
               className={`px-6 py-2 rounded-lg font-semibold transition-all ${
                 step === 1 && (!startDate || !endDate)

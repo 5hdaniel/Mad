@@ -10,15 +10,19 @@
  */
 
 import { jest } from "@jest/globals";
+import path from "path";
 
 // ============================================
 // Mocks
 // ============================================
 
+const MOCK_USER_DATA_DIR = path.join("/mock", "user", "data");
+const MOCK_CACHE_PATH = path.join(MOCK_USER_DATA_DIR, "feature-cache.json");
+
 // Mock Electron app module
 jest.mock("electron", () => ({
   app: {
-    getPath: jest.fn(() => "/mock/user/data"),
+    getPath: jest.fn(() => path.join("/mock", "user", "data")),
   },
 }));
 
@@ -400,7 +404,7 @@ describe("FeatureGateService", () => {
       await featureGateService.checkFeature("org-1", "text_export");
 
       expect(mockFs.writeFile).toHaveBeenCalledWith(
-        "/mock/user/data/feature-cache.json",
+        MOCK_CACHE_PATH,
         expect.any(String),
         "utf8"
       );
@@ -447,7 +451,7 @@ describe("FeatureGateService", () => {
       await featureGateService.clearCache();
 
       expect(mockFs.unlink).toHaveBeenCalledWith(
-        "/mock/user/data/feature-cache.json"
+        MOCK_CACHE_PATH
       );
 
       // After clearing, should re-fetch
