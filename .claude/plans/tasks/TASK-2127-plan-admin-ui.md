@@ -1,6 +1,6 @@
 # TASK-2127: Plan Administration UI (Admin Portal)
 
-**Backlog ID:** BACKLOG-892
+**Backlog ID:** BACKLOG-924
 **Sprint:** SPRINT-122
 **Phase:** Phase 1 - All Tasks (Parallel with TASK-2128, TASK-2129)
 **Depends On:** TASK-2126 (SPRINT-121 -- schema + RPCs must be merged first)

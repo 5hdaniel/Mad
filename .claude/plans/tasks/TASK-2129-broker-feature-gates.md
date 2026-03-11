@@ -1,6 +1,6 @@
 # TASK-2129: Broker Portal Feature Gate Enforcement
 
-**Backlog ID:** BACKLOG-894
+**Backlog ID:** BACKLOG-926
 **Sprint:** SPRINT-122
 **Phase:** Phase 1 - All Tasks (Parallel with TASK-2127, TASK-2128)
 **Depends On:** TASK-2126 (SPRINT-121 -- schema + RPCs must be merged first)

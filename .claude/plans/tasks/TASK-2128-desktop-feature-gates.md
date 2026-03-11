@@ -1,6 +1,6 @@
 # TASK-2128: Desktop App Feature Gate Enforcement (Electron)
 
-**Backlog ID:** BACKLOG-893
+**Backlog ID:** BACKLOG-925
 **Sprint:** SPRINT-122
 **Phase:** Phase 1 - All Tasks (Parallel with TASK-2127, TASK-2129)
 **Depends On:** TASK-2126 (SPRINT-121 -- schema + RPCs must be merged first)

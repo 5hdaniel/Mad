@@ -1,7 +1,7 @@
 # SPRINT-122: Plan Admin + Feature Gate Enforcement
 
 **Created:** 2026-03-06
-**Status:** Planned
+**Status:** In Progress
 **Goal:** Build admin UI for plan management and enforce feature gates in both the desktop app and broker portal
 
 ---
@@ -16,9 +16,9 @@ With the feature flag data model in place (SPRINT-121), this sprint adds the thr
 
 | Task | Backlog | Title | Est. Tokens | Status |
 |------|---------|-------|-------------|--------|
-| TASK-2127 | BACKLOG-892 | Plan Administration UI (admin-portal) | ~35K | Pending |
-| TASK-2128 | BACKLOG-893 | Desktop App Feature Gate Enforcement (electron) | ~30K | Pending |
-| TASK-2129 | BACKLOG-894 | Broker Portal Feature Gate Enforcement (admin-portal/broker-portal) | ~25K | Pending |
+| TASK-2127 | BACKLOG-924 | Plan Administration UI (admin-portal) | ~35K | In Progress |
+| TASK-2128 | BACKLOG-925 | Desktop App Feature Gate Enforcement (electron) | ~30K | In Progress |
+| TASK-2129 | BACKLOG-926 | Broker Portal Feature Gate Enforcement (broker-portal) | ~25K | In Progress |
 
 ### Key Deliverables
 
@@ -63,9 +63,9 @@ With the feature flag data model in place (SPRINT-121), this sprint adds the thr
 
 | Task | Title | Est. Tokens | Status |
 |------|-------|-------------|--------|
-| TASK-2127 | Plan Administration UI | ~35K | Pending |
-| TASK-2128 | Desktop App Feature Gate Enforcement | ~30K | Pending |
-| TASK-2129 | Broker Portal Feature Gate Enforcement | ~25K | Pending |
+| TASK-2127 | Plan Administration UI | ~35K | In Progress |
+| TASK-2128 | Desktop App Feature Gate Enforcement | ~30K | In Progress |
+| TASK-2129 | Broker Portal Feature Gate Enforcement | ~25K | In Progress |
 
 **Execution:** Parallel -- all three tasks are independent.
 
