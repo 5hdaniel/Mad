@@ -836,9 +836,11 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
 
   useEffect(() => {
     if (backupItem?.status === 'complete') {
-      setBackupResult({ success: true, message: 'Backup created successfully' });
-      notify.success('Database backup created successfully');
       setBackingUp(false);
+      if (backupItem.warning !== 'cancelled') {
+        setBackupResult({ success: true, message: 'Backup created successfully' });
+        notify.success('Database backup created successfully');
+      }
     } else if (backupItem?.status === 'error') {
       setBackupResult({ success: false, message: backupItem.error || 'Failed to create backup' });
       notify.error(backupItem.error || 'Failed to create backup');
@@ -848,9 +850,10 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
 
   useEffect(() => {
     if (restoreItem?.status === 'complete') {
+      setRestoring(false);
+      if (restoreItem.warning === 'cancelled') return;
       setBackupResult({ success: true, message: 'Database restored successfully' });
       notify.success('Database restored successfully');
-      setRestoring(false);
       // Refresh database info after successful restore
       window.api.databaseBackup.getInfo().then((infoResult) => {
         if (infoResult.success && infoResult.info) {
@@ -869,9 +872,11 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
 
   useEffect(() => {
     if (ccpaItem?.status === 'complete') {
-      setExportResult({ success: true, message: 'Data exported successfully' });
-      notify.success('Your data has been exported successfully.');
       setExporting(false);
+      if (ccpaItem.warning !== 'cancelled') {
+        setExportResult({ success: true, message: 'Data exported successfully' });
+        notify.success('Your data has been exported successfully.');
+      }
     } else if (ccpaItem?.status === 'error') {
       setExportResult({ success: false, message: ccpaItem.error || 'Export failed' });
       notify.error('Failed to export data: ' + (ccpaItem.error || 'Unknown error'));

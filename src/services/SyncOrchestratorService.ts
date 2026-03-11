@@ -328,7 +328,7 @@ class SyncOrchestratorServiceClass {
     this.registerSyncFunction('backup', async (_userId, onProgress) => {
       onProgress(0, 'backing up');
       const result = await window.api.databaseBackup.backup();
-      if (result.cancelled) return; // User cancelled dialog -- not an error
+      if (result.cancelled) return 'cancelled'; // User cancelled dialog -- not an error
       if (!result.success) {
         throw new Error(result.error || 'Backup failed');
       }
@@ -340,7 +340,7 @@ class SyncOrchestratorServiceClass {
     this.registerSyncFunction('restore', async (_userId, onProgress) => {
       onProgress(0, 'restoring');
       const result = await window.api.databaseBackup.restore();
-      if (result.cancelled) return; // User cancelled dialog -- not an error
+      if (result.cancelled) return 'cancelled'; // User cancelled dialog -- not an error
       if (!result.success) {
         throw new Error(result.error || 'Restore failed');
       }
@@ -357,7 +357,7 @@ class SyncOrchestratorServiceClass {
       );
       try {
         const result = await window.api.privacy.exportData(userId);
-        if (result.error === 'Export cancelled by user') return;
+        if (result.error === 'Export cancelled by user') return 'cancelled';
         if (!result.success) {
           throw new Error(result.error || 'CCPA export failed');
         }
