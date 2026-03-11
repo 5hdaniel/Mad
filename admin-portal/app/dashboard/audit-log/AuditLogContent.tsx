@@ -20,6 +20,7 @@ interface AuditLogEntry {
   target_id: string;
   metadata: Record<string, unknown> | null;
   ip_address: string | null;
+  user_agent: string | null;
   created_at: string;
   actor_id: string;
   actor_email: string | null;
