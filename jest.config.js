@@ -129,6 +129,7 @@ module.exports = {
     '/node_modules/',
     '/dist/',
     '/build/',
+    '/worktrees/',
     '/tests/integration/', // Integration tests run locally, not in CI
     'ContactSelectModal.test.tsx', // Hangs in CI during loading
     // TASK-2010: Electron tests excluded from CI (run locally only)
@@ -146,6 +147,8 @@ module.exports = {
     '/node_modules/',
     '/dist/',
     '/build/',
+    '/\\.claude/worktrees/', // Exclude git worktree copies from test discovery
+    '/worktrees/', // Catch any worktree path
   ],
 
   // Reduce output noise
