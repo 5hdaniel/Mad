@@ -6,10 +6,13 @@
  * Displays admin_audit_logs with filtering by action, date range, and actor.
  * Uses admin_get_audit_logs RPC for paginated, permission-gated access.
  * Extracted as a standalone component so it can be embedded in Settings tabs.
+ *
+ * BACKLOG-921: Column picker with presets (Default, Troubleshooting).
+ * Export respects currently selected columns.
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { FileText, ChevronLeft, ChevronRight, Filter, Clock, User, Search, Download } from 'lucide-react';
+import { FileText, ChevronLeft, ChevronRight, Filter, Clock, User, Search, Download, Columns, Monitor, Globe } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { formatTimestamp } from '@/lib/format';
 
@@ -18,6 +21,8 @@ interface AuditLogEntry {
   action: string;
   target_type: string;
   target_id: string;
+  target_email: string | null;
+  target_name: string | null;
   metadata: Record<string, unknown> | null;
   ip_address: string | null;
   user_agent: string | null;
@@ -42,6 +47,41 @@ const ACTION_LABELS: Record<string, { label: string; color: string }> = {
   'impersonation.end': { label: 'Impersonation Ended', color: 'bg-purple-100 text-purple-700' },
 };
 
+const TARGET_TYPE_LABELS: Record<string, string> = {
+  admin_role: 'Role',
+  user: 'User',
+  license: 'License',
+  internal_user: 'Internal User',
+};
+
+// Column definitions
+type ColumnKey = 'action' | 'target' | 'metadata' | 'ip_address' | 'user_agent' | 'actor' | 'timestamp';
+
+const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
+  { key: 'action', label: 'Action' },
+  { key: 'target', label: 'Target' },
+  { key: 'metadata', label: 'Details' },
+  { key: 'ip_address', label: 'IP Address' },
+  { key: 'user_agent', label: 'User Agent' },
+  { key: 'actor', label: 'Actor' },
+  { key: 'timestamp', label: 'Timestamp' },
+];
+
+const PRESETS: Record<string, { label: string; columns: ColumnKey[] }> = {
+  default: {
+    label: 'Default',
+    columns: ['action', 'target', 'metadata', 'actor', 'timestamp'],
+  },
+  troubleshooting: {
+    label: 'Troubleshooting',
+    columns: ['action', 'target', 'metadata', 'ip_address', 'user_agent', 'actor', 'timestamp'],
+  },
+  minimal: {
+    label: 'Minimal',
+    columns: ['action', 'target', 'actor', 'timestamp'],
+  },
+};
+
 const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 const DEFAULT_PAGE_SIZE = 25;
 
@@ -59,6 +99,32 @@ export function AuditLogContent({ embedded = false }: { embedded?: boolean } = {
   const [debouncedSearchTarget, setDebouncedSearchTarget] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+
+  // Column picker
+  const [selectedColumns, setSelectedColumns] = useState<ColumnKey[]>(PRESETS.default.columns);
+  const [showColumnPicker, setShowColumnPicker] = useState(false);
+
+  // Determine which preset (if any) matches the current selectedColumns
+  const activePreset = useMemo(() => {
+    const selected = new Set(selectedColumns);
+    for (const [key, preset] of Object.entries(PRESETS)) {
+      if (preset.columns.length === selected.size && preset.columns.every((c) => selected.has(c))) {
+        return key;
+      }
+    }
+    return null;
+  }, [selectedColumns]);
+
+  // Close column picker on click outside
+  useEffect(() => {
+    if (!showColumnPicker) return;
+    function handleClick(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-column-picker]')) setShowColumnPicker(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showColumnPicker]);
 
   // Debounce searchTarget by 300ms before using it in fetchLogs
   useEffect(() => {
@@ -110,9 +176,28 @@ export function AuditLogContent({ embedded = false }: { embedded?: boolean } = {
     return Object.keys(ACTION_LABELS);
   }, []);
 
+  function toggleColumn(key: ColumnKey) {
+    setSelectedColumns((prev) => {
+      if (prev.includes(key)) {
+        // Prevent deselecting all columns — keep at least 2
+        if (prev.length <= 2) return prev;
+        return prev.filter((k) => k !== key);
+      }
+      return [...prev, key];
+    });
+  }
+
+  function applyPreset(presetKey: string) {
+    setSelectedColumns(PRESETS[presetKey].columns);
+    setShowColumnPicker(false);
+  }
+
   function handleExport(format: 'csv' | 'json') {
     const params = new URLSearchParams();
     params.set('format', format);
+    params.set('columns', selectedColumns.join(','));
+    params.set('preset', activePreset || 'custom');
+    if (actionFilter) params.set('action', actionFilter);
     if (dateFrom) params.set('from', dateFrom);
     if (dateTo) params.set('to', dateTo);
     window.open(`/api/audit-log/export?${params.toString()}`, '_blank');
@@ -127,9 +212,54 @@ export function AuditLogContent({ embedded = false }: { embedded?: boolean } = {
     );
   }
 
+  function renderTarget(entry: AuditLogEntry) {
+    // User targets: show "on [name/email]" since the action badge doesn't convey who
+    if (entry.target_type === 'user') {
+      const name = entry.target_name || entry.target_email;
+      if (name) {
+        return (
+          <span className="text-sm text-gray-500">
+            on <span className="font-medium text-gray-700">{name}</span>
+          </span>
+        );
+      }
+    }
+
+    // Non-user targets: skip "on [Type]" prefix — the action badge already says the type.
+    // Try to find a descriptive name from metadata.
+    const metaName = entry.metadata
+      ? (entry.metadata.name as string) || (entry.metadata.slug as string) || (entry.metadata.email as string) || null
+      : null;
+    const displayName = entry.target_name || entry.target_email || metaName;
+
+    if (displayName) {
+      return (
+        <span className="text-sm text-gray-500">
+          <span className="mx-1">&mdash;</span>
+          <span className="font-medium text-gray-700">{displayName}</span>
+        </span>
+      );
+    }
+
+    // Fallback: truncated target ID only
+    if (entry.target_id) {
+      return (
+        <span className="text-sm text-gray-500">
+          <span className="mx-1">&mdash;</span>
+          <span className="text-xs text-gray-400" title={entry.target_id}>
+            ({entry.target_id.slice(0, 8)}&hellip;)
+          </span>
+        </span>
+      );
+    }
+
+    return null;
+  }
+
   function renderMetadata(metadata: Record<string, unknown> | null) {
     if (!metadata) return null;
-    const entries = Object.entries(metadata).filter(([k]) => k !== 'ip_address');
+    const exclude = ['ip_address', 'target_user_id'];
+    const entries = Object.entries(metadata).filter(([k]) => !exclude.includes(k));
     if (entries.length === 0) return null;
 
     return (
@@ -142,6 +272,10 @@ export function AuditLogContent({ embedded = false }: { embedded?: boolean } = {
         ))}
       </div>
     );
+  }
+
+  function isColumnVisible(key: ColumnKey): boolean {
+    return selectedColumns.includes(key);
   }
 
   return (
@@ -234,6 +368,56 @@ export function AuditLogContent({ embedded = false }: { embedded?: boolean } = {
             <p className="text-sm text-gray-500">{total} entr{total === 1 ? 'y' : 'ies'} found</p>
           </div>
           <div className="flex items-center gap-4">
+            {/* Column picker */}
+            <div className="relative" data-column-picker>
+              <button
+                onClick={() => setShowColumnPicker(!showColumnPicker)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                <Columns className="h-3.5 w-3.5" />
+                Columns
+              </button>
+              {showColumnPicker && (
+                <div className="absolute right-0 mt-1 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-20 py-2">
+                  <div className="px-3 pb-2 border-b border-gray-100">
+                    <span className="text-xs font-medium text-gray-500">Presets</span>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {Object.entries(PRESETS).map(([key, preset]) => (
+                        <button
+                          key={key}
+                          onClick={() => applyPreset(key)}
+                          className={
+                            activePreset === key
+                              ? 'px-2 py-1 text-xs rounded bg-primary-100 text-primary-700 ring-1 ring-primary-400'
+                              : 'px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 text-gray-700'
+                          }
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="py-1">
+                    {ALL_COLUMNS.map((col) => (
+                      <label
+                        key={col.key}
+                        className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedColumns.includes(col.key)}
+                          onChange={() => toggleColumn(col.key)}
+                          className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        />
+                        <span className="text-xs text-gray-700">{col.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Export */}
             <div className="flex items-center gap-2">
               <button
                 onClick={() => handleExport('csv')}
@@ -302,22 +486,40 @@ export function AuditLogContent({ embedded = false }: { embedded?: boolean } = {
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 flex-wrap">
-                        {renderActionBadge(entry.action)}
-                        <span className="text-sm text-gray-500">
-                          on <span className="font-medium text-gray-700">{entry.target_type}</span>
-                        </span>
+                        {isColumnVisible('action') && renderActionBadge(entry.action)}
+                        {isColumnVisible('target') && renderTarget(entry)}
                       </div>
-                      {renderMetadata(entry.metadata)}
+                      {isColumnVisible('metadata') && renderMetadata(entry.metadata)}
+                      {(isColumnVisible('ip_address') || isColumnVisible('user_agent')) && (
+                        <div className="flex flex-wrap gap-2 mt-1.5">
+                          {isColumnVisible('ip_address') && entry.ip_address && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-blue-50 text-blue-600">
+                              <Globe className="h-2.5 w-2.5" />
+                              {entry.ip_address.replace(/\/\d+$/, '')}
+                            </span>
+                          )}
+                          {isColumnVisible('user_agent') && entry.user_agent && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-blue-50 text-blue-600 max-w-md truncate" title={entry.user_agent}>
+                              <Monitor className="h-2.5 w-2.5 shrink-0" />
+                              {entry.user_agent}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                        <User className="h-3 w-3" />
-                        <span>{entry.actor_name || entry.actor_email || 'Unknown'}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-1">
-                        <Clock className="h-3 w-3" />
-                        <span>{formatTimestamp(entry.created_at)}</span>
-                      </div>
+                      {isColumnVisible('actor') && (
+                        <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                          <User className="h-3 w-3" />
+                          <span>{entry.actor_name || entry.actor_email || 'Unknown'}</span>
+                        </div>
+                      )}
+                      {isColumnVisible('timestamp') && (
+                        <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-1">
+                          <Clock className="h-3 w-3" />
+                          <span>{formatTimestamp(entry.created_at)}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
