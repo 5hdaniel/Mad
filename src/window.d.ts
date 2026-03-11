@@ -2053,6 +2053,24 @@ interface MainAPI {
     }>;
   };
 
+  // Feature Gate API (SPRINT-122)
+  featureGate: {
+    /** Check access to a specific feature */
+    check: (featureKey: string) => Promise<{
+      allowed: boolean;
+      value: string;
+      source: "plan" | "override" | "default";
+    }>;
+    /** Get all features for the current organization */
+    getAll: () => Promise<Record<string, {
+      allowed: boolean;
+      value: string;
+      source: "plan" | "override" | "default";
+    }>>;
+    /** Invalidate the feature gate cache */
+    invalidateCache: () => Promise<void>;
+  };
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any; // Allow other properties for backwards compatibility
 }

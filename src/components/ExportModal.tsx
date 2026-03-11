@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import type { Transaction } from "../../electron/types/models";
 import logger from '../utils/logger';
+import { useFeatureGate } from "../hooks/useFeatureGate";
+import { UpgradePrompt } from "./common/UpgradePrompt";
 
 interface ExportModalProps {
   transaction: Transaction;
@@ -60,6 +62,12 @@ function ExportModal({
     message: string;
   } | null>(null);
   const [exportedPath, setExportedPath] = useState<string | null>(null);
+
+  // Feature gate check
+  const { isAllowed, loading: featureGateLoading } = useFeatureGate();
+  const canExportText = isAllowed("text_export");
+  const canExportEmail = isAllowed("email_export");
+  const canExport = canExportText || canExportEmail;
 
   // Formats that are currently implemented
   const implementedFormats = ["pdf", "folder"];
@@ -268,6 +276,17 @@ function ExportModal({
 
         {/* Content */}
         <div className="p-6">
+          {/* Feature gate: block export when plan does not allow it */}
+          {!featureGateLoading && !canExport && (
+            <div className="mb-4">
+              <UpgradePrompt
+                featureName="Export"
+                description="Exporting transaction audits is not available on your current plan."
+                onDismiss={onClose}
+              />
+            </div>
+          )}
+
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-sm text-red-800">{error}</p>
