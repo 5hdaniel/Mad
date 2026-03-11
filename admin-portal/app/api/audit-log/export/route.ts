@@ -1,7 +1,7 @@
 /**
  * API Route: Audit Log Export
  *
- * GET /api/audit-log/export?format=csv|json&from=YYYY-MM-DD&to=YYYY-MM-DD&columns=action,target,...
+ * GET /api/audit-log/export?format=csv|json&from=YYYY-MM-DD&to=YYYY-MM-DD&columns=action,target,...&preset=default|minimal|...
  *
  * Server-side download route for SOC 2 auditors to extract audit logs.
  * Enforces authentication and audit.view permission.
@@ -48,12 +48,13 @@ export async function GET(request: NextRequest) {
   }
 
   // ── 3. Parse query params ──────────────────────────────────────────
-  const { searchParams } = new URL(request.url);
+  const searchParams = request.nextUrl.searchParams;
   const format = searchParams.get('format') || 'csv';
   const dateFrom = searchParams.get('from');
   const dateTo = searchParams.get('to');
   const actionFilter = searchParams.get('action');
   const columnsParam = searchParams.get('columns');
+  const presetParam = searchParams.get('preset');
 
   if (format !== 'csv' && format !== 'json') {
     return NextResponse.json(
@@ -106,11 +107,12 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // ── 6. Build filename with date range and export timestamp ─────────
+  // ── 6. Build filename with date range, preset, and export timestamp ─
   const fromStr = dateFrom || 'all';
   const toStr = dateTo || 'now';
   const exportTime = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const filename = `audit-log-${fromStr}-to-${toStr}_exported-${exportTime}`;
+  const presetSlug = presetParam || 'custom';
+  const filename = `audit-log-${fromStr}-to-${toStr}_${presetSlug}_exported-${exportTime}`;
 
   // ── 7. Return formatted response ───────────────────────────────────
   if (format === 'json') {

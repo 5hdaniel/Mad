@@ -196,6 +196,7 @@ export function AuditLogContent({ embedded = false }: { embedded?: boolean } = {
     const params = new URLSearchParams();
     params.set('format', format);
     params.set('columns', selectedColumns.join(','));
+    params.set('preset', activePreset || 'custom');
     if (actionFilter) params.set('action', actionFilter);
     if (dateFrom) params.set('from', dateFrom);
     if (dateTo) params.set('to', dateTo);
