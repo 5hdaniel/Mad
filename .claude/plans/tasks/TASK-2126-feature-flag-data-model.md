@@ -1,7 +1,7 @@
 # TASK-2126: Feature Flag & Plan Management Data Model
 
 **Backlog ID:** BACKLOG-891
-**Sprint:** SPRINT-121
+**Sprint:** SPRINT-124
 **Phase:** Phase 1 - Data Model Foundation (Sequential)
 **Depends On:** None (foundational)
 **Branch:** `feature/task-2126-feature-flag-data-model`
