@@ -6,7 +6,7 @@
  * is simply not rendered -- no upgrade prompts in the broker portal.
  *
  * Usage (in server components only):
- *   <FeatureGated features={orgFeatures} featureKey="text_export">
+ *   <FeatureGated features={orgFeatures} featureKey="broker_text_view">
  *     <SomeComponent />
  *   </FeatureGated>
  *
@@ -18,7 +18,7 @@ import { isFeatureEnabled, type OrgFeatures } from '@/lib/feature-gate';
 interface FeatureGatedProps {
   /** The org's feature set from getOrgFeatures */
   features: OrgFeatures;
-  /** The feature key to check (e.g., 'text_export', 'email_export') */
+  /** The feature key to check (e.g., 'broker_text_view', 'broker_email_view') */
   featureKey: string;
   /** Content to render when the feature is enabled */
   children: React.ReactNode;
