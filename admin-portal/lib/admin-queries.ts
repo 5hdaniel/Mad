@@ -261,19 +261,12 @@ export async function updatePlanFeature(
 ): Promise<RpcResult> {
   const supabase = createClient();
 
-  const { data, error } = await supabase
-    .from('plan_features')
-    .upsert(
-      {
-        plan_id: planId,
-        feature_id: featureId,
-        enabled,
-        value: value ?? null,
-      },
-      { onConflict: 'plan_id,feature_id' }
-    )
-    .select()
-    .single();
+  const { data, error } = await supabase.rpc('admin_update_plan_feature', {
+    p_plan_id: planId,
+    p_feature_id: featureId,
+    p_enabled: enabled,
+    p_value: value ?? null,
+  });
 
   if (error) {
     return { data: null, error: new Error(error.message) };
@@ -292,15 +285,14 @@ export async function createPlan(
 ): Promise<RpcResult<Plan>> {
   const supabase = createClient();
 
-  const { data, error } = await supabase
-    .from('plans')
-    .insert({
-      name,
-      tier,
-      description: description || null,
-    })
-    .select()
-    .single();
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+  const { data, error } = await supabase.rpc('admin_create_plan', {
+    p_name: name,
+    p_slug: slug,
+    p_tier: tier,
+    p_description: description || null,
+  });
 
   if (error) {
     return { data: null, error: new Error(error.message) };
@@ -318,17 +310,10 @@ export async function assignOrgPlan(
 ): Promise<RpcResult> {
   const supabase = createClient();
 
-  const { data, error } = await supabase
-    .from('organization_plans')
-    .upsert(
-      {
-        organization_id: orgId,
-        plan_id: planId,
-      },
-      { onConflict: 'organization_id' }
-    )
-    .select()
-    .single();
+  const { data, error } = await supabase.rpc('admin_assign_org_plan', {
+    p_org_id: orgId,
+    p_plan_id: planId,
+  });
 
   if (error) {
     return { data: null, error: new Error(error.message) };
