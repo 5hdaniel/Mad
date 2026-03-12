@@ -7,6 +7,7 @@ import { ReviewActions } from '@/components/submission/ReviewActions';
 import { AttachmentList } from '@/components/submission/AttachmentList';
 import { StatusHistory } from '@/components/submission/StatusHistory';
 import { getDataClient } from '@/lib/impersonation-guards';
+import { getOrgFeatures, isFeatureEnabled } from '@/lib/feature-gate';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 interface PageProps {
@@ -222,6 +223,30 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
     console.error('Unhandled error in markAsUnderReview:', e);
   });
 
+  // Fetch org features for feature gating (TASK-2129)
+  // Uses the submission's organization_id to determine plan features
+  const orgFeatures = await getOrgFeatures(submission.organization_id);
+
+  // Filter messages server-side based on feature gates
+  // If text_export is disabled, exclude text/SMS/iMessage messages
+  // If email_export is disabled, exclude email messages
+  const textEnabled = isFeatureEnabled(orgFeatures, 'text_export');
+  const emailEnabled = isFeatureEnabled(orgFeatures, 'email_export');
+  const gatedMessages = messages.filter((msg) => {
+    if (msg.channel === 'email') return emailEnabled;
+    // All non-email channels (sms, imessage) are gated by text_export
+    return textEnabled;
+  });
+
+  // Determine if attachments section should be shown
+  // Show attachments if either text_attachments or email_attachments is enabled
+  const textAttachmentsEnabled = isFeatureEnabled(orgFeatures, 'text_attachments');
+  const emailAttachmentsEnabled = isFeatureEnabled(orgFeatures, 'email_attachments');
+  const showAttachments = textAttachmentsEnabled || emailAttachmentsEnabled;
+
+  // Determine if messages section should be shown at all
+  const showMessages = textEnabled || emailEnabled;
+
   return (
     <div className="space-y-6 pb-24">
       {/* Back Link */}
@@ -290,11 +315,15 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
         submittedAt={rootCreatedAt}
       />
 
-      {/* Messages with filter tabs */}
-      <MessageList messages={messages} />
+      {/* Messages with filter tabs - gated by text_export / email_export (TASK-2129) */}
+      {showMessages && (
+        <MessageList messages={gatedMessages} />
+      )}
 
-      {/* Attachments with viewer */}
-      <AttachmentList attachments={attachments} />
+      {/* Attachments with viewer - gated by text_attachments / email_attachments (TASK-2129) */}
+      {showAttachments && (
+        <AttachmentList attachments={attachments} />
+      )}
     </div>
   );
 }
