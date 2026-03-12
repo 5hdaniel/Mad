@@ -1,7 +1,8 @@
 # SPRINT-126: Feature Gate Rework + Completion
 
 **Created:** 2026-03-11
-**Status:** Planned
+**Closed:** 2026-03-12
+**Status:** Completed
 **Goal:** Fix critical bugs in the desktop feature gate service, then QA-test and merge all feature gate PRs
 **Supersedes:** SPRINT-122 (Plan Admin + Feature Gate Enforcement)
 
@@ -19,17 +20,18 @@ TASK-2152 (iPhone Sync macOS button) is independent and proceeds via SPRINT-125 
 
 ## In-Scope
 
-| Task | Backlog | Title | Est. Tokens | Status |
-|------|---------|-------|-------------|--------|
-| TASK-2153 | BACKLOG-927 | Fix Desktop Feature Gate Service (TASK-2128 rework) | ~25K | Planned |
-| TASK-2127 | BACKLOG-924 | Plan Administration UI -- QA + merge | ~10K | Blocked (pending Phase 1) |
-| TASK-2129 | BACKLOG-926 | Broker Portal Feature Gates -- QA + merge | ~10K | Blocked (pending Phase 1) |
+| Task | Backlog | Title | Est. Tokens | Status | PR |
+|------|---------|-------|-------------|--------|-----|
+| TASK-2153 | BACKLOG-927 | Fix Desktop Feature Gate Service (TASK-2128 rework) | ~25K | Completed | #1124 merged 2026-03-11 |
+| TASK-2127 | BACKLOG-924 | Plan Administration UI -- QA + merge | ~10K | Completed | #1123 merged 2026-03-12 |
+| TASK-2129 | BACKLOG-926 | Broker Portal Feature Gates -- QA + merge | ~10K | Completed | #1122 merged 2026-03-12 |
+| TASK-2155 | BACKLOG-929 | Fix broker RPC auth (JSONB error handling) | ~5K | Completed | #1126 merged 2026-03-12 |
 
 ### Independent (SPRINT-125, coordinated here)
 
 | Task | Backlog | Title | Est. Tokens | Status |
 |------|---------|-------|-------------|--------|
-| TASK-2152 | BACKLOG-924 | iPhone Sync macOS Button -- commit stash + merge | ~5K | Ready |
+| TASK-2152 | BACKLOG-928 | iPhone Sync macOS Button -- commit stash + merge | ~5K | Separate sprint |
 
 ---
 
@@ -195,3 +197,26 @@ TASK-2152 (iPhone Sync Button) [Independent -- SPRINT-125]
 - `.claude/plans/tasks/TASK-2128-desktop-feature-gates.md` (existing -- reference for context)
 - `.claude/plans/tasks/TASK-2129-broker-feature-gates.md` (existing)
 - `.claude/plans/tasks/TASK-2152-iphone-sync-macos-button.md` (existing -- SPRINT-125)
+
+---
+
+## Sprint Closure
+
+**Closed:** 2026-03-12
+**Outcome:** All feature gate tasks completed and merged. User tested and verified.
+
+### Merged PRs
+
+| PR | Task | Title | Merged |
+|----|------|-------|--------|
+| #1124 | TASK-2153/TASK-2128 | feat(electron): add feature gate service with caching and upgrade prompts | 2026-03-11 |
+| #1123 | TASK-2127 | feat(admin): add plan management pages and org plan assignment | 2026-03-12 |
+| #1122 | TASK-2129 | feat(broker): add server-side feature gate enforcement | 2026-03-12 |
+| #1126 | TASK-2155 | fix(broker): add broker_get_org_features RPC and fix JSONB error handling | 2026-03-12 |
+
+### Notes
+
+- TASK-2153 was the TASK-2128 rework (7 bug fixes). PR #1124 was re-reviewed and merged after all fixes applied.
+- TASK-2155 (PR #1126) was an additional fix discovered during QA: the broker portal needed its own RPC with proper auth handling.
+- Delete Plan with Org Protection feature was included in PR #1123 (TASK-2127).
+- All worktrees (Mad-TASK-2127, Mad-TASK-2129) should be cleaned up.

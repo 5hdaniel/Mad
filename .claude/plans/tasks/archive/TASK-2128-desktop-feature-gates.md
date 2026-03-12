@@ -1,11 +1,12 @@
 # TASK-2128: Desktop App Feature Gate Enforcement (Electron)
 
-> **[UPDATED 2026-03-11]** SR review found 7 bugs (3 critical). Rework tracked as TASK-2153 in SPRINT-126.
-> PR #1124 has status: Changes Requested. See TASK-2153 for the fix plan.
+> **[COMPLETED 2026-03-11]** All 7 bugs fixed via TASK-2153 rework. PR #1124 merged to develop.
+> User tested and verified feature gates work.
 
 **Backlog ID:** BACKLOG-925
-**Sprint:** SPRINT-122 (superseded by SPRINT-126)
-**Phase:** Phase 1 - All Tasks (originally parallel with TASK-2127, TASK-2129 -- now sequential)
+**Sprint:** SPRINT-126 (moved from SPRINT-122)
+**Phase:** Phase 1 -- Rework via TASK-2153, then merged
+**Status:** Completed -- PR #1124 merged 2026-03-11
 **Depends On:** TASK-2126 (SPRINT-121 -- schema + RPCs must be merged first)
 **Branch:** `feature/task-2128-desktop-feature-gates`
 **Branch From:** `develop`

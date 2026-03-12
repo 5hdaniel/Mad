@@ -1,12 +1,12 @@
 # TASK-2127: Plan Administration UI (Admin Portal)
 
-> **[UPDATED 2026-03-11]** Moved from SPRINT-122 to SPRINT-126 Phase 2. Blocked until TASK-2153
-> (TASK-2128 rework) merges. SR note: `PERMISSION_CATEGORIES` in `permissions.ts` needs
-> `{ key: 'plans', label: 'Plans' }` added.
+> **[COMPLETED 2026-03-12]** PR #1123 merged to develop. User tested and verified.
+> Includes delete plan with org protection feature (TASK-2153 scope absorbed into this PR).
 
 **Backlog ID:** BACKLOG-924
 **Sprint:** SPRINT-126 (moved from SPRINT-122)
 **Phase:** Phase 2 -- QA + Merge (after TASK-2153 merges)
+**Status:** Completed -- PR #1123 merged 2026-03-12
 **Depends On:** TASK-2126 (SPRINT-121 -- merged), TASK-2153 (SPRINT-126 Phase 1 -- RPC fix must merge first)
 **Branch:** `feature/task-2127-plan-admin-ui`
 **Branch From:** `develop`

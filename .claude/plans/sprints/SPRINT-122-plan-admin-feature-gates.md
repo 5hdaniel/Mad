@@ -2,7 +2,7 @@
 
 **Created:** 2026-03-06
 **Closed:** 2026-03-11
-**Status:** Blocked -- Superseded by SPRINT-126
+**Status:** Deprecated -- Superseded by SPRINT-126 (completed 2026-03-12)
 **Goal:** Build admin UI for plan management and enforce feature gates in both the desktop app and broker portal
 
 ---

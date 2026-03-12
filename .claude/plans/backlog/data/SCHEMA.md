@@ -42,6 +42,7 @@ The main backlog table. Source of truth for all items.
 - `schema` - Database schema, migrations, RLS
 - `ipc` - IPC layer, handler bridges between main/renderer
 - `admin-portal` - Admin portal (Next.js), RBAC, internal tools
+- `broker-portal` - Broker portal (Next.js), feature gates, submission views
 
 **priority:**
 - `critical` - Must be done immediately
