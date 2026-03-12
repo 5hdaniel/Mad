@@ -21,7 +21,7 @@ interface DashboardActionProps {
   onAuditNew: () => void;
   onViewTransactions: () => void;
   onManageContacts: () => void;
-  onSyncPhone?: () => void; // Only available for Windows + iPhone users
+  onSyncPhone?: () => void; // Available for Windows + iPhone users, or macOS + iphone-sync import source
   onTourStateChange?: (isActive: boolean) => void;
   showSetupPrompt?: boolean;
   onContinueSetup?: () => void;
@@ -405,7 +405,7 @@ function Dashboard({
             </div>
           </button>
 
-          {/* Sync iPhone Card (Windows + iPhone users only) */}
+          {/* Sync iPhone Card (Windows + iPhone users, or macOS + iphone-sync) */}
           {onSyncPhone && (
             <button
               onClick={onSyncPhone}

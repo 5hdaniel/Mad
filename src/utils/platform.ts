@@ -84,7 +84,7 @@ export const platformFeatures = {
   localMessagesAccess: ["macos"],
   /** Access to local Contacts.app database (macOS only) */
   localContactsAccess: ["macos"],
-  /** Sync messages from iPhone via USB (Windows/Linux) */
+  /** Sync messages from iPhone via USB (Windows/Linux, also macOS when iphone-sync import source is selected) */
   iPhoneUSBSync: ["windows", "linux"],
   /** Email integration via OAuth (all platforms) */
   emailIntegration: ["macos", "windows", "linux"],
