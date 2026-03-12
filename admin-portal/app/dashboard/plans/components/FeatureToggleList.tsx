@@ -225,7 +225,7 @@ export function FeatureToggleList({ planId, features, allFeatures, canManage }: 
                         value={state.value ?? ''}
                         onChange={(e) => handleValueChange(fd.id, e.target.value)}
                         disabled={!canManage || !state.enabled}
-                        className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50 disabled:bg-gray-50"
+                        className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50 disabled:bg-gray-50"
                       />
                     )}
                     {fd.value_type === 'string' && (
@@ -234,7 +234,7 @@ export function FeatureToggleList({ planId, features, allFeatures, canManage }: 
                         value={state.value ?? ''}
                         onChange={(e) => handleValueChange(fd.id, e.target.value)}
                         disabled={!canManage || !state.enabled}
-                        className="w-32 rounded-md border border-gray-300 px-2 py-1 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50 disabled:bg-gray-50"
+                        className="w-32 rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50 disabled:bg-gray-50"
                       />
                     )}
 

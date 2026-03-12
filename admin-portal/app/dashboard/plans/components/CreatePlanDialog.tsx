@@ -14,7 +14,7 @@ const TIER_OPTIONS = ['trial', 'pro', 'enterprise', 'custom'] as const;
 
 interface CreatePlanDialogProps {
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (planId?: string) => void;
 }
 
 export function CreatePlanDialog({ onClose, onCreated }: CreatePlanDialogProps) {
@@ -58,7 +58,8 @@ export function CreatePlanDialog({ onClose, onCreated }: CreatePlanDialogProps) 
       return;
     }
 
-    onCreated();
+    const planId = (result.data as unknown as Record<string, unknown>)?.id as string | undefined;
+    onCreated(planId);
   };
 
   return (

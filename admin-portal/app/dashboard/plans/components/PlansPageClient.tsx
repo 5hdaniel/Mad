@@ -33,9 +33,13 @@ export function PlansPageClient({ plans, canManage }: PlansPageClientProps) {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const router = useRouter();
 
-  const handleCreated = () => {
+  const handleCreated = (planId?: string) => {
     setShowCreateDialog(false);
-    router.refresh();
+    if (planId) {
+      router.push(`/dashboard/plans/${planId}`);
+    } else {
+      router.refresh();
+    }
   };
 
   return (
