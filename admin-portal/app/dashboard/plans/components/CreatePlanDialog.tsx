@@ -98,7 +98,7 @@ export function CreatePlanDialog({ onClose, onCreated }: CreatePlanDialogProps) 
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Professional"
               disabled={isLoading}
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50"
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50"
             />
           </div>
 
@@ -112,7 +112,7 @@ export function CreatePlanDialog({ onClose, onCreated }: CreatePlanDialogProps) 
               value={tier}
               onChange={(e) => setTier(e.target.value)}
               disabled={isLoading}
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50"
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50"
             >
               {TIER_OPTIONS.map((t) => (
                 <option key={t} value={t}>
@@ -134,7 +134,7 @@ export function CreatePlanDialog({ onClose, onCreated }: CreatePlanDialogProps) 
               placeholder="Brief description of this plan..."
               rows={3}
               disabled={isLoading}
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50"
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50"
             />
           </div>
 
