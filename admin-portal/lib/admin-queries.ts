@@ -139,6 +139,313 @@ export async function updateLicense(
 }
 
 // ---------------------------------------------------------------------------
+// Plan Management
+// ---------------------------------------------------------------------------
+
+export interface Plan {
+  id: string;
+  name: string;
+  tier: string;
+  description: string | null;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FeatureDefinition {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  category: string;
+  value_type: string;
+  default_value: string | null;
+  created_at: string;
+}
+
+export interface PlanFeature {
+  id: string;
+  plan_id: string;
+  feature_id: string;
+  enabled: boolean;
+  value: string | null;
+  feature_definitions: FeatureDefinition;
+}
+
+export interface PlanWithFeatureCount extends Plan {
+  feature_count: number;
+}
+
+export interface OrganizationPlan {
+  id: string;
+  organization_id: string;
+  plan_id: string;
+  assigned_at: string;
+  assigned_by: string | null;
+  plans: Plan;
+}
+
+/**
+ * Fetch all plans with feature counts.
+ */
+export async function getPlans(): Promise<{ data: PlanWithFeatureCount[] | null; error: Error | null }> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from('plans')
+    .select('*, plan_features(count)')
+    .order('sort_order');
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  const plans: PlanWithFeatureCount[] = (data ?? []).map((plan) => {
+    const featureAgg = plan.plan_features as unknown as { count: number }[];
+    return {
+      id: plan.id,
+      name: plan.name,
+      tier: plan.tier,
+      description: plan.description,
+      is_active: plan.is_active,
+      sort_order: plan.sort_order,
+      created_at: plan.created_at,
+      updated_at: plan.updated_at,
+      feature_count: featureAgg?.[0]?.count ?? 0,
+    };
+  });
+
+  return { data: plans, error: null };
+}
+
+/**
+ * Fetch a single plan with all its feature assignments and definitions.
+ */
+export async function getPlanWithFeatures(
+  planId: string
+): Promise<{ data: { plan: Plan; features: PlanFeature[]; allFeatures: FeatureDefinition[] } | null; error: Error | null }> {
+  const supabase = createClient();
+
+  const [planResult, featuresResult, allFeaturesResult] = await Promise.all([
+    supabase.from('plans').select('*').eq('id', planId).single(),
+    supabase
+      .from('plan_features')
+      .select('*, feature_definitions(*)')
+      .eq('plan_id', planId),
+    supabase.from('feature_definitions').select('*').order('category').order('name'),
+  ]);
+
+  if (planResult.error) {
+    return { data: null, error: new Error(planResult.error.message) };
+  }
+
+  return {
+    data: {
+      plan: planResult.data as Plan,
+      features: (featuresResult.data ?? []) as unknown as PlanFeature[],
+      allFeatures: (allFeaturesResult.data ?? []) as FeatureDefinition[],
+    },
+    error: null,
+  };
+}
+
+/**
+ * Update a single plan feature (upsert enabled + value).
+ */
+export async function updatePlanFeature(
+  planId: string,
+  featureId: string,
+  enabled: boolean,
+  value?: string | null
+): Promise<RpcResult> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc('admin_update_plan_feature', {
+    p_plan_id: planId,
+    p_feature_id: featureId,
+    p_enabled: enabled,
+    p_value: value ?? null,
+  });
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  const updateResult = data as Record<string, unknown>;
+  if (updateResult?.success === false) {
+    return { data: null, error: new Error(String(updateResult.error || 'Unknown error')) };
+  }
+
+  return { data: data as Record<string, unknown>, error: null };
+}
+
+/**
+ * Create a new plan.
+ */
+export async function createPlan(
+  name: string,
+  tier: string,
+  description?: string
+): Promise<RpcResult<Plan>> {
+  const supabase = createClient();
+
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+  const { data, error } = await supabase.rpc('admin_create_plan', {
+    p_name: name,
+    p_slug: slug,
+    p_tier: tier,
+    p_description: description || null,
+  });
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  // RPC returns JSONB with success/error fields
+  const result = data as Record<string, unknown>;
+  if (result?.success === false) {
+    return { data: null, error: new Error(String(result.error || 'Unknown error')) };
+  }
+
+  return { data: data as Plan, error: null };
+}
+
+/**
+ * Assign a plan to an organization (upsert so changing plan just updates).
+ */
+export async function assignOrgPlan(
+  orgId: string,
+  planId: string
+): Promise<RpcResult> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc('admin_assign_org_plan', {
+    p_org_id: orgId,
+    p_plan_id: planId,
+  });
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  const assignResult = data as Record<string, unknown>;
+  if (assignResult?.success === false) {
+    return { data: null, error: new Error(String(assignResult.error || 'Unknown error')) };
+  }
+
+  return { data: data as Record<string, unknown>, error: null };
+}
+
+/**
+ * Get the current plan assignment for an organization.
+ * Uses admin_get_org_plan RPC to bypass organization_plans RLS.
+ */
+export async function getOrgPlan(
+  orgId: string
+): Promise<{ data: OrganizationPlan | null; error: Error | null }> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc('admin_get_org_plan', {
+    p_org_id: orgId,
+  });
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  const result = data as Record<string, unknown> | null;
+  if (!result || result.success === false) {
+    const errMsg = result?.error ? String(result.error) : 'Failed to fetch org plan';
+    return { data: null, error: new Error(errMsg) };
+  }
+
+  // RPC returns null data when no plan is assigned
+  if (result.data === null) {
+    return { data: null, error: null };
+  }
+
+  // Map RPC result to OrganizationPlan shape
+  return {
+    data: {
+      id: result.id as string,
+      organization_id: result.organization_id as string,
+      plan_id: result.plan_id as string,
+      assigned_at: result.assigned_at as string,
+      assigned_by: result.assigned_by as string | null,
+      plans: result.plans as Plan,
+    },
+    error: null,
+  };
+}
+
+/**
+ * Fetch all active plans (for dropdown selectors).
+ */
+export async function getActivePlans(): Promise<{ data: Plan[] | null; error: Error | null }> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from('plans')
+    .select('*')
+    .eq('is_active', true)
+    .order('sort_order');
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  return { data: data as Plan[], error: null };
+}
+
+/**
+ * Delete a plan. Blocked if any organizations are assigned to it.
+ */
+export async function deletePlan(planId: string): Promise<RpcResult> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc('admin_delete_plan', {
+    p_plan_id: planId,
+  });
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  const result = data as Record<string, unknown>;
+  if (result?.success === false) {
+    const message = result.message || result.error || 'Unknown error';
+    return { data: null, error: new Error(String(message)) };
+  }
+
+  return { data: data as Record<string, unknown>, error: null };
+}
+
+/**
+ * Activate or deactivate a plan.
+ */
+export async function togglePlanActive(planId: string, isActive: boolean): Promise<RpcResult> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc('admin_toggle_plan_active', {
+    p_plan_id: planId,
+    p_is_active: isActive,
+  });
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  const result = data as Record<string, unknown>;
+  if (result?.success === false) {
+    return { data: null, error: new Error(String(result.error || 'Unknown error')) };
+  }
+
+  return { data: data as Record<string, unknown>, error: null };
+}
+
+// ---------------------------------------------------------------------------
 // Impersonation
 // ---------------------------------------------------------------------------
 
