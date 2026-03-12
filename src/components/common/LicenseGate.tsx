@@ -66,11 +66,12 @@ export function LicenseGate({
   fallback = null,
   children,
 }: LicenseGateProps): React.ReactElement | null {
-  const { isAllowed, loading } = useFeatureGate();
+  const { isAllowed, loading, hasInitialized } = useFeatureGate();
 
-  // Don't render anything until feature gate data has loaded
-  // useFeatureGate defaults to fail-open, but we want to avoid flicker
-  if (loading) {
+  // Don't render anything until feature gate data has loaded at least once.
+  // After initialization, we trust the cached features even during refreshes
+  // to prevent gated content from disappearing (flicker regression).
+  if (loading && !hasInitialized) {
     return null;
   }
 

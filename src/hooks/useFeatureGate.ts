@@ -20,7 +20,7 @@
  * ```
  */
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import type { FeatureAccess } from "../../electron/types/featureGate";
 
 export type { FeatureAccess } from "../../electron/types/featureGate";
@@ -30,8 +30,10 @@ interface UseFeatureGateReturn {
   isAllowed: (featureKey: string) => boolean;
   /** All loaded features */
   features: Record<string, FeatureAccess>;
-  /** True while features are being loaded */
+  /** True while features are being loaded for the first time */
   loading: boolean;
+  /** True after features have been loaded at least once */
+  hasInitialized: boolean;
   /** Refresh features from the server */
   refresh: () => Promise<void>;
 }
@@ -39,6 +41,8 @@ interface UseFeatureGateReturn {
 export function useFeatureGate(): UseFeatureGateReturn {
   const [features, setFeatures] = useState<Record<string, FeatureAccess>>({});
   const [loading, setLoading] = useState(true);
+  const hasInitializedRef = useRef(false);
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   const loadFeatures = useCallback(async () => {
     try {
@@ -48,6 +52,10 @@ export function useFeatureGate(): UseFeatureGateReturn {
       // On error, keep empty features (fail-open: everything allowed)
     } finally {
       setLoading(false);
+      if (!hasInitializedRef.current) {
+        hasInitializedRef.current = true;
+        setHasInitialized(true);
+      }
     }
   }, []);
 
@@ -56,7 +64,8 @@ export function useFeatureGate(): UseFeatureGateReturn {
   }, [loadFeatures]);
 
   const refresh = useCallback(async () => {
-    setLoading(true);
+    // Don't set loading=true during refresh to avoid hiding already-visible content.
+    // Features stay visible with stale data while refresh completes (no flicker).
     await window.api.featureGate.invalidateCache();
     await loadFeatures();
   }, [loadFeatures]);
@@ -75,9 +84,10 @@ export function useFeatureGate(): UseFeatureGateReturn {
       isAllowed,
       features,
       loading,
+      hasInitialized,
       refresh,
     }),
-    [isAllowed, features, loading, refresh]
+    [isAllowed, features, loading, hasInitialized, refresh]
   );
 }
 

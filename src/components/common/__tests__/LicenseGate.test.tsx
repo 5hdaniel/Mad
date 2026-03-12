@@ -17,11 +17,13 @@ import { LicenseGate } from "../LicenseGate";
 // Mock the useFeatureGate hook
 const mockIsAllowed = jest.fn();
 const mockLoading = { value: false };
+const mockHasInitialized = { value: true };
 jest.mock("@/hooks/useFeatureGate", () => ({
   useFeatureGate: () => ({
     isAllowed: mockIsAllowed,
     features: {},
     loading: mockLoading.value,
+    hasInitialized: mockHasInitialized.value,
     refresh: jest.fn(),
   }),
 }));
@@ -38,13 +40,15 @@ describe("LicenseGate", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockLoading.value = false;
+    mockHasInitialized.value = true;
     // Default: no features allowed
     setAllowedFeatures(new Set());
   });
 
   describe("Loading state", () => {
-    it("should render nothing while feature gate is loading", () => {
+    it("should render nothing during initial load (not yet initialized)", () => {
       mockLoading.value = true;
+      mockHasInitialized.value = false;
       setAllowedFeatures(new Set(["text_export", "email_export"]));
 
       render(
@@ -54,6 +58,22 @@ describe("LicenseGate", () => {
       );
 
       expect(screen.queryByTestId("content")).not.toBeInTheDocument();
+    });
+
+    it("should keep content visible during refresh (after initialization)", () => {
+      // Simulates a refresh: loading is true but features were already loaded once
+      mockLoading.value = true;
+      mockHasInitialized.value = true;
+      setAllowedFeatures(new Set(["text_export", "email_export"]));
+
+      render(
+        <LicenseGate requires="individual">
+          <span data-testid="content">Content</span>
+        </LicenseGate>
+      );
+
+      // Content should remain visible during refresh (no flicker)
+      expect(screen.getByTestId("content")).toBeInTheDocument();
     });
   });
 
