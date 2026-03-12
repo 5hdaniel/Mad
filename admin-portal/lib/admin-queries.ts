@@ -166,7 +166,6 @@ export interface FeatureDefinition {
 }
 
 export interface FeatureDependency {
-  id: string;
   feature_key: string;
   depends_on_key: string;
 }

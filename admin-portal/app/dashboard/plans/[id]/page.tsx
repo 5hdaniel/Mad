@@ -68,7 +68,7 @@ export default async function PlanDetailPage({
       .select('*, feature_definitions(*)')
       .eq('plan_id', id),
     supabase.from('feature_definitions').select('*').order('category').order('name'),
-    supabase.from('feature_dependencies').select('id, feature_key, depends_on_key'),
+    supabase.from('feature_dependencies').select('feature_key, depends_on_key'),
   ]);
 
   if (!planResult.data) {
