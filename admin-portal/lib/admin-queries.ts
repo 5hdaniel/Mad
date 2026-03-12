@@ -378,6 +378,29 @@ export async function getActivePlans(): Promise<{ data: Plan[] | null; error: Er
   return { data: data as Plan[], error: null };
 }
 
+/**
+ * Delete a plan. Blocked if any organizations are assigned to it.
+ */
+export async function deletePlan(planId: string): Promise<RpcResult> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc('admin_delete_plan', {
+    p_plan_id: planId,
+  });
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  const result = data as Record<string, unknown>;
+  if (result?.success === false) {
+    const message = result.message || result.error || 'Unknown error';
+    return { data: null, error: new Error(String(message)) };
+  }
+
+  return { data: data as Record<string, unknown>, error: null };
+}
+
 // ---------------------------------------------------------------------------
 // Impersonation
 // ---------------------------------------------------------------------------

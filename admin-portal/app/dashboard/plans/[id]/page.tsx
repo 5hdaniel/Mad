@@ -3,6 +3,7 @@ import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, CreditCard, CheckCircle2, XCircle } from 'lucide-react';
 import { FeatureToggleList } from '../components/FeatureToggleList';
+import { DeletePlanButton } from '../components/DeletePlanButton';
 import { formatDate } from '@/lib/format';
 import type { Plan, PlanFeature, FeatureDefinition } from '@/lib/admin-queries';
 
@@ -145,6 +146,19 @@ export default async function PlanDetailPage({
           canManage={!!canManage}
         />
       </div>
+
+      {/* Danger zone */}
+      {canManage && (
+        <div className="border border-red-200 rounded-lg p-6">
+          <h2 className="text-sm font-semibold text-red-700 uppercase tracking-wider mb-2">
+            Danger Zone
+          </h2>
+          <p className="text-sm text-gray-500 mb-4">
+            Deleting a plan is permanent. Plans with assigned organizations cannot be deleted.
+          </p>
+          <DeletePlanButton planId={plan.id} planName={plan.name} />
+        </div>
+      )}
     </div>
   );
 }
