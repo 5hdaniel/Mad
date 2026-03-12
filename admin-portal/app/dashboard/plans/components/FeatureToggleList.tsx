@@ -456,12 +456,17 @@ export function FeatureToggleList({
     const tierLocked = isTierLocked(fd, planTier);
     const unmetDeps = getUnmetDeps(fd.key);
     const hasUnmetDeps = unmetDeps.length > 0 && !state.enabled;
-    const isLocked = tierLocked;
+    // Also lock if any unmet dependency is itself tier-locked (can never be enabled on this tier)
+    const depsAreTierLocked = hasUnmetDeps && unmetDeps.some((dep) => isTierLocked(dep, planTier));
+    const isLocked = tierLocked || depsAreTierLocked;
 
     // Build tooltip text
     let tooltip = '';
     if (tierLocked) {
       tooltip = `Requires ${TIER_LABELS[fd.min_tier!] ?? fd.min_tier} tier or higher`;
+    } else if (depsAreTierLocked) {
+      const lockedDeps = unmetDeps.filter((dep) => isTierLocked(dep, planTier));
+      tooltip = `Blocked: ${lockedDeps.map((d) => d.name).join(', ')} requires a higher tier`;
     } else if (hasUnmetDeps) {
       tooltip = `Requires ${unmetDeps.map((d) => d.name).join(', ')} to be enabled first`;
     }
@@ -483,7 +488,13 @@ export function FeatureToggleList({
                 <span>{TIER_LABELS[fd.min_tier!] ?? fd.min_tier}+</span>
               </span>
             )}
-            {hasUnmetDeps && !tierLocked && (
+            {depsAreTierLocked && !tierLocked && (
+              <span className="inline-flex items-center gap-1 text-xs text-gray-500" title={tooltip}>
+                <Lock className="h-3 w-3" />
+                <span>Blocked by tier</span>
+              </span>
+            )}
+            {hasUnmetDeps && !tierLocked && !depsAreTierLocked && (
               <span className="inline-flex items-center gap-1 text-xs text-amber-600" title={tooltip}>
                 <Link2 className="h-3 w-3" />
                 <span>Requires {unmetDeps.map((d) => d.name).join(', ')}</span>
