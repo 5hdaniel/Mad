@@ -10,7 +10,7 @@
 import { useState, useEffect, useRef, useId } from 'react';
 import { createPlan } from '@/lib/admin-queries';
 
-const TIER_OPTIONS = ['trial', 'pro', 'enterprise', 'custom'] as const;
+const TIER_OPTIONS = ['individual', 'team', 'enterprise', 'custom'] as const;
 
 interface CreatePlanDialogProps {
   onClose: () => void;
@@ -19,7 +19,7 @@ interface CreatePlanDialogProps {
 
 export function CreatePlanDialog({ onClose, onCreated }: CreatePlanDialogProps) {
   const [name, setName] = useState('');
-  const [tier, setTier] = useState<string>('trial');
+  const [tier, setTier] = useState<string>('individual');
   const [description, setDescription] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
