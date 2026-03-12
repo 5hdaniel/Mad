@@ -312,7 +312,7 @@ export async function createPlan(
   // RPC returns JSONB with success/error fields
   const result = data as Record<string, unknown>;
   if (result?.success === false) {
-    return { data: null, error: new Error(String(result.error || 'Unknown error')) };
+    return { data: null, error: new Error(String(result.message || result.error || 'Unknown error')) };
   }
 
   return { data: data as Plan, error: null };
@@ -445,7 +445,7 @@ export async function togglePlanActive(planId: string, isActive: boolean): Promi
 
   const result = data as Record<string, unknown>;
   if (result?.success === false) {
-    return { data: null, error: new Error(String(result.error || 'Unknown error')) };
+    return { data: null, error: new Error(String(result.message || result.error || 'Unknown error')) };
   }
 
   return { data: data as Record<string, unknown>, error: null };
@@ -472,7 +472,8 @@ export async function updatePlanTier(
 
   const result = data as Record<string, unknown>;
   if (result?.success === false) {
-    return { data: null, error: new Error(String(result.error || 'Unknown error')) };
+    const message = String(result.message || result.error || 'Unknown error');
+    return { data: null, error: new Error(message) };
   }
 
   return { data: data as Record<string, unknown>, error: null };
