@@ -340,23 +340,44 @@ export async function assignOrgPlan(
 
 /**
  * Get the current plan assignment for an organization.
+ * Uses admin_get_org_plan RPC to bypass organization_plans RLS.
  */
 export async function getOrgPlan(
   orgId: string
 ): Promise<{ data: OrganizationPlan | null; error: Error | null }> {
   const supabase = createClient();
 
-  const { data, error } = await supabase
-    .from('organization_plans')
-    .select('*, plans(*)')
-    .eq('organization_id', orgId)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc('admin_get_org_plan', {
+    p_org_id: orgId,
+  });
 
   if (error) {
     return { data: null, error: new Error(error.message) };
   }
 
-  return { data: data as OrganizationPlan | null, error: null };
+  const result = data as Record<string, unknown> | null;
+  if (!result || result.success === false) {
+    const errMsg = result?.error ? String(result.error) : 'Failed to fetch org plan';
+    return { data: null, error: new Error(errMsg) };
+  }
+
+  // RPC returns null data when no plan is assigned
+  if (result.data === null) {
+    return { data: null, error: null };
+  }
+
+  // Map RPC result to OrganizationPlan shape
+  return {
+    data: {
+      id: result.id as string,
+      organization_id: result.organization_id as string,
+      plan_id: result.plan_id as string,
+      assigned_at: result.assigned_at as string,
+      assigned_by: result.assigned_by as string | null,
+      plans: result.plans as Plan,
+    },
+    error: null,
+  };
 }
 
 /**

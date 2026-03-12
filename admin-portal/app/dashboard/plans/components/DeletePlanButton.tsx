@@ -55,6 +55,7 @@ export function DeletePlanButton({ planId, planName }: DeletePlanButtonProps) {
           onConfirm={handleDelete}
           onCancel={() => setShowConfirm(false)}
           isLoading={isDeleting}
+          isDestructive={true}
         />
       )}
     </>

@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, CreditCard, CheckCircle2, XCircle } from 'lucide-react';
+import { ArrowLeft, CreditCard } from 'lucide-react';
 import { FeatureToggleList } from '../components/FeatureToggleList';
 import { DeletePlanButton } from '../components/DeletePlanButton';
 import { PlanStatusToggle } from '../components/PlanStatusToggle';

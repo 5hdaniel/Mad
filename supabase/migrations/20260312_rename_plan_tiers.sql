@@ -132,3 +132,114 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.admin_delete_plan(UUID) TO authenticated;
+
+-- 6. Add admin_toggle_plan_active RPC
+CREATE OR REPLACE FUNCTION public.admin_toggle_plan_active(
+  p_plan_id UUID,
+  p_is_active BOOLEAN
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_admin_id UUID;
+  v_has_perm BOOLEAN;
+  v_plan_name TEXT;
+  v_previous_is_active BOOLEAN;
+BEGIN
+  v_admin_id := auth.uid();
+  IF v_admin_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'not_authenticated');
+  END IF;
+
+  SELECT public.has_permission(v_admin_id, 'plans.manage') INTO v_has_perm;
+  IF NOT v_has_perm THEN
+    RETURN jsonb_build_object('success', false, 'error', 'insufficient_permissions');
+  END IF;
+
+  SELECT name, is_active INTO v_plan_name, v_previous_is_active
+  FROM public.plans WHERE id = p_plan_id;
+
+  IF v_plan_name IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'plan_not_found');
+  END IF;
+
+  UPDATE public.plans
+  SET is_active = p_is_active, updated_at = now()
+  WHERE id = p_plan_id;
+
+  INSERT INTO public.admin_audit_logs (actor_id, action, target_type, target_id, metadata)
+  VALUES (
+    v_admin_id,
+    'plan.toggled',
+    'plan',
+    p_plan_id::text,
+    jsonb_build_object(
+      'name',               v_plan_name,
+      'previous_is_active', v_previous_is_active,
+      'new_is_active',      p_is_active
+    )
+  );
+
+  RETURN jsonb_build_object(
+    'success',            true,
+    'previous_is_active', v_previous_is_active
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.admin_toggle_plan_active(UUID, BOOLEAN) TO authenticated;
+
+-- 7. Add admin_get_org_plan RPC (bypasses RLS for admin reads)
+CREATE OR REPLACE FUNCTION public.admin_get_org_plan(p_org_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_admin_id UUID;
+  v_has_perm BOOLEAN;
+  v_result JSONB;
+BEGIN
+  v_admin_id := auth.uid();
+  IF v_admin_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'not_authenticated');
+  END IF;
+
+  SELECT public.has_permission(v_admin_id, 'plans.view') INTO v_has_perm;
+  IF NOT v_has_perm THEN
+    RETURN jsonb_build_object('success', false, 'error', 'insufficient_permissions');
+  END IF;
+
+  SELECT jsonb_build_object(
+    'success',         true,
+    'id',              op.id,
+    'organization_id', op.organization_id,
+    'plan_id',         op.plan_id,
+    'assigned_at',     op.assigned_at,
+    'assigned_by',     op.assigned_by,
+    'plans', jsonb_build_object(
+      'id',          p.id,
+      'name',        p.name,
+      'tier',        p.tier,
+      'description', p.description,
+      'is_active',   p.is_active,
+      'sort_order',  p.sort_order,
+      'created_at',  p.created_at,
+      'updated_at',  p.updated_at
+    )
+  ) INTO v_result
+  FROM public.organization_plans op
+  JOIN public.plans p ON p.id = op.plan_id
+  WHERE op.organization_id = p_org_id;
+
+  IF v_result IS NULL THEN
+    RETURN jsonb_build_object('success', true, 'data', null);
+  END IF;
+
+  RETURN v_result;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.admin_get_org_plan(UUID) TO authenticated;
