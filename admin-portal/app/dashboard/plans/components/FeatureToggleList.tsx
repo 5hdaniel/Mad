@@ -110,6 +110,18 @@ export function FeatureToggleList({ planId, features, allFeatures, canManage }: 
     setSaveSuccess(false);
   }, []);
 
+  const handleToggleCategory = useCallback((categoryFeatures: FeatureDefinition[]) => {
+    setFeatureState((prev) => {
+      const allEnabled = categoryFeatures.every((fd) => prev[fd.id]?.enabled);
+      const updated = { ...prev };
+      for (const fd of categoryFeatures) {
+        updated[fd.id] = { ...updated[fd.id], enabled: !allEnabled };
+      }
+      return updated;
+    });
+    setSaveSuccess(false);
+  }, []);
+
   const handleValueChange = useCallback((featureId: string, value: string) => {
     setFeatureState((prev) => ({
       ...prev,
@@ -197,10 +209,18 @@ export function FeatureToggleList({ planId, features, allFeatures, canManage }: 
       {/* Feature groups */}
       {sortedCategories.map((category) => (
         <div key={category} className="bg-white rounded-lg shadow-sm border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200">
+          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">
               {CATEGORY_LABELS[category] ?? category}
             </h3>
+            {canManage && (
+              <button
+                onClick={() => handleToggleCategory(grouped[category])}
+                className="text-xs font-medium text-primary-600 hover:text-primary-700 transition-colors"
+              >
+                {grouped[category].every((fd) => featureState[fd.id]?.enabled) ? 'Deselect All' : 'Select All'}
+              </button>
+            )}
           </div>
           <div className="divide-y divide-gray-100">
             {grouped[category].map((fd) => {
