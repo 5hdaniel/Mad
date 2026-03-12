@@ -234,6 +234,17 @@ CROSS JOIN public.feature_definitions fd
 WHERE fd.key = 'broker_portal_access'
 ON CONFLICT (plan_id, feature_id) DO NOTHING;
 
+-- Fix: Disable broker view features inherited from old text_export/email_export for Individual plan
+-- The key rename in section 4 preserved existing plan_features rows which had enabled=true.
+-- Broker visibility features should only be enabled for team/enterprise/custom.
+UPDATE public.plan_features
+SET enabled = false
+WHERE plan_id = (SELECT id FROM public.plans WHERE tier = 'individual')
+  AND feature_id IN (
+    SELECT id FROM public.feature_definitions
+    WHERE key IN ('broker_text_view', 'broker_email_view')
+  );
+
 -- ============================================================================
 -- 10. CREATE feature_dependencies JUNCTION TABLE
 -- ============================================================================
@@ -638,7 +649,7 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 DECLARE
-  v_visited TEXT[] := ARRAY[NEW.feature_key];
+  v_visited TEXT[] := ARRAY[]::TEXT[];
   v_queue TEXT[] := ARRAY[NEW.depends_on_key];
   v_current TEXT;
   v_next TEXT;
