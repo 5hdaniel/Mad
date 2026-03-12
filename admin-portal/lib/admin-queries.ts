@@ -401,6 +401,29 @@ export async function deletePlan(planId: string): Promise<RpcResult> {
   return { data: data as Record<string, unknown>, error: null };
 }
 
+/**
+ * Activate or deactivate a plan.
+ */
+export async function togglePlanActive(planId: string, isActive: boolean): Promise<RpcResult> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc('admin_toggle_plan_active', {
+    p_plan_id: planId,
+    p_is_active: isActive,
+  });
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  const result = data as Record<string, unknown>;
+  if (result?.success === false) {
+    return { data: null, error: new Error(String(result.error || 'Unknown error')) };
+  }
+
+  return { data: data as Record<string, unknown>, error: null };
+}
+
 // ---------------------------------------------------------------------------
 // Impersonation
 // ---------------------------------------------------------------------------

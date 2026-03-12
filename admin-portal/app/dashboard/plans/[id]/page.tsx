@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ArrowLeft, CreditCard, CheckCircle2, XCircle } from 'lucide-react';
 import { FeatureToggleList } from '../components/FeatureToggleList';
 import { DeletePlanButton } from '../components/DeletePlanButton';
+import { PlanStatusToggle } from '../components/PlanStatusToggle';
 import { formatDate } from '@/lib/format';
 import type { Plan, PlanFeature, FeatureDefinition } from '@/lib/admin-queries';
 
@@ -96,17 +97,7 @@ export default async function PlanDetailPage({
           <div className="flex-1">
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold text-gray-900">{plan.name}</h1>
-              {plan.is_active ? (
-                <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
-                  <CheckCircle2 className="h-3 w-3" />
-                  Active
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
-                  <XCircle className="h-3 w-3" />
-                  Inactive
-                </span>
-              )}
+              <PlanStatusToggle planId={plan.id} isActive={plan.is_active} canManage={!!canManage} />
             </div>
             {plan.description && (
               <p className="text-sm text-gray-500 mt-1">{plan.description}</p>
