@@ -10,19 +10,13 @@
 import Link from 'next/link';
 import { CreditCard, Layers, CheckCircle2, XCircle } from 'lucide-react';
 import type { PlanSummary } from './PlansPageClient';
+import { TIER_LABELS } from '@/lib/plan-constants';
 
 const tierColors: Record<string, string> = {
   individual: 'bg-blue-100 text-blue-700',
   team: 'bg-purple-100 text-purple-700',
   enterprise: 'bg-amber-100 text-amber-700',
   custom: 'bg-green-100 text-green-700',
-};
-
-const TIER_LABELS: Record<string, string> = {
-  individual: 'Individual',
-  team: 'Team',
-  enterprise: 'Enterprise',
-  custom: 'Custom',
 };
 
 interface PlanCardProps {

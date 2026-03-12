@@ -11,15 +11,9 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { updatePlanTier } from '@/lib/admin-queries';
+import { TIER_LABELS } from '@/lib/plan-constants';
 
 const TIER_OPTIONS = ['individual', 'team', 'enterprise', 'custom'] as const;
-
-const TIER_LABELS: Record<string, string> = {
-  individual: 'Individual',
-  team: 'Team',
-  enterprise: 'Enterprise',
-  custom: 'Custom',
-};
 
 interface PlanTierEditorProps {
   planId: string;

@@ -479,26 +479,6 @@ export async function updatePlanTier(
   return { data: data as Record<string, unknown>, error: null };
 }
 
-/**
- * Fetch all feature dependencies from the feature_dependencies table.
- */
-export async function getFeatureDependencies(): Promise<{
-  data: FeatureDependency[] | null;
-  error: Error | null;
-}> {
-  const supabase = createClient();
-
-  const { data, error } = await supabase
-    .from('feature_dependencies')
-    .select('id, feature_key, depends_on_key');
-
-  if (error) {
-    return { data: null, error: new Error(error.message) };
-  }
-
-  return { data: data as FeatureDependency[], error: null };
-}
-
 // ---------------------------------------------------------------------------
 // Impersonation
 // ---------------------------------------------------------------------------

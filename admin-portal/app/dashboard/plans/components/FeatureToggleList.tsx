@@ -18,6 +18,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { Save, RotateCcw, Lock, Link2 } from 'lucide-react';
 import { updatePlanFeature, type FeatureDefinition, type PlanFeature, type FeatureDependency } from '@/lib/admin-queries';
 import { ConfirmationDialog } from '@/components/shared/ConfirmationDialog';
+import { TIER_LABELS } from '@/lib/plan-constants';
 
 interface FeatureState {
   enabled: boolean;
@@ -39,13 +40,6 @@ const TIER_RANK: Record<string, number> = {
   team: 2,
   enterprise: 3,
   custom: 4,
-};
-
-const TIER_LABELS: Record<string, string> = {
-  individual: 'Individual',
-  team: 'Team',
-  enterprise: 'Enterprise',
-  custom: 'Custom',
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -331,22 +325,114 @@ export function FeatureToggleList({
     setSaveSuccess(false);
   }, [initialState]);
 
+  /**
+   * Topologically sort feature IDs based on dependency graph.
+   * Returns IDs in dependency-first order: if A depends on B, B comes before A.
+   */
+  const topologicalSort = useCallback(
+    (featureIds: string[]): string[] => {
+      // Build adjacency: for each feature ID, which IDs must come before it?
+      const idToKey: Record<string, string> = {};
+      const keyToId: Record<string, string> = {};
+      for (const fd of allFeatures) {
+        idToKey[fd.id] = fd.key;
+        keyToId[fd.key] = fd.id;
+      }
+
+      const idSet = new Set(featureIds);
+      const inDegree: Record<string, number> = {};
+      const graph: Record<string, string[]> = {};
+
+      for (const id of featureIds) {
+        inDegree[id] = 0;
+        graph[id] = [];
+      }
+
+      // For each feature in our set, add edges from its dependencies (also in set)
+      for (const id of featureIds) {
+        const key = idToKey[id];
+        if (!key) continue;
+        const depKeys = depsOf[key];
+        if (!depKeys) continue;
+        for (const depKey of depKeys) {
+          const depId = keyToId[depKey];
+          if (depId && idSet.has(depId)) {
+            // depId must come before id
+            graph[depId].push(id);
+            inDegree[id] = (inDegree[id] || 0) + 1;
+          }
+        }
+      }
+
+      // Kahn's algorithm
+      const queue: string[] = [];
+      for (const id of featureIds) {
+        if (inDegree[id] === 0) queue.push(id);
+      }
+
+      const sorted: string[] = [];
+      while (queue.length > 0) {
+        const current = queue.shift()!;
+        sorted.push(current);
+        for (const neighbor of graph[current]) {
+          inDegree[neighbor]--;
+          if (inDegree[neighbor] === 0) queue.push(neighbor);
+        }
+      }
+
+      // If cycle detected (sorted shorter than input), append remaining in original order
+      if (sorted.length < featureIds.length) {
+        const sortedSet = new Set(sorted);
+        for (const id of featureIds) {
+          if (!sortedSet.has(id)) sorted.push(id);
+        }
+      }
+
+      return sorted;
+    },
+    [allFeatures, depsOf],
+  );
+
   const handleSave = async () => {
     setSaving(true);
     setSaveError(null);
     setShowConfirm(false);
 
-    const changes: { featureId: string; enabled: boolean; value: string | null }[] = [];
+    const enables: { featureId: string; enabled: boolean; value: string | null }[] = [];
+    const disables: { featureId: string; enabled: boolean; value: string | null }[] = [];
+    const valueOnly: { featureId: string; enabled: boolean; value: string | null }[] = [];
+
     for (const fdId of Object.keys(featureState)) {
       const current = featureState[fdId];
       const initial = initialState[fdId];
       if (!initial) continue;
       if (current.enabled !== initial.enabled || current.value !== initial.value) {
-        changes.push({ featureId: fdId, enabled: current.enabled, value: current.value });
+        if (current.enabled && !initial.enabled) {
+          enables.push({ featureId: fdId, enabled: current.enabled, value: current.value });
+        } else if (!current.enabled && initial.enabled) {
+          disables.push({ featureId: fdId, enabled: current.enabled, value: current.value });
+        } else {
+          // Value-only change (enabled state unchanged)
+          valueOnly.push({ featureId: fdId, enabled: current.enabled, value: current.value });
+        }
       }
     }
 
-    for (const change of changes) {
+    // Sort enables in dependency-first order (topological: dependencies before dependents)
+    const enableOrder = topologicalSort(enables.map((e) => e.featureId));
+    const enableMap = new Map(enables.map((e) => [e.featureId, e]));
+    const sortedEnables = enableOrder.map((id) => enableMap.get(id)!);
+
+    // Sort disables in dependent-first order (reverse topological: dependents before dependencies)
+    const disableOrder = topologicalSort(disables.map((d) => d.featureId));
+    const disableMap = new Map(disables.map((d) => [d.featureId, d]));
+    const sortedDisables = disableOrder.map((id) => disableMap.get(id)!).reverse();
+
+    // Process in safe order: disables first (dependents before deps),
+    // then enables (deps before dependents), then value-only changes
+    const orderedChanges = [...sortedDisables, ...sortedEnables, ...valueOnly];
+
+    for (const change of orderedChanges) {
       const result = await updatePlanFeature(planId, change.featureId, change.enabled, change.value);
       if (result.error) {
         setSaveError(`Failed to update feature: ${result.error.message}`);
