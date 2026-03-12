@@ -3,6 +3,7 @@ import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Building2 } from 'lucide-react';
 import { MembersTable, type MemberRow } from './components/MembersTable';
+import { PlanAssignment } from './components/PlanAssignment';
 import { formatDate } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -48,6 +49,12 @@ export default async function OrganizationDetailPage({
   if (!hasPerm) {
     redirect('/dashboard?error=insufficient_permissions');
   }
+
+  // Check if user can manage plans
+  const { data: canManagePlans } = await supabase.rpc('has_permission', {
+    check_user_id: adminUser.id,
+    required_permission: 'plans.manage',
+  });
 
   // Fetch org details and members in parallel
   const [orgResult, membersResult] = await Promise.all([
@@ -125,6 +132,9 @@ export default async function OrganizationDetailPage({
           </div>
         </div>
       </div>
+
+      {/* Plan assignment */}
+      <PlanAssignment organizationId={org.id} canManage={!!canManagePlans} />
 
       {/* Members table (includes license summary filter cards) */}
       <div>
