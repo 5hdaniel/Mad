@@ -9,6 +9,7 @@ import { LicenseGate } from "./common/LicenseGate";
 import { AlertBanner, AlertIcons } from "./common/AlertBanner";
 import { TransactionLimitModal } from "./common/TransactionLimitModal";
 import { useLicense } from "../contexts/LicenseContext";
+import { useFeatureGate } from "../hooks/useFeatureGate";
 import {
   getDashboardTourSteps,
   JOYRIDE_STYLES,
@@ -80,7 +81,9 @@ function Dashboard({
     usePendingTransactionCount();
 
   // License status for transaction limit check and AI addon
-  const { canCreateTransaction, transactionCount, transactionLimit, hasAIAddon } = useLicense();
+  const { canCreateTransaction, transactionCount, transactionLimit } = useLicense();
+  const { isAllowed } = useFeatureGate();
+  const hasAIAddon = isAllowed("ai_detection");
 
   // Check if notifications are already enabled (macOS only)
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);

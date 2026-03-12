@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import type { Subscription } from "../../electron/types/models";
 import { useLicense } from "@/contexts/LicenseContext";
+import { useFeatureGate } from "@/hooks/useFeatureGate";
 import logger from '../utils/logger';
 
 interface User {
@@ -61,7 +62,6 @@ function Profile({
   // Get license information for display
   const {
     licenseType,
-    hasAIAddon,
     organizationId,
     isLoading: licenseLoading,
     validationStatus,
@@ -69,6 +69,8 @@ function Profile({
     transactionCount,
     transactionLimit,
   } = useLicense();
+  const { isAllowed } = useFeatureGate();
+  const hasAIAddon = isAllowed("ai_detection");
 
   // Format license type for display
   const formatLicenseType = (type: string): string => {

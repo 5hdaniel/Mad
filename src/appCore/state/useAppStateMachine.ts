@@ -12,7 +12,8 @@
  */
 
 import { useCallback, useMemo } from "react";
-import { useAuth, useNetwork, usePlatform, useLicense } from "../../contexts";
+import { useAuth, useNetwork, usePlatform } from "../../contexts";
+import { useFeatureGate } from "../../hooks/useFeatureGate";
 import {
   useSecureStorage,
   useEmailOnboardingApi,
@@ -64,7 +65,8 @@ export function useAppStateMachine(): AppStateMachine {
 
   const { isMacOS, isWindows } = usePlatform();
 
-  const { hasAIAddon } = useLicense();
+  const { isAllowed } = useFeatureGate();
+  const hasAIAddon = isAllowed("ai_detection");
 
   // ============================================
   // STATE MACHINE (Optional - feature flagged)

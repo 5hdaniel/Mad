@@ -1,7 +1,7 @@
 import React from "react";
 import type { Transaction } from "@/types";
 import { LicenseGate } from "@/components/common/LicenseGate";
-import { useLicense } from "@/contexts/LicenseContext";
+import { useFeatureGate } from "@/hooks/useFeatureGate";
 
 // ============================================
 // DETECTION BADGE COMPONENTS
@@ -16,7 +16,8 @@ export function ManualEntryBadge({
 }: {
   source: "auto" | "manual" | "hybrid" | undefined;
 }) {
-  const { hasAIAddon } = useLicense();
+  const { isAllowed } = useFeatureGate();
+  const hasAIAddon = isAllowed("ai_detection");
 
   // Don't show badge if no AI add-on - no distinction needed
   if (!hasAIAddon) {
@@ -188,7 +189,8 @@ function TransactionStatusWrapper({
   onActionClick,
   children,
 }: TransactionStatusWrapperProps) {
-  const { hasAIAddon } = useLicense();
+  const { isAllowed } = useFeatureGate();
+  const hasAIAddon = isAllowed("ai_detection");
   const config = getStatusConfig(transaction, hasAIAddon);
 
   const handleActionClick = (e: React.MouseEvent<HTMLButtonElement>) => {

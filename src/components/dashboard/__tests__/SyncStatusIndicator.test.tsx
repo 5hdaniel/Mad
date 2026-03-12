@@ -6,7 +6,7 @@
  *
  * Key test cases:
  * 1. Progress shows for ALL users (not gated by license)
- * 2. AI-specific features (pending count, Review Now) only show with AI add-on
+ * 2. AI-specific features (pending count, Review Now) only show with ai_detection feature
  * 3. Pills display in queue order
  * 4. Error state shows red pill with tooltip
  * 5. iPhone renders as a standard queue pill
@@ -17,10 +17,15 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import { SyncStatusIndicator } from "../SyncStatusIndicator";
 import type { SyncItem, SyncType } from "../../../services/SyncOrchestratorService";
 
-// Mock the useLicense hook
-const mockUseLicense = jest.fn();
-jest.mock("../../../contexts/LicenseContext", () => ({
-  useLicense: () => mockUseLicense(),
+// Mock the useFeatureGate hook (TASK-2159: migrated from useLicense)
+const mockIsAllowed = jest.fn();
+jest.mock("../../../hooks/useFeatureGate", () => ({
+  useFeatureGate: () => ({
+    isAllowed: mockIsAllowed,
+    features: {},
+    loading: false,
+    refresh: jest.fn(),
+  }),
 }));
 
 // Mock the useSyncOrchestrator hook
@@ -75,12 +80,8 @@ describe("SyncStatusIndicator", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
-    // Default: no AI add-on
-    mockUseLicense.mockReturnValue({
-      hasAIAddon: false,
-      licenseType: "individual",
-      isLoading: false,
-    });
+    // Default: no AI add-on (ai_detection not allowed)
+    mockIsAllowed.mockImplementation((key: string) => key !== "ai_detection");
     // Default: empty queue (not running)
     mockUseSyncOrchestrator.mockReturnValue(createOrchestratorState([], false));
   });
@@ -91,11 +92,7 @@ describe("SyncStatusIndicator", () => {
 
   describe("Progress visibility for ALL users", () => {
     it("should render sync progress indicator when syncing (no AI add-on)", () => {
-      mockUseLicense.mockReturnValue({
-        hasAIAddon: false,
-        licenseType: "individual",
-        isLoading: false,
-      });
+      mockIsAllowed.mockImplementation((key: string) => key !== "ai_detection");
       // Set up orchestrator with messages running
       const queue = [
         createSyncItem('contacts', 'complete', 100),
@@ -111,11 +108,7 @@ describe("SyncStatusIndicator", () => {
     });
 
     it("should render sync progress indicator when syncing (with AI add-on)", () => {
-      mockUseLicense.mockReturnValue({
-        hasAIAddon: true,
-        licenseType: "individual",
-        isLoading: false,
-      });
+      mockIsAllowed.mockReturnValue(true); // All features allowed including ai_detection
       // Set up orchestrator with messages running
       const queue = [
         createSyncItem('contacts', 'complete', 100),
@@ -260,11 +253,7 @@ describe("SyncStatusIndicator", () => {
 
   describe("Completion state", () => {
     it("should show generic completion message for non-AI users", () => {
-      mockUseLicense.mockReturnValue({
-        hasAIAddon: false,
-        licenseType: "individual",
-        isLoading: false,
-      });
+      mockIsAllowed.mockImplementation((key: string) => key !== "ai_detection");
       // Start with running state
       const runningQueue = [
         createSyncItem('contacts', 'running', 50),
@@ -288,11 +277,7 @@ describe("SyncStatusIndicator", () => {
     });
 
     it("should show pending transactions for AI add-on users", () => {
-      mockUseLicense.mockReturnValue({
-        hasAIAddon: true,
-        licenseType: "individual",
-        isLoading: false,
-      });
+      mockIsAllowed.mockReturnValue(true); // All features allowed including ai_detection
       // Start with running state
       const runningQueue = [
         createSyncItem('contacts', 'running', 50),
@@ -313,11 +298,7 @@ describe("SyncStatusIndicator", () => {
     });
 
     it("should show generic completion for AI users with 0 pending", () => {
-      mockUseLicense.mockReturnValue({
-        hasAIAddon: true,
-        licenseType: "individual",
-        isLoading: false,
-      });
+      mockIsAllowed.mockReturnValue(true); // All features allowed including ai_detection
       // Start with running state
       const runningQueue = [
         createSyncItem('contacts', 'running', 50),
@@ -338,11 +319,7 @@ describe("SyncStatusIndicator", () => {
     });
 
     it("should auto-dismiss completion after 3 seconds", () => {
-      mockUseLicense.mockReturnValue({
-        hasAIAddon: false,
-        licenseType: "individual",
-        isLoading: false,
-      });
+      mockIsAllowed.mockImplementation((key: string) => key !== "ai_detection");
       // Start with running state
       const runningQueue = [
         createSyncItem('contacts', 'running', 50),
@@ -371,11 +348,7 @@ describe("SyncStatusIndicator", () => {
     });
 
     it("should allow manual dismiss during auto-dismiss window", () => {
-      mockUseLicense.mockReturnValue({
-        hasAIAddon: false,
-        licenseType: "individual",
-        isLoading: false,
-      });
+      mockIsAllowed.mockImplementation((key: string) => key !== "ai_detection");
       // Start with running state
       const runningQueue = [
         createSyncItem('contacts', 'running', 50),
@@ -401,11 +374,7 @@ describe("SyncStatusIndicator", () => {
     });
 
     it("should cancel auto-dismiss when new sync starts during completion window", () => {
-      mockUseLicense.mockReturnValue({
-        hasAIAddon: false,
-        licenseType: "individual",
-        isLoading: false,
-      });
+      mockIsAllowed.mockImplementation((key: string) => key !== "ai_detection");
       // Start with running state
       const runningQueue = [
         createSyncItem('contacts', 'running', 50),
@@ -443,11 +412,7 @@ describe("SyncStatusIndicator", () => {
     });
 
     it("should clean up auto-dismiss timer on unmount", () => {
-      mockUseLicense.mockReturnValue({
-        hasAIAddon: false,
-        licenseType: "individual",
-        isLoading: false,
-      });
+      mockIsAllowed.mockImplementation((key: string) => key !== "ai_detection");
       // Start with running state
       const runningQueue = [
         createSyncItem('contacts', 'running', 50),
@@ -473,11 +438,7 @@ describe("SyncStatusIndicator", () => {
     });
 
     it("should auto-dismiss even when queue still has completed items", () => {
-      mockUseLicense.mockReturnValue({
-        hasAIAddon: false,
-        licenseType: "individual",
-        isLoading: false,
-      });
+      mockIsAllowed.mockImplementation((key: string) => key !== "ai_detection");
       // Start with running state
       const runningQueue = [
         createSyncItem('contacts', 'running', 50),
@@ -508,11 +469,7 @@ describe("SyncStatusIndicator", () => {
     });
 
     it("should allow manual dismiss of completion message", () => {
-      mockUseLicense.mockReturnValue({
-        hasAIAddon: false,
-        licenseType: "individual",
-        isLoading: false,
-      });
+      mockIsAllowed.mockImplementation((key: string) => key !== "ai_detection");
       // Start with running state
       const runningQueue = [
         createSyncItem('contacts', 'running', 50),
@@ -537,11 +494,7 @@ describe("SyncStatusIndicator", () => {
   describe("Review Now button", () => {
     it("should call onViewPending when Review Now is clicked", () => {
       const onViewPending = jest.fn();
-      mockUseLicense.mockReturnValue({
-        hasAIAddon: true,
-        licenseType: "individual",
-        isLoading: false,
-      });
+      mockIsAllowed.mockReturnValue(true); // All features allowed including ai_detection
       // Start with running state
       const runningQueue = [
         createSyncItem('contacts', 'running', 50),
@@ -566,11 +519,7 @@ describe("SyncStatusIndicator", () => {
 
   describe("Progress persistence", () => {
     it("should reset dismissed state when new sync starts", () => {
-      mockUseLicense.mockReturnValue({
-        hasAIAddon: false,
-        licenseType: "individual",
-        isLoading: false,
-      });
+      mockIsAllowed.mockImplementation((key: string) => key !== "ai_detection");
       // Start with running state
       const runningQueue = [
         createSyncItem('contacts', 'running', 50),
