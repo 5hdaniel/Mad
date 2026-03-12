@@ -1,7 +1,7 @@
 /**
  * Feature Gate Utility - Server-side feature checking
  *
- * Uses the `get_org_features` RPC to determine which features
+ * Uses the `broker_get_org_features` RPC to determine which features
  * an organization has access to based on their plan.
  *
  * IMPORTANT: All feature checks happen server-side in server components.
@@ -11,6 +11,8 @@
  * we allow access rather than blocking users due to a feature check error.
  *
  * TASK-2129: Broker Portal Feature Gate Enforcement
+ * BACKLOG-933: Uses broker-specific RPC that requires only authentication
+ *   (not org membership), and checks JSONB error field in RPC response.
  */
 
 import { createClient } from '@/lib/supabase/server';
@@ -39,13 +41,24 @@ export interface OrgFeatures {
 export async function getOrgFeatures(orgId: string): Promise<OrgFeatures> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase.rpc('get_org_features', {
+  const { data, error } = await supabase.rpc('broker_get_org_features', {
     p_org_id: orgId,
   });
 
   if (error) {
     // Fail-open: if we can't check features, allow everything
     console.error('Failed to fetch org features:', error);
+    return {
+      org_id: orgId,
+      plan_name: 'unknown',
+      plan_tier: 'unknown',
+      features: {},
+    };
+  }
+
+  // Check for JSONB-level error (RPC returns errors as data, not Supabase errors)
+  if (data && (data as any).error) {
+    console.error('Broker feature gate RPC error:', (data as any).error, 'for org:', orgId);
     return {
       org_id: orgId,
       plan_name: 'unknown',
