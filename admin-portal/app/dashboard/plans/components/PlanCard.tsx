@@ -12,10 +12,10 @@ import { CreditCard, Layers, CheckCircle2, XCircle } from 'lucide-react';
 import type { PlanSummary } from './PlansPageClient';
 
 const tierColors: Record<string, string> = {
-  free: 'bg-gray-100 text-gray-700',
-  starter: 'bg-blue-100 text-blue-700',
-  professional: 'bg-purple-100 text-purple-700',
+  trial: 'bg-blue-100 text-blue-700',
+  pro: 'bg-purple-100 text-purple-700',
   enterprise: 'bg-amber-100 text-amber-700',
+  custom: 'bg-green-100 text-green-700',
 };
 
 interface PlanCardProps {
@@ -57,7 +57,7 @@ export function PlanCard({ plan }: PlanCardProps) {
 
       <div className="mt-4 flex items-center gap-1.5 text-sm text-gray-500">
         <Layers className="h-4 w-4" />
-        <span>{plan.feature_count} feature{plan.feature_count !== 1 ? 's' : ''} configured</span>
+        <span>{plan.enabled_count} of {plan.feature_count} features enabled</span>
       </div>
     </Link>
   );

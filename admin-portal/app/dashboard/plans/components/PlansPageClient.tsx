@@ -22,6 +22,7 @@ export interface PlanSummary {
   created_at: string;
   updated_at: string;
   feature_count: number;
+  enabled_count: number;
 }
 
 interface PlansPageClientProps {

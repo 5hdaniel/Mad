@@ -49,10 +49,11 @@ export default async function PlansPage() {
     required_permission: 'plans.manage',
   });
 
-  // Fetch all plans with feature counts
+  // Fetch all plans with total and enabled feature counts
   const { data: plans, error } = await supabase
     .from('plans')
-    .select('*, plan_features(count)')
+    .select('*, plan_features(count), enabled_features:plan_features(count)')
+    .eq('enabled_features.enabled', true)
     .order('sort_order');
 
   if (error) {
@@ -71,6 +72,7 @@ export default async function PlansPage() {
   // Transform data to extract feature counts
   const plansData = (plans ?? []).map((plan) => {
     const featureAgg = plan.plan_features as unknown as { count: number }[];
+    const enabledAgg = plan.enabled_features as unknown as { count: number }[];
     return {
       id: plan.id as string,
       name: plan.name as string,
@@ -81,6 +83,7 @@ export default async function PlansPage() {
       created_at: plan.created_at as string,
       updated_at: plan.updated_at as string,
       feature_count: featureAgg?.[0]?.count ?? 0,
+      enabled_count: enabledAgg?.[0]?.count ?? 0,
     };
   });
 
