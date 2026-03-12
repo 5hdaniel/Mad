@@ -10,6 +10,7 @@
 import Link from 'next/link';
 import { CreditCard, Layers, CheckCircle2, XCircle } from 'lucide-react';
 import type { PlanSummary } from './PlansPageClient';
+import { TIER_LABELS } from '@/lib/plan-constants';
 
 const tierColors: Record<string, string> = {
   individual: 'bg-blue-100 text-blue-700',
@@ -38,7 +39,7 @@ export function PlanCard({ plan }: PlanCardProps) {
           <div>
             <h3 className="text-lg font-semibold text-gray-900">{plan.name}</h3>
             <span className={`inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full ${tierClass}`}>
-              {plan.tier}
+              {TIER_LABELS[plan.tier.toLowerCase()] ?? plan.tier}
             </span>
           </div>
         </div>

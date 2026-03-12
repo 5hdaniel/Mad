@@ -5,8 +5,9 @@ import { ArrowLeft, CreditCard } from 'lucide-react';
 import { FeatureToggleList } from '../components/FeatureToggleList';
 import { DeletePlanButton } from '../components/DeletePlanButton';
 import { PlanStatusToggle } from '../components/PlanStatusToggle';
+import { PlanTierEditor } from '../components/PlanTierEditor';
 import { formatDate } from '@/lib/format';
-import type { Plan, PlanFeature, FeatureDefinition } from '@/lib/admin-queries';
+import type { Plan, PlanFeature, FeatureDefinition, FeatureDependency } from '@/lib/admin-queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,14 +60,15 @@ export default async function PlanDetailPage({
     required_permission: 'plans.manage',
   });
 
-  // Fetch plan, plan features, and all feature definitions in parallel
-  const [planResult, planFeaturesResult, allFeaturesResult] = await Promise.all([
+  // Fetch plan, plan features, all feature definitions, and dependencies in parallel
+  const [planResult, planFeaturesResult, allFeaturesResult, depsResult] = await Promise.all([
     supabase.from('plans').select('*').eq('id', id).single(),
     supabase
       .from('plan_features')
       .select('*, feature_definitions(*)')
       .eq('plan_id', id),
     supabase.from('feature_definitions').select('*').order('category').order('name'),
+    supabase.from('feature_dependencies').select('feature_key, depends_on_key'),
   ]);
 
   if (!planResult.data) {
@@ -76,6 +78,7 @@ export default async function PlanDetailPage({
   const plan = planResult.data as unknown as Plan;
   const planFeatures = (planFeaturesResult.data ?? []) as unknown as PlanFeature[];
   const allFeatures = (allFeaturesResult.data ?? []) as unknown as FeatureDefinition[];
+  const dependencies = (depsResult.data ?? []) as unknown as FeatureDependency[];
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -108,7 +111,9 @@ export default async function PlanDetailPage({
         <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
             <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">Tier</dt>
-            <dd className="mt-1 text-sm text-gray-900 capitalize">{plan.tier}</dd>
+            <dd className="mt-1">
+              <PlanTierEditor planId={plan.id} currentTier={plan.tier} canManage={!!canManage} />
+            </dd>
           </div>
           <div>
             <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">Features Configured</dt>
@@ -132,8 +137,10 @@ export default async function PlanDetailPage({
         </h2>
         <FeatureToggleList
           planId={plan.id}
+          planTier={plan.tier}
           features={planFeatures}
           allFeatures={allFeatures}
+          dependencies={dependencies}
           canManage={!!canManage}
         />
       </div>
