@@ -37,21 +37,32 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const CATEGORY_ORDER = ['general', 'sync', 'export', 'compliance'];
 
+function computeInitialState(
+  features: PlanFeature[],
+  allFeatures: FeatureDefinition[],
+): Record<string, FeatureState> {
+  const state: Record<string, FeatureState> = {};
+  for (const fd of allFeatures) {
+    const pf = features.find((f) => f.feature_id === fd.id);
+    state[fd.id] = {
+      enabled: pf?.enabled ?? false,
+      value: pf?.value ?? fd.default_value ?? null,
+    };
+  }
+  return state;
+}
+
 export function FeatureToggleList({ planId, features, allFeatures, canManage }: FeatureToggleListProps) {
   // Build initial state map: featureId -> { enabled, value }
-  const initialState = useMemo(() => {
-    const state: Record<string, FeatureState> = {};
-    for (const fd of allFeatures) {
-      const pf = features.find((f) => f.feature_id === fd.id);
-      state[fd.id] = {
-        enabled: pf?.enabled ?? false,
-        value: pf?.value ?? fd.default_value ?? null,
-      };
-    }
-    return state;
-  }, [features, allFeatures]);
+  // Stored in state so it can be updated after a successful save,
+  // allowing isDirty to return false and "Changes saved" to appear.
+  const [initialState, setInitialState] = useState<Record<string, FeatureState>>(() =>
+    computeInitialState(features, allFeatures),
+  );
 
-  const [featureState, setFeatureState] = useState<Record<string, FeatureState>>(initialState);
+  const [featureState, setFeatureState] = useState<Record<string, FeatureState>>(() =>
+    computeInitialState(features, allFeatures),
+  );
   const [saving, setSaving] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -138,6 +149,8 @@ export function FeatureToggleList({ planId, features, allFeatures, canManage }: 
       }
     }
 
+    // Update baseline so isDirty returns false and "Changes saved" becomes visible
+    setInitialState({ ...featureState });
     setSaving(false);
     setSaveSuccess(true);
   };
