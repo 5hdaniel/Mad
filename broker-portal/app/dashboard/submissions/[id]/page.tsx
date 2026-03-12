@@ -223,25 +223,49 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
     console.error('Unhandled error in markAsUnderReview:', e);
   });
 
-  // Fetch org features for feature gating (TASK-2129)
+  // Fetch org features for feature gating (TASK-2129, TASK-2158)
   // Uses the submission's organization_id to determine plan features
   const orgFeatures = await getOrgFeatures(submission.organization_id);
 
-  // Filter messages server-side based on feature gates
-  // If text_export is disabled, exclude text/SMS/iMessage messages
-  // If email_export is disabled, exclude email messages
-  const textEnabled = isFeatureEnabled(orgFeatures, 'text_export');
-  const emailEnabled = isFeatureEnabled(orgFeatures, 'email_export');
+  // TASK-2158: Gate on broker_portal_access — if disabled, block the entire detail view
+  const portalAccessEnabled = isFeatureEnabled(orgFeatures, 'broker_portal_access');
+  if (!portalAccessEnabled) {
+    return (
+      <div className="space-y-6">
+        <Link
+          href="/dashboard/submissions"
+          className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700"
+        >
+          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Back to submissions
+        </Link>
+        <div className="bg-white shadow-sm border border-gray-200 rounded-lg p-8 text-center">
+          <h2 className="text-lg font-semibold text-gray-900">Submission data not available</h2>
+          <p className="mt-2 text-sm text-gray-500">
+            Submission data is not available for this organization&apos;s plan.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Filter messages server-side based on feature gates (TASK-2158: renamed keys)
+  // If broker_text_view is disabled, exclude text/SMS/iMessage messages
+  // If broker_email_view is disabled, exclude email messages
+  const textEnabled = isFeatureEnabled(orgFeatures, 'broker_text_view');
+  const emailEnabled = isFeatureEnabled(orgFeatures, 'broker_email_view');
   const gatedMessages = messages.filter((msg) => {
     if (msg.channel === 'email') return emailEnabled;
-    // All non-email channels (sms, imessage) are gated by text_export
+    // All non-email channels (sms, imessage) are gated by broker_text_view
     return textEnabled;
   });
 
-  // Determine if attachments section should be shown
-  // Show attachments if either text_attachments or email_attachments is enabled
-  const textAttachmentsEnabled = isFeatureEnabled(orgFeatures, 'text_attachments');
-  const emailAttachmentsEnabled = isFeatureEnabled(orgFeatures, 'email_attachments');
+  // Determine if attachments section should be shown (TASK-2158: renamed keys)
+  // Show attachments if either broker_text_attachments or broker_email_attachments is enabled
+  const textAttachmentsEnabled = isFeatureEnabled(orgFeatures, 'broker_text_attachments');
+  const emailAttachmentsEnabled = isFeatureEnabled(orgFeatures, 'broker_email_attachments');
   const showAttachments = textAttachmentsEnabled || emailAttachmentsEnabled;
 
   // Determine if messages section should be shown at all
@@ -315,12 +339,12 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
         submittedAt={rootCreatedAt}
       />
 
-      {/* Messages with filter tabs - gated by text_export / email_export (TASK-2129) */}
+      {/* Messages with filter tabs - gated by broker_text_view / broker_email_view (TASK-2158) */}
       {showMessages && (
         <MessageList messages={gatedMessages} />
       )}
 
-      {/* Attachments with viewer - gated by text_attachments / email_attachments (TASK-2129) */}
+      {/* Attachments with viewer - gated by broker_text_attachments / broker_email_attachments (TASK-2158) */}
       {showAttachments && (
         <AttachmentList attachments={attachments} />
       )}

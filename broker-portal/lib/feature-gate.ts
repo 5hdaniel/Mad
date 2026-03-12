@@ -78,7 +78,7 @@ export async function getOrgFeatures(orgId: string): Promise<OrgFeatures> {
  * or missing data don't block users.
  *
  * @param features - The org's feature set from getOrgFeatures
- * @param featureKey - The feature key to check (e.g., 'text_export')
+ * @param featureKey - The feature key to check (e.g., 'broker_text_view')
  * @returns true if the feature is enabled or unknown
  */
 export function isFeatureEnabled(features: OrgFeatures, featureKey: string): boolean {
