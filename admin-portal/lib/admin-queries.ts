@@ -272,6 +272,11 @@ export async function updatePlanFeature(
     return { data: null, error: new Error(error.message) };
   }
 
+  const updateResult = data as Record<string, unknown>;
+  if (updateResult?.success === false) {
+    return { data: null, error: new Error(String(updateResult.error || 'Unknown error')) };
+  }
+
   return { data: data as Record<string, unknown>, error: null };
 }
 
@@ -298,6 +303,12 @@ export async function createPlan(
     return { data: null, error: new Error(error.message) };
   }
 
+  // RPC returns JSONB with success/error fields
+  const result = data as Record<string, unknown>;
+  if (result?.success === false) {
+    return { data: null, error: new Error(String(result.error || 'Unknown error')) };
+  }
+
   return { data: data as Plan, error: null };
 }
 
@@ -317,6 +328,11 @@ export async function assignOrgPlan(
 
   if (error) {
     return { data: null, error: new Error(error.message) };
+  }
+
+  const assignResult = data as Record<string, unknown>;
+  if (assignResult?.success === false) {
+    return { data: null, error: new Error(String(assignResult.error || 'Unknown error')) };
   }
 
   return { data: data as Record<string, unknown>, error: null };
