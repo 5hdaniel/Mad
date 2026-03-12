@@ -18,6 +18,13 @@ const tierColors: Record<string, string> = {
   custom: 'bg-green-100 text-green-700',
 };
 
+const TIER_LABELS: Record<string, string> = {
+  individual: 'Individual',
+  team: 'Team',
+  enterprise: 'Enterprise',
+  custom: 'Custom',
+};
+
 interface PlanCardProps {
   plan: PlanSummary;
 }
@@ -38,7 +45,7 @@ export function PlanCard({ plan }: PlanCardProps) {
           <div>
             <h3 className="text-lg font-semibold text-gray-900">{plan.name}</h3>
             <span className={`inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full ${tierClass}`}>
-              {plan.tier}
+              {TIER_LABELS[plan.tier.toLowerCase()] ?? plan.tier}
             </span>
           </div>
         </div>

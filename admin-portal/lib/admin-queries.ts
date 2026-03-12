@@ -161,7 +161,14 @@ export interface FeatureDefinition {
   category: string;
   value_type: string;
   default_value: string | null;
+  min_tier: string | null;
   created_at: string;
+}
+
+export interface FeatureDependency {
+  id: string;
+  feature_key: string;
+  depends_on_key: string;
 }
 
 export interface PlanFeature {
@@ -443,6 +450,53 @@ export async function togglePlanActive(planId: string, isActive: boolean): Promi
   }
 
   return { data: data as Record<string, unknown>, error: null };
+}
+
+/**
+ * Update a plan's tier via admin_update_plan_tier RPC.
+ * Returns error with conflicting features list if tier downgrade is blocked.
+ */
+export async function updatePlanTier(
+  planId: string,
+  newTier: string
+): Promise<RpcResult> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc('admin_update_plan_tier', {
+    p_plan_id: planId,
+    p_new_tier: newTier,
+  });
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  const result = data as Record<string, unknown>;
+  if (result?.success === false) {
+    return { data: null, error: new Error(String(result.error || 'Unknown error')) };
+  }
+
+  return { data: data as Record<string, unknown>, error: null };
+}
+
+/**
+ * Fetch all feature dependencies from the feature_dependencies table.
+ */
+export async function getFeatureDependencies(): Promise<{
+  data: FeatureDependency[] | null;
+  error: Error | null;
+}> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from('feature_dependencies')
+    .select('id, feature_key, depends_on_key');
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  return { data: data as FeatureDependency[], error: null };
 }
 
 // ---------------------------------------------------------------------------
