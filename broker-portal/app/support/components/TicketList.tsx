@@ -74,31 +74,20 @@ export function TicketList() {
     }
   }
 
-  // Unauthenticated: show email input
+  // Unauthenticated: prompt to log in or submit a new ticket
   if (!isAuthenticated && !lookupEmail) {
     return (
       <div>
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-2">View Your Tickets</h2>
-          <p className="text-sm text-gray-500 mb-4">
-            Enter the email address you used when submitting your ticket.
+        <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+          <p className="text-gray-500 text-sm mb-4">
+            Log in to view your support tickets, or submit a new request below.
           </p>
-          <form onSubmit={handleEmailLookup} className="flex gap-3">
-            <input
-              type="email"
-              required
-              value={emailInput}
-              onChange={(e) => setEmailInput(e.target.value)}
-              placeholder="your@email.com"
-              className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-            <button
-              type="submit"
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
-            >
-              Look Up
-            </button>
-          </form>
+          <Link
+            href="/support/new"
+            className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+          >
+            Submit a New Ticket
+          </Link>
         </div>
       </div>
     );
