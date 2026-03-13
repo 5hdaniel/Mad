@@ -64,7 +64,7 @@ export default async function UserDetailPage({
         .single(),
       supabase
         .from('organization_members')
-        .select('organization_id, role, joined_at, organizations(name)')
+        .select('organization_id, role, joined_at, organizations(name, organization_plans(plan_id, plans(id, name, tier)))')
         .eq('user_id', id),
       supabase
         .from('licenses')
@@ -93,14 +93,24 @@ export default async function UserDetailPage({
 
   const profile = profileResult.data;
 
-  // Transform org memberships to include org name
+  // Transform org memberships to include org name and plan info
   const orgMemberships = (orgsResult.data ?? []).map((m) => {
-    const org = m.organizations as unknown as { name: string } | null;
+    const org = m.organizations as unknown as {
+      name: string;
+      organization_plans: Array<{
+        plan_id: string;
+        plans: { id: string; name: string; tier: string };
+      }>;
+    } | null;
+    const orgPlan = org?.organization_plans?.[0] ?? null;
     return {
       organization_id: m.organization_id,
       org_name: org?.name ?? null,
       role: m.role,
       joined_at: m.joined_at,
+      plan_id: orgPlan?.plan_id ?? null,
+      plan_name: orgPlan?.plans?.name ?? null,
+      plan_tier: orgPlan?.plans?.tier ?? null,
     };
   });
 
