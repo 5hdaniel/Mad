@@ -8,6 +8,7 @@ import type { Communication, Message } from "../types";
 import { ConversationViewModal } from "./modals";
 import { normalizePhoneForLookup } from "../../../utils/phoneNormalization";
 import { getContactAvatarInitial } from "../../../utils/avatarUtils";
+import { formatDate } from "../../../utils/formatUtils";
 
 /**
  * Union type for messages - can be from messages table or communications table
@@ -198,8 +199,6 @@ export function MessageThreadCard({
     const last = messages[messages.length - 1];
     const firstDate = new Date(first.sent_at || first.received_at || 0);
     const lastDate = new Date(last.sent_at || last.received_at || 0);
-    const formatDate = (d: Date) =>
-      d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
     if (firstDate.toDateString() === lastDate.toDateString()) {
       return formatDate(firstDate);
     }

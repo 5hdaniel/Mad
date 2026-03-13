@@ -9,6 +9,7 @@ import {
   sortThreadsByRecent,
   type MessageLike,
 } from "../MessageThreadCard";
+import { formatDate } from "../../../../utils/formatUtils";
 
 interface AttachMessagesModalProps {
   /** User ID to fetch unlinked messages for */
@@ -56,19 +57,6 @@ function formatPhoneNumber(phone: string): string {
   }
   return phone;
 }
-
-/**
- * Format date for display
- */
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
 
 /**
  * Get thread date range from messages
