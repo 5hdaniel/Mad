@@ -83,7 +83,7 @@ export function formatCurrency(
   amount: number | null | undefined,
   fallback: string = "N/A",
 ): string {
-  if (!amount) return fallback;
+  if (amount === null || amount === undefined) return fallback;
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
