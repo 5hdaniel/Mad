@@ -387,25 +387,6 @@ export async function getOrgPlan(
 }
 
 /**
- * Fetch all active plans (for dropdown selectors).
- */
-export async function getActivePlans(): Promise<{ data: Plan[] | null; error: Error | null }> {
-  const supabase = createClient();
-
-  const { data, error } = await supabase
-    .from('plans')
-    .select('*')
-    .eq('is_active', true)
-    .order('sort_order');
-
-  if (error) {
-    return { data: null, error: new Error(error.message) };
-  }
-
-  return { data: data as Plan[], error: null };
-}
-
-/**
  * Fetch active plans eligible for organization assignment.
  * Excludes Individual-tier plans (they are for solo users only).
  */
