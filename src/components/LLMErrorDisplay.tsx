@@ -15,7 +15,7 @@ interface LLMErrorDisplayProps {
   errorType: LLMErrorType;
   message?: string;
   onRetry?: () => void;
-  onOpenSettings?: () => void;
+  onOpenSettings?: (scrollTarget?: string) => void;
   onDismiss?: () => void;
 }
 
@@ -117,7 +117,7 @@ export const LLMErrorDisplay: React.FC<LLMErrorDisplayProps> = ({
           </button>
         )}
         {config.showSettings && onOpenSettings && (
-          <button className="llm-error-btn llm-error-btn-secondary" onClick={onOpenSettings}>
+          <button className="llm-error-btn llm-error-btn-secondary" onClick={() => onOpenSettings?.()}>
             Open Settings
           </button>
         )}

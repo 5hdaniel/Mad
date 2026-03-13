@@ -7,8 +7,8 @@ interface SystemHealthMonitorProps {
   userId: string;
   provider: OAuthProvider;
   hidden?: boolean;
-  /** Callback to open Settings modal - used for reconnect actions */
-  onOpenSettings?: () => void;
+  /** Callback to open Settings modal - used for reconnect actions. Pass a scrollTarget to scroll to a specific section. */
+  onOpenSettings?: (scrollTarget?: string) => void;
 }
 
 interface SystemIssue {

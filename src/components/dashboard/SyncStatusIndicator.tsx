@@ -34,8 +34,8 @@ interface SyncStatusIndicatorProps {
   pendingCount?: number;
   /** Callback when user clicks "Review Now" */
   onViewPending?: () => void;
-  /** Callback to open Settings modal (for message cap warnings) */
-  onOpenSettings?: () => void;
+  /** Callback to open Settings modal (for message cap warnings). Pass a scrollTarget to scroll to a specific section. */
+  onOpenSettings?: (scrollTarget?: string) => void;
   /** When true, suppress auto-dismiss so the tour anchor stays visible (TASK-2081) */
   isTourActive?: boolean;
   /** Callback when user clicks "Details" on a sync pill (e.g., iPhone) */
@@ -323,7 +323,7 @@ export function SyncStatusIndicator({
               <p className="text-xs text-amber-700">{syncWarning}</p>
             </div>
             <button
-              onClick={onOpenSettings}
+              onClick={() => onOpenSettings?.('settings-import-filters')}
               className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap ml-3"
             >
               Adjust Limits

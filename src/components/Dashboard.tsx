@@ -31,8 +31,8 @@ interface DashboardActionProps {
   onTriggerRefresh?: () => void;
   /** Callback when user selects a pending transaction to review */
   onSelectPendingTransaction?: (transaction: Transaction) => void;
-  /** Callback to open Settings modal */
-  onOpenSettings?: () => void;
+  /** Callback to open Settings modal. Pass a scrollTarget to scroll to a specific section. */
+  onOpenSettings?: (scrollTarget?: string) => void;
   /** Current user info for personalized greeting */
   user?: {
     display_name?: string;
