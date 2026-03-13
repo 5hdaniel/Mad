@@ -9,7 +9,6 @@ interface LicenseData {
   status: string | null;
   expires_at: string | null;
   license_type: string | null;
-  transaction_limit: number | null;
 }
 
 interface EditLicenseDialogProps {
@@ -37,16 +36,12 @@ export function EditLicenseDialog({ license }: EditLicenseDialogProps) {
     license.expires_at ? license.expires_at.split('T')[0] : ''
   );
   const [licenseType, setLicenseType] = useState(license.license_type ?? 'free');
-  const [transactionLimit, setTransactionLimit] = useState(
-    license.transaction_limit?.toString() ?? ''
-  );
 
   const openDialog = useCallback(() => {
     // Reset form to current values when opening
     setStatus(license.status ?? 'active');
     setExpiresAt(license.expires_at ? license.expires_at.split('T')[0] : '');
     setLicenseType(license.license_type ?? 'free');
-    setTransactionLimit(license.transaction_limit?.toString() ?? '');
     setError(null);
     dialogRef.current?.showModal();
   }, [license]);
@@ -77,11 +72,6 @@ export function EditLicenseDialog({ license }: EditLicenseDialogProps) {
         changes.license_type = licenseType;
       }
 
-      const currentLimit = license.transaction_limit?.toString() ?? '';
-      if (transactionLimit !== currentLimit) {
-        changes.transaction_limit = transactionLimit ? parseInt(transactionLimit, 10) : null;
-      }
-
       if (Object.keys(changes).length === 0) {
         closeDialog();
         setLoading(false);
@@ -104,7 +94,7 @@ export function EditLicenseDialog({ license }: EditLicenseDialogProps) {
         setLoading(false);
       }
     },
-    [status, expiresAt, licenseType, transactionLimit, license, closeDialog, router]
+    [status, expiresAt, licenseType, license, closeDialog, router]
   );
 
   return (
@@ -192,28 +182,6 @@ export function EditLicenseDialog({ license }: EditLicenseDialogProps) {
               />
             </div>
 
-            {/* Transaction Limit */}
-            <div>
-              <label
-                htmlFor="license-txn-limit"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Transaction Limit
-              </label>
-              <input
-                id="license-txn-limit"
-                type="number"
-                min="0"
-                value={transactionLimit}
-                onChange={(e) => setTransactionLimit(e.target.value)}
-                disabled={loading}
-                placeholder="Leave empty for unlimited"
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
-              />
-              <p className="mt-1 text-xs text-gray-400">
-                Deprecated — transaction limits are now managed via Plan Features.
-              </p>
-            </div>
           </div>
 
           {error && (
