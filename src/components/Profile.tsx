@@ -37,7 +37,7 @@ interface ProfileProps {
   onLogout: () => void;
   onClose: () => void;
   onViewTransactions: () => void;
-  onOpenSettings: () => void;
+  onOpenSettings: (scrollTarget?: string) => void;
 }
 
 /**

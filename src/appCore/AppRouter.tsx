@@ -44,10 +44,10 @@ export function AppRouter({ app }: AppRouterProps) {
     handleLogout,
   } = app;
 
-  // Ref for the email connections section in Settings modal (cross-component).
+  // Ref for scroll-to-highlight targets in Settings modal (cross-component).
   // The Settings modal mounts/unmounts dynamically, so the ref is re-resolved
   // each time via the callback below.
-  const emailSectionRef = useRef<HTMLElement | null>(null);
+  const scrollTargetRef = useRef<HTMLElement | null>(null);
 
   // Track license blocked state for login screen
   const [licenseBlocked, setLicenseBlocked] = useState<{
@@ -132,25 +132,34 @@ export function AppRouter({ app }: AppRouterProps) {
     // Show iPhone sync button for Windows + iPhone users
     const showIPhoneSyncButton = isWindows && selectedPhoneType === "iphone";
 
-    // Handler to open Settings and scroll to Email Connections section
-    const handleContinueSetup = () => {
-      openSettings();
-      // Scroll to and highlight email connections section after modal opens.
-      // The settings-email element is in the Settings modal (cross-component),
-      // so we resolve the ref after the modal mounts via setTimeout.
+    // Scroll to and highlight a target element inside the Settings modal.
+    // Reusable helper for handleContinueSetup and handleOpenSettings.
+    const scrollToSettingsSection = (elementId: string) => {
       setTimeout(() => {
-        emailSectionRef.current = document.getElementById("settings-email");
-        if (emailSectionRef.current) {
-          emailSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-          // Add highlight effect
-          emailSectionRef.current.classList.add("ring-2", "ring-amber-400", "ring-offset-2", "rounded-lg");
-          // Remove highlight after 3 seconds
-          const el = emailSectionRef.current;
+        scrollTargetRef.current = document.getElementById(elementId);
+        if (scrollTargetRef.current) {
+          scrollTargetRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+          scrollTargetRef.current.classList.add("ring-2", "ring-amber-400", "ring-offset-2", "rounded-lg");
+          const el = scrollTargetRef.current;
           setTimeout(() => {
             el.classList.remove("ring-2", "ring-amber-400", "ring-offset-2", "rounded-lg");
           }, 3000);
         }
       }, 150);
+    };
+
+    // Handler to open Settings and scroll to Email Connections section
+    const handleContinueSetup = () => {
+      openSettings();
+      scrollToSettingsSection("settings-email");
+    };
+
+    // Handler to open Settings, optionally scrolling to a specific section
+    const handleOpenSettings = (scrollTarget?: string) => {
+      openSettings();
+      if (scrollTarget) {
+        scrollToSettingsSection(scrollTarget);
+      }
     };
 
     return (
@@ -164,7 +173,7 @@ export function AppRouter({ app }: AppRouterProps) {
         onContinueSetup={handleContinueSetup}
         onDismissSetupPrompt={handleDismissSetupPrompt}
         onTriggerRefresh={app.triggerRefresh}
-        onOpenSettings={openSettings}
+        onOpenSettings={handleOpenSettings}
         user={currentUser ?? undefined}
       />
     );
