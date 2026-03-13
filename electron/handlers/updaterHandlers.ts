@@ -39,7 +39,7 @@ export function registerUpdaterHandlers(mainWindow: BrowserWindow): void {
       // Race the update check against a 15-second timeout
       const timeoutMs = 15000;
       const result = await Promise.race([
-        autoUpdater.checkForUpdatesAndNotify(),
+        autoUpdater.checkForUpdates(),
         new Promise<null>((_, reject) =>
           setTimeout(() => reject(new Error(`Update check timed out after ${timeoutMs / 1000}s`)), timeoutMs)
         ),
