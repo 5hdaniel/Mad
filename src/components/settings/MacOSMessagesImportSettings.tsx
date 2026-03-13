@@ -299,7 +299,7 @@ export function MacOSMessagesImportSettings({
       )}
 
       {/* TASK-1952: Import Filters */}
-      <div className="mb-3 p-3 bg-white rounded border border-gray-200">
+      <div id="settings-import-filters" className="mb-3 p-3 bg-white rounded border border-gray-200">
         <h5 className="text-xs font-medium text-gray-700 mb-2">
           Import Filters
         </h5>

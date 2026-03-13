@@ -145,7 +145,7 @@ export function AppRouter({ app }: AppRouterProps) {
             el.classList.remove("ring-2", "ring-amber-400", "ring-offset-2", "rounded-lg");
           }, 3000);
         }
-      }, 150);
+      }, 500);
     };
 
     // Handler to open Settings and scroll to Email Connections section

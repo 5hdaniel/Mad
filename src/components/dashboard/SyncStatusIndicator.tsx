@@ -323,7 +323,7 @@ export function SyncStatusIndicator({
               <p className="text-xs text-amber-700">{syncWarning}</p>
             </div>
             <button
-              onClick={() => onOpenSettings?.('settings-messages')}
+              onClick={() => onOpenSettings?.('settings-import-filters')}
               className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap ml-3"
             >
               Adjust Limits
