@@ -1,7 +1,7 @@
-# SPRINT-121: Feature Flag Data Model (Foundation)
+# SPRINT-124: Feature Flag Data Model (Foundation)
 
 **Created:** 2026-03-06
-**Status:** Planned
+**Status:** Completed
 **Goal:** Design and implement Supabase tables, RPCs, and RLS policies for per-capability feature flags and plan management
 
 ---
@@ -16,7 +16,7 @@ Keepr needs a feature flagging and plan management system to control which capab
 
 | Task | Backlog | Title | Est. Tokens | Status |
 |------|---------|-------|-------------|--------|
-| TASK-2126 | BACKLOG-891 | Feature Flag & Plan Management Data Model | ~40K | Pending |
+| TASK-2126 | BACKLOG-921 | Feature Flag & Plan Management Data Model | ~40K | Completed (PR #1118 merged) |
 
 ### Key Deliverables
 
@@ -55,7 +55,7 @@ Keepr needs a feature flagging and plan management system to control which capab
 
 | Task | Title | Est. Tokens | Status |
 |------|-------|-------------|--------|
-| TASK-2126 | Feature Flag & Plan Management Data Model | ~40K | Pending |
+| TASK-2126 | Feature Flag & Plan Management Data Model | ~40K | Completed (PR #1118 merged) |
 
 **Execution:** Sequential. Single task -- this is the entire sprint.
 

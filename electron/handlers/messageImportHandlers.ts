@@ -11,6 +11,7 @@ import databaseService from "../services/databaseService";
 import supabaseService from "../services/supabaseService";
 import macOSMessagesImportService from "../services/macOSMessagesImportService";
 import * as externalContactDb from "../services/db/externalContactDbService";
+import { wrapHandler } from "../utils/wrapHandler";
 import type {
   MacOSImportResult,
   ImportProgressCallback,
@@ -483,7 +484,7 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
    */
   ipcMain.handle(
     "messages:getImportStatus",
-    async (
+    wrapHandler(async (
       _event: IpcMainInvokeEvent,
       userId: string
     ): Promise<{
@@ -492,64 +493,45 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
       lastImportAt?: string | null;
       error?: string;
     }> => {
-      try {
-        // BACKLOG-615: Check if database is initialized before querying
-        if (!databaseService.isInitialized()) {
-          logService.info("[MessageImport] DB not initialized, returning empty import status (deferred DB init)", "MessageImportHandlers");
-          return {
-            success: true,
-            messageCount: 0,
-            lastImportAt: null,
-          };
-        }
-
-        // BACKLOG-615: Verify user exists in database before querying
-        const userExists = await databaseService.getUserById(userId);
-        if (!userExists) {
-          logService.info("[MessageImport] No local user yet, returning empty import status (deferred DB init)", "MessageImportHandlers");
-          return {
-            success: true,
-            messageCount: 0,
-            lastImportAt: null,
-          };
-        }
-
-        const db = databaseService.getRawDatabase();
-
-        // Get count and most recent created_at for iMessage/SMS
-        const result = db.prepare(`
-          SELECT
-            COUNT(*) as count,
-            MAX(created_at) as last_import_at
-          FROM messages
-          WHERE user_id = ?
-            AND channel IN ('sms', 'imessage')
-        `).get(userId) as { count: number; last_import_at: string | null } | undefined;
-
+      // BACKLOG-615: Check if database is initialized before querying
+      if (!databaseService.isInitialized()) {
+        logService.info("[MessageImport] DB not initialized, returning empty import status (deferred DB init)", "MessageImportHandlers");
         return {
           success: true,
-          messageCount: result?.count ?? 0,
-          lastImportAt: result?.last_import_at ?? null,
-        };
-      } catch (error) {
-        logService.error(
-          `Failed to get import status: ${error instanceof Error ? error.message : "Unknown"}`,
-          "MessageImportHandlers"
-        );
-        Sentry.captureException(error, {
-          tags: { sync_type: "message_import" },
-          level: "warning",
-          extra: {
-            handler: "messages:getImportStatus",
-            error_message: error instanceof Error ? error.message : String(error),
-          },
-        });
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Failed to get import status",
+          messageCount: 0,
+          lastImportAt: null,
         };
       }
-    }
+
+      // BACKLOG-615: Verify user exists in database before querying
+      const userExists = await databaseService.getUserById(userId);
+      if (!userExists) {
+        logService.info("[MessageImport] No local user yet, returning empty import status (deferred DB init)", "MessageImportHandlers");
+        return {
+          success: true,
+          messageCount: 0,
+          lastImportAt: null,
+        };
+      }
+
+      const db = databaseService.getRawDatabase();
+
+      // Get count and most recent created_at for iMessage/SMS
+      const result = db.prepare(`
+        SELECT
+          COUNT(*) as count,
+          MAX(created_at) as last_import_at
+        FROM messages
+        WHERE user_id = ?
+          AND channel IN ('sms', 'imessage')
+      `).get(userId) as { count: number; last_import_at: string | null } | undefined;
+
+      return {
+        success: true,
+        messageCount: result?.count ?? 0,
+        lastImportAt: result?.last_import_at ?? null,
+      };
+    }, { module: "MessageImportHandlers" }),
   );
 
   logService.info(

@@ -3,7 +3,6 @@
  */
 
 const mockAutoUpdater = {
-  checkForUpdatesAndNotify: jest.fn(() => Promise.resolve(null)),
   checkForUpdates: jest.fn(() => Promise.resolve(null)),
   downloadUpdate: jest.fn(() => Promise.resolve([])),
   quitAndInstall: jest.fn(),

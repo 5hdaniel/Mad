@@ -7,13 +7,15 @@ import { LicenseGate } from "./common/LicenseGate";
 import { SettingsTabBar } from "./settings/SettingsTabBar";
 import { useNotification } from "@/hooks/useNotification";
 import { useScrollSpy } from "@/hooks/useScrollSpy";
-import { useLicense } from "@/contexts/LicenseContext";
+import { useFeatureGate } from "@/hooks/useFeatureGate";
 import {
   emitEmailConnectionChanged,
   useEmailConnectionListener,
 } from "@/utils/emailConnectionEvents";
 import { useNetwork } from '../contexts/NetworkContext';
 import { OfflineNotice } from './common/OfflineNotice';
+import { useSyncOrchestrator } from '../hooks/useSyncOrchestrator';
+import { settingsService, authService } from '../services';
 import logger from '../utils/logger';
 import { formatFileSize } from '../utils/formatUtils';
 
@@ -151,9 +153,12 @@ interface SettingsComponentProps {
  */
 function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconnected }: SettingsComponentProps) {
   const { notify } = useNotification();
-  const { hasAIAddon } = useLicense();
+  const { isAllowed } = useFeatureGate();
+  const hasAIAddon = isAllowed("ai_detection");
   // TASK-2056: Network status for disabling network-dependent actions
   const { isOnline } = useNetwork();
+  // TASK-2150: Orchestrator for routing maintenance operations
+  const { queue, requestSync } = useSyncOrchestrator();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const visibleTabs = useMemo(
@@ -396,44 +401,44 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
   const loadPreferences = async (): Promise<void> => {
     setLoadingPreferences(true);
     try {
-      const result: PreferencesResult =
-        await window.api.preferences.get(userId);
-      if (result.success && result.preferences) {
+      const result = await settingsService.getPreferences(userId);
+      const prefs = result.data as PreferencesResult['preferences'];
+      if (result.success && prefs) {
         // Load export format preference
-        if (result.preferences.export?.defaultFormat) {
-          setExportFormat(result.preferences.export.defaultFormat);
+        if (prefs.export?.defaultFormat) {
+          setExportFormat(prefs.export.defaultFormat);
         }
         // Load email export mode preference
-        const loadedEmailMode = (result.preferences.export as { emailExportMode?: string } | undefined)?.emailExportMode;
+        const loadedEmailMode = (prefs.export as { emailExportMode?: string } | undefined)?.emailExportMode;
         if (loadedEmailMode === "thread" || loadedEmailMode === "individual") {
           setEmailExportMode(loadedEmailMode);
         }
         // TASK-2072: Load email cache duration (new key, with fallback to legacy key)
-        const loadedEmailCache = result.preferences.emailCache?.durationMonths
-          ?? result.preferences.emailSync?.lookbackMonths;
+        const loadedEmailCache = prefs.emailCache?.durationMonths
+          ?? prefs.emailSync?.lookbackMonths;
         if (typeof loadedEmailCache === "number" && loadedEmailCache > 0) {
           setEmailCacheDurationMonths(loadedEmailCache);
         }
         // Load auto-sync preference (default is true if not set)
-        if (typeof result.preferences.sync?.autoSyncOnLogin === "boolean") {
-          setAutoSyncOnLogin(result.preferences.sync.autoSyncOnLogin);
+        if (typeof prefs.sync?.autoSyncOnLogin === "boolean") {
+          setAutoSyncOnLogin(prefs.sync.autoSyncOnLogin);
         }
         // Load auto-download updates preference (default is false if not set)
-        if (typeof result.preferences.updates?.autoDownload === "boolean") {
-          setAutoDownloadUpdates(result.preferences.updates.autoDownload);
+        if (typeof prefs.updates?.autoDownload === "boolean") {
+          setAutoDownloadUpdates(prefs.updates.autoDownload);
         }
         // Load notifications preference (default is true if not set)
-        if (typeof result.preferences.notifications?.enabled === "boolean") {
-          setNotificationsEnabled(result.preferences.notifications.enabled);
+        if (typeof prefs.notifications?.enabled === "boolean") {
+          setNotificationsEnabled(prefs.notifications.enabled);
         }
         // TASK-1980: Load start date default mode preference
-        const loadedStartDateDefault = result.preferences.audit?.startDateDefault;
+        const loadedStartDateDefault = prefs.audit?.startDateDefault;
         if (loadedStartDateDefault === "auto" || loadedStartDateDefault === "manual") {
           setStartDateDefault(loadedStartDateDefault);
         }
         // Load contact source preferences
-        if (result.preferences.contactSources) {
-          const cs = result.preferences.contactSources;
+        if (prefs.contactSources) {
+          const cs = prefs.contactSources;
           if (cs.direct) {
             if (typeof cs.direct.outlookContacts === "boolean") setOutlookContactsEnabled(cs.direct.outlookContacts);
             if (typeof cs.direct.gmailContacts === "boolean") setGmailContactsEnabled(cs.direct.gmailContacts);
@@ -460,7 +465,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
     setExportFormat(newFormat);
     try {
       // Update only the export format preference
-      await window.api.preferences.update(userId, {
+      await settingsService.updatePreferences(userId, {
         export: {
           defaultFormat: newFormat,
         },
@@ -474,7 +479,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
   const handleEmailExportModeChange = async (mode: "thread" | "individual"): Promise<void> => {
     setEmailExportMode(mode);
     try {
-      await window.api.preferences.update(userId, {
+      await settingsService.updatePreferences(userId, {
         export: {
           emailExportMode: mode,
         },
@@ -488,7 +493,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
   const handleEmailCacheDurationChange = async (months: number): Promise<void> => {
     setEmailCacheDurationMonths(months);
     try {
-      const result = await window.api.preferences.update(userId, {
+      const result = await settingsService.updatePreferences(userId, {
         emailCache: {
           durationMonths: months,
         },
@@ -505,7 +510,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
   const handleStartDateDefaultChange = async (mode: "auto" | "manual"): Promise<void> => {
     setStartDateDefault(mode);
     try {
-      const result = await window.api.preferences.update(userId, {
+      const result = await settingsService.updatePreferences(userId, {
         audit: {
           startDateDefault: mode,
         },
@@ -523,7 +528,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
     setAutoSyncOnLogin(newValue);
     try {
       // Update auto-sync preference
-      await window.api.preferences.update(userId, {
+      await settingsService.updatePreferences(userId, {
         sync: {
           autoSyncOnLogin: newValue,
         },
@@ -539,7 +544,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
     setAutoDownloadUpdates(newValue);
     try {
       // Update auto-download updates preference
-      await window.api.preferences.update(userId, {
+      await settingsService.updatePreferences(userId, {
         updates: {
           autoDownload: newValue,
         },
@@ -572,7 +577,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
     setNotificationsEnabled(newValue);
     try {
       // Update notifications preference
-      await window.api.preferences.update(userId, {
+      await settingsService.updatePreferences(userId, {
         notifications: {
           enabled: newValue,
         },
@@ -608,7 +613,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
     const newValue = !currentValue;
     setter(newValue);
     try {
-      await window.api.preferences.update(userId, {
+      await settingsService.updatePreferences(userId, {
         contactSources: {
           [category]: {
             [key]: newValue,
@@ -624,11 +629,11 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
     setConnectingProvider("google");
     let cleanup: (() => void) | undefined;
     try {
-      const result = await window.api.auth.googleConnectMailbox(userId);
+      const result = await authService.googleConnectMailbox(userId);
       if (result.success) {
         // Auth popup window opens automatically and will close when done
         // Listen for connection completion
-        cleanup = window.api.onGoogleMailboxConnected(
+        cleanup = authService.onMailboxConnected("google",
           async (connectionResult: ConnectionResult) => {
             if (connectionResult.success) {
               // Refresh connections and get the result in one call
@@ -663,11 +668,11 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
     setConnectingProvider("microsoft");
     let cleanup: (() => void) | undefined;
     try {
-      const result = await window.api.auth.microsoftConnectMailbox(userId);
+      const result = await authService.microsoftConnectMailbox(userId);
       if (result.success) {
         // Auth popup window opens automatically and will close when done
         // Listen for connection completion
-        cleanup = window.api.onMicrosoftMailboxConnected(
+        cleanup = authService.onMailboxConnected("microsoft",
           async (connectionResult: ConnectionResult) => {
             if (connectionResult.success) {
               // Refresh connections and get the result in one call
@@ -701,7 +706,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
   const handleDisconnectGoogle = async (): Promise<void> => {
     setDisconnectingProvider("google");
     try {
-      const result = await window.api.auth.googleDisconnectMailbox(userId);
+      const result = await authService.googleDisconnectMailbox(userId);
       if (result.success) {
         await checkConnections();
         // TASK-1730: Notify parent to update app state machine
@@ -721,7 +726,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
   const handleDisconnectMicrosoft = async (): Promise<void> => {
     setDisconnectingProvider("microsoft");
     try {
-      const result = await window.api.auth.microsoftDisconnectMailbox(userId);
+      const result = await authService.microsoftDisconnectMailbox(userId);
       if (result.success) {
         await checkConnections();
         // TASK-1730: Notify parent to update app state machine
@@ -770,55 +775,14 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
     }
   };
 
-  // TASK-2053: Handle CCPA data export
-  const handleExportData = async (): Promise<void> => {
-    setExporting(true);
-    setExportProgress(0);
-    setExportCategory("");
+  // TASK-2053/2150: Handle CCPA data export -- routed through orchestrator
+  const handleExportData = (): void => {
     setExportResult(null);
-
-    // Listen for progress updates
-    const cleanup = window.api.privacy?.onExportProgress?.(
-      (progress: { category: string; progress: number }) => {
-        setExportProgress(progress.progress);
-        setExportCategory(progress.category);
-      },
-    );
-
-    try {
-      const result = await window.api.privacy.exportData(userId);
-      if (result.success) {
-        setExportResult({
-          success: true,
-          message: "Data exported successfully",
-        });
-        notify.success("Your data has been exported successfully.");
-      } else if (result.error === "Export cancelled by user") {
-        // User cancelled - no error message needed
-        setExportResult(null);
-      } else {
-        setExportResult({
-          success: false,
-          message: result.error || "Export failed",
-        });
-        notify.error("Failed to export data: " + (result.error || "Unknown error"));
-      }
-    } catch (error) {
-      logger.error("Failed to export data:", error);
-      setExportResult({
-        success: false,
-        message: "An unexpected error occurred during export",
-      });
-      notify.error("An unexpected error occurred during export.");
-    } finally {
-      setExporting(false);
-      setExportProgress(0);
-      setExportCategory("");
-      if (cleanup) cleanup();
-    }
+    requestSync(['ccpa-export'], userId);
   };
 
-  const handleReindexDatabase = async (): Promise<void> => {
+  // TASK-2150: Reindex routed through orchestrator
+  const handleReindexDatabase = (): void => {
     // Show confirmation with freeze warning
     const confirmed = window.confirm(
       "This will optimize the database for better performance.\n\n" +
@@ -827,115 +791,100 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
     );
     if (!confirmed) return;
 
-    setReindexing(true);
     setReindexResult(null);
-    try {
-      const result = await window.api.system.reindexDatabase();
-      if (result.success) {
-        setReindexResult({
-          success: true,
-          message: `Database optimized: ${result.indexesRebuilt} indexes rebuilt in ${result.durationMs}ms`,
-        });
-      } else {
-        setReindexResult({
-          success: false,
-          message: result.error || "Failed to optimize database",
-        });
-      }
-    } catch (error) {
-      logger.error("Failed to reindex database:", error);
-      setReindexResult({
-        success: false,
-        message: "An unexpected error occurred while optimizing the database",
-      });
-    } finally {
+    requestSync(['reindex'], userId);
+  };
+
+  // TASK-2052/2150: Backup database handler -- routed through orchestrator
+  const handleBackupDatabase = (): void => {
+    setBackupResult(null);
+    requestSync(['backup'], userId);
+  };
+
+  // TASK-2052/2150: Restore database handler -- routed through orchestrator
+  const handleRestoreDatabase = (): void => {
+    setBackupResult(null);
+    requestSync(['restore'], userId);
+  };
+
+  // =========================================================================
+  // TASK-2150: Derive operation-in-progress state from orchestrator queue
+  // =========================================================================
+  const reindexItem = queue.find(q => q.type === 'reindex');
+  const backupItem = queue.find(q => q.type === 'backup');
+  const restoreItem = queue.find(q => q.type === 'restore');
+  const ccpaItem = queue.find(q => q.type === 'ccpa-export');
+
+  // Derive running state from orchestrator (overrides local state)
+  const reindexRunning = reindexItem?.status === 'running' || reindexItem?.status === 'pending';
+  const backupRunning = backupItem?.status === 'running' || backupItem?.status === 'pending';
+  const restoreRunning = restoreItem?.status === 'running' || restoreItem?.status === 'pending';
+  const exportRunning = ccpaItem?.status === 'running' || ccpaItem?.status === 'pending';
+
+  // Derive progress from orchestrator queue for CCPA export
+  const orchestratorExportProgress = ccpaItem?.progress ?? 0;
+  const orchestratorExportCategory = ccpaItem?.phase ?? '';
+
+  // Watch orchestrator queue for completion/error and update local result state + notifications
+  useEffect(() => {
+    if (reindexItem?.status === 'complete') {
+      setReindexResult({ success: true, message: 'Database optimized successfully' });
+      setReindexing(false);
+    } else if (reindexItem?.status === 'error') {
+      setReindexResult({ success: false, message: reindexItem.error || 'Failed to optimize database' });
       setReindexing(false);
     }
-  };
+  }, [reindexItem?.status, reindexItem?.error]);
 
-  // TASK-2052: Backup database handler
-  const handleBackupDatabase = async (): Promise<void> => {
-    setBackingUp(true);
-    setBackupResult(null);
-    try {
-      const result = await window.api.databaseBackup.backup();
-      if (result.cancelled) {
-        // User cancelled the dialog, no feedback needed
-        return;
+  useEffect(() => {
+    if (backupItem?.status === 'complete') {
+      setBackingUp(false);
+      if (backupItem.warning !== 'cancelled') {
+        setBackupResult({ success: true, message: 'Backup created successfully' });
+        notify.success('Database backup created successfully');
       }
-      if (result.success) {
-        const sizeStr = result.fileSize
-          ? formatFileSize(result.fileSize)
-          : "unknown size";
-        setBackupResult({
-          success: true,
-          message: `Backup created successfully (${sizeStr})`,
-        });
-        notify.success("Database backup created successfully");
-      } else {
-        setBackupResult({
-          success: false,
-          message: result.error || "Failed to create backup",
-        });
-        notify.error(result.error || "Failed to create backup");
-      }
-    } catch (error) {
-      logger.error("Failed to backup database:", error);
-      setBackupResult({
-        success: false,
-        message: "An unexpected error occurred during backup",
-      });
-      notify.error("An unexpected error occurred during backup");
-    } finally {
+    } else if (backupItem?.status === 'error') {
+      setBackupResult({ success: false, message: backupItem.error || 'Failed to create backup' });
+      notify.error(backupItem.error || 'Failed to create backup');
       setBackingUp(false);
     }
-  };
+  }, [backupItem?.status, backupItem?.error]);
 
-  // TASK-2052: Restore database handler
-  const handleRestoreDatabase = async (): Promise<void> => {
-    setRestoring(true);
-    setBackupResult(null);
-    try {
-      const result = await window.api.databaseBackup.restore();
-      if (result.cancelled) {
-        // User cancelled the dialog or confirmation, no feedback needed
-        return;
-      }
-      if (result.success) {
-        setBackupResult({
-          success: true,
-          message: "Database restored successfully",
-        });
-        notify.success("Database restored successfully");
-        // Refresh database info after restore
-        const infoResult = await window.api.databaseBackup.getInfo();
+  useEffect(() => {
+    if (restoreItem?.status === 'complete') {
+      setRestoring(false);
+      if (restoreItem.warning === 'cancelled') return;
+      setBackupResult({ success: true, message: 'Database restored successfully' });
+      notify.success('Database restored successfully');
+      // Refresh database info after successful restore
+      window.api.databaseBackup.getInfo().then((infoResult) => {
         if (infoResult.success && infoResult.info) {
           setDbInfo({
             fileSize: infoResult.info.fileSize,
             lastModified: infoResult.info.lastModified,
           });
         }
-      } else {
-        setBackupResult({
-          success: false,
-          message: result.error || "Failed to restore database",
-        });
-        notify.error(result.error || "Failed to restore database");
-        if (result.requiresRestart) {
-          notify.error("The app may need to be restarted.");
-        }
-      }
-    } catch (error) {
-      logger.error("Failed to restore database:", error);
-      setBackupResult({
-        success: false,
-        message: "An unexpected error occurred during restore",
-      });
-      notify.error("An unexpected error occurred during restore");
-    } finally {
+      }).catch(() => { /* Non-critical */ });
+    } else if (restoreItem?.status === 'error') {
+      setBackupResult({ success: false, message: restoreItem.error || 'Failed to restore database' });
+      notify.error(restoreItem.error || 'Failed to restore database');
       setRestoring(false);
     }
-  };
+  }, [restoreItem?.status, restoreItem?.error]);
+
+  useEffect(() => {
+    if (ccpaItem?.status === 'complete') {
+      setExporting(false);
+      if (ccpaItem.warning !== 'cancelled') {
+        setExportResult({ success: true, message: 'Data exported successfully' });
+        notify.success('Your data has been exported successfully.');
+      }
+    } else if (ccpaItem?.status === 'error') {
+      setExportResult({ success: false, message: ccpaItem.error || 'Export failed' });
+      notify.error('Failed to export data: ' + (ccpaItem.error || 'Unknown error'));
+      setExporting(false);
+    }
+  }, [ccpaItem?.status, ccpaItem?.error]);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -1617,7 +1566,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                 {/* Reindex Database - Database maintenance for performance */}
                 <button
                   onClick={handleReindexDatabase}
-                  disabled={reindexing}
+                  disabled={reindexing || reindexRunning}
                   className="w-full text-left p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <div className="flex items-center justify-between">
@@ -1641,7 +1590,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                         </p>
                       )}
                     </div>
-                    {reindexing ? (
+                    {(reindexing || reindexRunning) ? (
                       <svg
                         className="w-5 h-5 text-blue-500 animate-spin"
                         fill="none"
@@ -1700,17 +1649,17 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                   <div className="flex gap-2">
                     <button
                       onClick={handleBackupDatabase}
-                      disabled={backingUp || restoring}
+                      disabled={backingUp || restoring || backupRunning || restoreRunning}
                       className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {backingUp ? "Backing up..." : "Backup Database"}
+                      {(backingUp || backupRunning) ? "Backing up..." : "Backup Database"}
                     </button>
                     <button
                       onClick={handleRestoreDatabase}
-                      disabled={backingUp || restoring}
+                      disabled={backingUp || restoring || backupRunning || restoreRunning}
                       className="px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded border border-amber-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {restoring ? "Restoring..." : "Restore from Backup"}
+                      {(restoring || restoreRunning) ? "Restoring..." : "Restore from Backup"}
                     </button>
                   </div>
                   {backupResult && (
@@ -1792,18 +1741,18 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                     preferences, and activity logs. OAuth token values are excluded
                     for security.
                   </p>
-                  {exporting && (
+                  {(exporting || exportRunning) && (
                     <div className="mb-3">
                       <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
                         <span>
-                          Exporting{exportCategory ? `: ${exportCategory}` : "..."}
+                          Exporting{(exportCategory || orchestratorExportCategory) ? `: ${exportCategory || orchestratorExportCategory}` : "..."}
                         </span>
-                        <span>{exportProgress}%</span>
+                        <span>{exportProgress || orchestratorExportProgress}%</span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-1.5">
                         <div
                           className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
-                          style={{ width: `${exportProgress}%` }}
+                          style={{ width: `${exportProgress || orchestratorExportProgress}%` }}
                         />
                       </div>
                     </div>
@@ -1819,10 +1768,10 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                   )}
                   <button
                     onClick={handleExportData}
-                    disabled={exporting}
+                    disabled={exporting || exportRunning}
                     className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {exporting ? "Exporting..." : "Export My Data"}
+                    {(exporting || exportRunning) ? "Exporting..." : "Export My Data"}
                   </button>
                 </div>
 

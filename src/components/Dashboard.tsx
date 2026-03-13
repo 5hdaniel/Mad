@@ -9,6 +9,7 @@ import { LicenseGate } from "./common/LicenseGate";
 import { AlertBanner, AlertIcons } from "./common/AlertBanner";
 import { TransactionLimitModal } from "./common/TransactionLimitModal";
 import { useLicense } from "../contexts/LicenseContext";
+import { useFeatureGate } from "../hooks/useFeatureGate";
 import {
   getDashboardTourSteps,
   JOYRIDE_STYLES,
@@ -30,8 +31,8 @@ interface DashboardActionProps {
   onTriggerRefresh?: () => void;
   /** Callback when user selects a pending transaction to review */
   onSelectPendingTransaction?: (transaction: Transaction) => void;
-  /** Callback to open Settings modal */
-  onOpenSettings?: () => void;
+  /** Callback to open Settings modal. Pass a scrollTarget to scroll to a specific section. */
+  onOpenSettings?: (scrollTarget?: string) => void;
   /** Current user info for personalized greeting */
   user?: {
     display_name?: string;
@@ -80,7 +81,9 @@ function Dashboard({
     usePendingTransactionCount();
 
   // License status for transaction limit check and AI addon
-  const { canCreateTransaction, transactionCount, transactionLimit, hasAIAddon } = useLicense();
+  const { canCreateTransaction, transactionCount, transactionLimit } = useLicense();
+  const { isAllowed } = useFeatureGate();
+  const hasAIAddon = isAllowed("ai_detection");
 
   // Check if notifications are already enabled (macOS only)
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);

@@ -1,7 +1,8 @@
 # SPRINT-122: Plan Admin + Feature Gate Enforcement
 
 **Created:** 2026-03-06
-**Status:** Planned
+**Closed:** 2026-03-11
+**Status:** Deprecated -- Superseded by SPRINT-126 (completed 2026-03-12)
 **Goal:** Build admin UI for plan management and enforce feature gates in both the desktop app and broker portal
 
 ---
@@ -12,138 +13,54 @@ With the feature flag data model in place (SPRINT-121), this sprint adds the thr
 
 ---
 
-## In-Scope
+## Closure Reason
 
-| Task | Backlog | Title | Est. Tokens | Status |
-|------|---------|-------|-------------|--------|
-| TASK-2127 | BACKLOG-892 | Plan Administration UI (admin-portal) | ~35K | Pending |
-| TASK-2128 | BACKLOG-893 | Desktop App Feature Gate Enforcement (electron) | ~30K | Pending |
-| TASK-2129 | BACKLOG-894 | Broker Portal Feature Gate Enforcement (admin-portal/broker-portal) | ~25K | Pending |
+**SPRINT-122 is superseded by SPRINT-126 (Feature Gate Rework + Completion).**
 
-### Key Deliverables
+During QA testing of the three parallel PRs, the SR Engineer identified 7 issues in PR #1124 (TASK-2128 -- Desktop Feature Gate Service), including 3 critical bugs that make the entire feature gate system non-functional:
 
-1. **Admin Portal -- Plan Management Pages:**
-   - Plans list page (view all plans, create new)
-   - Plan detail page (edit features in a plan)
-   - Organization plan assignment (on org detail page)
-   - Feature definitions list (read-only reference)
+1. **C1**: `featureGateService.ts` used `Array.isArray(data)` to parse the RPC response -- features were never actually parsed from the JSONB object format.
+2. **C4**: SQL RPC `get_org_features` had a broken `IF v_org_plan IS NOT NULL` check on a RECORD type -- override/plan logic never executed. The fix was applied live to Supabase but the deployed migration file is incorrect and needs a NEW corrective migration.
+3. **C6**: ExportModal renders date fields alongside UpgradePrompt when gated -- only the UpgradePrompt should render.
 
-2. **Desktop App -- Feature Gate Service:**
-   - `FeatureGateService` that checks `check_feature_access` RPC on sync
-   - Gate checks before text export, email export, attachment inclusion, call log access
-   - Graceful degradation: show upgrade prompt when feature is gated
-   - Cache feature flags locally with TTL
+Additional important issues: test mocks matching the bug (I1), inconsistent error response format (I2), no cache max age (I5), FeatureAccess type duplicated in 5 places (I6).
 
-3. **Broker Portal -- Server-Side Feature Gates:**
-   - Server component checks before rendering gated features
-   - Hide export buttons, attachment sections, call log tab when gated
-   - Feature check utility using `get_org_features` RPC
+Since TASK-2128 is the foundation layer (provides the `get_org_features` RPC that TASK-2127 and TASK-2129 also consume), all three tasks are blocked until the rework is complete.
 
-## Out of Scope / Deferred
+**Decision:** Close SPRINT-122, create SPRINT-126 with corrected dependency graph:
+- Phase 1: TASK-2153 (fix TASK-2128 bugs) -- sequential, blocks everything
+- Phase 2: QA test TASK-2127 and TASK-2129 after TASK-2128 merges
+- Independent: TASK-2152 (iPhone sync) proceeds separately via SPRINT-125
 
-- Billing/payment integration
-- Self-service plan upgrade flow
-- Usage metering or rate limiting
-- Feature flag analytics/tracking
-- Real-time feature flag updates (polling with TTL is sufficient)
+### Open PRs at Closure
 
----
+| PR | Task | Branch | Status | Action |
+|----|------|--------|--------|--------|
+| #1124 | TASK-2128 | `feature/task-2128-desktop-feature-gates` | Changes Requested | Rework in SPRINT-126 Phase 1 |
+| #1123 | TASK-2127 | `feature/task-2127-plan-admin-ui` | Open, Not Tested | QA in SPRINT-126 Phase 2 |
+| #1122 | TASK-2129 | `feature/task-2129-broker-feature-gates` | Open, Not Tested | QA in SPRINT-126 Phase 2 |
 
-## Dependencies
+### Existing Worktrees
 
-- **SPRINT-121 (Feature Flag Data Model) MUST be completed first** -- all three tasks depend on the schema, RPCs, and seed data from TASK-2126
-- Independent of SPRINT-116 (impersonation) and SPRINT-117 (SOC 2)
-- Independent of SPRINT-123 (voice transcription)
+| Worktree | Branch | Status |
+|----------|--------|--------|
+| `Mad-TASK-2127` | `feature/task-2127-plan-admin-ui` | Preserved for Phase 2 |
+| `Mad-TASK-2129` | `feature/task-2129-broker-feature-gates` | Preserved for Phase 2 |
 
 ---
 
-## Task Breakdown
+## Original In-Scope (for reference)
 
-### Phase 1: All Tasks (Parallel)
-
-| Task | Title | Est. Tokens | Status |
-|------|-------|-------------|--------|
-| TASK-2127 | Plan Administration UI | ~35K | Pending |
-| TASK-2128 | Desktop App Feature Gate Enforcement | ~30K | Pending |
-| TASK-2129 | Broker Portal Feature Gate Enforcement | ~25K | Pending |
-
-**Execution:** Parallel -- all three tasks are independent.
-
-**Dependency:** All depend on SPRINT-121 TASK-2126 being merged.
-
-**Safe for parallel because:**
-- TASK-2127 modifies only `admin-portal/` files
-- TASK-2128 modifies only `electron/` and `src/` files
-- TASK-2129 modifies only `broker-portal/` files
-- No shared files, no merge conflict risk
+| Task | Backlog | Title | Est. Tokens | Final Status |
+|------|---------|-------|-------------|--------------|
+| TASK-2127 | BACKLOG-924 | Plan Administration UI (admin-portal) | ~35K | Blocked by TASK-2128 |
+| TASK-2128 | BACKLOG-925 | Desktop App Feature Gate Enforcement (electron) | ~30K | Changes Requested (7 bugs) |
+| TASK-2129 | BACKLOG-926 | Broker Portal Feature Gate Enforcement (broker-portal) | ~25K | Blocked by TASK-2128 |
 
 ---
 
-## Dependency Graph
+## Lessons Learned
 
-```
-SPRINT-121 TASK-2126 (Feature Flag Data Model)
-    |
-    +---> TASK-2127 (Admin Portal Plan Management)
-    |
-    +---> TASK-2128 (Desktop App Feature Gates)
-    |
-    +---> TASK-2129 (Broker Portal Feature Gates)
-```
-
-No dependencies between the three tasks -- fully parallel.
-
----
-
-## Estimated Total Effort
-
-| Category | Est. Tokens |
-|----------|-------------|
-| Engineer work (3 tasks parallel) | ~90K |
-| SR Review (3 reviews x ~15K) | ~45K |
-| **Total** | **~135K** |
-
----
-
-## Merge Plan
-
-- No integration branch needed (tasks are fully independent, no shared files)
-- All PRs target `develop`
-- Merge order: Any order -- no interdependencies
-- Each task uses its own feature branch:
-  - `feature/task-2127-plan-admin-ui`
-  - `feature/task-2128-desktop-feature-gates`
-  - `feature/task-2129-broker-feature-gates`
-
----
-
-## Risk Register
-
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| SPRINT-121 not completed before this sprint starts | Critical | Hard dependency -- do NOT start this sprint until TASK-2126 is merged |
-| Desktop app offline access to feature flags | Medium | Cache feature flags in SQLite with TTL; fall back to cached values when offline |
-| Admin accidentally removes features from active plan | Medium | Confirmation dialog before plan changes; audit log all plan modifications |
-| Inconsistent feature gate behavior across platforms | Medium | All platforms use same `check_feature_access` / `get_org_features` RPCs |
-| Parallel merge conflicts | Low | Tasks touch completely separate directories -- no shared files |
-
----
-
-## Testing Plan
-
-| Surface | Requirement | Owner |
-|---------|-------------|-------|
-| Admin portal type-check + build | Must pass | TASK-2127 |
-| Plan CRUD operations | Create, read, update plans via admin UI | TASK-2127 |
-| Desktop feature gate service | Unit tests for gate checks and caching | TASK-2128 |
-| Desktop upgrade prompts | UI shows upgrade message when feature gated | TASK-2128 |
-| Broker portal feature hiding | Gated features not rendered in server components | TASK-2129 |
-| Existing CI | All existing tests continue to pass | All tasks |
-
----
-
-## Task Files
-
-- `.claude/plans/tasks/TASK-2127-plan-admin-ui.md`
-- `.claude/plans/tasks/TASK-2128-desktop-feature-gates.md`
-- `.claude/plans/tasks/TASK-2129-broker-feature-gates.md`
+1. **Tasks sharing an RPC are NOT independent.** TASK-2127, TASK-2128, and TASK-2129 all consume `get_org_features`. A bug in the RPC (C4) or in response parsing (C1) blocks all consumers. The original plan called these "fully parallel" but the shared RPC creates a hidden dependency.
+2. **QA testing should happen before declaring parallel safety.** The original plan noted "no shared files, no merge conflict risk" but did not consider shared runtime dependencies (RPCs, response shapes).
+3. **Deployed migrations need corrective migrations, not edits.** The C4 SQL fix was applied live to Supabase but the migration file still has the bug. Future deployments would reintroduce the bug without a new corrective migration.

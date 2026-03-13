@@ -106,6 +106,7 @@ import { registerSyncHandlers, cleanupSyncHandlers } from "./sync-handlers";
 import { registerDriverHandlers } from "./driver-handlers";
 import { registerLLMHandlers } from "./llm-handlers";
 import { registerLicenseHandlers } from "./license-handlers";
+import { registerFeatureGateHandlers } from "./feature-gate-handlers";
 import { registerPreAuthValidationHandler } from "./handlers/preAuthValidationHandler";
 import { LLMConfigService } from "./services/llm/llmConfigService";
 
@@ -829,7 +830,7 @@ function createWindow(): void {
 
     // Check for updates after window loads (only in production)
     setTimeout(() => {
-      autoUpdater.checkForUpdatesAndNotify();
+      autoUpdater.checkForUpdates();
     }, UPDATE_CHECK_DELAY);
   }
 }
@@ -1047,6 +1048,9 @@ app.whenReady().then(async () => {
 
   // Register license handlers
   registerLicenseHandlers();
+
+  // Register feature gate handlers (SPRINT-122)
+  registerFeatureGateHandlers();
 
   // TASK-2086: Register pre-DB auth validation handler (SOC 2 CC6.1)
   registerPreAuthValidationHandler();

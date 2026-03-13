@@ -1,5 +1,6 @@
 /**
  * Tests for TransactionToolbar component
+ * TASK-2159: Migrated from useLicense to useFeatureGate for AI gating
  * Verifies AI gating behavior for Rejected filter tab (BACKLOG-462)
  */
 
@@ -9,14 +10,37 @@ import "@testing-library/jest-dom";
 import TransactionToolbar from "../TransactionToolbar";
 import type { TransactionToolbarProps } from "../TransactionToolbar";
 
-// Mock the LicenseContext
-jest.mock("@/contexts/LicenseContext", () => ({
-  useLicense: jest.fn(),
+// TASK-2159: Mock useFeatureGate (replaces useLicense mock)
+const mockIsAllowed = jest.fn();
+jest.mock("@/hooks/useFeatureGate", () => ({
+  useFeatureGate: () => ({
+    isAllowed: mockIsAllowed,
+    features: {},
+    loading: false,
+    refresh: jest.fn(),
+  }),
 }));
 
-import { useLicense } from "@/contexts/LicenseContext";
-
-const mockUseLicense = useLicense as jest.MockedFunction<typeof useLicense>;
+// Mock LicenseGate to pass through (already uses useFeatureGate internally)
+jest.mock("@/components/common/LicenseGate", () => ({
+  LicenseGate: ({ requires, children }: { requires: string; children: React.ReactNode }) => {
+    // Simulate the feature gate logic
+    const allowed = (() => {
+      switch (requires) {
+        case "ai_addon":
+          return mockIsAllowed("ai_detection");
+        case "individual":
+          return mockIsAllowed("text_export") || mockIsAllowed("email_export");
+        case "team":
+        case "enterprise":
+          return mockIsAllowed("broker_submission");
+        default:
+          return false;
+      }
+    })();
+    return allowed ? <>{children}</> : null;
+  },
+}));
 
 // Helper to create default props
 function createDefaultProps(overrides: Partial<TransactionToolbarProps> = {}): TransactionToolbarProps {
@@ -50,48 +74,32 @@ function createDefaultProps(overrides: Partial<TransactionToolbarProps> = {}): T
   };
 }
 
-// Helper to create mock license context value
-function createMockLicenseContext(hasAIAddon: boolean) {
-  return {
-    licenseType: "individual" as const,
-    hasAIAddon,
-    organizationId: null,
-    canExport: true,
-    canSubmit: false,
-    canAutoDetect: hasAIAddon,
-    isLoading: false,
-    refresh: jest.fn(),
-  };
-}
-
 describe("TransactionToolbar", () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
   describe("Rejected filter tab AI gating (BACKLOG-462)", () => {
-    it("should show Rejected tab when user has AI add-on", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext(true));
+    it("should show Rejected tab when ai_detection feature is allowed", () => {
+      mockIsAllowed.mockReturnValue(true); // All features allowed
 
       render(<TransactionToolbar {...createDefaultProps()} />);
 
-      // Find the Rejected button
       const rejectedButton = screen.getByRole("button", { name: /rejected/i });
       expect(rejectedButton).toBeInTheDocument();
     });
 
-    it("should hide Rejected tab when user does not have AI add-on", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext(false));
+    it("should hide Rejected tab when ai_detection feature is not allowed", () => {
+      mockIsAllowed.mockImplementation((key: string) => key !== "ai_detection");
 
       render(<TransactionToolbar {...createDefaultProps()} />);
 
-      // Rejected button should not be present
       const rejectedButton = screen.queryByRole("button", { name: /rejected/i });
       expect(rejectedButton).not.toBeInTheDocument();
     });
 
-    it("should show rejected count badge when count > 0 and has AI add-on", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext(true));
+    it("should show rejected count badge when count > 0 and ai_detection is allowed", () => {
+      mockIsAllowed.mockReturnValue(true);
 
       render(
         <TransactionToolbar
@@ -107,15 +115,14 @@ describe("TransactionToolbar", () => {
         />
       );
 
-      // Find the Rejected button and check for count badge
       const rejectedButton = screen.getByRole("button", { name: /rejected/i });
       expect(rejectedButton).toHaveTextContent("3");
     });
   });
 
   describe("Pending Review filter tab AI gating", () => {
-    it("should show Pending Review tab when user has AI add-on", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext(true));
+    it("should show Pending Review tab when ai_detection feature is allowed", () => {
+      mockIsAllowed.mockReturnValue(true);
 
       render(<TransactionToolbar {...createDefaultProps()} />);
 
@@ -123,8 +130,8 @@ describe("TransactionToolbar", () => {
       expect(pendingButton).toBeInTheDocument();
     });
 
-    it("should hide Pending Review tab when user does not have AI add-on", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext(false));
+    it("should hide Pending Review tab when ai_detection feature is not allowed", () => {
+      mockIsAllowed.mockImplementation((key: string) => key !== "ai_detection");
 
       render(<TransactionToolbar {...createDefaultProps()} />);
 
@@ -134,8 +141,8 @@ describe("TransactionToolbar", () => {
   });
 
   describe("Auto Detect button AI gating", () => {
-    it("should show Auto Detect button when user has AI add-on", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext(true));
+    it("should show Auto Detect button when ai_detection feature is allowed", () => {
+      mockIsAllowed.mockReturnValue(true);
 
       render(<TransactionToolbar {...createDefaultProps()} />);
 
@@ -143,8 +150,8 @@ describe("TransactionToolbar", () => {
       expect(autoDetectButton).toBeInTheDocument();
     });
 
-    it("should hide Auto Detect button when user does not have AI add-on", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext(false));
+    it("should hide Auto Detect button when ai_detection feature is not allowed", () => {
+      mockIsAllowed.mockImplementation((key: string) => key !== "ai_detection");
 
       render(<TransactionToolbar {...createDefaultProps()} />);
 
@@ -154,46 +161,40 @@ describe("TransactionToolbar", () => {
   });
 
   describe("Non-gated filter tabs", () => {
-    it("should always show All tab regardless of AI add-on", () => {
-      // Without AI
-      mockUseLicense.mockReturnValue(createMockLicenseContext(false));
+    it("should always show All tab regardless of ai_detection", () => {
+      mockIsAllowed.mockImplementation((key: string) => key !== "ai_detection");
       const { rerender } = render(<TransactionToolbar {...createDefaultProps()} />);
       expect(screen.getByRole("button", { name: /^all/i })).toBeInTheDocument();
 
-      // With AI
-      mockUseLicense.mockReturnValue(createMockLicenseContext(true));
+      mockIsAllowed.mockReturnValue(true);
       rerender(<TransactionToolbar {...createDefaultProps()} />);
       expect(screen.getByRole("button", { name: /^all/i })).toBeInTheDocument();
     });
 
-    it("should always show Active tab regardless of AI add-on", () => {
-      // Without AI
-      mockUseLicense.mockReturnValue(createMockLicenseContext(false));
+    it("should always show Active tab regardless of ai_detection", () => {
+      mockIsAllowed.mockImplementation((key: string) => key !== "ai_detection");
       const { rerender } = render(<TransactionToolbar {...createDefaultProps()} />);
       expect(screen.getByRole("button", { name: /^active/i })).toBeInTheDocument();
 
-      // With AI
-      mockUseLicense.mockReturnValue(createMockLicenseContext(true));
+      mockIsAllowed.mockReturnValue(true);
       rerender(<TransactionToolbar {...createDefaultProps()} />);
       expect(screen.getByRole("button", { name: /^active/i })).toBeInTheDocument();
     });
 
-    it("should always show Closed tab regardless of AI add-on", () => {
-      // Without AI
-      mockUseLicense.mockReturnValue(createMockLicenseContext(false));
+    it("should always show Closed tab regardless of ai_detection", () => {
+      mockIsAllowed.mockImplementation((key: string) => key !== "ai_detection");
       const { rerender } = render(<TransactionToolbar {...createDefaultProps()} />);
       expect(screen.getByRole("button", { name: /^closed/i })).toBeInTheDocument();
 
-      // With AI
-      mockUseLicense.mockReturnValue(createMockLicenseContext(true));
+      mockIsAllowed.mockReturnValue(true);
       rerender(<TransactionToolbar {...createDefaultProps()} />);
       expect(screen.getByRole("button", { name: /^closed/i })).toBeInTheDocument();
     });
   });
 
   describe("Status info tooltip AI gating", () => {
-    it("should show Rejected explanation in tooltip only when user has AI add-on", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext(true));
+    it("should show Rejected explanation in tooltip only when ai_detection is allowed", () => {
+      mockIsAllowed.mockReturnValue(true);
 
       render(
         <TransactionToolbar
@@ -203,12 +204,11 @@ describe("TransactionToolbar", () => {
         />
       );
 
-      // Tooltip should contain Rejected explanation (unique text, not the button text)
       expect(screen.getByText("Not a real transaction (false positive)")).toBeInTheDocument();
     });
 
-    it("should not show Rejected explanation in tooltip when user does not have AI add-on", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext(false));
+    it("should not show Rejected explanation in tooltip when ai_detection is not allowed", () => {
+      mockIsAllowed.mockImplementation((key: string) => key !== "ai_detection");
 
       render(
         <TransactionToolbar
@@ -218,12 +218,11 @@ describe("TransactionToolbar", () => {
         />
       );
 
-      // Tooltip should NOT contain Rejected explanation
       expect(screen.queryByText("Not a real transaction (false positive)")).not.toBeInTheDocument();
     });
 
-    it("should show Pending Review explanation in tooltip only when user has AI add-on", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext(true));
+    it("should show Pending Review explanation in tooltip only when ai_detection is allowed", () => {
+      mockIsAllowed.mockReturnValue(true);
 
       render(
         <TransactionToolbar
@@ -233,12 +232,11 @@ describe("TransactionToolbar", () => {
         />
       );
 
-      // Tooltip should contain Pending Review explanation (unique text, not the button text)
       expect(screen.getByText("Auto-detected transaction awaiting your approval")).toBeInTheDocument();
     });
 
-    it("should not show Pending Review explanation in tooltip when user does not have AI add-on", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext(false));
+    it("should not show Pending Review explanation in tooltip when ai_detection is not allowed", () => {
+      mockIsAllowed.mockImplementation((key: string) => key !== "ai_detection");
 
       render(
         <TransactionToolbar
@@ -248,7 +246,6 @@ describe("TransactionToolbar", () => {
         />
       );
 
-      // Tooltip should NOT contain Pending Review explanation
       expect(screen.queryByText("Auto-detected transaction awaiting your approval")).not.toBeInTheDocument();
     });
   });

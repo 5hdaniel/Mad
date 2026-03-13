@@ -1,6 +1,7 @@
 /**
  * Tests for TransactionHeader component
  * Verifies action button visibility based on license type (BACKLOG-459)
+ * TASK-2159: Migrated from useLicense to useFeatureGate for LicenseGate
  */
 
 import React from "react";
@@ -8,9 +9,20 @@ import { render, screen } from "@testing-library/react";
 import { TransactionHeader } from "../TransactionHeader";
 import type { Transaction } from "@/types";
 
-// Mock the useLicense hook
+// Mock the useLicense hook (still used by some sub-components)
 jest.mock("@/contexts/LicenseContext", () => ({
   useLicense: jest.fn(),
+}));
+
+// TASK-2159: Mock the useFeatureGate hook (LicenseGate now uses this)
+const mockIsAllowed = jest.fn();
+jest.mock("@/hooks/useFeatureGate", () => ({
+  useFeatureGate: () => ({
+    isAllowed: mockIsAllowed,
+    features: {},
+    loading: false,
+    refresh: jest.fn(),
+  }),
 }));
 
 import { useLicense } from "@/contexts/LicenseContext";
@@ -42,6 +54,23 @@ function createMockLicenseContext(licenseType: "individual" | "team" | "enterpri
     isLoading,
     refresh: jest.fn(),
   };
+}
+
+/**
+ * Helper to configure useFeatureGate mock based on license type.
+ * Maps license types to feature flags that LicenseGate checks:
+ *   - individual: text_export=true, broker_submission=false
+ *   - team/enterprise: text_export=true, broker_submission=true
+ */
+function setFeatureGateForLicense(licenseType: "individual" | "team" | "enterprise") {
+  const featureMap: Record<string, boolean> = {
+    text_export: true,
+    email_export: true,
+  };
+  if (licenseType === "team" || licenseType === "enterprise") {
+    featureMap.broker_submission = true;
+  }
+  mockIsAllowed.mockImplementation((key: string) => !!featureMap[key]);
 }
 
 // Create mock transaction
@@ -88,6 +117,7 @@ describe("TransactionHeader", () => {
   describe("BACKLOG-459: Team License Export After Submission", () => {
     it("should show both Submit and Export buttons for team license users", () => {
       mockUseLicense.mockReturnValue(createMockLicenseContext("team", false, false));
+      setFeatureGateForLicense("team");
       const transaction = createMockTransaction({ submission_status: "not_submitted" });
 
       render(<TransactionHeader {...defaultProps} transaction={transaction} />);
@@ -101,6 +131,7 @@ describe("TransactionHeader", () => {
 
     it("should show only Export button for individual license users (no Submit)", () => {
       mockUseLicense.mockReturnValue(createMockLicenseContext("individual", false, false));
+      setFeatureGateForLicense("individual");
       const transaction = createMockTransaction();
 
       render(<TransactionHeader {...defaultProps} transaction={transaction} />);
@@ -114,6 +145,7 @@ describe("TransactionHeader", () => {
 
     it("should show Export button for team users even after submission", () => {
       mockUseLicense.mockReturnValue(createMockLicenseContext("team", false, false));
+      setFeatureGateForLicense("team");
       const transaction = createMockTransaction({ submission_status: "submitted" });
 
       render(<TransactionHeader {...defaultProps} transaction={transaction} />);
@@ -127,6 +159,7 @@ describe("TransactionHeader", () => {
 
     it("should show Resubmit button for team users when needs_changes", () => {
       mockUseLicense.mockReturnValue(createMockLicenseContext("team", false, false));
+      setFeatureGateForLicense("team");
       const transaction = createMockTransaction({ submission_status: "needs_changes" });
 
       render(<TransactionHeader {...defaultProps} transaction={transaction} />);
@@ -139,6 +172,7 @@ describe("TransactionHeader", () => {
 
     it("should show both Submit and Export for enterprise license users", () => {
       mockUseLicense.mockReturnValue(createMockLicenseContext("enterprise", false, false));
+      setFeatureGateForLicense("enterprise");
       const transaction = createMockTransaction({ submission_status: "not_submitted" });
 
       render(<TransactionHeader {...defaultProps} transaction={transaction} />);
@@ -153,6 +187,7 @@ describe("TransactionHeader", () => {
   describe("Pending Review Mode", () => {
     it("should show Approve/Reject/Edit buttons in pending review mode", () => {
       mockUseLicense.mockReturnValue(createMockLicenseContext("team", false, false));
+      setFeatureGateForLicense("team");
       const transaction = createMockTransaction();
 
       render(
@@ -177,6 +212,7 @@ describe("TransactionHeader", () => {
   describe("Rejected Mode", () => {
     it("should show Restore/Delete buttons in rejected mode", () => {
       mockUseLicense.mockReturnValue(createMockLicenseContext("team", false, false));
+      setFeatureGateForLicense("team");
       const transaction = createMockTransaction();
 
       render(

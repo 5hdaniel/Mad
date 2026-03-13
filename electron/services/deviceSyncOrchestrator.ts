@@ -144,7 +144,7 @@ export class DeviceSyncOrchestrator extends EventEmitter {
   private contactsParser: iOSContactsParser;
 
   private isRunning: boolean = false;
-  private isCancelled: boolean = false;
+  private abortController: AbortController | null = null;
   private currentPhase: SyncPhase = "idle";
   private estimatedBackupSize: number = 0;
   private startTime: number = 0;
@@ -230,7 +230,7 @@ export class DeviceSyncOrchestrator extends EventEmitter {
     }
 
     this.isRunning = true;
-    this.isCancelled = false;
+    this.abortController = new AbortController();
     this.startTime = Date.now();
     this.estimatedBackupSize = 0;
 
@@ -377,7 +377,7 @@ export class DeviceSyncOrchestrator extends EventEmitter {
         skipApps: true, // Always skip apps to reduce backup size
       });
 
-      if (this.isCancelled) {
+      if (this.abortController?.signal.aborted) {
         this.isRunning = false;
         return this.errorResult("Sync cancelled by user");
       }
@@ -410,7 +410,7 @@ export class DeviceSyncOrchestrator extends EventEmitter {
           options.password,
         );
 
-        if (this.isCancelled) {
+        if (this.abortController?.signal.aborted) {
           this.isRunning = false;
           return this.errorResult("Sync cancelled by user");
         }
@@ -442,7 +442,7 @@ export class DeviceSyncOrchestrator extends EventEmitter {
         message: `Found ${contacts.length} contacts`,
       });
 
-      if (this.isCancelled) {
+      if (this.abortController?.signal.aborted) {
         this.isRunning = false;
         this.contactsParser.close();
         return this.errorResult("Sync cancelled by user");
@@ -478,7 +478,7 @@ export class DeviceSyncOrchestrator extends EventEmitter {
       // Load messages for each conversation using async method
       let loadedCount = 0;
       for (const conv of conversations) {
-        if (this.isCancelled) {
+        if (this.abortController?.signal.aborted) {
           break;
         }
 
@@ -500,7 +500,7 @@ export class DeviceSyncOrchestrator extends EventEmitter {
         }
       }
 
-      if (this.isCancelled) {
+      if (this.abortController?.signal.aborted) {
         this.isRunning = false;
         this.messagesParser.close();
         this.contactsParser.close();
@@ -596,7 +596,9 @@ export class DeviceSyncOrchestrator extends EventEmitter {
    */
   cancel(): void {
     log.info("[DeviceSyncOrchestrator] Cancelling sync");
-    this.isCancelled = true;
+    this.abortController?.abort();
+    // Don't null the controller -- sync() checks signal.aborted at checkpoints
+    // and the next sync()/processExistingBackup() call creates a fresh controller.
     this.isRunning = false;
     // Always cancel backup service — even if orchestrator thinks it's not running,
     // the backup process may still be alive (race condition on disconnect/error)
@@ -640,8 +642,9 @@ export class DeviceSyncOrchestrator extends EventEmitter {
    */
   forceReset(): void {
     log.warn("[DeviceSyncOrchestrator] Force resetting sync state");
+    this.abortController?.abort();
+    this.abortController = null;
     this.isRunning = false;
-    this.isCancelled = false;
     this.currentPhase = "idle";
     this.estimatedBackupSize = 0;
   }
@@ -914,7 +917,7 @@ export class DeviceSyncOrchestrator extends EventEmitter {
     }
 
     this.isRunning = true;
-    this.isCancelled = false;
+    this.abortController = new AbortController();
     this.startTime = Date.now();
 
     // TASK-2110: Generate session ID for ACID rollback on cancel
@@ -1064,7 +1067,7 @@ export class DeviceSyncOrchestrator extends EventEmitter {
       // Load messages for each conversation using async method
       let loadedCount = 0;
       for (const conv of conversations) {
-        if (this.isCancelled) {
+        if (this.abortController?.signal.aborted) {
           break;
         }
 
@@ -1083,7 +1086,7 @@ export class DeviceSyncOrchestrator extends EventEmitter {
         }
       }
 
-      if (this.isCancelled) {
+      if (this.abortController?.signal.aborted) {
         this.messagesParser.close();
         this.contactsParser.close();
         return this.errorResult("Processing cancelled by user");

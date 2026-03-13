@@ -52,7 +52,6 @@ export function LicenseCard({ licenses }: { licenses: License[] }) {
               status: primaryLicense.status,
               expires_at: primaryLicense.expires_at,
               license_type: primaryLicense.license_type,
-              transaction_limit: primaryLicense.transaction_limit,
             }}
           />
         )}

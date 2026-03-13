@@ -6,6 +6,8 @@
 import type { GetConversationsResult } from "./hooks/useConversations";
 import type { iOSDevice, BackupProgress } from "./types/iphone";
 import type { Transaction } from "../electron/types/models";
+import type { FeatureAccess } from "../electron/types/featureGate";
+import type { FolderExportProgress } from "../electron/types/ipc";
 
 /**
  * Backup progress details from idevicebackup2
@@ -122,7 +124,7 @@ interface ElectronAPI {
     callback: (progress: unknown) => void,
   ) => () => void;
   onExportFolderProgress: (
-    callback: (progress: { stage: string; current: number; total: number; message: string }) => void,
+    callback: (progress: FolderExportProgress) => void,
   ) => () => void;
 
   // File System
@@ -1637,7 +1639,7 @@ interface MainAPI {
 
   // Folder export progress event
   onExportFolderProgress: (
-    callback: (progress: { stage: string; current: number; total: number; message: string }) => void,
+    callback: (progress: FolderExportProgress) => void,
   ) => () => void;
 
   // ==========================================
@@ -2051,6 +2053,16 @@ interface MainAPI {
       success: boolean;
       error?: string;
     }>;
+  };
+
+  // Feature Gate API (SPRINT-122)
+  featureGate: {
+    /** Check access to a specific feature */
+    check: (featureKey: string) => Promise<FeatureAccess>;
+    /** Get all features for the current organization */
+    getAll: () => Promise<Record<string, FeatureAccess>>;
+    /** Invalidate the feature gate cache */
+    invalidateCache: () => Promise<void>;
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

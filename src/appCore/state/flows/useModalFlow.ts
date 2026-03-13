@@ -17,7 +17,7 @@ export interface UseModalFlowReturn {
   closeProfile: () => void;
 
   // Settings modal
-  openSettings: () => void;
+  openSettings: (scrollTarget?: string) => void;
   closeSettings: () => void;
 
   // Transactions modal

@@ -11,7 +11,7 @@ import Settings from "../Settings";
 import { PlatformProvider } from "../../contexts/PlatformContext";
 import { NotificationProvider } from "../../contexts/NotificationContext";
 
-// Mock the useLicense hook for LicenseGate (BACKLOG-462)
+// Mock the useLicense hook (still used by some sub-components)
 jest.mock("@/contexts/LicenseContext", () => ({
   useLicense: jest.fn(() => ({
     licenseType: "individual" as const,
@@ -23,6 +23,17 @@ jest.mock("@/contexts/LicenseContext", () => ({
     isLoading: false,
     refresh: jest.fn(),
   })),
+}));
+
+// TASK-2159: Mock the useFeatureGate hook (Settings + LicenseGate now use this)
+const mockIsAllowed = jest.fn().mockReturnValue(true); // Default: all features allowed
+jest.mock("@/hooks/useFeatureGate", () => ({
+  useFeatureGate: () => ({
+    isAllowed: mockIsAllowed,
+    features: {},
+    loading: false,
+    refresh: jest.fn(),
+  }),
 }));
 
 // TASK-2056: Mock the useNetwork hook for offline testing
@@ -672,9 +683,11 @@ describe("Settings", () => {
         .closest("button");
       await userEvent.click(reindexButton!);
 
+      // TASK-2150: Reindex now goes through orchestrator, so the success message
+      // is simplified (detailed result data like indexesRebuilt is not surfaced)
       await waitFor(() => {
         expect(
-          screen.getByText(/database optimized.*14 indexes rebuilt/i),
+          screen.getByText(/database optimized successfully/i),
         ).toBeInTheDocument();
       });
 
@@ -841,20 +854,9 @@ describe("Settings", () => {
     });
   });
 
-  describe("AI Settings License Gating (BACKLOG-462)", () => {
-    const { useLicense } = jest.requireMock("@/contexts/LicenseContext");
-
-    it("should show AI Settings section when AI add-on is enabled", async () => {
-      useLicense.mockReturnValue({
-        licenseType: "individual",
-        hasAIAddon: true,
-        organizationId: null,
-        canExport: true,
-        canSubmit: false,
-        canAutoDetect: true,
-        isLoading: false,
-        refresh: jest.fn(),
-      });
+  describe("AI Settings Feature Gating (BACKLOG-462, TASK-2159)", () => {
+    it("should show AI Settings section when ai_detection feature is allowed", async () => {
+      mockIsAllowed.mockReturnValue(true); // All features allowed
 
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
@@ -863,17 +865,8 @@ describe("Settings", () => {
       });
     });
 
-    it("should hide AI Settings section when AI add-on is disabled", async () => {
-      useLicense.mockReturnValue({
-        licenseType: "individual",
-        hasAIAddon: false, // AI add-on disabled
-        organizationId: null,
-        canExport: true,
-        canSubmit: false,
-        canAutoDetect: false,
-        isLoading: false,
-        refresh: jest.fn(),
-      });
+    it("should hide AI Settings section when ai_detection feature is not allowed", async () => {
+      mockIsAllowed.mockImplementation((key: string) => key !== "ai_detection");
 
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 
@@ -883,17 +876,8 @@ describe("Settings", () => {
       });
     });
 
-    it("should show AI Settings for team license with AI add-on", async () => {
-      useLicense.mockReturnValue({
-        licenseType: "team",
-        hasAIAddon: true,
-        organizationId: "org-123",
-        canExport: false,
-        canSubmit: true,
-        canAutoDetect: true,
-        isLoading: false,
-        refresh: jest.fn(),
-      });
+    it("should show AI Settings when ai_detection feature is allowed regardless of license type", async () => {
+      mockIsAllowed.mockReturnValue(true); // All features allowed
 
       await renderSettings({ userId: mockUserId, onClose: mockOnClose });
 

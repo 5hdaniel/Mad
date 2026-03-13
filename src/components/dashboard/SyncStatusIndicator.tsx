@@ -6,7 +6,7 @@
  *
  * IMPORTANT: Sync progress is shown for ALL users (not gated by license).
  * AI-specific features (pending transaction count, "Review Now" button) are
- * gated internally via useLicense() hook.
+ * gated internally via useFeatureGate() hook.
  *
  * TASK-2119: iPhone sync is now rendered from the orchestrator queue like
  * contacts/emails/messages. No more iPhone-specific props.
@@ -24,7 +24,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useLicense } from "../../contexts/LicenseContext";
+import { useFeatureGate } from "../../hooks/useFeatureGate";
 import { useSyncOrchestrator } from "../../hooks/useSyncOrchestrator";
 import type { SyncType, SyncItemStatus } from "../../services/SyncOrchestratorService";
 import logger from "../../utils/logger";
@@ -34,8 +34,8 @@ interface SyncStatusIndicatorProps {
   pendingCount?: number;
   /** Callback when user clicks "Review Now" */
   onViewPending?: () => void;
-  /** Callback to open Settings modal (for message cap warnings) */
-  onOpenSettings?: () => void;
+  /** Callback to open Settings modal (for message cap warnings). Pass a scrollTarget to scroll to a specific section. */
+  onOpenSettings?: (scrollTarget?: string) => void;
   /** When true, suppress auto-dismiss so the tour anchor stays visible (TASK-2081) */
   isTourActive?: boolean;
   /** Callback when user clicks "Details" on a sync pill (e.g., iPhone) */
@@ -55,6 +55,14 @@ const getLabelForType = (type: SyncType): string => {
       return 'Messages';
     case 'iphone':
       return 'iPhone';
+    case 'reindex':
+      return 'Reindex';
+    case 'backup':
+      return 'Backup';
+    case 'restore':
+      return 'Restore';
+    case 'ccpa-export':
+      return 'Data Export';
     default:
       return type;
   }
@@ -87,8 +95,9 @@ export function SyncStatusIndicator({
   const wasSyncingRef = useRef(false);
   const autoDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Get license status for AI-specific features (pending count, Review Now button)
-  const { hasAIAddon } = useLicense();
+  // Get feature gate status for AI-specific features (pending count, Review Now button)
+  const { isAllowed } = useFeatureGate();
+  const hasAIAddon = isAllowed("ai_detection");
 
   // Use SyncOrchestrator as single source of truth for sync state
   const { queue, isRunning } = useSyncOrchestrator();
@@ -314,7 +323,7 @@ export function SyncStatusIndicator({
               <p className="text-xs text-amber-700">{syncWarning}</p>
             </div>
             <button
-              onClick={onOpenSettings}
+              onClick={() => onOpenSettings?.('settings-import-filters')}
               className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap ml-3"
             >
               Adjust Limits

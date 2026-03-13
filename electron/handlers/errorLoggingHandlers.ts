@@ -8,6 +8,7 @@
 import { ipcMain } from "electron";
 import { getErrorLoggingService, type ErrorLogPayload } from "../services/errorLoggingService";
 import logService from "../services/logService";
+import { wrapHandler } from "../utils/wrapHandler";
 
 /**
  * Register error logging IPC handlers
@@ -19,59 +20,35 @@ export function registerErrorLoggingHandlers(): void {
    */
   ipcMain.handle(
     "error-logging:submit",
-    async (_event, payload: ErrorLogPayload) => {
-      try {
-        logService.debug("[ErrorLogging] Received error submission request", "ErrorLoggingHandlers", {
-          errorType: payload.errorType,
-          errorCode: payload.errorCode,
-        });
+    wrapHandler(async (_event, payload: ErrorLogPayload) => {
+      logService.debug("[ErrorLogging] Received error submission request", "ErrorLoggingHandlers", {
+        errorType: payload.errorType,
+        errorCode: payload.errorCode,
+      });
 
-        const service = getErrorLoggingService();
-        const result = await service.submitError(payload);
+      const service = getErrorLoggingService();
+      const result = await service.submitError(payload);
 
-        return result;
-      } catch (error) {
-        logService.error("[ErrorLogging] Handler exception", "ErrorLoggingHandlers", {
-          error: error instanceof Error ? error.message : "Unknown error",
-        });
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        };
-      }
-    }
+      return result;
+    }, { module: "ErrorLoggingHandlers" }),
   );
 
   /**
    * Process queued errors (call when connection restored)
    */
-  ipcMain.handle("error-logging:process-queue", async () => {
-    try {
-      const service = getErrorLoggingService();
-      const processedCount = await service.processOfflineQueue();
-      return { success: true, processedCount };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      };
-    }
-  });
+  ipcMain.handle("error-logging:process-queue", wrapHandler(async () => {
+    const service = getErrorLoggingService();
+    const processedCount = await service.processOfflineQueue();
+    return { success: true, processedCount };
+  }, { module: "ErrorLoggingHandlers" }));
 
   /**
    * Get queue size (for diagnostics)
    */
-  ipcMain.handle("error-logging:get-queue-size", async () => {
-    try {
-      const service = getErrorLoggingService();
-      return { success: true, queueSize: service.getQueueSize() };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      };
-    }
-  });
+  ipcMain.handle("error-logging:get-queue-size", wrapHandler(async () => {
+    const service = getErrorLoggingService();
+    return { success: true, queueSize: service.getQueueSize() };
+  }, { module: "ErrorLoggingHandlers" }));
 
   logService.debug("[ErrorLogging] Handlers registered", "ErrorLoggingHandlers");
 }

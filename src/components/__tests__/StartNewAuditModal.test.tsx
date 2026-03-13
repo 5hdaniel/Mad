@@ -53,6 +53,17 @@ jest.mock("../../contexts/LicenseContext", () => ({
   }),
 }));
 
+// TASK-2160: Mock useFeatureGate (used directly by StartNewAuditModal and LicenseGate)
+jest.mock("../../hooks/useFeatureGate", () => ({
+  useFeatureGate: () => ({
+    isAllowed: () => true, // All features allowed for testing
+    features: {},
+    loading: false,
+    hasInitialized: true,
+    refresh: jest.fn(),
+  }),
+}));
+
 describe("StartNewAuditModal", () => {
   const mockOnSelectPendingTransaction = jest.fn();
   const mockOnViewActiveTransactions = jest.fn();

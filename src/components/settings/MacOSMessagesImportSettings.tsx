@@ -12,8 +12,10 @@
  * @module settings/MacOSMessagesImportSettings
  */
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { usePlatform } from "../../contexts/PlatformContext";
+import { useSyncOrchestrator } from "../../hooks/useSyncOrchestrator";
+import { settingsService } from '../../services';
 import logger from '../../utils/logger';
 
 /** Import progress state for inline display */
@@ -36,9 +38,19 @@ export function MacOSMessagesImportSettings({
   userId,
 }: MacOSMessagesImportSettingsProps) {
   const { isMacOS } = usePlatform();
-  const [isImporting, setIsImporting] = useState(false);
-  const [importProgress, setImportProgress] =
-    useState<ImportProgressState | null>(null);
+  const { queue, requestSync } = useSyncOrchestrator();
+
+  // Derive importing state from orchestrator queue
+  const messagesItem = queue.find(q => q.type === 'messages');
+  const isImporting = messagesItem?.status === 'running' || messagesItem?.status === 'pending';
+
+  // Derive progress from orchestrator queue item
+  const importProgress = isImporting && messagesItem?.phase ? {
+    phase: messagesItem.phase as ImportProgressState['phase'],
+    current: 0,
+    total: 0,
+    percent: messagesItem.progress,
+  } : null;
   const [lastResult, setLastResult] = useState<{
     success: boolean;
     messagesImported: number;
@@ -110,9 +122,9 @@ export function MacOSMessagesImportSettings({
   // TASK-1952: Load filter preferences from user preferences
   const loadFilterPreferences = async () => {
     try {
-      const result = await window.api.preferences.get(userId);
-      if (result?.success && result.preferences) {
-        const prefs = result.preferences as Record<string, unknown>;
+      const result = await settingsService.getPreferences(userId);
+      if (result?.success && result.data) {
+        const prefs = result.data as Record<string, unknown>;
         const messageImport = prefs.messageImport as
           | { filters?: { lookbackMonths?: number | null; maxMessages?: number | null } }
           | undefined;
@@ -133,7 +145,7 @@ export function MacOSMessagesImportSettings({
     setLastResult(null);
     setCapPromptForce(null);
     try {
-      await window.api.preferences.update(userId, {
+      await settingsService.updatePreferences(userId, {
         messageImport: {
           filters: {
             lookbackMonths: months,
@@ -152,7 +164,7 @@ export function MacOSMessagesImportSettings({
     setLastResult(null);
     setCapPromptForce(null);
     try {
-      await window.api.preferences.update(userId, {
+      await settingsService.updatePreferences(userId, {
         messageImport: {
           filters: {
             maxMessages: cap,
@@ -182,28 +194,32 @@ export function MacOSMessagesImportSettings({
     return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
   };
 
-  // Subscribe to import progress updates
+  // TASK-2150: Track overrideCap state for preference restoration after orchestrator completes
+  const pendingCapRestoreRef = useRef<number | null>(null);
+
+  // Watch orchestrator queue for messages completion to restore cap preference
   useEffect(() => {
-    if (!isMacOS) return;
-
-    const cleanup = window.api.messages.onImportProgress((progress) => {
-      // Cast to ensure all required fields are present (TASK-1710)
-      setImportProgress(progress as ImportProgressState);
-    });
-
-    return cleanup;
-  }, [isMacOS]);
+    if (pendingCapRestoreRef.current !== null && messagesItem?.status !== 'running' && messagesItem?.status !== 'pending') {
+      // Messages sync completed or errored -- restore the cap preference
+      const previousMax = pendingCapRestoreRef.current;
+      pendingCapRestoreRef.current = null;
+      setMaxMessages(previousMax);
+      settingsService.updatePreferences(userId, {
+        messageImport: { filters: { maxMessages: previousMax } },
+      }).catch(() => { /* Silently handle */ });
+    }
+  }, [messagesItem?.status, userId]);
 
   const handleImport = useCallback(
     async (forceReimport = false, overrideCap = false) => {
       if (!userId || isImporting) return;
 
       // Temporarily remove cap for this import if overriding
-      let previousMaxMessages = maxMessages;
       if (overrideCap) {
+        pendingCapRestoreRef.current = maxMessages;
         setMaxMessages(null);
         try {
-          await window.api.preferences.update(userId, {
+          await settingsService.updatePreferences(userId, {
             messageImport: { filters: { maxMessages: null } },
           });
         } catch {
@@ -211,70 +227,36 @@ export function MacOSMessagesImportSettings({
         }
       }
 
-      setIsImporting(true);
-      setImportProgress(null);
       setLastResult(null);
 
-      try {
-        // Type assertion: window.d.ts has the correct signature but TS doesn't pick it up
-        // See BACKLOG-199 for investigation
-        const importFn = window.api.messages.importMacOSMessages as (
-          userId: string,
-          forceReimport?: boolean
-        ) => Promise<{
-          success: boolean;
-          messagesImported: number;
-          error?: string;
-          wasCapped?: boolean;
-          totalAvailable?: number;
-        }>;
-        const result = await importFn(userId, forceReimport);
-
-        // Check if cancelled
-        const wasCancelled = result.error === "Import cancelled";
-
-        setLastResult({
-          success: result.success,
-          messagesImported: result.messagesImported,
-          error: wasCancelled ? undefined : result.error,
-          cancelled: wasCancelled,
-          wasCapped: result.wasCapped,
-          totalAvailable: result.totalAvailable,
-        });
-
-        // Reload status after successful import
-        if (result.success) {
-          await loadImportStatus();
-        }
-
-        // Restore cap after override import completes
-        if (overrideCap && previousMaxMessages !== null) {
-          setMaxMessages(previousMaxMessages);
-          try {
-            await window.api.preferences.update(userId, {
-              messageImport: { filters: { maxMessages: previousMaxMessages } },
-            });
-          } catch {
-            // Silently handle
-          }
-        }
-      } catch (error) {
-        setLastResult({
-          success: false,
-          messagesImported: 0,
-          error: error instanceof Error ? error.message : "Import failed",
-        });
-        // Restore cap on error too
-        if (overrideCap && previousMaxMessages !== null) {
-          setMaxMessages(previousMaxMessages);
-        }
-      } finally {
-        setIsImporting(false);
-        setImportProgress(null);
-      }
+      // TASK-2150: Route through orchestrator instead of direct IPC
+      requestSync(['messages'], userId, { forceReimport: forceReimport || undefined });
     },
-    [userId, isImporting, maxMessages]
+    [userId, isImporting, maxMessages, requestSync]
   );
+
+  // Watch orchestrator queue for messages completion to update result/status
+  useEffect(() => {
+    if (messagesItem?.status === 'complete') {
+      loadImportStatus();
+      // If there's a warning from the orchestrator (cap exceeded), show it
+      if (messagesItem.warning) {
+        setLastResult({
+          success: true,
+          messagesImported: 0,
+          wasCapped: true,
+        });
+      } else {
+        setLastResult({ success: true, messagesImported: 0 });
+      }
+    } else if (messagesItem?.status === 'error') {
+      setLastResult({
+        success: false,
+        messagesImported: 0,
+        error: messagesItem.error || 'Import failed',
+      });
+    }
+  }, [messagesItem?.status, messagesItem?.error, messagesItem?.warning]);
 
 
   // Only render on macOS
@@ -318,7 +300,7 @@ export function MacOSMessagesImportSettings({
       )}
 
       {/* TASK-1952: Import Filters */}
-      <div className="mb-3 p-3 bg-white rounded border border-gray-200">
+      <div id="settings-import-filters" className="mb-3 p-3 bg-white rounded border border-gray-200">
         <h5 className="text-xs font-medium text-gray-700 mb-2">
           Import Filters
         </h5>

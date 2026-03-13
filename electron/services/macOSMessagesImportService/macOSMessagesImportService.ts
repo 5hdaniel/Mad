@@ -78,8 +78,6 @@ class MacOSMessagesImportService {
   private isImporting = false;
   /** Timestamp when import started (for stuck flag detection) */
   private importStartedAt: number | null = null;
-  /** Flag to signal that current import should be cancelled */
-  private cancelCurrentImport = false;
   /** TASK-2047: AbortController for clean cancellation via AbortSignal */
   private abortController: AbortController | null = null;
   /** Flag to indicate force reimport is in progress (blocks all other imports) */
@@ -126,12 +124,11 @@ class MacOSMessagesImportService {
         "Force reimport requested, cancelling current import",
         MacOSMessagesImportService.SERVICE_NAME
       );
-      this.cancelCurrentImport = true;
+      this.abortController?.abort();
       // Wait a bit for the current import to notice the cancellation
       await new Promise((resolve) => setTimeout(resolve, 500));
       this.isImporting = false;
       this.importStartedAt = null;
-      this.cancelCurrentImport = false;
     }
 
     // Check if import flag is stuck (been true for too long)
@@ -198,9 +195,9 @@ class MacOSMessagesImportService {
   }
 
   /**
-   * Request cancellation of the current import (TASK-1710, TASK-2047)
+   * Request cancellation of the current import (TASK-1710, TASK-2047, TASK-2151)
    * The import will stop at the next batch boundary, preserving partial data.
-   * Uses both the legacy flag and AbortController signal for cancellation.
+   * Uses AbortController signal for cancellation.
    */
   requestCancellation(): void {
     if (this.isImporting) {
@@ -208,8 +205,6 @@ class MacOSMessagesImportService {
         "Import cancellation requested",
         MacOSMessagesImportService.SERVICE_NAME
       );
-      this.cancelCurrentImport = true;
-      // TASK-2047: Also abort via AbortController for processItemsInChunks support
       this.abortController?.abort();
     }
   }
@@ -418,7 +413,7 @@ class MacOSMessagesImportService {
 
         while (fetchedCount < totalMessageCount) {
           // Check for cancellation (legacy flag and AbortSignal)
-          if (this.cancelCurrentImport || this.abortController?.signal.aborted) {
+          if (this.abortController?.signal.aborted) {
             queryProgressBar.stop();
             logService.warn(
               `Import cancelled during query phase at ${fetchedCount}/${totalMessageCount}`,
@@ -676,7 +671,7 @@ class MacOSMessagesImportService {
 
     for (let batchNum = 0; batchNum < totalBatches; batchNum++) {
       // Check for cancellation at start of each batch (legacy flag and AbortSignal)
-      if (this.cancelCurrentImport || this.abortController?.signal.aborted) {
+      if (this.abortController?.signal.aborted) {
         msgProgressBar.stop();
         logService.warn(
           `Import cancelled at batch ${batchNum}/${totalBatches}`,
@@ -1014,7 +1009,7 @@ class MacOSMessagesImportService {
 
     for (const attachment of attachments) {
       // Check for cancellation (legacy flag and AbortSignal)
-      if (this.cancelCurrentImport || this.abortController?.signal.aborted) {
+      if (this.abortController?.signal.aborted) {
         attachProgressBar.stop();
         logService.warn(
           `Attachment import cancelled at ${processed}/${totalAttachments}`,

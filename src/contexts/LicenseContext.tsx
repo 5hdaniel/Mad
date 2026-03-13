@@ -10,6 +10,10 @@
  * SPRINT-062: Added license validation with trial tracking, transaction limits,
  * and device limits. LicenseProvider now accepts userId prop for validation.
  *
+ * SPRINT-127 / TASK-2160: transactionLimit and hasAIAddon now read from
+ * plan features via useFeatureGate (max_transaction_size, ai_detection).
+ * Plan features are the sole source of truth; no license column fallback.
+ *
  * Combined Examples:
  *   - Individual + No AI: Export, manual transactions only
  *   - Individual + AI: Export, manual transactions, AI detection features
@@ -29,6 +33,7 @@ import React, {
 import type { LicenseType } from "../../electron/types/models";
 import type { LicenseValidationResult } from "../../shared/types/license";
 import { licenseService } from "../services";
+import { useFeatureGate } from "../hooks/useFeatureGate";
 import logger from '../utils/logger';
 
 // License context value interface
@@ -270,11 +275,21 @@ export function LicenseProvider({
     }
   }, [fetchLicense, validateLicense, userId]);
 
+  // SPRINT-127 / TASK-2160: Read plan-level features (sole source of truth)
+  const {
+    isAllowed: featureIsAllowed,
+    features: planFeatures,
+  } = useFeatureGate();
+
   // Compute convenience flags
   const canExport = state.licenseType === "individual";
   const canSubmit =
     state.licenseType === "team" || state.licenseType === "enterprise";
-  const canAutoDetect = state.hasAIAddon;
+
+  // SPRINT-127: hasAIAddon from plan feature. Plan features are sole source of truth.
+  // featureIsAllowed returns true (fail-open) when the feature gate hasn't loaded yet.
+  const hasAIAddon = featureIsAllowed("ai_detection");
+  const canAutoDetect = hasAIAddon;
 
   // SPRINT-062: Extract validation status fields
   const validationStatus = state.validationStatus;
@@ -282,14 +297,22 @@ export function LicenseProvider({
   const blockReason = validationStatus?.blockReason ?? null;
   const trialDaysRemaining = validationStatus?.trialDaysRemaining ?? null;
   const transactionCount = validationStatus?.transactionCount ?? 0;
-  const transactionLimit = validationStatus?.transactionLimit ?? Infinity;
-  const canCreateTransaction = validationStatus?.canCreateTransaction ?? true;
+
+  // SPRINT-127: transactionLimit from plan feature. Plan features are sole source of truth.
+  // Parse max_transaction_size feature value (string) as integer.
+  // Defaults to Infinity (fail-open) when the feature is missing or not yet loaded.
+  const planMaxTxn = planFeatures["max_transaction_size"]?.value;
+  const parsedPlanLimit = planMaxTxn ? parseInt(planMaxTxn, 10) : NaN;
+  const transactionLimit = !isNaN(parsedPlanLimit) ? parsedPlanLimit : Infinity;
+
+  // SPRINT-127: canCreateTransaction uses plan-feature-derived limit
+  const canCreateTransaction = transactionCount < transactionLimit;
 
   // Memoize context value to prevent unnecessary re-renders
   const contextValue = useMemo<LicenseContextValue>(
     () => ({
       licenseType: state.licenseType,
-      hasAIAddon: state.hasAIAddon,
+      hasAIAddon,
       organizationId: state.organizationId,
       canExport,
       canSubmit,
@@ -308,6 +331,7 @@ export function LicenseProvider({
     }),
     [
       state,
+      hasAIAddon,
       canExport,
       canSubmit,
       canAutoDetect,
