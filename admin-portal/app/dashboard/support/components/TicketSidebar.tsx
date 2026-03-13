@@ -55,6 +55,7 @@ export function TicketSidebar({ ticket, participants, events, onTicketUpdated }:
   const [updatingAssignee, setUpdatingAssignee] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<TicketStatus | ''>('');
   const [selectedPriority, setSelectedPriority] = useState<TicketPriority>(ticket.priority);
+  const [selectedAssignee, setSelectedAssignee] = useState<string>(ticket.assignee_id || '');
   const [showPendingReason, setShowPendingReason] = useState(false);
   const [pendingReason, setPendingReason] = useState<PendingReason>('customer');
   const [error, setError] = useState<string | null>(null);
@@ -115,12 +116,12 @@ export function TicketSidebar({ ticket, participants, events, onTicketUpdated }:
     }
   }
 
-  async function handleAssigneeChange(assigneeId: string) {
-    if (!assigneeId) return;
+  async function handleAssigneeSave() {
+    if (!selectedAssignee || selectedAssignee === (ticket.assignee_id || '')) return;
     setUpdatingAssignee(true);
     setError(null);
     try {
-      await assignTicket(ticket.id, assigneeId);
+      await assignTicket(ticket.id, selectedAssignee);
       onTicketUpdated();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to assign ticket');
@@ -236,18 +237,27 @@ export function TicketSidebar({ ticket, participants, events, onTicketUpdated }:
         <label className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2 block">
           Assignee
         </label>
-        <select
-          value={ticket.assignee_id || ''}
-          onChange={(e) => handleAssigneeChange(e.target.value)}
-          className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-        >
-          <option value="">Unassigned</option>
-          {agents.map((agent) => (
-            <option key={agent.user_id} value={agent.user_id}>
-              {agent.display_name} ({agent.role_name})
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2">
+          <select
+            value={selectedAssignee}
+            onChange={(e) => setSelectedAssignee(e.target.value)}
+            className="flex-1 text-sm text-gray-900 border border-gray-300 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          >
+            <option value="">Unassigned</option>
+            {agents.map((agent) => (
+              <option key={agent.user_id} value={agent.user_id}>
+                {agent.display_name} ({agent.role_name})
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={handleAssigneeSave}
+            disabled={!selectedAssignee || selectedAssignee === (ticket.assignee_id || '') || updatingAssignee}
+            className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {updatingAssignee ? 'Saving...' : 'Save'}
+          </button>
+        </div>
       </div>
 
       {/* Category */}
