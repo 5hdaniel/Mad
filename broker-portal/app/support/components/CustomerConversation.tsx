@@ -9,7 +9,7 @@
  * Attachments are shown inline with their associated messages.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { SupportTicketMessage, SupportTicketAttachment } from '@/lib/support-types';
 import { getAttachmentUrl } from '@/lib/support-queries';
 
@@ -42,11 +42,24 @@ function formatFileSize(bytes: number): string {
 
 function AttachmentItem({ attachment }: { attachment: SupportTicketAttachment }) {
   const [downloading, setDownloading] = useState(false);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageError, setImageError] = useState(false);
+
+  const isImage = attachment.file_type.startsWith('image/');
+
+  // Auto-load signed URL for images
+  useEffect(() => {
+    if (isImage) {
+      getAttachmentUrl(attachment.storage_path)
+        .then(setImageUrl)
+        .catch(() => setImageError(true));
+    }
+  }, [isImage, attachment.storage_path]);
 
   async function handleDownload() {
     setDownloading(true);
     try {
-      const url = await getAttachmentUrl(attachment.storage_path);
+      const url = imageUrl || await getAttachmentUrl(attachment.storage_path);
       window.open(url, '_blank');
     } catch {
       // Silently fail — user can retry
@@ -55,7 +68,23 @@ function AttachmentItem({ attachment }: { attachment: SupportTicketAttachment })
     }
   }
 
-  const isImage = attachment.file_type.startsWith('image/');
+  if (isImage && imageUrl && !imageError) {
+    return (
+      <div className="mt-2">
+        <button onClick={handleDownload} className="block cursor-pointer">
+          <img
+            src={imageUrl}
+            alt={attachment.file_name}
+            className="max-w-full max-h-64 rounded-md border border-gray-200"
+            onError={() => setImageError(true)}
+          />
+        </button>
+        <span className="text-xs text-gray-400 mt-1 block">
+          {attachment.file_name} ({formatFileSize(attachment.file_size)})
+        </span>
+      </div>
+    );
+  }
 
   return (
     <button
@@ -63,9 +92,7 @@ function AttachmentItem({ attachment }: { attachment: SupportTicketAttachment })
       disabled={downloading}
       className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-md hover:bg-gray-100 transition-colors text-left w-full"
     >
-      <span className="text-gray-400 text-sm shrink-0">
-        {isImage ? '🖼' : '📎'}
-      </span>
+      <span className="text-gray-400 text-sm shrink-0">📎</span>
       <span className="text-sm text-blue-600 hover:text-blue-700 truncate">
         {attachment.file_name}
       </span>
