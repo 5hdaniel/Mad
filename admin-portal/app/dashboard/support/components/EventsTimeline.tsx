@@ -66,8 +66,16 @@ function formatEventTime(dateStr: string): string {
   });
 }
 
+const INITIAL_VISIBLE = 5;
+
 export function EventsTimeline({ events }: EventsTimelineProps) {
   const [expanded, setExpanded] = useState(true);
+  const [showAll, setShowAll] = useState(false);
+
+  // Most recent first
+  const sortedEvents = [...events].reverse();
+  const visibleEvents = showAll ? sortedEvents : sortedEvents.slice(0, INITIAL_VISIBLE);
+  const hasMore = sortedEvents.length > INITIAL_VISIBLE;
 
   return (
     <div className="px-4 py-3">
@@ -88,26 +96,44 @@ export function EventsTimeline({ events }: EventsTimelineProps) {
           {events.length === 0 ? (
             <p className="text-xs text-gray-400">No activity recorded</p>
           ) : (
-            events.map((event) => {
-              const icon = getEventIcon(event.event_type);
-              return (
-                <div key={event.id} className="flex items-start gap-2">
-                  <span
-                    className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-xs font-bold shrink-0 ${icon.color}`}
-                  >
-                    {icon.symbol}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs text-gray-700">
-                      {getEventDescription(event)}
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      {formatEventTime(event.created_at)}
-                    </p>
+            <>
+              {visibleEvents.map((event) => {
+                const icon = getEventIcon(event.event_type);
+                return (
+                  <div key={event.id} className="flex items-start gap-2">
+                    <span
+                      className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-xs font-bold shrink-0 ${icon.color}`}
+                    >
+                      {icon.symbol}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-gray-700">
+                        {getEventDescription(event)}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {formatEventTime(event.created_at)}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              );
-            })
+                );
+              })}
+              {hasMore && !showAll && (
+                <button
+                  onClick={() => setShowAll(true)}
+                  className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  See all {sortedEvents.length} events
+                </button>
+              )}
+              {showAll && hasMore && (
+                <button
+                  onClick={() => setShowAll(false)}
+                  className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  Show less
+                </button>
+              )}
+            </>
           )}
         </div>
       )}

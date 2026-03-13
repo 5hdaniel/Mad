@@ -10,7 +10,7 @@
 
 import { useState, useEffect } from 'react';
 import { User, Calendar, Tag, AlertCircle } from 'lucide-react';
-import { updateTicketStatus, assignTicket, getAssignableAgents } from '@/lib/support-queries';
+import { updateTicketStatus, updateTicketPriority, assignTicket, getAssignableAgents } from '@/lib/support-queries';
 import type { AssignableAgent } from '@/lib/support-queries';
 import type {
   SupportTicket,
@@ -23,6 +23,7 @@ import type {
 import {
   ALLOWED_TRANSITIONS,
   STATUS_LABELS,
+  PRIORITY_LABELS,
 } from '@/lib/support-types';
 import { StatusBadge } from './StatusBadge';
 import { PriorityBadge } from './PriorityBadge';
@@ -50,7 +51,10 @@ function formatDate(dateStr: string): string {
 export function TicketSidebar({ ticket, participants, events, onTicketUpdated }: TicketSidebarProps) {
   const [agents, setAgents] = useState<AssignableAgent[]>([]);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [updatingPriority, setUpdatingPriority] = useState(false);
   const [updatingAssignee, setUpdatingAssignee] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState<TicketStatus | ''>('');
+  const [selectedPriority, setSelectedPriority] = useState<TicketPriority>(ticket.priority);
   const [showPendingReason, setShowPendingReason] = useState(false);
   const [pendingReason, setPendingReason] = useState<PendingReason>('customer');
   const [error, setError] = useState<string | null>(null);
@@ -64,20 +68,36 @@ export function TicketSidebar({ ticket, participants, events, onTicketUpdated }:
 
   const allowedTransitions = ALLOWED_TRANSITIONS[ticket.status] || [];
 
-  async function handleStatusChange(newStatus: TicketStatus) {
-    if (newStatus === 'pending') {
+  async function handleStatusSave() {
+    if (!selectedStatus) return;
+    if (selectedStatus === 'pending') {
       setShowPendingReason(true);
       return;
     }
     setUpdatingStatus(true);
     setError(null);
     try {
-      await updateTicketStatus(ticket.id, newStatus);
+      await updateTicketStatus(ticket.id, selectedStatus);
+      setSelectedStatus('');
       onTicketUpdated();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update status');
     } finally {
       setUpdatingStatus(false);
+    }
+  }
+
+  async function handlePrioritySave() {
+    if (selectedPriority === ticket.priority) return;
+    setUpdatingPriority(true);
+    setError(null);
+    try {
+      await updateTicketPriority(ticket.id, selectedPriority);
+      onTicketUpdated();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update priority');
+    } finally {
+      setUpdatingPriority(false);
     }
   }
 
@@ -130,17 +150,26 @@ export function TicketSidebar({ ticket, participants, events, onTicketUpdated }:
           <StatusBadge status={ticket.status} />
         </div>
         {allowedTransitions.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {allowedTransitions.map((nextStatus) => (
-              <button
-                key={nextStatus}
-                onClick={() => handleStatusChange(nextStatus)}
-                disabled={updatingStatus}
-                className="text-xs px-2 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-              >
-                {STATUS_LABELS[nextStatus]}
-              </button>
-            ))}
+          <div className="flex items-center gap-2 mt-2">
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value as TicketStatus)}
+              className="flex-1 text-sm border border-gray-300 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Change status...</option>
+              {allowedTransitions.map((nextStatus) => (
+                <option key={nextStatus} value={nextStatus}>
+                  {STATUS_LABELS[nextStatus]}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleStatusSave}
+              disabled={!selectedStatus || updatingStatus}
+              className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {updatingStatus ? 'Saving...' : 'Save'}
+            </button>
           </div>
         )}
         {/* Pending reason dialog */}
@@ -182,7 +211,24 @@ export function TicketSidebar({ ticket, participants, events, onTicketUpdated }:
         <label className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2 block">
           Priority
         </label>
-        <PriorityBadge priority={ticket.priority} />
+        <div className="flex items-center gap-2">
+          <select
+            value={selectedPriority}
+            onChange={(e) => setSelectedPriority(e.target.value as TicketPriority)}
+            className="flex-1 text-sm border border-gray-300 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {(Object.entries(PRIORITY_LABELS) as [TicketPriority, string][]).map(([key, label]) => (
+              <option key={key} value={key}>{label}</option>
+            ))}
+          </select>
+          <button
+            onClick={handlePrioritySave}
+            disabled={selectedPriority === ticket.priority || updatingPriority}
+            className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {updatingPriority ? 'Saving...' : 'Save'}
+          </button>
+        </div>
       </div>
 
       {/* Assignee */}
