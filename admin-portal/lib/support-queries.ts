@@ -120,6 +120,20 @@ export async function getCategories(): Promise<SupportCategory[]> {
   return (data ?? []) as SupportCategory[];
 }
 
+export interface AssignableAgent {
+  user_id: string;
+  email: string;
+  display_name: string;
+  role_name: string;
+}
+
+export async function getAssignableAgents(): Promise<AssignableAgent[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_list_agents');
+  if (error) throw error;
+  return (data ?? []) as unknown as AssignableAgent[];
+}
+
 /** Build hierarchical category tree from flat list */
 export function buildCategoryTree(categories: SupportCategory[]): SupportCategory[] {
   const topLevel = categories.filter((c) => !c.parent_id);
