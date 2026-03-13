@@ -830,7 +830,7 @@ function createWindow(): void {
 
     // Check for updates after window loads (only in production)
     setTimeout(() => {
-      autoUpdater.checkForUpdatesAndNotify();
+      autoUpdater.checkForUpdates();
     }, UPDATE_CHECK_DELAY);
   }
 }

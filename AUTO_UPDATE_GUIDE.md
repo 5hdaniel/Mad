@@ -72,7 +72,7 @@ function createWindow() {
   } else {
     // Check for updates 5 seconds after launch
     setTimeout(() => {
-      autoUpdater.checkForUpdatesAndNotify();
+      autoUpdater.checkForUpdates();
     }, 5000);
   }
 }
