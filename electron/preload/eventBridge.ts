@@ -4,6 +4,7 @@
  */
 
 import { ipcRenderer, IpcRendererEvent } from "electron";
+import type { FolderExportProgress } from "../types/ipc";
 
 export const eventBridge = {
   /**
@@ -218,8 +219,8 @@ export const eventBridge = {
    * @param callback - Callback function to handle progress updates
    * @returns Cleanup function to remove listener
    */
-  onExportFolderProgress: (callback: (progress: { stage: string; current: number; total: number; message: string }) => void) => {
-    const listener = (_: IpcRendererEvent, progress: { stage: string; current: number; total: number; message: string }) => callback(progress);
+  onExportFolderProgress: (callback: (progress: FolderExportProgress) => void) => {
+    const listener = (_: IpcRendererEvent, progress: FolderExportProgress) => callback(progress);
     ipcRenderer.on("transactions:export-folder-progress", listener);
     return () =>
       ipcRenderer.removeListener("transactions:export-folder-progress", listener);

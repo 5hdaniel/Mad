@@ -20,6 +20,7 @@ import { getDeviceId } from "../services/deviceService";
 
 // Import validation utilities
 import { ValidationError, validateUserId, validateSessionToken } from "../utils/validation";
+import { wrapHandler } from "../utils/wrapHandler";
 
 // Import constants
 import {
@@ -340,10 +341,15 @@ async function handleAcceptTermsToSupabase(
     );
 
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Handle both standard Error and PostgrestError from Supabase
-    const errorMessage = error?.message || error?.error_description || String(error) || "Unknown error";
-    const errorCode = error?.code || error?.status || "UNKNOWN";
+    const errorObj = error as Record<string, unknown> | null;
+    const errorMessage =
+      (error instanceof Error ? error.message : undefined) ||
+      (errorObj?.error_description as string) ||
+      String(error) ||
+      "Unknown error";
+    const errorCode = (errorObj?.code as string) || (errorObj?.status as string) || "UNKNOWN";
 
     await logService.error(
       "Accept terms to Supabase failed",
@@ -351,8 +357,8 @@ async function handleAcceptTermsToSupabase(
       {
         error: errorMessage,
         code: errorCode,
-        details: error?.details,
-        hint: error?.hint,
+        details: errorObj?.details,
+        hint: errorObj?.hint,
       }
     );
     Sentry.captureException(error, {
@@ -1268,20 +1274,20 @@ async function handleGetActiveDevices(
  * Register all session handlers
  */
 export function registerSessionHandlers(): void {
-  ipcMain.handle("auth:logout", handleLogout);
-  ipcMain.handle("auth:force-logout", handleForceLogout);
+  ipcMain.handle("auth:logout", wrapHandler(handleLogout, { module: "SessionHandlers" }));
+  ipcMain.handle("auth:force-logout", wrapHandler(handleForceLogout, { module: "SessionHandlers" }));
   // TASK-2045: Global sign-out (all devices)
-  ipcMain.handle("session:sign-out-all-devices", handleSignOutAllDevices);
-  ipcMain.handle("auth:accept-terms", handleAcceptTerms);
-  ipcMain.handle("auth:accept-terms-to-supabase", handleAcceptTermsToSupabase);
-  ipcMain.handle("auth:complete-email-onboarding", handleCompleteEmailOnboarding);
-  ipcMain.handle("auth:check-email-onboarding", handleCheckEmailOnboarding);
-  ipcMain.handle("auth:validate-session", handleValidateSession);
-  ipcMain.handle("auth:get-current-user", handleGetCurrentUser);
+  ipcMain.handle("session:sign-out-all-devices", wrapHandler(handleSignOutAllDevices, { module: "SessionHandlers" }));
+  ipcMain.handle("auth:accept-terms", wrapHandler(handleAcceptTerms, { module: "SessionHandlers" }));
+  ipcMain.handle("auth:accept-terms-to-supabase", wrapHandler(handleAcceptTermsToSupabase, { module: "SessionHandlers" }));
+  ipcMain.handle("auth:complete-email-onboarding", wrapHandler(handleCompleteEmailOnboarding, { module: "SessionHandlers" }));
+  ipcMain.handle("auth:check-email-onboarding", wrapHandler(handleCheckEmailOnboarding, { module: "SessionHandlers" }));
+  ipcMain.handle("auth:validate-session", wrapHandler(handleValidateSession, { module: "SessionHandlers" }));
+  ipcMain.handle("auth:get-current-user", wrapHandler(handleGetCurrentUser, { module: "SessionHandlers" }));
   // TASK-1507: Open browser for Supabase OAuth with deep-link callback
-  ipcMain.handle("auth:open-in-browser", handleOpenAuthInBrowser);
+  ipcMain.handle("auth:open-in-browser", wrapHandler(handleOpenAuthInBrowser, { module: "SessionHandlers" }));
   // TASK-2062: Remote session validation (polls Supabase auth.getUser)
-  ipcMain.handle("session:validate-remote", handleValidateRemoteSession);
+  ipcMain.handle("session:validate-remote", wrapHandler(handleValidateRemoteSession, { module: "SessionHandlers" }));
   // TASK-2062: Active devices list for session management UI
-  ipcMain.handle("session:get-active-devices", handleGetActiveDevices);
+  ipcMain.handle("session:get-active-devices", wrapHandler(handleGetActiveDevices, { module: "SessionHandlers" }));
 }

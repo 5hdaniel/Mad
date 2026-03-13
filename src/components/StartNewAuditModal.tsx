@@ -7,6 +7,7 @@ import { useLicense } from "../contexts/LicenseContext";
 import { useFeatureGate } from "../hooks/useFeatureGate";
 import { useNetwork } from "../contexts/NetworkContext";
 import { OfflineNotice } from "./common/OfflineNotice";
+import { formatDate as formatDateShared, formatCurrency as formatCurrencyShared } from "../utils/formatUtils";
 
 interface StartNewAuditModalProps {
   /** Callback when user wants to view pending transaction details */
@@ -50,22 +51,11 @@ function StartNewAuditModal({
   // TASK-2056: Disable sync button when offline
   const { isOnline } = useNetwork();
 
-  const formatDate = (dateString: string | Date | null | undefined): string => {
-    if (!dateString) return "";
-    return new Date(dateString).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
-  };
+  const formatDate = (dateString: string | Date | null | undefined): string =>
+    formatDateShared(dateString, { fallback: "", includeYear: false });
 
-  const formatCurrency = (amount: number | null | undefined): string => {
-    if (!amount) return "";
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
+  const formatCurrency = (amount: number | null | undefined): string =>
+    formatCurrencyShared(amount, "");
 
   return (
     <div

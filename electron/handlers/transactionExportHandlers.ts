@@ -20,6 +20,7 @@ import folderExportService from "../services/folderExportService";
 import { wrapHandler } from "../utils/wrapHandler";
 import type { SubmissionProgress } from "../services/submissionService";
 import type { TransactionResponse } from "../types/handlerTypes";
+import type { FolderExportProgress } from "../types/ipc";
 import {
   ValidationError,
   validateTransactionId,
@@ -268,7 +269,7 @@ export function registerTransactionExportHandlers(
           includeTexts: sanitizedOptions.includeTexts ?? true,
           includeAttachments: sanitizedOptions.includeAttachments ?? true,
           emailExportMode: sanitizedOptions.emailExportMode,
-          onProgress: (progress: unknown) => {
+          onProgress: (progress: FolderExportProgress) => {
             // Send progress updates to renderer
             if (mainWindow && !mainWindow.isDestroyed()) {
               mainWindow.webContents.send(

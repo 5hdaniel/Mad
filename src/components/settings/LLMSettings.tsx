@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { llmService } from '../../services';
 import logger from '../../utils/logger';
 
 /**
@@ -469,8 +470,8 @@ export function LLMSettings({ userId }: LLMSettingsProps) {
     setError(null);
     try {
       const [configResult, usageResult] = await Promise.all([
-        window.api.llm.getConfig(userId),
-        window.api.llm.getUsage(userId),
+        llmService.getConfig(userId),
+        llmService.getUsage(userId),
       ]);
 
       if (configResult.success && configResult.data) {
@@ -486,6 +487,10 @@ export function LLMSettings({ userId }: LLMSettingsProps) {
         if (!configResult.data.hasConsent) {
           setShowConsentModal(true);
         }
+      } else if (!configResult.success) {
+        setError("Failed to load LLM settings");
+        logger.error("Error loading LLM config:", configResult.error);
+        return;
       }
 
       if (usageResult.success && usageResult.data) {
@@ -513,7 +518,7 @@ export function LLMSettings({ userId }: LLMSettingsProps) {
 
     setValidation("validating");
     try {
-      const result = await window.api.llm.validateKey(provider, key);
+      const result = await llmService.validateKey(provider, key);
       setValidation(result.success && result.data ? "valid" : "invalid");
     } catch {
       setValidation("invalid");
@@ -526,7 +531,7 @@ export function LLMSettings({ userId }: LLMSettingsProps) {
     if (!key || key.startsWith("*")) return;
 
     try {
-      const result = await window.api.llm.setApiKey(userId, provider, key);
+      const result = await llmService.setApiKey(userId, provider, key);
       if (result.success) {
         // Reload config to get updated state
         await loadConfig();
@@ -545,7 +550,7 @@ export function LLMSettings({ userId }: LLMSettingsProps) {
   // Handle API key removal
   const handleRemoveKey = async (provider: ProviderType) => {
     try {
-      const result = await window.api.llm.removeApiKey(userId, provider);
+      const result = await llmService.removeApiKey(userId, provider);
       if (result.success) {
         if (provider === "openai") {
           setOpenAIKey("");
@@ -574,7 +579,7 @@ export function LLMSettings({ userId }: LLMSettingsProps) {
     }>
   ) => {
     try {
-      const result = await window.api.llm.updatePreferences(userId, preferences);
+      const result = await llmService.updatePreferences(userId, preferences as Parameters<typeof llmService.updatePreferences>[1]);
       if (result.success) {
         setConfig((prev) => (prev ? { ...prev, ...preferences } : prev));
       }
@@ -586,7 +591,7 @@ export function LLMSettings({ userId }: LLMSettingsProps) {
   // Handle consent
   const handleAcceptConsent = async () => {
     try {
-      const result = await window.api.llm.recordConsent(userId, true);
+      const result = await llmService.recordConsent(userId, true);
       if (result.success) {
         setShowConsentModal(false);
         setConfig((prev) =>

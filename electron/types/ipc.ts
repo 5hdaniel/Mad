@@ -22,6 +22,27 @@ import type {
 import type { ExportResult, ExtractionResult, SyncStatus } from "./database";
 
 // ============================================
+// FOLDER EXPORT TYPES
+// ============================================
+
+/**
+ * Progress updates emitted during folder export.
+ * Shared across main process, preload bridge, and renderer.
+ */
+export interface FolderExportProgress {
+  stage:
+    | "preparing"
+    | "summary"
+    | "emails"
+    | "texts"
+    | "attachments"
+    | "complete";
+  current: number;
+  total: number;
+  message: string;
+}
+
+// ============================================
 // LLM TYPE DEFINITIONS
 // ============================================
 
@@ -1930,7 +1951,7 @@ export interface WindowApi {
     callback: (progress: unknown) => void,
   ) => () => void;
   onExportFolderProgress: (
-    callback: (progress: { stage: string; current: number; total: number; message: string }) => void,
+    callback: (progress: FolderExportProgress) => void,
   ) => () => void;
 
   // Error Logging API (TASK-1800)

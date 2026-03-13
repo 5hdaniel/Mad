@@ -26,6 +26,7 @@ import {
   type TransactionFilter,
 } from "./transaction";
 import { OfflineNotice } from "./common/OfflineNotice";
+import { formatDate, formatCurrency } from "../utils/formatUtils";
 
 interface TransactionListComponentProps {
   userId: string;
@@ -163,23 +164,6 @@ function TransactionList({
     );
   }
 
-  const formatCurrency = (amount: number | null | undefined): string => {
-    if (!amount) return "N/A";
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  const formatDate = (dateString: string | Date | null | undefined): string => {
-    if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
 
   const handleQuickExport = (
     transaction: Transaction,
