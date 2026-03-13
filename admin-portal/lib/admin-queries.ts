@@ -406,6 +406,27 @@ export async function getActivePlans(): Promise<{ data: Plan[] | null; error: Er
 }
 
 /**
+ * Fetch active plans eligible for organization assignment.
+ * Excludes Individual-tier plans (they are for solo users only).
+ */
+export async function getActivePlansForOrgs(): Promise<{ data: Plan[] | null; error: Error | null }> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from('plans')
+    .select('*')
+    .eq('is_active', true)
+    .neq('tier', 'individual')
+    .order('sort_order');
+
+  if (error) {
+    return { data: null, error: new Error(error.message) };
+  }
+
+  return { data: data as Plan[], error: null };
+}
+
+/**
  * Delete a plan. Blocked if any organizations are assigned to it.
  */
 export async function deletePlan(planId: string): Promise<RpcResult> {
