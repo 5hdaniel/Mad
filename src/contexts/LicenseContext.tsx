@@ -287,12 +287,9 @@ export function LicenseProvider({
   const canSubmit =
     state.licenseType === "team" || state.licenseType === "enterprise";
 
-  // SPRINT-127: hasAIAddon from plan feature with license fallback
-  // When feature gate has initialized, use plan-level ai_detection.
-  // Fall back to license column value when feature gate hasn't loaded.
-  const hasAIAddon = featureGateReady
-    ? featureIsAllowed("ai_detection")
-    : state.hasAIAddon;
+  // SPRINT-127: hasAIAddon from plan feature. Plan features are sole source of truth.
+  // featureIsAllowed returns true (fail-open) when the feature gate hasn't loaded yet.
+  const hasAIAddon = featureIsAllowed("ai_detection");
   const canAutoDetect = hasAIAddon;
 
   // SPRINT-062: Extract validation status fields
@@ -302,15 +299,12 @@ export function LicenseProvider({
   const trialDaysRemaining = validationStatus?.trialDaysRemaining ?? null;
   const transactionCount = validationStatus?.transactionCount ?? 0;
 
-  // SPRINT-127: transactionLimit from plan feature with license fallback
+  // SPRINT-127: transactionLimit from plan feature. Plan features are sole source of truth.
   // Parse max_transaction_size feature value (string) as integer.
-  // Fall back to license column value when feature value is unavailable or invalid.
+  // Defaults to Infinity (fail-open) when the feature is missing or not yet loaded.
   const planMaxTxn = planFeatures["max_transaction_size"]?.value;
   const parsedPlanLimit = planMaxTxn ? parseInt(planMaxTxn, 10) : NaN;
-  const transactionLimit =
-    featureGateReady && !isNaN(parsedPlanLimit)
-      ? parsedPlanLimit
-      : (validationStatus?.transactionLimit ?? Infinity);
+  const transactionLimit = !isNaN(parsedPlanLimit) ? parsedPlanLimit : Infinity;
 
   // SPRINT-127: canCreateTransaction uses plan-feature-derived limit
   const canCreateTransaction = transactionCount < transactionLimit;

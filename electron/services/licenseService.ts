@@ -175,9 +175,9 @@ function calculateLicenseStatus(
   }
 
   // Check transaction limit
-  // SPRINT-127 / TASK-2160: Legacy fallback — the renderer now reads transaction_limit
-  // from plan features via useFeatureGate('max_transactions') first. This license column
-  // value is used only when the plan feature is unavailable (offline / feature gate not loaded).
+  // SPRINT-127 / TASK-2160: Deprecated — the renderer now reads transaction_limit
+  // exclusively from plan features via useFeatureGate. This license column value
+  // is still returned for audit/display purposes but is not used by the client.
   const atTransactionLimit =
     license.transaction_count >= license.transaction_limit;
 
@@ -210,9 +210,9 @@ function calculateLicenseStatus(
     canCreateTransaction: !atTransactionLimit,
     deviceCount,
     deviceLimit,
-    // SPRINT-127 / TASK-2160: Legacy fallback — the renderer now reads ai_detection
-    // from plan features via useFeatureGate('ai_detection') first. This license column
-    // value is used only when the plan feature is unavailable (offline / feature gate not loaded).
+    // SPRINT-127 / TASK-2160: Deprecated — the renderer now reads ai_detection
+    // exclusively from plan features via useFeatureGate. This license column value
+    // is still returned for audit/display purposes but is not used by the client.
     aiEnabled: license.ai_detection_enabled,
     blockReason,
   };
