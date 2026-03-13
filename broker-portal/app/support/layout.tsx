@@ -3,8 +3,8 @@ import Link from 'next/link';
 /**
  * Support Section Layout - Broker Portal
  *
- * Standalone layout for the /support/* pages with "Keepr. Support" branding.
- * Accessible without authentication.
+ * Minimal layout for public-facing support pages (e.g., /support/new).
+ * Authenticated users access tickets via /dashboard/support instead.
  */
 export default function SupportLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -12,23 +12,16 @@ export default function SupportLayout({ children }: { children: React.ReactNode 
       {/* Header */}
       <header className="bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
-          <Link href="/support" className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-gray-900">Keepr. Support</span>
+          <Link href="/" className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-gray-900">Keepr.</span>
+            <span className="text-sm text-gray-500">Support</span>
           </Link>
-          <nav className="flex items-center gap-4">
-            <Link
-              href="/support"
-              className="text-sm text-gray-500 hover:text-gray-700 font-medium"
-            >
-              My Tickets
-            </Link>
-            <Link
-              href="/support/new"
-              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
-            >
-              New Ticket
-            </Link>
-          </nav>
+          <Link
+            href="/login"
+            className="text-sm text-gray-500 hover:text-gray-700 font-medium"
+          >
+            Log In
+          </Link>
         </div>
       </header>
 

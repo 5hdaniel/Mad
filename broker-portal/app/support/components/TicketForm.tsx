@@ -99,7 +99,7 @@ export function TicketForm() {
         }
       }
 
-      router.push('/support?success=true');
+      router.push('/dashboard/support?success=true');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit ticket');
     } finally {

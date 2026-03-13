@@ -82,12 +82,20 @@ export function TicketList() {
           <p className="text-gray-500 text-sm mb-4">
             Log in to view your support tickets, or submit a new request below.
           </p>
-          <Link
-            href="/support/new"
-            className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
-          >
-            Submit a New Ticket
-          </Link>
+          <div className="flex items-center justify-center gap-3">
+            <Link
+              href="/login?redirect=/support"
+              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+            >
+              Log In
+            </Link>
+            <Link
+              href="/support/new"
+              className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+            >
+              Submit a New Ticket
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -139,7 +147,7 @@ export function TicketList() {
         {tickets.map((ticket) => (
           <Link
             key={ticket.id}
-            href={`/support/${ticket.id}`}
+            href={`/dashboard/support/${ticket.id}`}
             className="block bg-white rounded-lg border border-gray-200 p-4 hover:border-blue-300 hover:shadow-sm transition-all"
           >
             <div className="flex items-start justify-between gap-4">
