@@ -1,6 +1,6 @@
 import React from "react";
 import { LicenseGate } from "@/components/common/LicenseGate";
-import { useLicense } from "@/contexts/LicenseContext";
+import { useFeatureGate } from "@/hooks/useFeatureGate";
 
 // ============================================
 // TYPES AND INTERFACES
@@ -94,7 +94,8 @@ function TransactionToolbar({
   quickExportSuccess,
   bulkActionSuccess,
 }: TransactionToolbarProps): React.ReactElement {
-  const { hasAIAddon } = useLicense();
+  const { isAllowed } = useFeatureGate();
+  const hasAIAddon = isAllowed("ai_detection");
 
   return (
     <>

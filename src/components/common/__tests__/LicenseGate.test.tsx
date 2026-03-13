@@ -1,48 +1,55 @@
 /**
  * Tests for LicenseGate component
- * Verifies conditional rendering based on license type and AI add-on status
+ * TASK-2159: Migrated from useLicense to useFeatureGate
+ *
+ * Verifies conditional rendering based on plan feature access via useFeatureGate.
+ * Feature mapping:
+ *   - "individual" -> isAllowed("text_export") || isAllowed("email_export")
+ *   - "team"       -> isAllowed("broker_submission")
+ *   - "enterprise" -> isAllowed("broker_submission")
+ *   - "ai_addon"   -> isAllowed("ai_detection")
  */
 
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import { LicenseGate } from "../LicenseGate";
-import type { LicenseType } from "../../../../electron/types/models";
 
-// Mock the useLicense hook
-jest.mock("@/contexts/LicenseContext", () => ({
-  useLicense: jest.fn(),
+// Mock the useFeatureGate hook
+const mockIsAllowed = jest.fn();
+const mockLoading = { value: false };
+const mockHasInitialized = { value: true };
+jest.mock("@/hooks/useFeatureGate", () => ({
+  useFeatureGate: () => ({
+    isAllowed: mockIsAllowed,
+    features: {},
+    loading: mockLoading.value,
+    hasInitialized: mockHasInitialized.value,
+    refresh: jest.fn(),
+  }),
 }));
 
-import { useLicense } from "@/contexts/LicenseContext";
-
-const mockUseLicense = useLicense as jest.MockedFunction<typeof useLicense>;
-
-// Helper to create mock license context value
-function createMockLicenseContext(
-  licenseType: LicenseType = "individual",
-  hasAIAddon = false,
-  isLoading = false
-) {
-  return {
-    licenseType,
-    hasAIAddon,
-    organizationId: licenseType === "individual" ? null : "org-123",
-    canExport: licenseType === "individual",
-    canSubmit: licenseType === "team" || licenseType === "enterprise",
-    canAutoDetect: hasAIAddon,
-    isLoading,
-    refresh: jest.fn(),
-  };
+/**
+ * Helper to configure which features are allowed.
+ * Pass a set of allowed feature keys.
+ */
+function setAllowedFeatures(allowed: Set<string>) {
+  mockIsAllowed.mockImplementation((key: string) => allowed.has(key));
 }
 
 describe("LicenseGate", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockLoading.value = false;
+    mockHasInitialized.value = true;
+    // Default: no features allowed
+    setAllowedFeatures(new Set());
   });
 
   describe("Loading state", () => {
-    it("should render nothing while license is loading", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext("individual", false, true));
+    it("should render nothing during initial load (not yet initialized)", () => {
+      mockLoading.value = true;
+      mockHasInitialized.value = false;
+      setAllowedFeatures(new Set(["text_export", "email_export"]));
 
       render(
         <LicenseGate requires="individual">
@@ -52,11 +59,27 @@ describe("LicenseGate", () => {
 
       expect(screen.queryByTestId("content")).not.toBeInTheDocument();
     });
+
+    it("should keep content visible during refresh (after initialization)", () => {
+      // Simulates a refresh: loading is true but features were already loaded once
+      mockLoading.value = true;
+      mockHasInitialized.value = true;
+      setAllowedFeatures(new Set(["text_export", "email_export"]));
+
+      render(
+        <LicenseGate requires="individual">
+          <span data-testid="content">Content</span>
+        </LicenseGate>
+      );
+
+      // Content should remain visible during refresh (no flicker)
+      expect(screen.getByTestId("content")).toBeInTheDocument();
+    });
   });
 
-  describe("Individual license gate", () => {
-    it("should show children when user has individual license", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext("individual", false, false));
+  describe("Individual license gate (export features)", () => {
+    it("should show children when text_export is allowed", () => {
+      setAllowedFeatures(new Set(["text_export"]));
 
       render(
         <LicenseGate requires="individual">
@@ -67,8 +90,8 @@ describe("LicenseGate", () => {
       expect(screen.getByTestId("export-button")).toBeInTheDocument();
     });
 
-    it("should hide children when user has team license", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext("team", false, false));
+    it("should show children when email_export is allowed", () => {
+      setAllowedFeatures(new Set(["email_export"]));
 
       render(
         <LicenseGate requires="individual">
@@ -76,11 +99,23 @@ describe("LicenseGate", () => {
         </LicenseGate>
       );
 
-      expect(screen.queryByTestId("export-button")).not.toBeInTheDocument();
+      expect(screen.getByTestId("export-button")).toBeInTheDocument();
     });
 
-    it("should hide children when user has enterprise license", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext("enterprise", false, false));
+    it("should show children when both exports are allowed", () => {
+      setAllowedFeatures(new Set(["text_export", "email_export"]));
+
+      render(
+        <LicenseGate requires="individual">
+          <span data-testid="export-button">Export</span>
+        </LicenseGate>
+      );
+
+      expect(screen.getByTestId("export-button")).toBeInTheDocument();
+    });
+
+    it("should hide children when no export features are allowed", () => {
+      setAllowedFeatures(new Set(["broker_submission"])); // Only submission, no export
 
       render(
         <LicenseGate requires="individual">
@@ -92,7 +127,7 @@ describe("LicenseGate", () => {
     });
 
     it("should show fallback when gate fails", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext("team", false, false));
+      setAllowedFeatures(new Set(["broker_submission"])); // No export
 
       render(
         <LicenseGate
@@ -108,9 +143,9 @@ describe("LicenseGate", () => {
     });
   });
 
-  describe("Team license gate", () => {
-    it("should show children when user has team license", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext("team", false, false));
+  describe("Team license gate (broker_submission)", () => {
+    it("should show children when broker_submission is allowed", () => {
+      setAllowedFeatures(new Set(["broker_submission"]));
 
       render(
         <LicenseGate requires="team">
@@ -121,20 +156,8 @@ describe("LicenseGate", () => {
       expect(screen.getByTestId("submit-button")).toBeInTheDocument();
     });
 
-    it("should show children when user has enterprise license (includes team)", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext("enterprise", false, false));
-
-      render(
-        <LicenseGate requires="team">
-          <span data-testid="submit-button">Submit for Review</span>
-        </LicenseGate>
-      );
-
-      expect(screen.getByTestId("submit-button")).toBeInTheDocument();
-    });
-
-    it("should hide children when user has individual license", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext("individual", false, false));
+    it("should hide children when broker_submission is not allowed", () => {
+      setAllowedFeatures(new Set(["text_export"])); // Only export, no submission
 
       render(
         <LicenseGate requires="team">
@@ -146,9 +169,9 @@ describe("LicenseGate", () => {
     });
   });
 
-  describe("Enterprise license gate", () => {
-    it("should show children when user has enterprise license", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext("enterprise", false, false));
+  describe("Enterprise license gate (broker_submission)", () => {
+    it("should show children when broker_submission is allowed", () => {
+      setAllowedFeatures(new Set(["broker_submission"]));
 
       render(
         <LicenseGate requires="enterprise">
@@ -159,20 +182,8 @@ describe("LicenseGate", () => {
       expect(screen.getByTestId("enterprise-feature")).toBeInTheDocument();
     });
 
-    it("should hide children when user has team license", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext("team", false, false));
-
-      render(
-        <LicenseGate requires="enterprise">
-          <span data-testid="enterprise-feature">Enterprise Feature</span>
-        </LicenseGate>
-      );
-
-      expect(screen.queryByTestId("enterprise-feature")).not.toBeInTheDocument();
-    });
-
-    it("should hide children when user has individual license", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext("individual", false, false));
+    it("should hide children when broker_submission is not allowed", () => {
+      setAllowedFeatures(new Set(["text_export"])); // Only export
 
       render(
         <LicenseGate requires="enterprise">
@@ -184,9 +195,9 @@ describe("LicenseGate", () => {
     });
   });
 
-  describe("AI add-on gate", () => {
-    it("should show children when AI add-on is enabled with individual license", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext("individual", true, false));
+  describe("AI add-on gate (ai_detection)", () => {
+    it("should show children when ai_detection is allowed", () => {
+      setAllowedFeatures(new Set(["ai_detection"]));
 
       render(
         <LicenseGate requires="ai_addon">
@@ -197,8 +208,8 @@ describe("LicenseGate", () => {
       expect(screen.getByTestId("ai-feature")).toBeInTheDocument();
     });
 
-    it("should show children when AI add-on is enabled with team license", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext("team", true, false));
+    it("should show children when ai_detection is allowed alongside other features", () => {
+      setAllowedFeatures(new Set(["text_export", "ai_detection"]));
 
       render(
         <LicenseGate requires="ai_addon">
@@ -209,32 +220,8 @@ describe("LicenseGate", () => {
       expect(screen.getByTestId("ai-feature")).toBeInTheDocument();
     });
 
-    it("should show children when AI add-on is enabled with enterprise license", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext("enterprise", true, false));
-
-      render(
-        <LicenseGate requires="ai_addon">
-          <span data-testid="ai-feature">Auto Detect</span>
-        </LicenseGate>
-      );
-
-      expect(screen.getByTestId("ai-feature")).toBeInTheDocument();
-    });
-
-    it("should hide children when AI add-on is not enabled", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext("individual", false, false));
-
-      render(
-        <LicenseGate requires="ai_addon">
-          <span data-testid="ai-feature">Auto Detect</span>
-        </LicenseGate>
-      );
-
-      expect(screen.queryByTestId("ai-feature")).not.toBeInTheDocument();
-    });
-
-    it("should hide children for team license without AI add-on", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext("team", false, false));
+    it("should hide children when ai_detection is not allowed", () => {
+      setAllowedFeatures(new Set(["text_export", "email_export"])); // No AI
 
       render(
         <LicenseGate requires="ai_addon">
@@ -248,7 +235,7 @@ describe("LicenseGate", () => {
 
   describe("Fallback behavior", () => {
     it("should render null when no fallback provided and gate fails", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext("individual", false, false));
+      setAllowedFeatures(new Set(["text_export"])); // Only export, no submission
 
       const { container } = render(
         <LicenseGate requires="team">
@@ -260,7 +247,7 @@ describe("LicenseGate", () => {
     });
 
     it("should render fallback element when provided and gate fails", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext("individual", false, false));
+      setAllowedFeatures(new Set(["text_export"])); // Only export
 
       render(
         <LicenseGate
@@ -276,7 +263,7 @@ describe("LicenseGate", () => {
     });
 
     it("should not render fallback when gate passes", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext("team", false, false));
+      setAllowedFeatures(new Set(["broker_submission"]));
 
       render(
         <LicenseGate
@@ -293,8 +280,8 @@ describe("LicenseGate", () => {
   });
 
   describe("Integration scenarios", () => {
-    it("should correctly handle Individual with AI: can export and use AI features", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext("individual", true, false));
+    it("should handle plan with export + AI: can export and use AI features", () => {
+      setAllowedFeatures(new Set(["text_export", "email_export", "ai_detection"]));
 
       render(
         <>
@@ -315,8 +302,8 @@ describe("LicenseGate", () => {
       expect(screen.getByTestId("ai")).toBeInTheDocument();
     });
 
-    it("should correctly handle Team without AI: can submit but no AI features", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext("team", false, false));
+    it("should handle plan with submission only: can submit but no export or AI", () => {
+      setAllowedFeatures(new Set(["broker_submission"]));
 
       render(
         <>
@@ -337,8 +324,8 @@ describe("LicenseGate", () => {
       expect(screen.queryByTestId("ai")).not.toBeInTheDocument();
     });
 
-    it("should correctly handle Team with AI: can submit and use AI features", () => {
-      mockUseLicense.mockReturnValue(createMockLicenseContext("team", true, false));
+    it("should handle plan with submission + AI: can submit and use AI features", () => {
+      setAllowedFeatures(new Set(["broker_submission", "ai_detection"]));
 
       render(
         <>
@@ -357,6 +344,50 @@ describe("LicenseGate", () => {
       expect(screen.queryByTestId("export")).not.toBeInTheDocument();
       expect(screen.getByTestId("submit")).toBeInTheDocument();
       expect(screen.getByTestId("ai")).toBeInTheDocument();
+    });
+
+    it("should handle plan with all features", () => {
+      setAllowedFeatures(new Set(["text_export", "email_export", "broker_submission", "ai_detection"]));
+
+      render(
+        <>
+          <LicenseGate requires="individual">
+            <span data-testid="export">Export</span>
+          </LicenseGate>
+          <LicenseGate requires="team">
+            <span data-testid="submit">Submit</span>
+          </LicenseGate>
+          <LicenseGate requires="ai_addon">
+            <span data-testid="ai">AI Features</span>
+          </LicenseGate>
+        </>
+      );
+
+      expect(screen.getByTestId("export")).toBeInTheDocument();
+      expect(screen.getByTestId("submit")).toBeInTheDocument();
+      expect(screen.getByTestId("ai")).toBeInTheDocument();
+    });
+
+    it("should handle plan with no features", () => {
+      setAllowedFeatures(new Set()); // No features
+
+      render(
+        <>
+          <LicenseGate requires="individual">
+            <span data-testid="export">Export</span>
+          </LicenseGate>
+          <LicenseGate requires="team">
+            <span data-testid="submit">Submit</span>
+          </LicenseGate>
+          <LicenseGate requires="ai_addon">
+            <span data-testid="ai">AI Features</span>
+          </LicenseGate>
+        </>
+      );
+
+      expect(screen.queryByTestId("export")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("submit")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("ai")).not.toBeInTheDocument();
     });
   });
 });

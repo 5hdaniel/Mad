@@ -7,7 +7,7 @@ import { LicenseGate } from "./common/LicenseGate";
 import { SettingsTabBar } from "./settings/SettingsTabBar";
 import { useNotification } from "@/hooks/useNotification";
 import { useScrollSpy } from "@/hooks/useScrollSpy";
-import { useLicense } from "@/contexts/LicenseContext";
+import { useFeatureGate } from "@/hooks/useFeatureGate";
 import {
   emitEmailConnectionChanged,
   useEmailConnectionListener,
@@ -152,7 +152,8 @@ interface SettingsComponentProps {
  */
 function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconnected }: SettingsComponentProps) {
   const { notify } = useNotification();
-  const { hasAIAddon } = useLicense();
+  const { isAllowed } = useFeatureGate();
+  const hasAIAddon = isAllowed("ai_detection");
   // TASK-2056: Network status for disabling network-dependent actions
   const { isOnline } = useNetwork();
   // TASK-2150: Orchestrator for routing maintenance operations

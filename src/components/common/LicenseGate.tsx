@@ -1,27 +1,30 @@
 /**
  * LicenseGate Component
+ * SPRINT-127 / TASK-2159: Migrated from LicenseContext to useFeatureGate
  *
- * Conditionally renders children based on user's license type and AI add-on status.
- * Used to gate features based on license permissions.
+ * Conditionally renders children based on plan-level feature access.
+ * Uses useFeatureGate hook to check feature permissions from plan definitions
+ * instead of checking license_type directly.
  *
- * License Model (BACKLOG-426):
- *   - Individual: Can export locally
- *   - Team/Enterprise: Can submit for broker review
- *   - AI Add-on: Works with ANY base license, enables AI detection features
+ * Feature Mapping:
+ *   - "individual" -> isAllowed("text_export") || isAllowed("email_export")
+ *   - "team"       -> isAllowed("broker_submission")
+ *   - "enterprise" -> isAllowed("broker_submission") (same gate, enterprise is a tier)
+ *   - "ai_addon"   -> isAllowed("ai_detection")
  *
  * @example
  * ```tsx
- * // Gate Export button to Individual license only
+ * // Gate Export button to plans with export features
  * <LicenseGate requires="individual">
  *   <Button onClick={handleExport}>Export</Button>
  * </LicenseGate>
  *
- * // Gate Submit button to Team license (includes Enterprise)
+ * // Gate Submit button to plans with broker submission
  * <LicenseGate requires="team">
  *   <Button onClick={handleSubmit}>Submit for Review</Button>
  * </LicenseGate>
  *
- * // Gate AI features to AI add-on
+ * // Gate AI features to plans with AI detection
  * <LicenseGate requires="ai_addon">
  *   <AutoDetectionButton />
  * </LicenseGate>
@@ -34,7 +37,7 @@
  */
 
 import React from "react";
-import { useLicense } from "@/contexts/LicenseContext";
+import { useFeatureGate } from "@/hooks/useFeatureGate";
 
 export type LicenseRequirement =
   | "individual"
@@ -54,7 +57,8 @@ export interface LicenseGateProps {
 /**
  * LicenseGate Component
  *
- * Renders children only if the user has the required license or feature.
+ * Renders children only if the user's plan allows the required feature.
+ * Uses useFeatureGate (plan-based) instead of license_type checks.
  * Returns fallback (or null) if the requirement is not met.
  */
 export function LicenseGate({
@@ -62,29 +66,29 @@ export function LicenseGate({
   fallback = null,
   children,
 }: LicenseGateProps): React.ReactElement | null {
-  const { licenseType, hasAIAddon, isLoading, hasInitialized } = useLicense();
+  const { isAllowed, loading, hasInitialized } = useFeatureGate();
 
-  // Don't render anything until we've loaded license data at least once
-  // This prevents showing gated content before we know the actual license type
-  // After initialization, we trust the cached licenseType even during refreshes
-  if (isLoading && !hasInitialized) {
+  // Don't render anything until feature gate data has loaded at least once.
+  // After initialization, we trust the cached features even during refreshes
+  // to prevent gated content from disappearing (flicker regression).
+  if (loading && !hasInitialized) {
     return null;
   }
 
   const hasAccess = (() => {
     switch (requires) {
       case "individual":
-        // Individual license only (for local export)
-        return licenseType === "individual";
+        // Plans with export capability (text or email export)
+        return isAllowed("text_export") || isAllowed("email_export");
       case "team":
-        // Team OR Enterprise (for submit to broker)
-        return licenseType === "team" || licenseType === "enterprise";
+        // Plans with broker submission capability
+        return isAllowed("broker_submission");
       case "enterprise":
-        // Enterprise only
-        return licenseType === "enterprise";
+        // Plans with broker submission capability (enterprise is a tier, same gate)
+        return isAllowed("broker_submission");
       case "ai_addon":
-        // AI detection add-on (works with any license)
-        return hasAIAddon;
+        // Plans with AI detection feature
+        return isAllowed("ai_detection");
       default:
         return false;
     }
