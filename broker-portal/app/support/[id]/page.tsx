@@ -14,7 +14,7 @@ import { getTicketDetail } from '@/lib/support-queries';
 import type { TicketDetailResponse } from '@/lib/support-types';
 import { PRIORITY_LABELS, PRIORITY_COLORS } from '@/lib/support-types';
 import { TicketStatusBadge } from '../components/TicketStatusBadge';
-import { CustomerConversation } from '../components/CustomerConversation';
+import { CustomerTicketDescription, CustomerMessageList } from '../components/CustomerConversation';
 import { CustomerReplyForm } from '../components/CustomerReplyForm';
 
 export default function CustomerTicketDetailPage() {
@@ -121,44 +121,51 @@ export default function CustomerTicketDetailPage() {
         </div>
       </div>
 
-      {/* Conversation */}
-      <div className="mb-6">
-        <CustomerConversation
-          messages={messages}
-          attachments={attachments}
-          ticketDescription={ticket.description}
+      {/* 1. Original description (pinned) */}
+      <div className="mb-4">
+        <CustomerTicketDescription
+          description={ticket.description}
           requesterName={ticket.requester_name}
-          requesterEmail={ticket.requester_email}
           createdAt={ticket.created_at}
+          attachments={attachments.filter((a) => !a.message_id)}
         />
-        <div ref={threadEndRef} />
       </div>
 
-      {/* Reply form or status message */}
-      {isClosed ? (
-        <div className="text-center py-4 text-gray-500 bg-gray-50 rounded-lg border border-gray-200">
-          This ticket is closed.
-        </div>
-      ) : isResolved ? (
-        <>
-          <div className="text-center py-3 text-amber-700 bg-amber-50 rounded-lg border border-amber-200 mb-4 text-sm">
-            This ticket has been resolved. Reply below to reopen it.
+      {/* 2. Reply form or status message */}
+      <div className="mb-4">
+        {isClosed ? (
+          <div className="text-center py-4 text-gray-500 bg-gray-50 rounded-lg border border-gray-200">
+            This ticket is closed.
           </div>
+        ) : isResolved ? (
+          <>
+            <div className="text-center py-3 text-amber-700 bg-amber-50 rounded-lg border border-amber-200 mb-4 text-sm">
+              This ticket has been resolved. Reply below to reopen it.
+            </div>
+            <CustomerReplyForm
+              ticketId={ticket.id}
+              requesterEmail={ticket.requester_email}
+              requesterName={ticket.requester_name}
+              onReplySent={handleReplySent}
+            />
+          </>
+        ) : (
           <CustomerReplyForm
             ticketId={ticket.id}
             requesterEmail={ticket.requester_email}
             requesterName={ticket.requester_name}
             onReplySent={handleReplySent}
           />
-        </>
-      ) : (
-        <CustomerReplyForm
-          ticketId={ticket.id}
-          requesterEmail={ticket.requester_email}
-          requesterName={ticket.requester_name}
-          onReplySent={handleReplySent}
-        />
-      )}
+        )}
+      </div>
+
+      {/* 3. Messages — newest first */}
+      <CustomerMessageList
+        messages={messages}
+        attachments={attachments}
+        requesterEmail={ticket.requester_email}
+      />
+      <div ref={threadEndRef} />
     </div>
   );
 }
