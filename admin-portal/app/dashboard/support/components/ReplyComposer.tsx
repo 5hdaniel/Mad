@@ -21,7 +21,7 @@ interface ReplyComposerProps {
 
 export function ReplyComposer({ ticketId, onMessageSent }: ReplyComposerProps) {
   const [body, setBody] = useState('');
-  const [messageType, setMessageType] = useState<MessageType>('reply');
+  const [messageType, setMessageType] = useState<MessageType>('internal_note');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [files, setFiles] = useState<PendingFile[]>([]);
