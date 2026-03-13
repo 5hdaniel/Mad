@@ -223,9 +223,7 @@ export function ReplyComposer({ ticketId, onMessageSent, requesterName, ticketNu
           <span>
             {hasContent
               ? body.trim().substring(0, 60) + (body.trim().length > 60 ? '...' : '')
-              : isNote
-                ? 'Click to add an internal note...'
-                : 'Click to reply...'}
+              : 'Click to respond...'}
           </span>
         </div>
         <ChevronDown className="h-4 w-4 text-gray-400" />
