@@ -14,7 +14,7 @@ import { ArrowLeft, Hash, Eye, EyeOff } from 'lucide-react';
 import { getTicketDetail } from '@/lib/support-queries';
 import type { TicketDetailResponse } from '@/lib/support-types';
 import { StatusBadge } from '../components/StatusBadge';
-import { ConversationThread } from '../components/ConversationThread';
+import { TicketDescription, MessageList } from '../components/ConversationThread';
 import { ReplyComposer } from '../components/ReplyComposer';
 import { TicketSidebar } from '../components/TicketSidebar';
 
@@ -125,22 +125,34 @@ export default function TicketDetailPage() {
 
       {/* Two-column layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Conversation */}
+        {/* Left: Description → Composer → Messages (newest first) */}
         <div className="lg:col-span-2 space-y-4">
-          <ConversationThread
-            messages={messages}
-            attachments={attachments}
-            ticketDescription={ticket.description}
+          {/* 1. Original ticket description (pinned) */}
+          <TicketDescription
+            description={ticket.description}
             requesterName={ticket.requester_name}
             requesterEmail={ticket.requester_email}
             createdAt={ticket.created_at}
+            attachments={attachments.filter((a) => !a.message_id)}
+            showAttachments={showAttachments}
+          />
+
+          {/* 2. Reply Composer */}
+          <ReplyComposer
+            ticketId={ticket.id}
+            onMessageSent={handleMessageSent}
+            requesterName={ticket.requester_name}
+            ticketNumber={ticket.ticket_number}
+          />
+
+          {/* 3. Messages — newest first */}
+          <MessageList
+            messages={messages}
+            attachments={attachments}
             showAttachments={showAttachments}
           />
 
           <div ref={threadEndRef} />
-
-          {/* Reply Composer */}
-          <ReplyComposer ticketId={ticket.id} onMessageSent={handleMessageSent} />
         </div>
 
         {/* Right: Sidebar */}

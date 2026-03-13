@@ -145,6 +145,17 @@ export interface CreateTicketParams {
   source_channel?: SourceChannel;
 }
 
+export interface SupportResponseTemplate {
+  id: string;
+  name: string;
+  body: string;
+  category: string | null;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Status transition map for UI validation
 export const ALLOWED_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
   new: ['assigned', 'in_progress'],

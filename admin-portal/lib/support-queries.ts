@@ -16,6 +16,7 @@ import type {
   SupportTicketAttachment,
   SupportTicketEvent,
   SupportTicketParticipant,
+  SupportResponseTemplate,
   ParticipantRole,
 } from './support-types';
 
@@ -245,4 +246,62 @@ export async function listEvents(ticketId: string): Promise<SupportTicketEvent[]
   });
   if (error) throw error;
   return (data ?? []) as unknown as SupportTicketEvent[];
+}
+
+// --- Response Template functions ---
+
+export async function listTemplates(): Promise<SupportResponseTemplate[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_list_templates');
+  if (error) throw error;
+  return (data ?? []) as unknown as SupportResponseTemplate[];
+}
+
+export async function listAllTemplates(): Promise<SupportResponseTemplate[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_list_all_templates');
+  if (error) throw error;
+  return (data ?? []) as unknown as SupportResponseTemplate[];
+}
+
+export async function createTemplate(
+  name: string,
+  body: string,
+  category?: string
+): Promise<{ id: string; name: string }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_create_template', {
+    p_name: name,
+    p_body: body,
+    p_category: category || null,
+  });
+  if (error) throw error;
+  return data as unknown as { id: string; name: string };
+}
+
+export async function updateTemplate(
+  id: string,
+  name: string,
+  body: string,
+  category?: string,
+  isActive?: boolean
+): Promise<{ id: string; updated: boolean }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_update_template', {
+    p_id: id,
+    p_name: name,
+    p_body: body,
+    p_category: category || null,
+    p_is_active: isActive ?? true,
+  });
+  if (error) throw error;
+  return data as unknown as { id: string; updated: boolean };
+}
+
+export async function deleteTemplate(id: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.rpc('support_delete_template', {
+    p_id: id,
+  });
+  if (error) throw error;
 }
