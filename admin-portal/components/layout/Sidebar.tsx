@@ -11,7 +11,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { LayoutDashboard, BarChart3, Users, Building2, CreditCard, Settings, LogOut, PanelLeftClose, PanelLeftOpen, FileText, ChevronDown, ChevronRight, Shield } from 'lucide-react';
+import { LayoutDashboard, BarChart3, Users, Building2, CreditCard, Headphones, Settings, LogOut, PanelLeftClose, PanelLeftOpen, FileText, ChevronDown, ChevronRight, Shield } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
 import type { PermissionKey } from '@/lib/permissions';
@@ -31,6 +31,7 @@ const mainNavItems: NavItem[] = [
   { label: 'Users', href: '/dashboard/users', icon: Users, permission: PERMISSIONS.USERS_VIEW },
   { label: 'Organizations', href: '/dashboard/organizations', icon: Building2, permission: PERMISSIONS.ORGANIZATIONS_VIEW },
   { label: 'Plans', href: '/dashboard/plans', icon: CreditCard, permission: PERMISSIONS.PLANS_VIEW },
+  { label: 'Support', href: '/dashboard/support', icon: Headphones, permission: PERMISSIONS.SUPPORT_VIEW },
 ];
 
 /** Sub-items under the collapsible "Settings" section */
