@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, CreditCard } from 'lucide-react';
+import { ArrowLeft, Building2, CreditCard } from 'lucide-react';
 import { FeatureToggleList } from '../components/FeatureToggleList';
 import { DeletePlanButton } from '../components/DeletePlanButton';
 import { PlanStatusToggle } from '../components/PlanStatusToggle';
@@ -60,8 +60,8 @@ export default async function PlanDetailPage({
     required_permission: 'plans.manage',
   });
 
-  // Fetch plan, plan features, all feature definitions, and dependencies in parallel
-  const [planResult, planFeaturesResult, allFeaturesResult, depsResult] = await Promise.all([
+  // Fetch plan, plan features, all feature definitions, dependencies, and orgs using this plan in parallel
+  const [planResult, planFeaturesResult, allFeaturesResult, depsResult, orgsOnPlanResult] = await Promise.all([
     supabase.from('plans').select('*').eq('id', id).single(),
     supabase
       .from('plan_features')
@@ -69,6 +69,11 @@ export default async function PlanDetailPage({
       .eq('plan_id', id),
     supabase.from('feature_definitions').select('*').order('category').order('name'),
     supabase.from('feature_dependencies').select('feature_key, depends_on_key'),
+    supabase
+      .from('organization_plans')
+      .select('organization_id, assigned_at, organizations(id, name)')
+      .eq('plan_id', id)
+      .order('assigned_at', { ascending: false }),
   ]);
 
   if (!planResult.data) {
@@ -79,6 +84,11 @@ export default async function PlanDetailPage({
   const planFeatures = (planFeaturesResult.data ?? []) as unknown as PlanFeature[];
   const allFeatures = (allFeaturesResult.data ?? []) as unknown as FeatureDefinition[];
   const dependencies = (depsResult.data ?? []) as unknown as FeatureDependency[];
+  const orgsOnPlan = (orgsOnPlanResult.data ?? []) as unknown as Array<{
+    organization_id: string;
+    assigned_at: string;
+    organizations: { id: string; name: string } | null;
+  }>;
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -143,6 +153,36 @@ export default async function PlanDetailPage({
           dependencies={dependencies}
           canManage={!!canManage}
         />
+      </div>
+
+      {/* Organizations using this plan */}
+      <div>
+        <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4">
+          Organizations Using This Plan
+        </h2>
+        {orgsOnPlan.length === 0 ? (
+          <p className="text-sm text-gray-500">No organizations are using this plan.</p>
+        ) : (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 divide-y divide-gray-100">
+            {orgsOnPlan.map((op) => (
+              <Link
+                key={op.organization_id}
+                href={`/dashboard/organizations/${op.organization_id}`}
+                className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <Building2 className="h-4 w-4 text-gray-400" />
+                  <span className="text-sm font-medium text-primary-600 hover:text-primary-700">
+                    {op.organizations?.name || 'Unnamed Organization'}
+                  </span>
+                </div>
+                <span className="text-xs text-gray-500">
+                  Assigned {formatDate(op.assigned_at)}
+                </span>
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Danger zone */}

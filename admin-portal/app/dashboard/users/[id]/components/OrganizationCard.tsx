@@ -1,10 +1,11 @@
 /**
  * OrganizationCard - Displays the user's organization membership
  *
- * Shows org name, role, and join date.
+ * Shows org name (linked), role, join date, and plan info (linked).
  */
 
-import { Building2 } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, Building2 } from 'lucide-react';
 import { formatDate } from '@/lib/format';
 
 interface OrgMembership {
@@ -12,6 +13,9 @@ interface OrgMembership {
   org_name: string | null;
   role: string | null;
   joined_at: string | null;
+  plan_id?: string | null;
+  plan_name?: string | null;
+  plan_tier?: string | null;
 }
 
 function getRoleBadgeColor(role: string | null): string {
@@ -51,12 +55,23 @@ export function OrganizationCard({
               className="flex items-center justify-between p-3 rounded-md bg-gray-50"
             >
               <div>
-                <p className="text-sm font-medium text-gray-900">
+                <Link
+                  href={`/dashboard/organizations/${m.organization_id}`}
+                  className="text-sm font-medium text-primary-600 hover:text-primary-700 hover:underline"
+                >
                   {m.org_name || 'Unnamed Organization'}
-                </p>
+                </Link>
                 <p className="text-xs text-gray-500">
                   Joined {formatDate(m.joined_at)}
                 </p>
+                {m.plan_id && m.plan_name && (
+                  <Link
+                    href={`/dashboard/plans/${m.plan_id}`}
+                    className="inline-flex items-center gap-1 mt-1 text-xs text-primary-600 hover:text-primary-700 font-medium"
+                  >
+                    {m.plan_name} ({m.plan_tier}) <ArrowRight className="h-3 w-3" />
+                  </Link>
+                )}
               </div>
               <span
                 className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleBadgeColor(m.role)}`}
