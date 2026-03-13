@@ -35,7 +35,7 @@ BACKLOG-033,Check Supabase Terms Acceptance,feature,service,High,Pending,-,-,-,-
 BACKLOG-034,Phone Type Card Layout,feature,ui,Medium,Completed,-,-,-,-,2025-12-15,2026-01-23,-,
 BACKLOG-035,Remove Orphaned Table,chore,schema,Critical,Completed,SPRINT-003,20-30K,~40K,+25%,2025-12-16,2025-12-17,[BACKLOG-035.md](BACKLOG-035.md),
 BACKLOG-036,Fix Sync Phase UI Text,bug,ui,Medium,Pending,-,-,-,-,2025-12-15,,-,
-BACKLOG-037,Don't Fail Sync on Disconnect,bug,service,High,Pending,SPRINT-093,~35K,-,-,2025-12-15,,-,Rollout readiness item #18. Sync fails without retry or partial save on network disconnect. TASK-2049.
+BACKLOG-037,Don't Fail Sync on Disconnect,bug,service,High,Obsolete,,~35K,-,-,2025-12-15,2026-03-13,-,"Obsolete — sync service already handles disconnection with retry logic. Investigated SPRINT-127."
 BACKLOG-038,Schema Mismatch contacts.name,bug,schema,Critical,Completed,SPRINT-003,40-60K,~30K,-36%,2025-12-16,2025-12-17,[BACKLOG-038.md](BACKLOG-038.md),
 BACKLOG-039,Schema Mismatch transactions.status,bug,schema,Critical,Completed,SPRINT-003,40-60K,~100K,+100%,2025-12-16,2025-12-17,[BACKLOG-039.md](BACKLOG-039.md),
 BACKLOG-040,ContactsService macOS Paths,bug,service,Medium,Deferred,-,-,-,-,2025-12-15,,-,
@@ -801,4 +801,4 @@ BACKLOG-932,Broker portal access feature gate,feature,service,high,Pending,SPRIN
 BACKLOG-933,Admin Portal Delete Plan with Org Protection,feature,admin-portal,medium,Deferred,-,15K,,,2026-03-12,,,"Add delete plan button to admin portal with org protection guard. Block deletion if orgs are assigned. Originally SPRINT-122 scope. Deferred pending SPRINT-127 tier constraints."
 BACKLOG-934,Admin Portal UX Cross-links and Navigation,feature,admin-portal,medium,Pending,-,20K,,,2026-03-12,,.claude/plans/backlog/items/BACKLOG-934.md,"Add cross-links between admin portal pages for support agent navigation. User detail -> org link and plan link. Org detail -> assigned plan with link and license info. Plan detail -> orgs using this plan."
 BACKLOG-936,Prevent assigning Individual plan to organizations,bug,schema,medium,Pending,-,15K,,,2026-03-12,,.claude/plans/backlog/items/BACKLOG-936.md,"Admin portal allows assigning Individual plan to an org. Individual plans are for solo users without orgs. Need UI filter in plan dropdown and RPC validation to reject the assignment."
-BACKLOG-937,Org-Level Feature Overrides (Entitlement Overrides),feature,licensing,High,Pending,-,~60K,,,2026-03-13,,.claude/plans/backlog/items/BACKLOG-937.md,"Per-org feature overrides for support/sales scenarios. Override hierarchy: org override > plan feature > default. Supports expiry for temporary overrides."
+BACKLOG-937,Org-Level Feature Overrides (Entitlement Overrides),feature,service,High,Pending,-,~60K,,,2026-03-13,,.claude/plans/backlog/items/BACKLOG-937.md,"Per-org feature overrides for support/sales scenarios. Override hierarchy: org override > plan feature > default. Supports expiry for temporary overrides."
