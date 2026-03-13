@@ -153,7 +153,7 @@ The dialog currently does NOT show an `ai_detection_enabled` toggle (confirmed b
 1. **`src/contexts/LicenseContext.tsx`** -- Core migration:
    - Imported `useFeatureGate` hook into `LicenseProvider`
    - `hasAIAddon` now reads from `featureIsAllowed("ai_detection")` when feature gate has initialized, with fallback to `state.hasAIAddon` (license column)
-   - `transactionLimit` now reads from `planFeatures["max_transactions"]?.value` (parsed as int) when feature gate has initialized and value is valid, with fallback to `validationStatus?.transactionLimit`
+   - `transactionLimit` now reads from `planFeatures["max_transaction_size"]?.value` (parsed as int) when feature gate has initialized and value is valid, with fallback to `validationStatus?.transactionLimit`
    - `canCreateTransaction` now computed from plan-feature-derived `transactionLimit`
    - Updated `useMemo` dependency array to include `hasAIAddon`
 

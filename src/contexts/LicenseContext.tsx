@@ -11,7 +11,7 @@
  * and device limits. LicenseProvider now accepts userId prop for validation.
  *
  * SPRINT-127 / TASK-2160: transactionLimit and hasAIAddon now read from
- * plan features via useFeatureGate (max_transactions, ai_detection) with
+ * plan features via useFeatureGate (max_transaction_size, ai_detection) with
  * fallback to license column values for backward compatibility.
  *
  * Combined Examples:
@@ -303,9 +303,9 @@ export function LicenseProvider({
   const transactionCount = validationStatus?.transactionCount ?? 0;
 
   // SPRINT-127: transactionLimit from plan feature with license fallback
-  // Parse max_transactions feature value (string) as integer.
+  // Parse max_transaction_size feature value (string) as integer.
   // Fall back to license column value when feature value is unavailable or invalid.
-  const planMaxTxn = planFeatures["max_transactions"]?.value;
+  const planMaxTxn = planFeatures["max_transaction_size"]?.value;
   const parsedPlanLimit = planMaxTxn ? parseInt(planMaxTxn, 10) : NaN;
   const transactionLimit =
     featureGateReady && !isNaN(parsedPlanLimit)
