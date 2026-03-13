@@ -111,7 +111,6 @@ describe("Failure Log Handlers", () => {
 
       expect(result).toEqual({
         success: false,
-        entries: [],
         error: "DB error",
       });
     });
@@ -141,7 +140,6 @@ describe("Failure Log Handlers", () => {
 
       expect(result).toEqual({
         success: false,
-        count: 0,
         error: "DB error",
       });
     });
