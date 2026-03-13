@@ -113,19 +113,19 @@ export function ParticipantsPanel({ ticketId, participants, onUpdated }: Partici
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Email address"
-            className="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full text-xs text-gray-900 border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Name (optional)"
-            className="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full text-xs text-gray-900 border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
           <select
             value={role}
             onChange={(e) => setRole(e.target.value as ParticipantRole)}
-            className="w-full text-xs border border-gray-300 rounded px-2 py-1 bg-white"
+            className="w-full text-xs text-gray-900 border border-gray-300 rounded px-2 py-1 bg-white"
           >
             <option value="cc">CC</option>
             <option value="watcher">Watcher</option>

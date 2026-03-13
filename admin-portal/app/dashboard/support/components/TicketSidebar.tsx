@@ -239,7 +239,7 @@ export function TicketSidebar({ ticket, participants, events, onTicketUpdated }:
         <select
           value={ticket.assignee_id || ''}
           onChange={(e) => handleAssigneeChange(e.target.value)}
-          className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          className="w-full text-sm text-gray-900 border border-gray-300 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
         >
           <option value="">Unassigned</option>
           {agents.map((agent) => (
