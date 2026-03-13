@@ -10,6 +10,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { Eye, EyeOff } from 'lucide-react';
 import { getTicketDetail } from '@/lib/support-queries';
 import type { TicketDetailResponse } from '@/lib/support-types';
 import { PRIORITY_LABELS, PRIORITY_COLORS } from '@/lib/support-types';
@@ -24,6 +25,7 @@ export default function DashboardTicketDetailPage() {
   const [detail, setDetail] = useState<TicketDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showAttachments, setShowAttachments] = useState(true);
   const threadEndRef = useRef<HTMLDivElement>(null);
 
   const loadDetail = useCallback(async () => {
@@ -110,13 +112,24 @@ export default function DashboardTicketDetailPage() {
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <span
-              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLORS[ticket.priority]}`}
-            >
-              {PRIORITY_LABELS[ticket.priority]}
-            </span>
-            <TicketStatusBadge status={ticket.status} />
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <div className="flex items-center gap-2">
+              <span
+                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLORS[ticket.priority]}`}
+              >
+                {PRIORITY_LABELS[ticket.priority]}
+              </span>
+              <TicketStatusBadge status={ticket.status} />
+            </div>
+            {attachments.length > 0 && (
+              <button
+                onClick={() => setShowAttachments(!showAttachments)}
+                className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                {showAttachments ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                {showAttachments ? 'Hide' : 'Show'} attachments ({attachments.length})
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -130,6 +143,7 @@ export default function DashboardTicketDetailPage() {
           requesterName={ticket.requester_name}
           requesterEmail={ticket.requester_email}
           createdAt={ticket.created_at}
+          showAttachments={showAttachments}
         />
         <div ref={threadEndRef} />
       </div>

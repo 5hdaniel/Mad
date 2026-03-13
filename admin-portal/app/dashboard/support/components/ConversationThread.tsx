@@ -11,7 +11,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Lock, MessageSquare, Eye, EyeOff, Paperclip } from 'lucide-react';
+import { Lock, MessageSquare, Paperclip } from 'lucide-react';
 import type { SupportTicketMessage, SupportTicketAttachment } from '@/lib/support-types';
 import { getAttachmentUrl } from '@/lib/support-queries';
 import { AttachmentLightbox } from './AttachmentLightbox';
@@ -23,6 +23,7 @@ interface ConversationThreadProps {
   requesterName: string;
   requesterEmail: string;
   createdAt: string;
+  showAttachments?: boolean;
 }
 
 function formatTimestamp(dateStr: string): string {
@@ -191,8 +192,8 @@ export function ConversationThread({
   requesterName,
   requesterEmail,
   createdAt,
+  showAttachments = true,
 }: ConversationThreadProps) {
-  const [showAttachments, setShowAttachments] = useState(true);
   const [lightbox, setLightbox] = useState<{
     url: string;
     attachment: SupportTicketAttachment;
@@ -209,7 +210,6 @@ export function ConversationThread({
   }
 
   const ticketAttachments = attachmentsByMessage.get(null) || [];
-  const hasAnyAttachments = attachments.length > 0;
 
   function openLightbox(url: string, att: SupportTicketAttachment) {
     setLightbox({ url, attachment: att });
@@ -217,24 +217,6 @@ export function ConversationThread({
 
   return (
     <div>
-      {/* Toggle bar */}
-      {hasAnyAttachments && (
-        <div className="flex items-center justify-between mb-3">
-          <button
-            onClick={() => setShowAttachments(!showAttachments)}
-            className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors"
-          >
-            {showAttachments ? (
-              <EyeOff className="h-3.5 w-3.5" />
-            ) : (
-              <Eye className="h-3.5 w-3.5" />
-            )}
-            {showAttachments ? 'Hide' : 'Show'} inline attachments
-            <span className="text-gray-400">({attachments.length})</span>
-          </button>
-        </div>
-      )}
-
       <div className="space-y-4">
         {/* Original ticket description as the first "message" */}
         <div className="rounded-lg p-4 bg-blue-50 border border-blue-200">

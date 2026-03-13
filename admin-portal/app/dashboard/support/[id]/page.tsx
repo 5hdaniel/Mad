@@ -10,7 +10,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Hash } from 'lucide-react';
+import { ArrowLeft, Hash, Eye, EyeOff } from 'lucide-react';
 import { getTicketDetail } from '@/lib/support-queries';
 import type { TicketDetailResponse } from '@/lib/support-types';
 import { StatusBadge } from '../components/StatusBadge';
@@ -26,6 +26,7 @@ export default function TicketDetailPage() {
   const [detail, setDetail] = useState<TicketDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showAttachments, setShowAttachments] = useState(true);
   const threadEndRef = useRef<HTMLDivElement>(null);
 
   const loadDetail = useCallback(async () => {
@@ -100,13 +101,25 @@ export default function TicketDetailPage() {
           <ArrowLeft className="h-4 w-4" />
           Back to Queue
         </button>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 text-gray-400">
-            <Hash className="h-5 w-5" />
-            <span className="text-lg font-mono">{ticket.ticket_number}</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 text-gray-400">
+              <Hash className="h-5 w-5" />
+              <span className="text-lg font-mono">{ticket.ticket_number}</span>
+            </div>
+            <h1 className="text-xl font-bold text-gray-900">{ticket.subject}</h1>
+            <StatusBadge status={ticket.status} />
           </div>
-          <h1 className="text-xl font-bold text-gray-900">{ticket.subject}</h1>
-          <StatusBadge status={ticket.status} />
+          {attachments.length > 0 && (
+            <button
+              onClick={() => setShowAttachments(!showAttachments)}
+              className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              {showAttachments ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              {showAttachments ? 'Hide' : 'Show'} attachments
+              <span className="text-gray-400">({attachments.length})</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -121,6 +134,7 @@ export default function TicketDetailPage() {
             requesterName={ticket.requester_name}
             requesterEmail={ticket.requester_email}
             createdAt={ticket.created_at}
+            showAttachments={showAttachments}
           />
 
           <div ref={threadEndRef} />
