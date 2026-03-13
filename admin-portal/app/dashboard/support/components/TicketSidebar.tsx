@@ -154,7 +154,7 @@ export function TicketSidebar({ ticket, participants, events, onTicketUpdated }:
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value as TicketStatus)}
-              className="flex-1 text-sm border border-gray-300 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 text-sm text-gray-900 border border-gray-300 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Change status...</option>
               {allowedTransitions.map((nextStatus) => (
@@ -181,7 +181,7 @@ export function TicketSidebar({ ticket, participants, events, onTicketUpdated }:
             <select
               value={pendingReason}
               onChange={(e) => setPendingReason(e.target.value as PendingReason)}
-              className="w-full text-xs border border-orange-300 rounded px-2 py-1 mb-2"
+              className="w-full text-xs text-gray-900 border border-orange-300 rounded px-2 py-1 mb-2"
             >
               <option value="customer">Waiting on Customer</option>
               <option value="vendor">Waiting on Vendor</option>
@@ -215,7 +215,7 @@ export function TicketSidebar({ ticket, participants, events, onTicketUpdated }:
           <select
             value={selectedPriority}
             onChange={(e) => setSelectedPriority(e.target.value as TicketPriority)}
-            className="flex-1 text-sm border border-gray-300 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 text-sm text-gray-900 border border-gray-300 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             {(Object.entries(PRIORITY_LABELS) as [TicketPriority, string][]).map(([key, label]) => (
               <option key={key} value={key}>{label}</option>
