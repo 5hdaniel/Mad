@@ -186,6 +186,12 @@ if (typeof window !== 'undefined') {
       openITunesStore: jest.fn(),
       checkUpdate: jest.fn(),
     },
+    // SPRINT-127 / TASK-2160: Feature gate (plan-based feature access)
+    featureGate: {
+      getAll: jest.fn().mockResolvedValue({}),
+      check: jest.fn().mockResolvedValue({ allowed: true, value: '', source: 'default' }),
+      invalidateCache: jest.fn().mockResolvedValue(undefined),
+    },
     onTransactionScanProgress: jest.fn(() => jest.fn()),
     onGoogleMailboxConnected: jest.fn(() => jest.fn()),
     onMicrosoftMailboxConnected: jest.fn(() => jest.fn()),

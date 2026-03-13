@@ -89,6 +89,10 @@ export function LicenseCard({ licenses }: { licenses: License[] }) {
                   {lic.transaction_limit && lic.transaction_limit < 999999
                     ? ` / ${lic.transaction_limit.toLocaleString()}`
                     : ' (unlimited)'}
+                  {' '}
+                  <span className="text-gray-400" title="Transaction limits are now managed via Plan Features. This value is the legacy license fallback.">
+                    (legacy)
+                  </span>
                 </span>
                 {lic.trial_status && (
                   <>

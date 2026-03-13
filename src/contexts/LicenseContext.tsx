@@ -10,6 +10,10 @@
  * SPRINT-062: Added license validation with trial tracking, transaction limits,
  * and device limits. LicenseProvider now accepts userId prop for validation.
  *
+ * SPRINT-127 / TASK-2160: transactionLimit and hasAIAddon now read from
+ * plan features via useFeatureGate (max_transactions, ai_detection) with
+ * fallback to license column values for backward compatibility.
+ *
  * Combined Examples:
  *   - Individual + No AI: Export, manual transactions only
  *   - Individual + AI: Export, manual transactions, AI detection features
@@ -29,6 +33,7 @@ import React, {
 import type { LicenseType } from "../../electron/types/models";
 import type { LicenseValidationResult } from "../../shared/types/license";
 import { licenseService } from "../services";
+import { useFeatureGate } from "../hooks/useFeatureGate";
 import logger from '../utils/logger';
 
 // License context value interface
@@ -270,11 +275,25 @@ export function LicenseProvider({
     }
   }, [fetchLicense, validateLicense, userId]);
 
+  // SPRINT-127 / TASK-2160: Read plan-level features with license fallback
+  const {
+    isAllowed: featureIsAllowed,
+    features: planFeatures,
+    hasInitialized: featureGateReady,
+  } = useFeatureGate();
+
   // Compute convenience flags
   const canExport = state.licenseType === "individual";
   const canSubmit =
     state.licenseType === "team" || state.licenseType === "enterprise";
-  const canAutoDetect = state.hasAIAddon;
+
+  // SPRINT-127: hasAIAddon from plan feature with license fallback
+  // When feature gate has initialized, use plan-level ai_detection.
+  // Fall back to license column value when feature gate hasn't loaded.
+  const hasAIAddon = featureGateReady
+    ? featureIsAllowed("ai_detection")
+    : state.hasAIAddon;
+  const canAutoDetect = hasAIAddon;
 
   // SPRINT-062: Extract validation status fields
   const validationStatus = state.validationStatus;
@@ -282,14 +301,25 @@ export function LicenseProvider({
   const blockReason = validationStatus?.blockReason ?? null;
   const trialDaysRemaining = validationStatus?.trialDaysRemaining ?? null;
   const transactionCount = validationStatus?.transactionCount ?? 0;
-  const transactionLimit = validationStatus?.transactionLimit ?? Infinity;
-  const canCreateTransaction = validationStatus?.canCreateTransaction ?? true;
+
+  // SPRINT-127: transactionLimit from plan feature with license fallback
+  // Parse max_transactions feature value (string) as integer.
+  // Fall back to license column value when feature value is unavailable or invalid.
+  const planMaxTxn = planFeatures["max_transactions"]?.value;
+  const parsedPlanLimit = planMaxTxn ? parseInt(planMaxTxn, 10) : NaN;
+  const transactionLimit =
+    featureGateReady && !isNaN(parsedPlanLimit)
+      ? parsedPlanLimit
+      : (validationStatus?.transactionLimit ?? Infinity);
+
+  // SPRINT-127: canCreateTransaction uses plan-feature-derived limit
+  const canCreateTransaction = transactionCount < transactionLimit;
 
   // Memoize context value to prevent unnecessary re-renders
   const contextValue = useMemo<LicenseContextValue>(
     () => ({
       licenseType: state.licenseType,
-      hasAIAddon: state.hasAIAddon,
+      hasAIAddon,
       organizationId: state.organizationId,
       canExport,
       canSubmit,
@@ -308,6 +338,7 @@ export function LicenseProvider({
     }),
     [
       state,
+      hasAIAddon,
       canExport,
       canSubmit,
       canAutoDetect,

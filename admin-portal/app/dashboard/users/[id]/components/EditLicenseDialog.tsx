@@ -210,6 +210,9 @@ export function EditLicenseDialog({ license }: EditLicenseDialogProps) {
                 placeholder="Leave empty for unlimited"
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
               />
+              <p className="mt-1 text-xs text-gray-400">
+                Transaction limits are now managed via Plan Features. This value is a legacy fallback.
+              </p>
             </div>
           </div>
 
