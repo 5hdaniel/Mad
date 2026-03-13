@@ -106,7 +106,7 @@ interface ModalFlowReturn {
   modalState: ModalState;
   openProfile: () => void;
   closeProfile: () => void;
-  openSettings: () => void;
+  openSettings: (scrollTarget?: string) => void;
   closeSettings: () => void;
   openTransactions: () => void;
   closeTransactions: () => void;
