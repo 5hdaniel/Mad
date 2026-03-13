@@ -17,7 +17,6 @@ import { StatusBadge } from '../components/StatusBadge';
 import { ConversationThread } from '../components/ConversationThread';
 import { ReplyComposer } from '../components/ReplyComposer';
 import { TicketSidebar } from '../components/TicketSidebar';
-import { AttachmentList } from '../components/AttachmentList';
 
 export default function TicketDetailPage() {
   const params = useParams();
@@ -117,19 +116,12 @@ export default function TicketDetailPage() {
         <div className="lg:col-span-2 space-y-4">
           <ConversationThread
             messages={messages}
+            attachments={attachments}
             ticketDescription={ticket.description}
             requesterName={ticket.requester_name}
             requesterEmail={ticket.requester_email}
             createdAt={ticket.created_at}
           />
-
-          {/* Ticket-level attachments */}
-          {attachments.length > 0 && (
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <h3 className="text-sm font-medium text-gray-700 mb-2">Attachments</h3>
-              <AttachmentList attachments={attachments} />
-            </div>
-          )}
 
           <div ref={threadEndRef} />
 

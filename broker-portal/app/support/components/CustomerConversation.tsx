@@ -6,12 +6,15 @@
  * Displays conversation thread from the customer's perspective.
  * Internal notes are filtered out (defense-in-depth).
  * Customer messages vs agent messages have distinct styling.
- * Attachments are shown inline with their associated messages.
+ * Attachments shown inline with thumbnails + lightbox preview.
+ * Toggle to show/hide inline attachments.
  */
 
 import { useState, useEffect } from 'react';
+import { Eye, EyeOff, Paperclip } from 'lucide-react';
 import type { SupportTicketMessage, SupportTicketAttachment } from '@/lib/support-types';
 import { getAttachmentUrl } from '@/lib/support-queries';
+import { AttachmentLightbox } from './AttachmentLightbox';
 
 interface CustomerConversationProps {
   messages: SupportTicketMessage[];
@@ -40,66 +43,93 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function AttachmentItem({ attachment }: { attachment: SupportTicketAttachment }) {
-  const [downloading, setDownloading] = useState(false);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [imageError, setImageError] = useState(false);
+function AttachmentThumbnail({
+  attachment,
+  onPreview,
+}: {
+  attachment: SupportTicketAttachment;
+  onPreview: (url: string) => void;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const isImage = attachment.file_type.startsWith('image/');
 
-  // Auto-load signed URL for images
   useEffect(() => {
     if (isImage) {
       getAttachmentUrl(attachment.storage_path)
-        .then(setImageUrl)
-        .catch(() => setImageError(true));
+        .then(setUrl)
+        .catch(() => setLoadError(true));
     }
   }, [isImage, attachment.storage_path]);
 
-  async function handleDownload() {
-    setDownloading(true);
+  async function handleClick() {
+    if (url) {
+      onPreview(url);
+      return;
+    }
+    setLoading(true);
     try {
-      const url = imageUrl || await getAttachmentUrl(attachment.storage_path);
-      window.open(url, '_blank');
+      const signedUrl = await getAttachmentUrl(attachment.storage_path);
+      setUrl(signedUrl);
+      onPreview(signedUrl);
     } catch {
-      // Silently fail — user can retry
+      setLoadError(true);
     } finally {
-      setDownloading(false);
+      setLoading(false);
     }
   }
 
-  if (isImage && imageUrl && !imageError) {
+  if (isImage && url && !loadError) {
     return (
-      <div className="mt-2">
-        <button onClick={handleDownload} className="block cursor-pointer">
-          <img
-            src={imageUrl}
-            alt={attachment.file_name}
-            className="max-w-full max-h-64 rounded-md border border-gray-200"
-            onError={() => setImageError(true)}
-          />
-        </button>
-        <span className="text-xs text-gray-400 mt-1 block">
-          {attachment.file_name} ({formatFileSize(attachment.file_size)})
-        </span>
-      </div>
+      <button
+        onClick={handleClick}
+        className="block group relative rounded-md overflow-hidden border border-gray-200 hover:border-blue-400 transition-colors"
+      >
+        <img
+          src={url}
+          alt={attachment.file_name}
+          className="h-20 w-auto object-cover rounded-md"
+          onError={() => setLoadError(true)}
+        />
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors rounded-md" />
+      </button>
     );
   }
 
   return (
     <button
-      onClick={handleDownload}
-      disabled={downloading}
-      className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-md hover:bg-gray-100 transition-colors text-left w-full"
+      onClick={handleClick}
+      disabled={loading}
+      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-md hover:bg-gray-100 hover:border-blue-400 transition-colors disabled:opacity-50"
     >
-      <span className="text-gray-400 text-sm shrink-0">📎</span>
-      <span className="text-sm text-blue-600 hover:text-blue-700 truncate">
-        {attachment.file_name}
-      </span>
-      <span className="text-xs text-gray-400 shrink-0">
-        {formatFileSize(attachment.file_size)}
-      </span>
+      <Paperclip className="h-3 w-3 text-gray-400" />
+      <span className="text-gray-700 truncate max-w-[120px]">{attachment.file_name}</span>
+      <span className="text-gray-400">({formatFileSize(attachment.file_size)})</span>
     </button>
+  );
+}
+
+function InlineAttachments({
+  attachments,
+  onPreview,
+}: {
+  attachments: SupportTicketAttachment[];
+  onPreview: (url: string, att: SupportTicketAttachment) => void;
+}) {
+  if (attachments.length === 0) return null;
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {attachments.map((att) => (
+        <AttachmentThumbnail
+          key={att.id}
+          attachment={att}
+          onPreview={(url) => onPreview(url, att)}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -111,10 +141,16 @@ export function CustomerConversation({
   requesterEmail,
   createdAt,
 }: CustomerConversationProps) {
-  // Filter out internal notes (defense-in-depth, RPC should already exclude them)
+  const [showAttachments, setShowAttachments] = useState(true);
+  const [lightbox, setLightbox] = useState<{
+    url: string;
+    attachment: SupportTicketAttachment;
+  } | null>(null);
+
+  // Filter out internal notes (defense-in-depth)
   const publicMessages = messages.filter((m) => m.message_type !== 'internal_note');
 
-  // Group attachments by message_id (null = ticket-level attachments)
+  // Group attachments by message_id (null = ticket-level)
   const attachmentsByMessage = new Map<string | null, SupportTicketAttachment[]>();
   for (const att of attachments) {
     const key = att.message_id;
@@ -125,72 +161,106 @@ export function CustomerConversation({
   }
 
   const ticketAttachments = attachmentsByMessage.get(null) || [];
+  const hasAnyAttachments = attachments.length > 0;
+
+  function openLightbox(url: string, att: SupportTicketAttachment) {
+    setLightbox({ url, attachment: att });
+  }
 
   return (
-    <div className="space-y-4">
-      {/* Original ticket description */}
-      <div className="flex justify-end">
-        <div className="max-w-[80%]">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-900">{requesterName}</span>
-              <span className="text-xs text-gray-400 ml-3">{formatTimestamp(createdAt)}</span>
-            </div>
-            <div className="text-sm text-gray-700 whitespace-pre-wrap">{ticketDescription}</div>
-            {ticketAttachments.length > 0 && (
-              <div className="mt-3 space-y-1.5">
-                {ticketAttachments.map((att) => (
-                  <AttachmentItem key={att.id} attachment={att} />
-                ))}
-              </div>
+    <div>
+      {/* Toggle bar */}
+      {hasAnyAttachments && (
+        <div className="flex items-center justify-between mb-3">
+          <button
+            onClick={() => setShowAttachments(!showAttachments)}
+            className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+          >
+            {showAttachments ? (
+              <EyeOff className="h-3.5 w-3.5" />
+            ) : (
+              <Eye className="h-3.5 w-3.5" />
             )}
+            {showAttachments ? 'Hide' : 'Show'} inline attachments
+            <span className="text-gray-400">({attachments.length})</span>
+          </button>
+        </div>
+      )}
+
+      <div className="space-y-4">
+        {/* Original ticket description */}
+        <div className="flex justify-end">
+          <div className="max-w-[80%]">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-900">{requesterName}</span>
+                <span className="text-xs text-gray-400 ml-3">{formatTimestamp(createdAt)}</span>
+              </div>
+              <div className="text-sm text-gray-700 whitespace-pre-wrap">{ticketDescription}</div>
+              {showAttachments && (
+                <InlineAttachments
+                  attachments={ticketAttachments}
+                  onPreview={openLightbox}
+                />
+              )}
+            </div>
           </div>
         </div>
+
+        {/* Messages */}
+        {publicMessages.map((message) => {
+          const isCustomer = message.sender_email === requesterEmail;
+          const messageAttachments = attachmentsByMessage.get(message.id) || [];
+
+          return (
+            <div key={message.id} className={`flex ${isCustomer ? 'justify-end' : 'justify-start'}`}>
+              <div className="max-w-[80%]">
+                <div
+                  className={`rounded-lg p-4 ${
+                    isCustomer
+                      ? 'bg-blue-50 border border-blue-200'
+                      : 'bg-white border border-gray-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-900">
+                      {isCustomer
+                        ? message.sender_name || 'You'
+                        : message.sender_name || 'Support Agent'}
+                    </span>
+                    <span className="text-xs text-gray-400 ml-3">
+                      {formatTimestamp(message.created_at)}
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-700 whitespace-pre-wrap">{message.body}</div>
+                  {showAttachments && (
+                    <InlineAttachments
+                      attachments={messageAttachments}
+                      onPreview={openLightbox}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        {publicMessages.length === 0 && (
+          <div className="text-center py-6 text-gray-400 text-sm">
+            No replies yet. A support agent will respond soon.
+          </div>
+        )}
       </div>
 
-      {/* Messages */}
-      {publicMessages.map((message) => {
-        const isCustomer = message.sender_email === requesterEmail;
-        const messageAttachments = attachmentsByMessage.get(message.id) || [];
-
-        return (
-          <div key={message.id} className={`flex ${isCustomer ? 'justify-end' : 'justify-start'}`}>
-            <div className="max-w-[80%]">
-              <div
-                className={`rounded-lg p-4 ${
-                  isCustomer
-                    ? 'bg-blue-50 border border-blue-200'
-                    : 'bg-white border border-gray-200'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-900">
-                    {isCustomer
-                      ? message.sender_name || 'You'
-                      : message.sender_name || 'Support Agent'}
-                  </span>
-                  <span className="text-xs text-gray-400 ml-3">
-                    {formatTimestamp(message.created_at)}
-                  </span>
-                </div>
-                <div className="text-sm text-gray-700 whitespace-pre-wrap">{message.body}</div>
-                {messageAttachments.length > 0 && (
-                  <div className="mt-3 space-y-1.5">
-                    {messageAttachments.map((att) => (
-                      <AttachmentItem key={att.id} attachment={att} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })}
-
-      {publicMessages.length === 0 && (
-        <div className="text-center py-6 text-gray-400 text-sm">
-          No replies yet. A support agent will respond soon.
-        </div>
+      {/* Lightbox */}
+      {lightbox && (
+        <AttachmentLightbox
+          url={lightbox.url}
+          fileName={lightbox.attachment.file_name}
+          fileType={lightbox.attachment.file_type}
+          fileSize={formatFileSize(lightbox.attachment.file_size)}
+          onClose={() => setLightbox(null)}
+        />
       )}
     </div>
   );
