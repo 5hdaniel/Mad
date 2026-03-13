@@ -9,6 +9,7 @@
 import { ipcMain, dialog, BrowserWindow } from "electron";
 import { exportUserData, writeExportFile } from "../services/ccpaExportService";
 import logService from "../services/logService";
+import { wrapHandler } from "../utils/wrapHandler";
 
 /**
  * Register CCPA/privacy IPC handlers
@@ -26,72 +27,59 @@ export function registerCcpaHandlers(): void {
    */
   ipcMain.handle(
     "privacy:export-data",
-    async (event, userId: string): Promise<{ success: boolean; filePath?: string; error?: string }> => {
-      try {
-        logService.info(
-          "[CcpaHandlers] Export requested",
-          "CcpaHandlers",
-        );
+    wrapHandler(async (event, userId: string): Promise<{ success: boolean; filePath?: string; error?: string }> => {
+      logService.info(
+        "[CcpaHandlers] Export requested",
+        "CcpaHandlers",
+      );
 
-        if (!userId) {
-          return { success: false, error: "User ID is required" };
-        }
-
-        // Get the BrowserWindow that sent the request
-        const win = BrowserWindow.fromWebContents(event.sender);
-
-        // Show save dialog
-        const dateStr = new Date().toISOString().split("T")[0];
-        const defaultFilename = `keepr-data-export-${dateStr}.json`;
-
-        const dialogResult = await dialog.showSaveDialog(
-          win || BrowserWindow.getFocusedWindow()!,
-          {
-            title: "Export Your Data (CCPA)",
-            defaultPath: defaultFilename,
-            filters: [{ name: "JSON Files", extensions: ["json"] }],
-          },
-        );
-
-        if (dialogResult.canceled || !dialogResult.filePath) {
-          return { success: false, error: "Export cancelled by user" };
-        }
-
-        const filePath = dialogResult.filePath;
-
-        // Gather data with progress reporting
-        const data = await exportUserData(userId, (category, progress) => {
-          // Send progress to renderer
-          if (event.sender && !event.sender.isDestroyed()) {
-            event.sender.send("privacy:export-progress", {
-              category,
-              progress,
-            });
-          }
-        });
-
-        // Write the file
-        await writeExportFile(data, filePath);
-
-        logService.info(
-          `[CcpaHandlers] Export complete: ${filePath}`,
-          "CcpaHandlers",
-        );
-
-        return { success: true, filePath };
-      } catch (error) {
-        logService.error(
-          "[CcpaHandlers] Export failed",
-          "CcpaHandlers",
-          { error: error instanceof Error ? error.message : "Unknown error" },
-        );
-
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Export failed",
-        };
+      if (!userId) {
+        return { success: false, error: "User ID is required" };
       }
-    },
+
+      // Get the BrowserWindow that sent the request
+      const win = BrowserWindow.fromWebContents(event.sender);
+
+      // Show save dialog
+      const dateStr = new Date().toISOString().split("T")[0];
+      const defaultFilename = `keepr-data-export-${dateStr}.json`;
+
+      const dialogResult = await dialog.showSaveDialog(
+        win || BrowserWindow.getFocusedWindow()!,
+        {
+          title: "Export Your Data (CCPA)",
+          defaultPath: defaultFilename,
+          filters: [{ name: "JSON Files", extensions: ["json"] }],
+        },
+      );
+
+      if (dialogResult.canceled || !dialogResult.filePath) {
+        return { success: false, error: "Export cancelled by user" };
+      }
+
+      const filePath = dialogResult.filePath;
+
+      // Gather data with progress reporting
+      const data = await exportUserData(userId, (category, progress) => {
+        // Send progress to renderer
+        if (event.sender && !event.sender.isDestroyed()) {
+          event.sender.send("privacy:export-progress", {
+            category,
+            progress,
+          });
+        }
+      });
+
+      // Write the file
+      await writeExportFile(data, filePath);
+
+      logService.info(
+        `[CcpaHandlers] Export complete: ${filePath}`,
+        "CcpaHandlers",
+      );
+
+      return { success: true, filePath };
+    }, { module: "CcpaHandlers" }),
   );
 
   logService.debug("[CcpaHandlers] Handlers registered", "CcpaHandlers");

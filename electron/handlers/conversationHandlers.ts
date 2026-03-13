@@ -18,6 +18,7 @@ import {
   resolveContactName,
 } from "../services/contactsService";
 import logService from "../services/logService";
+import { wrapHandler } from "../utils/wrapHandler";
 import { macTimestampToDate, getYearsAgoTimestamp } from "../utils/dateUtils";
 import { createTimestampedFilename } from "../utils/fileUtils";
 import { getMessageText } from "../utils/messageParser";
@@ -51,24 +52,23 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
   handlersRegistered = true;
 
   // Get conversations from Messages database
-  ipcMain.handle("get-conversations", async () => {
+  ipcMain.handle("get-conversations", wrapHandler(async () => {
+    const messagesDbPath = path.join(
+      process.env.HOME!,
+      "Library/Messages/chat.db"
+    );
+
+    const db = new sqlite3.Database(messagesDbPath, sqlite3.OPEN_READONLY);
+    const dbAll = promisify(db.all.bind(db)) as <T>(
+      sql: string,
+      params?: unknown
+    ) => Promise<T[]>;
+    const dbClose = promisify(db.close.bind(db));
+
+    let db2: sqlite3.Database | null = null;
+    let dbClose2: (() => Promise<void>) | null = null;
+
     try {
-      const messagesDbPath = path.join(
-        process.env.HOME!,
-        "Library/Messages/chat.db"
-      );
-
-      const db = new sqlite3.Database(messagesDbPath, sqlite3.OPEN_READONLY);
-      const dbAll = promisify(db.all.bind(db)) as <T>(
-        sql: string,
-        params?: unknown
-      ) => Promise<T[]>;
-      const dbClose = promisify(db.close.bind(db));
-
-      let db2: sqlite3.Database | null = null;
-      let dbClose2: (() => Promise<void>) | null = null;
-
-      try {
         // Get contact names from Contacts database
         const { contactMap, phoneToContactInfo } = await getContactNames();
 
@@ -375,97 +375,76 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
         }
         throw error;
       }
-    } catch (error) {
-      logService.error("Error getting conversations", "ConversationHandlers", { error });
-      return {
-        success: false,
-        error: (error as Error).message,
-      };
-    }
-  });
+  }, { module: "ConversationHandlers" }));
 
   // Get messages for a specific conversation
   ipcMain.handle(
     "get-messages",
-    async (event: IpcMainInvokeEvent, chatId: number) => {
+    wrapHandler(async (event: IpcMainInvokeEvent, chatId: number) => {
+      const messagesDbPath = path.join(
+        process.env.HOME!,
+        "Library/Messages/chat.db"
+      );
+
+      const db = new sqlite3.Database(messagesDbPath, sqlite3.OPEN_READONLY);
+      const dbAll = promisify(db.all.bind(db)) as <T>(
+        sql: string,
+        params?: unknown
+      ) => Promise<T[]>;
+      const dbClose = promisify(db.close.bind(db));
+
       try {
-        const messagesDbPath = path.join(
-          process.env.HOME!,
-          "Library/Messages/chat.db"
+        const messages = await dbAll<MessageRow>(
+          `
+        SELECT
+          message.ROWID as id,
+          message.text,
+          message.date,
+          message.is_from_me,
+          handle.id as sender
+        FROM message
+        JOIN chat_message_join ON message.ROWID = chat_message_join.message_id
+        LEFT JOIN handle ON message.handle_id = handle.ROWID
+        WHERE chat_message_join.chat_id = ?
+        ORDER BY message.date ASC
+      `,
+          [chatId]
         );
 
-        const db = new sqlite3.Database(messagesDbPath, sqlite3.OPEN_READONLY);
-        const dbAll = promisify(db.all.bind(db)) as <T>(
-          sql: string,
-          params?: unknown
-        ) => Promise<T[]>;
-        const dbClose = promisify(db.close.bind(db));
+        await dbClose();
 
-        try {
-          const messages = await dbAll<MessageRow>(
-            `
-          SELECT
-            message.ROWID as id,
-            message.text,
-            message.date,
-            message.is_from_me,
-            handle.id as sender
-          FROM message
-          JOIN chat_message_join ON message.ROWID = chat_message_join.message_id
-          LEFT JOIN handle ON message.handle_id = handle.ROWID
-          WHERE chat_message_join.chat_id = ?
-          ORDER BY message.date ASC
-        `,
-            [chatId]
-          );
-
-          await dbClose();
-
-          return {
-            success: true,
-            messages: messages.map((msg) => ({
-              id: msg.id,
-              text: msg.text || "",
-              date: msg.date,
-              isFromMe: msg.is_from_me === 1,
-              sender: msg.sender,
-            })),
-          };
-        } catch (error) {
-          await dbClose();
-          throw error;
-        }
-      } catch (error) {
-        logService.error("Error getting messages", "ConversationHandlers", { error });
         return {
-          success: false,
-          error: (error as Error).message,
+          success: true,
+          messages: messages.map((msg) => ({
+            id: msg.id,
+            text: msg.text || "",
+            date: msg.date,
+            isFromMe: msg.is_from_me === 1,
+            sender: msg.sender,
+          })),
         };
+      } catch (error) {
+        await dbClose();
+        throw error;
       }
-    }
+    }, { module: "ConversationHandlers" }),
   );
 
   // Open folder in Finder
   ipcMain.handle(
     "open-folder",
-    async (event: IpcMainInvokeEvent, folderPath: string) => {
-      try {
-        await shell.openPath(folderPath);
-        return { success: true };
-      } catch (error) {
-        logService.error("Error opening folder", "ConversationHandlers", { error, folderPath });
-        return { success: false, error: (error as Error).message };
-      }
-    }
+    wrapHandler(async (event: IpcMainInvokeEvent, folderPath: string) => {
+      await shell.openPath(folderPath);
+      return { success: true };
+    }, { module: "ConversationHandlers" }),
   );
 
   // Export conversations to files
   ipcMain.handle(
     "export-conversations",
-    async (event: IpcMainInvokeEvent, conversationIds: number[]) => {
-      try {
-        // Generate default folder name with timestamp
-        const now = new Date();
+    wrapHandler(async (event: IpcMainInvokeEvent, conversationIds: number[]) => {
+      // Generate default folder name with timestamp
+      const now = new Date();
         const timestamp = now
           .toLocaleString("en-US", {
             month: "2-digit",
@@ -648,13 +627,6 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
           await dbClose();
           throw error;
         }
-      } catch (error) {
-        logService.error("Error exporting conversations", "ConversationHandlers", { error });
-        return {
-          success: false,
-          error: (error as Error).message,
-        };
-      }
-    }
+    }, { module: "ConversationHandlers" }),
   );
 }
