@@ -15,6 +15,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { usePlatform } from "../../contexts/PlatformContext";
 import { useSyncOrchestrator } from "../../hooks/useSyncOrchestrator";
+import { settingsService } from '../../services';
 import logger from '../../utils/logger';
 
 /** Import progress state for inline display */
@@ -121,9 +122,9 @@ export function MacOSMessagesImportSettings({
   // TASK-1952: Load filter preferences from user preferences
   const loadFilterPreferences = async () => {
     try {
-      const result = await window.api.preferences.get(userId);
-      if (result?.success && result.preferences) {
-        const prefs = result.preferences as Record<string, unknown>;
+      const result = await settingsService.getPreferences(userId);
+      if (result?.success && result.data) {
+        const prefs = result.data as Record<string, unknown>;
         const messageImport = prefs.messageImport as
           | { filters?: { lookbackMonths?: number | null; maxMessages?: number | null } }
           | undefined;
@@ -144,7 +145,7 @@ export function MacOSMessagesImportSettings({
     setLastResult(null);
     setCapPromptForce(null);
     try {
-      await window.api.preferences.update(userId, {
+      await settingsService.updatePreferences(userId, {
         messageImport: {
           filters: {
             lookbackMonths: months,
@@ -163,7 +164,7 @@ export function MacOSMessagesImportSettings({
     setLastResult(null);
     setCapPromptForce(null);
     try {
-      await window.api.preferences.update(userId, {
+      await settingsService.updatePreferences(userId, {
         messageImport: {
           filters: {
             maxMessages: cap,
@@ -203,7 +204,7 @@ export function MacOSMessagesImportSettings({
       const previousMax = pendingCapRestoreRef.current;
       pendingCapRestoreRef.current = null;
       setMaxMessages(previousMax);
-      window.api.preferences.update(userId, {
+      settingsService.updatePreferences(userId, {
         messageImport: { filters: { maxMessages: previousMax } },
       }).catch(() => { /* Silently handle */ });
     }
@@ -218,7 +219,7 @@ export function MacOSMessagesImportSettings({
         pendingCapRestoreRef.current = maxMessages;
         setMaxMessages(null);
         try {
-          await window.api.preferences.update(userId, {
+          await settingsService.updatePreferences(userId, {
             messageImport: { filters: { maxMessages: null } },
           });
         } catch {

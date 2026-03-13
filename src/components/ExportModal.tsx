@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import type { Transaction } from "../../electron/types/models";
+import { settingsService, transactionService } from '../services';
 import logger from '../utils/logger';
 import { useFeatureGate } from "../hooks/useFeatureGate";
 import { UpgradePrompt } from "./common/UpgradePrompt";
@@ -77,9 +78,9 @@ function ExportModal({
     const loadDefaultFormat = async () => {
       if (userId) {
         try {
-          const result = await window.api.preferences.get(userId);
-          if (result.success && result.preferences) {
-            const prefs = result.preferences as {
+          const result = await settingsService.getPreferences(userId);
+          if (result.success && result.data) {
+            const prefs = result.data as {
               export?: { defaultFormat?: string; emailExportMode?: string };
             };
             // Only use saved preference if it's an implemented format
@@ -140,7 +141,7 @@ function ExportModal({
         closing_date_verified: 1,
       };
 
-      const updateResult = await window.api.transactions.update(transaction.id, updateData);
+      const updateResult = await transactionService.update(transaction.id, updateData);
 
       if (!updateResult.success) {
         setError(`Failed to save dates: ${updateResult.error}`);
@@ -210,7 +211,7 @@ function ExportModal({
   const handleCloseTransaction = async (shouldClose: boolean) => {
     if (shouldClose) {
       try {
-        await window.api.transactions.update(transaction.id, { status: "closed" });
+        await transactionService.update(transaction.id, { status: "closed" });
       } catch (err) {
         logger.error("Failed to close transaction:", err);
         // Continue to success screen even if closing fails
