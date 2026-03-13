@@ -14,7 +14,7 @@ import logger from '../utils/logger';
 
 // TASK-2044: Login retry configuration
 const LOGIN_RETRY_CONFIG = {
-  maxRetries: 3,
+  maxRetries: 0,
   baseDelayMs: 1000,
   maxDelayMs: 10000,
   /** Timeout for waiting for deep link callback (ms) */
