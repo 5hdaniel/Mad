@@ -8,7 +8,7 @@
  * Works for both authenticated and unauthenticated users.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { createTicket, getCategories, buildCategoryTree, uploadAttachment } from '@/lib/support-queries';
@@ -21,6 +21,7 @@ export function TicketForm() {
   const router = useRouter();
   const [categories, setCategories] = useState<SupportCategory[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
@@ -62,6 +63,9 @@ export function TicketForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
+    // Guard against double submission (React state is async)
+    if (submittingRef.current) return;
+
     if (subject.length < 3) {
       setError('Subject must be at least 3 characters');
       return;
@@ -71,6 +75,7 @@ export function TicketForm() {
       return;
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
     setError(null);
     setUploadProgress(null);
@@ -98,6 +103,7 @@ export function TicketForm() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit ticket');
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
       setUploadProgress(null);
     }
@@ -124,7 +130,7 @@ export function TicketForm() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             readOnly={isAuthenticated}
-            className={`w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+            className={`w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
               isAuthenticated ? 'bg-gray-50 text-gray-500' : ''
             }`}
             placeholder="John Doe"
@@ -141,46 +147,12 @@ export function TicketForm() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             readOnly={isAuthenticated}
-            className={`w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+            className={`w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
               isAuthenticated ? 'bg-gray-50 text-gray-500' : ''
             }`}
             placeholder="you@example.com"
           />
         </div>
-      </div>
-
-      {/* Subject */}
-      <div>
-        <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-1">
-          Subject <span className="text-red-500">*</span>
-        </label>
-        <input
-          id="subject"
-          type="text"
-          required
-          minLength={3}
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          placeholder="Brief summary of your issue"
-        />
-      </div>
-
-      {/* Description */}
-      <div>
-        <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
-          Description <span className="text-red-500">*</span>
-        </label>
-        <textarea
-          id="description"
-          required
-          minLength={3}
-          rows={5}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-          placeholder="Please describe your issue in detail..."
-        />
       </div>
 
       {/* Category & Priority */}
@@ -196,7 +168,7 @@ export function TicketForm() {
               setCategoryId(e.target.value);
               setSubcategoryId('');
             }}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="">Select a category...</option>
             {categories.map((cat) => (
@@ -215,7 +187,7 @@ export function TicketForm() {
             id="priority"
             value={priority}
             onChange={(e) => setPriority(e.target.value as TicketPriority)}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
             {(Object.entries(PRIORITY_LABELS) as [TicketPriority, string][]).map(
               ([key, label]) => (
@@ -238,7 +210,7 @@ export function TicketForm() {
             id="subcategory"
             value={subcategoryId}
             onChange={(e) => setSubcategoryId(e.target.value)}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="">Select a subcategory...</option>
             {selectedCategory.children.map((sub) => (
@@ -250,6 +222,47 @@ export function TicketForm() {
         </div>
       )}
 
+      {/* Compliance disclaimer */}
+      {disclaimer && (
+        <div className="bg-amber-50 border border-amber-200 rounded-md p-4">
+          <p className="text-sm text-amber-800">{disclaimer}</p>
+        </div>
+      )}
+
+      {/* Subject */}
+      <div>
+        <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-1">
+          Subject <span className="text-red-500">*</span>
+        </label>
+        <input
+          id="subject"
+          type="text"
+          required
+          minLength={3}
+          value={subject}
+          onChange={(e) => setSubject(e.target.value)}
+          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          placeholder="Brief summary of your issue"
+        />
+      </div>
+
+      {/* Description */}
+      <div>
+        <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
+          Description <span className="text-red-500">*</span>
+        </label>
+        <textarea
+          id="description"
+          required
+          minLength={3}
+          rows={5}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+          placeholder="Please describe your issue in detail..."
+        />
+      </div>
+
       {/* File Attachments */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -257,13 +270,6 @@ export function TicketForm() {
         </label>
         <FileUpload files={files} onFilesChange={setFiles} disabled={submitting} />
       </div>
-
-      {/* Compliance disclaimer */}
-      {disclaimer && (
-        <div className="bg-amber-50 border border-amber-200 rounded-md p-4">
-          <p className="text-sm text-amber-800">{disclaimer}</p>
-        </div>
-      )}
 
       {uploadProgress && (
         <div className="text-sm text-blue-600">{uploadProgress}</div>

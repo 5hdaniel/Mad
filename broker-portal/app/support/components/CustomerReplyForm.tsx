@@ -98,14 +98,14 @@ export function CustomerReplyForm({
               value={senderName}
               onChange={(e) => setSenderName(e.target.value)}
               placeholder="Your name"
-              className="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="border border-gray-300 rounded-md px-3 py-1.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <input
               type="email"
               value={senderEmail}
               onChange={(e) => setSenderEmail(e.target.value)}
               placeholder="Your email"
-              className="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="border border-gray-300 rounded-md px-3 py-1.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </div>
@@ -118,7 +118,7 @@ export function CustomerReplyForm({
           onKeyDown={handleKeyDown}
           rows={4}
           placeholder="Type your reply..."
-          className="w-full border-0 resize-none text-sm placeholder-gray-400 focus:outline-none focus:ring-0"
+          className="w-full border-0 resize-none text-sm text-gray-900 bg-white placeholder-gray-400 focus:outline-none focus:ring-0"
         />
 
         {/* File Upload */}

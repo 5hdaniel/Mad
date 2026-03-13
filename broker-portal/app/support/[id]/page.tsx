@@ -78,7 +78,7 @@ export default function CustomerTicketDetailPage() {
     );
   }
 
-  const { ticket, messages } = detail;
+  const { ticket, messages, attachments } = detail;
   const isClosed = ticket.status === 'closed';
   const isResolved = ticket.status === 'resolved';
 
@@ -125,6 +125,7 @@ export default function CustomerTicketDetailPage() {
       <div className="mb-6">
         <CustomerConversation
           messages={messages}
+          attachments={attachments}
           ticketDescription={ticket.description}
           requesterName={ticket.requester_name}
           requesterEmail={ticket.requester_email}

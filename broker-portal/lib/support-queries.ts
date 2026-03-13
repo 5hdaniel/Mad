@@ -116,7 +116,8 @@ export async function uploadAttachment(
 ): Promise<{ id: string; storage_path: string }> {
   const supabase = createClient();
   const attachmentId = crypto.randomUUID();
-  const storagePath = `${ticketId}/${attachmentId}/${file.name}`;
+  const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const storagePath = `${ticketId}/${attachmentId}/${sanitizedName}`;
 
   const { error: uploadError } = await supabase.storage
     .from('support-attachments')
@@ -142,4 +143,13 @@ export async function listAttachments(ticketId: string): Promise<SupportTicketAt
   });
   if (error) throw error;
   return (data ?? []) as unknown as SupportTicketAttachment[];
+}
+
+export async function getAttachmentUrl(storagePath: string): Promise<string> {
+  const supabase = createClient();
+  const { data, error } = await supabase.storage
+    .from('support-attachments')
+    .createSignedUrl(storagePath, 3600);
+  if (error) throw error;
+  return data.signedUrl;
 }

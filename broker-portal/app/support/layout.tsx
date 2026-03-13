@@ -3,17 +3,17 @@ import Link from 'next/link';
 /**
  * Support Section Layout - Broker Portal
  *
- * Standalone layout for the /support/* pages with "Keepr Support" branding.
+ * Standalone layout for the /support/* pages with "Keepr. Support" branding.
  * Accessible without authentication.
  */
 export default function SupportLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
           <Link href="/support" className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-gray-900">Keepr Support</span>
+            <span className="text-2xl font-bold text-gray-900">Keepr. Support</span>
           </Link>
           <nav className="flex items-center gap-4">
             <Link
@@ -33,7 +33,7 @@ export default function SupportLayout({ children }: { children: React.ReactNode 
       </header>
 
       {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 flex-1 w-full">
         {children}
       </main>
 
@@ -41,7 +41,7 @@ export default function SupportLayout({ children }: { children: React.ReactNode 
       <footer className="border-t border-gray-200 bg-white mt-auto">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4">
           <p className="text-xs text-gray-400 text-center">
-            Keepr Compliance &mdash; Product Support
+            Keepr. Compliance &mdash; Product Support
           </p>
         </div>
       </footer>

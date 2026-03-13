@@ -72,7 +72,7 @@ export interface TicketDetailResponse {
   ticket: SupportTicket;
   messages: SupportTicketMessage[];
   events: unknown[];
-  attachments: unknown[];
+  attachments: SupportTicketAttachment[];
   participants: unknown[];
 }
 

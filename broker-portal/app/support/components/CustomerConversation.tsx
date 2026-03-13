@@ -6,12 +6,16 @@
  * Displays conversation thread from the customer's perspective.
  * Internal notes are filtered out (defense-in-depth).
  * Customer messages vs agent messages have distinct styling.
+ * Attachments are shown inline with their associated messages.
  */
 
-import type { SupportTicketMessage } from '@/lib/support-types';
+import { useState } from 'react';
+import type { SupportTicketMessage, SupportTicketAttachment } from '@/lib/support-types';
+import { getAttachmentUrl } from '@/lib/support-queries';
 
 interface CustomerConversationProps {
   messages: SupportTicketMessage[];
+  attachments: SupportTicketAttachment[];
   ticketDescription: string;
   requesterName: string;
   requesterEmail: string;
@@ -30,8 +34,51 @@ function formatTimestamp(dateStr: string): string {
   });
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function AttachmentItem({ attachment }: { attachment: SupportTicketAttachment }) {
+  const [downloading, setDownloading] = useState(false);
+
+  async function handleDownload() {
+    setDownloading(true);
+    try {
+      const url = await getAttachmentUrl(attachment.storage_path);
+      window.open(url, '_blank');
+    } catch {
+      // Silently fail — user can retry
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  const isImage = attachment.file_type.startsWith('image/');
+
+  return (
+    <button
+      onClick={handleDownload}
+      disabled={downloading}
+      className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-md hover:bg-gray-100 transition-colors text-left w-full"
+    >
+      <span className="text-gray-400 text-sm shrink-0">
+        {isImage ? '🖼' : '📎'}
+      </span>
+      <span className="text-sm text-blue-600 hover:text-blue-700 truncate">
+        {attachment.file_name}
+      </span>
+      <span className="text-xs text-gray-400 shrink-0">
+        {formatFileSize(attachment.file_size)}
+      </span>
+    </button>
+  );
+}
+
 export function CustomerConversation({
   messages,
+  attachments,
   ticketDescription,
   requesterName,
   requesterEmail,
@@ -39,6 +86,18 @@ export function CustomerConversation({
 }: CustomerConversationProps) {
   // Filter out internal notes (defense-in-depth, RPC should already exclude them)
   const publicMessages = messages.filter((m) => m.message_type !== 'internal_note');
+
+  // Group attachments by message_id (null = ticket-level attachments)
+  const attachmentsByMessage = new Map<string | null, SupportTicketAttachment[]>();
+  for (const att of attachments) {
+    const key = att.message_id;
+    if (!attachmentsByMessage.has(key)) {
+      attachmentsByMessage.set(key, []);
+    }
+    attachmentsByMessage.get(key)!.push(att);
+  }
+
+  const ticketAttachments = attachmentsByMessage.get(null) || [];
 
   return (
     <div className="space-y-4">
@@ -51,6 +110,13 @@ export function CustomerConversation({
               <span className="text-xs text-gray-400 ml-3">{formatTimestamp(createdAt)}</span>
             </div>
             <div className="text-sm text-gray-700 whitespace-pre-wrap">{ticketDescription}</div>
+            {ticketAttachments.length > 0 && (
+              <div className="mt-3 space-y-1.5">
+                {ticketAttachments.map((att) => (
+                  <AttachmentItem key={att.id} attachment={att} />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -58,6 +124,7 @@ export function CustomerConversation({
       {/* Messages */}
       {publicMessages.map((message) => {
         const isCustomer = message.sender_email === requesterEmail;
+        const messageAttachments = attachmentsByMessage.get(message.id) || [];
 
         return (
           <div key={message.id} className={`flex ${isCustomer ? 'justify-end' : 'justify-start'}`}>
@@ -80,6 +147,13 @@ export function CustomerConversation({
                   </span>
                 </div>
                 <div className="text-sm text-gray-700 whitespace-pre-wrap">{message.body}</div>
+                {messageAttachments.length > 0 && (
+                  <div className="mt-3 space-y-1.5">
+                    {messageAttachments.map((att) => (
+                      <AttachmentItem key={att.id} attachment={att} />
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
