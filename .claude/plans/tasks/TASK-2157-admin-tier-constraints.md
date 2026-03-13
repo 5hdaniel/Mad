@@ -4,7 +4,7 @@
 **Backlog:** BACKLOG-930, BACKLOG-931
 **Phase:** Phase 1
 **Branch:** `feature/task-2157-admin-tier-constraints`
-**Status:** PR Ready
+**Status:** Completed
 **Estimated Effort:** ~30K tokens
 
 ---

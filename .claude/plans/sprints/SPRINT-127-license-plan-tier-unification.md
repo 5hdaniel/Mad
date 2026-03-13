@@ -1,7 +1,7 @@
 # SPRINT-127: License/Plan/Tier Unification (Phase 1-2)
 
 **Created:** 2026-03-12
-**Status:** Planning
+**Status:** Completed
 **Goal:** Consolidate Keepr's fragmented entitlement system into two clear layers (License = user access, Plan = org capabilities) with tier constraints as structural guardrails.
 
 ---
@@ -27,13 +27,14 @@ Phases 3-4 (schema cleanup and context unification) are planned for SPRINT-128 a
 
 | Task | Backlog | Title | Phase | Est. Tokens | Status |
 |------|---------|-------|-------|-------------|--------|
-| TASK-2156 | BACKLOG-930, BACKLOG-931 | Tier Constraints Schema + RPC Enforcement (incl. feature dependency rules) | Phase 1 | ~40K | Pending |
-| TASK-2157 | BACKLOG-930, BACKLOG-931 | Admin UI Tier Constraint Enforcement (incl. dependency UI) | Phase 1 | ~30K | Pending |
-| TASK-2158 | BACKLOG-930, BACKLOG-932 | New Feature Definitions (export, submission, AI, broker_portal_access) | Phase 2 | ~30K | Pending |
-| TASK-2159 | BACKLOG-930 | Move canExport/canSubmit to useFeatureGate | Phase 2 | ~40K | Pending |
-| TASK-2160 | BACKLOG-930 | Move transaction_limit and ai_detection to Plan Features | Phase 2 | ~25K | Pending |
+| TASK-2156 | BACKLOG-930, BACKLOG-931 | Tier Constraints Schema + RPC Enforcement (incl. feature dependency rules) | Phase 1 | ~40K | Completed |
+| TASK-2157 | BACKLOG-930, BACKLOG-931 | Admin UI Tier Constraint Enforcement (incl. dependency UI) | Phase 1 | ~30K | Completed |
+| TASK-2158 | BACKLOG-930, BACKLOG-932 | New Feature Definitions (export, submission, AI, broker_portal_access) | Phase 2 | ~30K | Completed |
+| TASK-2159 | BACKLOG-930 | Move canExport/canSubmit to useFeatureGate | Phase 2 | ~40K | Completed |
+| TASK-2160 | BACKLOG-930 | Move transaction_limit and ai_detection to Plan Features | Phase 2 | ~25K | Completed |
+| TASK-2161 | BACKLOG-930 | Add max_seats Feature Definition (integer, per-tier defaults) | Phase 1 | ~5K | Completed |
 
-**Total Engineer Estimate: ~165K tokens**
+**Total Engineer Estimate: ~170K tokens**
 
 ### Folded-In Backlog Items
 
@@ -106,7 +107,7 @@ The `custom` tier bypasses all constraints (fully configurable for special deals
 4. Migration: Set `min_tier` values for existing features:
    - `NULL` (all tiers): `text_export`, `email_export`, `iphone_sync`, `email_sync`, `max_transaction_size`
    - `team`: `broker_submission` (new), `team_management` (new), `multi_seat` (new), `text_attachments`, `email_attachments`, `call_log`, `voice_transcription`
-   - `enterprise`: `sso_login`, `custom_retention`, `dual_approval`
+   - `enterprise`: `sso_login`, `custom_retention`
 5. Create/update RPCs:
    - `admin_create_plan`: Enforce that plan features respect tier constraints AND feature dependency rules
    - `admin_update_plan_feature`: Reject enabling a feature whose `min_tier` exceeds the plan's tier; reject enabling a feature whose dependencies are not enabled
@@ -155,6 +156,23 @@ The `custom` tier bypasses all constraints (fully configurable for special deals
 - Enabling a feature auto-enables its dependencies (with confirmation dialog)
 - Disabling a feature warns if other enabled features depend on it
 - Admin portal builds and type-checks
+
+### TASK-2161: Add max_seats Feature Definition (~5K)
+
+**Scope:**
+1. Insert `max_seats` feature_definition: `key = 'max_seats'`, `category = 'access'`, `value_type = 'integer'`, `min_tier = NULL`
+2. Seed `plan_features` for all plans with per-tier defaults: Individual = 1, Team = 5, Enterprise = 50, Custom = 50
+
+**Files Modified:**
+- New Supabase migration file (single file)
+
+**Dependencies:** TASK-2156 must be merged (schema structure).
+
+**Testing:**
+- Migration applies cleanly
+- `max_seats` feature exists with `value_type = 'integer'`
+- All plans have correct default values
+- Admin portal already renders integer features with input fields (no UI changes needed)
 
 ---
 
@@ -270,6 +288,8 @@ TASK-2156 (Tier Constraints Schema + RPCs)       [Phase 1]
     |
     +---> TASK-2157 (Admin UI Tier Constraints)   [Phase 1]
     |
+    +---> TASK-2161 (max_seats Feature Definition) [Phase 1]
+    |
     +---> TASK-2158 (New Feature Definitions)     [Phase 2]
               |
               +---> TASK-2159 (canExport/canSubmit -> useFeatureGate)  [Phase 2]
@@ -282,7 +302,7 @@ TASK-2156 (Tier Constraints Schema + RPCs)       [Phase 1]
 | Batch | Tasks | Execution | Rationale |
 |-------|-------|-----------|-----------|
 | 1 | TASK-2156 | Sequential (solo) | Foundation schema -- everything depends on this |
-| 2 | TASK-2157, TASK-2158 | **Parallel** | TASK-2157 modifies admin-portal only; TASK-2158 modifies migration + electron + broker-portal. No shared files. |
+| 2 | TASK-2157, TASK-2158, TASK-2161 | **Parallel** | TASK-2157 modifies admin-portal only; TASK-2158 modifies migration + broker-portal; TASK-2161 is a standalone migration. No shared files. |
 | 3 | TASK-2159 | Sequential | Depends on TASK-2158 (new feature definitions must exist) |
 | 4 | TASK-2160 | Sequential | Depends on TASK-2159 (LicenseContext bridge must be in place) |
 
@@ -290,8 +310,9 @@ TASK-2156 (Tier Constraints Schema + RPCs)       [Phase 1]
 
 | Task | Files Modified | Overlap with Other? |
 |------|---------------|---------------------|
-| TASK-2157 | `admin-portal/app/dashboard/plans/*` | No -- TASK-2158 touches different admin-portal files (if any) or migration only |
-| TASK-2158 | New migration file, `electron/services/featureGateService.ts`, `broker-portal/` | No overlap with TASK-2157 |
+| TASK-2157 | `admin-portal/app/dashboard/plans/*` | No -- TASK-2158 and TASK-2161 touch different files |
+| TASK-2158 | New migration file, `broker-portal/` | No overlap with TASK-2157 or TASK-2161 |
+| TASK-2161 | New migration file (separate from TASK-2158) | No overlap -- each task creates its own migration file |
 
 **Verdict:** Safe for parallel execution.
 
@@ -301,11 +322,11 @@ TASK-2156 (Tier Constraints Schema + RPCs)       [Phase 1]
 
 | Category | Est. Tokens |
 |----------|-------------|
-| Phase 1 Engineer work (TASK-2156 + TASK-2157, incl. BACKLOG-931 dependency rules) | ~70K |
+| Phase 1 Engineer work (TASK-2156 + TASK-2157 + TASK-2161, incl. BACKLOG-931 dependency rules) | ~75K |
 | Phase 2 Engineer work (TASK-2158 + TASK-2159 + TASK-2160, incl. BACKLOG-932 broker gate) | ~95K |
-| SR Review (5 reviews x ~15K avg) | ~75K |
+| SR Review (6 reviews x ~15K avg) | ~90K |
 | PM overhead | ~10K |
-| **Total Sprint** | **~250K** |
+| **Total Sprint** | **~270K** |
 
 ### Estimation Basis
 
@@ -328,6 +349,7 @@ TASK-2156 (Tier Constraints Schema + RPCs)       [Phase 1]
   - `feature/task-2158-new-feature-definitions`
   - `feature/task-2159-export-submit-feature-gate`
   - `feature/task-2160-txn-limit-ai-plan-features`
+  - `feature/task-2161-max-seats-feature-definition`
 - Merge order follows dependency graph strictly
 
 ---
@@ -367,6 +389,7 @@ TASK-2156 (Tier Constraints Schema + RPCs)       [Phase 1]
 | Feature dependency enforcement (UI) | Admin portal greys out features with unmet dependencies; auto-enables dependencies on confirmation | TASK-2157 |
 | Broker portal access gate | `broker_portal_access` feature controls entire portal; dashboard and submissions pages show blocked message when disabled | TASK-2158 |
 | Broker portal access defaults | Existing team/enterprise plans have `broker_portal_access` enabled after migration | TASK-2158 |
+| max_seats feature definition | `max_seats` exists as integer feature with correct per-tier values (1/5/50) | TASK-2161 |
 | CI gates | Type-check, lint, test suite pass | All tasks |
 
 ---
@@ -393,12 +416,111 @@ For planning purposes, these are the follow-on tasks:
 
 ---
 
+## QA Results (Batch 3: TASK-2159)
+
+**QA Completed:** 2026-03-12
+**Tasks Covered:** TASK-2159 (PR #1132)
+**Pass Rate:** 7/7 (100%)
+
+### Issues Found
+
+None.
+
+### Observations
+
+- TEST-127-012 required a live plan switch (Izzyrescue to Individual and back to Team) to exercise the negative gate case. The plan switch took effect after app restart, which is expected behavior.
+- The `if (loading && !hasInitialized)` flicker guard was confirmed working — gated content is stable on navigation after initial load.
+- All four AI gate surfaces (TransactionToolbar, TransactionStatusWrapper, SyncStatusIndicator, Settings tab bar) are consistent with each other for the same session.
+- Fail-open behavior (unknown features default to allowed) was not explicitly exercised; covered by existing SPRINT-126 tests.
+- No production orgs are on Individual plan — Individual-plan behavior was tested via temporary plan switch, consistent with Batch 2 approach.
+
+### Recommendation
+
+PR #1132 is clear to merge. TASK-2160 (transaction_limit and ai_detection migration) may now proceed.
+
+---
+
+## QA Results (Batch 2)
+
+**QA Completed:** 2026-03-12
+**Tasks Covered:** TASK-2157 (PR #1129), TASK-2158 (PR #1130)
+**Pass Rate:** 10/10 (100%)
+
+### Issues Found
+
+| Test | Issue | Fix | PRs |
+|------|-------|-----|-----|
+| TEST-127-004 | `feature_dependencies` query selected non-existent `id` column — silent failure, no deps loaded | Removed `id` from SELECT | PR #1129 |
+| TEST-127-005 | Features with tier-locked dependencies could trigger auto-enable of tier-locked deps | Added "Blocked by tier" badge; fully locks features with unresolvable dep chain | PR #1129 |
+| TEST-127-007 | Tier downgrade RPC error returned raw error code, not human-readable message | RPC error messages now surfaced as readable text with conflicting feature list | PR #1129 |
+
+### Deferred / Out of Scope
+
+| Item | Reason |
+|------|--------|
+| Testing broker_portal_access block with a real Individual-plan org (production data) | No production orgs on Individual plan exist yet — tested via temporary plan swap |
+| `dual_approval` feature | Removed from DB per user request before QA |
+
+### Observations
+
+- All orgs in production are on Team or Enterprise plans. The Individual plan has no orgs assigned. A backlog item was created to prevent assigning Individual plans to organizations directly.
+- The broker portal feature key rename (text_export → broker_text_view etc.) was transparent to end users — no visible regressions.
+- Fail-open policy (feature gate system down = access allowed) was not explicitly exercised; covered by existing SPRINT-126 tests.
+
+---
+
 ## Task Files
 
-Task files will be created before sprint execution begins. The estimates above serve as the basis for task file authoring.
+- `.claude/plans/tasks/TASK-2156-tier-constraints-schema.md`
+- `.claude/plans/tasks/TASK-2157-admin-tier-constraints.md`
+- `.claude/plans/tasks/TASK-2158-new-feature-definitions.md`
+- TASK-2159 documented in sprint plan (no separate task file)
+- `.claude/plans/tasks/TASK-2160-txn-limit-ai-plan-features.md`
+- `.claude/plans/tasks/TASK-2161-max-seats-feature-definition.md`
 
-- `.claude/plans/tasks/TASK-2156-tier-constraints-schema.md` (to be created)
-- `.claude/plans/tasks/TASK-2157-admin-tier-constraints.md` (to be created)
-- `.claude/plans/tasks/TASK-2158-new-feature-definitions.md` (to be created)
-- `.claude/plans/tasks/TASK-2159-export-submit-feature-gate.md` (to be created)
-- `.claude/plans/tasks/TASK-2160-txn-limit-ai-plan-features.md` (to be created)
+---
+
+## Sprint Summary
+
+**Completed:** 2026-03-13
+**Total Tasks:** 6 (all completed)
+**Total PRs:** 6 (all merged)
+**QA Pass Rate:** 100% across all batches
+
+### Key Deliverables
+
+1. **Tier constraints schema and RPC enforcement** -- `min_tier` column on `feature_definitions`, `tier_rank()` function, server-side enforcement in `admin_create_plan`, `admin_update_plan_feature`, and new `admin_update_plan_tier` RPCs. Tier hierarchy: individual < team < enterprise < custom.
+
+2. **Feature dependency system** (BACKLOG-931) -- `feature_dependencies` junction table with BFS-based circular dependency prevention trigger. 8 initial dependency rules seeded (attachments depend on views/exports, broker features depend on `broker_portal_access`).
+
+3. **Admin UI tier constraint and dependency visualization** (TASK-2157) -- Locked features with tooltips, platform-grouped export/attachment keys (Broker Portal vs Desktop App sections), auto-enable/disable confirmation dialogs for dependencies, tier change rejection with conflicting feature list.
+
+4. **New feature definitions** (TASK-2158) -- `desktop_text_export`, `desktop_email_export`, `desktop_text_attachments`, `desktop_email_attachments`, `broker_submission`, `team_management`, `multi_seat`, `ai_detection`, `broker_portal_access`. Feature key renames: `text_export` to `broker_text_view`, etc.
+
+5. **Broker portal access gate** (BACKLOG-932) -- `broker_portal_access` feature controls org-level data visibility on submissions list and detail pages. Existing team/enterprise plans have it enabled by default.
+
+6. **canExport/canSubmit/hasAIAddon migration** (TASK-2159) -- LicenseContext now derives `canExport` from `useFeatureGate('local_export')`, `canSubmit` from `useFeatureGate('broker_submission')`, and `canAutoDetect` from `useFeatureGate('ai_detection')`. Backward-compatible interface maintained.
+
+7. **transaction_limit and ai_detection plan feature migration** (TASK-2160) -- `transactionLimit` and `hasAIAddon` in LicenseContext now read from plan features first (`max_transactions`, `ai_detection`) with fallback to license columns. Admin portal shows legacy indicators.
+
+8. **max_seats feature definition** (TASK-2161) -- Integer feature with per-tier defaults: Individual=1, Team=5, Enterprise=50.
+
+### Issues Encountered
+
+- **TASK-2157 QA (Batch 2):** Three issues found and fixed within the PR -- `feature_dependencies` query selected non-existent `id` column, tier-locked dependencies could trigger auto-enable of tier-locked deps, and tier downgrade RPC error returned raw error code. All resolved before merge.
+- **TASK-2159 QA (Batch 3):** `LicenseGate` loading state regression discovered during refresh -- fixed with a `hasInitialized` flicker guard (`if (loading && !hasInitialized)`).
+- No issues on other tasks.
+
+### Backlog Items Completed
+
+| Backlog | Title | Resolved Via |
+|---------|-------|-------------|
+| BACKLOG-930 | License/Plan/Tier Unification (Phases 1-2) | All 6 tasks |
+| BACKLOG-931 | Feature dependency rules | TASK-2156 (schema) + TASK-2157 (admin UI) |
+| BACKLOG-932 | Broker portal access gate | TASK-2158 |
+
+### Next Steps
+
+Phases 3-4 are planned for SPRINT-128:
+- Phase 3: Drop `organizations.plan` column, deprecate `subscription_tier` and `license_type` columns, move API rate limits to plan-based
+- Phase 4: Create `useEntitlements()` hook, simplify `licenses` table, auto-assign Personal plan, remove `license_type` from local SQLite
