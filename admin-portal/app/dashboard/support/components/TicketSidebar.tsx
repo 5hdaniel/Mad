@@ -4,25 +4,35 @@
  * TicketSidebar - Support Ticket Detail
  *
  * Right sidebar showing ticket metadata: status, priority, category,
- * assignee, requester info, timestamps. Includes controls for
- * status transitions, assignment, and priority changes.
+ * assignee, requester info, timestamps, participants, and events.
+ * Includes controls for status transitions, assignment, and priority changes.
  */
 
 import { useState, useEffect } from 'react';
 import { User, Calendar, Tag, AlertCircle } from 'lucide-react';
 import { updateTicketStatus, assignTicket, getAssignableAgents } from '@/lib/support-queries';
 import type { AssignableAgent } from '@/lib/support-queries';
-import type { SupportTicket, TicketStatus, TicketPriority, PendingReason } from '@/lib/support-types';
+import type {
+  SupportTicket,
+  TicketStatus,
+  TicketPriority,
+  PendingReason,
+  SupportTicketParticipant,
+  SupportTicketEvent,
+} from '@/lib/support-types';
 import {
   ALLOWED_TRANSITIONS,
   STATUS_LABELS,
-  PRIORITY_LABELS,
 } from '@/lib/support-types';
 import { StatusBadge } from './StatusBadge';
 import { PriorityBadge } from './PriorityBadge';
+import { ParticipantsPanel } from './ParticipantsPanel';
+import { EventsTimeline } from './EventsTimeline';
 
 interface TicketSidebarProps {
   ticket: SupportTicket;
+  participants: SupportTicketParticipant[];
+  events: SupportTicketEvent[];
   onTicketUpdated: () => void;
 }
 
@@ -37,14 +47,16 @@ function formatDate(dateStr: string): string {
   });
 }
 
-export function TicketSidebar({ ticket, onTicketUpdated }: TicketSidebarProps) {
+export function TicketSidebar({ ticket, participants, events, onTicketUpdated }: TicketSidebarProps) {
   const [agents, setAgents] = useState<AssignableAgent[]>([]);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [updatingAssignee, setUpdatingAssignee] = useState(false);
-  const [updatingPriority, setUpdatingPriority] = useState(false);
   const [showPendingReason, setShowPendingReason] = useState(false);
   const [pendingReason, setPendingReason] = useState<PendingReason>('customer');
   const [error, setError] = useState<string | null>(null);
+
+  // Suppress unused variable warnings for phase-1 features not yet wired
+  void updatingAssignee;
 
   useEffect(() => {
     getAssignableAgents().then(setAgents).catch(() => {});
@@ -95,15 +107,6 @@ export function TicketSidebar({ ticket, onTicketUpdated }: TicketSidebarProps) {
     } finally {
       setUpdatingAssignee(false);
     }
-  }
-
-  async function handlePriorityChange(newPriority: TicketPriority) {
-    // Priority changes use direct update -- for now we'll call updateTicketStatus
-    // Actually, priority is not changed via the status RPC. We need to just note this.
-    // For Phase 1 we'll skip direct priority change since there's no RPC for it.
-    // This is handled in the RPC layer. For now, show the priority but don't allow change.
-    setUpdatingPriority(false);
-    void newPriority; // unused for now
   }
 
   return (
@@ -190,7 +193,6 @@ export function TicketSidebar({ ticket, onTicketUpdated }: TicketSidebarProps) {
         <select
           value={ticket.assignee_id || ''}
           onChange={(e) => handleAssigneeChange(e.target.value)}
-          disabled={updatingAssignee}
           className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
         >
           <option value="">Unassigned</option>
@@ -231,6 +233,16 @@ export function TicketSidebar({ ticket, onTicketUpdated }: TicketSidebarProps) {
           </div>
         </div>
       </div>
+
+      {/* Participants */}
+      <ParticipantsPanel
+        ticketId={ticket.id}
+        participants={participants}
+        onUpdated={onTicketUpdated}
+      />
+
+      {/* Events Timeline */}
+      <EventsTimeline events={events} />
 
       {/* Timestamps */}
       <div className="px-4 py-3">

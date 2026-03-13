@@ -3,7 +3,7 @@
 /**
  * TicketForm - Customer Ticket Submission
  *
- * Form for submitting a new support ticket.
+ * Form for submitting a new support ticket with file attachments.
  * Auto-fills name/email if user is authenticated.
  * Works for both authenticated and unauthenticated users.
  */
@@ -11,9 +11,11 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { createTicket, getCategories, buildCategoryTree } from '@/lib/support-queries';
+import { createTicket, getCategories, buildCategoryTree, uploadAttachment } from '@/lib/support-queries';
 import type { TicketPriority, SupportCategory } from '@/lib/support-types';
 import { PRIORITY_LABELS } from '@/lib/support-types';
+import { FileUpload } from './FileUpload';
+import type { PendingFile } from './FileUpload';
 
 export function TicketForm() {
   const router = useRouter();
@@ -21,6 +23,7 @@ export function TicketForm() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
 
   // Form state
   const [name, setName] = useState('');
@@ -30,6 +33,9 @@ export function TicketForm() {
   const [priority, setPriority] = useState<TicketPriority>('normal');
   const [categoryId, setCategoryId] = useState('');
   const [subcategoryId, setSubcategoryId] = useState('');
+  const [files, setFiles] = useState<PendingFile[]>([]);
+
+  const validFiles = files.filter((f) => !f.error);
 
   // Load categories and check auth
   useEffect(() => {
@@ -67,9 +73,10 @@ export function TicketForm() {
 
     setSubmitting(true);
     setError(null);
+    setUploadProgress(null);
 
     try {
-      await createTicket({
+      const result = await createTicket({
         subject,
         description,
         priority,
@@ -78,11 +85,21 @@ export function TicketForm() {
         category_id: categoryId || undefined,
         subcategory_id: subcategoryId || undefined,
       });
+
+      // Upload attachments after ticket is created
+      if (validFiles.length > 0) {
+        for (let i = 0; i < validFiles.length; i++) {
+          setUploadProgress(`Uploading ${i + 1}/${validFiles.length}...`);
+          await uploadAttachment(result.id, validFiles[i].file);
+        }
+      }
+
       router.push('/support?success=true');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit ticket');
     } finally {
       setSubmitting(false);
+      setUploadProgress(null);
     }
   }
 
@@ -233,11 +250,23 @@ export function TicketForm() {
         </div>
       )}
 
+      {/* File Attachments */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Attachments
+        </label>
+        <FileUpload files={files} onFilesChange={setFiles} disabled={submitting} />
+      </div>
+
       {/* Compliance disclaimer */}
       {disclaimer && (
         <div className="bg-amber-50 border border-amber-200 rounded-md p-4">
           <p className="text-sm text-amber-800">{disclaimer}</p>
         </div>
+      )}
+
+      {uploadProgress && (
+        <div className="text-sm text-blue-600">{uploadProgress}</div>
       )}
 
       {/* Submit */}
@@ -247,7 +276,7 @@ export function TicketForm() {
           disabled={submitting}
           className="w-full sm:w-auto px-6 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          {submitting ? 'Submitting...' : 'Submit Ticket'}
+          {submitting ? (uploadProgress || 'Submitting...') : 'Submit Ticket'}
         </button>
       </div>
     </form>

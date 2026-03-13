@@ -11,6 +11,7 @@ import type {
   TicketDetailResponse,
   TicketPriority,
   SupportCategory,
+  SupportTicketAttachment,
 } from './support-types';
 
 export async function listTickets(
@@ -104,4 +105,41 @@ export function buildCategoryTree(categories: SupportCategory[]): SupportCategor
       .filter((c) => c.parent_id === parent.id)
       .sort((a, b) => a.sort_order - b.sort_order),
   }));
+}
+
+// --- Attachment functions ---
+
+export async function uploadAttachment(
+  ticketId: string,
+  file: File,
+  messageId?: string
+): Promise<{ id: string; storage_path: string }> {
+  const supabase = createClient();
+  const attachmentId = crypto.randomUUID();
+  const storagePath = `${ticketId}/${attachmentId}/${file.name}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('support-attachments')
+    .upload(storagePath, file, { contentType: file.type, upsert: false });
+  if (uploadError) throw uploadError;
+
+  const { data, error } = await supabase.rpc('support_add_attachment', {
+    p_ticket_id: ticketId,
+    p_message_id: messageId || null,
+    p_file_name: file.name,
+    p_file_size: file.size,
+    p_file_type: file.type,
+    p_storage_path: storagePath,
+  });
+  if (error) throw error;
+  return data as unknown as { id: string; storage_path: string };
+}
+
+export async function listAttachments(ticketId: string): Promise<SupportTicketAttachment[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_list_attachments', {
+    p_ticket_id: ticketId,
+  });
+  if (error) throw error;
+  return (data ?? []) as unknown as SupportTicketAttachment[];
 }

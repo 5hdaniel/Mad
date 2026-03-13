@@ -4,6 +4,7 @@
  * Support Dashboard - Ticket Queue Page
  *
  * Main support page at /dashboard/support showing:
+ * - Search bar (full-text search via tsvector)
  * - Stats cards (open, unassigned, urgent)
  * - Filter bar (status, priority, category)
  * - Ticket table with pagination
@@ -22,6 +23,7 @@ import { StatsCards } from './components/StatsCards';
 import { TicketFilters } from './components/TicketFilters';
 import { TicketTable } from './components/TicketTable';
 import { CreateTicketDialog } from './components/CreateTicketDialog';
+import { SearchBar } from './components/SearchBar';
 
 export default function SupportPage() {
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
@@ -35,6 +37,7 @@ export default function SupportPage() {
   const [statusFilter, setStatusFilter] = useState<TicketStatus | null>(null);
   const [priorityFilter, setPriorityFilter] = useState<TicketPriority | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const pageSize = 20;
 
@@ -45,6 +48,7 @@ export default function SupportPage() {
         status: statusFilter,
         priority: priorityFilter,
         category_id: categoryFilter,
+        search: searchQuery || undefined,
         page,
         page_size: pageSize,
       });
@@ -56,7 +60,7 @@ export default function SupportPage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, priorityFilter, categoryFilter, page]);
+  }, [statusFilter, priorityFilter, categoryFilter, searchQuery, page]);
 
   useEffect(() => {
     loadTickets();
@@ -78,6 +82,11 @@ export default function SupportPage() {
     setPage(1);
   }
 
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+    setPage(1);
+  }, []);
+
   return (
     <div className="max-w-7xl mx-auto">
       {/* Header */}
@@ -97,6 +106,11 @@ export default function SupportPage() {
 
       {/* Stats Cards */}
       <StatsCards />
+
+      {/* Search Bar */}
+      <div className="mb-4">
+        <SearchBar onSearch={handleSearch} />
+      </div>
 
       {/* Filters */}
       <div className="mb-4">

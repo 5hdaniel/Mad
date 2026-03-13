@@ -36,6 +36,18 @@ export interface SupportTicketMessage {
   created_at: string;
 }
 
+export interface SupportTicketAttachment {
+  id: string;
+  ticket_id: string;
+  message_id: string | null;
+  file_name: string;
+  file_size: number;
+  file_type: string;
+  storage_path: string;
+  uploaded_by: string | null;
+  created_at: string;
+}
+
 export interface SupportCategory {
   id: string;
   name: string;

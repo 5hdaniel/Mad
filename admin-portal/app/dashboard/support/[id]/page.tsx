@@ -4,7 +4,8 @@
  * Ticket Detail Page - Agent Dashboard
  *
  * Two-column layout: conversation thread (left) + sidebar (right).
- * Shows ticket detail, messages, reply composer, status/assignment controls.
+ * Shows ticket detail, messages, attachments, reply composer,
+ * status/assignment controls, participants, and events.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -16,6 +17,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { ConversationThread } from '../components/ConversationThread';
 import { ReplyComposer } from '../components/ReplyComposer';
 import { TicketSidebar } from '../components/TicketSidebar';
+import { AttachmentList } from '../components/AttachmentList';
 
 export default function TicketDetailPage() {
   const params = useParams();
@@ -86,7 +88,7 @@ export default function TicketDetailPage() {
     );
   }
 
-  const { ticket, messages } = detail;
+  const { ticket, messages, attachments, participants, events } = detail;
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -120,6 +122,15 @@ export default function TicketDetailPage() {
             requesterEmail={ticket.requester_email}
             createdAt={ticket.created_at}
           />
+
+          {/* Ticket-level attachments */}
+          {attachments.length > 0 && (
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <h3 className="text-sm font-medium text-gray-700 mb-2">Attachments</h3>
+              <AttachmentList attachments={attachments} />
+            </div>
+          )}
+
           <div ref={threadEndRef} />
 
           {/* Reply Composer */}
@@ -128,7 +139,12 @@ export default function TicketDetailPage() {
 
         {/* Right: Sidebar */}
         <div>
-          <TicketSidebar ticket={ticket} onTicketUpdated={loadDetail} />
+          <TicketSidebar
+            ticket={ticket}
+            participants={participants}
+            events={events}
+            onTicketUpdated={loadDetail}
+          />
         </div>
       </div>
     </div>
