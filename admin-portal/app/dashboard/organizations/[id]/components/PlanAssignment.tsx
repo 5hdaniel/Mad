@@ -10,7 +10,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { CreditCard, ArrowRight } from 'lucide-react';
-import { assignOrgPlan, getOrgPlan, getActivePlans, type Plan, type OrganizationPlan } from '@/lib/admin-queries';
+import { assignOrgPlan, getOrgPlan, getActivePlansForOrgs, type Plan, type OrganizationPlan } from '@/lib/admin-queries';
 import { ConfirmationDialog } from '@/components/shared/ConfirmationDialog';
 import { formatDate } from '@/lib/format';
 
@@ -33,7 +33,7 @@ export function PlanAssignment({ organizationId, canManage }: PlanAssignmentProp
       setLoading(true);
       const [orgPlanResult, plansResult] = await Promise.all([
         getOrgPlan(organizationId),
-        getActivePlans(),
+        getActivePlansForOrgs(),
       ]);
 
       if (orgPlanResult.data) {
@@ -61,7 +61,10 @@ export function PlanAssignment({ organizationId, canManage }: PlanAssignmentProp
     const result = await assignOrgPlan(organizationId, selectedPlanId);
 
     if (result.error) {
-      setError(result.error.message);
+      const message = result.error.message === 'individual_plan_cannot_be_assigned_to_org'
+        ? 'Individual plans cannot be assigned to organizations. Use Team, Enterprise, or Custom plans.'
+        : result.error.message;
+      setError(message);
       setSaving(false);
       return;
     }
