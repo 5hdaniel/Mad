@@ -34,6 +34,18 @@ jest.mock("../../contexts/LicenseContext", () => ({
   }),
 }));
 
+// TASK-2159: Mock useFeatureGate (LicenseGate now uses this internally)
+const mockIsAllowed = jest.fn();
+jest.mock("@/hooks/useFeatureGate", () => ({
+  useFeatureGate: () => ({
+    isAllowed: mockIsAllowed,
+    features: {},
+    loading: false,
+    hasInitialized: true,
+    refresh: jest.fn(),
+  }),
+}));
+
 jest.mock("../../contexts/NetworkContext", () => ({
   useNetwork: () => ({
     isOnline: true,
@@ -100,6 +112,9 @@ describe("TransactionList", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+
+    // Allow all features by default
+    mockIsAllowed.mockReturnValue(true);
 
     // Default mock: return transactions with different detection statuses
     window.api.transactions.getAll.mockResolvedValue({
