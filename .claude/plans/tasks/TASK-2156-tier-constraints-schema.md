@@ -4,7 +4,7 @@
 **Backlog:** BACKLOG-930, BACKLOG-931
 **Phase:** Phase 1
 **Branch:** `feature/task-2156-tier-constraints-schema`
-**Status:** Pending
+**Status:** Completed
 **Estimated Effort:** ~50K tokens (adjusted per SR review)
 
 ---

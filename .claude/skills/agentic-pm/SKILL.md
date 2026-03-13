@@ -42,6 +42,16 @@ When executing sprint tasks, PM is responsible for these steps:
 1. `.claude/plans/backlog/data/backlog.csv` — status column (source of truth)
 2. `.claude/plans/backlog/items/BACKLOG-XXX.md` — if detail file exists, update status there too
 3. `.claude/plans/sprints/SPRINT-XXX.md` — In-Scope table Status column
+4. `.claude/plans/tasks/TASK-XXX.md` — update `Status:` field in the task file frontmatter
+
+**Sprint Close Checklist (Step 15):**
+1. Update ALL individual task files to `Status: Completed`
+2. Update parent backlog item(s) to `Completed` with completion date
+3. Update sprint file status to `Completed`
+4. Clean up worktrees (`git worktree remove` + `git worktree prune`)
+5. Check for orphaned PRs: `gh pr list --state open`
+6. Switch main repo back to develop: `git checkout develop && git pull`
+7. Write sprint summary (tasks, PRs, key deliverables, issues)
 
 **Handoff Protocol:** Use the handoff message template from `.claude/skills/agent-handoff/templates/`.
 
