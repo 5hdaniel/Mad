@@ -16,6 +16,7 @@ import { syncStatusService } from "./syncStatusService";
 import { getDeviceId } from "./deviceService";
 import failureLogService from "./failureLogService";
 import sessionService from "./sessionService";
+import connectionStatusService from "./connectionStatusService";
 import logService from "./logService";
 
 /**
@@ -136,12 +137,10 @@ export async function collectDiagnostics(): Promise<AppDiagnostics> {
   try {
     const session = await sessionService.loadSession();
     if (session?.user?.id) {
-      // Check connection status from session metadata if available
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sessionAny = session as any;
+      const connectionStatus = await connectionStatusService.checkAllConnections(session.user.id);
       diagnostics.email_connections = {
-        google: !!sessionAny.googleConnected,
-        microsoft: !!sessionAny.microsoftConnected,
+        google: connectionStatus.google.connected,
+        microsoft: connectionStatus.microsoft.connected,
       };
     }
   } catch {
@@ -165,7 +164,7 @@ export async function collectDiagnostics(): Promise<AppDiagnostics> {
     const failures = await failureLogService.getRecentFailures(10);
     diagnostics.recent_errors = failures.map((f) => ({
       operation: f.operation,
-      error_message: sanitizeString(f.error_message, 200),
+      error_message: f.error_message,
       timestamp: f.timestamp,
     }));
   } catch {

@@ -87,6 +87,19 @@ jest.mock("../sessionService", () => ({
   },
 }));
 
+// Mock connectionStatusService
+jest.mock("../connectionStatusService", () => ({
+  __esModule: true,
+  default: {
+    checkAllConnections: jest.fn().mockResolvedValue({
+      google: { connected: false, lastCheck: Date.now(), error: null },
+      microsoft: { connected: false, lastCheck: Date.now(), error: null },
+      allConnected: false,
+      anyConnected: false,
+    }),
+  },
+}));
+
 // Mock logService
 jest.mock("../logService", () => ({
   debug: jest.fn(),
