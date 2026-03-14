@@ -2321,6 +2321,70 @@ export interface WindowApi {
     /** Invalidate the feature gate cache */
     invalidateCache: () => Promise<void>;
   };
+
+  // Support Ticket API (TASK-2180)
+  support: {
+    /** Collect app diagnostics (PII-safe) */
+    collectDiagnostics: () => Promise<{
+      success: boolean;
+      diagnostics?: {
+        app_version: string;
+        electron_version: string;
+        os_platform: string;
+        os_version: string;
+        os_arch: string;
+        node_version: string;
+        db_initialized: boolean;
+        db_encrypted: boolean;
+        sync_status: { is_running: boolean; current_operation: string | null };
+        email_connections: { google: boolean; microsoft: boolean };
+        memory_usage: { rss: number; heap_used: number; heap_total: number };
+        recent_errors: Array<{ operation: string; error_message: string; timestamp: string }>;
+        device_id: string;
+        uptime_seconds: number;
+        collected_at: string;
+      };
+      error?: string;
+    }>;
+    /** Capture a screenshot */
+    captureScreenshot: () => Promise<{
+      success: boolean;
+      screenshot?: string | null;
+      error?: string;
+    }>;
+    /** Get support categories */
+    getCategories: () => Promise<{
+      success: boolean;
+      categories?: Array<{
+        id: string;
+        name: string;
+        slug: string;
+        description: string | null;
+        parent_id: string | null;
+        sort_order: number;
+        is_active: boolean;
+      }>;
+      error?: string;
+    }>;
+    /** Submit a support ticket */
+    submitTicket: (
+      params: {
+        subject: string;
+        description: string;
+        priority: string;
+        category_id: string | null;
+        requester_email: string;
+        requester_name: string;
+      },
+      screenshotBase64: string | null,
+      diagnosticsData: Record<string, unknown> | null
+    ) => Promise<{
+      success: boolean;
+      ticket_id?: string;
+      ticket_number?: number;
+      error?: string;
+    }>;
+  };
 }
 
 // Augment Window interface
