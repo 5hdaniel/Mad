@@ -8,7 +8,7 @@
  * Works for both authenticated and unauthenticated users.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { createTicket, getCategories, buildCategoryTree, uploadAttachment } from '@/lib/support-queries';
@@ -16,6 +16,8 @@ import type { TicketPriority, SupportCategory } from '@/lib/support-types';
 import { PRIORITY_LABELS } from '@/lib/support-types';
 import { FileUpload } from './FileUpload';
 import type { PendingFile } from './FileUpload';
+import { useBrowserDiagnostics, BrowserDiagnostics } from './BrowserDiagnostics';
+import { ScreenshotPaste } from './ScreenshotPaste';
 
 export function TicketForm() {
   const router = useRouter();
@@ -25,6 +27,14 @@ export function TicketForm() {
   const [error, setError] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+
+  // Browser diagnostics (best-effort)
+  const diagnostics = useBrowserDiagnostics();
+
+  // Screenshot paste state
+  const [screenshot, setScreenshot] = useState<File | null>(null);
+  const handleScreenshot = useCallback((file: File) => setScreenshot(file), []);
+  const removeScreenshot = useCallback(() => setScreenshot(null), []);
 
   // Form state
   const [name, setName] = useState('');
@@ -96,6 +106,27 @@ export function TicketForm() {
         for (let i = 0; i < validFiles.length; i++) {
           setUploadProgress(`Uploading ${i + 1}/${validFiles.length}...`);
           await uploadAttachment(result.id, validFiles[i].file);
+        }
+      }
+
+      // Upload diagnostics as JSON attachment (best-effort)
+      if (diagnostics) {
+        try {
+          const diagnosticsBlob = new Blob([JSON.stringify(diagnostics, null, 2)], { type: 'application/json' });
+          const diagnosticsFile = new File([diagnosticsBlob], 'browser-diagnostics.json', { type: 'application/json' });
+          await uploadAttachment(result.id, diagnosticsFile);
+        } catch {
+          // Diagnostics upload failure should not block ticket submission
+        }
+      }
+
+      // Upload pasted screenshot (best-effort)
+      if (screenshot) {
+        try {
+          setUploadProgress('Uploading screenshot...');
+          await uploadAttachment(result.id, screenshot);
+        } catch {
+          // Screenshot upload failure should not block ticket submission
         }
       }
 
@@ -263,6 +294,14 @@ export function TicketForm() {
         />
       </div>
 
+      {/* Screenshot Paste */}
+      <ScreenshotPaste
+        onScreenshot={handleScreenshot}
+        screenshot={screenshot}
+        onRemove={removeScreenshot}
+        disabled={submitting}
+      />
+
       {/* File Attachments */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -270,6 +309,9 @@ export function TicketForm() {
         </label>
         <FileUpload files={files} onFilesChange={setFiles} disabled={submitting} />
       </div>
+
+      {/* Browser Diagnostics */}
+      <BrowserDiagnostics diagnostics={diagnostics} />
 
       {uploadProgress && (
         <div className="text-sm text-blue-600">{uploadProgress}</div>
