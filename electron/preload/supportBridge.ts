@@ -1,0 +1,111 @@
+/**
+ * Support Bridge
+ * TASK-2180: Desktop In-App Support Ticket Dialog with Diagnostics
+ *
+ * Exposes support ticket IPC methods to the renderer process.
+ */
+
+import { ipcRenderer } from "electron";
+
+/** Parameters for creating a support ticket */
+interface CreateTicketParams {
+  subject: string;
+  description: string;
+  priority: string;
+  category_id: string | null;
+  requester_email: string;
+  requester_name: string;
+}
+
+/** Diagnostics data shape (must match main process type) */
+interface AppDiagnostics {
+  app_version: string;
+  electron_version: string;
+  os_platform: string;
+  os_version: string;
+  os_arch: string;
+  node_version: string;
+  db_initialized: boolean;
+  db_encrypted: boolean;
+  sync_status: {
+    is_running: boolean;
+    current_operation: string | null;
+  };
+  email_connections: {
+    google: boolean;
+    microsoft: boolean;
+  };
+  memory_usage: {
+    rss: number;
+    heap_used: number;
+    heap_total: number;
+  };
+  recent_errors: Array<{
+    operation: string;
+    error_message: string;
+    timestamp: string;
+  }>;
+  device_id: string;
+  uptime_seconds: number;
+  collected_at: string;
+}
+
+/** Support category from Supabase */
+interface SupportCategory {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  parent_id: string | null;
+  sort_order: number;
+  is_active: boolean;
+}
+
+export const supportBridge = {
+  /**
+   * Collect app diagnostics (PII-safe) for a support ticket
+   */
+  collectDiagnostics: (): Promise<{
+    success: boolean;
+    diagnostics?: AppDiagnostics;
+    error?: string;
+  }> => ipcRenderer.invoke("support:collect-diagnostics"),
+
+  /**
+   * Capture a screenshot of the primary screen
+   */
+  captureScreenshot: (): Promise<{
+    success: boolean;
+    screenshot?: string | null;
+    error?: string;
+  }> => ipcRenderer.invoke("support:capture-screenshot"),
+
+  /**
+   * Get support categories from Supabase
+   */
+  getCategories: (): Promise<{
+    success: boolean;
+    categories?: SupportCategory[];
+    error?: string;
+  }> => ipcRenderer.invoke("support:get-categories"),
+
+  /**
+   * Submit a support ticket with optional screenshot and diagnostics
+   */
+  submitTicket: (
+    params: CreateTicketParams,
+    screenshotBase64: string | null,
+    diagnosticsData: AppDiagnostics | null
+  ): Promise<{
+    success: boolean;
+    ticket_id?: string;
+    ticket_number?: number;
+    error?: string;
+  }> =>
+    ipcRenderer.invoke(
+      "support:submit-ticket",
+      params,
+      screenshotBase64,
+      diagnosticsData
+    ),
+};
