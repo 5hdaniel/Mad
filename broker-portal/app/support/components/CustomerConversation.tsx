@@ -134,15 +134,81 @@ function InlineAttachments({
   );
 }
 
-export function CustomerConversation({
+/**
+ * CustomerTicketDescription - Standalone export for the pinned ticket description card.
+ * Used by the customer detail page.
+ */
+export function CustomerTicketDescription({
+  description,
+  requesterName,
+  createdAt,
+  attachments,
+  showAttachments = true,
+}: {
+  description: string;
+  requesterName: string;
+  createdAt: string;
+  attachments: SupportTicketAttachment[];
+  showAttachments?: boolean;
+}) {
+  const [lightbox, setLightbox] = useState<{
+    url: string;
+    attachment: SupportTicketAttachment;
+  } | null>(null);
+
+  function openLightbox(url: string, att: SupportTicketAttachment) {
+    setLightbox({ url, attachment: att });
+  }
+
+  return (
+    <>
+      <div className="flex justify-end">
+        <div className="max-w-[80%]">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-gray-900">{requesterName}</span>
+              <span className="text-xs text-gray-400 ml-3">{formatTimestamp(createdAt)}</span>
+            </div>
+            <div className="text-sm text-gray-700 whitespace-pre-wrap">{description}</div>
+            {showAttachments && (
+              <InlineAttachments
+                attachments={attachments}
+                onPreview={openLightbox}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {lightbox && (
+        <AttachmentLightbox
+          url={lightbox.url}
+          fileName={lightbox.attachment.file_name}
+          fileType={lightbox.attachment.file_type}
+          fileSize={formatFileSize(lightbox.attachment.file_size)}
+          onClose={() => setLightbox(null)}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * CustomerMessageList - Standalone export for the customer message list.
+ * Filters out internal notes (defense-in-depth) and renders customer vs agent messages
+ * with distinct styling (right-aligned for customer, left-aligned for agent).
+ */
+export function CustomerMessageList({
   messages,
   attachments,
-  ticketDescription,
-  requesterName,
   requesterEmail,
-  createdAt,
   showAttachments = true,
-}: CustomerConversationProps) {
+}: {
+  messages: SupportTicketMessage[];
+  attachments: SupportTicketAttachment[];
+  requesterEmail: string;
+  showAttachments?: boolean;
+}) {
   const [lightbox, setLightbox] = useState<{
     url: string;
     attachment: SupportTicketAttachment;
@@ -151,7 +217,7 @@ export function CustomerConversation({
   // Filter out internal notes (defense-in-depth)
   const publicMessages = messages.filter((m) => m.message_type !== 'internal_note');
 
-  // Group attachments by message_id (null = ticket-level)
+  // Group attachments by message_id
   const attachmentsByMessage = new Map<string | null, SupportTicketAttachment[]>();
   for (const att of attachments) {
     const key = att.message_id;
@@ -161,35 +227,13 @@ export function CustomerConversation({
     attachmentsByMessage.get(key)!.push(att);
   }
 
-  const ticketAttachments = attachmentsByMessage.get(null) || [];
-
   function openLightbox(url: string, att: SupportTicketAttachment) {
     setLightbox({ url, attachment: att });
   }
 
   return (
-    <div>
+    <>
       <div className="space-y-4">
-        {/* Original ticket description */}
-        <div className="flex justify-end">
-          <div className="max-w-[80%]">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-900">{requesterName}</span>
-                <span className="text-xs text-gray-400 ml-3">{formatTimestamp(createdAt)}</span>
-              </div>
-              <div className="text-sm text-gray-700 whitespace-pre-wrap">{ticketDescription}</div>
-              {showAttachments && (
-                <InlineAttachments
-                  attachments={ticketAttachments}
-                  onPreview={openLightbox}
-                />
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Messages */}
         {publicMessages.map((message) => {
           const isCustomer = message.sender_email === requesterEmail;
           const messageAttachments = attachmentsByMessage.get(message.id) || [];
@@ -234,7 +278,6 @@ export function CustomerConversation({
         )}
       </div>
 
-      {/* Lightbox */}
       {lightbox && (
         <AttachmentLightbox
           url={lightbox.url}
@@ -244,6 +287,38 @@ export function CustomerConversation({
           onClose={() => setLightbox(null)}
         />
       )}
+    </>
+  );
+}
+
+export function CustomerConversation({
+  messages,
+  attachments,
+  ticketDescription,
+  requesterName,
+  requesterEmail,
+  createdAt,
+  showAttachments = true,
+}: CustomerConversationProps) {
+  const ticketAttachments = attachments.filter((a) => !a.message_id);
+
+  return (
+    <div>
+      <CustomerTicketDescription
+        description={ticketDescription}
+        requesterName={requesterName}
+        createdAt={createdAt}
+        attachments={ticketAttachments}
+        showAttachments={showAttachments}
+      />
+      <div className="mt-4">
+        <CustomerMessageList
+          messages={messages}
+          attachments={attachments}
+          requesterEmail={requesterEmail}
+          showAttachments={showAttachments}
+        />
+      </div>
     </div>
   );
 }

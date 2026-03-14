@@ -185,21 +185,83 @@ function MessageBubble({
   );
 }
 
-export function ConversationThread({
-  messages,
-  attachments,
-  ticketDescription,
+/**
+ * TicketDescription - Standalone export for the pinned ticket description card.
+ * Used by the detail page in the two-column layout.
+ */
+export function TicketDescription({
+  description,
   requesterName,
   requesterEmail,
   createdAt,
+  attachments,
   showAttachments = true,
-}: ConversationThreadProps) {
+}: {
+  description: string;
+  requesterName: string;
+  requesterEmail: string;
+  createdAt: string;
+  attachments: SupportTicketAttachment[];
+  showAttachments?: boolean;
+}) {
   const [lightbox, setLightbox] = useState<{
     url: string;
     attachment: SupportTicketAttachment;
   } | null>(null);
 
-  // Group attachments by message_id (null = ticket-level)
+  function openLightbox(url: string, att: SupportTicketAttachment) {
+    setLightbox({ url, attachment: att });
+  }
+
+  return (
+    <>
+      <div className="rounded-lg p-4 bg-blue-50 border border-blue-200">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="h-3.5 w-3.5 text-blue-600" />
+            <span className="text-sm font-medium text-gray-900">{requesterName}</span>
+            <span className="text-xs text-gray-400">{requesterEmail}</span>
+          </div>
+          <span className="text-xs text-gray-400">{formatTimestamp(createdAt)}</span>
+        </div>
+        <div className="text-sm text-gray-700 whitespace-pre-wrap">{description}</div>
+        {showAttachments && (
+          <InlineAttachments attachments={attachments} onPreview={openLightbox} />
+        )}
+      </div>
+
+      {lightbox && (
+        <AttachmentLightbox
+          url={lightbox.url}
+          fileName={lightbox.attachment.file_name}
+          fileType={lightbox.attachment.file_type}
+          fileSize={formatFileSize(lightbox.attachment.file_size)}
+          onClose={() => setLightbox(null)}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * MessageList - Standalone export for the message list.
+ * Groups attachments by message_id and renders each message with its attachments.
+ */
+export function MessageList({
+  messages,
+  attachments,
+  showAttachments = true,
+}: {
+  messages: SupportTicketMessage[];
+  attachments: SupportTicketAttachment[];
+  showAttachments?: boolean;
+}) {
+  const [lightbox, setLightbox] = useState<{
+    url: string;
+    attachment: SupportTicketAttachment;
+  } | null>(null);
+
+  // Group attachments by message_id
   const attachmentsByMessage = new Map<string | null, SupportTicketAttachment[]>();
   for (const att of attachments) {
     const key = att.message_id;
@@ -209,32 +271,13 @@ export function ConversationThread({
     attachmentsByMessage.get(key)!.push(att);
   }
 
-  const ticketAttachments = attachmentsByMessage.get(null) || [];
-
   function openLightbox(url: string, att: SupportTicketAttachment) {
     setLightbox({ url, attachment: att });
   }
 
   return (
-    <div>
+    <>
       <div className="space-y-4">
-        {/* Original ticket description as the first "message" */}
-        <div className="rounded-lg p-4 bg-blue-50 border border-blue-200">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <MessageSquare className="h-3.5 w-3.5 text-blue-600" />
-              <span className="text-sm font-medium text-gray-900">{requesterName}</span>
-              <span className="text-xs text-gray-400">{requesterEmail}</span>
-            </div>
-            <span className="text-xs text-gray-400">{formatTimestamp(createdAt)}</span>
-          </div>
-          <div className="text-sm text-gray-700 whitespace-pre-wrap">{ticketDescription}</div>
-          {showAttachments && (
-            <InlineAttachments attachments={ticketAttachments} onPreview={openLightbox} />
-          )}
-        </div>
-
-        {/* Messages */}
         {messages.map((message) => (
           <MessageBubble
             key={message.id}
@@ -252,7 +295,6 @@ export function ConversationThread({
         )}
       </div>
 
-      {/* Lightbox */}
       {lightbox && (
         <AttachmentLightbox
           url={lightbox.url}
@@ -262,6 +304,38 @@ export function ConversationThread({
           onClose={() => setLightbox(null)}
         />
       )}
+    </>
+  );
+}
+
+export function ConversationThread({
+  messages,
+  attachments,
+  ticketDescription,
+  requesterName,
+  requesterEmail,
+  createdAt,
+  showAttachments = true,
+}: ConversationThreadProps) {
+  const ticketAttachments = attachments.filter((a) => !a.message_id);
+
+  return (
+    <div>
+      <TicketDescription
+        description={ticketDescription}
+        requesterName={requesterName}
+        requesterEmail={requesterEmail}
+        createdAt={createdAt}
+        attachments={ticketAttachments}
+        showAttachments={showAttachments}
+      />
+      <div className="mt-4">
+        <MessageList
+          messages={messages}
+          attachments={attachments}
+          showAttachments={showAttachments}
+        />
+      </div>
     </div>
   );
 }
