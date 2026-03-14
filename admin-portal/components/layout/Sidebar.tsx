@@ -11,7 +11,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { LayoutDashboard, BarChart3, Users, Building2, CreditCard, Headphones, Settings, LogOut, PanelLeftClose, PanelLeftOpen, FileText, ChevronDown, ChevronRight, Shield } from 'lucide-react';
+import { LayoutDashboard, BarChart3, Users, Building2, CreditCard, Headphones, Settings, LogOut, PanelLeftClose, PanelLeftOpen, FileText, ChevronDown, ChevronRight, Shield, Inbox } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
 import type { PermissionKey } from '@/lib/permissions';
@@ -31,7 +31,18 @@ const mainNavItems: NavItem[] = [
   { label: 'Users', href: '/dashboard/users', icon: Users, permission: PERMISSIONS.USERS_VIEW },
   { label: 'Organizations', href: '/dashboard/organizations', icon: Building2, permission: PERMISSIONS.ORGANIZATIONS_VIEW },
   { label: 'Plans', href: '/dashboard/plans', icon: CreditCard, permission: PERMISSIONS.PLANS_VIEW },
-  { label: 'Support', href: '/dashboard/support', icon: Headphones, permission: PERMISSIONS.SUPPORT_VIEW },
+];
+
+/** Sub-items under the collapsible "Support" section */
+const supportSubItems: NavItem[] = [
+  { label: 'Queue', href: '/dashboard/support', icon: Inbox, permission: PERMISSIONS.SUPPORT_VIEW },
+  { label: 'Settings', href: '/dashboard/support/settings', icon: Settings, permission: PERMISSIONS.SUPPORT_MANAGE },
+];
+
+/** Permissions that grant visibility to the Support section */
+const supportSectionPermissions: PermissionKey[] = [
+  PERMISSIONS.SUPPORT_VIEW,
+  PERMISSIONS.SUPPORT_MANAGE,
 ];
 
 /** Sub-items under the collapsible "Settings" section */
@@ -59,11 +70,24 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { signOut } = useAuth();
   const { hasPermission, roleName, loading } = usePermissions();
 
+  // Check if any support sub-item route is active
+  const isSupportActive = pathname.startsWith('/dashboard/support');
+
   // Check if any settings sub-item route is active
   const isSettingsActive = pathname.startsWith('/dashboard/settings');
 
+  // Auto-expand when a support route is active; allow manual toggle otherwise
+  const [supportExpanded, setSupportExpanded] = useState(isSupportActive);
+
   // Auto-expand when a settings route is active; allow manual toggle otherwise
   const [settingsExpanded, setSettingsExpanded] = useState(isSettingsActive);
+
+  // Keep expanded state in sync when navigating to/from support routes
+  useEffect(() => {
+    if (isSupportActive) {
+      setSupportExpanded(true);
+    }
+  }, [isSupportActive]);
 
   // Keep expanded state in sync when navigating to/from settings routes
   useEffect(() => {
@@ -71,6 +95,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       setSettingsExpanded(true);
     }
   }, [isSettingsActive]);
+
+  // Whether the user can see the support section at all
+  const canSeeSupport = loading || supportSectionPermissions.some((p) => hasPermission(p));
 
   // Whether the user can see the settings section at all
   const canSeeSettings = loading || settingsSectionPermissions.some((p) => hasPermission(p));
@@ -135,6 +162,49 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <nav className={`flex-1 py-4 space-y-1 overflow-y-auto ${collapsed ? 'px-2' : 'px-3'}`}>
         {/* Main nav items */}
         {mainNavItems.map((item) => renderNavItem(item))}
+
+        {/* Collapsible Support section */}
+        {canSeeSupport && (
+          <div>
+            <button
+              onClick={() => {
+                if (collapsed) {
+                  // When collapsed, expand the sidebar instead of toggling sub-items
+                  onToggle();
+                  setSupportExpanded(true);
+                } else {
+                  setSupportExpanded(!supportExpanded);
+                }
+              }}
+              className={`flex items-center w-full rounded-md text-sm font-medium transition-colors ${
+                collapsed ? 'justify-center px-2 py-2' : 'gap-3 px-3 py-2'
+              } ${
+                isSupportActive
+                  ? 'bg-gray-800 text-white'
+                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+              }`}
+              title={collapsed ? 'Support' : undefined}
+            >
+              <Headphones className="h-5 w-5 shrink-0" />
+              {!collapsed && (
+                <>
+                  <span className="flex-1 text-left">Support</span>
+                  {supportExpanded
+                    ? <ChevronDown className="h-4 w-4 shrink-0" />
+                    : <ChevronRight className="h-4 w-4 shrink-0" />
+                  }
+                </>
+              )}
+            </button>
+
+            {/* Sub-items (only visible when expanded and sidebar not collapsed) */}
+            {supportExpanded && !collapsed && (
+              <div className="mt-1 space-y-1">
+                {supportSubItems.map((item) => renderNavItem(item, true))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Collapsible Settings section */}
         {canSeeSettings && (
