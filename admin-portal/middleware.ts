@@ -19,6 +19,7 @@ const ROUTE_PERMISSIONS: Record<string, string[]> = {
   '/dashboard/organizations': ['organizations.view'],
   '/dashboard/audit-log': ['audit.view'],
   '/dashboard/settings': ['internal_users.view', 'roles.view', 'audit.view'],
+  '/dashboard/support': ['support.view'],
 };
 
 export async function middleware(request: NextRequest) {
