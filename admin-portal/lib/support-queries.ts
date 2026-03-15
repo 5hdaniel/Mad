@@ -18,6 +18,7 @@ import type {
   SupportTicketParticipant,
   SupportResponseTemplate,
   ParticipantRole,
+  AgentAnalyticsResponse,
 } from './support-types';
 
 export async function listTickets(params: TicketListParams): Promise<TicketListResponse> {
@@ -161,6 +162,28 @@ export function buildCategoryTree(categories: SupportCategory[]): SupportCategor
       .filter((c) => c.parent_id === parent.id)
       .sort((a, b) => a.sort_order - b.sort_order),
   }));
+}
+
+// --- Analytics functions ---
+
+export async function getAgentAnalytics(periodDays: number = 30): Promise<AgentAnalyticsResponse> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_agent_analytics', {
+    p_period_days: periodDays,
+  });
+  if (error) throw error;
+  return data as unknown as AgentAnalyticsResponse;
+}
+
+// --- Delete functions ---
+
+export async function deleteTicket(ticketId: string): Promise<{ deleted: boolean; ticket_number: number }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_delete_ticket', {
+    p_ticket_id: ticketId,
+  });
+  if (error) throw error;
+  return data as unknown as { deleted: boolean; ticket_number: number };
 }
 
 // --- Attachment functions ---
