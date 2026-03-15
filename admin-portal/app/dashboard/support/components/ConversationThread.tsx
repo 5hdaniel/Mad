@@ -3,11 +3,10 @@
 /**
  * ConversationThread - Support Ticket Detail
  *
- * Displays ticket messages in chronological order.
+ * TicketDescription: Pinned original ticket description card.
+ * MessageList: Messages in reverse chronological order (newest first).
  * Internal notes have amber/yellow background with lock icon.
- * Public replies have standard white/gray styling.
  * Attachments shown inline with thumbnails + lightbox preview.
- * Toggle to show/hide inline attachments.
  */
 
 import { useState, useEffect } from 'react';
@@ -15,16 +14,6 @@ import { Lock, MessageSquare, Paperclip } from 'lucide-react';
 import type { SupportTicketMessage, SupportTicketAttachment } from '@/lib/support-types';
 import { getAttachmentUrl } from '@/lib/support-queries';
 import { AttachmentLightbox } from './AttachmentLightbox';
-
-interface ConversationThreadProps {
-  messages: SupportTicketMessage[];
-  attachments: SupportTicketAttachment[];
-  ticketDescription: string;
-  requesterName: string;
-  requesterEmail: string;
-  createdAt: string;
-  showAttachments?: boolean;
-}
 
 function formatTimestamp(dateStr: string): string {
   const date = new Date(dateStr);
@@ -134,125 +123,46 @@ function InlineAttachments({
   );
 }
 
-function MessageBubble({
-  message,
-  attachments,
-  showAttachments,
-  onPreview,
-}: {
-  message: SupportTicketMessage;
-  attachments: SupportTicketAttachment[];
-  showAttachments: boolean;
-  onPreview: (url: string, att: SupportTicketAttachment) => void;
-}) {
-  const isNote = message.message_type === 'internal_note';
-
-  return (
-    <div
-      className={`rounded-lg p-4 ${
-        isNote
-          ? 'bg-amber-50 border border-amber-200'
-          : 'bg-white border border-gray-200'
-      }`}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          {isNote && (
-            <div className="flex items-center gap-1 text-amber-600 text-xs font-medium">
-              <Lock className="h-3 w-3" />
-              Internal Note
-            </div>
-          )}
-          <span className="text-sm font-medium text-gray-900">
-            {message.sender_name || message.sender_email || 'System'}
-          </span>
-          {message.sender_email && message.sender_name && (
-            <span className="text-xs text-gray-400">{message.sender_email}</span>
-          )}
-        </div>
-        <span className="text-xs text-gray-400">{formatTimestamp(message.created_at)}</span>
-      </div>
-
-      {/* Body */}
-      <div className="text-sm text-gray-700 whitespace-pre-wrap">{message.body}</div>
-
-      {/* Inline attachments */}
-      {showAttachments && (
-        <InlineAttachments attachments={attachments} onPreview={onPreview} />
-      )}
-    </div>
-  );
-}
-
-export function ConversationThread({
-  messages,
-  attachments,
-  ticketDescription,
+/** Pinned original ticket description card */
+export function TicketDescription({
+  description,
   requesterName,
   requesterEmail,
   createdAt,
+  attachments,
   showAttachments = true,
-}: ConversationThreadProps) {
+}: {
+  description: string;
+  requesterName: string;
+  requesterEmail: string;
+  createdAt: string;
+  attachments: SupportTicketAttachment[];
+  showAttachments?: boolean;
+}) {
   const [lightbox, setLightbox] = useState<{
     url: string;
     attachment: SupportTicketAttachment;
   } | null>(null);
 
-  // Group attachments by message_id (null = ticket-level)
-  const attachmentsByMessage = new Map<string | null, SupportTicketAttachment[]>();
-  for (const att of attachments) {
-    const key = att.message_id;
-    if (!attachmentsByMessage.has(key)) {
-      attachmentsByMessage.set(key, []);
-    }
-    attachmentsByMessage.get(key)!.push(att);
-  }
-
-  const ticketAttachments = attachmentsByMessage.get(null) || [];
-
-  function openLightbox(url: string, att: SupportTicketAttachment) {
-    setLightbox({ url, attachment: att });
-  }
-
   return (
-    <div>
-      <div className="space-y-4">
-        {/* Original ticket description as the first "message" */}
-        <div className="rounded-lg p-4 bg-blue-50 border border-blue-200">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <MessageSquare className="h-3.5 w-3.5 text-blue-600" />
-              <span className="text-sm font-medium text-gray-900">{requesterName}</span>
-              <span className="text-xs text-gray-400">{requesterEmail}</span>
-            </div>
-            <span className="text-xs text-gray-400">{formatTimestamp(createdAt)}</span>
+    <>
+      <div className="rounded-lg p-4 bg-blue-50 border border-blue-200">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="h-3.5 w-3.5 text-blue-600" />
+            <span className="text-sm font-medium text-gray-900">{requesterName}</span>
+            <span className="text-xs text-gray-400">{requesterEmail}</span>
           </div>
-          <div className="text-sm text-gray-700 whitespace-pre-wrap">{ticketDescription}</div>
-          {showAttachments && (
-            <InlineAttachments attachments={ticketAttachments} onPreview={openLightbox} />
-          )}
+          <span className="text-xs text-gray-400">{formatTimestamp(createdAt)}</span>
         </div>
-
-        {/* Messages */}
-        {messages.map((message) => (
-          <MessageBubble
-            key={message.id}
-            message={message}
-            attachments={attachmentsByMessage.get(message.id) || []}
-            showAttachments={showAttachments}
-            onPreview={openLightbox}
+        <div className="text-sm text-gray-700 whitespace-pre-wrap">{description}</div>
+        {showAttachments && (
+          <InlineAttachments
+            attachments={attachments}
+            onPreview={(url, att) => setLightbox({ url, attachment: att })}
           />
-        ))}
-
-        {messages.length === 0 && (
-          <div className="text-center py-8 text-gray-400 text-sm">
-            No replies yet. Be the first to respond.
-          </div>
         )}
       </div>
-
-      {/* Lightbox */}
       {lightbox && (
         <AttachmentLightbox
           url={lightbox.url}
@@ -262,6 +172,101 @@ export function ConversationThread({
           onClose={() => setLightbox(null)}
         />
       )}
-    </div>
+    </>
+  );
+}
+
+/** Message list — renders newest first */
+export function MessageList({
+  messages,
+  attachments,
+  showAttachments = true,
+}: {
+  messages: SupportTicketMessage[];
+  attachments: SupportTicketAttachment[];
+  showAttachments?: boolean;
+}) {
+  const [lightbox, setLightbox] = useState<{
+    url: string;
+    attachment: SupportTicketAttachment;
+  } | null>(null);
+
+  // Group attachments by message_id
+  const attachmentsByMessage = new Map<string, SupportTicketAttachment[]>();
+  for (const att of attachments) {
+    if (!att.message_id) continue;
+    if (!attachmentsByMessage.has(att.message_id)) {
+      attachmentsByMessage.set(att.message_id, []);
+    }
+    attachmentsByMessage.get(att.message_id)!.push(att);
+  }
+
+  // Reverse: newest first
+  const sortedMessages = [...messages].reverse();
+
+  function openLightbox(url: string, att: SupportTicketAttachment) {
+    setLightbox({ url, attachment: att });
+  }
+
+  if (sortedMessages.length === 0) {
+    return (
+      <div className="text-center py-8 text-gray-400 text-sm">
+        No replies yet. Be the first to respond.
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="space-y-4">
+        {sortedMessages.map((message) => {
+          const isNote = message.message_type === 'internal_note';
+          const msgAttachments = attachmentsByMessage.get(message.id) || [];
+
+          return (
+            <div
+              key={message.id}
+              className={`rounded-lg p-4 ${
+                isNote
+                  ? 'bg-amber-50 border border-amber-200'
+                  : 'bg-white border border-gray-200'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  {isNote && (
+                    <div className="flex items-center gap-1 text-amber-600 text-xs font-medium">
+                      <Lock className="h-3 w-3" />
+                      Internal Note
+                    </div>
+                  )}
+                  <span className="text-sm font-medium text-gray-900">
+                    {message.sender_name || message.sender_email || 'System'}
+                  </span>
+                  {message.sender_email && message.sender_name && (
+                    <span className="text-xs text-gray-400">{message.sender_email}</span>
+                  )}
+                </div>
+                <span className="text-xs text-gray-400">{formatTimestamp(message.created_at)}</span>
+              </div>
+              <div className="text-sm text-gray-700 whitespace-pre-wrap">{message.body}</div>
+              {showAttachments && (
+                <InlineAttachments attachments={msgAttachments} onPreview={openLightbox} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {lightbox && (
+        <AttachmentLightbox
+          url={lightbox.url}
+          fileName={lightbox.attachment.file_name}
+          fileType={lightbox.attachment.file_type}
+          fileSize={formatFileSize(lightbox.attachment.file_size)}
+          onClose={() => setLightbox(null)}
+        />
+      )}
+    </>
   );
 }
