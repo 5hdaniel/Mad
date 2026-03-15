@@ -15,6 +15,7 @@ import {
 import { useNetwork } from '../contexts/NetworkContext';
 import { OfflineNotice } from './common/OfflineNotice';
 import { useSyncOrchestrator } from '../hooks/useSyncOrchestrator';
+import { settingsService, authService } from '../services';
 import logger from '../utils/logger';
 import { formatFileSize } from '../utils/formatUtils';
 
@@ -400,44 +401,44 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
   const loadPreferences = async (): Promise<void> => {
     setLoadingPreferences(true);
     try {
-      const result: PreferencesResult =
-        await window.api.preferences.get(userId);
-      if (result.success && result.preferences) {
+      const result = await settingsService.getPreferences(userId);
+      const prefs = result.data as PreferencesResult['preferences'];
+      if (result.success && prefs) {
         // Load export format preference
-        if (result.preferences.export?.defaultFormat) {
-          setExportFormat(result.preferences.export.defaultFormat);
+        if (prefs.export?.defaultFormat) {
+          setExportFormat(prefs.export.defaultFormat);
         }
         // Load email export mode preference
-        const loadedEmailMode = (result.preferences.export as { emailExportMode?: string } | undefined)?.emailExportMode;
+        const loadedEmailMode = (prefs.export as { emailExportMode?: string } | undefined)?.emailExportMode;
         if (loadedEmailMode === "thread" || loadedEmailMode === "individual") {
           setEmailExportMode(loadedEmailMode);
         }
         // TASK-2072: Load email cache duration (new key, with fallback to legacy key)
-        const loadedEmailCache = result.preferences.emailCache?.durationMonths
-          ?? result.preferences.emailSync?.lookbackMonths;
+        const loadedEmailCache = prefs.emailCache?.durationMonths
+          ?? prefs.emailSync?.lookbackMonths;
         if (typeof loadedEmailCache === "number" && loadedEmailCache > 0) {
           setEmailCacheDurationMonths(loadedEmailCache);
         }
         // Load auto-sync preference (default is true if not set)
-        if (typeof result.preferences.sync?.autoSyncOnLogin === "boolean") {
-          setAutoSyncOnLogin(result.preferences.sync.autoSyncOnLogin);
+        if (typeof prefs.sync?.autoSyncOnLogin === "boolean") {
+          setAutoSyncOnLogin(prefs.sync.autoSyncOnLogin);
         }
         // Load auto-download updates preference (default is false if not set)
-        if (typeof result.preferences.updates?.autoDownload === "boolean") {
-          setAutoDownloadUpdates(result.preferences.updates.autoDownload);
+        if (typeof prefs.updates?.autoDownload === "boolean") {
+          setAutoDownloadUpdates(prefs.updates.autoDownload);
         }
         // Load notifications preference (default is true if not set)
-        if (typeof result.preferences.notifications?.enabled === "boolean") {
-          setNotificationsEnabled(result.preferences.notifications.enabled);
+        if (typeof prefs.notifications?.enabled === "boolean") {
+          setNotificationsEnabled(prefs.notifications.enabled);
         }
         // TASK-1980: Load start date default mode preference
-        const loadedStartDateDefault = result.preferences.audit?.startDateDefault;
+        const loadedStartDateDefault = prefs.audit?.startDateDefault;
         if (loadedStartDateDefault === "auto" || loadedStartDateDefault === "manual") {
           setStartDateDefault(loadedStartDateDefault);
         }
         // Load contact source preferences
-        if (result.preferences.contactSources) {
-          const cs = result.preferences.contactSources;
+        if (prefs.contactSources) {
+          const cs = prefs.contactSources;
           if (cs.direct) {
             if (typeof cs.direct.outlookContacts === "boolean") setOutlookContactsEnabled(cs.direct.outlookContacts);
             if (typeof cs.direct.gmailContacts === "boolean") setGmailContactsEnabled(cs.direct.gmailContacts);
@@ -464,7 +465,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
     setExportFormat(newFormat);
     try {
       // Update only the export format preference
-      await window.api.preferences.update(userId, {
+      await settingsService.updatePreferences(userId, {
         export: {
           defaultFormat: newFormat,
         },
@@ -478,7 +479,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
   const handleEmailExportModeChange = async (mode: "thread" | "individual"): Promise<void> => {
     setEmailExportMode(mode);
     try {
-      await window.api.preferences.update(userId, {
+      await settingsService.updatePreferences(userId, {
         export: {
           emailExportMode: mode,
         },
@@ -492,7 +493,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
   const handleEmailCacheDurationChange = async (months: number): Promise<void> => {
     setEmailCacheDurationMonths(months);
     try {
-      const result = await window.api.preferences.update(userId, {
+      const result = await settingsService.updatePreferences(userId, {
         emailCache: {
           durationMonths: months,
         },
@@ -509,7 +510,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
   const handleStartDateDefaultChange = async (mode: "auto" | "manual"): Promise<void> => {
     setStartDateDefault(mode);
     try {
-      const result = await window.api.preferences.update(userId, {
+      const result = await settingsService.updatePreferences(userId, {
         audit: {
           startDateDefault: mode,
         },
@@ -527,7 +528,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
     setAutoSyncOnLogin(newValue);
     try {
       // Update auto-sync preference
-      await window.api.preferences.update(userId, {
+      await settingsService.updatePreferences(userId, {
         sync: {
           autoSyncOnLogin: newValue,
         },
@@ -543,7 +544,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
     setAutoDownloadUpdates(newValue);
     try {
       // Update auto-download updates preference
-      await window.api.preferences.update(userId, {
+      await settingsService.updatePreferences(userId, {
         updates: {
           autoDownload: newValue,
         },
@@ -576,7 +577,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
     setNotificationsEnabled(newValue);
     try {
       // Update notifications preference
-      await window.api.preferences.update(userId, {
+      await settingsService.updatePreferences(userId, {
         notifications: {
           enabled: newValue,
         },
@@ -612,7 +613,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
     const newValue = !currentValue;
     setter(newValue);
     try {
-      await window.api.preferences.update(userId, {
+      await settingsService.updatePreferences(userId, {
         contactSources: {
           [category]: {
             [key]: newValue,
@@ -628,11 +629,11 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
     setConnectingProvider("google");
     let cleanup: (() => void) | undefined;
     try {
-      const result = await window.api.auth.googleConnectMailbox(userId);
+      const result = await authService.googleConnectMailbox(userId);
       if (result.success) {
         // Auth popup window opens automatically and will close when done
         // Listen for connection completion
-        cleanup = window.api.onGoogleMailboxConnected(
+        cleanup = authService.onMailboxConnected("google",
           async (connectionResult: ConnectionResult) => {
             if (connectionResult.success) {
               // Refresh connections and get the result in one call
@@ -667,11 +668,11 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
     setConnectingProvider("microsoft");
     let cleanup: (() => void) | undefined;
     try {
-      const result = await window.api.auth.microsoftConnectMailbox(userId);
+      const result = await authService.microsoftConnectMailbox(userId);
       if (result.success) {
         // Auth popup window opens automatically and will close when done
         // Listen for connection completion
-        cleanup = window.api.onMicrosoftMailboxConnected(
+        cleanup = authService.onMailboxConnected("microsoft",
           async (connectionResult: ConnectionResult) => {
             if (connectionResult.success) {
               // Refresh connections and get the result in one call
@@ -705,7 +706,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
   const handleDisconnectGoogle = async (): Promise<void> => {
     setDisconnectingProvider("google");
     try {
-      const result = await window.api.auth.googleDisconnectMailbox(userId);
+      const result = await authService.googleDisconnectMailbox(userId);
       if (result.success) {
         await checkConnections();
         // TASK-1730: Notify parent to update app state machine
@@ -725,7 +726,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
   const handleDisconnectMicrosoft = async (): Promise<void> => {
     setDisconnectingProvider("microsoft");
     try {
-      const result = await window.api.auth.microsoftDisconnectMailbox(userId);
+      const result = await authService.microsoftDisconnectMailbox(userId);
       if (result.success) {
         await checkConnections();
         // TASK-1730: Notify parent to update app state machine

@@ -4,7 +4,7 @@
  */
 import React from "react";
 import type { TransactionAttachment } from "../hooks/useTransactionAttachments";
-import { formatFileSize } from "../../../utils/formatUtils";
+import { formatFileSize, formatDate } from "../../../utils/formatUtils";
 
 interface AttachmentCardProps {
   attachment: TransactionAttachment;
@@ -81,22 +81,6 @@ function getFileIcon(mimeType: string): { icon: React.ReactNode; colorClass: str
 }
 
 /**
- * Format date to readable string
- */
-function formatDate(dateString: string): string {
-  if (!dateString) return "";
-  try {
-    return new Date(dateString).toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  } catch {
-    return "";
-  }
-}
-
-/**
  * AttachmentCard displays a single attachment with file info and email context.
  * Note: Download functionality is not implemented as attachments are stored as API references.
  */
@@ -121,7 +105,7 @@ export function AttachmentCard({ attachment }: AttachmentCardProps): React.React
             {attachment.emailDate && (
               <>
                 <span className="text-gray-300">|</span>
-                <span>{formatDate(attachment.emailDate)}</span>
+                <span>{formatDate(attachment.emailDate, { fallback: "" })}</span>
               </>
             )}
           </div>

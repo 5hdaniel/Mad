@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 
 import type { OAuthProvider } from "../../electron/types/models";
+import { systemService, authService } from '../services';
 import logger from '../utils/logger';
 
 interface SystemHealthMonitorProps {
@@ -49,10 +50,10 @@ function SystemHealthMonitor({
 
     try {
       // Pass provider so we only check the relevant OAuth connection
-      const result = await window.api.system.healthCheck(userId, provider);
+      const result = await systemService.healthCheck(userId, provider);
 
-      if (!result.healthy && result.issues && Array.isArray(result.issues)) {
-        setIssues(result.issues as SystemIssue[]);
+      if (result.success && result.data && !result.data.healthy && result.data.issues && Array.isArray(result.data.issues)) {
+        setIssues(result.data.issues as SystemIssue[]);
       }
     } catch (error) {
       logger.error("[SystemHealthMonitor] System health check failed:", error);
@@ -84,9 +85,7 @@ function SystemHealthMonitor({
   const handleAction = async (issue: SystemIssue, issueIndex: number) => {
     switch (issue.actionHandler) {
       case "open-system-settings":
-        if (window.api?.system?.openPrivacyPane) {
-          await window.api.system.openPrivacyPane("fullDiskAccess");
-        }
+        await systemService.openPrivacyPane("fullDiskAccess");
         break;
 
       case "connect-google":
@@ -116,23 +115,21 @@ function SystemHealthMonitor({
           try {
             const isGoogle = issue.actionHandler === "connect-google" || issue.actionHandler === "reconnect-google";
             const result = isGoogle
-              ? await window.api.auth.googleConnectMailbox(userId)
-              : await window.api.auth.microsoftConnectMailbox(userId);
+              ? await authService.googleConnectMailbox(userId)
+              : await authService.microsoftConnectMailbox(userId);
             if (result.success) {
-              const cleanup = isGoogle
-                ? window.api.onGoogleMailboxConnected(async (connectionResult) => {
-                    if (connectionResult.success) {
-                      await checkSystemHealth();
-                    }
-                    if (cleanup) cleanup();
-                  })
-                : window.api.onMicrosoftMailboxConnected((connectionResult) => {
-                    if (connectionResult.success) {
-                      checkSystemHealth();
+              const cleanup = authService.onMailboxConnected(
+                isGoogle ? "google" : "microsoft",
+                async (connectionResult) => {
+                  if (connectionResult.success) {
+                    await checkSystemHealth();
+                    if (!isGoogle) {
                       handleDismiss(issueIndex);
                     }
-                    cleanup();
-                  });
+                  }
+                  cleanup();
+                }
+              );
             }
           } catch (error) {
             logger.error(

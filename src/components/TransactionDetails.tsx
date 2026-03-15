@@ -11,6 +11,7 @@
  */
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import type { Transaction } from "@/types";
+import { transactionService } from '../services';
 import ExportModal from "./ExportModal";
 import AuditTransactionModal from "./AuditTransactionModal";
 import { ToastContainer } from "./Toast";
@@ -251,9 +252,9 @@ function TransactionDetails({
 
     // Refresh transaction data to reflect any date changes made during export
     try {
-      const refreshed = await window.api.transactions.getDetails(transaction.id);
-      if (refreshed.success && refreshed.transaction) {
-        setTransaction(refreshed.transaction as Transaction);
+      const refreshed = await transactionService.getDetails(transaction.id);
+      if (refreshed.success && refreshed.data) {
+        setTransaction(refreshed.data);
         loadDetails();
         onTransactionUpdated?.();
       }
@@ -265,7 +266,7 @@ function TransactionDetails({
 
   const handleDelete = async (): Promise<void> => {
     try {
-      await window.api.transactions.delete(transaction.id);
+      await transactionService.delete(transaction.id);
       setShowDeleteConfirm(false);
       onClose();
       onTransactionUpdated?.();
@@ -498,9 +499,9 @@ function TransactionDetails({
           onShowDeleteConfirm={() => setShowDeleteConfirm(true)}
           onShowSubmitModal={async () => {
             try {
-              const refreshed = await window.api.transactions.getDetails(transaction.id);
-              if (refreshed.success && refreshed.transaction) {
-                setTransaction(refreshed.transaction as Transaction);
+              const refreshed = await transactionService.getDetails(transaction.id);
+              if (refreshed.success && refreshed.data) {
+                setTransaction(refreshed.data);
               }
             } catch (err) {
               logger.error("Failed to refresh transaction before submit:", err);

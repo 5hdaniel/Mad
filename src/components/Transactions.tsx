@@ -45,6 +45,7 @@ import {
 } from "./transaction/hooks";
 import type { Transaction } from "../../electron/types/models";
 import type { TransactionTab } from "./transactionDetailsModule/types";
+import { formatDate, formatCurrency } from "../utils/formatUtils";
 
 // ============================================
 // TYPES
@@ -55,30 +56,6 @@ interface TransactionsProps {
   provider?: string; // Optional - will auto-detect if not provided
   onClose: () => void;
 }
-
-// ============================================
-// UTILITY FUNCTIONS
-// ============================================
-
-const formatCurrency = (amount: number | undefined): string => {
-  if (!amount) return "N/A";
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-  }).format(amount);
-};
-
-const formatDate = (dateString: string | Date | undefined): string => {
-  if (!dateString) return "N/A";
-  const date =
-    typeof dateString === "string" ? new Date(dateString) : dateString;
-  return date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-};
 
 // ============================================
 // TRANSACTIONS COMPONENT

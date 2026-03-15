@@ -9,6 +9,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import type { Device } from "../../../shared/types/license";
 import logger from '../../utils/logger';
+import { formatDate } from '../../utils/formatUtils';
 
 export function DeviceLimitScreen(): React.ReactElement {
   const [devices, setDevices] = useState<Device[]>([]);
@@ -152,7 +153,7 @@ export function DeviceLimitScreen(): React.ReactElement {
                   </p>
                   <p className="text-sm text-gray-500">
                     {formatPlatform(device.platform)} - Last seen{" "}
-                    {formatDate(device.last_seen_at)}
+                    {formatDate(device.last_seen_at, { fallback: "Unknown" })}
                   </p>
                 </div>
                 <button
@@ -197,11 +198,3 @@ function formatPlatform(platform: string | null): string {
   }
 }
 
-function formatDate(dateString: string): string {
-  try {
-    const date = new Date(dateString);
-    return date.toLocaleDateString();
-  } catch {
-    return "Unknown";
-  }
-}

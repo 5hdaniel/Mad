@@ -6,7 +6,6 @@
 
 import { ipcMain, app, BrowserWindow } from "electron";
 import { autoUpdater } from "electron-updater";
-import log from "electron-log";
 import * as Sentry from "@sentry/electron/main";
 import logService from "../services/logService";
 import failureLogService from "../services/failureLogService";
@@ -51,7 +50,9 @@ export function registerUpdaterHandlers(mainWindow: BrowserWindow): void {
         currentVersion: app.getVersion(),
       };
     } catch (error) {
-      log.warn("Manual update check failed:", error);
+      logService.warn("Manual update check failed", "UpdaterHandlers", {
+        error: error instanceof Error ? error.message : "Check failed",
+      });
       Sentry.captureException(error, { tags: { component: "auto-updater", trigger: "manual-check" } });
       // TASK-2058: Log failure for offline diagnostics
       failureLogService.logFailure(
@@ -68,7 +69,7 @@ export function registerUpdaterHandlers(mainWindow: BrowserWindow): void {
 
   // Install update and restart
   ipcMain.on("install-update", () => {
-    log.info("Installing update...");
+    logService.info("Installing update...", "UpdaterHandlers");
 
     // Ensure app relaunches after update
     // Parameters: isSilent, isForceRunAfter

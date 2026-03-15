@@ -29,6 +29,7 @@ import logService from "../logService";
 import databaseService from "../databaseService";
 import { getUserById } from "../db/userDbService";
 import type { Transaction, Communication } from "../../types/models";
+import type { FolderExportProgress } from "../../types/ipc";
 import { isEmailMessage, isTextMessage } from "../../utils/channelHelpers";
 import {
   resolveHandles as resolveAllHandles,
@@ -69,12 +70,8 @@ export interface FolderExportOptions {
   onProgress?: (progress: FolderExportProgress) => void;
 }
 
-export interface FolderExportProgress {
-  stage: "preparing" | "summary" | "emails" | "texts" | "attachments" | "complete";
-  current: number;
-  total: number;
-  message: string;
-}
+// FolderExportProgress is imported from ../../types/ipc
+export type { FolderExportProgress } from "../../types/ipc";
 
 interface AttachmentManifestEntry {
   filename: string;

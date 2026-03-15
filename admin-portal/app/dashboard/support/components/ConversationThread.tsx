@@ -123,7 +123,10 @@ function InlineAttachments({
   );
 }
 
-/** Pinned original ticket description card */
+/**
+ * TicketDescription - Pinned original ticket description card.
+ * Used by the detail page in the two-column layout.
+ */
 export function TicketDescription({
   description,
   requesterName,
@@ -144,6 +147,10 @@ export function TicketDescription({
     attachment: SupportTicketAttachment;
   } | null>(null);
 
+  function openLightbox(url: string, att: SupportTicketAttachment) {
+    setLightbox({ url, attachment: att });
+  }
+
   return (
     <>
       <div className="rounded-lg p-4 bg-blue-50 border border-blue-200">
@@ -157,10 +164,7 @@ export function TicketDescription({
         </div>
         <div className="text-sm text-gray-700 whitespace-pre-wrap">{description}</div>
         {showAttachments && (
-          <InlineAttachments
-            attachments={attachments}
-            onPreview={(url, att) => setLightbox({ url, attachment: att })}
-          />
+          <InlineAttachments attachments={attachments} onPreview={openLightbox} />
         )}
       </div>
       {lightbox && (
@@ -176,7 +180,10 @@ export function TicketDescription({
   );
 }
 
-/** Message list — renders newest first */
+/**
+ * MessageList - Message list rendering newest first.
+ * Groups attachments by message_id and renders each message with its attachments.
+ */
 export function MessageList({
   messages,
   attachments,

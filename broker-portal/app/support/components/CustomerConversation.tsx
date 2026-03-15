@@ -123,7 +123,10 @@ function InlineAttachments({
   );
 }
 
-/** Pinned original ticket description card */
+/**
+ * CustomerTicketDescription - Pinned original ticket description card.
+ * Used by the customer detail page. Right-aligned to match customer message styling.
+ */
 export function CustomerTicketDescription({
   description,
   requesterName,
@@ -142,21 +145,30 @@ export function CustomerTicketDescription({
     attachment: SupportTicketAttachment;
   } | null>(null);
 
+  function openLightbox(url: string, att: SupportTicketAttachment) {
+    setLightbox({ url, attachment: att });
+  }
+
   return (
     <>
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium text-gray-900">{requesterName}</span>
-          <span className="text-xs text-gray-400 ml-3">{formatTimestamp(createdAt)}</span>
+      <div className="flex justify-end">
+        <div className="max-w-[80%]">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-gray-900">{requesterName}</span>
+              <span className="text-xs text-gray-400 ml-3">{formatTimestamp(createdAt)}</span>
+            </div>
+            <div className="text-sm text-gray-700 whitespace-pre-wrap">{description}</div>
+            {showAttachments && (
+              <InlineAttachments
+                attachments={attachments}
+                onPreview={openLightbox}
+              />
+            )}
+          </div>
         </div>
-        <div className="text-sm text-gray-700 whitespace-pre-wrap">{description}</div>
-        {showAttachments && (
-          <InlineAttachments
-            attachments={attachments}
-            onPreview={(url, att) => setLightbox({ url, attachment: att })}
-          />
-        )}
       </div>
+
       {lightbox && (
         <AttachmentLightbox
           url={lightbox.url}
@@ -170,7 +182,11 @@ export function CustomerTicketDescription({
   );
 }
 
-/** Message list — newest first, internal notes filtered out */
+/**
+ * CustomerMessageList - Customer message list, newest first.
+ * Filters out internal notes (defense-in-depth) and renders customer vs agent messages
+ * with distinct styling (right-aligned for customer, left-aligned for agent).
+ */
 export function CustomerMessageList({
   messages,
   attachments,
