@@ -132,7 +132,7 @@ export default function CustomerTicketDetailPage() {
               {PRIORITY_LABELS[ticket.priority]}
             </span>
             <TicketStatusBadge status={ticket.status} />
-            {!isClosed && (
+            {ticket.status !== 'closed' && (
               <button
                 onClick={() => setShowCloseConfirm(true)}
                 className="ml-2 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
