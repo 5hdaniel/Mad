@@ -272,7 +272,7 @@ Created `migrate_to_supabase.py` (574 lines) and `requirements.txt` at `.claude/
 - **Before**: PM data in CSV/markdown files only
 - **After**: Migration script ready to populate Supabase pm_* tables
 - **Actual Tokens**: ~30K (Est: ~30K)
-- **PR**: [URL after PR created]
+- **PR**: https://github.com/5hdaniel/Mad/pull/1175
 
 ---
 
