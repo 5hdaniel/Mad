@@ -28,6 +28,7 @@ import {
 import { StatusBadge } from './StatusBadge';
 import { PriorityBadge } from './PriorityBadge';
 import { ParticipantsPanel } from './ParticipantsPanel';
+import { RelatedTicketsPanel } from './RelatedTicketsPanel';
 import { EventsTimeline } from './EventsTimeline';
 
 interface TicketSidebarProps {
@@ -295,6 +296,12 @@ export function TicketSidebar({ ticket, participants, events, onTicketUpdated }:
         ticketId={ticket.id}
         participants={participants}
         onUpdated={onTicketUpdated}
+      />
+
+      {/* Related Tickets */}
+      <RelatedTicketsPanel
+        ticketId={ticket.id}
+        onTicketUpdated={onTicketUpdated}
       />
 
       {/* Events Timeline */}
