@@ -272,11 +272,27 @@ Sprint aggregate across N engineer + N SR agents
 
 #### Retrospective Generation
 
-Populate the sprint file `## Sprint Retrospective` section with:
+**Use the `/sprint-close` skill** — it handles the full retrospective as a background agent.
+
+The skill populates the sprint file `## Sprint Retrospective` section by:
 
 1. **Estimation accuracy table** — est vs actual per task, with variance %
-2. **Issues summary** — aggregated from all task handoff `### Issues/Blockers` sections
-3. **What went well / didn't / lessons learned** — derived from the sprint
+2. **Issues summary** — aggregated from all task `Issues encountered` and handoff `### Issues/Blockers` sections
+3. **Lessons learned** — aggregated from all task `Lessons / Insights` sections (Engineer + SR Engineer)
+4. **Architecture & codebase insights** — from SR review notes and engineer discoveries
+5. **Process improvements** — workflow observations
+6. **Recommendations for next sprint** — actionable items
+7. **Systemic lessons → MEMORY.md** — if any insight applies beyond this sprint
+
+**PM invocation:**
+```
+Agent(
+  subagent_type="general-purpose",
+  description="Close SPRINT-XXX",
+  prompt="Run /sprint-close for SPRINT-XXX. Sprint file: .claude/plans/sprints/SPRINT-XXX-slug.md",
+  run_in_background=true
+)
+```
 
 #### Sprint File Required Sections
 

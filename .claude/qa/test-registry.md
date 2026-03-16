@@ -4,6 +4,28 @@ Tracks all test cases run across sprints. One row per test, updated after each Q
 
 ---
 
+## SPRINT-132 Tests (Support Ticket Search Expansion)
+
+**QA Date:** 2026-03-15
+**Tasks:** TASK-2182 (DB migration), TASK-2183 (Frontend rendering)
+
+| Test ID | Title | Status | Last Run | Notes |
+|---------|-------|--------|----------|-------|
+| TEST-132-001 | SearchBar placeholder text | PASS | 2026-03-15 | Placeholder reads "Search tickets, messages, requesters..." |
+| TEST-132-002 | Search by requester name | PASS | 2026-03-15 | Fix applied: requester highlights render inline in Requester column (not snippet row) |
+| TEST-132-003 | Search by requester email | PASS | 2026-03-15 | Fix applied: ILIKE fallback added for email/name — tsvector treats emails as single tokens |
+| TEST-132-004 | Search by message body | PASS | 2026-03-15 | Message snippet row shows sender name + date; parent ticket returned correctly |
+| TEST-132-005 | Search by subject | PASS | 2026-03-15 | Fix applied: subject highlights render inline in Subject column (not snippet row) |
+| TEST-132-006 | Search by description | PASS | 2026-03-15 | Description uses snippet row pattern below ticket row |
+| TEST-132-007 | Clear search | PASS | 2026-03-15 | All snippets and highlights disappear; full list restored |
+| TEST-132-008 | Internal notes security | PASS | 2026-03-15 | Internal notes filtered for non-agents; SQL injection + XSS safety also verified |
+| TEST-132-009 | Pagination during search | PASS | 2026-03-15 | Enhancement: pagination controls added at top of table as well as bottom |
+| TEST-132-010 | My Tickets page snippets | PASS | 2026-03-15 | Snippet behavior identical to main support page |
+| TEST-132-011 | Empty search / no results | PASS | 2026-03-15 | Graceful empty state; no artifacts |
+| TEST-132-012 | Multi-word + cross-field match | PASS | 2026-03-15 | AND semantics confirmed; "billing invoice" returned 5 tickets; first highlight only per ticket |
+
+---
+
 ## SPRINT-127 Tests (Batch 3: canExport/canSubmit Migration to useFeatureGate)
 
 **QA Date:** 2026-03-12

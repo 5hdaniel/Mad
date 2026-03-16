@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Keepr - Architecture Debugger{{FOCUS_TITLE}}</title>
+  <!--
+    Security note: All dynamic content rendered via innerHTML in this file
+    comes exclusively from trusted local sources (schema.sql file and
+    hardcoded Python constants). No user input is rendered as HTML.
+  -->
+  <style>
+    :root {
+      --bg-dark: #0d1117;
+      --bg-card: #161b22;
+      --bg-hover: #21262d;
+      --border: #30363d;
+      --border-active: #58a6ff;
+      --text-primary: #e6edf3;
+      --text-secondary: #8b949e;
+      --text-muted: #484f58;
+      --blue: #58a6ff;
+      --green: #3fb950;
+      --purple: #a371f7;
+      --orange: #d29922;
+      --red: #f85149;
+      --cyan: #39c5cf;
+      --pink: #db61a2;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-dark);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 340px;
+      background: var(--bg-card);
+      border-right: 1px solid var(--border);
+      padding: 20px;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+    .sidebar h1 { font-size: 1.1rem; margin-bottom: 5px; color: var(--blue); }
+    .sidebar .subtitle { font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 15px; }
+
+    /* Tab bar */
+    .tab-bar {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 15px;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 8px 12px;
+      background: var(--bg-hover);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      border-radius: 6px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 500;
+    }
+    .tab-btn:hover { border-color: var(--text-secondary); color: var(--text-primary); }
+    .tab-btn.active {
+      background: rgba(88, 166, 255, 0.15);
+      border-color: var(--blue);
+      color: var(--blue);
+    }
+
+    .chain-info { margin-top: 15px; }
+    .chain-info h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-secondary); margin-bottom: 10px; }
+    .chain-step {
+      background: var(--bg-hover);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 8px;
+      font-size: 0.8rem;
+    }
+    .chain-step.active { border-color: var(--blue); background: rgba(88, 166, 255, 0.1); }
+    .chain-step .step-layer { font-size: 0.65rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
+    .chain-step .step-name { font-weight: 600; color: var(--text-primary); }
+    .chain-step .step-file { font-size: 0.7rem; color: var(--cyan); font-family: 'SF Mono', Monaco, monospace; margin-top: 4px; word-break: break-all; }
+    .chain-step .step-desc { font-size: 0.7rem; color: var(--text-secondary); margin-top: 4px; }
+    .chain-arrow { text-align: center; color: var(--text-muted); font-size: 0.8rem; margin: 4px 0; }
+    .no-selection { color: var(--text-secondary); font-size: 0.85rem; text-align: center; padding: 40px 20px; }
+
+    .legend { margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border); }
+    .legend h4 { font-size: 0.7rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 10px; }
+    .legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 6px; }
+    .legend-dot { width: 12px; height: 12px; border-radius: 3px; }
+    .generated-info { font-size: 0.7rem; color: var(--text-muted); margin-top: 15px; text-align: center; }
+
+    .reset-btn {
+      background: var(--bg-hover);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      width: 100%;
+    }
+    .reset-btn:hover { border-color: var(--text-secondary); color: var(--text-primary); }
+
+    /* Main */
+    .main { flex: 1; padding: 30px; overflow: auto; }
+
+    /* Layers (shared between arch and db) */
+    .layers { display: flex; flex-direction: column; gap: 20px; max-width: 1400px; margin: 0 auto; }
+    .layer { display: flex; align-items: flex-start; gap: 20px; }
+    .layer-label { width: 130px; flex-shrink: 0; text-align: right; padding-top: 12px; }
+    .layer-label .label-name { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+    .layer-label .label-desc { font-size: 0.65rem; color: var(--text-muted); margin-top: 2px; }
+    .layer-content { flex: 1; display: flex; flex-wrap: wrap; gap: 10px; }
+
+    /* Nodes */
+    .node {
+      background: var(--bg-card);
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      min-width: 140px;
+    }
+    .node:hover { border-color: var(--text-secondary); transform: translateY(-2px); }
+    .node.highlighted { border-color: var(--blue); background: rgba(88, 166, 255, 0.15); box-shadow: 0 0 20px rgba(88, 166, 255, 0.3); z-index: 10; }
+    .node.dimmed { opacity: 0.3; }
+    .node.selected { border-color: var(--green); background: rgba(63, 185, 80, 0.15); box-shadow: 0 0 20px rgba(63, 185, 80, 0.3); }
+    .node .node-name { font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; }
+    .node .node-type { font-size: 0.65rem; color: var(--text-muted); font-family: 'SF Mono', Monaco, monospace; }
+
+    /* Architecture layer colors */
+    .layer.components .layer-label .label-name { color: var(--green); }
+    .layer.components .node { border-left: 3px solid var(--green); }
+    .layer.hooks .layer-label .label-name { color: var(--cyan); }
+    .layer.hooks .node { border-left: 3px solid var(--cyan); }
+    .layer.services .layer-label .label-name { color: var(--purple); }
+    .layer.services .node { border-left: 3px solid var(--purple); }
+    .layer.ipc .layer-label .label-name { color: var(--orange); }
+    .layer.ipc .node { border-left: 3px solid var(--orange); }
+    .layer.handlers .layer-label .label-name { color: var(--pink); }
+    .layer.handlers .node { border-left: 3px solid var(--pink); }
+    .layer.backend .layer-label .label-name { color: var(--blue); }
+    .layer.backend .node { border-left: 3px solid var(--blue); }
+    .layer.storage .layer-label .label-name { color: var(--red); }
+    .layer.storage .node { border-left: 3px solid var(--red); }
+
+    .instructions {
+      background: var(--bg-hover);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 15px 20px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    .instructions-icon { font-size: 1.5rem; }
+    .instructions-text { font-size: 0.85rem; color: var(--text-secondary); }
+    .instructions-text strong { color: var(--text-primary); }
+
+    /* Database Schema View */
+    .db-section { margin-bottom: 30px; }
+    .db-section-header {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 15px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .db-section-header .db-icon { font-size: 1.2rem; }
+
+    .db-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .db-badge.sqlite { background: rgba(88, 166, 255, 0.2); color: var(--blue); }
+    .db-badge.supabase { background: rgba(63, 185, 80, 0.2); color: var(--green); }
+
+    /* Schema table in sidebar */
+    .schema-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.72rem;
+      margin-top: 8px;
+    }
+    .schema-table th {
+      text-align: left;
+      padding: 4px 6px;
+      color: var(--text-muted);
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+    }
+    .schema-table td {
+      padding: 3px 6px;
+      border-bottom: 1px solid rgba(48, 54, 61, 0.5);
+      font-family: 'SF Mono', Monaco, monospace;
+    }
+    .schema-table td.col-name { color: var(--text-primary); }
+    .schema-table td.col-type { color: var(--cyan); font-size: 0.68rem; }
+    .schema-table td.col-flags { color: var(--text-muted); font-size: 0.65rem; }
+    .schema-table tr.pk-row td { background: rgba(88, 166, 255, 0.05); }
+    .schema-table tr.fk-row td.col-name { color: var(--orange); }
+
+    .fk-section { margin-top: 12px; }
+    .fk-section h4 {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .fk-link {
+      display: block;
+      padding: 5px 8px;
+      margin-bottom: 4px;
+      background: var(--bg-hover);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-family: 'SF Mono', Monaco, monospace;
+      color: var(--cyan);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .fk-link:hover {
+      border-color: var(--cyan);
+      background: rgba(57, 197, 207, 0.1);
+    }
+    .fk-link .fk-arrow { color: var(--text-muted); }
+
+    .table-desc {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin: 8px 0 4px;
+      line-height: 1.4;
+    }
+    .table-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <h1>Architecture Debugger</h1>
+    <p class="subtitle">Interactive architecture and database explorer{{FOCUS_TITLE}}</p>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="arch" onclick="switchTab('arch')">Architecture</button>
+      <button class="tab-btn" data-tab="db" onclick="switchTab('db')">Database</button>
+    </div>
+
+    <button class="reset-btn" onclick="resetAll()">Reset View</button>
+
+    <div class="chain-info" id="chainInfo">
+      <div class="no-selection">Click on any component to see its full connection chain.</div>
+    </div>
+
+    <div class="legend" id="archLegend">
+      <h4>Architecture Layers</h4>
+      <div class="legend-item"><div class="legend-dot" style="background: var(--green);"></div><span>React Components</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background: var(--cyan);"></div><span>Custom Hooks</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background: var(--purple);"></div><span>Frontend Services</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background: var(--orange);"></div><span>IPC Bridges</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background: var(--pink);"></div><span>Main Process Handlers</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background: var(--blue);"></div><span>Backend Services</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background: var(--red);"></div><span>Storage / External APIs</span></div>
+    </div>
+
+    <div class="legend" id="dbLegend" style="display:none">
+      <h4>Database Legend</h4>
+      <div class="legend-item"><div class="legend-dot" style="background: var(--blue);"></div><span>SQLite (Local Device)</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background: var(--green);"></div><span>Supabase (Cloud)</span></div>
+      <div style="margin-top: 10px; font-size: 0.72rem; color: var(--text-muted);">
+        <div style="margin-bottom: 4px;"><strong style="color: var(--green);">Green glow</strong> = selected table</div>
+        <div style="margin-bottom: 4px;"><strong style="color: var(--blue);">Blue glow</strong> = connected via FK</div>
+        <div>Click FK links in sidebar to navigate</div>
+      </div>
+    </div>
+
+    <div class="generated-info">Auto-generated by /architecture skill</div>
+  </aside>
+
+  <main class="main">
+    <!-- Architecture Flow Tab -->
+    <div id="archView">
+      <div class="instructions">
+        <span class="instructions-icon">&#128269;</span>
+        <div class="instructions-text">
+          <strong>Architecture Flow:</strong> Click any node to trace the data flow from UI to database/API.
+        </div>
+      </div>
+      <div class="layers" id="archLayers">
+{{LAYERS_HTML}}
+      </div>
+    </div>
+
+    <!-- Database Schema Tab -->
+    <div id="dbView" style="display:none">
+      <div class="instructions">
+        <span class="instructions-icon">&#128451;</span>
+        <div class="instructions-text">
+          <strong>Database Schema:</strong> Click any table to see its columns, types, and foreign key relationships. Connected tables are highlighted.
+        </div>
+      </div>
+      <div class="layers" id="dbLayers">
+        <!-- Rendered by JavaScript from dbSchema data -->
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // ============================================
+    // Data (injected by Python generator)
+    // All data comes from trusted local sources only:
+    //   - schema.sql (SQLite definitions)
+    //   - Hardcoded Python constants (Supabase definitions)
+    // ============================================
+    var architecture = {{ARCH_JSON}};
+    var dbSchema = {{DB_JSON}};
+
+    // ============================================
+    // Tab Switching
+    // ============================================
+    var currentTab = 'arch';
+
+    function switchTab(tab) {
+      currentTab = tab;
+      document.getElementById('archView').style.display = tab === 'arch' ? 'block' : 'none';
+      document.getElementById('dbView').style.display = tab === 'db' ? 'block' : 'none';
+      document.getElementById('archLegend').style.display = tab === 'arch' ? 'block' : 'none';
+      document.getElementById('dbLegend').style.display = tab === 'db' ? 'block' : 'none';
+      document.querySelectorAll('.tab-btn').forEach(function(btn) {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+      });
+      resetAll();
+    }
+
+    function resetAll() {
+      if (currentTab === 'arch') {
+        resetSelection();
+      } else {
+        resetTableSelection();
+      }
+      var hint = currentTab === 'arch'
+        ? 'Click on any component to see its full connection chain.'
+        : 'Click on any table to see its schema and foreign key relationships.';
+      document.getElementById('chainInfo').textContent = '';
+      var div = document.createElement('div');
+      div.className = 'no-selection';
+      div.textContent = hint;
+      document.getElementById('chainInfo').appendChild(div);
+    }
+
+    // ============================================
+    // Architecture Flow
+    // ============================================
+    var selectedNode = null;
+    var highlightedNodes = new Set();
+
+    function selectNode(nodeId) {
+      selectedNode = nodeId;
+      highlightedNodes.clear();
+      var chain = buildChain(nodeId);
+      highlightedNodes = new Set(chain.map(function(step) { return step.id; }));
+      updateNodeStyles();
+      updateChainInfo(chain);
+    }
+
+    function buildChain(startId) {
+      var chain = [];
+      var visited = new Set();
+      var layerOrder = ['components', 'hooks', 'services', 'ipc', 'handlers', 'backend', 'storage'];
+
+      function traverseForward(id, depth) {
+        if (depth === undefined) depth = 0;
+        if (visited.has(id) || !architecture[id]) return;
+        visited.add(id);
+        var node = architecture[id];
+        chain.push({ id: id, layer: node.layer, file: node.file, desc: node.desc, connects: node.connects, direction: depth === 0 ? 'origin' : 'downstream' });
+        var connects = node.connects || [];
+        for (var i = 0; i < connects.length; i++) { traverseForward(connects[i], depth + 1); }
+      }
+
+      function findUpstream(targetId) {
+        var upstream = [];
+        for (var id in architecture) {
+          var node = architecture[id];
+          if (node.connects && node.connects.indexOf(targetId) !== -1) { upstream.push(id); }
+        }
+        return upstream;
+      }
+
+      function traverseBackward(id) {
+        var upstreamIds = findUpstream(id);
+        for (var i = 0; i < upstreamIds.length; i++) {
+          var upId = upstreamIds[i];
+          if (!visited.has(upId) && architecture[upId]) {
+            visited.add(upId);
+            var node = architecture[upId];
+            chain.unshift({ id: upId, layer: node.layer, file: node.file, desc: node.desc, connects: node.connects, direction: 'upstream' });
+            traverseBackward(upId);
+          }
+        }
+      }
+
+      traverseForward(startId);
+      traverseBackward(startId);
+      chain.sort(function(a, b) { return layerOrder.indexOf(a.layer) - layerOrder.indexOf(b.layer); });
+      return chain;
+    }
+
+    function updateNodeStyles() {
+      document.querySelectorAll('#archView .node').forEach(function(node) {
+        var nodeId = node.dataset.id;
+        node.classList.remove('highlighted', 'selected', 'dimmed');
+        if (selectedNode) {
+          if (nodeId === selectedNode) { node.classList.add('selected'); }
+          else if (highlightedNodes.has(nodeId)) { node.classList.add('highlighted'); }
+          else { node.classList.add('dimmed'); }
+        }
+      });
+    }
+
+    function updateChainInfo(chain) {
+      var container = document.getElementById('chainInfo');
+      if (chain.length === 0) {
+        container.textContent = '';
+        var d = document.createElement('div');
+        d.className = 'no-selection';
+        d.textContent = 'Click on any component to see its full connection chain.';
+        container.appendChild(d);
+        return;
+      }
+
+      // Build chain display using DOM methods for safety
+      container.textContent = '';
+      var h3 = document.createElement('h3');
+      h3.textContent = 'Connection Chain';
+      container.appendChild(h3);
+
+      for (var i = 0; i < chain.length; i++) {
+        var step = chain[i];
+        var isOrigin = step.direction === 'origin';
+
+        var stepDiv = document.createElement('div');
+        stepDiv.className = 'chain-step' + (isOrigin ? ' active' : '');
+
+        var layerDiv = document.createElement('div');
+        layerDiv.className = 'step-layer';
+        layerDiv.textContent = step.layer;
+        stepDiv.appendChild(layerDiv);
+
+        var nameDiv = document.createElement('div');
+        nameDiv.className = 'step-name';
+        nameDiv.textContent = step.id;
+        stepDiv.appendChild(nameDiv);
+
+        var fileDiv = document.createElement('div');
+        fileDiv.className = 'step-file';
+        fileDiv.textContent = step.file;
+        stepDiv.appendChild(fileDiv);
+
+        var descDiv = document.createElement('div');
+        descDiv.className = 'step-desc';
+        descDiv.textContent = step.desc;
+        stepDiv.appendChild(descDiv);
+
+        container.appendChild(stepDiv);
+
+        if (i < chain.length - 1) {
+          var arrow = document.createElement('div');
+          arrow.className = 'chain-arrow';
+          arrow.textContent = '\u2193';
+          container.appendChild(arrow);
+        }
+      }
+    }
+
+    function resetSelection() {
+      selectedNode = null;
+      highlightedNodes.clear();
+      document.querySelectorAll('#archView .node').forEach(function(node) {
+        node.classList.remove('highlighted', 'selected', 'dimmed');
+      });
+    }
+
+    // ============================================
+    // Database Schema View
+    // ============================================
+    var dbSelectedTable = null;
+    var dbHighlightedTables = new Set();
+
+    function renderDatabaseView() {
+      var container = document.getElementById('dbLayers');
+      container.textContent = '';
+
+      var dbKeys = Object.keys(dbSchema);
+      for (var d = 0; d < dbKeys.length; d++) {
+        var dbKey = dbKeys[d];
+        var db = dbSchema[dbKey];
+
+        var section = document.createElement('div');
+        section.className = 'db-section';
+
+        var header = document.createElement('div');
+        header.className = 'db-section-header';
+        var iconSpan = document.createElement('span');
+        iconSpan.className = 'db-icon';
+        iconSpan.textContent = dbKey === 'sqlite' ? '\uD83D\uDCBE' : '\u2601\uFE0F';
+        header.appendChild(iconSpan);
+        header.appendChild(document.createTextNode(' ' + db.label));
+        section.appendChild(header);
+
+        var groupKeys = Object.keys(db.groups);
+        for (var g = 0; g < groupKeys.length; g++) {
+          var groupKey = groupKeys[g];
+          var group = db.groups[groupKey];
+          if (!group.tables || group.tables.length === 0) continue;
+
+          var layerDiv = document.createElement('div');
+          layerDiv.className = 'layer';
+
+          var labelDiv = document.createElement('div');
+          labelDiv.className = 'layer-label';
+          var labelName = document.createElement('div');
+          labelName.className = 'label-name';
+          labelName.style.color = group.color;
+          labelName.textContent = group.label;
+          labelDiv.appendChild(labelName);
+          var labelDesc = document.createElement('div');
+          labelDesc.className = 'label-desc';
+          labelDesc.textContent = group.tables.length + ' tables';
+          labelDiv.appendChild(labelDesc);
+          layerDiv.appendChild(labelDiv);
+
+          var contentDiv = document.createElement('div');
+          contentDiv.className = 'layer-content';
+
+          for (var t = 0; t < group.tables.length; t++) {
+            var tableName = group.tables[t];
+            var table = db.tables[tableName];
+            if (!table) continue;
+            var colCount = table.columns ? table.columns.length : 0;
+            var fkCount = table.fks ? table.fks.length : 0;
+            var subtitle = colCount + ' cols' + (fkCount > 0 ? ' \u00B7 ' + fkCount + ' FK' : '');
+
+            var nodeDiv = document.createElement('div');
+            nodeDiv.className = 'node db-node';
+            nodeDiv.dataset.db = dbKey;
+            nodeDiv.dataset.table = tableName;
+            nodeDiv.style.borderLeft = '3px solid ' + group.color;
+            nodeDiv.onclick = (function(dk, tn) {
+              return function() { selectTable(dk, tn); };
+            })(dbKey, tableName);
+
+            var nameDiv = document.createElement('div');
+            nameDiv.className = 'node-name';
+            nameDiv.textContent = tableName;
+            nodeDiv.appendChild(nameDiv);
+
+            var typeDiv = document.createElement('div');
+            typeDiv.className = 'node-type';
+            typeDiv.textContent = subtitle;
+            nodeDiv.appendChild(typeDiv);
+
+            contentDiv.appendChild(nodeDiv);
+          }
+
+          layerDiv.appendChild(contentDiv);
+          section.appendChild(layerDiv);
+        }
+        container.appendChild(section);
+      }
+    }
+
+    function selectTable(dbKey, tableName) {
+      dbSelectedTable = { db: dbKey, table: tableName };
+      dbHighlightedTables.clear();
+
+      var table = dbSchema[dbKey] && dbSchema[dbKey].tables[tableName];
+      if (!table) return;
+
+      // Highlight tables this one references (outgoing FKs)
+      var fks = table.fks || [];
+      for (var i = 0; i < fks.length; i++) {
+        var fk = fks[i];
+        if (dbSchema[dbKey].tables[fk.refTable]) {
+          dbHighlightedTables.add(dbKey + ':' + fk.refTable);
+        } else {
+          var otherDbs = Object.keys(dbSchema);
+          for (var j = 0; j < otherDbs.length; j++) {
+            if (otherDbs[j] !== dbKey && dbSchema[otherDbs[j]].tables[fk.refTable]) {
+              dbHighlightedTables.add(otherDbs[j] + ':' + fk.refTable);
+            }
+          }
+        }
+      }
+
+      // Highlight tables that reference this one (incoming FKs)
+      var allDbs = Object.keys(dbSchema);
+      for (var di = 0; di < allDbs.length; di++) {
+        var dk = allDbs[di];
+        var dbObj = dbSchema[dk];
+        var tableNames = Object.keys(dbObj.tables);
+        for (var ti = 0; ti < tableNames.length; ti++) {
+          var otherTable = tableNames[ti];
+          if (dk === dbKey && otherTable === tableName) continue;
+          var otherFks = dbObj.tables[otherTable].fks || [];
+          for (var fi = 0; fi < otherFks.length; fi++) {
+            if (otherFks[fi].refTable === tableName) {
+              dbHighlightedTables.add(dk + ':' + otherTable);
+            }
+          }
+        }
+      }
+
+      updateTableStyles();
+      updateTableInfo(dbKey, tableName);
+    }
+
+    function updateTableStyles() {
+      document.querySelectorAll('.db-node').forEach(function(node) {
+        var db = node.dataset.db;
+        var table = node.dataset.table;
+        node.classList.remove('selected', 'highlighted', 'dimmed');
+
+        if (dbSelectedTable) {
+          if (db === dbSelectedTable.db && table === dbSelectedTable.table) {
+            node.classList.add('selected');
+          } else if (dbHighlightedTables.has(db + ':' + table)) {
+            node.classList.add('highlighted');
+          } else {
+            node.classList.add('dimmed');
+          }
+        }
+      });
+    }
+
+    function updateTableInfo(dbKey, tableName) {
+      var table = dbSchema[dbKey].tables[tableName];
+      var container = document.getElementById('chainInfo');
+      container.textContent = '';
+
+      // Title
+      var title = document.createElement('div');
+      title.className = 'table-title';
+      title.textContent = tableName;
+      container.appendChild(title);
+
+      // Badge
+      var badge = document.createElement('div');
+      badge.className = 'db-badge ' + dbKey;
+      badge.textContent = dbSchema[dbKey].label;
+      container.appendChild(badge);
+
+      // Description
+      if (table.desc) {
+        var desc = document.createElement('div');
+        desc.className = 'table-desc';
+        desc.textContent = table.desc;
+        container.appendChild(desc);
+      }
+
+      // Columns table
+      var schemaTable = document.createElement('table');
+      schemaTable.className = 'schema-table';
+      var thead = document.createElement('tr');
+      ['Column', 'Type', 'Info'].forEach(function(h) {
+        var th = document.createElement('th');
+        th.textContent = h;
+        thead.appendChild(th);
+      });
+      schemaTable.appendChild(thead);
+
+      var columns = table.columns || [];
+      for (var i = 0; i < columns.length; i++) {
+        var col = columns[i];
+        var flags = [];
+        if (col.pk) flags.push('PK');
+        if (col.notNull) flags.push('NOT NULL');
+        if (col.unique) flags.push('UNIQUE');
+        if (col.hasDefault) flags.push('DEFAULT');
+
+        var colFk = null;
+        var tableFks = table.fks || [];
+        for (var f = 0; f < tableFks.length; f++) {
+          if (tableFks[f].col === col.name) { colFk = tableFks[f]; break; }
+        }
+        if (colFk) flags.push('FK');
+
+        var tr = document.createElement('tr');
+        tr.className = col.pk ? 'pk-row' : (colFk ? 'fk-row' : '');
+
+        var tdName = document.createElement('td');
+        tdName.className = 'col-name';
+        tdName.textContent = col.name;
+        tr.appendChild(tdName);
+
+        var tdType = document.createElement('td');
+        tdType.className = 'col-type';
+        tdType.textContent = col.type;
+        tr.appendChild(tdType);
+
+        var tdFlags = document.createElement('td');
+        tdFlags.className = 'col-flags';
+        tdFlags.textContent = flags.join(', ');
+        tr.appendChild(tdFlags);
+
+        schemaTable.appendChild(tr);
+      }
+      container.appendChild(schemaTable);
+
+      // Outgoing FK references
+      var outFks = table.fks || [];
+      if (outFks.length > 0) {
+        var fkSection = document.createElement('div');
+        fkSection.className = 'fk-section';
+        var fkH4 = document.createElement('h4');
+        fkH4.textContent = 'References \u2192';
+        fkSection.appendChild(fkH4);
+
+        for (var ri = 0; ri < outFks.length; ri++) {
+          var fk = outFks[ri];
+          var targetDb = null;
+          if (dbSchema[dbKey].tables[fk.refTable]) { targetDb = dbKey; }
+          else {
+            var dks = Object.keys(dbSchema);
+            for (var dki = 0; dki < dks.length; dki++) {
+              if (dbSchema[dks[dki]].tables[fk.refTable]) { targetDb = dks[dki]; break; }
+            }
+          }
+
+          var link = document.createElement('div');
+          link.className = 'fk-link';
+          link.textContent = fk.col + ' \u2192 ' + fk.refTable + '.' + fk.refCol;
+          if (targetDb) {
+            link.onclick = (function(tdb, tbl) {
+              return function() { selectTable(tdb, tbl); };
+            })(targetDb, fk.refTable);
+          } else {
+            link.style.cursor = 'default';
+            link.style.opacity = '0.5';
+          }
+          fkSection.appendChild(link);
+        }
+        container.appendChild(fkSection);
+      }
+
+      // Incoming FK references
+      var referencedBy = [];
+      var allDbKeys = Object.keys(dbSchema);
+      for (var dbi = 0; dbi < allDbKeys.length; dbi++) {
+        var dKey = allDbKeys[dbi];
+        var dbObj = dbSchema[dKey];
+        var tNames = Object.keys(dbObj.tables);
+        for (var ti = 0; ti < tNames.length; ti++) {
+          var otherName = tNames[ti];
+          if (dKey === dbKey && otherName === tableName) continue;
+          var otherFks = dbObj.tables[otherName].fks || [];
+          for (var ofi = 0; ofi < otherFks.length; ofi++) {
+            if (otherFks[ofi].refTable === tableName) {
+              referencedBy.push({ db: dKey, table: otherName, col: otherFks[ofi].col, refCol: otherFks[ofi].refCol });
+            }
+          }
+        }
+      }
+
+      if (referencedBy.length > 0) {
+        var refSection = document.createElement('div');
+        refSection.className = 'fk-section';
+        var refH4 = document.createElement('h4');
+        refH4.textContent = '\u2190 Referenced By';
+        refSection.appendChild(refH4);
+
+        for (var rbi = 0; rbi < referencedBy.length; rbi++) {
+          var ref = referencedBy[rbi];
+          var refLink = document.createElement('div');
+          refLink.className = 'fk-link';
+          refLink.textContent = ref.table + '.' + ref.col + ' \u2192 ' + ref.refCol;
+          refLink.onclick = (function(rdb, rtbl) {
+            return function() { selectTable(rdb, rtbl); };
+          })(ref.db, ref.table);
+          refSection.appendChild(refLink);
+        }
+        container.appendChild(refSection);
+      }
+    }
+
+    function resetTableSelection() {
+      dbSelectedTable = null;
+      dbHighlightedTables.clear();
+      document.querySelectorAll('.db-node').forEach(function(node) {
+        node.classList.remove('selected', 'highlighted', 'dimmed');
+      });
+    }
+
+    // ============================================
+    // Initialize
+    // ============================================
+    document.addEventListener('DOMContentLoaded', function() {
+      renderDatabaseView();
+    });
+  </script>
+</body>
+</html>

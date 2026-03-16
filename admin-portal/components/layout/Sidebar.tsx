@@ -35,9 +35,9 @@ const mainNavItems: NavItem[] = [
 
 /** Sub-items under the collapsible "Support" section */
 const supportSubItems: NavItem[] = [
-  { label: 'Queue', href: '/dashboard/support', icon: Inbox, permission: PERMISSIONS.SUPPORT_VIEW },
   { label: 'My Tickets', href: '/dashboard/support/my-tickets', icon: UserCheck, permission: PERMISSIONS.SUPPORT_VIEW },
   { label: 'Analytics', href: '/dashboard/support/analytics', icon: BarChart3, permission: PERMISSIONS.SUPPORT_MANAGE },
+  { label: 'Queue', href: '/dashboard/support', icon: Inbox, permission: PERMISSIONS.SUPPORT_VIEW },
   { label: 'Settings', href: '/dashboard/support/settings', icon: Settings, permission: PERMISSIONS.SUPPORT_MANAGE },
 ];
 

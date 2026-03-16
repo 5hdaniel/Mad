@@ -120,6 +120,9 @@ PHASE C: IMPLEMENTATION
     - Engineer MUST include `### Effort` section in handoff message
       with agent_id and token count. The agent_id is returned by
       the Task tool when the agent completes.
+    - Engineer MUST include `### Lessons / Insights` section in handoff
+      (patterns that worked, estimation surprises, codebase discoveries,
+      or "None — straightforward implementation")
     - → SR ENGINEER: Handoff for implementation review
 
 10. SR ENGINEER: Review implementation
@@ -129,6 +132,8 @@ PHASE C: IMPLEMENTATION
     ├─ Approve → Step 11
     │   - Confirm implementation matches plan
     │   - SR Engineer MUST include own `### Effort` section in handoff
+    │   - SR Engineer MUST include `### Lessons / Insights` section
+    │     (architecture observations, quality patterns, review findings)
     │   - Handoff to PM
     └─ Reject → Step 11 (notify PM with rejected status)
         - Document rejection reason
@@ -186,19 +191,19 @@ PHASE D: PR, TEST & MERGE
     - Collect issues from handoff messages → sprint file `## Issues Summary`
 
 15. PM: When ALL sprint tasks complete → Close sprint
-    - Verify all tasks are complete
-    - Aggregate all task metrics for the sprint:
-      python .claude/skills/log-metrics/sum_effort.py --task TASK-XXXX --pretty
-      (repeat for each task)
-    - Populate sprint file `## Sprint Retrospective` section:
-      - Estimation accuracy table (est vs actual per task)
-      - Issues summary (aggregated from all task handoffs)
-      - What went well / didn't / lessons learned
-    - Create sprint rollup PR (sprint/* → develop) with
-      `## Engineer Metrics` section populated from aggregated data
-      (this passes the CI pr-metrics-check)
-    - Include Agent ID, Total Tokens, Duration, Variance in PR body
-    - Update sprint status to "completed"
+    - Invoke `/sprint-close` via background agent to handle closure
+    - The sprint-close skill handles:
+      a. Verify all tasks are complete and PRs merged
+      b. Aggregate all task metrics
+      c. Collect issues AND lessons/insights from all task handoffs
+      d. Populate sprint file `## Sprint Retrospective` section
+         (estimation accuracy, issues, lessons learned)
+      e. Create sprint rollup PR with `## Engineer Metrics`
+      f. Update sprint status to "completed"
+      g. Save systemic lessons to MEMORY.md if warranted
+    - Run this in background so user can continue other work:
+      Agent(subagent_type="general-purpose", prompt="...",
+            run_in_background=true)
 ```
 
 ---
@@ -216,6 +221,7 @@ Every handoff MUST use this format:
 **Next Action:** [what the receiving agent should do]
 **Context:** [any relevant info - branch, PR, blockers]
 **Issues/Blockers:** [problems encountered, workarounds used, or "None"]
+**Lessons/Insights:** [what you learned that helps future tasks, or "None"]
 ```
 
 See `templates/handoff-message.template.md` for the full template.
