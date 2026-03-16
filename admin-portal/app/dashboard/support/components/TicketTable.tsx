@@ -170,8 +170,17 @@ export function TicketTable({
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                     {ticket.ticket_number}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate font-medium">
-                    {ticket.subject}
+                  <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate font-medium [&_mark]:bg-yellow-200 [&_mark]:px-0.5 [&_mark]:rounded-sm">
+                    {(() => {
+                      const subjectHighlight = searchActive && ticket.search_highlights?.find(
+                        h => h.field === 'subject'
+                      );
+                      if (subjectHighlight) {
+                        const sanitized = DOMPurify.sanitize(subjectHighlight.snippet, { ALLOWED_TAGS: ['mark'] });
+                        return <span dangerouslySetInnerHTML={{ __html: sanitized }} />;
+                      }
+                      return ticket.subject;
+                    })()}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <StatusBadge status={ticket.status} />
@@ -202,7 +211,7 @@ export function TicketTable({
                 </tr>
                 {(() => {
                   const snippetHighlight = searchActive && ticket.search_highlights?.find(
-                    h => h.field !== 'requester_name' && h.field !== 'requester_email'
+                    h => h.field === 'description' || h.field === 'message'
                   );
                   return snippetHighlight ? (
                     <tr className="border-b border-gray-100">
