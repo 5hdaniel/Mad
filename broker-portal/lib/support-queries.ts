@@ -153,3 +153,12 @@ export async function getAttachmentUrl(storagePath: string): Promise<string> {
   if (error) throw error;
   return data.signedUrl;
 }
+
+export async function closeTicketByRequester(ticketId: string): Promise<{ closed: boolean }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_close_ticket_by_requester', {
+    p_ticket_id: ticketId,
+  });
+  if (error) throw error;
+  return data as unknown as { closed: boolean };
+}

@@ -12,7 +12,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Hash } from 'lucide-react';
-import { getTicketDetail } from '@/lib/support-queries';
+import { getTicketDetail, closeTicketByRequester } from '@/lib/support-queries';
 import type { TicketDetailResponse } from '@/lib/support-types';
 import { TicketStatusBadge } from '../components/TicketStatusBadge';
 import { CustomerTicketDescription, CustomerMessageList } from '../components/CustomerConversation';
@@ -26,6 +26,8 @@ export default function CustomerTicketDetailPage() {
   const [detail, setDetail] = useState<TicketDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [closing, setClosing] = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
 
   const loadDetail = useCallback(async () => {
@@ -50,6 +52,19 @@ export default function CustomerTicketDetailPage() {
         threadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       }, 100);
     });
+  }
+
+  async function handleCloseTicket() {
+    setClosing(true);
+    try {
+      await closeTicketByRequester(ticketId);
+      setShowCloseConfirm(false);
+      await loadDetail();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to close ticket');
+    } finally {
+      setClosing(false);
+    }
   }
 
   if (loading) {
@@ -107,6 +122,14 @@ export default function CustomerTicketDetailPage() {
             </div>
             <h1 className="text-xl font-bold text-gray-900">{ticket.subject}</h1>
             <TicketStatusBadge status={ticket.status} />
+            {ticket.status !== 'closed' && (
+              <button
+                onClick={() => setShowCloseConfirm(true)}
+                className="ml-2 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                Close Ticket
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -163,6 +186,34 @@ export default function CustomerTicketDetailPage() {
           <CustomerTicketSidebar ticket={ticket} />
         </div>
       </div>
+
+      {/* Close Ticket Confirmation Dialog */}
+      {showCloseConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Close this ticket?</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Are you sure you want to close this ticket? You can reopen it later by replying.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowCloseConfirm(false)}
+                disabled={closing}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCloseTicket}
+                disabled={closing}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {closing ? 'Closing...' : 'Close Ticket'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
