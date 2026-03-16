@@ -2,8 +2,8 @@
 -- Migration: Add Missing Audit Log Actions
 -- Task: TASK-2190 / BACKLOG-863 (SPRINT-134)
 -- Purpose: Convert admin RPCs from direct INSERT INTO admin_audit_logs to use
---          the centralized log_admin_action() RPC. This ensures all audit
---          entries capture IP address and user-agent (SOC 2 CC6.1 compliance).
+--          the centralized log_admin_action() RPC. This centralizes all audit
+--          logging through a single function for consistency and maintainability.
 --
 -- RPCs updated (8 direct-INSERT -> log_admin_action):
 --   1. admin_assign_org_plan
@@ -404,9 +404,10 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  v_admin_id  UUID;
-  v_has_perm  BOOLEAN;
-  v_plan_name TEXT;
+  v_admin_id          UUID;
+  v_has_perm          BOOLEAN;
+  v_plan_name         TEXT;
+  v_previous_is_active BOOLEAN;
 BEGIN
   v_admin_id := auth.uid();
   IF v_admin_id IS NULL THEN
@@ -418,22 +419,22 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'insufficient_permissions');
   END IF;
 
-  SELECT name INTO v_plan_name FROM public.plans WHERE id = p_plan_id;
+  SELECT name, is_active INTO v_plan_name, v_previous_is_active FROM public.plans WHERE id = p_plan_id;
   IF v_plan_name IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'plan_not_found');
   END IF;
 
-  UPDATE public.plans SET is_active = p_is_active WHERE id = p_plan_id;
+  UPDATE public.plans SET is_active = p_is_active, updated_at = now() WHERE id = p_plan_id;
 
   -- Audit log (TASK-2190: migrated from direct INSERT to log_admin_action)
   PERFORM public.log_admin_action(
-    CASE WHEN p_is_active THEN 'plan.activated' ELSE 'plan.deactivated' END,
+    'plan.toggled',
     'plan',
     p_plan_id::text,
-    jsonb_build_object('name', v_plan_name, 'is_active', p_is_active)
+    jsonb_build_object('name', v_plan_name, 'previous_is_active', v_previous_is_active, 'new_is_active', p_is_active)
   );
 
-  RETURN jsonb_build_object('success', true, 'is_active', p_is_active);
+  RETURN jsonb_build_object('success', true, 'previous_is_active', v_previous_is_active);
 END;
 $$;
 
@@ -721,7 +722,6 @@ BEGIN
     jsonb_build_object(
       'admin_user_id', v_session.admin_user_id,
       'target_user_id', v_session.target_user_id,
-      'target_email', v_session.target_email,
       'session_id', v_session.id
     )
   );
