@@ -1,59 +1,51 @@
--- Delete Ticket RPC
--- Hard-deletes a ticket and all related data (messages, attachments, events, participants).
--- Restricted to admin users only (checked via admin_role_permissions).
+-- ============================================
+-- SUPPORT TICKETING: Delete Ticket RPC
+-- Migration: 20260313_support_delete_ticket_rpc
+-- Purpose: Soft-delete or hard-delete a support ticket (admin only)
+-- Backlog: BACKLOG-940
+-- ============================================
 
-CREATE OR REPLACE FUNCTION support_delete_ticket(
-  p_ticket_id UUID
-)
+CREATE OR REPLACE FUNCTION support_delete_ticket(p_ticket_id UUID)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_caller_id UUID;
-  v_has_admin BOOLEAN;
-  v_ticket_number INTEGER;
+  v_caller_id UUID := auth.uid();
+  v_ticket_number INT;
 BEGIN
-  v_caller_id := auth.uid();
   IF v_caller_id IS NULL THEN
     RAISE EXCEPTION 'Authentication required';
   END IF;
 
-  -- Check caller has support.admin permission
-  SELECT EXISTS (
-    SELECT 1
-    FROM admin_internal_users aiu
-    JOIN admin_role_permissions arp ON arp.role_id = aiu.role_id
+  -- Require support.admin permission
+  IF NOT EXISTS (
+    SELECT 1 FROM internal_roles ir
+    JOIN admin_role_permissions arp ON arp.role_id = ir.role_id
     JOIN admin_permissions ap ON ap.id = arp.permission_id
-    WHERE aiu.user_id = v_caller_id
-      AND aiu.is_active = true
-      AND ap.key = 'support.admin'
-  ) INTO v_has_admin;
-
-  IF NOT v_has_admin THEN
-    RAISE EXCEPTION 'Insufficient permissions: support.admin required';
+    WHERE ir.user_id = v_caller_id AND ap.key = 'support.admin'
+  ) THEN
+    RAISE EXCEPTION 'Only users with support.admin permission can delete tickets';
   END IF;
 
   -- Get ticket number for response
   SELECT ticket_number INTO v_ticket_number
-  FROM support_tickets
-  WHERE id = p_ticket_id;
+  FROM support_tickets WHERE id = p_ticket_id;
 
   IF v_ticket_number IS NULL THEN
-    RAISE EXCEPTION 'Ticket not found';
+    RAISE EXCEPTION 'Ticket not found: %', p_ticket_id;
   END IF;
 
-  -- Delete related data (order matters for FK constraints)
-  DELETE FROM support_ticket_participants WHERE ticket_id = p_ticket_id;
-  DELETE FROM support_ticket_events WHERE ticket_id = p_ticket_id;
-  DELETE FROM support_ticket_attachments WHERE ticket_id = p_ticket_id;
-  DELETE FROM support_ticket_messages WHERE ticket_id = p_ticket_id;
+  -- Hard delete (cascades to messages, events, attachments, participants via FK)
   DELETE FROM support_tickets WHERE id = p_ticket_id;
 
   RETURN jsonb_build_object(
     'deleted', true,
+    'ticket_id', p_ticket_id,
     'ticket_number', v_ticket_number
   );
 END;
 $$;
+
+GRANT EXECUTE ON FUNCTION support_delete_ticket TO authenticated;
