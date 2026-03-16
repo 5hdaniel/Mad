@@ -265,14 +265,14 @@ export function RelatedTicketsPanel({ ticketId, onTicketUpdated }: RelatedTicket
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search by # or subject..."
-                    className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full text-sm text-gray-900 bg-white border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
 
                   {/* Link type selector */}
                   <select
                     value={linkType}
                     onChange={(e) => setLinkType(e.target.value as TicketLinkType)}
-                    className="w-full text-xs border border-gray-300 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full text-xs text-gray-900 border border-gray-300 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     {(Object.entries(LINK_TYPE_LABELS) as [TicketLinkType, string][]).map(
                       ([value, label]) => (
