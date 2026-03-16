@@ -102,7 +102,7 @@ export function getEventDescription(event: SupportTicketEvent): string {
  * as top-level fields; fall back to metadata for backwards compatibility.
  */
 export function getActorName(event: SupportTicketEvent): string | null {
-  const evt = event as Record<string, unknown>;
+  const evt = event as unknown as Record<string, unknown>;
   if (typeof evt.actor_name === 'string') return evt.actor_name;
   if (typeof evt.actor_email === 'string') return evt.actor_email;
   if (event.metadata && typeof event.metadata === 'object') {
