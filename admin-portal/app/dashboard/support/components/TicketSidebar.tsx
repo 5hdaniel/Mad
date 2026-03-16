@@ -18,7 +18,6 @@ import type {
   TicketPriority,
   PendingReason,
   SupportTicketParticipant,
-  SupportTicketEvent,
 } from '@/lib/support-types';
 import {
   ALLOWED_TRANSITIONS,
@@ -28,12 +27,10 @@ import {
 import { StatusBadge } from './StatusBadge';
 import { PriorityBadge } from './PriorityBadge';
 import { ParticipantsPanel } from './ParticipantsPanel';
-import { EventsTimeline } from './EventsTimeline';
 
 interface TicketSidebarProps {
   ticket: SupportTicket;
   participants: SupportTicketParticipant[];
-  events: SupportTicketEvent[];
   onTicketUpdated: () => void;
 }
 
@@ -48,7 +45,7 @@ function formatDate(dateStr: string): string {
   });
 }
 
-export function TicketSidebar({ ticket, participants, events, onTicketUpdated }: TicketSidebarProps) {
+export function TicketSidebar({ ticket, participants, onTicketUpdated }: TicketSidebarProps) {
   const [agents, setAgents] = useState<AssignableAgent[]>([]);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [updatingPriority, setUpdatingPriority] = useState(false);
@@ -296,9 +293,6 @@ export function TicketSidebar({ ticket, participants, events, onTicketUpdated }:
         participants={participants}
         onUpdated={onTicketUpdated}
       />
-
-      {/* Events Timeline */}
-      <EventsTimeline events={events} />
 
       {/* Timestamps */}
       <div className="px-4 py-3">
