@@ -89,6 +89,7 @@ DECLARE
   v_tickets JSONB;
   v_offset INT;
   v_query tsquery;
+  v_ilike TEXT;
 BEGIN
   -- Auth guard: must be authenticated
   IF v_caller_id IS NULL THEN
@@ -103,6 +104,7 @@ BEGIN
   -- Pre-compute the tsquery once (NULL if no search)
   IF p_search IS NOT NULL THEN
     v_query := plainto_tsquery('english', p_search);
+    v_ilike := '%' || p_search || '%';
   END IF;
 
   -- Count total
@@ -120,6 +122,8 @@ BEGIN
     -- Full-text search (ticket fields + message bodies)
     AND (p_search IS NULL OR (
       t.search_vector @@ v_query
+      OR t.requester_name ILIKE v_ilike
+      OR t.requester_email ILIKE v_ilike
       OR EXISTS (
         SELECT 1 FROM support_ticket_messages m
         WHERE m.ticket_id = t.id
@@ -167,7 +171,7 @@ BEGIN
 
               UNION ALL
 
-              -- Requester name highlight
+              -- Requester name highlight (tsvector match)
               SELECT jsonb_build_object(
                 'field', 'requester_name',
                 'snippet', ts_headline('english', t.requester_name, v_query,
@@ -177,13 +181,24 @@ BEGIN
 
               UNION ALL
 
-              -- Requester email highlight
+              -- Requester name highlight (ILIKE fallback for partial matches)
+              SELECT jsonb_build_object(
+                'field', 'requester_name',
+                'snippet', replace(t.requester_name, p_search,
+                  '<mark>' || p_search || '</mark>')
+              )
+              WHERE t.requester_name ILIKE v_ilike
+              AND NOT (to_tsvector('english', coalesce(t.requester_name, '')) @@ v_query)
+
+              UNION ALL
+
+              -- Requester email highlight (ILIKE — tsvector treats email as single token)
               SELECT jsonb_build_object(
                 'field', 'requester_email',
-                'snippet', ts_headline('english', t.requester_email, v_query,
-                  'StartSel=<mark>, StopSel=</mark>, MaxWords=35, MinWords=15, MaxFragments=1')
+                'snippet', replace(t.requester_email, p_search,
+                  '<mark>' || p_search || '</mark>')
               )
-              WHERE to_tsvector('english', coalesce(t.requester_email, '')) @@ v_query
+              WHERE t.requester_email ILIKE v_ilike
 
               UNION ALL
 
