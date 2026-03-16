@@ -3,6 +3,11 @@
  *
  * All mutations go through SECURITY DEFINER RPCs.
  * Categories are fetched via direct table query (SELECT-only).
+ *
+ * Email notifications (TASK-2199):
+ * After agent replies (not internal notes) and ticket assignments,
+ * fire-and-forget notification calls are sent to the broker portal
+ * via the admin portal's /api/support/notify proxy route.
  */
 
 import { createClient } from '@/lib/supabase/client';
@@ -24,6 +29,95 @@ import type {
   RequesterSearchResult,
   RecentTicket,
 } from './support-types';
+
+// ---------------------------------------------------------------------------
+// Email notification helpers (TASK-2199)
+// ---------------------------------------------------------------------------
+
+/**
+ * Strip HTML tags and markdown formatting from text for plain-text preview.
+ */
+function stripHtmlAndMarkdown(text: string): string {
+  return text
+    .replace(/<[^>]*>/g, '') // Remove HTML tags
+    .replace(/\*\*(.*?)\*\*/g, '$1') // Bold **text**
+    .replace(/\*(.*?)\*/g, '$1') // Italic *text*
+    .replace(/#{1,6}\s/g, '') // Headers
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // Links [text](url)
+    .replace(/`{1,3}[^`]*`{1,3}/g, '') // Code blocks
+    .replace(/\n{2,}/g, '\n') // Multiple newlines
+    .trim();
+}
+
+/**
+ * Send a ticket notification via the admin portal proxy route.
+ * Fire-and-forget: errors are logged but never thrown.
+ */
+function sendTicketNotification(payload: Record<string, unknown>): void {
+  fetch('/api/support/notify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).catch((err) => {
+    console.error('[Support] Failed to send ticket notification:', err);
+  });
+}
+
+/**
+ * Notify customer that an agent has replied to their ticket.
+ * Called after successful addMessage with messageType 'reply'.
+ */
+function notifyCustomerOfReply(
+  ticketId: string,
+  replyBody: string,
+  ticket: { subject: string; ticket_number: number; requester_email: string },
+  agentName: string,
+  brokerPortalUrl: string
+): void {
+  const plainText = stripHtmlAndMarkdown(replyBody);
+  const replyPreview = plainText.substring(0, 200) + (plainText.length > 200 ? '...' : '');
+  const ticketNumber = `TKT-${String(ticket.ticket_number).padStart(4, '0')}`;
+
+  sendTicketNotification({
+    type: 'reply',
+    ticketId,
+    ticketNumber,
+    ticketSubject: ticket.subject,
+    customerEmail: ticket.requester_email,
+    agentName,
+    replyPreview,
+    ticketUrl: `${brokerPortalUrl}/dashboard/support/${ticketId}`,
+  });
+}
+
+/**
+ * Notify agent that a ticket has been assigned to them.
+ * Called after successful assignTicket.
+ */
+function notifyAgentOfAssignment(
+  ticketId: string,
+  ticket: {
+    subject: string;
+    ticket_number: number;
+    requester_name: string;
+    priority: string;
+  },
+  agentEmail: string,
+  adminPortalUrl: string
+): void {
+  const ticketNumber = `TKT-${String(ticket.ticket_number).padStart(4, '0')}`;
+
+  sendTicketNotification({
+    type: 'assignment',
+    ticketId,
+    ticketNumber,
+    ticketSubject: ticket.subject,
+    agentEmail,
+    customerName: ticket.requester_name,
+    priority: ticket.priority,
+    ticketUrl: `${adminPortalUrl}/support/${ticketId}`,
+  });
+}
 
 export async function listTickets(params: TicketListParams): Promise<TicketListResponse> {
   const supabase = createClient();
@@ -116,6 +210,34 @@ export async function assignTicket(
     p_assignee_id: assigneeId,
   });
   if (error) throw error;
+
+  // Fire-and-forget: notify agent of ticket assignment.
+  // Entire notification path is non-blocking -- we don't await any of it.
+  const adminPortalUrl = typeof window !== 'undefined'
+    ? window.location.origin
+    : 'https://admin.keeprcompliance.com';
+
+  Promise.all([
+    supabase
+      .from('support_tickets')
+      .select('subject, ticket_number, requester_name, priority')
+      .eq('id', ticketId)
+      .single(),
+    supabase.rpc('support_list_agents'),
+  ])
+    .then(([ticketResult, agentResult]) => {
+      if (ticketResult.data && agentResult.data) {
+        const agents = agentResult.data as unknown as AssignableAgent[];
+        const agent = agents.find((a) => a.user_id === assigneeId);
+        if (agent) {
+          notifyAgentOfAssignment(ticketId, ticketResult.data, agent.email, adminPortalUrl);
+        }
+      }
+    })
+    .catch((notifyErr) => {
+      console.error('[Support] Failed to prepare assignment notification:', notifyErr);
+    });
+
   return data as unknown as { id: string; assignee_id: string; status: string };
 }
 
@@ -131,6 +253,32 @@ export async function addMessage(
     p_message_type: messageType,
   });
   if (error) throw error;
+
+  // Fire-and-forget: notify customer of agent reply (never for internal notes).
+  // Entire notification path is non-blocking -- we don't await any of it.
+  if (messageType === 'reply') {
+    const brokerPortalUrl =
+      process.env.NEXT_PUBLIC_BROKER_PORTAL_URL || 'https://app.keeprcompliance.com';
+
+    Promise.all([
+      supabase
+        .from('support_tickets')
+        .select('subject, ticket_number, requester_email')
+        .eq('id', ticketId)
+        .single(),
+      supabase.auth.getUser(),
+    ])
+      .then(([ticketResult, userResult]) => {
+        if (ticketResult.data && userResult.data?.user) {
+          const agentName = userResult.data.user.user_metadata?.full_name || 'Support Team';
+          notifyCustomerOfReply(ticketId, body, ticketResult.data, agentName, brokerPortalUrl);
+        }
+      })
+      .catch((notifyErr) => {
+        console.error('[Support] Failed to prepare reply notification:', notifyErr);
+      });
+  }
+
   return data as unknown as { id: string; ticket_id: string; message_type: string };
 }
 
