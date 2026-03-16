@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Search, Loader2, AlertTriangle, ExternalLink } from 'lucide-react';
+import { X, Search, Loader2, AlertTriangle, ExternalLink, Info } from 'lucide-react';
 import {
   createTicket,
   getCategories,
@@ -535,7 +535,18 @@ export function CreateTicketDialog({ open, onClose, onCreated }: CreateTicketDia
             </div>
 
             <div>
-              <label className={LABEL_CLASS}>Priority</label>
+              <label className={LABEL_CLASS}>
+                Priority
+                <span className="relative inline-block ml-1 group">
+                  <Info className="inline h-3.5 w-3.5 text-gray-400 cursor-help" />
+                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-56 px-3 py-2 text-xs text-gray-700 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-20">
+                    <strong>Low:</strong> General questions, no urgency<br />
+                    <strong>Normal:</strong> Standard issues, reasonable timeframe<br />
+                    <strong>High:</strong> Business impact, needs prompt attention<br />
+                    <strong>Urgent:</strong> Critical blocker, immediate action needed
+                  </span>
+                </span>
+              </label>
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as TicketPriority)}
