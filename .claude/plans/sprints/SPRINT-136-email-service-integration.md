@@ -196,6 +196,18 @@ The following MUST pass before merge:
 - **Decision**: Bundle templates with the email service task (TASK-2197)
 - **Rationale**: Templates are tightly coupled with send functions (each template is used by exactly one send method). Separating them would create a blocker dependency with no parallelization benefit.
 
+### Decision: Reuse existing Keepr Azure app registration
+
+- **Date**: 2026-03-16
+- **Context**: Keepr already has an Azure app registration (`3a6c341a-17ab-4739-977d-a7d71b27f945`) used for PKCE login + Outlook sync. Question was whether to create a new registration for server-side email sending or reuse the existing one.
+- **Decision**: Reuse the existing registration with modifications
+- **Rationale**:
+  1. Adding `Mail.Send` Application permission to the existing registration does not affect existing delegated permissions (PKCE login, Mail.Read, Contacts.Read)
+  2. Application permissions (server-side) and Delegated permissions (user-side) are completely separate channels — no client impact
+  3. A new client secret is needed (current flow uses PKCE with no secret), but this only applies to the server-side code
+  4. Less Azure admin overhead than creating a second registration
+- **Impact**: Engineer must use env vars `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` (not the existing `MICROSOFT_*` prefixed vars from the Electron app). PM will configure the app registration before manual testing.
+
 ### Decision: Defer rate limiting to follow-up sprint
 
 - **Date**: 2026-03-16
