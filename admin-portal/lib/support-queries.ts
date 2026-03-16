@@ -21,6 +21,8 @@ import type {
   AgentAnalyticsResponse,
   RelatedTicketsResponse,
   TicketLinkSearchResult,
+  RequesterSearchResult,
+  RecentTicket,
 } from './support-types';
 
 export async function listTickets(params: TicketListParams): Promise<TicketListResponse> {
@@ -69,6 +71,8 @@ export async function createTicket(
     p_requester_email: params.requester_email,
     p_requester_name: params.requester_name,
     p_source_channel: params.source_channel || 'admin_created',
+    p_requester_phone: params.requester_phone || null,
+    p_preferred_contact: params.preferred_contact || 'email',
   });
   if (error) throw error;
   return data as unknown as { id: string; ticket_number: number };
@@ -164,6 +168,26 @@ export function buildCategoryTree(categories: SupportCategory[]): SupportCategor
       .filter((c) => c.parent_id === parent.id)
       .sort((a, b) => a.sort_order - b.sort_order),
   }));
+}
+
+// --- Requester Lookup functions ---
+
+export async function searchRequesters(query: string): Promise<RequesterSearchResult[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_search_requesters', {
+    p_query: query,
+  });
+  if (error) throw error;
+  return (data ?? []) as unknown as RequesterSearchResult[];
+}
+
+export async function getRequesterRecentTickets(email: string): Promise<RecentTicket[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_requester_recent_tickets', {
+    p_email: email,
+  });
+  if (error) throw error;
+  return (data ?? []) as unknown as RecentTicket[];
 }
 
 // --- Analytics functions ---

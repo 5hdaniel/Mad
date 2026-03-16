@@ -16,6 +16,7 @@ import type { TicketPriority, SupportCategory } from '@/lib/support-types';
 import { PRIORITY_LABELS } from '@/lib/support-types';
 import { FileUpload } from './FileUpload';
 import type { PendingFile } from './FileUpload';
+import { useBrowserDiagnostics, BrowserDiagnostics } from './BrowserDiagnostics';
 
 export function TicketForm() {
   const router = useRouter();
@@ -25,6 +26,9 @@ export function TicketForm() {
   const [error, setError] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+
+  // Browser diagnostics (best-effort)
+  const diagnostics = useBrowserDiagnostics();
 
   // Form state
   const [name, setName] = useState('');
@@ -96,6 +100,17 @@ export function TicketForm() {
         for (let i = 0; i < validFiles.length; i++) {
           setUploadProgress(`Uploading ${i + 1}/${validFiles.length}...`);
           await uploadAttachment(result.id, validFiles[i].file);
+        }
+      }
+
+      // Upload diagnostics as JSON attachment (best-effort)
+      if (diagnostics) {
+        try {
+          const diagnosticsBlob = new Blob([JSON.stringify(diagnostics, null, 2)], { type: 'application/json' });
+          const diagnosticsFile = new File([diagnosticsBlob], 'browser-diagnostics.json', { type: 'application/json' });
+          await uploadAttachment(result.id, diagnosticsFile);
+        } catch {
+          // Diagnostics upload failure should not block ticket submission
         }
       }
 
@@ -270,6 +285,9 @@ export function TicketForm() {
         </label>
         <FileUpload files={files} onFilesChange={setFiles} disabled={submitting} />
       </div>
+
+      {/* Browser Diagnostics */}
+      <BrowserDiagnostics diagnostics={diagnostics} />
 
       {uploadProgress && (
         <div className="text-sm text-blue-600">{uploadProgress}</div>

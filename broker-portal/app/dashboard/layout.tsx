@@ -4,6 +4,7 @@ import Link from 'next/link';
 import UserMenu from '@/components/UserMenu';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { getImpersonationSession } from '@/lib/impersonation';
+import { SupportWidget } from './components/SupportWidget';
 
 async function getUserWithRole() {
   const supabase = await createClient();
@@ -130,6 +131,9 @@ export default async function DashboardLayout({
       <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         {children}
       </main>
+
+      {/* Floating Support Widget */}
+      <SupportWidget />
     </div>
   );
 }

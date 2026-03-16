@@ -14,6 +14,7 @@ import { OfflineBanner } from "./shell";
 import SystemHealthMonitor from "../components/SystemHealthMonitor";
 import { isOnboardingStep } from "./routing";
 import { useSessionValidator } from "../hooks/useSessionValidator";
+import { SupportWidget } from "../components/support/SupportWidget";
 
 // OAuthProvider type to match SystemHealthMonitor expectations
 // Note: 'azure' is Microsoft's Azure AD provider
@@ -130,6 +131,14 @@ export function AppShell({ app, children }: AppShellProps) {
       <div className="flex-1 min-h-0 overflow-y-auto relative">
         {children}
       </div>
+
+      {/* Floating Support Widget - Only for authenticated users, not during onboarding */}
+      {isAuthenticated && currentUser && !isOnboardingStep(currentStep) && (
+        <SupportWidget
+          userEmail={currentUser.email}
+          userName={currentUser.display_name || currentUser.email}
+        />
+      )}
     </div>
   );
 }
