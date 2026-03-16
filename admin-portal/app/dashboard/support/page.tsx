@@ -12,8 +12,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import Link from 'next/link';
-import { Plus, Settings } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { listTickets } from '@/lib/support-queries';
 import type {
   SupportTicket,
@@ -97,13 +96,6 @@ export default function SupportPage() {
           <p className="text-sm text-gray-500 mt-1">Manage support tickets</p>
         </div>
         <div className="flex items-center gap-3">
-          <Link
-            href="/dashboard/support/settings"
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-          >
-            <Settings className="h-4 w-4" />
-            Settings
-          </Link>
           <button
             onClick={() => setShowCreateDialog(true)}
             className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 transition-colors"
@@ -143,6 +135,7 @@ export default function SupportPage() {
         totalPages={totalPages}
         onPageChange={setPage}
         loading={loading}
+        searchActive={!!searchQuery}
       />
 
       {/* Create Ticket Dialog */}
