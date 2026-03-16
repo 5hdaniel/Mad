@@ -159,68 +159,101 @@ The following MUST pass before merge:
 - **Rationale**: Avoids second round-trip per search. 20-row ts_headline computation is negligible.
 - **Impact**: RPC return shape gains optional `search_highlights` array
 
+### Decision Update: Hybrid tsvector + ILIKE for identity fields
+
+- **Date**: 2026-03-16 (QA)
+- **Context**: QA TEST-132-003 found that searching "john" didn't match "john@example.com" because tsvector tokenizes email addresses as single tokens
+- **Decision**: Added ILIKE fallback for `requester_name` and `requester_email` fields alongside tsvector
+- **Rationale**: Users expect partial matching on names and emails. tsvector is designed for natural language text, not structured identifiers.
+- **Impact**: Deviates from the "tsvector everywhere" decision. Identity fields now use hybrid search (tsvector OR ILIKE). Full-text fields (subject, description, message body) remain tsvector-only.
+- **Learning**: For future search features, default to hybrid tsvector+ILIKE for identity/email fields from the start.
+
 ## Unplanned Work Log
 
 | Task | Source | Root Cause | Added Date | Est. Tokens | Actual Tokens |
 |------|--------|------------|------------|-------------|---------------|
-| - | - | - | - | - | - |
+| QA hotfix: inline requester highlight | QA TEST-132-002 | Snippet row UX was redundant for visible columns | 2026-03-16 | ~3K | ~5K |
+| QA hotfix: ILIKE email fallback | QA TEST-132-003 | tsvector tokenizes emails as single tokens | 2026-03-16 | ~5K | ~10K |
+| QA hotfix: inline subject highlight | QA TEST-132-005 | Same as requester — snippet row redundant for visible columns | 2026-03-16 | ~2K | ~3K |
+| QA enhancement: top pagination | QA TEST-132-009 | User request during QA | 2026-03-16 | ~2K | ~3K |
 
 ### Unplanned Work Summary (Updated at Sprint Close)
 
 | Metric | Value |
 |--------|-------|
-| Unplanned tasks | 0 |
-| Unplanned PRs | 0 |
-| Unplanned lines changed | +0/-0 |
-| Unplanned tokens (est) | 0 |
-| Unplanned tokens (actual) | 0 |
-| Discovery buffer | 0% |
+| Unplanned tasks | 4 (3 hotfixes + 1 enhancement) |
+| Unplanned PRs | 0 (committed directly to develop during QA) |
+| Unplanned lines changed | ~+50/-20 (est) |
+| Unplanned tokens (est) | ~12K |
+| Unplanned tokens (actual) | ~21K |
+| Discovery buffer | ~21% of sprint total |
 
 ### Root Cause Categories
 
 | Category | Count | Examples |
 |----------|-------|----------|
-| Integration gaps | 0 | |
-| Validation discoveries | 0 | |
+| Integration gaps | 1 | tsvector email tokenization vs ILIKE |
+| Validation discoveries | 2 | Redundant snippet rows for visible columns |
 | Review findings | 0 | |
 | Dependency discoveries | 0 | |
-| Scope expansion | 0 | |
+| Scope expansion | 1 | Top-of-table pagination enhancement |
 
 ## Sprint Retrospective
 
-*Populated at sprint close by `/sprint-close` skill. Do not fill manually — the skill aggregates from task files.*
+**Sprint Status: Completed**
+**Closed:** 2026-03-16
 
 ### Estimation Accuracy
 
-| Task | Est Tokens | Actual Tokens | Variance | Notes |
-|------|-----------|---------------|----------|-------|
-| - | - | - | - | - |
+| Task | Est Tokens (Eng) | Actual Tokens (Eng) | Variance | Total (All Agents) | Notes |
+|------|-----------|---------------|----------|-------|-------|
+| TASK-2182 | ~15K-25K | ~15.2K | -24% (vs midpoint) | ~30.7K | Engineer came in at low end of estimate; PM+SR overhead added ~15.5K |
+| TASK-2183 | ~10K-18K | ~8.6K | -39% (vs midpoint) | ~23.8K | Engineer under estimate; PM setup proportionally larger for small tasks |
+| QA | N/A | N/A | N/A | ~47.3K | 12/12 tests + 3 hotfixes + 1 enhancement during QA |
+| **Sprint Total** | **~25K-43K** | **~23.8K** | **-30% (eng)** | **~101.8K** | QA was largest cost center — drove 3 hotfixes |
 
 ### Issues Encountered
 
 | # | Task | Issue | Severity | Resolution | Time Impact |
 |---|------|-------|----------|------------|-------------|
-| - | - | - | - | - | - |
+| 1 | TASK-2183/QA | Requester snippet row was redundant — showing a snippet row below the ticket when the match was in the requester column was visually noisy | Low | Changed to inline highlight in Requester column instead of snippet row | ~5K tokens (QA hotfix) |
+| 2 | TASK-2182/QA | Partial email search failed — tsvector tokenizes emails as single tokens, so searching "john" wouldn't match "john@example.com" | Medium | Added ILIKE fallback for requester name/email fields alongside tsvector | ~10K tokens (QA hotfix + decision log deviation) |
+| 3 | TASK-2183/QA | Subject snippet row was redundant — same issue as requester, showing a snippet row below ticket when match was in subject column | Low | Changed to inline highlight in Subject column, consistent with requester fix | ~3K tokens (QA hotfix) |
 
 ### Lessons Learned
 
 #### What Went Well
-- *TBD*
+- Sequential task dependency (TASK-2182 DB first, then TASK-2183 frontend) worked cleanly — no merge conflicts, no coordination overhead
+- Engineer estimates were accurate or under for both tasks
+- QA was thorough: 12/12 tests passing, plus caught 3 genuine UX issues and validated security (SQL injection + XSS)
+- tsvector + ts_headline approach delivered good search quality with minimal infrastructure (no Elasticsearch needed)
+- SQL injection safety and XSS safety confirmed via bonus QA verifications
 
 #### What Didn't Go Well
-- *TBD*
+- tsvector-only decision (Decision Log) had to be partially reversed during QA when partial email search failed — ILIKE fallback was needed for name/email fields
+- 3 QA hotfixes committed directly to develop during QA rather than through branches — bypassed the normal PR flow (justified by small scope and QA context)
+- QA agent consumed ~47K billable tokens (47% of sprint total) — significantly more than either implementation task
 
 #### Estimation Insights
-- *TBD*
+- Engineer estimates for DB migration and UI tasks were well-calibrated (both came in under midpoint)
+- PM setup overhead (~10K per task) and SR review overhead (~5K per task) are predictable and should be included in sprint-level estimates
+- QA cost was not estimated at all — for sprints with cross-layer changes (DB + frontend), QA tends to find more issues and should be budgeted at ~1x the largest task estimate
 
 #### Architecture & Codebase Insights
-- *TBD*
+- PostgreSQL tsvector tokenizes email addresses as single tokens — partial matching requires ILIKE fallback. This is a known PostgreSQL limitation worth documenting for future search features
+- For fields that naturally appear in table columns (subject, requester), inline highlights are superior to snippet rows — snippet rows should be reserved for fields not visible in the table (description, message bodies)
+- DOMPurify with `isomorphic-dompurify` worked correctly for SSR-safe HTML sanitization in Next.js — `ALLOWED_TAGS: ['mark']` is the right pattern for ts_headline output
+- `support_list_tickets` RPC now has a hybrid search pattern: tsvector for full-text fields + ILIKE for identity fields (name/email)
 
 #### Process Improvements
-- *TBD*
+- QA hotfixes committed directly to develop during QA is acceptable for small fixes but should be documented in the sprint file (which was done here)
+- The "decision log" pattern in the sprint file proved valuable — when QA found the tsvector-only approach didn't work for emails, the decision log provided context for why the deviation was justified
+- Top-of-table pagination was added as a user-requested enhancement during QA — good example of scope-controlled enhancement that doesn't warrant a separate task
 
 #### Recommendations for Next Sprint
-- *TBD*
+- Budget QA tokens explicitly in sprint estimates (~30-50K for cross-layer sprints)
+- For any future search features, default to hybrid tsvector+ILIKE for identity/email fields from the start
+- Consider adding the "inline highlight vs snippet row" rendering pattern to a shared UI pattern guide
 
 ---
 
@@ -261,13 +294,13 @@ None.
 
 ## End-of-Sprint Validation Checklist
 
-- [ ] All tasks merged to develop
-- [ ] All CI checks passing
+- [x] All tasks merged to develop
+- [x] All CI checks passing
 - [x] All acceptance criteria verified
 - [x] Testing requirements met
-- [ ] No unresolved conflicts
-- [ ] **Sprint retrospective populated** (via `/sprint-close`)
-- [ ] **Worktree cleanup complete**
+- [x] No unresolved conflicts
+- [x] **Sprint retrospective populated** (via `/sprint-close`)
+- [x] **Worktree cleanup complete**
 
 ## Worktree Cleanup (Post-Sprint)
 
