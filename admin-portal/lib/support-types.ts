@@ -11,6 +11,13 @@ export type SourceChannel = 'web_form' | 'email' | 'in_app_redirect' | 'admin_cr
 export type ParticipantRole = 'cc' | 'watcher';
 export type PendingReason = 'customer' | 'vendor' | 'internal';
 
+export interface SearchHighlight {
+  field: 'subject' | 'description' | 'requester_name' | 'requester_email' | 'message';
+  snippet: string;  // Contains <mark> tags from ts_headline
+  sender_name?: string;  // Only for field: 'message'
+  sent_at?: string;      // Only for field: 'message'
+}
+
 export interface SupportTicket {
   id: string;
   ticket_number: number;
@@ -39,6 +46,8 @@ export interface SupportTicket {
   subcategory_name?: string | null;
   assignee_name?: string | null;
   assignee_email?: string | null;
+  // Search highlight snippets (populated when search is active)
+  search_highlights?: SearchHighlight[] | null;
 }
 
 export interface SupportTicketMessage {

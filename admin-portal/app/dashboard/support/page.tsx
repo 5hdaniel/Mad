@@ -135,6 +135,7 @@ export default function SupportPage() {
         totalPages={totalPages}
         onPageChange={setPage}
         loading={loading}
+        searchActive={!!searchQuery}
       />
 
       {/* Create Ticket Dialog */}

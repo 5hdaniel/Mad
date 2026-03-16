@@ -25,7 +25,7 @@ function useDebounce(value: string, delay: number): string {
   return debouncedValue;
 }
 
-export function SearchBar({ onSearch, placeholder = 'Search tickets...' }: SearchBarProps) {
+export function SearchBar({ onSearch, placeholder = 'Search tickets, messages, requesters...' }: SearchBarProps) {
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebounce(query, 300);
 
