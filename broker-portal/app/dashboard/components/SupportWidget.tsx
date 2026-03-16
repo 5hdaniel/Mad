@@ -206,7 +206,7 @@ export function SupportWidget() {
           <div className="fixed inset-0 bg-black/30" onClick={handleClose} />
 
           {/* Dialog */}
-          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] min-h-[60vh] overflow-y-auto sm:ml-0 mx-4 flex flex-col">
+          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] overflow-y-auto sm:ml-0 mx-4 flex flex-col">
             {/* Header */}
             <div className="sticky top-0 bg-white border-b border-gray-200 px-5 py-4 rounded-t-xl flex items-center justify-between z-10">
               <h2 className="text-lg font-semibold text-gray-900">Contact Support</h2>
@@ -219,26 +219,29 @@ export function SupportWidget() {
               </button>
             </div>
 
-            {/* Success state */}
-            {success ? (
-              <div className="p-5 text-center flex-1 flex flex-col items-center justify-center">
-                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
+            {/* Form — always mounted to preserve dialog size */}
+            <div className="relative flex-1">
+              {/* Success overlay */}
+              {success && (
+                <div className="absolute inset-0 z-10 bg-white flex flex-col items-center justify-center rounded-b-xl p-5 text-center">
+                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-1">Ticket Submitted</h3>
+                  <p className="text-sm text-gray-500 mb-4">We&apos;ll get back to you as soon as possible.</p>
+                  <button
+                    onClick={handleClose}
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+                  >
+                    Close
+                  </button>
                 </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-1">Ticket Submitted</h3>
-                <p className="text-sm text-gray-500 mb-4">We&apos;ll get back to you as soon as possible.</p>
-                <button
-                  onClick={handleClose}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
-                >
-                  Close
-                </button>
-              </div>
-            ) : (
-              /* Form */
-              <form onSubmit={handleSubmit} className="p-5 space-y-4 flex-1">
+              )}
+
+              {/* Form */}
+              <form onSubmit={handleSubmit} className={`p-5 space-y-4 ${success ? 'invisible' : ''}`}>
                 {error && (
                   <div className="bg-red-50 border border-red-200 rounded-md p-3">
                     <p className="text-sm text-red-700">{error}</p>
@@ -414,7 +417,7 @@ export function SupportWidget() {
                   {submitting ? (uploadProgress || 'Submitting...') : 'Submit Ticket'}
                 </button>
               </form>
-            )}
+            </div>
           </div>
         </div>
       )}
