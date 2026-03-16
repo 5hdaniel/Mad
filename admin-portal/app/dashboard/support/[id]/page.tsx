@@ -16,7 +16,8 @@ import { PERMISSIONS } from '@/lib/permissions';
 import { getTicketDetail, deleteTicket } from '@/lib/support-queries';
 import type { TicketDetailResponse } from '@/lib/support-types';
 import { StatusBadge } from '../components/StatusBadge';
-import { TicketDescription, MessageList } from '../components/ConversationThread';
+import { TicketDescription } from '../components/ConversationThread';
+import { ActivityTimeline } from '../components/ActivityTimeline';
 import { ReplyComposer } from '../components/ReplyComposer';
 import { TicketSidebar } from '../components/TicketSidebar';
 
@@ -155,7 +156,7 @@ export default function TicketDetailPage() {
 
       {/* Two-column layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Description → Composer → Messages (newest first) */}
+        {/* Left: Description → Timeline (oldest first) → Composer */}
         <div className="lg:col-span-2 space-y-4">
           {/* 1. Original ticket description (pinned) */}
           <TicketDescription
@@ -167,19 +168,20 @@ export default function TicketDetailPage() {
             showAttachments={showAttachments}
           />
 
-          {/* 2. Reply Composer */}
+          {/* 2. Activity Timeline — messages + events, oldest first */}
+          <ActivityTimeline
+            messages={messages}
+            events={events}
+            attachments={attachments}
+            showAttachments={showAttachments}
+          />
+
+          {/* 3. Reply Composer — at the bottom */}
           <ReplyComposer
             ticketId={ticket.id}
             onMessageSent={handleMessageSent}
             requesterName={ticket.requester_name}
             ticketNumber={ticket.ticket_number}
-          />
-
-          {/* 3. Messages — newest first */}
-          <MessageList
-            messages={messages}
-            attachments={attachments}
-            showAttachments={showAttachments}
           />
 
           <div ref={threadEndRef} />
@@ -190,7 +192,6 @@ export default function TicketDetailPage() {
           <TicketSidebar
             ticket={ticket}
             participants={participants}
-            events={events}
             onTicketUpdated={loadDetail}
           />
         </div>

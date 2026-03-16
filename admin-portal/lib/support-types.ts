@@ -284,3 +284,9 @@ export const PRIORITY_COLORS: Record<TicketPriority, string> = {
   high: 'bg-orange-100 text-orange-800',
   urgent: 'bg-red-100 text-red-800',
 };
+
+// --- Timeline types ---
+
+export type TimelineEntry =
+  | { type: 'message'; data: SupportTicketMessage; timestamp: string }
+  | { type: 'event'; data: SupportTicketEvent; timestamp: string };
