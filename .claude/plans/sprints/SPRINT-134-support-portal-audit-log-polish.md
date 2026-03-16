@@ -157,26 +157,28 @@ The following MUST pass before merge:
 
 | Task | Source | Root Cause | Added Date | Est. Tokens | Actual Tokens |
 |------|--------|------------|------------|-------------|---------------|
-| - | - | - | - | - | - |
+| PR #1162 — Sidebar fix | QA / user testing | Sidebar navigation issue discovered during deployment | 2026-03-16 | - | - |
+| PR #1163 — Dashboard route fix | QA / user testing | Broker portal routes at `/dashboard/support/[id]` not `/support/[id]` | 2026-03-16 | - | - |
+| PR #1164 — Layout polish | QA / user testing | Layout refinements needed after sprint features deployed | 2026-03-16 | - | - |
 
 ### Unplanned Work Summary (Updated at Sprint Close)
 
 | Metric | Value |
 |--------|-------|
-| Unplanned tasks | 0 |
-| Unplanned PRs | 0 |
-| Unplanned lines changed | +0/-0 |
-| Unplanned tokens (est) | 0 |
-| Unplanned tokens (actual) | 0 |
-| Discovery buffer | 0% |
+| Unplanned tasks | 3 |
+| Unplanned PRs | 3 (#1162, #1163, #1164) |
+| Unplanned lines changed | - |
+| Unplanned tokens (est) | - |
+| Unplanned tokens (actual) | - |
+| Discovery buffer | - |
 
 ### Root Cause Categories
 
 | Category | Count | Examples |
 |----------|-------|----------|
-| Integration gaps | 0 | - |
-| Validation discoveries | 0 | - |
-| Review findings | 0 | - |
+| Integration gaps | 1 | PR #1163 -- dashboard route mismatch |
+| Validation discoveries | 1 | PR #1162 -- sidebar fix |
+| Review findings | 1 | PR #1164 -- layout polish |
 | Dependency discoveries | 0 | - |
 | Scope expansion | 0 | - |
 
@@ -248,10 +250,10 @@ None.
 - [x] All acceptance criteria verified
 - [x] Testing requirements met
 - [x] No unresolved conflicts
-- [ ] Documentation updated (if applicable)
+- [x] Documentation updated (if applicable)
 - [x] Ready for release (if applicable)
-- [ ] **Sprint retrospective populated** (via `/sprint-close`)
-- [ ] **Worktree cleanup complete**
+- [x] **Sprint retrospective populated** (via `/sprint-close`)
+- [x] **Worktree cleanup complete**
 
 ## Worktree Cleanup (Post-Sprint)
 
