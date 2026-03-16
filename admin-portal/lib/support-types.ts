@@ -11,6 +11,13 @@ export type SourceChannel = 'web_form' | 'email' | 'in_app_redirect' | 'admin_cr
 export type ParticipantRole = 'cc' | 'watcher';
 export type PendingReason = 'customer' | 'vendor' | 'internal';
 
+export interface SearchHighlight {
+  field: 'subject' | 'description' | 'requester_name' | 'requester_email' | 'message';
+  snippet: string;  // Contains <mark> tags from ts_headline
+  sender_name?: string;  // Only for field: 'message'
+  sent_at?: string;      // Only for field: 'message'
+}
+
 export interface SupportTicket {
   id: string;
   ticket_number: number;
@@ -39,6 +46,8 @@ export interface SupportTicket {
   subcategory_name?: string | null;
   assignee_name?: string | null;
   assignee_email?: string | null;
+  // Search highlight snippets (populated when search is active)
+  search_highlights?: SearchHighlight[] | null;
 }
 
 export interface SupportTicketMessage {
@@ -154,6 +163,30 @@ export interface SupportResponseTemplate {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// --- Analytics types ---
+
+export interface AgentAnalytics {
+  agent_id: string;
+  agent_email: string;
+  agent_name: string;
+  open_tickets: number;
+  closed_tickets: number;
+  avg_first_response_minutes: number | null;
+  avg_resolution_minutes: number | null;
+}
+
+export interface SupportSummary {
+  total_open: number;
+  closed_in_period: number;
+  avg_first_response_minutes: number | null;
+  avg_resolution_minutes: number | null;
+}
+
+export interface AgentAnalyticsResponse {
+  summary: SupportSummary;
+  agents: AgentAnalytics[];
 }
 
 // Status transition map for UI validation

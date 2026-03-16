@@ -10,8 +10,10 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Hash, Eye, EyeOff } from 'lucide-react';
-import { getTicketDetail } from '@/lib/support-queries';
+import { ArrowLeft, Hash, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { usePermissions } from '@/components/providers/PermissionsProvider';
+import { PERMISSIONS } from '@/lib/permissions';
+import { getTicketDetail, deleteTicket } from '@/lib/support-queries';
 import type { TicketDetailResponse } from '@/lib/support-types';
 import { StatusBadge } from '../components/StatusBadge';
 import { TicketDescription, MessageList } from '../components/ConversationThread';
@@ -23,10 +25,14 @@ export default function TicketDetailPage() {
   const router = useRouter();
   const ticketId = params.id as string;
 
+  const { hasPermission } = usePermissions();
+
   const [detail, setDetail] = useState<TicketDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAttachments, setShowAttachments] = useState(true);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
 
   const loadDetail = useCallback(async () => {
@@ -52,6 +58,18 @@ export default function TicketDetailPage() {
         threadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       }, 100);
     });
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      await deleteTicket(ticketId);
+      router.push('/dashboard/support');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete ticket');
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
   }
 
   if (loading) {
@@ -110,16 +128,28 @@ export default function TicketDetailPage() {
             <h1 className="text-xl font-bold text-gray-900">{ticket.subject}</h1>
             <StatusBadge status={ticket.status} />
           </div>
-          {attachments.length > 0 && (
-            <button
-              onClick={() => setShowAttachments(!showAttachments)}
-              className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors"
-            >
-              {showAttachments ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-              {showAttachments ? 'Hide' : 'Show'} attachments
-              <span className="text-gray-400">({attachments.length})</span>
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {attachments.length > 0 && (
+              <button
+                onClick={() => setShowAttachments(!showAttachments)}
+                className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                {showAttachments ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                {showAttachments ? 'Hide' : 'Show'} attachments
+                <span className="text-gray-400">({attachments.length})</span>
+              </button>
+            )}
+            {hasPermission(PERMISSIONS.SUPPORT_ADMIN) && (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="inline-flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 transition-colors"
+                title="Delete ticket"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -165,6 +195,34 @@ export default function TicketDetailPage() {
           />
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-lg border border-gray-200 shadow-xl p-6 max-w-sm mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Ticket #{ticket.ticket_number}?</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              This will permanently delete this ticket, all messages, attachments, and history. This action cannot be undone.
+            </p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors disabled:opacity-50"
+              >
+                {deleting ? 'Deleting...' : 'Delete Ticket'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

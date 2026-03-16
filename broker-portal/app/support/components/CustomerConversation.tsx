@@ -3,11 +3,10 @@
 /**
  * CustomerConversation - Customer Ticket Detail
  *
- * Displays conversation thread from the customer's perspective.
- * Internal notes are filtered out (defense-in-depth).
- * Customer messages vs agent messages have distinct styling.
+ * CustomerTicketDescription: Pinned original description card.
+ * CustomerMessageList: Messages newest first, internal notes filtered out.
+ * Customer messages right-aligned (blue), agent messages left-aligned (white).
  * Attachments shown inline with thumbnails + lightbox preview.
- * Toggle to show/hide inline attachments.
  */
 
 import { useState, useEffect } from 'react';
@@ -15,16 +14,6 @@ import { Paperclip } from 'lucide-react';
 import type { SupportTicketMessage, SupportTicketAttachment } from '@/lib/support-types';
 import { getAttachmentUrl } from '@/lib/support-queries';
 import { AttachmentLightbox } from './AttachmentLightbox';
-
-interface CustomerConversationProps {
-  messages: SupportTicketMessage[];
-  attachments: SupportTicketAttachment[];
-  ticketDescription: string;
-  requesterName: string;
-  requesterEmail: string;
-  createdAt: string;
-  showAttachments?: boolean;
-}
 
 function formatTimestamp(dateStr: string): string {
   const date = new Date(dateStr);
@@ -135,8 +124,8 @@ function InlineAttachments({
 }
 
 /**
- * CustomerTicketDescription - Standalone export for the pinned ticket description card.
- * Used by the customer detail page.
+ * CustomerTicketDescription - Pinned original ticket description card.
+ * Used by the customer detail page. Right-aligned to match customer message styling.
  */
 export function CustomerTicketDescription({
   description,
@@ -194,7 +183,7 @@ export function CustomerTicketDescription({
 }
 
 /**
- * CustomerMessageList - Standalone export for the customer message list.
+ * CustomerMessageList - Customer message list, newest first.
  * Filters out internal notes (defense-in-depth) and renders customer vs agent messages
  * with distinct styling (right-aligned for customer, left-aligned for agent).
  */
@@ -218,25 +207,36 @@ export function CustomerMessageList({
   const publicMessages = messages.filter((m) => m.message_type !== 'internal_note');
 
   // Group attachments by message_id
-  const attachmentsByMessage = new Map<string | null, SupportTicketAttachment[]>();
+  const attachmentsByMessage = new Map<string, SupportTicketAttachment[]>();
   for (const att of attachments) {
-    const key = att.message_id;
-    if (!attachmentsByMessage.has(key)) {
-      attachmentsByMessage.set(key, []);
+    if (!att.message_id) continue;
+    if (!attachmentsByMessage.has(att.message_id)) {
+      attachmentsByMessage.set(att.message_id, []);
     }
-    attachmentsByMessage.get(key)!.push(att);
+    attachmentsByMessage.get(att.message_id)!.push(att);
   }
+
+  // Reverse: newest first
+  const sortedMessages = [...publicMessages].reverse();
 
   function openLightbox(url: string, att: SupportTicketAttachment) {
     setLightbox({ url, attachment: att });
   }
 
+  if (sortedMessages.length === 0) {
+    return (
+      <div className="text-center py-6 text-gray-400 text-sm">
+        No replies yet. A support agent will respond soon.
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="space-y-4">
-        {publicMessages.map((message) => {
+        {sortedMessages.map((message) => {
           const isCustomer = message.sender_email === requesterEmail;
-          const messageAttachments = attachmentsByMessage.get(message.id) || [];
+          const msgAttachments = attachmentsByMessage.get(message.id) || [];
 
           return (
             <div key={message.id} className={`flex ${isCustomer ? 'justify-end' : 'justify-start'}`}>
@@ -260,22 +260,13 @@ export function CustomerMessageList({
                   </div>
                   <div className="text-sm text-gray-700 whitespace-pre-wrap">{message.body}</div>
                   {showAttachments && (
-                    <InlineAttachments
-                      attachments={messageAttachments}
-                      onPreview={openLightbox}
-                    />
+                    <InlineAttachments attachments={msgAttachments} onPreview={openLightbox} />
                   )}
                 </div>
               </div>
             </div>
           );
         })}
-
-        {publicMessages.length === 0 && (
-          <div className="text-center py-6 text-gray-400 text-sm">
-            No replies yet. A support agent will respond soon.
-          </div>
-        )}
       </div>
 
       {lightbox && (
@@ -288,37 +279,5 @@ export function CustomerMessageList({
         />
       )}
     </>
-  );
-}
-
-export function CustomerConversation({
-  messages,
-  attachments,
-  ticketDescription,
-  requesterName,
-  requesterEmail,
-  createdAt,
-  showAttachments = true,
-}: CustomerConversationProps) {
-  const ticketAttachments = attachments.filter((a) => !a.message_id);
-
-  return (
-    <div>
-      <CustomerTicketDescription
-        description={ticketDescription}
-        requesterName={requesterName}
-        createdAt={createdAt}
-        attachments={ticketAttachments}
-        showAttachments={showAttachments}
-      />
-      <div className="mt-4">
-        <CustomerMessageList
-          messages={messages}
-          attachments={attachments}
-          requesterEmail={requesterEmail}
-          showAttachments={showAttachments}
-        />
-      </div>
-    </div>
   );
 }
