@@ -1,86 +1,66 @@
--- Support Analytics RPC
--- Aggregates per-agent metrics from existing support_tickets data.
--- Returns both a summary object and a per-agent breakdown.
+-- ============================================
+-- SUPPORT TICKETING: Agent Analytics RPC
+-- Migration: 20260313_support_analytics_rpc
+-- Purpose: Analytics RPC for support agent performance dashboard
+-- Backlog: BACKLOG-940
+-- ============================================
 
-CREATE OR REPLACE FUNCTION support_agent_analytics(
-  p_period_days INTEGER DEFAULT 30
-)
+CREATE OR REPLACE FUNCTION support_agent_analytics(p_period_days INT DEFAULT 30)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_period_start TIMESTAMPTZ;
+  v_caller_id UUID := auth.uid();
   v_summary JSONB;
   v_agents JSONB;
-  v_result JSONB;
+  v_period_start TIMESTAMPTZ;
 BEGIN
-  -- Verify caller is an authenticated admin user
-  IF auth.uid() IS NULL THEN
+  IF v_caller_id IS NULL THEN
     RAISE EXCEPTION 'Authentication required';
   END IF;
 
-  v_period_start := NOW() - (p_period_days || ' days')::INTERVAL;
+  v_period_start := now() - (p_period_days || ' days')::INTERVAL;
 
-  -- Build summary
+  -- Summary stats
   SELECT jsonb_build_object(
-    'total_open', COALESCE(SUM(CASE WHEN t.status NOT IN ('resolved', 'closed') THEN 1 ELSE 0 END), 0),
-    'closed_in_period', COALESCE(SUM(CASE WHEN t.status IN ('resolved', 'closed') AND t.resolved_at >= v_period_start THEN 1 ELSE 0 END), 0),
-    'avg_first_response_minutes', ROUND(
-      AVG(
-        CASE WHEN t.first_response_at IS NOT NULL AND t.created_at >= v_period_start
-        THEN EXTRACT(EPOCH FROM (t.first_response_at - t.created_at)) / 60.0
-        ELSE NULL END
-      )::NUMERIC, 1
-    ),
-    'avg_resolution_minutes', ROUND(
-      AVG(
-        CASE WHEN t.resolved_at IS NOT NULL AND t.created_at >= v_period_start
-        THEN EXTRACT(EPOCH FROM (t.resolved_at - t.created_at)) / 60.0
-        ELSE NULL END
-      )::NUMERIC, 1
-    )
+    'total_tickets', COUNT(*),
+    'open_tickets', COUNT(*) FILTER (WHERE status NOT IN ('resolved', 'closed')),
+    'resolved_tickets', COUNT(*) FILTER (WHERE status = 'resolved'),
+    'closed_tickets', COUNT(*) FILTER (WHERE status = 'closed'),
+    'avg_first_response_hours', ROUND(EXTRACT(EPOCH FROM AVG(first_response_at - created_at) FILTER (WHERE first_response_at IS NOT NULL)) / 3600, 1),
+    'avg_resolution_hours', ROUND(EXTRACT(EPOCH FROM AVG(resolved_at - created_at) FILTER (WHERE resolved_at IS NOT NULL)) / 3600, 1),
+    'tickets_created_in_period', COUNT(*) FILTER (WHERE created_at >= v_period_start),
+    'tickets_resolved_in_period', COUNT(*) FILTER (WHERE resolved_at >= v_period_start)
   ) INTO v_summary
-  FROM support_tickets t;
+  FROM support_tickets;
 
-  -- Build per-agent breakdown
-  SELECT COALESCE(jsonb_agg(agent_row ORDER BY agent_row->>'agent_name'), '[]'::JSONB)
+  -- Per-agent stats
+  SELECT COALESCE(jsonb_agg(row_to_json(agent_stats)::JSONB), '[]'::JSONB)
   INTO v_agents
   FROM (
-    SELECT jsonb_build_object(
-      'agent_id', au.id,
-      'agent_email', au.email,
-      'agent_name', COALESCE(aiu.display_name, au.email),
-      'open_tickets', COALESCE(SUM(CASE WHEN t.status NOT IN ('resolved', 'closed') THEN 1 ELSE 0 END), 0),
-      'closed_tickets', COALESCE(SUM(CASE WHEN t.status IN ('resolved', 'closed') AND t.resolved_at >= v_period_start THEN 1 ELSE 0 END), 0),
-      'avg_first_response_minutes', ROUND(
-        AVG(
-          CASE WHEN t.first_response_at IS NOT NULL AND t.created_at >= v_period_start
-          THEN EXTRACT(EPOCH FROM (t.first_response_at - t.created_at)) / 60.0
-          ELSE NULL END
-        )::NUMERIC, 1
-      ),
-      'avg_resolution_minutes', ROUND(
-        AVG(
-          CASE WHEN t.resolved_at IS NOT NULL AND t.created_at >= v_period_start
-          THEN EXTRACT(EPOCH FROM (t.resolved_at - t.created_at)) / 60.0
-          ELSE NULL END
-        )::NUMERIC, 1
-      )
-    ) AS agent_row
-    FROM auth.users au
-    INNER JOIN admin_internal_users aiu ON aiu.user_id = au.id
-    LEFT JOIN support_tickets t ON t.assignee_id = au.id
-    WHERE aiu.is_active = true
-    GROUP BY au.id, au.email, aiu.display_name
-  ) sub;
+    SELECT
+      st.assignee_id,
+      u.email AS agent_email,
+      COUNT(*) AS total_assigned,
+      COUNT(*) FILTER (WHERE st.status NOT IN ('resolved', 'closed')) AS open_count,
+      COUNT(*) FILTER (WHERE st.status IN ('resolved', 'closed')) AS resolved_count,
+      ROUND(EXTRACT(EPOCH FROM AVG(st.first_response_at - st.created_at) FILTER (WHERE st.first_response_at IS NOT NULL)) / 3600, 1) AS avg_first_response_hours,
+      ROUND(EXTRACT(EPOCH FROM AVG(st.resolved_at - st.created_at) FILTER (WHERE st.resolved_at IS NOT NULL)) / 3600, 1) AS avg_resolution_hours
+    FROM support_tickets st
+    JOIN auth.users u ON u.id = st.assignee_id
+    WHERE st.assignee_id IS NOT NULL
+    GROUP BY st.assignee_id, u.email
+    ORDER BY total_assigned DESC
+  ) agent_stats;
 
-  v_result := jsonb_build_object(
+  RETURN jsonb_build_object(
     'summary', v_summary,
-    'agents', v_agents
+    'agents', v_agents,
+    'period_days', p_period_days
   );
-
-  RETURN v_result;
 END;
 $$;
+
+GRANT EXECUTE ON FUNCTION support_agent_analytics TO authenticated;
