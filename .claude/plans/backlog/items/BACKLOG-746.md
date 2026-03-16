@@ -35,10 +35,17 @@ This item covers selecting and integrating an email sending infrastructure (SMTP
 
 ### User Invite Flow (Primary Use Case)
 - When an admin invites a new user, send an invite email with a time-limited token link
-- Link format: `https://<portal-domain>/accept-invite?token=<JWT>`
-- Token expires in 48 hours
+- **Note:** Invite link generation + acceptance flow already works (see `broker-portal/lib/actions/inviteUser.ts` and `/invite/[token]/page.tsx`). The missing piece is automated email delivery — currently admins must copy/paste the link manually.
+- Link format: `https://<portal-domain>/invite/<token>` (already implemented)
+- Token expires in 7 days (already implemented)
 - Resend invite option in admin UI if original expires
 - Invite email includes: inviting org name, inviter name, expiry notice, and call-to-action button
+
+### End-to-End Agent Onboarding Journey (Goal)
+- Admin sends invite → agent receives email → clicks link → signs in via OAuth → lands on `/dashboard`
+- From dashboard, agent can: view submissions, access `/download` to install the desktop app, submit support tickets at `/dashboard/support` if something doesn't work
+- All three destination pages (dashboard, downloads, support) are already built and production-ready
+- This backlog item completes the flow by adding the email trigger
 
 ### Account-Related Emails (Secondary Use Cases)
 - **Password reset**: link with 1-hour expiry, single-use

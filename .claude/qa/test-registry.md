@@ -4,6 +4,70 @@ Tracks all test cases run across sprints. One row per test, updated after each Q
 
 ---
 
+## SPRINT-134 Tests (Support Portal & Audit Log Polish)
+
+**QA Date:** 2026-03-16
+**Tasks:** TASK-2188 (Customer Ticket Closing), TASK-2189 (Audit Log Payloads), TASK-2190 (Missing Audit Actions), PR #1162 (Customer Sidebar)
+
+| Test ID | Title | Status | Last Run | Notes |
+|---------|-------|--------|----------|-------|
+| TEST-134-001 | Close Ticket Button — Visible on Active Ticket | PASS | 2026-03-16 | Button renders as small red text in header |
+| TEST-134-002 | Close Ticket — Confirmation Dialog Content | PASS | 2026-03-16 | Exact spec text confirmed, Cancel and Close Ticket buttons present |
+| TEST-134-003 | Close Ticket — Successful Close Flow | PASS | 2026-03-16 | Status updates in-place, reply form replaced, button hidden |
+| TEST-134-004 | Close Ticket Button — Hidden on Closed Ticket | PASS | 2026-03-16 | Button absent on closed ticket; list view shows Closed status |
+| TEST-134-005 | Closed Ticket — Reply Composer Replaced by Closed Message | PASS | 2026-03-16 | "This ticket is closed." shown; message history intact |
+| TEST-134-006 | Customer Ticket Sidebar — Two-Column Layout | PASS | 2026-03-16 | 2:1 column ratio at desktop; single-column at mobile |
+| TEST-134-007 | Customer Ticket Sidebar — Field Content | PASS | 2026-03-16 | All 5 sections present: Status, Priority, Category, Requester, Dates |
+| TEST-134-008 | Audit Log — Role Update Has Before/After Payload | PASS | 2026-03-16 | role.update and role.update_permissions both have structured before/after |
+| TEST-134-009 | Audit Log — User Suspend Has Before/After Payload | PASS | 2026-03-16 | before: {email, status}, after: {status, reason, licenses_suspended} |
+| TEST-134-010 | Audit Log — Plan Feature Toggle Uses log_admin_action | PASS | 2026-03-16 | Verified via live function definition — no direct INSERT remaining |
+| TEST-134-011 | Audit Log — Impersonation Start/End Logged via log_admin_action | PASS | 2026-03-16 | All 3 impersonation RPCs confirmed; validate token logging is net-new |
+| TEST-134-012 | Regression — Ticket Detail Page Still Loads Normally | PASS | 2026-03-16 | List, open ticket, closed ticket all load cleanly |
+
+---
+
+## SPRINT-133 Tests (Phase 2 — Support Ticket UX Enhancements — Admin Portal)
+
+**QA Date:** 2026-03-16
+**Tasks:** TASK-2185 (Requester Lookup), TASK-2186 (Related Tickets Panel), TASK-2187 (Activity Timeline)
+
+| Test ID | Title | Status | Last Run | Notes |
+|---------|-------|--------|----------|-------|
+| TEST-133-P2-001 | Create Ticket Dialog — Search Autocomplete Renders | PASS | 2026-03-16 | — |
+| TEST-133-P2-002 | Create Ticket Dialog — Requester Selection Auto-Fill | PASS | 2026-03-16 | — |
+| TEST-133-P2-003 | Create Ticket Dialog — Recent Tickets Panel | PASS | 2026-03-16 | — |
+| TEST-133-P2-004 | Create Ticket Dialog — Manual Entry Fallback | PASS | 2026-03-16 | — |
+| TEST-133-P2-005 | Related Tickets Panel — Auto-Related Tickets Display | PASS | 2026-03-16 | Fix applied: white text on search input |
+| TEST-133-P2-006 | Related Tickets Panel — Manual Link Creation | PASS | 2026-03-16 | Fix applied: duplicate link error message improved |
+| TEST-133-P2-007 | Related Tickets Panel — Unlink | PASS | 2026-03-16 | — |
+| TEST-133-P2-008 | Unified Activity Timeline — Chronological Order | PASS | 2026-03-16 | Deviation: sort order changed to newest-first per user feedback |
+| TEST-133-P2-009 | Unified Activity Timeline — Internal Notes and Composer Position | PASS | 2026-03-16 | — |
+| TEST-133-P2-010 | Integration — Ticket Link Events in Activity Timeline | PASS | 2026-03-16 | Fix applied: RPC joined auth.users; frontend reads actor_name |
+| TEST-133-P2-011 | Integration — Phone + Preferred Contact Persists End-to-End | SKIP | 2026-03-16 | Deferred — retest before sprint close |
+| TEST-133-P2-012 | Regression — Existing Ticket Creation Still Works | SKIP | 2026-03-16 | Deferred — run before next sprint touching CreateTicketDialog |
+
+---
+
+## SPRINT-133 Tests (Phase 1 — Support Widget — Broker Portal)
+
+**QA Date:** 2026-03-15
+**Tasks:** SupportWidget, dashboard layout, /dashboard/support/new route
+
+| Test ID | Title | Status | Last Run | Notes |
+|---------|-------|--------|----------|-------|
+| TEST-133-001 | Widget button visible on dashboard | PASS | 2026-03-15 | — |
+| TEST-133-002 | Widget button visible on all dashboard sub-pages | PASS | 2026-03-15 | — |
+| TEST-133-003 | Screenshot capture — spinner shows then dialog opens | PASS | 2026-03-15 | — |
+| TEST-133-004 | Screenshot preview appears below attachments section | PASS | 2026-03-15 | — |
+| TEST-133-005 | Remove screenshot button works | PASS | 2026-03-15 | — |
+| TEST-133-006 | Dashboard nav visible behind the dialog overlay | PASS | 2026-03-15 | — |
+| TEST-133-007 | Form validation — subject and description minimum length | PASS | 2026-03-15 | Fix applied: text-gray-900 bg-white added to widget inputs |
+| TEST-133-008 | Form submission creates ticket and shows success state | PASS | 2026-03-15 | Fix applied: dialog maintains consistent size on success state |
+| TEST-133-009 | Browser diagnostics collapsible section | PASS | 2026-03-15 | — |
+| TEST-133-010 | /dashboard/support/new page keeps nav bar visible | PASS | 2026-03-15 | — |
+
+---
+
 ## SPRINT-127 Tests (Batch 3: canExport/canSubmit Migration to useFeatureGate)
 
 **QA Date:** 2026-03-12
