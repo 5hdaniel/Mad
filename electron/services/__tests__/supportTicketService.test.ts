@@ -10,8 +10,8 @@ jest.mock("electron", () => ({
   app: {
     getVersion: jest.fn().mockReturnValue("2.9.5"),
   },
-  desktopCapturer: {
-    getSources: jest.fn(),
+  BrowserWindow: {
+    getFocusedWindow: jest.fn(),
   },
 }));
 
@@ -277,36 +277,34 @@ describe("supportTicketService", () => {
   });
 
   describe("captureScreenshot", () => {
-    it("should return null when no sources available", async () => {
-      const { desktopCapturer } = require("electron");
-      desktopCapturer.getSources.mockResolvedValue([]);
+    it("should return null when no focused window", async () => {
+      const { BrowserWindow } = require("electron");
+      BrowserWindow.getFocusedWindow.mockReturnValue(null);
 
       const result = await captureScreenshot();
       expect(result).toBeNull();
     });
 
-    it("should return base64 PNG when sources available", async () => {
-      const { desktopCapturer } = require("electron");
+    it("should return base64 PNG when window is available", async () => {
+      const { BrowserWindow } = require("electron");
       const mockPngBuffer = Buffer.from("fake-png-data");
-      desktopCapturer.getSources.mockResolvedValue([
-        {
-          id: "screen:0:0",
-          name: "Screen 1",
-          thumbnail: {
+      BrowserWindow.getFocusedWindow.mockReturnValue({
+        webContents: {
+          capturePage: jest.fn().mockResolvedValue({
             toPNG: jest.fn().mockReturnValue(mockPngBuffer),
-          },
+          }),
         },
-      ]);
+      });
 
       const result = await captureScreenshot();
       expect(result).toBe(mockPngBuffer.toString("base64"));
     });
 
     it("should return null on error", async () => {
-      const { desktopCapturer } = require("electron");
-      desktopCapturer.getSources.mockRejectedValue(
-        new Error("Permission denied")
-      );
+      const { BrowserWindow } = require("electron");
+      BrowserWindow.getFocusedWindow.mockImplementation(() => {
+        throw new Error("Permission denied");
+      });
 
       const result = await captureScreenshot();
       expect(result).toBeNull();
