@@ -57,6 +57,19 @@ If issues exist, use this format:
    - Time impact: [estimate]
 ```
 
+### Lessons / Insights
+
+[What did you learn during this phase that would help future tasks?]
+
+Consider:
+- Patterns or approaches that worked well (or didn't)
+- Estimation insights ("this took longer/shorter than expected because...")
+- Codebase discoveries ("this area is more complex than it looks because...")
+- Reusable patterns ("the approach from X could be applied to Y")
+- Process observations ("splitting this differently would have been faster")
+
+If none: "None — straightforward implementation."
+
 ### Effort
 
 **MANDATORY for Engineer and SR Engineer handoffs.** This data feeds into PM metrics collection and sprint retrospectives.

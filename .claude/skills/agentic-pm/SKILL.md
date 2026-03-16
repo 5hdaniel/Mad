@@ -45,13 +45,26 @@ When executing sprint tasks, PM is responsible for these steps:
 4. `.claude/plans/tasks/TASK-XXX.md` — update `Status:` field in the task file frontmatter
 
 **Sprint Close Checklist (Step 15):**
-1. Update ALL individual task files to `Status: Completed`
-2. Update parent backlog item(s) to `Completed` with completion date
-3. Update sprint file status to `Completed`
-4. Clean up worktrees (`git worktree remove` + `git worktree prune`)
-5. Check for orphaned PRs: `gh pr list --state open`
-6. Switch main repo back to develop: `git checkout develop && git pull`
-7. Write sprint summary (tasks, PRs, key deliverables, issues)
+
+Invoke `/sprint-close` as a **background agent** so the user can keep working:
+```
+Agent(
+  subagent_type="general-purpose",
+  description="Close SPRINT-XXX",
+  prompt="Run /sprint-close for SPRINT-XXX. Sprint file: .claude/plans/sprints/SPRINT-XXX-slug.md",
+  run_in_background=true
+)
+```
+
+The sprint-close skill handles all of:
+1. Verify all PRs merged (BLOCKING)
+2. Label and aggregate all agent metrics
+3. **Collect lessons/insights from all task files** (key improvement)
+4. Populate sprint retrospective section
+5. Update all statuses to `Completed`
+6. Clean up worktrees
+7. Create sprint rollup PR with `## Engineer Metrics`
+8. Save systemic lessons to MEMORY.md if warranted
 
 **Handoff Protocol:** Use the handoff message template from `.claude/skills/agent-handoff/templates/`.
 

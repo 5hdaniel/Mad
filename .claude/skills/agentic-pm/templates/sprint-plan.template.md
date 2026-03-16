@@ -176,6 +176,44 @@ The following MUST pass before merge:
 | Dependency discoveries | 0 | Task X requires Task Y first |
 | Scope expansion | 0 | Feature needs more edge cases |
 
+## Sprint Retrospective
+
+*Populated at sprint close by `/sprint-close` skill. Do not fill manually — the skill aggregates from task files.*
+
+### Estimation Accuracy
+
+| Task | Est Tokens | Actual Tokens | Variance | Notes |
+|------|-----------|---------------|----------|-------|
+| - | - | - | - | - |
+
+### Issues Encountered
+
+| # | Task | Issue | Severity | Resolution | Time Impact |
+|---|------|-------|----------|------------|-------------|
+| - | - | - | - | - | - |
+
+### Lessons Learned
+
+#### What Went Well
+- *TBD — aggregated from task `Lessons / Insights` sections*
+
+#### What Didn't Go Well
+- *TBD — aggregated from task `Issues encountered` sections*
+
+#### Estimation Insights
+- *TBD — derived from estimation accuracy table*
+
+#### Architecture & Codebase Insights
+- *TBD — aggregated from Engineer + SR Engineer insights*
+
+#### Process Improvements
+- *TBD — workflow observations from this sprint*
+
+#### Recommendations for Next Sprint
+- *TBD — actionable items*
+
+---
+
 ## End-of-Sprint Validation Checklist
 
 - [ ] All tasks merged to integration branch
@@ -185,6 +223,7 @@ The following MUST pass before merge:
 - [ ] No unresolved conflicts
 - [ ] Documentation updated (if applicable)
 - [ ] Ready for release (if applicable)
+- [ ] **Sprint retrospective populated** (via `/sprint-close`)
 - [ ] **Worktree cleanup complete** (see below)
 
 ## Worktree Cleanup (Post-Sprint)

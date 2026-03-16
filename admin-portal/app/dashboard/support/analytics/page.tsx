@@ -18,10 +18,37 @@ type SortField = 'agent_name' | 'open_tickets' | 'closed_tickets' | 'avg_first_r
 type SortDir = 'asc' | 'desc';
 
 const PERIOD_OPTIONS = [
-  { label: 'Last 7 days', value: 7 },
-  { label: 'Last 30 days', value: 30 },
-  { label: 'Last 90 days', value: 90 },
+  { label: 'Last 24 hours', key: '24h' },
+  { label: 'This week', key: 'week' },
+  { label: 'Last 7 days', key: '7d' },
+  { label: 'Last 30 days', key: '30d' },
+  { label: 'Last 90 days', key: '90d' },
 ];
+
+function getPeriodDays(key: string): number {
+  switch (key) {
+    case '24h': return 1;
+    case 'week': {
+      const day = new Date().getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+      return day === 0 ? 7 : day; // days since Monday
+    }
+    case '7d': return 7;
+    case '30d': return 30;
+    case '90d': return 90;
+    default: return 30;
+  }
+}
+
+function getShortPeriodLabel(key: string): string {
+  switch (key) {
+    case '24h': return '24h';
+    case 'week': return 'week';
+    case '7d': return '7d';
+    case '30d': return '30d';
+    case '90d': return '90d';
+    default: return '30d';
+  }
+}
 
 function formatDuration(minutes: number | null): string {
   if (minutes === null || minutes === 0) return '-';
@@ -38,9 +65,11 @@ export default function SupportAnalyticsPage() {
   const [data, setData] = useState<AgentAnalyticsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [periodDays, setPeriodDays] = useState(30);
+  const [periodKey, setPeriodKey] = useState('24h');
   const [sortField, setSortField] = useState<SortField>('closed_tickets');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+
+  const periodDays = getPeriodDays(periodKey);
 
   const loadAnalytics = useCallback(async () => {
     setLoading(true);
@@ -88,7 +117,7 @@ export default function SupportAnalyticsPage() {
       color: 'text-blue-600 bg-blue-50',
     },
     {
-      label: `Closed (${periodDays}d)`,
+      label: `Closed (${getShortPeriodLabel(periodKey)})`,
       value: data?.summary.closed_in_period ?? 0,
       format: 'number' as const,
       icon: CheckCircle2,
@@ -119,12 +148,12 @@ export default function SupportAnalyticsPage() {
           <p className="text-sm text-gray-500 mt-1">Team performance and ticket metrics</p>
         </div>
         <select
-          value={periodDays}
-          onChange={(e) => setPeriodDays(Number(e.target.value))}
+          value={periodKey}
+          onChange={(e) => setPeriodKey(e.target.value)}
           className="text-sm border border-gray-300 rounded-md px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         >
           {PERIOD_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
+            <option key={opt.key} value={opt.key}>
               {opt.label}
             </option>
           ))}

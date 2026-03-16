@@ -248,6 +248,9 @@ Verification:
 **Issues encountered:**
 <Document any issues or challenges and how you resolved them>
 
+**Lessons / Insights:**
+<What did you learn? Patterns that worked well, estimation surprises, codebase discoveries, reusable approaches, or "None — straightforward implementation">
+
 **Reviewer notes:**
 <Anything the reviewer should pay attention to>
 
@@ -298,6 +301,9 @@ SR Engineer Agent ID: <agent_id from Task tool output>
 
 **Review Notes:**
 <Key observations, concerns addressed, approval rationale>
+
+**Lessons / Insights:**
+<Architecture observations, quality patterns worth replicating, review findings that inform future work, or "None">
 
 ### Merge Information
 

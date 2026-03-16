@@ -3,3 +3,8 @@
 *.tsbuildinfo
 .next
 node_modules
+
+# Playwright
+e2e/.auth/
+test-results/
+playwright-report/
