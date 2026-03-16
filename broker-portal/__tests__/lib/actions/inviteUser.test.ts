@@ -184,6 +184,7 @@ describe('InviteUserResult type behavior', () => {
   interface InviteUserResult {
     success: boolean;
     inviteLink?: string;
+    emailSent?: boolean;
     error?: string;
   }
 
@@ -253,5 +254,221 @@ describe('invite link generation', () => {
   it('should handle localhost for development', () => {
     const link = generateInviteLink('http://localhost:3000', 'devtoken');
     expect(link).toBe('http://localhost:3000/invite/devtoken');
+  });
+});
+
+// ============================================================================
+// Email Sending Integration Tests
+// ============================================================================
+
+describe('invite email sending', () => {
+  /**
+   * Tests the email sending integration added by TASK-2198.
+   * Validates that sendInviteEmail is called with correct params
+   * and that graceful degradation works when email fails.
+   */
+
+  // Replicate the email sending logic from the server action
+  interface SendInviteEmailParams {
+    recipientEmail: string;
+    organizationName: string;
+    inviterName: string;
+    role: string;
+    inviteLink: string;
+    expiresInDays: number;
+  }
+
+  interface SendEmailResult {
+    success: boolean;
+    error?: string;
+  }
+
+  interface InviteUserResult {
+    success: boolean;
+    inviteLink?: string;
+    emailSent?: boolean;
+    error?: string;
+  }
+
+  // Simulate the email sending part of inviteUser
+  async function sendInviteAfterCreate(
+    sendInviteEmail: (params: SendInviteEmailParams) => Promise<SendEmailResult>,
+    inviterDisplayName: string | null,
+    inviterEmail: string | null,
+    orgName: string | null,
+    normalizedEmail: string,
+    role: string,
+    inviteLink: string,
+  ): Promise<InviteUserResult> {
+    let emailSent = false;
+    try {
+      const inviterName = inviterDisplayName || inviterEmail || 'Your administrator';
+      const organizationName = orgName || 'your organization';
+
+      const emailResult = await sendInviteEmail({
+        recipientEmail: normalizedEmail,
+        organizationName,
+        inviterName,
+        role,
+        inviteLink,
+        expiresInDays: 7,
+      });
+
+      emailSent = emailResult.success;
+    } catch {
+      // Email failure should not block invite creation
+    }
+
+    return {
+      success: true,
+      inviteLink,
+      emailSent,
+    };
+  }
+
+  it('should call sendInviteEmail with correct params after successful invite', async () => {
+    const mockSendInviteEmail = jest.fn().mockResolvedValue({ success: true });
+
+    const result = await sendInviteAfterCreate(
+      mockSendInviteEmail,
+      'John Admin',
+      'john@company.com',
+      'Acme Corp',
+      'newuser@example.com',
+      'agent',
+      'https://app.keeprcompliance.com/invite/abc123',
+    );
+
+    expect(mockSendInviteEmail).toHaveBeenCalledTimes(1);
+    expect(mockSendInviteEmail).toHaveBeenCalledWith({
+      recipientEmail: 'newuser@example.com',
+      organizationName: 'Acme Corp',
+      inviterName: 'John Admin',
+      role: 'agent',
+      inviteLink: 'https://app.keeprcompliance.com/invite/abc123',
+      expiresInDays: 7,
+    });
+    expect(result.success).toBe(true);
+    expect(result.emailSent).toBe(true);
+  });
+
+  it('should return emailSent: true when email succeeds', async () => {
+    const mockSendInviteEmail = jest.fn().mockResolvedValue({ success: true });
+
+    const result = await sendInviteAfterCreate(
+      mockSendInviteEmail,
+      'Admin',
+      'admin@co.com',
+      'Org',
+      'user@example.com',
+      'broker',
+      'https://app.keeprcompliance.com/invite/token',
+    );
+
+    expect(result.emailSent).toBe(true);
+    expect(result.success).toBe(true);
+    expect(result.inviteLink).toBe('https://app.keeprcompliance.com/invite/token');
+  });
+
+  it('should return emailSent: false when email fails (graceful degradation)', async () => {
+    const mockSendInviteEmail = jest.fn().mockResolvedValue({
+      success: false,
+      error: 'Graph API error',
+    });
+
+    const result = await sendInviteAfterCreate(
+      mockSendInviteEmail,
+      'Admin',
+      'admin@co.com',
+      'Org',
+      'user@example.com',
+      'admin',
+      'https://app.keeprcompliance.com/invite/token',
+    );
+
+    // Invite should still succeed even if email fails
+    expect(result.success).toBe(true);
+    expect(result.emailSent).toBe(false);
+    // The invite link should still be available for manual copy
+    expect(result.inviteLink).toBe('https://app.keeprcompliance.com/invite/token');
+  });
+
+  it('should return emailSent: false when sendInviteEmail throws (graceful degradation)', async () => {
+    const mockSendInviteEmail = jest.fn().mockRejectedValue(new Error('Network error'));
+
+    const result = await sendInviteAfterCreate(
+      mockSendInviteEmail,
+      'Admin',
+      'admin@co.com',
+      'Org',
+      'user@example.com',
+      'agent',
+      'https://app.keeprcompliance.com/invite/token',
+    );
+
+    // Invite should still succeed even if email throws
+    expect(result.success).toBe(true);
+    expect(result.emailSent).toBe(false);
+    expect(result.inviteLink).toBe('https://app.keeprcompliance.com/invite/token');
+  });
+
+  it('should use email as fallback when display_name is null', async () => {
+    const mockSendInviteEmail = jest.fn().mockResolvedValue({ success: true });
+
+    await sendInviteAfterCreate(
+      mockSendInviteEmail,
+      null,
+      'admin@company.com',
+      'Acme Corp',
+      'user@example.com',
+      'agent',
+      'https://app.keeprcompliance.com/invite/token',
+    );
+
+    expect(mockSendInviteEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inviterName: 'admin@company.com',
+      }),
+    );
+  });
+
+  it('should use "Your administrator" when both display_name and email are null', async () => {
+    const mockSendInviteEmail = jest.fn().mockResolvedValue({ success: true });
+
+    await sendInviteAfterCreate(
+      mockSendInviteEmail,
+      null,
+      null,
+      'Acme Corp',
+      'user@example.com',
+      'agent',
+      'https://app.keeprcompliance.com/invite/token',
+    );
+
+    expect(mockSendInviteEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inviterName: 'Your administrator',
+      }),
+    );
+  });
+
+  it('should use "your organization" when org name is null', async () => {
+    const mockSendInviteEmail = jest.fn().mockResolvedValue({ success: true });
+
+    await sendInviteAfterCreate(
+      mockSendInviteEmail,
+      'Admin',
+      'admin@co.com',
+      null,
+      'user@example.com',
+      'agent',
+      'https://app.keeprcompliance.com/invite/token',
+    );
+
+    expect(mockSendInviteEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationName: 'your organization',
+      }),
+    );
   });
 });
