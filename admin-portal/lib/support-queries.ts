@@ -19,6 +19,8 @@ import type {
   SupportResponseTemplate,
   ParticipantRole,
   AgentAnalyticsResponse,
+  RelatedTicketsResponse,
+  TicketLinkSearchResult,
   RequesterSearchResult,
   RecentTicket,
 } from './support-types';
@@ -351,4 +353,56 @@ export async function deleteTemplate(id: string): Promise<void> {
     p_id: id,
   });
   if (error) throw error;
+}
+
+// --- Related Tickets functions ---
+
+export async function getRelatedTickets(ticketId: string): Promise<RelatedTicketsResponse> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_get_related_tickets', {
+    p_ticket_id: ticketId,
+  });
+  if (error) throw error;
+  return data as unknown as RelatedTicketsResponse;
+}
+
+export async function linkTickets(
+  ticketId: string,
+  linkedTicketId: string,
+  linkType: string = 'related'
+): Promise<{ link_id: string; linked: boolean }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_link_tickets', {
+    p_ticket_id: ticketId,
+    p_linked_ticket_id: linkedTicketId,
+    p_link_type: linkType,
+  });
+  if (error) throw error;
+  return data as unknown as { link_id: string; linked: boolean };
+}
+
+export async function unlinkTickets(
+  ticketId: string,
+  linkedTicketId: string
+): Promise<{ unlinked: boolean }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_unlink_tickets', {
+    p_ticket_id: ticketId,
+    p_linked_ticket_id: linkedTicketId,
+  });
+  if (error) throw error;
+  return data as unknown as { unlinked: boolean };
+}
+
+export async function searchTicketsForLink(
+  query: string,
+  excludeTicketId: string
+): Promise<TicketLinkSearchResult[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_search_tickets_for_link', {
+    p_query: query,
+    p_exclude_ticket_id: excludeTicketId,
+  });
+  if (error) throw error;
+  return (data ?? []) as unknown as TicketLinkSearchResult[];
 }

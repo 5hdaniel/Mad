@@ -27,6 +27,7 @@ import {
 import { StatusBadge } from './StatusBadge';
 import { PriorityBadge } from './PriorityBadge';
 import { ParticipantsPanel } from './ParticipantsPanel';
+import { RelatedTicketsPanel } from './RelatedTicketsPanel';
 
 interface TicketSidebarProps {
   ticket: SupportTicket;
@@ -293,6 +294,13 @@ export function TicketSidebar({ ticket, participants, onTicketUpdated }: TicketS
         participants={participants}
         onUpdated={onTicketUpdated}
       />
+
+      {/* Related Tickets */}
+      <RelatedTicketsPanel
+        ticketId={ticket.id}
+        onTicketUpdated={onTicketUpdated}
+      />
+
 
       {/* Timestamps */}
       <div className="px-4 py-3">
