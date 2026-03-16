@@ -98,9 +98,13 @@ export function getEventDescription(event: SupportTicketEvent): string {
 }
 
 /**
- * Extract actor name from event metadata.
+ * Extract actor name from event. The RPC now returns actor_name/actor_email
+ * as top-level fields; fall back to metadata for backwards compatibility.
  */
 export function getActorName(event: SupportTicketEvent): string | null {
+  const evt = event as Record<string, unknown>;
+  if (typeof evt.actor_name === 'string') return evt.actor_name;
+  if (typeof evt.actor_email === 'string') return evt.actor_email;
   if (event.metadata && typeof event.metadata === 'object') {
     const meta = event.metadata as Record<string, unknown>;
     if (typeof meta.actor_name === 'string') return meta.actor_name;
