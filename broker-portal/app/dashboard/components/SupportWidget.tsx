@@ -117,7 +117,6 @@ export function SupportWidget() {
     setFiles([]);
     setScreenshot(null);
     setError(null);
-    setSuccess(false);
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
