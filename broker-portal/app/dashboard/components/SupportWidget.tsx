@@ -101,6 +101,13 @@ export function SupportWidget() {
     }
   }, []);
 
+  // Listen for external "open-support-widget" events so other components can trigger the dialog
+  useEffect(() => {
+    const handler = () => { handleOpen(); };
+    window.addEventListener('open-support-widget', handler);
+    return () => window.removeEventListener('open-support-widget', handler);
+  }, [handleOpen]);
+
   const handleClose = useCallback(() => {
     setOpen(false);
     setError(null);
