@@ -7,9 +7,11 @@
  * Each row navigates to the ticket detail page on click.
  */
 
+import { Fragment } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import type { SupportTicket, TicketStatus, TicketPriority } from '@/lib/support-types';
+import DOMPurify from 'isomorphic-dompurify';
+import type { SupportTicket, TicketStatus, TicketPriority, SearchHighlight } from '@/lib/support-types';
 import { STATUS_LABELS, PRIORITY_LABELS, STATUS_COLORS, PRIORITY_COLORS } from '@/lib/support-types';
 
 interface TicketTableProps {
@@ -20,6 +22,7 @@ interface TicketTableProps {
   totalPages: number;
   onPageChange: (page: number) => void;
   loading?: boolean;
+  searchActive?: boolean;
 }
 
 function StatusBadge({ status }: { status: TicketStatus }) {
@@ -55,6 +58,41 @@ function formatDate(dateStr: string): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+function getHighlightLabel(highlight: SearchHighlight): string {
+  switch (highlight.field) {
+    case 'message': {
+      const who = highlight.sender_name || 'Unknown';
+      const when = highlight.sent_at ? formatDate(highlight.sent_at) : '';
+      return when ? `Message by ${who}, ${when}` : `Message by ${who}`;
+    }
+    case 'subject':
+      return 'Matched in subject';
+    case 'description':
+      return 'Matched in description';
+    case 'requester_name':
+    case 'requester_email':
+      return 'Requester';
+    default:
+      return 'Match';
+  }
+}
+
+function HighlightSnippet({ highlight }: { highlight: SearchHighlight }) {
+  // Sanitize HTML to only allow <mark> tags from ts_headline
+  const sanitized = DOMPurify.sanitize(highlight.snippet, { ALLOWED_TAGS: ['mark'] });
+  const label = getHighlightLabel(highlight);
+
+  return (
+    <span className="inline">
+      <span className="font-medium text-gray-600">{label}:</span>{' '}
+      <span
+        className="[&_mark]:bg-yellow-200 [&_mark]:px-0.5 [&_mark]:rounded-sm"
+        dangerouslySetInnerHTML={{ __html: sanitized }}
+      />
+    </span>
+  );
+}
+
 export function TicketTable({
   tickets,
   totalCount,
@@ -63,6 +101,7 @@ export function TicketTable({
   totalPages,
   onPageChange,
   loading,
+  searchActive,
 }: TicketTableProps) {
   const router = useRouter();
 
@@ -123,35 +162,45 @@ export function TicketTable({
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {tickets.map((ticket) => (
-              <tr
-                key={ticket.id}
-                onClick={() => router.push(`/dashboard/support/${ticket.id}`)}
-                className="hover:bg-gray-50 cursor-pointer transition-colors"
-              >
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                  {ticket.ticket_number}
-                </td>
-                <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate font-medium">
-                  {ticket.subject}
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap">
-                  <StatusBadge status={ticket.status} />
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap">
-                  <PriorityBadge priority={ticket.priority} />
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                  {ticket.category_name || '-'}
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                  <div className="truncate max-w-[160px]" title={ticket.requester_email}>
-                    {ticket.requester_name}
-                  </div>
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                  {formatDate(ticket.created_at)}
-                </td>
-              </tr>
+              <Fragment key={ticket.id}>
+                <tr
+                  onClick={() => router.push(`/dashboard/support/${ticket.id}`)}
+                  className="hover:bg-gray-50 cursor-pointer transition-colors"
+                >
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                    {ticket.ticket_number}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate font-medium">
+                    {ticket.subject}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <StatusBadge status={ticket.status} />
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <PriorityBadge priority={ticket.priority} />
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                    {ticket.category_name || '-'}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                    <div className="truncate max-w-[160px]" title={ticket.requester_email}>
+                      {ticket.requester_name}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                    {formatDate(ticket.created_at)}
+                  </td>
+                </tr>
+                {searchActive && ticket.search_highlights && ticket.search_highlights.length > 0 && (
+                  <tr className="border-b border-gray-100">
+                    <td colSpan={7} className="px-4 py-1.5 bg-gray-50">
+                      <div className="flex items-start gap-2 text-xs text-gray-500 pl-4">
+                        <HighlightSnippet highlight={ticket.search_highlights[0]} />
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}
           </tbody>
         </table>

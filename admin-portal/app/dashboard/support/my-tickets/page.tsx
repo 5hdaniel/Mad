@@ -177,6 +177,7 @@ export default function MyTicketsPage() {
         totalPages={totalPages}
         onPageChange={setPage}
         loading={loading}
+        searchActive={!!searchQuery}
       />
     </div>
   );

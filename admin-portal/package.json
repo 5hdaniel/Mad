@@ -6,11 +6,16 @@
     "dev": "next dev -p 3002",
     "build": "next build",
     "start": "next start -p 3002",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:save-cookies": "npx tsx e2e/extract-cookies.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.47.10",
+    "isomorphic-dompurify": "^3.3.0",
     "lucide-react": "^0.468.0",
     "next": "15.5.10",
     "react": "^18.3.1",
@@ -20,6 +25,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.4",
     "@playwright/test": "^1.58.2",
+    "@types/dompurify": "^3.0.5",
     "@types/node": "^20.17.11",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
