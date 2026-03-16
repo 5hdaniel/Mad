@@ -152,6 +152,8 @@ export interface CreateTicketParams {
   requester_email: string;
   requester_name: string;
   source_channel?: SourceChannel;
+  requester_phone?: string;
+  preferred_contact?: PreferredContact;
 }
 
 export interface SupportResponseTemplate {
@@ -163,6 +165,29 @@ export interface SupportResponseTemplate {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// --- Requester Lookup types ---
+
+export type PreferredContact = 'email' | 'phone' | 'either';
+
+export interface RequesterSearchResult {
+  user_id: string;
+  email: string;
+  name: string;
+  phone: string | null;
+  organization_id: string | null;
+  organization_name: string | null;
+  open_ticket_count: number;
+}
+
+export interface RecentTicket {
+  id: string;
+  ticket_number: number;
+  subject: string;
+  status: string;
+  priority: string;
+  created_at: string;
 }
 
 // --- Analytics types ---
