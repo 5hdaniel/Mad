@@ -512,7 +512,7 @@ BEGIN
   INSERT INTO public.admin_audit_logs (actor_id, action, target_type, target_id, metadata)
   VALUES (
     v_admin_id,
-    CASE WHEN p_is_active THEN 'plan.activated' ELSE 'plan.deactivated' END,
+    'plan.toggled',
     'plan',
     p_plan_id::text,
     jsonb_build_object(
@@ -527,7 +527,7 @@ BEGIN
     )
   );
 
-  RETURN jsonb_build_object('success', true, 'is_active', p_is_active);
+  RETURN jsonb_build_object('success', true, 'previous_is_active', v_previous_is_active);
 END;
 $$;
 
@@ -822,6 +822,7 @@ BEGIN
     v_admin_id, 'plan_feature.updated', 'plan_feature', v_result.id::text,
     jsonb_build_object(
       'plan_id', p_plan_id,
+      'feature_id', p_feature_id,
       'before', jsonb_build_object(
         'feature_key', v_feature.key,
         'enabled', v_old_enabled,
