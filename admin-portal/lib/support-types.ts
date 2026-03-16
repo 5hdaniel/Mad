@@ -165,6 +165,35 @@ export interface SupportResponseTemplate {
   updated_at: string;
 }
 
+// --- Related Tickets types ---
+
+export type TicketLinkType = 'related' | 'duplicate' | 'parent' | 'child';
+
+export interface RelatedTicket {
+  id: string;
+  ticket_number: number;
+  subject: string;
+  status: string;
+  priority: string;
+  created_at: string;
+  link_source: 'auto' | 'manual';
+  link_type?: TicketLinkType;
+  link_id?: string;
+}
+
+export interface RelatedTicketsResponse {
+  auto_related: RelatedTicket[];
+  manual_links: RelatedTicket[];
+}
+
+export interface TicketLinkSearchResult {
+  id: string;
+  ticket_number: number;
+  subject: string;
+  status: string;
+  requester_name: string;
+}
+
 // --- Analytics types ---
 
 export interface AgentAnalytics {
