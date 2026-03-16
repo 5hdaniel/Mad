@@ -36,31 +36,31 @@ describe('buildTimeline', () => {
     expect(result).toEqual([]);
   });
 
-  it('returns only messages when events are empty', () => {
+  it('returns only messages when events are empty (newest first)', () => {
     const msg1 = makeMessage({ id: 'msg-1', created_at: '2026-03-10T10:00:00Z' });
     const msg2 = makeMessage({ id: 'msg-2', created_at: '2026-03-10T11:00:00Z' });
 
     const result = buildTimeline([msg1, msg2], []);
     expect(result).toHaveLength(2);
     expect(result[0].type).toBe('message');
-    expect(result[0].data).toBe(msg1);
+    expect(result[0].data).toBe(msg2);
     expect(result[1].type).toBe('message');
-    expect(result[1].data).toBe(msg2);
+    expect(result[1].data).toBe(msg1);
   });
 
-  it('returns only events when messages are empty', () => {
+  it('returns only events when messages are empty (newest first)', () => {
     const evt1 = makeEvent({ id: 'evt-1', created_at: '2026-03-10T09:00:00Z' });
     const evt2 = makeEvent({ id: 'evt-2', created_at: '2026-03-10T10:00:00Z' });
 
     const result = buildTimeline([], [evt1, evt2]);
     expect(result).toHaveLength(2);
     expect(result[0].type).toBe('event');
-    expect(result[0].data).toBe(evt1);
+    expect(result[0].data).toBe(evt2);
     expect(result[1].type).toBe('event');
-    expect(result[1].data).toBe(evt2);
+    expect(result[1].data).toBe(evt1);
   });
 
-  it('merges and sorts messages and events chronologically (oldest first)', () => {
+  it('merges and sorts messages and events newest first', () => {
     const msg1 = makeMessage({ id: 'msg-1', created_at: '2026-03-10T10:00:00Z' });
     const msg2 = makeMessage({ id: 'msg-2', created_at: '2026-03-10T12:00:00Z' });
     const evt1 = makeEvent({ id: 'evt-1', created_at: '2026-03-10T09:00:00Z' });
@@ -69,18 +69,18 @@ describe('buildTimeline', () => {
     const result = buildTimeline([msg1, msg2], [evt1, evt2]);
     expect(result).toHaveLength(4);
 
-    // Should be: evt1 (09:00) -> msg1 (10:00) -> evt2 (11:00) -> msg2 (12:00)
-    expect(result[0].type).toBe('event');
-    expect(result[0].timestamp).toBe('2026-03-10T09:00:00Z');
+    // Should be: msg2 (12:00) -> evt2 (11:00) -> msg1 (10:00) -> evt1 (09:00)
+    expect(result[0].type).toBe('message');
+    expect(result[0].timestamp).toBe('2026-03-10T12:00:00Z');
 
-    expect(result[1].type).toBe('message');
-    expect(result[1].timestamp).toBe('2026-03-10T10:00:00Z');
+    expect(result[1].type).toBe('event');
+    expect(result[1].timestamp).toBe('2026-03-10T11:00:00Z');
 
-    expect(result[2].type).toBe('event');
-    expect(result[2].timestamp).toBe('2026-03-10T11:00:00Z');
+    expect(result[2].type).toBe('message');
+    expect(result[2].timestamp).toBe('2026-03-10T10:00:00Z');
 
-    expect(result[3].type).toBe('message');
-    expect(result[3].timestamp).toBe('2026-03-10T12:00:00Z');
+    expect(result[3].type).toBe('event');
+    expect(result[3].timestamp).toBe('2026-03-10T09:00:00Z');
   });
 
   it('filters out message_added events', () => {
@@ -102,9 +102,9 @@ describe('buildTimeline', () => {
     // message_added event should be excluded
     expect(result.find((e) => e.type === 'event' && e.data.id === 'evt-ma')).toBeUndefined();
 
-    // status_changed event should be included
-    expect(result[1].type).toBe('event');
-    expect((result[1].data as SupportTicketEvent).id).toBe('evt-status');
+    // status_changed event should be included (newest first: evt-status at 11:00, then msg at 10:00)
+    expect(result[0].type).toBe('event');
+    expect((result[0].data as SupportTicketEvent).id).toBe('evt-status');
   });
 
   it('preserves all non-message_added event types', () => {

@@ -33,9 +33,9 @@ export function buildTimeline(
         timestamp: e.created_at,
       })),
   ];
-  // Sort oldest first (chronological reading order)
+  // Sort newest first (most recent activity at top)
   return entries.sort(
-    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
   );
 }
 
