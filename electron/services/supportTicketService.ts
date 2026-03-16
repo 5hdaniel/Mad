@@ -8,7 +8,7 @@
  * - sanitizeDiagnostics(): Strip PII from diagnostics data
  */
 
-import { app, desktopCapturer } from "electron";
+import { app, BrowserWindow } from "electron";
 import * as os from "os";
 import databaseService from "./databaseService";
 import databaseEncryptionService from "./databaseEncryptionService";
@@ -189,24 +189,20 @@ export async function collectDiagnostics(): Promise<AppDiagnostics> {
 }
 
 /**
- * Capture a screenshot of the primary screen via desktopCapturer.
+ * Capture a screenshot of the focused app window via webContents.capturePage().
+ * Uses Chromium's built-in page capture — no screen recording permission needed.
  * Returns a base64-encoded PNG string, or null on failure.
  */
 export async function captureScreenshot(): Promise<string | null> {
   try {
-    const sources = await desktopCapturer.getSources({
-      types: ["screen"],
-      thumbnailSize: { width: 1920, height: 1080 },
-    });
-
-    if (sources.length === 0) {
-      logService.warn("[Support] No screen sources available", "SupportTicketService");
+    const win = BrowserWindow.getFocusedWindow();
+    if (!win) {
+      logService.warn("[Support] No focused window for screenshot", "SupportTicketService");
       return null;
     }
 
-    const primaryScreen = sources[0];
-    const thumbnail = primaryScreen.thumbnail;
-    const pngBuffer = thumbnail.toPNG();
+    const image = await win.webContents.capturePage();
+    const pngBuffer = image.toPNG();
 
     return pngBuffer.toString("base64");
   } catch (err) {

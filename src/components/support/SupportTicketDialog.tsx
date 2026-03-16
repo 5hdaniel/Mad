@@ -26,6 +26,8 @@ interface SupportTicketDialogProps {
   userEmail: string;
   /** User display name from session */
   userName: string;
+  /** Auto-capture a screenshot when the dialog opens (used by the floating widget) */
+  autoCaptureScreenshot?: boolean;
 }
 
 const PRIORITY_OPTIONS: Array<{ value: TicketPriority; label: string }> = [
@@ -43,6 +45,7 @@ export function SupportTicketDialog({
   onClose,
   userEmail,
   userName,
+  autoCaptureScreenshot = false,
 }: SupportTicketDialogProps): React.ReactElement {
   const {
     diagnostics,
@@ -70,6 +73,13 @@ export function SupportTicketDialog({
   useEffect(() => {
     collectDiagnostics();
   }, [collectDiagnostics]);
+
+  // Auto-capture screenshot when opened from the floating widget
+  useEffect(() => {
+    if (autoCaptureScreenshot) {
+      captureScreenshot();
+    }
+  }, [autoCaptureScreenshot, captureScreenshot]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
