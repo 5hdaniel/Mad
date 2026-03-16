@@ -259,7 +259,7 @@ export function SupportWidget() {
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       readOnly={isAuthenticated}
-                      className={`w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isAuthenticated ? 'bg-gray-50 text-gray-500' : ''}`}
+                      className={`w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${isAuthenticated ? 'bg-gray-50 text-gray-500' : ''}`}
                       placeholder="Your name"
                     />
                   </div>
@@ -274,7 +274,7 @@ export function SupportWidget() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       readOnly={isAuthenticated}
-                      className={`w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isAuthenticated ? 'bg-gray-50 text-gray-500' : ''}`}
+                      className={`w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${isAuthenticated ? 'bg-gray-50 text-gray-500' : ''}`}
                       placeholder="you@example.com"
                     />
                   </div>
@@ -288,7 +288,7 @@ export function SupportWidget() {
                       id="widget-category"
                       value={categoryId}
                       onChange={(e) => { setCategoryId(e.target.value); setSubcategoryId(''); }}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="">Select...</option>
                       {categories.map((cat) => (
@@ -302,7 +302,7 @@ export function SupportWidget() {
                       id="widget-priority"
                       value={priority}
                       onChange={(e) => setPriority(e.target.value as TicketPriority)}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       {(Object.entries(PRIORITY_LABELS) as [TicketPriority, string][]).map(([key, label]) => (
                         <option key={key} value={key}>{label}</option>
@@ -319,7 +319,7 @@ export function SupportWidget() {
                       id="widget-subcategory"
                       value={subcategoryId}
                       onChange={(e) => setSubcategoryId(e.target.value)}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="">Select...</option>
                       {selectedCategory.children.map((sub) => (
@@ -347,7 +347,7 @@ export function SupportWidget() {
                     minLength={3}
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Brief summary of your issue"
                   />
                 </div>
@@ -364,7 +364,7 @@ export function SupportWidget() {
                     rows={3}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                     placeholder="Describe your issue..."
                   />
                 </div>
