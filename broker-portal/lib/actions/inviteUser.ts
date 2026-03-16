@@ -12,6 +12,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { randomBytes } from 'crypto';
 import { blockWriteDuringImpersonation } from '@/lib/impersonation-guards';
+import { sendInviteEmail } from '@/lib/email';
 
 // ============================================================================
 // Types
@@ -26,6 +27,7 @@ interface InviteUserInput {
 interface InviteUserResult {
   success: boolean;
   inviteLink?: string;
+  emailSent?: boolean;
   error?: string;
 }
 
@@ -75,7 +77,7 @@ export async function inviteUser(input: InviteUserInput): Promise<InviteUserResu
   // Check user cannot invite themselves
   const { data: currentUserData } = await supabase
     .from('users')
-    .select('email')
+    .select('email, display_name')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -129,7 +131,7 @@ export async function inviteUser(input: InviteUserInput): Promise<InviteUserResu
   // Check organization seat limits (optional - get org info)
   const { data: organization } = await supabase
     .from('organizations')
-    .select('max_seats')
+    .select('name, max_seats')
     .eq('id', input.organizationId)
     .maybeSingle();
 
@@ -175,8 +177,32 @@ export async function inviteUser(input: InviteUserInput): Promise<InviteUserResu
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.keeprcompliance.com';
   const inviteLink = `${baseUrl}/invite/${invitationToken}`;
 
+  // Send invite email (non-blocking -- invite is created regardless of email success)
+  let emailSent = false;
+  try {
+    const inviterName = currentUserData?.display_name || currentUserData?.email || 'Your administrator';
+    const orgName = organization?.name || 'your organization';
+
+    const emailResult = await sendInviteEmail({
+      recipientEmail: normalizedEmail,
+      organizationName: orgName,
+      inviterName,
+      role: input.role,
+      inviteLink,
+      expiresInDays: 7,
+    });
+
+    emailSent = emailResult.success;
+    if (!emailResult.success) {
+      console.error('Failed to send invite email:', emailResult.error);
+    }
+  } catch (emailError) {
+    console.error('Error sending invite email:', emailError);
+  }
+
   return {
     success: true,
     inviteLink,
+    emailSent,
   };
 }
