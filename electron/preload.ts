@@ -57,6 +57,7 @@ import {
   privacyBridge,
   failureLogBridge,
   featureGateBridge,
+  supportBridge,
   logBridge,
 } from "./preload/index";
 
@@ -140,6 +141,9 @@ contextBridge.exposeInMainWorld("api", {
 
   // Feature gate enforcement (SPRINT-122)
   featureGate: featureGateBridge,
+
+  // Support ticket diagnostics + screenshot (TASK-2180)
+  support: supportBridge,
 
   // Renderer log relay — pipes to main process log file
   log: logBridge,

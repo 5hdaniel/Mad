@@ -108,6 +108,7 @@ import { registerLLMHandlers } from "./llm-handlers";
 import { registerLicenseHandlers } from "./license-handlers";
 import { registerFeatureGateHandlers } from "./feature-gate-handlers";
 import { registerPreAuthValidationHandler } from "./handlers/preAuthValidationHandler";
+import { registerSupportTicketHandlers } from "./handlers/supportTicketHandlers";
 import { LLMConfigService } from "./services/llm/llmConfigService";
 
 // Import license and device services for deep link auth validation (TASK-1507)
@@ -1066,6 +1067,7 @@ app.whenReady().then(async () => {
   registerBackupRestoreHandlers();
   registerCcpaHandlers();
   registerFailureLogHandlers();
+  registerSupportTicketHandlers();
 
   // DEV-ONLY: Manual deep link handler for testing when protocol handler fails
   // Usage from DevTools console: window.api.system.manualDeepLink("keepr://callback?access_token=...&refresh_token=...")
