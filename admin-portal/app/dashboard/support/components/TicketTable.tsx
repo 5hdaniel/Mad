@@ -183,23 +183,37 @@ export function TicketTable({
                     {ticket.category_name || '-'}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                    <div className="truncate max-w-[160px]" title={ticket.requester_email}>
-                      {ticket.requester_name}
+                    <div className="truncate max-w-[160px] [&_mark]:bg-yellow-200 [&_mark]:px-0.5 [&_mark]:rounded-sm" title={ticket.requester_email}>
+                      {(() => {
+                        const requesterHighlight = searchActive && ticket.search_highlights?.find(
+                          h => h.field === 'requester_name' || h.field === 'requester_email'
+                        );
+                        if (requesterHighlight) {
+                          const sanitized = DOMPurify.sanitize(requesterHighlight.snippet, { ALLOWED_TAGS: ['mark'] });
+                          return <span dangerouslySetInnerHTML={{ __html: sanitized }} />;
+                        }
+                        return ticket.requester_name;
+                      })()}
                     </div>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                     {formatDate(ticket.created_at)}
                   </td>
                 </tr>
-                {searchActive && ticket.search_highlights && ticket.search_highlights.length > 0 && (
-                  <tr className="border-b border-gray-100">
-                    <td colSpan={7} className="px-4 py-1.5 bg-gray-50">
-                      <div className="flex items-start gap-2 text-xs text-gray-500 pl-4">
-                        <HighlightSnippet highlight={ticket.search_highlights[0]} />
-                      </div>
-                    </td>
-                  </tr>
-                )}
+                {(() => {
+                  const snippetHighlight = searchActive && ticket.search_highlights?.find(
+                    h => h.field !== 'requester_name' && h.field !== 'requester_email'
+                  );
+                  return snippetHighlight ? (
+                    <tr className="border-b border-gray-100">
+                      <td colSpan={7} className="px-4 py-1.5 bg-gray-50">
+                        <div className="flex items-start gap-2 text-xs text-gray-500 pl-4">
+                          <HighlightSnippet highlight={snippetHighlight} />
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null;
+                })()}
               </Fragment>
             ))}
           </tbody>
