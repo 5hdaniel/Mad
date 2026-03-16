@@ -246,30 +246,6 @@ export function SupportWidget() {
                   </div>
                 )}
 
-                {/* Auto-captured screenshot preview */}
-                {previewUrl && screenshot && (
-                  <div className="space-y-1">
-                    <label className="block text-xs font-medium text-gray-500">Page Screenshot (auto-captured)</label>
-                    <div className="relative inline-block">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={previewUrl}
-                        alt="Page screenshot"
-                        className="max-h-32 rounded-md border border-gray-200 w-full object-cover object-top"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setScreenshot(null)}
-                        disabled={submitting}
-                        className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-red-600 disabled:opacity-50"
-                        aria-label="Remove screenshot"
-                      >
-                        &times;
-                      </button>
-                    </div>
-                  </div>
-                )}
-
                 {/* Name & Email */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -398,6 +374,30 @@ export function SupportWidget() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Attachments</label>
                   <FileUpload files={files} onFilesChange={setFiles} disabled={submitting} />
                 </div>
+
+                {/* Auto-captured screenshot (shown as attachment) */}
+                {previewUrl && screenshot && (
+                  <div className="space-y-1">
+                    <label className="block text-xs font-medium text-gray-500">Page Screenshot (auto-captured)</label>
+                    <div className="relative inline-block">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={previewUrl}
+                        alt="Page screenshot"
+                        className="max-h-28 rounded-md border border-gray-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setScreenshot(null)}
+                        disabled={submitting}
+                        className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-red-600 disabled:opacity-50"
+                        aria-label="Remove screenshot"
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Diagnostics */}
                 <BrowserDiagnostics diagnostics={diagnostics} />
