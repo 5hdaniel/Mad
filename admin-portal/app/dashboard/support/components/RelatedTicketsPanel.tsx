@@ -131,7 +131,12 @@ export function RelatedTicketsPanel({ ticketId, onTicketUpdated }: RelatedTicket
       await fetchRelated();
       onTicketUpdated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to link ticket');
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('unique') || msg.includes('duplicate')) {
+        setError('These tickets are already linked');
+      } else {
+        setError(msg || 'Failed to link ticket');
+      }
     } finally {
       setLinking(false);
     }
