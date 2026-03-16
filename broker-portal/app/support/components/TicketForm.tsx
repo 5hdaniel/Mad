@@ -8,7 +8,7 @@
  * Works for both authenticated and unauthenticated users.
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { createTicket, getCategories, buildCategoryTree, uploadAttachment } from '@/lib/support-queries';
@@ -17,7 +17,6 @@ import { PRIORITY_LABELS } from '@/lib/support-types';
 import { FileUpload } from './FileUpload';
 import type { PendingFile } from './FileUpload';
 import { useBrowserDiagnostics, BrowserDiagnostics } from './BrowserDiagnostics';
-import { ScreenshotPaste } from './ScreenshotPaste';
 
 export function TicketForm() {
   const router = useRouter();
@@ -30,11 +29,6 @@ export function TicketForm() {
 
   // Browser diagnostics (best-effort)
   const diagnostics = useBrowserDiagnostics();
-
-  // Screenshot paste state
-  const [screenshot, setScreenshot] = useState<File | null>(null);
-  const handleScreenshot = useCallback((file: File) => setScreenshot(file), []);
-  const removeScreenshot = useCallback(() => setScreenshot(null), []);
 
   // Form state
   const [name, setName] = useState('');
@@ -117,16 +111,6 @@ export function TicketForm() {
           await uploadAttachment(result.id, diagnosticsFile);
         } catch {
           // Diagnostics upload failure should not block ticket submission
-        }
-      }
-
-      // Upload pasted screenshot (best-effort)
-      if (screenshot) {
-        try {
-          setUploadProgress('Uploading screenshot...');
-          await uploadAttachment(result.id, screenshot);
-        } catch {
-          // Screenshot upload failure should not block ticket submission
         }
       }
 
@@ -293,14 +277,6 @@ export function TicketForm() {
           placeholder="Please describe your issue in detail..."
         />
       </div>
-
-      {/* Screenshot Paste */}
-      <ScreenshotPaste
-        onScreenshot={handleScreenshot}
-        screenshot={screenshot}
-        onRemove={removeScreenshot}
-        disabled={submitting}
-      />
 
       {/* File Attachments */}
       <div>
