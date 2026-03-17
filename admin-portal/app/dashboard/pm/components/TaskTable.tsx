@@ -285,7 +285,7 @@ export function TaskTable({
                     </td>
                   )}
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                    {item.legacy_id || `#${item.item_number}`}
+                    #{item.item_number}
                   </td>
                   <td
                     className="px-4 py-3 text-sm text-gray-900 max-w-sm truncate font-medium"

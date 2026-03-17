@@ -69,12 +69,10 @@ export function KanbanCard({
         </div>
       )}
 
-      {/* Legacy ID */}
-      {item.legacy_id && (
-        <span className="text-xs text-gray-400 font-mono">
-          {item.legacy_id}
-        </span>
-      )}
+      {/* Item number */}
+      <span className="text-xs text-gray-400 font-mono">
+        #{item.item_number}
+      </span>
 
       {/* Title (link to detail) */}
       <Link

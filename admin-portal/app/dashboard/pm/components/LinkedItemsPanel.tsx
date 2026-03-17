@@ -135,7 +135,6 @@ export function LinkedItemsPanel({ itemId, links, onUpdate }: LinkedItemsPanelPr
             href={`/dashboard/pm/tasks/${link.item_id}`}
             className="block text-sm text-gray-700 hover:text-blue-600 truncate"
           >
-            {link.item_legacy_id ? `${link.item_legacy_id} ` : ''}
             {link.item_title}
           </Link>
           <div className="flex items-center gap-2 mt-0.5">
@@ -249,7 +248,6 @@ export function LinkedItemsPanel({ itemId, links, onUpdate }: LinkedItemsPanelPr
                       className="w-full text-left px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50 rounded-md disabled:opacity-50 transition-colors"
                     >
                       <div className="truncate">
-                        {result.legacy_id ? `${result.legacy_id} ` : ''}
                         {result.title}
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">

@@ -582,18 +582,16 @@ export function TaskSidebar({ item, onUpdate }: TaskSidebarProps) {
         </div>
       )}
 
-      {/* Legacy ID */}
-      {item.legacy_id && (
-        <div className="px-4 py-3">
-          <label className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2 block">
-            Legacy ID
-          </label>
-          <div className="flex items-center gap-1.5 text-sm text-gray-700">
-            <Tag className="h-3.5 w-3.5 text-gray-400" />
-            {item.legacy_id}
-          </div>
+      {/* Item Number */}
+      <div className="px-4 py-3">
+        <label className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2 block">
+          Item ID
+        </label>
+        <div className="flex items-center gap-1.5 text-sm text-gray-700">
+          <Tag className="h-3.5 w-3.5 text-gray-400" />
+          #{item.item_number}
         </div>
-      )}
+      </div>
 
       {/* Timestamps */}
       <div className="px-4 py-3">

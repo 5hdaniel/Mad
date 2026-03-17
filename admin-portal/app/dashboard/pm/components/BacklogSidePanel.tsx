@@ -121,9 +121,7 @@ function BacklogPanelItem({ item }: { item: PmBacklogItem }) {
         isDragging ? 'opacity-50' : ''
       }`}
     >
-      {item.legacy_id && (
-        <span className="text-xs text-gray-400 font-mono">{item.legacy_id}</span>
-      )}
+      <span className="text-xs text-gray-400 font-mono">#{item.item_number}</span>
       <p className="text-xs text-gray-900 font-medium line-clamp-2 mt-0.5">
         {item.title}
       </p>
