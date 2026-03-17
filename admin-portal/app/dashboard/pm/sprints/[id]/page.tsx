@@ -19,6 +19,10 @@ import {
   Clock,
   AlertCircle,
   Loader2,
+  Coins,
+  TrendingUp,
+  TrendingDown,
+  Gauge,
 } from 'lucide-react';
 import { getSprintDetail, listItems } from '@/lib/pm-queries';
 import type {
@@ -33,6 +37,13 @@ import type { BurndownDataPoint } from '../../components/BurndownChart';
 import { EstVsActualChart } from '../../components/EstVsActualChart';
 import type { EstVsActualEntry } from '../../components/EstVsActualChart';
 import { TaskTable } from '../../components/TaskTable';
+
+/** Format token count for display (e.g. 1500 → "2K", 1200000 → "1.2M"). */
+function formatTokens(tokens: number): string {
+  if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
+  if (tokens >= 1000) return `${(tokens / 1000).toFixed(0)}K`;
+  return String(tokens);
+}
 
 /** Build simplified burndown data from sprint date range and current state. */
 function buildBurndownData(
@@ -325,6 +336,84 @@ export default function SprintDetailPage() {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* Token Metric Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-blue-50">
+              <Coins className="h-5 w-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Estimated Tokens</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {formatTokens(metrics.total_est_tokens)}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-purple-50">
+              <Coins className="h-5 w-5 text-purple-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Actual Tokens</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {formatTokens(metrics.total_actual_tokens)}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="flex items-center gap-3">
+            {(() => {
+              const variance =
+                metrics.total_est_tokens > 0
+                  ? ((metrics.total_actual_tokens - metrics.total_est_tokens) /
+                      metrics.total_est_tokens) *
+                    100
+                  : 0;
+              const isOver = variance > 0;
+              const Icon = isOver ? TrendingUp : TrendingDown;
+              return (
+                <>
+                  <div
+                    className={`p-2 rounded-lg ${isOver ? 'bg-red-50' : 'bg-green-50'}`}
+                  >
+                    <Icon
+                      className={`h-5 w-5 ${isOver ? 'text-red-600' : 'text-green-600'}`}
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Variance</p>
+                    <p
+                      className={`text-2xl font-bold ${isOver ? 'text-red-600' : 'text-green-600'}`}
+                    >
+                      {isOver ? '+' : ''}
+                      {variance.toFixed(0)}%
+                    </p>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-green-50">
+              <Gauge className="h-5 w-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Efficiency</p>
+              <p className="text-2xl font-bold text-gray-900">{progress}%</p>
+            </div>
+          </div>
         </div>
       </div>
 

@@ -7,15 +7,29 @@
  * items table (filtered to this project), and associated sprints.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, FolderKanban } from 'lucide-react';
+import {
+  ArrowLeft,
+  FolderKanban,
+  Coins,
+  TrendingUp,
+  TrendingDown,
+  Gauge,
+} from 'lucide-react';
 import { getProjectDetail, listItems } from '@/lib/pm-queries';
 import { TaskTable } from '../../components/TaskTable';
 import { SprintList } from '../../components/SprintList';
 import type { PmProject, PmBacklogItem, PmSprint, ItemStatus } from '@/lib/pm-types';
 import { STATUS_LABELS, STATUS_COLORS } from '@/lib/pm-types';
+
+/** Format token count for display (e.g. 1500 → "2K", 1200000 → "1.2M"). */
+function formatTokens(tokens: number): string {
+  if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
+  if (tokens >= 1000) return `${(tokens / 1000).toFixed(0)}K`;
+  return String(tokens);
+}
 
 const STATUS_ORDER: ItemStatus[] = [
   'pending',
@@ -92,6 +106,19 @@ export default function ProjectDetailPage() {
   const totalItems = Object.values(itemsByStatus).reduce((a, b) => a + b, 0);
   const completedItems = itemsByStatus['completed'] ?? 0;
   const progressPct = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+
+  // Compute token sums from loaded items
+  const tokenSums = useMemo(() => {
+    let estTotal = 0;
+    let actualTotal = 0;
+    for (const item of items) {
+      estTotal += item.est_tokens ?? 0;
+      actualTotal += item.actual_tokens ?? 0;
+    }
+    const variance =
+      estTotal > 0 ? ((actualTotal - estTotal) / estTotal) * 100 : 0;
+    return { estTotal, actualTotal, variance };
+  }, [items]);
 
   if (loadingDetail) {
     return (
@@ -205,6 +232,78 @@ export default function ProjectDetailPage() {
         ) : (
           <p className="text-sm text-gray-400">No items in this project yet.</p>
         )}
+      </div>
+
+      {/* Token Metric Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-blue-50">
+              <Coins className="h-5 w-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Estimated Tokens</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {formatTokens(tokenSums.estTotal)}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-purple-50">
+              <Coins className="h-5 w-5 text-purple-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Actual Tokens</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {formatTokens(tokenSums.actualTotal)}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="flex items-center gap-3">
+            {(() => {
+              const isOver = tokenSums.variance > 0;
+              const Icon = isOver ? TrendingUp : TrendingDown;
+              return (
+                <>
+                  <div
+                    className={`p-2 rounded-lg ${isOver ? 'bg-red-50' : 'bg-green-50'}`}
+                  >
+                    <Icon
+                      className={`h-5 w-5 ${isOver ? 'text-red-600' : 'text-green-600'}`}
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Variance</p>
+                    <p
+                      className={`text-2xl font-bold ${isOver ? 'text-red-600' : 'text-green-600'}`}
+                    >
+                      {isOver ? '+' : ''}
+                      {tokenSums.variance.toFixed(0)}%
+                    </p>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-green-50">
+              <Gauge className="h-5 w-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Items Completed</p>
+              <p className="text-2xl font-bold text-gray-900">{progressPct}%</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Items section */}
