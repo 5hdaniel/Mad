@@ -84,14 +84,44 @@ function groupItemsByDimension(
 }
 
 // ---------------------------------------------------------------------------
+// Board state persistence
+// ---------------------------------------------------------------------------
+
+const BOARD_STATE_KEY = 'pm-board-state';
+
+interface BoardPersistedState {
+  selectedSprintId: string;
+  swimLane: SwimLaneMode;
+  collapsedLanes: string[]; // Set serialized as array
+}
+
+/** Read persisted board state from localStorage (returns null on failure). */
+function readPersistedBoardState(): BoardPersistedState | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const saved = localStorage.getItem(BOARD_STATE_KEY);
+    if (saved) return JSON.parse(saved) as BoardPersistedState;
+  } catch {
+    // Ignore corrupted localStorage
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 export default function BoardPage() {
   // -- State ---------------------------------------------------------------
   const [sprints, setSprints] = useState<PmSprint[]>([]);
-  const [selectedSprintId, setSelectedSprintId] = useState<string>('');
-  const [swimLane, setSwimLane] = useState<SwimLaneMode>('project');
+  const [selectedSprintId, setSelectedSprintId] = useState<string>(() => {
+    const persisted = readPersistedBoardState();
+    return persisted?.selectedSprintId || '';
+  });
+  const [swimLane, setSwimLane] = useState<SwimLaneMode>(() => {
+    const persisted = readPersistedBoardState();
+    return persisted?.swimLane || 'project';
+  });
   const [backlogOpen, setBacklogOpen] = useState(false);
   const [columns, setColumns] = useState<BoardColumns>({
     pending: [],
@@ -107,7 +137,10 @@ export default function BoardPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sprintDropdownOpen, setSprintDropdownOpen] = useState(false);
   const [sprintSearch, setSprintSearch] = useState('');
-  const [collapsedLanes, setCollapsedLanes] = useState<Set<string>>(new Set());
+  const [collapsedLanes, setCollapsedLanes] = useState<Set<string>>(() => {
+    const persisted = readPersistedBoardState();
+    return persisted?.collapsedLanes ? new Set(persisted.collapsedLanes) : new Set();
+  });
   const [nameMap, setNameMap] = useState<Map<string, string>>(new Map());
 
   const toggleLane = useCallback((laneKey: string) => {
@@ -119,6 +152,20 @@ export default function BoardPage() {
     });
   }, []);
 
+  // -- Persist board UI state to localStorage ------------------------------
+  useEffect(() => {
+    try {
+      const state: BoardPersistedState = {
+        selectedSprintId,
+        swimLane,
+        collapsedLanes: Array.from(collapsedLanes),
+      };
+      localStorage.setItem(BOARD_STATE_KEY, JSON.stringify(state));
+    } catch {
+      // localStorage may be full or disabled -- ignore
+    }
+  }, [selectedSprintId, swimLane, collapsedLanes]);
+
   // -- Data fetching -------------------------------------------------------
 
   /** Load sprints on mount, auto-select the first active sprint. */
@@ -129,11 +176,14 @@ export default function BoardPage() {
         const sprintList = Array.isArray(data) ? data : [];
         setSprints(sprintList);
 
-        // Auto-select first active sprint, fallback to first sprint
-        const active = sprintList.find((s) => s.status === 'active');
-        const initial = active || sprintList[0];
-        if (initial) {
-          setSelectedSprintId(initial.id);
+        // Auto-select first active sprint only if no persisted sprint
+        // (selectedSprintId is initialized from localStorage synchronously)
+        if (!selectedSprintId) {
+          const active = sprintList.find((s) => s.status === 'active');
+          const initial = active || sprintList[0];
+          if (initial) {
+            setSelectedSprintId(initial.id);
+          }
         }
       } catch (err) {
         console.error('Failed to load sprints:', err);
