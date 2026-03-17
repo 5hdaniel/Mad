@@ -139,7 +139,7 @@ export function TaskFilters({
       <select
         value={sprintId || ''}
         onChange={(e) => onSprintChange(e.target.value || null)}
-        className={selectClass}
+        className={`${selectClass} max-w-[180px] truncate`}
       >
         <option value="">All Sprints</option>
         {sprints.map((s) => (
@@ -153,7 +153,7 @@ export function TaskFilters({
       <select
         value={projectId || ''}
         onChange={(e) => onProjectChange(e.target.value || null)}
-        className={selectClass}
+        className={`${selectClass} max-w-[180px] truncate`}
       >
         <option value="">All Projects</option>
         {projects.map((p) => (
