@@ -88,6 +88,7 @@ export function CreateTaskDialog({
   const [selectedParent, setSelectedParent] = useState<PmItemSearchResult | null>(null);
 
   const parentSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const parentSearchInputRef = useRef<HTMLInputElement>(null);
 
   // Load sprints and projects when dialog opens
   useEffect(() => {
@@ -106,8 +107,11 @@ export function CreateTaskDialog({
   useEffect(() => {
     if (!parentQuery || parentQuery.length < 1) {
       setParentResults([]);
+      setSearchingParent(false);
       return;
     }
+
+    let cancelled = false;
 
     if (parentSearchTimer.current) {
       clearTimeout(parentSearchTimer.current);
@@ -117,20 +121,34 @@ export function CreateTaskDialog({
       setSearchingParent(true);
       try {
         const results = await searchItemsForLink(parentQuery);
-        setParentResults(results);
+        if (!cancelled) {
+          setParentResults(results);
+        }
       } catch {
-        setParentResults([]);
+        if (!cancelled) {
+          setParentResults([]);
+        }
       } finally {
-        setSearchingParent(false);
+        if (!cancelled) {
+          setSearchingParent(false);
+        }
       }
     }, 300);
 
     return () => {
+      cancelled = true;
       if (parentSearchTimer.current) {
         clearTimeout(parentSearchTimer.current);
       }
     };
   }, [parentQuery]);
+
+  // Focus search input when parent search is opened
+  useEffect(() => {
+    if (showParentSearch && parentSearchInputRef.current) {
+      parentSearchInputRef.current.focus();
+    }
+  }, [showParentSearch]);
 
   const resetForm = useCallback(() => {
     setTitle('');
@@ -302,11 +320,18 @@ export function CreateTaskDialog({
           <div>
             <label className={LABEL_CLASS}>Parent Item</label>
             {selectedParent || parentId ? (
-              <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
+              <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-md px-3 py-2">
                 <span className="text-sm text-gray-900 truncate">
-                  {selectedParent
-                    ? selectedParent.title
-                    : parentId}
+                  {selectedParent ? (
+                    <>
+                      {selectedParent.legacy_id && (
+                        <span className="text-green-600 text-xs font-medium mr-1">
+                          {selectedParent.legacy_id}
+                        </span>
+                      )}
+                      {selectedParent.title}
+                    </>
+                  ) : parentId}
                 </span>
                 <button
                   type="button"
@@ -321,11 +346,16 @@ export function CreateTaskDialog({
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <input
+                    ref={parentSearchInputRef}
                     type="text"
                     value={parentQuery}
                     onChange={(e) => setParentQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.preventDefault();
+                    }}
                     className={`${INPUT_CLASS} pl-9`}
                     placeholder="Search by ID or title..."
+                    autoFocus
                   />
                 </div>
 
@@ -346,7 +376,7 @@ export function CreateTaskDialog({
                         className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                       >
                         <span className="text-gray-400 text-xs">
-                          #{result.id.slice(0, 8)}
+                          {result.legacy_id || `#${result.id.slice(0, 8)}`}
                         </span>{' '}
                         {result.title}
                       </button>
