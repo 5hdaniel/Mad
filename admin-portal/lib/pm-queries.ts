@@ -23,6 +23,10 @@ import type {
   ProjectDetailResponse,
   SprintVelocityEntry,
   BoardColumns,
+  TaskStatusUpdateResult,
+  TaskLegacyLookup,
+  TaskTokenResult,
+  AgentMetricResult,
 } from './pm-types';
 
 // ---------------------------------------------------------------------------
@@ -641,4 +645,117 @@ export async function getItemByLegacyId(legacyId: string): Promise<ItemDetailRes
   });
   if (error) throw error;
   return data as unknown as ItemDetailResponse;
+}
+
+// ---------------------------------------------------------------------------
+// 37. pm_update_task_status -- Task status transition
+// ---------------------------------------------------------------------------
+
+/** Update a task's status. DB validates the transition. */
+export async function updateTaskStatus(
+  taskId: string,
+  newStatus: string
+): Promise<TaskStatusUpdateResult> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('pm_update_task_status', {
+    p_task_id: taskId,
+    p_new_status: newStatus,
+  });
+  if (error) throw error;
+  return data as unknown as TaskStatusUpdateResult;
+}
+
+// ---------------------------------------------------------------------------
+// 38. pm_get_task_by_legacy_id -- Look up task by legacy ID
+// ---------------------------------------------------------------------------
+
+/** Look up a task by its legacy ID (e.g., "TASK-2226"). Returns null if not found. */
+export async function getTaskByLegacyId(
+  legacyId: string
+): Promise<TaskLegacyLookup | null> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('pm_get_task_by_legacy_id', {
+    p_legacy_id: legacyId,
+  });
+  if (error) throw error;
+  if ((data as Record<string, unknown>)?.error) return null;
+  return data as unknown as TaskLegacyLookup;
+}
+
+// ---------------------------------------------------------------------------
+// 39. pm_record_task_tokens -- Record actual token usage for a task
+// ---------------------------------------------------------------------------
+
+/** Record actual token usage for a task, rolling up to the parent backlog item. */
+export async function recordTaskTokens(
+  taskId: string,
+  actualTokens: number,
+  agentId?: string,
+  agentType?: string,
+  inputTokens?: number,
+  outputTokens?: number,
+  cacheRead?: number,
+  cacheCreate?: number,
+  durationMs?: number,
+  apiCalls?: number,
+  sessionId?: string
+): Promise<TaskTokenResult> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('pm_record_task_tokens', {
+    p_task_id: taskId,
+    p_actual_tokens: actualTokens,
+    p_agent_id: agentId ?? null,
+    p_agent_type: agentType ?? null,
+    p_input_tokens: inputTokens ?? null,
+    p_output_tokens: outputTokens ?? null,
+    p_cache_read: cacheRead ?? null,
+    p_cache_create: cacheCreate ?? null,
+    p_duration_ms: durationMs ?? null,
+    p_api_calls: apiCalls ?? null,
+    p_session_id: sessionId ?? null,
+  });
+  if (error) throw error;
+  return data as unknown as TaskTokenResult;
+}
+
+// ---------------------------------------------------------------------------
+// 40. pm_log_agent_metrics -- Standalone agent metrics logging
+// ---------------------------------------------------------------------------
+
+/** Log agent metrics, optionally tied to a task. */
+export async function logAgentMetrics(
+  agentId: string,
+  params?: {
+    agentType?: string;
+    taskId?: string;
+    description?: string;
+    inputTokens?: number;
+    outputTokens?: number;
+    cacheRead?: number;
+    cacheCreate?: number;
+    totalTokens?: number;
+    durationMs?: number;
+    apiCalls?: number;
+    sessionId?: string;
+    model?: string;
+  }
+): Promise<AgentMetricResult> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('pm_log_agent_metrics', {
+    p_agent_id: agentId,
+    p_agent_type: params?.agentType ?? null,
+    p_task_id: params?.taskId ?? null,
+    p_description: params?.description ?? null,
+    p_input_tokens: params?.inputTokens ?? 0,
+    p_output_tokens: params?.outputTokens ?? 0,
+    p_cache_read: params?.cacheRead ?? 0,
+    p_cache_create: params?.cacheCreate ?? 0,
+    p_total_tokens: params?.totalTokens ?? 0,
+    p_duration_ms: params?.durationMs ?? 0,
+    p_api_calls: params?.apiCalls ?? 0,
+    p_session_id: params?.sessionId ?? null,
+    p_model: params?.model ?? null,
+  });
+  if (error) throw error;
+  return data as unknown as AgentMetricResult;
 }
