@@ -21,6 +21,7 @@ import { BulkActionBar } from '../components/BulkActionBar';
 import {
   listSprints,
   listItems,
+  listProjects,
   getBoardTasks,
   updateItemStatus,
   assignToSprint,
@@ -90,7 +91,7 @@ export default function BoardPage() {
   // -- State ---------------------------------------------------------------
   const [sprints, setSprints] = useState<PmSprint[]>([]);
   const [selectedSprintId, setSelectedSprintId] = useState<string>('');
-  const [swimLane, setSwimLane] = useState<SwimLaneMode>('off');
+  const [swimLane, setSwimLane] = useState<SwimLaneMode>('project');
   const [backlogOpen, setBacklogOpen] = useState(false);
   const [columns, setColumns] = useState<BoardColumns>({
     pending: [],
@@ -107,6 +108,7 @@ export default function BoardPage() {
   const [sprintDropdownOpen, setSprintDropdownOpen] = useState(false);
   const [sprintSearch, setSprintSearch] = useState('');
   const [collapsedLanes, setCollapsedLanes] = useState<Set<string>>(new Set());
+  const [nameMap, setNameMap] = useState<Map<string, string>>(new Map());
 
   const toggleLane = useCallback((laneKey: string) => {
     setCollapsedLanes((prev) => {
@@ -138,6 +140,24 @@ export default function BoardPage() {
       }
     }
     loadSprints();
+  }, []);
+
+  /** Load projects for swim lane name lookup. */
+  useEffect(() => {
+    async function loadProjects() {
+      try {
+        const data = await listProjects();
+        const projects = Array.isArray(data) ? data : [];
+        const map = new Map<string, string>();
+        for (const p of projects) {
+          map.set(p.id, p.name);
+        }
+        setNameMap(map);
+      } catch (err) {
+        console.error('Failed to load projects:', err);
+      }
+    }
+    loadProjects();
   }, []);
 
   /** Load board data when selected sprint changes. */
@@ -531,7 +551,7 @@ export default function BoardPage() {
                           <ChevronDown className="h-4 w-4 text-gray-400" />
                         )}
                         <span className="text-sm font-semibold text-gray-700">
-                          {groupKey}
+                          {nameMap.get(groupKey) || groupKey}
                         </span>
                         <span className="text-xs text-gray-400">
                           ({itemCount} {itemCount === 1 ? 'item' : 'items'})
