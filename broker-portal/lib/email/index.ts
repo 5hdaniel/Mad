@@ -18,6 +18,7 @@ export { sendEmail } from './send-email';
 
 // Template builders
 export { buildInviteEmail } from './templates/invite';
+export { buildTicketConfirmationEmail } from './templates/ticket-confirmation';
 export { buildTicketReplyNotification } from './templates/ticket-reply-notification';
 export { buildTicketAssignmentNotification } from './templates/ticket-assignment-notification';
 
@@ -27,6 +28,7 @@ export type {
   SendEmailResult,
   EmailContent,
   InviteEmailParams,
+  TicketConfirmationParams,
   TicketReplyNotificationParams,
   TicketAssignmentNotificationParams,
 } from './types';
@@ -37,10 +39,12 @@ export type {
 
 import { sendEmail } from './send-email';
 import { buildInviteEmail } from './templates/invite';
+import { buildTicketConfirmationEmail } from './templates/ticket-confirmation';
 import { buildTicketReplyNotification } from './templates/ticket-reply-notification';
 import { buildTicketAssignmentNotification } from './templates/ticket-assignment-notification';
 import type {
   InviteEmailParams,
+  TicketConfirmationParams,
   TicketReplyNotificationParams,
   TicketAssignmentNotificationParams,
   SendEmailResult,
@@ -55,6 +59,16 @@ export async function sendInviteEmail(
   params: InviteEmailParams,
 ): Promise<SendEmailResult> {
   const { subject, html, text } = buildInviteEmail(params);
+  return sendEmail({ to: params.recipientEmail, subject, html, text });
+}
+
+/**
+ * Send a ticket confirmation email to the requester.
+ */
+export async function sendTicketConfirmationEmail(
+  params: TicketConfirmationParams,
+): Promise<SendEmailResult> {
+  const { subject, html, text } = buildTicketConfirmationEmail(params);
   return sendEmail({ to: params.recipientEmail, subject, html, text });
 }
 

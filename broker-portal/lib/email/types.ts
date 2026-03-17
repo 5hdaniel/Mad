@@ -77,6 +77,17 @@ export interface TicketReplyNotificationParams {
   ticketLink: string;
 }
 
+export interface TicketConfirmationParams {
+  /** Email address of the ticket requester */
+  recipientEmail: string;
+  /** Support ticket subject line */
+  ticketSubject: string;
+  /** Support ticket display number (e.g., "TKT-0042") */
+  ticketNumber: string;
+  /** Full URL for the requester to view their ticket */
+  ticketLink: string;
+}
+
 export interface TicketAssignmentNotificationParams {
   /** Email address of the agent being assigned */
   recipientEmail: string;
