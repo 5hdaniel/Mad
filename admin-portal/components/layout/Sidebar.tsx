@@ -196,7 +196,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className={`flex-1 py-4 space-y-1 overflow-y-auto ${collapsed ? 'px-2' : 'px-3'}`}>
+      <nav className={`flex-1 py-4 space-y-1 overflow-y-auto scrollbar-hide ${collapsed ? 'px-2' : 'px-3'}`}>
         {/* Main nav items */}
         {mainNavItems.map((item) => renderNavItem(item))}
 
@@ -329,23 +329,23 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       {/* User info + Role badge + Sign Out */}
       <div className={`border-t border-gray-800 ${collapsed ? 'px-2 py-4' : 'px-3 py-4'}`}>
         {!collapsed && (
-          <div className="px-3 py-1.5 mb-1">
+          <div className="px-3 py-1.5 mb-2">
             <div className="flex items-center gap-2.5">
               {avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={avatarUrl} alt={displayName} className="h-8 w-8 rounded-full" />
+                <img src={avatarUrl} alt={displayName} className="h-8 w-8 rounded-full shrink-0" />
               ) : (
                 <div className="h-8 w-8 rounded-full bg-primary-600 flex items-center justify-center text-white text-sm font-medium shrink-0">
                   {displayName.charAt(0).toUpperCase()}
                 </div>
               )}
-              <span className="text-sm text-gray-300 truncate">{displayName}</span>
+              <div className="min-w-0">
+                <p className="text-sm text-gray-300 truncate leading-tight">{displayName}</p>
+                {roleName && (
+                  <p className="text-xs text-gray-500 truncate leading-tight">{roleName}</p>
+                )}
+              </div>
             </div>
-          </div>
-        )}
-        {!collapsed && roleName && (
-          <div className="px-3 py-1 mb-2 ml-[42px]">
-            <span className="text-xs text-gray-500">{roleName}</span>
           </div>
         )}
         <button
