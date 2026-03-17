@@ -18,6 +18,7 @@ export { sendEmail } from './send-email';
 
 // Template builders
 export { buildInviteEmail } from './templates/invite';
+export { buildInternalInviteEmail } from './templates/internal-invite';
 export { buildTicketConfirmationEmail } from './templates/ticket-confirmation';
 export { buildTicketReplyNotification } from './templates/ticket-reply-notification';
 export { buildTicketAssignmentNotification } from './templates/ticket-assignment-notification';
@@ -28,6 +29,7 @@ export type {
   SendEmailResult,
   EmailContent,
   InviteEmailParams,
+  InternalInviteEmailParams,
   TicketConfirmationParams,
   TicketReplyNotificationParams,
   TicketAssignmentNotificationParams,
@@ -39,11 +41,13 @@ export type {
 
 import { sendEmail } from './send-email';
 import { buildInviteEmail } from './templates/invite';
+import { buildInternalInviteEmail } from './templates/internal-invite';
 import { buildTicketConfirmationEmail } from './templates/ticket-confirmation';
 import { buildTicketReplyNotification } from './templates/ticket-reply-notification';
 import { buildTicketAssignmentNotification } from './templates/ticket-assignment-notification';
 import type {
   InviteEmailParams,
+  InternalInviteEmailParams,
   TicketConfirmationParams,
   TicketReplyNotificationParams,
   TicketAssignmentNotificationParams,
@@ -59,6 +63,16 @@ export async function sendInviteEmail(
   params: InviteEmailParams,
 ): Promise<SendEmailResult> {
   const { subject, html, text } = buildInviteEmail(params);
+  return sendEmail({ to: params.recipientEmail, subject, html, text });
+}
+
+/**
+ * Send an internal user invite email (admin portal users).
+ */
+export async function sendInternalInviteEmail(
+  params: InternalInviteEmailParams,
+): Promise<SendEmailResult> {
+  const { subject, html, text } = buildInternalInviteEmail(params);
   return sendEmail({ to: params.recipientEmail, subject, html, text });
 }
 

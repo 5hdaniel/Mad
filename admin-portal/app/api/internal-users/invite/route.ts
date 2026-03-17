@@ -105,6 +105,10 @@ export async function POST(request: NextRequest) {
     }
 
     const result = data as { success: boolean; user_id: string; role: string } | null;
+
+    // Fire-and-forget: send notification email
+    sendInternalInviteNotification(email, roleSlug);
+
     return NextResponse.json({
       success: true,
       user_id: result?.user_id,
@@ -144,9 +148,44 @@ export async function POST(request: NextRequest) {
   }
 
   const roleName = roleRow.slug;
+
+  // Fire-and-forget: send invite email
+  sendInternalInviteNotification(email, roleName);
+
   return NextResponse.json({
     success: true,
     pending: true,
     message: `Invitation created for ${email} as ${roleName}. Role will be assigned on first login.`,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Email notification helper
+// ---------------------------------------------------------------------------
+
+function sendInternalInviteNotification(email: string, roleName: string) {
+  const brokerPortalUrl = process.env.BROKER_PORTAL_URL;
+  const apiSecret = process.env.INTERNAL_API_SECRET;
+
+  if (!brokerPortalUrl || !apiSecret) {
+    console.warn('[invite-internal-user] Email skipped: BROKER_PORTAL_URL or INTERNAL_API_SECRET not configured');
+    return;
+  }
+
+  const adminPortalUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://admin.keeprcompliance.com';
+
+  fetch(`${brokerPortalUrl}/api/email/internal-invite`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-secret': apiSecret,
+    },
+    body: JSON.stringify({
+      email,
+      roleName,
+      loginUrl: adminPortalUrl,
+    }),
+  }).catch((err) => {
+    console.error('[invite-internal-user] Failed to send invite email:', err);
   });
 }
