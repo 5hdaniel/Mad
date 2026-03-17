@@ -36,16 +36,19 @@ BEGIN
     RAISE EXCEPTION 'Sprint not found: %', p_sprint_id;
   END IF;
 
-  UPDATE pm_sprints
-  SET status = p_status
-  WHERE id = p_sprint_id;
-
-  -- When activating, snapshot current item count
   IF p_status = 'active' THEN
-    UPDATE pm_sprints SET original_item_count = (
-      SELECT COUNT(*) FROM pm_backlog_items
-      WHERE sprint_id = p_sprint_id AND deleted_at IS NULL
-    ) WHERE id = p_sprint_id;
+    -- When activating, snapshot current item count in same UPDATE
+    UPDATE pm_sprints
+    SET status = p_status,
+        original_item_count = (
+          SELECT COUNT(*) FROM pm_backlog_items
+          WHERE sprint_id = p_sprint_id AND deleted_at IS NULL
+        )
+    WHERE id = p_sprint_id;
+  ELSE
+    UPDATE pm_sprints
+    SET status = p_status
+    WHERE id = p_sprint_id;
   END IF;
 
   RETURN jsonb_build_object('success', true, 'old_status', v_old_status, 'new_status', p_status);

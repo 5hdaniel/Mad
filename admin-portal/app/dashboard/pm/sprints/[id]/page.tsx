@@ -342,14 +342,16 @@ export default function SprintDetailPage() {
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <div className="flex items-center gap-3">
             {(() => {
+              const SCOPE_CREEP_RED_THRESHOLD = 4;
               const original = sprint.original_item_count ?? metrics.total_items;
               const added = metrics.total_items - original;
               const pct = original > 0 ? Math.round((added / original) * 100) : 0;
               const hasCreep = added > 0;
+              const isSevere = added >= SCOPE_CREEP_RED_THRESHOLD;
               return (
                 <>
-                  <div className={`p-2 rounded-lg ${hasCreep ? (added >= 4 ? 'bg-red-50' : 'bg-yellow-50') : 'bg-green-50'}`}>
-                    <TrendingUp className={`h-5 w-5 ${hasCreep ? (added >= 4 ? 'text-red-600' : 'text-yellow-600') : 'text-green-600'}`} />
+                  <div className={`p-2 rounded-lg ${hasCreep ? (isSevere ? 'bg-red-50' : 'bg-yellow-50') : 'bg-green-50'}`}>
+                    <TrendingUp className={`h-5 w-5 ${hasCreep ? (isSevere ? 'text-red-600' : 'text-yellow-600') : 'text-green-600'}`} />
                   </div>
                   <div>
                     <div className="flex items-center gap-1">
@@ -361,7 +363,7 @@ export default function SprintDetailPage() {
                         </span>
                       </span>
                     </div>
-                    <p className={`text-2xl font-bold ${hasCreep ? (added >= 4 ? 'text-red-600' : 'text-yellow-600') : 'text-green-600'}`}>
+                    <p className={`text-2xl font-bold ${hasCreep ? (isSevere ? 'text-red-600' : 'text-yellow-600') : 'text-green-600'}`}>
                       {added > 0 ? '+' : ''}{added} ({pct}%)
                     </p>
                   </div>
