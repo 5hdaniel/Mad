@@ -13,7 +13,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { KanbanSquare, ChevronDown, RefreshCw, Loader2 } from 'lucide-react';
+import { KanbanSquare, ChevronDown, ChevronRight, RefreshCw, Loader2 } from 'lucide-react';
 import { KanbanBoard } from '../components/KanbanBoard';
 import { SwimLaneSelector, type SwimLaneMode } from '../components/SwimLaneSelector';
 import { BacklogSidePanel } from '../components/BacklogSidePanel';
@@ -105,6 +105,16 @@ export default function BoardPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sprintDropdownOpen, setSprintDropdownOpen] = useState(false);
   const [sprintSearch, setSprintSearch] = useState('');
+  const [collapsedLanes, setCollapsedLanes] = useState<Set<string>>(new Set());
+
+  const toggleLane = useCallback((laneKey: string) => {
+    setCollapsedLanes((prev) => {
+      const next = new Set(prev);
+      if (next.has(laneKey)) next.delete(laneKey);
+      else next.add(laneKey);
+      return next;
+    });
+  }, []);
 
   // -- Data fetching -------------------------------------------------------
 
@@ -432,7 +442,13 @@ export default function BoardPage() {
           </div>
 
           {/* Swim lane toggle */}
-          <SwimLaneSelector value={swimLane} onChange={setSwimLane} />
+          <SwimLaneSelector
+            value={swimLane}
+            onChange={(mode) => {
+              setSwimLane(mode);
+              setCollapsedLanes(new Set());
+            }}
+          />
         </div>
 
         {/* Right side: refresh + backlog toggle */}
@@ -477,20 +493,44 @@ export default function BoardPage() {
             // Swim lane view: grouped boards
             <div className="space-y-6">
               {Array.from(swimLaneGroups.entries()).map(
-                ([groupKey, groupColumns]) => (
-                  <div key={groupKey}>
-                    <h2 className="text-sm font-semibold text-gray-700 mb-3 px-1 border-b border-gray-200 pb-2">
-                      {groupKey}
-                    </h2>
-                    <KanbanBoard
-                      columns={groupColumns}
-                      onStatusChange={handleStatusChange}
-                      onQuickAdd={handleQuickAdd}
-                      selectedIds={selectedIds}
-                      onToggleSelect={handleToggleSelect}
-                    />
-                  </div>
-                )
+                ([groupKey, groupColumns]) => {
+                  const itemCount =
+                    groupColumns.pending.length +
+                    groupColumns.in_progress.length +
+                    groupColumns.testing.length +
+                    groupColumns.completed.length +
+                    groupColumns.blocked.length;
+                  const isCollapsed = collapsedLanes.has(groupKey);
+                  return (
+                    <div key={groupKey}>
+                      <button
+                        onClick={() => toggleLane(groupKey)}
+                        className="flex items-center gap-2 w-full text-left py-2 px-1 border-b border-gray-200 mb-3"
+                      >
+                        {isCollapsed ? (
+                          <ChevronRight className="h-4 w-4 text-gray-400" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 text-gray-400" />
+                        )}
+                        <span className="text-sm font-semibold text-gray-700">
+                          {groupKey}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          ({itemCount} {itemCount === 1 ? 'item' : 'items'})
+                        </span>
+                      </button>
+                      {!isCollapsed && (
+                        <KanbanBoard
+                          columns={groupColumns}
+                          onStatusChange={handleStatusChange}
+                          onQuickAdd={handleQuickAdd}
+                          selectedIds={selectedIds}
+                          onToggleSelect={handleToggleSelect}
+                        />
+                      )}
+                    </div>
+                  );
+                }
               )}
               {swimLaneGroups.size === 0 && (
                 <div className="flex flex-col items-center justify-center h-32 text-gray-400">
