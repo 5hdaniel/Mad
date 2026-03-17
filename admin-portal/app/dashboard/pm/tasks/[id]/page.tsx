@@ -27,6 +27,7 @@ import { TaskSidebar } from '../../components/TaskSidebar';
 import { DependencyPanel } from '../../components/DependencyPanel';
 import { LinkedItemsPanel } from '../../components/LinkedItemsPanel';
 import { LabelPicker } from '../../components/LabelPicker';
+import { TimeTracker } from '../../components/TimeTracker';
 
 // -- Loading Skeleton --------------------------------------------------------
 
@@ -214,6 +215,8 @@ export default function TaskDetailPage() {
         {/* Right: Sidebar, Labels, Dependencies, Linked Items */}
         <div className="lg:col-span-2 space-y-6">
           <TaskSidebar item={item} onUpdate={loadDetail} />
+
+          <TimeTracker itemId={item.id} />
 
           <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-200">
             <LabelPicker

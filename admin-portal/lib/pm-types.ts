@@ -426,6 +426,25 @@ export type SortableColumn =
 export type SortDirection = 'asc' | 'desc';
 
 // ---------------------------------------------------------------------------
+// Time tracking types
+// ---------------------------------------------------------------------------
+
+export interface PmTimeEntry {
+  id: string;
+  user_id: string;
+  user_name: string;
+  description: string | null;
+  duration_minutes: number;
+  started_at: string;
+  created_at: string;
+}
+
+export interface TimeEntriesResponse {
+  entries: PmTimeEntry[];
+  total_minutes: number;
+}
+
+// ---------------------------------------------------------------------------
 // Timeline types
 // ---------------------------------------------------------------------------
 

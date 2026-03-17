@@ -23,6 +23,7 @@ import type {
   ProjectDetailResponse,
   SprintVelocityEntry,
   BoardColumns,
+  TimeEntriesResponse,
 } from './pm-types';
 
 // ---------------------------------------------------------------------------
@@ -641,4 +642,52 @@ export async function getItemByLegacyId(legacyId: string): Promise<ItemDetailRes
   });
   if (error) throw error;
   return data as unknown as ItemDetailResponse;
+}
+
+// ---------------------------------------------------------------------------
+// 37. pm_add_time_entry -- Log time against an item
+// ---------------------------------------------------------------------------
+
+/** Add a time entry to a backlog item. */
+export async function addTimeEntry(
+  itemId: string,
+  durationMinutes: number,
+  description?: string
+): Promise<{ id: string }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('pm_add_time_entry', {
+    p_item_id: itemId,
+    p_duration_minutes: durationMinutes,
+    p_description: description || null,
+  });
+  if (error) throw error;
+  return data as unknown as { id: string };
+}
+
+// ---------------------------------------------------------------------------
+// 38. pm_list_time_entries -- List time entries for an item
+// ---------------------------------------------------------------------------
+
+/** List all time entries for a backlog item with total. */
+export async function listTimeEntries(itemId: string): Promise<TimeEntriesResponse> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('pm_list_time_entries', {
+    p_item_id: itemId,
+  });
+  if (error) throw error;
+  return data as unknown as TimeEntriesResponse;
+}
+
+// ---------------------------------------------------------------------------
+// 39. pm_delete_time_entry -- Delete own time entry
+// ---------------------------------------------------------------------------
+
+/** Delete a time entry (only own entries). */
+export async function deleteTimeEntry(entryId: string): Promise<{ success: boolean }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('pm_delete_time_entry', {
+    p_entry_id: entryId,
+  });
+  if (error) throw error;
+  return data as unknown as { success: boolean };
 }
