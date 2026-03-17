@@ -27,6 +27,7 @@ import { TaskSearchBar } from '../components/TaskSearchBar';
 import { SavedViewSelector } from '../components/SavedViewSelector';
 import { HierarchyTree } from '../components/HierarchyTree';
 import { CreateTaskDialog } from '../components/CreateTaskDialog';
+import { BacklogBulkBar } from '../components/BacklogBulkBar';
 
 // ---------------------------------------------------------------------------
 // Priority order maps for sorting enum-valued columns
@@ -173,6 +174,9 @@ export default function BacklogPage() {
   const [sortBy, setSortBy] = useState<SortableColumn | null>(null);
   const [sortDir, setSortDir] = useState<SortDirection>('asc');
 
+  // Selection state for bulk actions
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
   // View mode
   const [treeMode, setTreeMode] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -274,36 +278,43 @@ export default function BacklogPage() {
   function handleStatusesChange(statuses: string[]) {
     setStatusFilters(statuses);
     setPage(1);
+    setSelectedIds(new Set());
   }
 
   function handlePrioritiesChange(priorities: string[]) {
     setPriorityFilters(priorities);
     setPage(1);
+    setSelectedIds(new Set());
   }
 
   function handleTypesChange(types: string[]) {
     setTypeFilters(types);
     setPage(1);
+    setSelectedIds(new Set());
   }
 
   function handleAreasChange(areas: string[]) {
     setAreaFilters(areas);
     setPage(1);
+    setSelectedIds(new Set());
   }
 
   function handleSprintIdsChange(sprintIds: string[]) {
     setSprintFilters(sprintIds);
     setPage(1);
+    setSelectedIds(new Set());
   }
 
   function handleProjectIdsChange(projectIds: string[]) {
     setProjectFilters(projectIds);
     setPage(1);
+    setSelectedIds(new Set());
   }
 
   const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
     setPage(1);
+    setSelectedIds(new Set());
   }, []);
 
   // ---------------------------------------------------------------------------
@@ -346,6 +357,15 @@ export default function BacklogPage() {
     setProjectFilters(toArray(filters.project_id ?? filters.projectIds));
     setPage(1);
   }
+
+  // ---------------------------------------------------------------------------
+  // Bulk action complete handler -- reload data and clear selection
+  // ---------------------------------------------------------------------------
+
+  const handleBulkComplete = useCallback(() => {
+    setSelectedIds(new Set());
+    loadItems();
+  }, [loadItems]);
 
   function handleItemClick(itemId: string) {
     router.push(`/dashboard/pm/tasks/${itemId}`);
@@ -448,6 +468,8 @@ export default function BacklogPage() {
           sortBy={sortBy}
           sortDir={sortDir}
           onSort={handleSort}
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
         />
       )}
 
@@ -456,6 +478,13 @@ export default function BacklogPage() {
         open={showCreateDialog}
         onClose={() => setShowCreateDialog(false)}
         onCreated={loadItems}
+      />
+
+      {/* Bulk Action Bar */}
+      <BacklogBulkBar
+        selectedIds={selectedIds}
+        onClearSelection={() => setSelectedIds(new Set())}
+        onComplete={handleBulkComplete}
       />
     </div>
   );
