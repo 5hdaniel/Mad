@@ -426,6 +426,18 @@ export type SortableColumn =
 export type SortDirection = 'asc' | 'desc';
 
 // ---------------------------------------------------------------------------
+// Sortable column keys for sprint table
+// ---------------------------------------------------------------------------
+
+export type SprintSortColumn =
+  | 'name'
+  | 'status'
+  | 'start_date'
+  | 'end_date'
+  | 'total_items'
+  | 'progress';
+
+// ---------------------------------------------------------------------------
 // Timeline types
 // ---------------------------------------------------------------------------
 
