@@ -24,6 +24,7 @@ import {
   getBoardTasks,
   updateItemStatus,
   assignToSprint,
+  assignItem,
   createItem,
   bulkUpdate,
   deleteItem,
@@ -277,6 +278,23 @@ export default function BoardPage() {
     }
   }, [selectedIds, selectedSprintId, loadBoardData]);
 
+  /** Bulk assign to user. */
+  const handleBulkAssignUser = useCallback(
+    async (assigneeId: string | null) => {
+      if (selectedIds.size === 0) return;
+      try {
+        await Promise.all(
+          Array.from(selectedIds).map((id) => assignItem(id, assigneeId))
+        );
+        setSelectedIds(new Set());
+        await loadBoardData();
+      } catch (err) {
+        console.error('Failed to bulk assign user:', err);
+      }
+    },
+    [selectedIds, loadBoardData]
+  );
+
   /** Bulk delete. */
   const handleBulkDelete = useCallback(async () => {
     if (selectedIds.size === 0) return;
@@ -529,6 +547,7 @@ export default function BoardPage() {
           // Priority change not implemented in this version
         }}
         onAssignToSprint={handleBulkAssignSprint}
+        onAssignUser={handleBulkAssignUser}
         onDelete={handleBulkDelete}
       />
     </div>

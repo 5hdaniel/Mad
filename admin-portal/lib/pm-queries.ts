@@ -135,18 +135,18 @@ export async function updateItemField(
 // 6. pm_assign_item -- Assign to user
 // ---------------------------------------------------------------------------
 
-/** Assign a backlog item to a user. */
+/** Assign a backlog item to a user (pass null to unassign). */
 export async function assignItem(
   itemId: string,
-  assigneeId: string
-): Promise<{ success: boolean; item_id: string; assignee_id: string }> {
+  assigneeId: string | null
+): Promise<{ success: boolean; item_id: string; assignee_id: string | null }> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc('pm_assign_item', {
     p_item_id: itemId,
     p_assignee_id: assigneeId,
   });
   if (error) throw error;
-  return data as unknown as { success: boolean; item_id: string; assignee_id: string };
+  return data as unknown as { success: boolean; item_id: string; assignee_id: string | null };
 }
 
 // ---------------------------------------------------------------------------
@@ -758,4 +758,21 @@ export async function logAgentMetrics(
   });
   if (error) throw error;
   return data as unknown as AgentMetricResult;
+}
+
+// ---------------------------------------------------------------------------
+// 41. listAssignableUsers -- Profiles for assignment picker
+// ---------------------------------------------------------------------------
+
+/** List users that can be assigned to items (all profiles ordered by display name). */
+export async function listAssignableUsers(): Promise<
+  { id: string; display_name: string | null; email: string }[]
+> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, display_name, email')
+    .order('display_name');
+  if (error) throw error;
+  return (data ?? []) as { id: string; display_name: string | null; email: string }[];
 }
