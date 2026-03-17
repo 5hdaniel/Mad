@@ -6,11 +6,12 @@
  * Renders the backlog items as a table with pagination.
  * Supports checkbox selection for bulk operations and tree indentation.
  * Each row navigates to the item detail page on click.
+ * Column headers are clickable to sort by that column.
  */
 
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import type { PmBacklogItem, ItemStatus, ItemPriority, ItemType } from '@/lib/pm-types';
+import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import type { PmBacklogItem, ItemStatus, ItemPriority, ItemType, SortableColumn, SortDirection } from '@/lib/pm-types';
 import {
   STATUS_LABELS,
   STATUS_COLORS,
@@ -32,6 +33,9 @@ interface TaskTableProps {
   selectedIds?: Set<string>;
   onSelectionChange?: (ids: Set<string>) => void;
   treeMode?: boolean;
+  sortBy?: SortableColumn | null;
+  sortDir?: SortDirection;
+  onSort?: (column: SortableColumn) => void;
 }
 
 function StatusBadge({ status }: { status: ItemStatus }) {
@@ -83,6 +87,48 @@ function formatTokens(tokens: number | null): string {
   return String(tokens);
 }
 
+interface SortIconProps {
+  column: SortableColumn;
+  currentSort: SortableColumn | null | undefined;
+  currentDir: SortDirection | undefined;
+}
+
+function SortIcon({ column, currentSort, currentDir }: SortIconProps) {
+  if (currentSort !== column) {
+    return <ChevronsUpDown className="h-3.5 w-3.5 text-gray-400 ml-1" />;
+  }
+  if (currentDir === 'asc') {
+    return <ChevronUp className="h-3.5 w-3.5 text-blue-600 ml-1" />;
+  }
+  return <ChevronDown className="h-3.5 w-3.5 text-blue-600 ml-1" />;
+}
+
+interface SortableHeaderProps {
+  column: SortableColumn;
+  label: string;
+  sortBy: SortableColumn | null | undefined;
+  sortDir: SortDirection | undefined;
+  onSort?: (column: SortableColumn) => void;
+}
+
+function SortableHeader({ column, label, sortBy, sortDir, onSort }: SortableHeaderProps) {
+  const isActive = sortBy === column;
+
+  return (
+    <th
+      className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer select-none hover:bg-gray-100 transition-colors ${
+        isActive ? 'text-blue-600' : 'text-gray-500'
+      }`}
+      onClick={() => onSort?.(column)}
+    >
+      <div className="inline-flex items-center">
+        {label}
+        <SortIcon column={column} currentSort={sortBy} currentDir={sortDir} />
+      </div>
+    </th>
+  );
+}
+
 export function TaskTable({
   items,
   totalCount,
@@ -94,6 +140,9 @@ export function TaskTable({
   selectedIds,
   onSelectionChange,
   treeMode,
+  sortBy,
+  sortDir,
+  onSort,
 }: TaskTableProps) {
   const router = useRouter();
 
@@ -192,30 +241,14 @@ export function TaskTable({
                   />
                 </th>
               )}
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                ID
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Title
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Type
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Priority
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Area
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Est
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Created
-              </th>
+              <SortableHeader column="item_number" label="ID" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+              <SortableHeader column="title" label="Title" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+              <SortableHeader column="type" label="Type" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+              <SortableHeader column="status" label="Status" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+              <SortableHeader column="priority" label="Priority" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+              <SortableHeader column="area" label="Area" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+              <SortableHeader column="est_tokens" label="Est" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+              <SortableHeader column="created_at" label="Created" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
