@@ -22,7 +22,6 @@ import {
   Coins,
   TrendingUp,
   TrendingDown,
-  Gauge,
   Info,
 } from 'lucide-react';
 import { getSprintDetail, listItems } from '@/lib/pm-queries';
@@ -342,21 +341,33 @@ export default function SprintDetailPage() {
 
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-green-50">
-              <Gauge className="h-5 w-5 text-green-600" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1">
-                <p className="text-sm text-gray-500">Efficiency</p>
-                <span className="group relative">
-                  <Info className="h-3.5 w-3.5 text-gray-400 cursor-help" />
-                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                    Completed items / Total items × 100
-                  </span>
-                </span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">{progress}%</p>
-            </div>
+            {(() => {
+              const original = sprint.original_item_count ?? metrics.total_items;
+              const added = metrics.total_items - original;
+              const pct = original > 0 ? Math.round((added / original) * 100) : 0;
+              const hasCreep = added > 0;
+              return (
+                <>
+                  <div className={`p-2 rounded-lg ${hasCreep ? (added >= 4 ? 'bg-red-50' : 'bg-yellow-50') : 'bg-green-50'}`}>
+                    <TrendingUp className={`h-5 w-5 ${hasCreep ? (added >= 4 ? 'text-red-600' : 'text-yellow-600') : 'text-green-600'}`} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1">
+                      <p className="text-sm text-gray-500">Scope Change</p>
+                      <span className="group relative">
+                        <Info className="h-3.5 w-3.5 text-gray-400 cursor-help" />
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                          Items added after sprint started vs original count
+                        </span>
+                      </span>
+                    </div>
+                    <p className={`text-2xl font-bold ${hasCreep ? (added >= 4 ? 'text-red-600' : 'text-yellow-600') : 'text-green-600'}`}>
+                      {added > 0 ? '+' : ''}{added} ({pct}%)
+                    </p>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       </div>
