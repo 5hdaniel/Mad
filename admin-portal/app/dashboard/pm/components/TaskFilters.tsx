@@ -4,51 +4,55 @@
  * TaskFilters - PM Backlog
  *
  * Filter controls for the backlog list: Status, Priority, Type, Area, Sprint, Project.
+ * Uses multi-select dropdowns with checkboxes for each filter category,
+ * allowing multiple values to be selected simultaneously.
  */
 
 import { useEffect, useState } from 'react';
 import { Filter, X } from 'lucide-react';
 import { listSprints, listProjects } from '@/lib/pm-queries';
-import type { ItemStatus, ItemPriority, ItemType, PmSprint, PmProject } from '@/lib/pm-types';
+import type { PmSprint, PmProject } from '@/lib/pm-types';
 import { STATUS_LABELS, PRIORITY_LABELS, TYPE_LABELS } from '@/lib/pm-types';
+import { MultiSelectDropdown } from './MultiSelectDropdown';
+import type { MultiSelectOption } from './MultiSelectDropdown';
 
-const AREA_OPTIONS = [
-  'admin-portal',
-  'electron',
-  'broker-portal',
-  'service',
-  'schema',
-  'ui',
+const AREA_OPTIONS: MultiSelectOption[] = [
+  { value: 'admin-portal', label: 'admin-portal' },
+  { value: 'electron', label: 'electron' },
+  { value: 'broker-portal', label: 'broker-portal' },
+  { value: 'service', label: 'service' },
+  { value: 'schema', label: 'schema' },
+  { value: 'ui', label: 'ui' },
 ];
 
 interface TaskFiltersProps {
-  status: ItemStatus | null;
-  priority: ItemPriority | null;
-  type: ItemType | null;
-  area: string | null;
-  sprintId: string | null;
-  projectId: string | null;
-  onStatusChange: (status: ItemStatus | null) => void;
-  onPriorityChange: (priority: ItemPriority | null) => void;
-  onTypeChange: (type: ItemType | null) => void;
-  onAreaChange: (area: string | null) => void;
-  onSprintChange: (sprintId: string | null) => void;
-  onProjectChange: (projectId: string | null) => void;
+  statuses: string[];
+  priorities: string[];
+  types: string[];
+  areas: string[];
+  sprintIds: string[];
+  projectIds: string[];
+  onStatusesChange: (statuses: string[]) => void;
+  onPrioritiesChange: (priorities: string[]) => void;
+  onTypesChange: (types: string[]) => void;
+  onAreasChange: (areas: string[]) => void;
+  onSprintIdsChange: (sprintIds: string[]) => void;
+  onProjectIdsChange: (projectIds: string[]) => void;
 }
 
 export function TaskFilters({
-  status,
-  priority,
-  type,
-  area,
-  sprintId,
-  projectId,
-  onStatusChange,
-  onPriorityChange,
-  onTypeChange,
-  onAreaChange,
-  onSprintChange,
-  onProjectChange,
+  statuses,
+  priorities,
+  types,
+  areas,
+  sprintIds,
+  projectIds,
+  onStatusesChange,
+  onPrioritiesChange,
+  onTypesChange,
+  onAreasChange,
+  onSprintIdsChange,
+  onProjectIdsChange,
 }: TaskFiltersProps) {
   const [sprints, setSprints] = useState<PmSprint[]>([]);
   const [projects, setProjects] = useState<PmProject[]>([]);
@@ -58,19 +62,44 @@ export function TaskFilters({
     listProjects().then(setProjects).catch(() => {});
   }, []);
 
-  const hasFilters = status || priority || type || area || sprintId || projectId;
+  const hasFilters =
+    statuses.length > 0 ||
+    priorities.length > 0 ||
+    types.length > 0 ||
+    areas.length > 0 ||
+    sprintIds.length > 0 ||
+    projectIds.length > 0;
 
   function clearAll() {
-    onStatusChange(null);
-    onPriorityChange(null);
-    onTypeChange(null);
-    onAreaChange(null);
-    onSprintChange(null);
-    onProjectChange(null);
+    onStatusesChange([]);
+    onPrioritiesChange([]);
+    onTypesChange([]);
+    onAreasChange([]);
+    onSprintIdsChange([]);
+    onProjectIdsChange([]);
   }
 
-  const selectClass =
-    'text-sm border border-gray-300 rounded-md px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500';
+  const statusOptions: MultiSelectOption[] = Object.entries(STATUS_LABELS).map(
+    ([key, label]) => ({ value: key, label })
+  );
+
+  const priorityOptions: MultiSelectOption[] = Object.entries(PRIORITY_LABELS).map(
+    ([key, label]) => ({ value: key, label })
+  );
+
+  const typeOptions: MultiSelectOption[] = Object.entries(TYPE_LABELS).map(
+    ([key, label]) => ({ value: key, label })
+  );
+
+  const sprintOptions: MultiSelectOption[] = sprints.map((s) => ({
+    value: s.id,
+    label: s.name,
+  }));
+
+  const projectOptions: MultiSelectOption[] = projects.map((p) => ({
+    value: p.id,
+    label: p.name,
+  }));
 
   return (
     <div className="flex items-center gap-3 flex-wrap">
@@ -80,88 +109,54 @@ export function TaskFilters({
       </div>
 
       {/* Status filter */}
-      <select
-        value={status || ''}
-        onChange={(e) => onStatusChange((e.target.value as ItemStatus) || null)}
-        className={selectClass}
-      >
-        <option value="">All Statuses</option>
-        {(Object.entries(STATUS_LABELS) as [ItemStatus, string][]).map(([key, label]) => (
-          <option key={key} value={key}>
-            {label}
-          </option>
-        ))}
-      </select>
+      <MultiSelectDropdown
+        label="All Statuses"
+        options={statusOptions}
+        selected={statuses}
+        onChange={onStatusesChange}
+      />
 
       {/* Priority filter */}
-      <select
-        value={priority || ''}
-        onChange={(e) => onPriorityChange((e.target.value as ItemPriority) || null)}
-        className={selectClass}
-      >
-        <option value="">All Priorities</option>
-        {(Object.entries(PRIORITY_LABELS) as [ItemPriority, string][]).map(([key, label]) => (
-          <option key={key} value={key}>
-            {label}
-          </option>
-        ))}
-      </select>
+      <MultiSelectDropdown
+        label="All Priorities"
+        options={priorityOptions}
+        selected={priorities}
+        onChange={onPrioritiesChange}
+      />
 
       {/* Type filter */}
-      <select
-        value={type || ''}
-        onChange={(e) => onTypeChange((e.target.value as ItemType) || null)}
-        className={selectClass}
-      >
-        <option value="">All Types</option>
-        {(Object.entries(TYPE_LABELS) as [ItemType, string][]).map(([key, label]) => (
-          <option key={key} value={key}>
-            {label}
-          </option>
-        ))}
-      </select>
+      <MultiSelectDropdown
+        label="All Types"
+        options={typeOptions}
+        selected={types}
+        onChange={onTypesChange}
+      />
 
       {/* Area filter */}
-      <select
-        value={area || ''}
-        onChange={(e) => onAreaChange(e.target.value || null)}
-        className={selectClass}
-      >
-        <option value="">All Areas</option>
-        {AREA_OPTIONS.map((a) => (
-          <option key={a} value={a}>
-            {a}
-          </option>
-        ))}
-      </select>
+      <MultiSelectDropdown
+        label="All Areas"
+        options={AREA_OPTIONS}
+        selected={areas}
+        onChange={onAreasChange}
+      />
 
       {/* Sprint filter */}
-      <select
-        value={sprintId || ''}
-        onChange={(e) => onSprintChange(e.target.value || null)}
-        className={`${selectClass} max-w-[180px] truncate`}
-      >
-        <option value="">All Sprints</option>
-        {sprints.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.name}
-          </option>
-        ))}
-      </select>
+      <MultiSelectDropdown
+        label="All Sprints"
+        options={sprintOptions}
+        selected={sprintIds}
+        onChange={onSprintIdsChange}
+        className="max-w-[180px]"
+      />
 
       {/* Project filter */}
-      <select
-        value={projectId || ''}
-        onChange={(e) => onProjectChange(e.target.value || null)}
-        className={`${selectClass} max-w-[180px] truncate`}
-      >
-        <option value="">All Projects</option>
-        {projects.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-          </option>
-        ))}
-      </select>
+      <MultiSelectDropdown
+        label="All Projects"
+        options={projectOptions}
+        selected={projectIds}
+        onChange={onProjectIdsChange}
+        className="max-w-[180px]"
+      />
 
       {/* Clear all button */}
       {hasFilters && (
