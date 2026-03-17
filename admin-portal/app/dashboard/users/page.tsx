@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedUser } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { UsersPageClient } from './components/UsersPageClient';
 
@@ -11,12 +11,7 @@ export const dynamic = 'force-dynamic';
  * then renders the client-side search interface.
  */
 export default async function UsersPage() {
-  const supabase = await createClient();
-
-  // Verify authentication
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user } = await getAuthenticatedUser();
 
   if (!user) {
     redirect('/login');

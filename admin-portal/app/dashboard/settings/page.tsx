@@ -5,7 +5,7 @@
  * and renders the management UI with tabs for users and roles.
  */
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient, getAuthenticatedUser } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { SettingsManager } from './components/SettingsManager';
 
@@ -189,17 +189,13 @@ async function getPermissions(): Promise<AdminPermission[]> {
 }
 
 async function getCurrentUserId(): Promise<string | null> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { user } = await getAuthenticatedUser();
   return user?.id ?? null;
 }
 
 export default async function SettingsPage() {
   // Defense-in-depth: verify auth, internal role, and page-level permission
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user } = await getAuthenticatedUser();
 
   if (!user) {
     redirect('/login');

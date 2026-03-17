@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedUser } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { BarChart3, Clock } from 'lucide-react';
 import {
@@ -23,12 +23,7 @@ export const dynamic = 'force-dynamic';
  * and renders the dashboard sections.
  */
 export default async function AnalyticsPage() {
-  const supabase = await createClient();
-
-  // Verify authentication
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user } = await getAuthenticatedUser();
 
   if (!user) {
     redirect('/login');

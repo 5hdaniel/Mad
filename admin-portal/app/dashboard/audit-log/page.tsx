@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedUser } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { AuditLogContent } from './AuditLogContent';
 
@@ -11,12 +11,7 @@ export const dynamic = 'force-dynamic';
  * then renders the client-side audit log viewer.
  */
 export default async function AuditLogPage() {
-  const supabase = await createClient();
-
-  // Verify authentication
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user } = await getAuthenticatedUser();
 
   if (!user) {
     redirect('/login');

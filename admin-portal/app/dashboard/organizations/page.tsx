@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedUser } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { OrganizationsTable, type OrganizationRow } from './components/OrganizationsTable';
 
@@ -11,12 +11,7 @@ export const dynamic = 'force-dynamic';
  * Uses existing admin RLS policies for cross-org read access.
  */
 export default async function OrganizationsPage() {
-  const supabase = await createClient();
-
-  // Verify admin auth
-  const {
-    data: { user: adminUser },
-  } = await supabase.auth.getUser();
+  const { supabase, user: adminUser } = await getAuthenticatedUser();
 
   if (!adminUser) {
     redirect('/login');
