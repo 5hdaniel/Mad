@@ -172,6 +172,12 @@ export default function SprintDetailPage() {
     loadItems();
   }, [loadItems]);
 
+  // Build task URL with sprint context (must be before early returns for hook rules)
+  const buildItemUrl = useMemo(
+    () => (itemId: string) => `/dashboard/pm/tasks/${itemId}?from=sprint&sprintId=${sprintId}`,
+    [sprintId]
+  );
+
   // Loading state
   if (loading) {
     return (
@@ -213,12 +219,6 @@ export default function SprintDetailPage() {
       </div>
     );
   }
-
-  // Build task URL with sprint context
-  const buildItemUrl = useMemo(
-    () => (itemId: string) => `/dashboard/pm/tasks/${itemId}?from=sprint&sprintId=${sprintId}`,
-    [sprintId]
-  );
 
   const { sprint, metrics } = detail;
   const progress =
