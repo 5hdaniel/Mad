@@ -132,14 +132,24 @@ export function DependencyPanel({ itemId, dependencies, onUpdate }: DependencyPa
   }
 
   function renderDepRow(dep: PmDependency, targetId: string) {
+    const displayLabel = dep.related_title
+      ? `${dep.related_item_number ? `#${dep.related_item_number} ` : ''}${dep.related_title}`
+      : targetId.slice(0, 8) + '...';
+
     return (
       <div key={dep.id} className="group flex items-center gap-2 py-1">
         <Link
           href={`/dashboard/pm/tasks/${targetId}`}
           className="text-sm text-gray-700 hover:text-blue-600 truncate flex-1"
+          title={displayLabel}
         >
-          {targetId.slice(0, 8)}...
+          {displayLabel}
         </Link>
+        {dep.related_status && (
+          <span className="text-xs text-gray-400 capitalize shrink-0">
+            {dep.related_status.replace('_', ' ')}
+          </span>
+        )}
         <button
           onClick={() => handleRemove(dep.id)}
           disabled={removing === dep.id}
@@ -285,16 +295,27 @@ export function DependencyPanel({ itemId, dependencies, onUpdate }: DependencyPa
             <div>
               <h4 className="text-xs font-medium text-gray-500 mb-1">Depended On By</h4>
               <div className="space-y-0.5">
-                {dependedOnBy.map((dep) => (
-                  <div key={dep.id} className="py-1">
-                    <Link
-                      href={`/dashboard/pm/tasks/${dep.source_id}`}
-                      className="text-sm text-gray-700 hover:text-blue-600 truncate"
-                    >
-                      {dep.source_id.slice(0, 8)}...
-                    </Link>
-                  </div>
-                ))}
+                {dependedOnBy.map((dep) => {
+                  const label = dep.related_title
+                    ? `${dep.related_item_number ? `#${dep.related_item_number} ` : ''}${dep.related_title}`
+                    : dep.source_id.slice(0, 8) + '...';
+                  return (
+                    <div key={dep.id} className="py-1 flex items-center gap-2">
+                      <Link
+                        href={`/dashboard/pm/tasks/${dep.source_id}`}
+                        className="text-sm text-gray-700 hover:text-blue-600 truncate flex-1"
+                        title={label}
+                      >
+                        {label}
+                      </Link>
+                      {dep.related_status && (
+                        <span className="text-xs text-gray-400 capitalize shrink-0">
+                          {dep.related_status.replace('_', ' ')}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
