@@ -444,3 +444,36 @@ export type SprintSortColumn =
 export type PmTimelineEntry =
   | { type: 'comment'; data: PmComment; timestamp: string }
   | { type: 'event'; data: PmEvent; timestamp: string };
+
+// ---------------------------------------------------------------------------
+// RPC result types (task-level operations & agent metrics)
+// ---------------------------------------------------------------------------
+
+export interface TaskStatusUpdateResult {
+  success: boolean;
+  task_id: string;
+  old_status: string;
+  new_status: string;
+}
+
+export interface TaskLegacyLookup {
+  id: string;
+  legacy_id: string;
+  title: string;
+  status: string;
+  backlog_item_id: string;
+  sprint_id: string;
+}
+
+export interface TaskTokenResult {
+  success: boolean;
+  task_id: string;
+  actual_tokens: number;
+  parent_actual: number;
+  variance: number;
+}
+
+export interface AgentMetricResult {
+  success: boolean;
+  metric_id: string;
+}
