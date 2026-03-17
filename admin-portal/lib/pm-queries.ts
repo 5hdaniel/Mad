@@ -764,15 +764,12 @@ export async function logAgentMetrics(
 // 41. listAssignableUsers -- Profiles for assignment picker
 // ---------------------------------------------------------------------------
 
-/** List users that can be assigned to items (all profiles ordered by display name). */
+/** List users that can be assigned to items (via SECURITY DEFINER RPC to bypass profiles RLS). */
 export async function listAssignableUsers(): Promise<
   { id: string; display_name: string | null; email: string }[]
 > {
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, display_name, email')
-    .order('display_name');
+  const { data, error } = await supabase.rpc('pm_list_assignable_users');
   if (error) throw error;
   return (data ?? []) as { id: string; display_name: string | null; email: string }[];
 }
