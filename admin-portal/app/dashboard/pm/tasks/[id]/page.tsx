@@ -15,8 +15,9 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Trash2 } from 'lucide-react';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
 import { PERMISSIONS } from '@/lib/permissions';
-import { getItemDetail, deleteItem } from '@/lib/pm-queries';
+import { getItemDetail, deleteItem, getProjectDetail } from '@/lib/pm-queries';
 import type { ItemDetailResponse } from '@/lib/pm-types';
+import type { CustomFieldDefinition } from '@/lib/pm-types';
 import { TaskStatusBadge } from '../../components/TaskStatusBadge';
 import { TaskPriorityBadge } from '../../components/TaskPriorityBadge';
 import { TaskTypeBadge } from '../../components/TaskTypeBadge';
@@ -27,6 +28,7 @@ import { TaskSidebar } from '../../components/TaskSidebar';
 import { DependencyPanel } from '../../components/DependencyPanel';
 import { LinkedItemsPanel } from '../../components/LinkedItemsPanel';
 import { LabelPicker } from '../../components/LabelPicker';
+import { CustomFieldsDisplay } from '../../components/CustomFieldsDisplay';
 
 // -- Loading Skeleton --------------------------------------------------------
 
@@ -63,12 +65,26 @@ export default function TaskDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDefinition[]>([]);
 
   const loadDetail = useCallback(async () => {
     try {
       const data = await getItemDetail(itemId);
       setDetail(data);
       setError(null);
+
+      // Load custom field definitions from the item's project
+      if (data.item.project_id) {
+        try {
+          const projectData = await getProjectDetail(data.item.project_id);
+          setCustomFieldDefs(projectData.project.custom_field_definitions ?? []);
+        } catch {
+          // Non-critical: custom fields just won't show
+          setCustomFieldDefs([]);
+        }
+      } else {
+        setCustomFieldDefs([]);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load item');
     } finally {
@@ -211,9 +227,18 @@ export default function TaskDetailPage() {
           />
         </div>
 
-        {/* Right: Sidebar, Labels, Dependencies, Linked Items */}
+        {/* Right: Sidebar, Custom Fields, Labels, Dependencies, Linked Items */}
         <div className="lg:col-span-2 space-y-6">
           <TaskSidebar item={item} onUpdate={loadDetail} />
+
+          {customFieldDefs.length > 0 && (
+            <CustomFieldsDisplay
+              itemId={item.id}
+              definitions={customFieldDefs}
+              values={item.custom_fields ?? {}}
+              onUpdate={loadDetail}
+            />
+          )}
 
           <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-200">
             <LabelPicker

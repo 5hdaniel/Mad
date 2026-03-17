@@ -14,6 +14,7 @@ import { ArrowLeft, FolderKanban } from 'lucide-react';
 import { getProjectDetail, listItems } from '@/lib/pm-queries';
 import { TaskTable } from '../../components/TaskTable';
 import { SprintList } from '../../components/SprintList';
+import { CustomFieldsEditor } from '../../components/CustomFieldsEditor';
 import type { PmProject, PmBacklogItem, PmSprint, ItemStatus } from '@/lib/pm-types';
 import { STATUS_LABELS, STATUS_COLORS } from '@/lib/pm-types';
 
@@ -48,22 +49,23 @@ export default function ProjectDetailPage() {
   const pageSize = 25;
 
   // Load project detail
-  useEffect(() => {
-    async function loadDetail() {
-      setLoadingDetail(true);
-      try {
-        const data = await getProjectDetail(projectId);
-        setProject(data.project);
-        setSprints(data.sprints);
-        setItemsByStatus(data.items_by_status);
-      } catch (err) {
-        console.error('Failed to load project detail:', err);
-      } finally {
-        setLoadingDetail(false);
-      }
+  const loadProjectDetail = useCallback(async () => {
+    setLoadingDetail(true);
+    try {
+      const data = await getProjectDetail(projectId);
+      setProject(data.project);
+      setSprints(data.sprints);
+      setItemsByStatus(data.items_by_status);
+    } catch (err) {
+      console.error('Failed to load project detail:', err);
+    } finally {
+      setLoadingDetail(false);
     }
-    loadDetail();
   }, [projectId]);
+
+  useEffect(() => {
+    loadProjectDetail();
+  }, [loadProjectDetail]);
 
   // Load items for this project
   const loadItems = useCallback(async () => {
@@ -231,6 +233,18 @@ export default function ProjectDetailPage() {
           <span className="ml-2 text-sm font-normal text-gray-500">({sprints.length})</span>
         </h2>
         <SprintList sprints={sprints} />
+      </div>
+
+      {/* Custom Fields section */}
+      <div className="mb-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-3">
+          Custom Fields
+        </h2>
+        <CustomFieldsEditor
+          projectId={projectId}
+          definitions={project.custom_field_definitions ?? []}
+          onUpdate={loadProjectDetail}
+        />
       </div>
     </div>
   );
