@@ -48,7 +48,16 @@ BEGIN
     AND (p_area IS NULL OR i.area = p_area)
     AND (p_sprint_id IS NULL OR i.sprint_id = p_sprint_id)
     AND (p_project_id IS NULL OR i.project_id = p_project_id)
-    AND (p_search IS NULL OR i.search_vector @@ plainto_tsquery('english', p_search))
+    AND (p_search IS NULL OR (
+      i.search_vector @@ plainto_tsquery('english', p_search)
+      OR i.legacy_id ILIKE '%' || p_search || '%'
+      OR i.title ILIKE '%' || p_search || '%'
+      OR EXISTS (
+        SELECT 1 FROM pm_comments c
+        WHERE c.item_id = i.id AND c.deleted_at IS NULL
+          AND c.body ILIKE '%' || p_search || '%'
+      )
+    ))
     AND (p_labels IS NULL OR EXISTS (
       SELECT 1 FROM pm_item_labels il WHERE il.item_id = i.id AND il.label_id = ANY(p_labels)
     ))
@@ -75,7 +84,16 @@ BEGIN
       AND (p_area IS NULL OR i.area = p_area)
       AND (p_sprint_id IS NULL OR i.sprint_id = p_sprint_id)
       AND (p_project_id IS NULL OR i.project_id = p_project_id)
-      AND (p_search IS NULL OR i.search_vector @@ plainto_tsquery('english', p_search))
+      AND (p_search IS NULL OR (
+        i.search_vector @@ plainto_tsquery('english', p_search)
+        OR i.legacy_id ILIKE '%' || p_search || '%'
+        OR i.title ILIKE '%' || p_search || '%'
+        OR EXISTS (
+          SELECT 1 FROM pm_comments c
+          WHERE c.item_id = i.id AND c.deleted_at IS NULL
+            AND c.body ILIKE '%' || p_search || '%'
+        )
+      ))
       AND (p_labels IS NULL OR EXISTS (
         SELECT 1 FROM pm_item_labels il WHERE il.item_id = i.id AND il.label_id = ANY(p_labels)
       ))
