@@ -23,6 +23,7 @@ import type {
   ProjectDetailResponse,
   SprintVelocityEntry,
   BoardColumns,
+  CustomFieldDefinition,
 } from './pm-types';
 
 // ---------------------------------------------------------------------------
@@ -641,4 +642,42 @@ export async function getItemByLegacyId(legacyId: string): Promise<ItemDetailRes
   });
   if (error) throw error;
   return data as unknown as ItemDetailResponse;
+}
+
+// ---------------------------------------------------------------------------
+// 37. pm_update_field_definitions -- Update project custom field definitions
+// ---------------------------------------------------------------------------
+
+/** Update the custom field definitions for a project. */
+export async function updateFieldDefinitions(
+  projectId: string,
+  definitions: CustomFieldDefinition[]
+): Promise<{ success: boolean }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('pm_update_field_definitions', {
+    p_project_id: projectId,
+    p_definitions: definitions as unknown as Record<string, unknown>,
+  });
+  if (error) throw error;
+  return data as unknown as { success: boolean };
+}
+
+// ---------------------------------------------------------------------------
+// 38. pm_update_custom_field -- Update a custom field value on an item
+// ---------------------------------------------------------------------------
+
+/** Update a single custom field value on a backlog item. */
+export async function updateCustomField(
+  itemId: string,
+  fieldKey: string,
+  value: unknown
+): Promise<{ success: boolean }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('pm_update_custom_field', {
+    p_item_id: itemId,
+    p_field_key: fieldKey,
+    p_value: value as unknown as Record<string, unknown>,
+  });
+  if (error) throw error;
+  return data as unknown as { success: boolean };
 }

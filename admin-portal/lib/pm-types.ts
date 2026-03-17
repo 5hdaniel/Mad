@@ -6,6 +6,20 @@
  */
 
 // ---------------------------------------------------------------------------
+// Custom Field types
+// ---------------------------------------------------------------------------
+
+export type CustomFieldType = 'text' | 'number' | 'date' | 'select';
+
+export interface CustomFieldDefinition {
+  key: string;
+  label: string;
+  type: CustomFieldType;
+  options?: string[]; // For select type
+  required?: boolean;
+}
+
+// ---------------------------------------------------------------------------
 // Enum types (match DB CHECK constraints exactly)
 // ---------------------------------------------------------------------------
 
@@ -74,6 +88,7 @@ export interface PmBacklogItem {
   updated_at: string;
   completed_at: string | null;
   deleted_at: string | null;
+  custom_fields?: Record<string, unknown>;
   // Joined from RPCs (pm_list_items)
   labels?: PmLabel[];
   child_count?: number;
@@ -106,6 +121,7 @@ export interface PmProject {
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
+  custom_field_definitions?: CustomFieldDefinition[];
   // Joined from RPCs (pm_list_projects)
   item_count?: number;
   active_sprint_count?: number;
