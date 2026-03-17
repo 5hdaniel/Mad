@@ -16,7 +16,12 @@ export async function createClient() {
     {
       cookies: {
         get(name: string) {
-          return cookieStore.get(name)?.value;
+          try {
+            return cookieStore.get(name)?.value;
+          } catch {
+            // Handle invalid UTF-8 sequences in cookie values
+            return undefined;
+          }
         },
         set(name: string, value: string, options: CookieOptions) {
           try {
