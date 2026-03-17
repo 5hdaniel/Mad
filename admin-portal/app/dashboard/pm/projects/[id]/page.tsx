@@ -7,7 +7,7 @@
  * items table (filtered to this project), and associated sprints.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, FolderKanban } from 'lucide-react';
@@ -87,6 +87,12 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     loadItems();
   }, [loadItems]);
+
+  // Build task URL with project context
+  const buildItemUrl = useMemo(
+    () => (itemId: string) => `/dashboard/pm/tasks/${itemId}?from=project&projectId=${projectId}`,
+    [projectId]
+  );
 
   // Compute total and progress from itemsByStatus
   const totalItems = Object.values(itemsByStatus).reduce((a, b) => a + b, 0);
@@ -221,6 +227,7 @@ export default function ProjectDetailPage() {
           totalPages={totalPages}
           onPageChange={setPage}
           loading={loadingItems}
+          buildItemUrl={buildItemUrl}
         />
       </div>
 
