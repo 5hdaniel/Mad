@@ -11,16 +11,16 @@ import type { EmailContent, InternalInviteEmailParams } from '../types';
 export function buildInternalInviteEmail(params: InternalInviteEmailParams): EmailContent {
   const { roleName, loginUrl } = params;
 
-  const subject = `You've been added to the Keepr team`;
+  const subject = `You've been added to the Keepr. team`;
 
   const html = baseLayout({
-    preheader: `You've been added to the Keepr team as ${roleName}`,
+    preheader: `You've been added to the Keepr. team as ${roleName}`,
     body: `
       <h1 style="margin:0 0 16px 0; font-size:24px; font-weight:700; color:#111827; line-height:1.3;">
         Welcome to the team!
       </h1>
       <p style="margin:0 0 8px 0; font-size:16px; color:#374151; line-height:1.6;">
-        You've been added to the Keepr team.
+        You've been added to the Keepr. team.
       </p>
       <p style="margin:0 0 24px 0; font-size:14px; color:#6b7280; line-height:1.5;">
         Role: <strong>${escapeHtml(roleName)}</strong>
@@ -46,7 +46,7 @@ export function buildInternalInviteEmail(params: InternalInviteEmailParams): Ema
   });
 
   const text = [
-    "You've been added to the Keepr team",
+    "You've been added to the Keepr. team",
     '',
     `Role: ${roleName}`,
     '',

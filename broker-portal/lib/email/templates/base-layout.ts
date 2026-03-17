@@ -59,7 +59,7 @@ export function baseLayout({ preheader, body }: LayoutParams): string {
           <!-- Header -->
           <tr>
             <td style="padding:24px 32px; background-color:#4f46e5;">
-              <h2 style="margin:0; color:#ffffff; font-size:20px; font-weight:700; letter-spacing:-0.025em;">Keepr</h2>
+              <h2 style="margin:0; color:#ffffff; font-size:20px; font-weight:700; letter-spacing:-0.025em;">Keepr.</h2>
             </td>
           </tr>
           <!-- Body -->
