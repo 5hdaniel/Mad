@@ -19,6 +19,7 @@ import type {
   PmBacklogItem,
   PmNotification,
   PmItemSearchResult,
+  PmDependency,
   SprintDetailResponse,
   ProjectDetailResponse,
   SprintVelocityEntry,
@@ -206,7 +207,21 @@ export async function addComment(
 }
 
 // ---------------------------------------------------------------------------
-// 10. pm_add_dependency -- Task dependency with circular-dep check
+// 10a. pm_list_item_dependencies -- List dependencies for a backlog item
+// ---------------------------------------------------------------------------
+
+/** List all dependencies (depends_on, blocks, depended_on_by) for a backlog item. */
+export async function listItemDependencies(itemId: string): Promise<PmDependency[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('pm_list_item_dependencies', {
+    p_item_id: itemId,
+  });
+  if (error) throw error;
+  return (data ?? []) as unknown as PmDependency[];
+}
+
+// ---------------------------------------------------------------------------
+// 10b. pm_add_dependency -- Task dependency with circular-dep check
 // ---------------------------------------------------------------------------
 
 /** Add a dependency between two tasks. Validates against circular dependencies. */

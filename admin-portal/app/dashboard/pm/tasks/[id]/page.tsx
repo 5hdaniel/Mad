@@ -16,8 +16,8 @@ import Link from 'next/link';
 import { ArrowLeft, Trash2 } from 'lucide-react';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
 import { PERMISSIONS } from '@/lib/permissions';
-import { getItemDetail, deleteItem } from '@/lib/pm-queries';
-import type { ItemDetailResponse } from '@/lib/pm-types';
+import { getItemDetail, deleteItem, listItemDependencies } from '@/lib/pm-queries';
+import type { ItemDetailResponse, PmDependency } from '@/lib/pm-types';
 import { TaskStatusBadge } from '../../components/TaskStatusBadge';
 import { TaskPriorityBadge } from '../../components/TaskPriorityBadge';
 import { TaskTypeBadge } from '../../components/TaskTypeBadge';
@@ -69,6 +69,7 @@ function TaskDetailContent() {
   const { hasPermission } = usePermissions();
 
   const [detail, setDetail] = useState<ItemDetailResponse | null>(null);
+  const [dependencies, setDependencies] = useState<PmDependency[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -95,6 +96,16 @@ function TaskDetailContent() {
     return { label: 'Back to Backlog', href: '/dashboard/pm/backlog' };
   }, [searchParams]);
 
+  const loadDependencies = useCallback(async () => {
+    try {
+      const deps = await listItemDependencies(itemId);
+      setDependencies(deps);
+    } catch {
+      // Dependencies are non-critical; don't block the page
+      setDependencies([]);
+    }
+  }, [itemId]);
+
   const loadDetail = useCallback(async () => {
     try {
       const data = await getItemDetail(itemId);
@@ -109,7 +120,8 @@ function TaskDetailContent() {
 
   useEffect(() => {
     loadDetail();
-  }, [loadDetail]);
+    loadDependencies();
+  }, [loadDetail, loadDependencies]);
 
   async function handleDelete() {
     setDeleting(true);
@@ -250,8 +262,8 @@ function TaskDetailContent() {
 
             <DependencyPanel
               itemId={item.id}
-              dependencies={[]}
-              onUpdate={loadDetail}
+              dependencies={dependencies}
+              onUpdate={() => { loadDetail(); loadDependencies(); }}
             />
 
             <LinkedItemsPanel

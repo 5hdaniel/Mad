@@ -160,6 +160,11 @@ export interface PmDependency {
   target_id: string;
   dependency_type: DependencyType;
   created_at: string;
+  // Joined fields from pm_list_item_dependencies RPC
+  related_title?: string | null;
+  related_legacy_id?: string | null;
+  related_item_number?: number | null;
+  related_status?: string | null;
 }
 
 export interface PmLabel {
