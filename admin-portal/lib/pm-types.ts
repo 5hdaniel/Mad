@@ -410,6 +410,22 @@ export const SPRINT_STATUS_COLORS: Record<SprintStatus, string> = {
 };
 
 // ---------------------------------------------------------------------------
+// Sortable column keys for backlog table
+// ---------------------------------------------------------------------------
+
+export type SortableColumn =
+  | 'item_number'
+  | 'title'
+  | 'type'
+  | 'status'
+  | 'priority'
+  | 'area'
+  | 'est_tokens'
+  | 'created_at';
+
+export type SortDirection = 'asc' | 'desc';
+
+// ---------------------------------------------------------------------------
 // Timeline types
 // ---------------------------------------------------------------------------
 
