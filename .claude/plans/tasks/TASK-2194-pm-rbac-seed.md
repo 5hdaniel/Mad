@@ -187,7 +187,7 @@ None. The `admin_permissions` and `admin_role_permissions` tables matched expect
 - **Before**: No pm.* permissions in admin_permissions
 - **After**: 5 pm.* permissions seeded, assigned to super-admin
 - **Actual Tokens**: ~8K (Est: ~8K)
-- **PR**: pending
+- **PR**: https://github.com/5hdaniel/Mad/pull/1170
 
 ---
 

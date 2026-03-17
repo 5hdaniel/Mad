@@ -43,6 +43,7 @@ export default function InviteUserModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [emailSent, setEmailSent] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -61,6 +62,7 @@ export default function InviteUserModal({
         setError(result.error);
       } else if (result.inviteLink) {
         setInviteLink(result.inviteLink);
+        setEmailSent(result.emailSent ?? false);
         router.refresh(); // Refresh the user list
       }
     } catch {
@@ -75,6 +77,7 @@ export default function InviteUserModal({
     setRole('agent');
     setError(null);
     setInviteLink(null);
+    setEmailSent(false);
     setCopied(false);
     onClose();
   };
@@ -116,42 +119,89 @@ export default function InviteUserModal({
           </h2>
 
           {inviteLink ? (
-            // Success state - show invite link
+            // Success state - varies based on whether email was sent
             <div className="space-y-4">
-              <div className="flex items-center gap-2 text-green-600">
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
-                <span className="font-medium">Invitation Created</span>
-              </div>
+              {emailSent ? (
+                <>
+                  <div className="flex items-center gap-2 text-green-600">
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                    <span className="font-medium">Invitation Email Sent</span>
+                  </div>
 
-              <p className="text-sm text-gray-600">
-                Share this link with {email}:
-              </p>
+                  <p className="text-sm text-gray-600">
+                    An invitation email has been sent to <strong>{email}</strong>.
+                    They will receive a link to join your organization.
+                  </p>
 
-              <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
-                <p className="break-all text-sm text-gray-800 font-mono">
-                  {inviteLink}
-                </p>
-              </div>
+                  <details className="text-sm">
+                    <summary className="text-gray-500 cursor-pointer hover:text-gray-700">
+                      Or copy the invite link manually
+                    </summary>
+                    <div className="mt-2 bg-gray-50 p-3 rounded-md border border-gray-200">
+                      <p className="break-all text-sm text-gray-800 font-mono">
+                        {inviteLink}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCopyLink}
+                      className="mt-2 w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+                    >
+                      {copied ? 'Copied!' : 'Copy Link'}
+                    </button>
+                  </details>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 text-yellow-600">
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                      />
+                    </svg>
+                    <span className="font-medium">Invitation Created</span>
+                  </div>
 
-              <button
-                type="button"
-                onClick={handleCopyLink}
-                className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
-              >
-                {copied ? 'Copied!' : 'Copy Link'}
-              </button>
+                  <p className="text-sm text-gray-600">
+                    The invitation was created but the email could not be sent.
+                    Please share this link with <strong>{email}</strong> manually:
+                  </p>
+
+                  <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                    <p className="break-all text-sm text-gray-800 font-mono">
+                      {inviteLink}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleCopyLink}
+                    className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+                  >
+                    {copied ? 'Copied!' : 'Copy Link'}
+                  </button>
+                </>
+              )}
 
               <button
                 type="button"

@@ -208,71 +208,42 @@ After running the script:
 **REQUIRED: Complete this section before creating PR.**
 **See: `.claude/docs/ENGINEER-WORKFLOW.md` for full workflow**
 
-*Completed: 2026-03-16*
+*Completed: <DATE>*
 
 ### Engineer Checklist
 
 ```
 Pre-Work:
-- [x] Created branch from feature/pm-module
-- [x] Verified pm_* tables exist in Supabase (TASK-2191 applied)
-- [x] Verified RPCs exist (TASK-2193 applied)
-- [x] Noted start time: 2026-03-16
-- [x] Read task file completely
+- [ ] Created branch from feature/pm-module
+- [ ] Verified pm_* tables exist in Supabase (TASK-2191 applied)
+- [ ] Verified RPCs exist (TASK-2193 applied)
+- [ ] Noted start time: ___
+- [ ] Read task file completely
 
 Implementation:
-- [x] Code complete
-- [ ] Script runs without errors (manual run required)
-- [ ] Row counts verified (manual run required)
-- [ ] FK resolution verified (manual run required)
-- [ ] Idempotency verified (manual run required)
-- [x] No source files modified
+- [ ] Code complete
+- [ ] Script runs without errors
+- [ ] Row counts verified
+- [ ] FK resolution verified (spot-check)
+- [ ] Idempotency verified (re-run)
+- [ ] No source files modified
 
 PR Submission:
-- [x] This summary section completed
-- [x] PR created with Engineer Metrics (see template)
-- [x] SR Engineer review requested
+- [ ] This summary section completed
+- [ ] PR created with Engineer Metrics (see template)
+- [ ] SR Engineer review requested
 
 Completion:
 - [ ] SR Engineer approved and merged
 - [ ] PM notified for next task
 ```
 
-### What Was Built
-
-Created `migrate_to_supabase.py` (574 lines) and `requirements.txt` at `.claude/plans/backlog/scripts/`.
-
-**Script capabilities:**
-1. **Sprints**: Parses `sprints.csv` (69 rows), normalizes status (`Completed`->`completed`, `deprecated`->`cancelled`), finds matching `.md` plan files for body content, upserts with `ON CONFLICT (legacy_id) DO UPDATE`
-2. **Backlog Items**: Parses `backlog.csv` (808 rows), normalizes priority/status/tokens/variance, resolves sprint FKs via legacy_id map, finds BACKLOG-*.md body content, handles 19 rows with shifted columns (DictReader overflow), upserts in batches of 100
-3. **Tasks**: Scans 437 TASK-*.md files, parses metadata (title, status, sprint, backlog ref, est tokens) from markdown headers, resolves sprint + backlog FKs, stores full .md content as body, upserts in batches of 50
-4. **Token Metrics**: Parses `tokens.csv` (917 rows), maps `duration_secs` -> `duration_ms`, delete-and-reinsert for idempotency (no legacy_id), batches of 200
-5. **Changelog**: Parses `changelog.csv` (254 rows), extracts sprint/task refs from text, delete-and-reinsert for idempotency
-
-**Data normalization handled:**
-- Token formats: `~30K`->30000, `20-30K`->25000 (avg), `~25K-40K`->32500 (avg), `5000`->5000, `-`->NULL
-- Variance: `+100%`->100.0, `-72%`->-72.0, text->NULL
-- Status: `In Progress`->`in_progress`, `Completed`->`completed`, etc.
-- Priority: `Medium`->`medium`, `Critical`->`critical`, etc.
-- Types: `refactor`->`chore`, `test`->`chore`, `docs`->`chore` (schema only allows feature/bug/chore/spike/epic)
-- Sprint status: `Completed`/`complete`->`completed`, `deprecated`->`cancelled`
-
-**Syntax verified**: `python3 -c "import ast; ast.parse(...)"`
-**Normalizer unit tests**: All 28 test cases pass (tokens + variance edge cases)
-
-### Issues/Blockers
-
-1. **19 rows with column misalignment in backlog.csv**: 11 rows have 13 columns (missing description), 8 rows have 15 columns (description overflows). DictReader handles this via `None` key overflow. Description content is captured from overflow.
-2. **No Status field in ~77% of task files**: Older task files lack `**Status:**` metadata. Script defaults to `pending`.
-3. **Type mapping**: CSV has `refactor`, `test`, `docs` types not in schema CHECK constraint. Mapped to `chore` as closest match.
-4. **Token metrics/changelog lack legacy_id**: Used delete-and-reinsert strategy instead of ON CONFLICT for idempotency.
-
 ### Results
 
 - **Before**: PM data in CSV/markdown files only
-- **After**: Migration script ready to populate Supabase pm_* tables
-- **Actual Tokens**: ~30K (Est: ~30K)
-- **PR**: https://github.com/5hdaniel/Mad/pull/1175
+- **After**: All data migrated to Supabase pm_* tables
+- **Actual Tokens**: ~XK (Est: ~30K)
+- **PR**: [URL after PR created]
 
 ---
 

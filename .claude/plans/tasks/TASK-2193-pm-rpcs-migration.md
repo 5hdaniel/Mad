@@ -338,7 +338,7 @@ Completion:
 - **Before**: No PM RPCs in Supabase
 - **After**: 36 SECURITY DEFINER RPCs for full PM CRUD, dependencies, labels, links, sprints, projects, board, stats, bulk updates, saved views, notifications, and agent helper
 - **Actual Tokens**: ~30K (Est: ~30K)
-- **PR**: [URL after PR created]
+- **PR**: https://github.com/5hdaniel/Mad/pull/1173
 
 ### Verification Results
 

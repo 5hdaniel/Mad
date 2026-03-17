@@ -195,7 +195,7 @@ Completion:
 - **Before**: pm_* tables have no RLS (open access)
 - **After**: All 14 tables have RLS with internal-only SELECT policies; pm_saved_views scoped to own+shared
 - **Actual Tokens**: ~12K (Est: ~12K)
-- **PR**: [URL after PR created]
+- **PR**: https://github.com/5hdaniel/Mad/pull/1171
 
 ### Issues/Blockers
 
