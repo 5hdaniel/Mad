@@ -129,11 +129,9 @@ export function HierarchyTree({ items, onItemClick }: HierarchyTreeProps) {
             onClick={() => onItemClick(item.id)}
             className="flex items-center gap-1.5 min-w-0 flex-1 text-left"
           >
-            {item.legacy_id && (
-              <span className="text-xs text-gray-400 font-mono shrink-0">
-                [{item.legacy_id}]
-              </span>
-            )}
+            <span className="text-xs text-gray-400 font-mono shrink-0">
+              #{item.item_number ?? ''}
+            </span>
             <span className="text-sm text-gray-700 truncate">
               {item.title}
             </span>

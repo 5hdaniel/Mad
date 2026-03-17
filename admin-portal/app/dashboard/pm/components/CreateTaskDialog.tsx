@@ -305,7 +305,7 @@ export function CreateTaskDialog({
               <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
                 <span className="text-sm text-gray-900 truncate">
                   {selectedParent
-                    ? `${selectedParent.legacy_id ? `${selectedParent.legacy_id} ` : ''}${selectedParent.title}`
+                    ? selectedParent.title
                     : parentId}
                 </span>
                 <button
@@ -346,7 +346,7 @@ export function CreateTaskDialog({
                         className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                       >
                         <span className="text-gray-400 text-xs">
-                          {result.legacy_id || result.id.slice(0, 8)}
+                          #{result.id.slice(0, 8)}
                         </span>{' '}
                         {result.title}
                       </button>

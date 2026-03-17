@@ -169,11 +169,6 @@ function TaskDetailContent() {
                 <span className="text-sm text-gray-500 font-mono">
                   #{item.item_number}
                 </span>
-                {item.legacy_id && (
-                  <span className="text-xs text-gray-400">
-                    ({item.legacy_id})
-                  </span>
-                )}
               </div>
               <h1 className="text-xl font-bold text-gray-900">{item.title}</h1>
             </div>
@@ -282,9 +277,6 @@ function TaskDetailContent() {
                 className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
               >
                 <span className="text-sm text-gray-700 truncate flex-1">
-                  {child.legacy_id && (
-                    <span className="text-xs text-gray-400 mr-2">{child.legacy_id}</span>
-                  )}
                   {child.title}
                 </span>
                 <span className="text-xs text-gray-400 capitalize">

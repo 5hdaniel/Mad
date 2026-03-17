@@ -185,7 +185,6 @@ export function DependencyPanel({ itemId, dependencies, onUpdate }: DependencyPa
                 className="w-full text-left px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50 rounded-md disabled:opacity-50 transition-colors"
               >
                 <div className="truncate">
-                  {result.legacy_id ? `${result.legacy_id} ` : ''}
                   {result.title}
                 </div>
               </button>
