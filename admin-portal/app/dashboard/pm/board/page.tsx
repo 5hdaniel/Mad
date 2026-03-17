@@ -104,6 +104,7 @@ export default function BoardPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sprintDropdownOpen, setSprintDropdownOpen] = useState(false);
+  const [sprintSearch, setSprintSearch] = useState('');
 
   // -- Data fetching -------------------------------------------------------
 
@@ -313,6 +314,16 @@ export default function BoardPage() {
 
   // -- Selected sprint label -----------------------------------------------
 
+  const filteredSprints = useMemo(() => {
+    if (!sprintSearch.trim()) return sprints;
+    const q = sprintSearch.toLowerCase();
+    return sprints.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        (s.legacy_id && s.legacy_id.toLowerCase().includes(q))
+    );
+  }, [sprints, sprintSearch]);
+
   const selectedSprint = sprints.find((s) => s.id === selectedSprintId);
 
   // -- Render --------------------------------------------------------------
@@ -327,14 +338,17 @@ export default function BoardPage() {
             <h1 className="text-lg font-semibold text-gray-900">Board</h1>
           </div>
 
-          {/* Sprint selector dropdown */}
+          {/* Sprint selector dropdown (searchable) */}
           <div className="relative">
             <button
-              onClick={() => setSprintDropdownOpen(!sprintDropdownOpen)}
+              onClick={() => {
+                setSprintDropdownOpen(!sprintDropdownOpen);
+                if (sprintDropdownOpen) setSprintSearch('');
+              }}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white hover:bg-gray-50 transition-colors text-gray-900"
             >
               {selectedSprint
-                ? selectedSprint.name
+                ? `${selectedSprint.legacy_id ? `${selectedSprint.legacy_id} — ` : ''}${selectedSprint.name}`
                 : 'Select Sprint'}
               <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
             </button>
@@ -344,51 +358,74 @@ export default function BoardPage() {
                 {/* Backdrop to close dropdown */}
                 <div
                   className="fixed inset-0 z-10"
-                  onClick={() => setSprintDropdownOpen(false)}
+                  onClick={() => {
+                    setSprintDropdownOpen(false);
+                    setSprintSearch('');
+                  }}
                 />
-                <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto">
-                  {sprints.length === 0 ? (
-                    <div className="p-3 text-sm text-gray-400">
-                      No sprints found
-                    </div>
-                  ) : (
-                    sprints.map((sprint) => (
-                      <button
-                        key={sprint.id}
-                        onClick={() => {
-                          setSelectedSprintId(sprint.id);
-                          setSprintDropdownOpen(false);
-                        }}
-                        className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 transition-colors ${
-                          sprint.id === selectedSprintId
-                            ? 'bg-blue-50 text-blue-700 font-medium'
-                            : 'text-gray-700'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span>{sprint.name}</span>
-                          <span
-                            className={`text-xs px-1.5 py-0.5 rounded ${
-                              sprint.status === 'active'
-                                ? 'bg-green-100 text-green-700'
-                                : sprint.status === 'planned'
-                                  ? 'bg-gray-100 text-gray-600'
-                                  : sprint.status === 'completed'
-                                    ? 'bg-blue-100 text-blue-600'
-                                    : 'bg-red-100 text-red-600'
-                            }`}
-                          >
-                            {sprint.status}
-                          </span>
-                        </div>
-                        {sprint.total_items != null && (
-                          <span className="text-xs text-gray-400">
-                            {sprint.total_items} items
-                          </span>
-                        )}
-                      </button>
-                    ))
-                  )}
+                <div className="absolute top-full left-0 mt-1 w-72 bg-white border border-gray-200 rounded-lg shadow-lg z-20">
+                  {/* Search input */}
+                  <input
+                    type="text"
+                    value={sprintSearch}
+                    onChange={(e) => setSprintSearch(e.target.value)}
+                    placeholder="Search sprints..."
+                    className="w-full px-3 py-2 border-b border-gray-200 text-sm text-gray-900 bg-white placeholder-gray-400 focus:outline-none rounded-t-lg"
+                    autoFocus
+                  />
+                  {/* Sprint list */}
+                  <div className="max-h-60 overflow-y-auto">
+                    {filteredSprints.length === 0 ? (
+                      <div className="p-3 text-sm text-gray-400">
+                        No sprints found
+                      </div>
+                    ) : (
+                      filteredSprints.map((sprint) => (
+                        <button
+                          key={sprint.id}
+                          onClick={() => {
+                            setSelectedSprintId(sprint.id);
+                            setSprintDropdownOpen(false);
+                            setSprintSearch('');
+                          }}
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 transition-colors ${
+                            sprint.id === selectedSprintId
+                              ? 'bg-blue-50 text-blue-700 font-medium'
+                              : 'text-gray-700'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex flex-col min-w-0 mr-2">
+                              <span className="truncate">{sprint.name}</span>
+                              {sprint.legacy_id && (
+                                <span className="text-xs text-gray-400">
+                                  {sprint.legacy_id}
+                                </span>
+                              )}
+                            </div>
+                            <span
+                              className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${
+                                sprint.status === 'active'
+                                  ? 'bg-green-100 text-green-700'
+                                  : sprint.status === 'planned'
+                                    ? 'bg-gray-100 text-gray-600'
+                                    : sprint.status === 'completed'
+                                      ? 'bg-blue-100 text-blue-600'
+                                      : 'bg-red-100 text-red-600'
+                              }`}
+                            >
+                              {sprint.status}
+                            </span>
+                          </div>
+                          {sprint.total_items != null && (
+                            <span className="text-xs text-gray-400">
+                              {sprint.total_items} items
+                            </span>
+                          )}
+                        </button>
+                      ))
+                    )}
+                  </div>
                 </div>
               </>
             )}
