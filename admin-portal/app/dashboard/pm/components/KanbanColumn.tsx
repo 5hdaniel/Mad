@@ -59,7 +59,7 @@ export function KanbanColumn({
         items={items.map((i) => i.id)}
         strategy={verticalListSortingStrategy}
       >
-        <div className="flex-1 space-y-2 min-h-[4rem]">
+        <div className="flex-1 space-y-2 min-h-[8rem]">
           {items.map((item) => (
             <KanbanCard
               key={item.id}
