@@ -16,7 +16,8 @@ import {
   Coins,
   TrendingUp,
   TrendingDown,
-  Gauge,
+  Calendar,
+  Info,
 } from 'lucide-react';
 import { getProjectDetail, listItems } from '@/lib/pm-queries';
 import { TaskTable } from '../../components/TaskTable';
@@ -301,12 +302,19 @@ export default function ProjectDetailPage() {
 
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-green-50">
-              <Gauge className="h-5 w-5 text-green-600" />
+            <div className="p-2 rounded-lg bg-blue-50">
+              <Calendar className="h-5 w-5 text-blue-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Items Completed</p>
-              <p className="text-2xl font-bold text-gray-900">{progressPct}%</p>
+              <div className="flex items-center gap-1">
+                <p className="text-sm text-gray-500">Days Open</p>
+                <span title="Days since project was created">
+                  <Info className="h-3.5 w-3.5 text-gray-400" />
+                </span>
+              </div>
+              <p className="text-2xl font-bold text-gray-900">
+                {Math.floor((Date.now() - new Date(project.created_at).getTime()) / (1000 * 60 * 60 * 24))} days
+              </p>
             </div>
           </div>
         </div>
