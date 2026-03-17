@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedUser } from '@/lib/supabase/server';
 import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Building2, CreditCard } from 'lucide-react';
@@ -23,12 +23,7 @@ export default async function PlanDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
-
-  // Verify authentication
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user } = await getAuthenticatedUser();
 
   if (!user) {
     redirect('/login');

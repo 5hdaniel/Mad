@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedUser } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { PlanCard } from './components/PlanCard';
 import { PlansPageClient } from './components/PlansPageClient';
@@ -12,12 +12,7 @@ export const dynamic = 'force-dynamic';
  * Includes a button to create new plans.
  */
 export default async function PlansPage() {
-  const supabase = await createClient();
-
-  // Verify authentication
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user } = await getAuthenticatedUser();
 
   if (!user) {
     redirect('/login');

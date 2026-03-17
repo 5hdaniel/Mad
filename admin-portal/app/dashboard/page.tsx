@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedUser } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
@@ -9,11 +9,7 @@ export const dynamic = 'force-dynamic';
  * Welcome page showing user's role from the RBAC system.
  */
 export default async function DashboardPage() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user } = await getAuthenticatedUser();
 
   if (!user) {
     redirect('/login');

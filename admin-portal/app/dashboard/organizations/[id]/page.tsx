@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedUser } from '@/lib/supabase/server';
 import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Building2 } from 'lucide-react';
@@ -20,12 +20,7 @@ export default async function OrganizationDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
-
-  // Verify admin auth
-  const {
-    data: { user: adminUser },
-  } = await supabase.auth.getUser();
+  const { supabase, user: adminUser } = await getAuthenticatedUser();
 
   if (!adminUser) {
     redirect('/login');

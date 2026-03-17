@@ -5,6 +5,7 @@
  */
 
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import type { User } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 
 export async function createClient() {
@@ -16,7 +17,12 @@ export async function createClient() {
     {
       cookies: {
         get(name: string) {
-          return cookieStore.get(name)?.value;
+          try {
+            return cookieStore.get(name)?.value;
+          } catch {
+            // Handle invalid UTF-8 sequences in cookie values
+            return undefined;
+          }
         },
         set(name: string, value: string, options: CookieOptions) {
           try {
@@ -36,4 +42,23 @@ export async function createClient() {
       },
     }
   );
+}
+
+/**
+ * Safely get the authenticated user. Catches errors from corrupted cookies
+ * (e.g. invalid UTF-8 in @supabase/ssr's internal base64url decoder).
+ * Returns { supabase, user } where user is null if anything fails.
+ */
+export async function getAuthenticatedUser(): Promise<{
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  user: User | null;
+}> {
+  const supabase = await createClient();
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    return { supabase, user };
+  } catch {
+    // Corrupted session cookie — treat as unauthenticated
+    return { supabase, user: null };
+  }
 }

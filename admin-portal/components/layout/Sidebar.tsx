@@ -11,7 +11,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { LayoutDashboard, BarChart3, Users, Building2, CreditCard, Headphones, Inbox, UserCheck, Settings, LogOut, PanelLeftClose, PanelLeftOpen, FileText, ChevronDown, ChevronRight, Shield } from 'lucide-react';
+import { LayoutDashboard, BarChart3, Users, Building2, CreditCard, Headphones, Inbox, UserCheck, Settings, LogOut, PanelLeftClose, PanelLeftOpen, FileText, ChevronDown, ChevronRight, Shield, KanbanSquare, ListChecks, FolderKanban, Calendar } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
 import type { PermissionKey } from '@/lib/permissions';
@@ -47,6 +47,23 @@ const supportSectionPermissions: PermissionKey[] = [
   PERMISSIONS.SUPPORT_MANAGE,
 ];
 
+/** Sub-items under the collapsible "Projects" section */
+const pmSubItems: NavItem[] = [
+  { label: 'Dashboard', href: '/dashboard/pm', icon: LayoutDashboard, permission: PERMISSIONS.PM_VIEW },
+  { label: 'Backlog', href: '/dashboard/pm/backlog', icon: ListChecks, permission: PERMISSIONS.PM_VIEW },
+  { label: 'Board', href: '/dashboard/pm/board', icon: KanbanSquare, permission: PERMISSIONS.PM_VIEW },
+  { label: 'My Tasks', href: '/dashboard/pm/my-tasks', icon: UserCheck, permission: PERMISSIONS.PM_VIEW },
+  { label: 'Sprints', href: '/dashboard/pm/sprints', icon: Calendar, permission: PERMISSIONS.PM_VIEW },
+  { label: 'Projects', href: '/dashboard/pm/projects', icon: FolderKanban, permission: PERMISSIONS.PM_MANAGE },
+  { label: 'Settings', href: '/dashboard/pm/settings', icon: Settings, permission: PERMISSIONS.PM_ADMIN },
+];
+
+/** Permissions that grant visibility to the Projects section */
+const pmSectionPermissions: PermissionKey[] = [
+  PERMISSIONS.PM_VIEW,
+  PERMISSIONS.PM_MANAGE,
+];
+
 /** Sub-items under the collapsible "Settings" section */
 const settingsSubItems: NavItem[] = [
   { label: 'Internal Users', href: '/dashboard/settings?tab=users', icon: Users, permission: PERMISSIONS.INTERNAL_USERS_VIEW },
@@ -69,8 +86,15 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const { hasPermission, roleName, loading } = usePermissions();
+
+  const displayName =
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    user?.email ||
+    'Admin';
+  const avatarUrl = user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
 
   // Check if any settings sub-item route is active
   const isSettingsActive = pathname.startsWith('/dashboard/settings');
@@ -78,9 +102,13 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   // Check if any support sub-item route is active
   const isSupportActive = pathname.startsWith('/dashboard/support');
 
+  // Check if any PM sub-item route is active
+  const isPmActive = pathname.startsWith('/dashboard/pm');
+
   // Auto-expand when a settings route is active; allow manual toggle otherwise
   const [settingsExpanded, setSettingsExpanded] = useState(isSettingsActive);
   const [supportExpanded, setSupportExpanded] = useState(isSupportActive);
+  const [pmExpanded, setPmExpanded] = useState(isPmActive);
 
   // Keep expanded state in sync when navigating to/from settings/support routes
   useEffect(() => {
@@ -95,12 +123,19 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     }
   }, [isSupportActive]);
 
-  // Whether the user can see the settings/support sections at all
+  useEffect(() => {
+    if (isPmActive) {
+      setPmExpanded(true);
+    }
+  }, [isPmActive]);
+
+  // Whether the user can see the settings/support/pm sections at all
   const canSeeSettings = loading || settingsSectionPermissions.some((p) => hasPermission(p));
   const canSeeSupport = loading || supportSectionPermissions.some((p) => hasPermission(p));
+  const canSeePm = loading || pmSectionPermissions.some((p) => hasPermission(p));
 
   /** Paths that should use exact-match only (prefix of other routes) */
-  const exactMatchPaths = new Set(['/dashboard', '/dashboard/support']);
+  const exactMatchPaths = new Set(['/dashboard', '/dashboard/support', '/dashboard/pm']);
 
   const renderNavItem = (item: NavItem, isSubItem = false) => {
     // While permissions are loading, show all items to prevent flash
@@ -161,7 +196,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className={`flex-1 py-4 space-y-1 overflow-y-auto ${collapsed ? 'px-2' : 'px-3'}`}>
+      <nav className={`flex-1 py-4 space-y-1 overflow-y-auto scrollbar-hide ${collapsed ? 'px-2' : 'px-3'}`}>
         {/* Main nav items */}
         {mainNavItems.map((item) => renderNavItem(item))}
 
@@ -201,6 +236,47 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             {supportExpanded && !collapsed && (
               <div className="mt-1 space-y-1">
                 {supportSubItems.map((item) => renderNavItem(item, true))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Collapsible Projects section */}
+        {canSeePm && (
+          <div>
+            <button
+              onClick={() => {
+                if (collapsed) {
+                  onToggle();
+                  setPmExpanded(true);
+                } else {
+                  setPmExpanded(!pmExpanded);
+                }
+              }}
+              className={`flex items-center w-full rounded-md text-sm font-medium transition-colors ${
+                collapsed ? 'justify-center px-2 py-2' : 'gap-3 px-3 py-2'
+              } ${
+                isPmActive
+                  ? 'bg-gray-800 text-white'
+                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+              }`}
+              title={collapsed ? 'Projects' : undefined}
+            >
+              <KanbanSquare className="h-5 w-5 shrink-0" />
+              {!collapsed && (
+                <>
+                  <span className="flex-1 text-left">Projects</span>
+                  {pmExpanded
+                    ? <ChevronDown className="h-4 w-4 shrink-0" />
+                    : <ChevronRight className="h-4 w-4 shrink-0" />
+                  }
+                </>
+              )}
+            </button>
+
+            {pmExpanded && !collapsed && (
+              <div className="mt-1 space-y-1">
+                {pmSubItems.map((item) => renderNavItem(item, true))}
               </div>
             )}
           </div>
@@ -250,11 +326,26 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         )}
       </nav>
 
-      {/* Role badge + Sign Out */}
+      {/* User info + Role badge + Sign Out */}
       <div className={`border-t border-gray-800 ${collapsed ? 'px-2 py-4' : 'px-3 py-4'}`}>
-        {!collapsed && roleName && (
+        {!collapsed && (
           <div className="px-3 py-1.5 mb-2">
-            <span className="text-xs text-gray-500">{roleName}</span>
+            <div className="flex items-center gap-2.5">
+              {avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={avatarUrl} alt={displayName} className="h-8 w-8 rounded-full shrink-0" />
+              ) : (
+                <div className="h-8 w-8 rounded-full bg-primary-600 flex items-center justify-center text-white text-sm font-medium shrink-0">
+                  {displayName.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="text-sm text-gray-300 truncate leading-tight">{displayName}</p>
+                {roleName && (
+                  <p className="text-xs text-gray-500 truncate leading-tight">{roleName}</p>
+                )}
+              </div>
+            </div>
           </div>
         )}
         <button

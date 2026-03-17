@@ -36,7 +36,12 @@ export async function middleware(request: NextRequest) {
     {
       cookies: {
         get(name: string) {
-          return request.cookies.get(name)?.value;
+          try {
+            return request.cookies.get(name)?.value;
+          } catch {
+            // Handle invalid UTF-8 sequences in cookie values
+            return undefined;
+          }
         },
         set(name: string, value: string, options: CookieOptions) {
           request.cookies.set({
