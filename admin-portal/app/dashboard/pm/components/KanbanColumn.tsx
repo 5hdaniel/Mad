@@ -15,9 +15,9 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import type { PmBacklogItem, ItemStatus } from '@/lib/pm-types';
+import type { PmBacklogItem, ItemStatus, PmLabel } from '@/lib/pm-types';
 import { STATUS_LABELS, STATUS_COLORS } from '@/lib/pm-types';
-import { KanbanCard } from './KanbanCard';
+import { KanbanCard, type AssignableUser } from './KanbanCard';
 import { KanbanQuickAdd } from './KanbanQuickAdd';
 
 interface KanbanColumnProps {
@@ -26,6 +26,9 @@ interface KanbanColumnProps {
   onQuickAdd?: (title: string) => Promise<void>;
   selectedIds?: Set<string>;
   onToggleSelect?: (itemId: string) => void;
+  onItemUpdated?: () => void;
+  users?: AssignableUser[];
+  allLabels?: PmLabel[];
 }
 
 export function KanbanColumn({
@@ -34,6 +37,9 @@ export function KanbanColumn({
   onQuickAdd,
   selectedIds,
   onToggleSelect,
+  onItemUpdated,
+  users,
+  allLabels,
 }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const [showTopAdd, setShowTopAdd] = useState(false);
@@ -91,6 +97,9 @@ export function KanbanColumn({
               onToggleSelect={
                 onToggleSelect ? () => onToggleSelect(item.id) : undefined
               }
+              onItemUpdated={onItemUpdated}
+              users={users}
+              allLabels={allLabels}
             />
           ))}
         </div>
