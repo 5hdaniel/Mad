@@ -74,6 +74,12 @@ The Agent ID is the key that links to `.claude/metrics/tokens.csv` for PM aggreg
 - `path/to/file1.ts` - [brief description of change]
 - `path/to/file2.tsx` - [brief description of change]
 
+### Supabase Updates Performed
+- [ ] `pm_get_task_by_legacy_id('TASK-XXXX')` → UUID: ___
+- [ ] `pm_update_task_status('<uuid>', '<status>')` → result: ___
+- [ ] `pm_update_item_status('<uuid>', '<status>')` → result: ___
+- [ ] `pm_record_task_tokens(...)` → result: ___ (Step 14 only)
+
 ---
 
 ## Example: Engineer → SR Engineer (Plan Review)

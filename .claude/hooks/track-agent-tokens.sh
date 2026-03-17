@@ -86,5 +86,38 @@ CSV_ROW="${TIMESTAMP},${SESSION_ID},${AGENT_ID},,,,$TOTAL_INPUT,$TOTAL_OUTPUT,$T
 echo "$CSV_ROW" >> "$METRICS_FILE"
 echo "[HOOK] Logged: $TOTAL_TOKENS tokens to CSV" >> /tmp/claude-hook-debug.log
 
+# --- Push to Supabase (best-effort, never fails the hook) ---
+# Set PM_SUPABASE_URL and PM_SUPABASE_KEY in your shell profile or .env to enable.
+SUPABASE_URL="${PM_SUPABASE_URL:-}"
+SUPABASE_KEY="${PM_SUPABASE_KEY:-}"
+
+if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_KEY" ]; then
+  # Convert duration from seconds to milliseconds for the RPC
+  DURATION_MS=$((DURATION_SECS * 1000))
+
+  # Extract model from transcript (first message with a model field)
+  MODEL=$(jq -r '[.message.model // empty] | first // "unknown"' "$TRANSCRIPT_PATH" 2>/dev/null | head -1)
+  [ -z "$MODEL" ] && MODEL="unknown"
+
+  curl -s -X POST "${SUPABASE_URL}/rest/v1/rpc/pm_log_agent_metrics" \
+    -H "apikey: ${SUPABASE_KEY}" \
+    -H "Authorization: Bearer ${SUPABASE_KEY}" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"p_agent_id\": \"${AGENT_ID}\",
+      \"p_input_tokens\": ${TOTAL_INPUT},
+      \"p_output_tokens\": ${TOTAL_OUTPUT},
+      \"p_cache_read\": ${TOTAL_CACHE_READ},
+      \"p_cache_create\": ${TOTAL_CACHE_CREATE},
+      \"p_total_tokens\": ${TOTAL_TOKENS},
+      \"p_duration_ms\": ${DURATION_MS},
+      \"p_api_calls\": ${API_CALLS},
+      \"p_session_id\": \"${SESSION_ID}\",
+      \"p_model\": \"${MODEL}\"
+    }" 2>/dev/null || true
+
+  echo "[HOOK] Pushed to Supabase: $TOTAL_TOKENS tokens" >> /tmp/claude-hook-debug.log
+fi
+
 echo '{"decision": "allow"}'
 exit 0
