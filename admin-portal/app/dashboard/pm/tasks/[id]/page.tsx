@@ -10,8 +10,9 @@
  * Pattern: Adapted from support/[id]/page.tsx
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { Suspense, useState, useEffect, useCallback, useMemo } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { ArrowLeft, Trash2 } from 'lucide-react';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
 import { PERMISSIONS } from '@/lib/permissions';
@@ -53,8 +54,17 @@ function LoadingSkeleton() {
 // -- Main Page ---------------------------------------------------------------
 
 export default function TaskDetailPage() {
+  return (
+    <Suspense fallback={<LoadingSkeleton />}>
+      <TaskDetailContent />
+    </Suspense>
+  );
+}
+
+function TaskDetailContent() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const itemId = params.id as string;
   const { hasPermission } = usePermissions();
 
@@ -63,6 +73,27 @@ export default function TaskDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // Compute context-aware back link from searchParams
+  const backLink = useMemo(() => {
+    const from = searchParams.get('from');
+    if (from === 'project') {
+      const projectId = searchParams.get('projectId');
+      if (projectId) {
+        return { label: 'Back to Project', href: `/dashboard/pm/projects/${projectId}` };
+      }
+    }
+    if (from === 'sprint') {
+      const sprintId = searchParams.get('sprintId');
+      if (sprintId) {
+        return { label: 'Back to Sprint', href: `/dashboard/pm/sprints/${sprintId}` };
+      }
+    }
+    if (from === 'my-tasks') {
+      return { label: 'Back to My Tasks', href: '/dashboard/pm/my-tasks' };
+    }
+    return { label: 'Back to Backlog', href: '/dashboard/pm/backlog' };
+  }, [searchParams]);
 
   const loadDetail = useCallback(async () => {
     try {
@@ -84,7 +115,7 @@ export default function TaskDetailPage() {
     setDeleting(true);
     try {
       await deleteItem(itemId);
-      router.push('/dashboard/pm/backlog');
+      router.push(backLink.href);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete item');
       setDeleting(false);
@@ -103,13 +134,13 @@ export default function TaskDetailPage() {
   if (error || !detail) {
     return (
       <div className="max-w-7xl mx-auto">
-        <button
-          onClick={() => router.push('/dashboard/pm/backlog')}
+        <Link
+          href={backLink.href}
           className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-6"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Backlog
-        </button>
+          {backLink.label}
+        </Link>
         <div className="bg-white rounded-lg border border-red-200 p-8 text-center">
           <p className="text-red-600 text-sm">{error || 'Item not found'}</p>
         </div>
@@ -123,13 +154,13 @@ export default function TaskDetailPage() {
     <div className="max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-6">
-        <button
-          onClick={() => router.push('/dashboard/pm/backlog')}
+        <Link
+          href={backLink.href}
           className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-3"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Backlog
-        </button>
+          {backLink.label}
+        </Link>
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">

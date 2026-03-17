@@ -211,6 +211,7 @@ export default function MyTasksPage() {
           onPageChange={setPage}
           loading={loading}
           searchActive={!!searchQuery}
+          buildItemUrl={(itemId) => `/dashboard/pm/tasks/${itemId}?from=my-tasks`}
         />
       )}
     </div>

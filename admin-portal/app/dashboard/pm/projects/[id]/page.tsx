@@ -102,6 +102,12 @@ export default function ProjectDetailPage() {
     loadItems();
   }, [loadItems]);
 
+  // Build task URL with project context
+  const buildItemUrl = useMemo(
+    () => (itemId: string) => `/dashboard/pm/tasks/${itemId}?from=project&projectId=${projectId}`,
+    [projectId]
+  );
+
   // Compute total and progress from itemsByStatus
   const totalItems = Object.values(itemsByStatus).reduce((a, b) => a + b, 0);
   const completedItems = itemsByStatus['completed'] ?? 0;
@@ -320,6 +326,7 @@ export default function ProjectDetailPage() {
           totalPages={totalPages}
           onPageChange={setPage}
           loading={loadingItems}
+          buildItemUrl={buildItemUrl}
         />
       </div>
 

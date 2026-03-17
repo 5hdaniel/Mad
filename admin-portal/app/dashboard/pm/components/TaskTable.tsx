@@ -9,6 +9,7 @@
  * Column headers are clickable to sort by that column.
  */
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import type { PmBacklogItem, ItemStatus, ItemPriority, ItemType, SortableColumn, SortDirection } from '@/lib/pm-types';
@@ -36,6 +37,8 @@ interface TaskTableProps {
   sortBy?: SortableColumn | null;
   sortDir?: SortDirection;
   onSort?: (column: SortableColumn) => void;
+  /** Build a custom URL for each item row. Defaults to `/dashboard/pm/tasks/${itemId}`. */
+  buildItemUrl?: (itemId: string) => string;
 }
 
 function StatusBadge({ status }: { status: ItemStatus }) {
@@ -143,8 +146,14 @@ export function TaskTable({
   sortBy,
   sortDir,
   onSort,
+  buildItemUrl,
 }: TaskTableProps) {
   const router = useRouter();
+
+  function getItemUrl(itemId: string): string {
+    if (buildItemUrl) return buildItemUrl(itemId);
+    return `/dashboard/pm/tasks/${itemId}`;
+  }
 
   const allSelected = items.length > 0 && selectedIds?.size === items.length &&
     items.every((item) => selectedIds?.has(item.id));
@@ -252,56 +261,70 @@ export function TaskTable({
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {items.map((item) => (
-              <tr
-                key={item.id}
-                onClick={() => router.push(`/dashboard/pm/tasks/${item.id}`)}
-                className="hover:bg-gray-50 cursor-pointer transition-colors"
-              >
-                {onSelectionChange && (
-                  <td className="px-4 py-3 w-10" onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={selectedIds?.has(item.id) ?? false}
-                      onChange={() => toggleItem(item.id)}
-                      className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                  </td>
-                )}
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                  {item.legacy_id || `#${item.item_number}`}
-                </td>
-                <td
-                  className="px-4 py-3 text-sm text-gray-900 max-w-sm truncate font-medium"
-                  style={treeMode && item.parent_id ? { paddingLeft: '2.5rem' } : undefined}
+            {items.map((item) => {
+              const itemUrl = getItemUrl(item.id);
+              return (
+                <tr
+                  key={item.id}
+                  onClick={(e: React.MouseEvent<HTMLTableRowElement>) => {
+                    // Don't navigate if clicking a link, checkbox, or interactive element
+                    const target = e.target as HTMLElement;
+                    if (target.closest('a') || target.closest('input')) return;
+                    router.push(itemUrl);
+                  }}
+                  className="hover:bg-gray-50 cursor-pointer transition-colors"
                 >
-                  {item.title}
-                  {item.child_count && item.child_count > 0 ? (
-                    <span className="ml-2 text-xs text-gray-400">
-                      ({item.child_count} children)
-                    </span>
-                  ) : null}
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap">
-                  <TypeBadge type={item.type} />
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap">
-                  <StatusBadge status={item.status} />
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap">
-                  <PriorityBadge priority={item.priority} />
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                  {item.area || '-'}
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                  {formatTokens(item.est_tokens)}
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                  {formatDate(item.created_at)}
-                </td>
-              </tr>
-            ))}
+                  {onSelectionChange && (
+                    <td className="px-4 py-3 w-10" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds?.has(item.id) ?? false}
+                        onChange={() => toggleItem(item.id)}
+                        className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                    </td>
+                  )}
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                    {item.legacy_id || `#${item.item_number}`}
+                  </td>
+                  <td
+                    className="px-4 py-3 text-sm text-gray-900 max-w-sm truncate font-medium"
+                    style={treeMode && item.parent_id ? { paddingLeft: '2.5rem' } : undefined}
+                  >
+                    <Link
+                      href={itemUrl}
+                      className="hover:text-blue-600 hover:underline"
+                      onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                    >
+                      {item.title}
+                    </Link>
+                    {item.child_count && item.child_count > 0 ? (
+                      <span className="ml-2 text-xs text-gray-400">
+                        ({item.child_count} children)
+                      </span>
+                    ) : null}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <TypeBadge type={item.type} />
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <StatusBadge status={item.status} />
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <PriorityBadge priority={item.priority} />
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                    {item.area || '-'}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                    {formatTokens(item.est_tokens)}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                    {formatDate(item.created_at)}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

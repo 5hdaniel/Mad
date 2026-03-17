@@ -8,7 +8,7 @@
  * and a paginated task table of sprint items.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -213,6 +213,12 @@ export default function SprintDetailPage() {
       </div>
     );
   }
+
+  // Build task URL with sprint context
+  const buildItemUrl = useMemo(
+    () => (itemId: string) => `/dashboard/pm/tasks/${itemId}?from=sprint&sprintId=${sprintId}`,
+    [sprintId]
+  );
 
   const { sprint, metrics } = detail;
   const progress =
@@ -441,6 +447,7 @@ export default function SprintDetailPage() {
           totalPages={totalPages}
           onPageChange={setPage}
           loading={itemsLoading}
+          buildItemUrl={buildItemUrl}
         />
       </div>
     </div>
