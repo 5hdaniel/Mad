@@ -37,12 +37,12 @@ When executing sprint tasks, PM is responsible for these steps:
 - **Step 14:** After PR merged → `Completed` + record effort metrics
 - **Step 15:** Close sprint when all tasks complete
 
-**Valid CSV statuses:** `Pending`, `In Progress`, `Testing`, `Completed`, `Deferred`
-**Files to update at EVERY transition:**
-1. `.claude/plans/backlog/data/backlog.csv` — status column (source of truth)
-2. `.claude/plans/backlog/items/BACKLOG-XXX.md` — if detail file exists, update status there too
+**Valid statuses:** `pending`, `in_progress`, `testing`, `completed`, `deferred` (Supabase underscore format)
+**Updates at EVERY transition (in order):**
+1. `pm_update_item_status(p_item_id, p_new_status)` — primary (Supabase, source of truth)
+2. `.claude/plans/tasks/TASK-XXX.md` — update `Status:` field in the task file frontmatter (commit artifact)
 3. `.claude/plans/sprints/SPRINT-XXX.md` — In-Scope table Status column
-4. `.claude/plans/tasks/TASK-XXX.md` — update `Status:` field in the task file frontmatter
+4. `.claude/plans/backlog/data/backlog.csv` — OPTIONAL (backward compatibility during transition)
 
 **Sprint Close Checklist (Step 15):**
 1. Update ALL individual task files to `Status: Completed`
@@ -226,15 +226,16 @@ If any sprint-related PRs are open, the sprint CANNOT be closed.
 
 | Artifact | Location | Naming Pattern |
 |----------|----------|----------------|
+| **Supabase (source of truth)** | `pm_*` tables via RPCs | `pm_list_items`, `pm_get_item_detail`, etc. |
 | Sprint plans | `.claude/plans/sprints/` | `SPRINT-<NNN>-<slug>.md` |
 | Task files | `.claude/plans/tasks/` | `TASK-<NNN>-<slug>.md` |
-| **Backlog CSV (source of truth)** | `.claude/plans/backlog/data/backlog.csv` | One row per item |
+| Backlog CSV (archive) | `.claude/plans/backlog/data/backlog.csv` | Read-only reference |
 | Backlog detail files | `.claude/plans/backlog/items/` | `BACKLOG-<NNN>.md` (not all items have one) |
 | Backlog README | `.claude/plans/backlog/README.md` | Schema, status flow, queries |
 | Decision logs | `.claude/plans/decision-log.md` | - |
 | Risk registers | `.claude/plans/risk-register.md` | - |
 
-**Backlog update rule:** Always update the CSV first. If a `.md` detail file exists for the item, update it too. Not all items have `.md` files — the CSV is authoritative.
+**Backlog update rule:** Update Supabase via RPCs first. CSV is archived and read-only. If a `.md` detail file exists for the item, update it too. Not all items have `.md` files — Supabase is authoritative.
 
 ### Sprint Numbering
 

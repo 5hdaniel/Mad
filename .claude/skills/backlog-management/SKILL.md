@@ -1,69 +1,120 @@
 ---
 name: backlog-management
-description: Query, update, and manage the project backlog using the CSV-based system.
+description: Query, update, and manage the project backlog using the Supabase-backed system.
 ---
 
 # Backlog Management Skill
 
-This skill provides workflows for managing the project backlog. The backlog uses a CSV-based system for efficient querying and reduced token usage.
+This skill provides workflows for managing the project backlog. The backlog uses a Supabase-backed system with RPC functions for efficient querying and data integrity.
+
+> **Note:** Legacy CSV files are preserved in `.claude/plans/backlog/data/` for reference but are NO LONGER the source of truth. Supabase is the authoritative data store.
 
 ---
 
 ## System Overview
 
 ```
-.claude/plans/backlog/
+Supabase (source of truth)
+├── pm_backlog_items         # Main table
+├── pm_sprints               # Sprint history
+├── pm_sprint_items          # Sprint-to-item assignments
+├── pm_changelog             # Audit trail
+└── pm_* RPCs                # Query & mutation functions
+
+.claude/plans/backlog/ (read-only archive)
 ├── data/
-│   ├── backlog.csv      # Main table (source of truth)
-│   ├── sprints.csv      # Sprint history
-│   ├── changelog.csv    # Audit trail
-│   └── SCHEMA.md        # Column definitions
+│   ├── backlog.csv          # Archived CSV (read-only)
+│   ├── sprints.csv          # Archived sprint history
+│   ├── changelog.csv        # Archived audit trail
+│   └── SCHEMA.md            # Column definitions (reference)
 ├── scripts/
-│   ├── queries.py       # Query interface
-│   └── validate.py      # Schema validation
-├── items/               # BACKLOG-XXX.md detail files
-└── README.md            # Quick start guide
+│   ├── queries.py           # Legacy query interface (still works)
+│   └── validate.py          # Legacy schema validation
+├── items/                   # BACKLOG-XXX.md detail files
+└── README.md                # Quick start guide
 ```
 
 ---
 
 ## Quick Reference
 
-### Query Items
+### Query Items (Supabase MCP)
+
+```sql
+-- By status
+SELECT * FROM pm_backlog_items WHERE status = 'pending' AND deleted_at IS NULL ORDER BY priority, created_at;
+
+-- By priority
+SELECT * FROM pm_backlog_items WHERE priority = 'high' AND status = 'pending' AND deleted_at IS NULL;
+
+-- Sprint items
+SELECT i.* FROM pm_backlog_items i
+  JOIN pm_sprint_items si ON si.item_id = i.id
+  JOIN pm_sprints s ON s.id = si.sprint_id
+  WHERE s.name = 'SPRINT-042' AND i.deleted_at IS NULL;
+
+-- Search
+SELECT * FROM pm_backlog_items WHERE title ILIKE '%sync%' AND deleted_at IS NULL;
+
+-- Statistics
+SELECT status, COUNT(*) FROM pm_backlog_items WHERE deleted_at IS NULL GROUP BY status;
+```
+
+Use the Supabase MCP tool `mcp__supabase__execute_sql` to run these queries.
+
+### Using RPCs (Preferred)
+
+```sql
+-- List items with filters
+SELECT pm_list_items(p_status := 'pending', p_priority := 'high');
+
+-- Get item by legacy ID (BACKLOG-XXX)
+SELECT pm_get_item_by_legacy_id('BACKLOG-746');
+
+-- Get item detail
+SELECT pm_get_item_detail('<uuid>');
+
+-- Create item
+SELECT pm_create_item(p_title := 'New feature', p_type := 'feature', p_priority := 'high');
+
+-- Update status
+SELECT pm_update_item_status('<uuid>', 'in_progress');
+
+-- List sprints
+SELECT pm_list_sprints();
+
+-- Create sprint
+SELECT pm_create_sprint(p_name := 'SPRINT-140', p_goal := 'Sprint goal');
+
+-- Assign item to sprint
+SELECT pm_assign_to_sprint(p_item_id := '<uuid>', p_sprint_id := '<uuid>');
+```
+
+### Legacy CSV Query (still works, read-only)
 
 ```bash
-# By status
+# These scripts still work for backward compatibility
 python .claude/plans/backlog/scripts/queries.py status pending
-
-# By priority
 python .claude/plans/backlog/scripts/queries.py priority high --status pending
-
-# Sprint items
 python .claude/plans/backlog/scripts/queries.py sprint SPRINT-042
-
-# Search
 python .claude/plans/backlog/scripts/queries.py search "sync"
-
-# Statistics
 python .claude/plans/backlog/scripts/queries.py stats
 ```
 
-### Python Module Usage
+---
 
-```python
-import csv
+## Available RPCs (Common Operations)
 
-# Load all items
-with open('.claude/plans/backlog/data/backlog.csv') as f:
-    items = list(csv.DictReader(f))
-
-# Filter to pending high priority
-pending_high = [
-    i for i in items
-    if i['status'].lower() == 'pending'
-    and i['priority'].lower() == 'high'
-]
-```
+| Operation | RPC | Example |
+|-----------|-----|---------|
+| List/filter items | `pm_list_items(p_status, p_priority, ...)` | `SELECT pm_list_items(p_status := 'pending');` |
+| Create item | `pm_create_item(p_title, p_type, p_priority, ...)` | `SELECT pm_create_item(p_title := 'Fix login', p_type := 'bug', p_priority := 'high');` |
+| Update status | `pm_update_item_status(p_item_id, p_new_status)` | `SELECT pm_update_item_status('<uuid>', 'in_progress');` |
+| Get by legacy ID | `pm_get_item_by_legacy_id(p_legacy_id)` | `SELECT pm_get_item_by_legacy_id('BACKLOG-746');` |
+| Get item detail | `pm_get_item_detail(p_item_id)` | `SELECT pm_get_item_detail('<uuid>');` |
+| List sprints | `pm_list_sprints()` | `SELECT pm_list_sprints();` |
+| Create sprint | `pm_create_sprint(p_name, p_goal)` | `SELECT pm_create_sprint(p_name := 'SPRINT-140', p_goal := 'Goal');` |
+| Assign to sprint | `pm_assign_to_sprint(p_item_id, p_sprint_id)` | `SELECT pm_assign_to_sprint('<item_uuid>', '<sprint_uuid>');` |
 
 ---
 
@@ -80,48 +131,44 @@ pending_high = [
 
 ## Key Rules
 
-1. **CSV is source of truth** - Always update backlog.csv for status changes
+1. **Supabase is source of truth** - Always use RPCs or direct SQL via Supabase MCP for status changes
 2. **All items need .md files** - Create BACKLOG-XXX.md for every item
-3. **Run validation** - Execute `python .claude/plans/backlog/scripts/validate.py` before committing
-4. **Log key changes** - Add entries to changelog.csv for significant changes
-5. **Column order matters** - The CSV column order is: `id,title,type,area,priority,status,sprint,est_tokens,actual_tokens,variance,created_at,completed_at,file,description`
+3. **Database constraints enforce schema** - Supabase enforces valid status values, types, and priorities via enums and constraints
+4. **Log key changes** - Changes are automatically tracked in `pm_changelog` table
+5. **Legacy CSV column order (archive reference)** - `id,title,type,area,priority,status,sprint,est_tokens,actual_tokens,variance,created_at,completed_at,file,description`
 
-### CSV Column Order (Quick Reference)
+### Legacy CSV Column Order (Archive Reference)
 
 ```
 id,title,type,area,priority,status,sprint,est_tokens,actual_tokens,variance,created_at,completed_at,file,description
 ```
 
-> **Common Mistake:** Swapping type/area/priority/status positions. Always verify positions 3-6:
-> - Position 3: `type` (bug, feature, chore, refactor, test, docs)
-> - Position 4: `area` (ui, electron, infra, service, security, schema, ipc)
-> - Position 5: `priority` (high, medium, low, critical)
-> - Position 6: `status` (pending, in-progress, testing, etc.)
+> **Note:** The CSV uses different status format (Title Case: `In Progress`) while Supabase uses underscore format (`in_progress`). When querying Supabase, use the underscore format.
 
 ---
 
 ## Status Flow (IMPORTANT)
 
 ```
-pending → in-progress → testing → completed
+pending → in_progress → testing → completed
                            ↓
-                       reopened → in-progress → ...
+                       reopened → in_progress → ...
 ```
 
-**CRITICAL RULES:**
-1. Code merged = `testing` (NOT completed)
-2. Only user verification = `completed`
-3. Failed testing = `reopened` (NEVER create new task)
-
-### Status Values
+**Supabase status values (underscore format):**
 - `pending` - Not started
-- `in-progress` - Currently being worked on
+- `in_progress` - Currently being worked on
 - `testing` - Code merged, awaiting user verification
 - `completed` - Done AND verified by user
 - `blocked` - Waiting on something
 - `deferred` - Postponed
 - `obsolete` - No longer relevant
 - `reopened` - Failed testing, needs more work
+
+**CRITICAL RULES:**
+1. Code merged = `testing` (NOT completed)
+2. Only user verification = `completed`
+3. Failed testing = `reopened` (NEVER create new task)
 
 ### Priority
 - `critical` - Must be done immediately
@@ -135,4 +182,4 @@ pending → in-progress → testing → completed
 
 - Schema details: `.claude/plans/backlog/data/SCHEMA.md`
 - Estimation guidelines: [estimation-guidelines.md](estimation-guidelines.md)
-- CSV reference: [csv-reference.md](csv-reference.md)
+- CSV reference (archive): [csv-reference.md](csv-reference.md)
