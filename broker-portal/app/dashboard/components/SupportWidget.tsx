@@ -177,6 +177,18 @@ export function SupportWidget() {
         } catch { /* best-effort */ }
       }
 
+      // Fire-and-forget: send confirmation email to requester
+      fetch('/api/email/ticket-confirmation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ticketNumber: `TKT-${String(result.ticket_number).padStart(4, '0')}`,
+          ticketSubject: subject,
+          requesterEmail: email,
+          ticketLink: `${window.location.origin}/support/${result.id}`,
+        }),
+      }).catch(() => { /* best-effort */ });
+
       setSuccess(true);
       resetForm();
     } catch (err) {

@@ -48,7 +48,16 @@ BEGIN
     AND (p_area IS NULL OR i.area = p_area)
     AND (p_sprint_id IS NULL OR i.sprint_id = p_sprint_id)
     AND (p_project_id IS NULL OR i.project_id = p_project_id)
-    AND (p_search IS NULL OR i.search_vector @@ plainto_tsquery('english', p_search))
+    AND (p_search IS NULL OR (
+      i.search_vector @@ plainto_tsquery('english', p_search)
+      OR i.legacy_id ILIKE '%' || p_search || '%'
+      OR i.title ILIKE '%' || p_search || '%'
+      OR EXISTS (
+        SELECT 1 FROM pm_comments c
+        WHERE c.item_id = i.id AND c.deleted_at IS NULL
+          AND c.body ILIKE '%' || p_search || '%'
+      )
+    ))
     AND (p_labels IS NULL OR EXISTS (
       SELECT 1 FROM pm_item_labels il WHERE il.item_id = i.id AND il.label_id = ANY(p_labels)
     ))
@@ -75,7 +84,16 @@ BEGIN
       AND (p_area IS NULL OR i.area = p_area)
       AND (p_sprint_id IS NULL OR i.sprint_id = p_sprint_id)
       AND (p_project_id IS NULL OR i.project_id = p_project_id)
-      AND (p_search IS NULL OR i.search_vector @@ plainto_tsquery('english', p_search))
+      AND (p_search IS NULL OR (
+        i.search_vector @@ plainto_tsquery('english', p_search)
+        OR i.legacy_id ILIKE '%' || p_search || '%'
+        OR i.title ILIKE '%' || p_search || '%'
+        OR EXISTS (
+          SELECT 1 FROM pm_comments c
+          WHERE c.item_id = i.id AND c.deleted_at IS NULL
+            AND c.body ILIKE '%' || p_search || '%'
+        )
+      ))
       AND (p_labels IS NULL OR EXISTS (
         SELECT 1 FROM pm_item_labels il WHERE il.item_id = i.id AND il.label_id = ANY(p_labels)
       ))
@@ -128,16 +146,30 @@ BEGIN
     RAISE EXCEPTION 'Item not found: %', p_item_id;
   END IF;
 
-  -- Get comments
-  SELECT COALESCE(jsonb_agg(to_jsonb(c.*) ORDER BY c.created_at ASC), '[]'::jsonb)
+  -- Get comments with author name/email from auth.users
+  SELECT COALESCE(jsonb_agg(
+    to_jsonb(c.*) || jsonb_build_object(
+      'author_name', COALESCE(u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'name', u.email),
+      'author_email', u.email
+    )
+    ORDER BY c.created_at ASC
+  ), '[]'::jsonb)
   INTO v_comments
   FROM pm_comments c
+  LEFT JOIN auth.users u ON u.id = c.author_id
   WHERE c.item_id = p_item_id AND c.deleted_at IS NULL;
 
-  -- Get events
-  SELECT COALESCE(jsonb_agg(to_jsonb(e.*) ORDER BY e.created_at ASC), '[]'::jsonb)
+  -- Get events with actor name/email from auth.users
+  SELECT COALESCE(jsonb_agg(
+    to_jsonb(e.*) || jsonb_build_object(
+      'actor_name', COALESCE(u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'name', u.email),
+      'actor_email', u.email
+    )
+    ORDER BY e.created_at ASC
+  ), '[]'::jsonb)
   INTO v_events
   FROM pm_events e
+  LEFT JOIN auth.users u ON u.id = e.actor_id
   WHERE e.item_id = p_item_id;
 
   -- Get links (bidirectional)

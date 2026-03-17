@@ -58,8 +58,15 @@ function formatDate(dateStr: string): string {
   });
 }
 
+/** Parse a date string as local date (not UTC) to avoid timezone shifts */
+function parseLocalDate(dateStr: string): Date {
+  // "2026-03-17" or "2026-03-17T..." → treat as local midnight
+  const [y, m, d] = dateStr.split('T')[0].split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
 function formatDateShort(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', {
+  return parseLocalDate(dateStr).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -69,7 +76,10 @@ function formatDateShort(dateStr: string): string {
 function isOverdue(dueDate: string | null, status: ItemStatus): boolean {
   if (!dueDate) return false;
   if (status === 'completed' || status === 'obsolete') return false;
-  return new Date(dueDate) < new Date();
+  const due = parseLocalDate(dueDate);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return due < today;
 }
 
 // -- Component ---------------------------------------------------------------

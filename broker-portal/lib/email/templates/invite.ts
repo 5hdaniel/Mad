@@ -24,18 +24,20 @@ export function buildInviteEmail(params: InviteEmailParams): EmailContent {
     expiresInDays,
   } = params;
 
-  const subject = `You've been invited to join ${organizationName} on Keepr`;
+  const subject = `${inviterName} has invited you to the ${organizationName} team on Keepr`;
 
   const html = baseLayout({
-    preheader: `${inviterName} invited you to join ${organizationName}`,
+    preheader: `${inviterName} has invited you to the ${organizationName} team on Keepr`,
     body: `
       <h1 style="margin:0 0 16px 0; font-size:24px; font-weight:700; color:#111827; line-height:1.3;">
         You're Invited!
       </h1>
-      <p style="margin:0 0 24px 0; font-size:16px; color:#374151; line-height:1.6;">
-        ${escapeHtml(inviterName)} has invited you to join
-        <strong>${escapeHtml(organizationName)}</strong> as a
-        <strong>${escapeHtml(role)}</strong>.
+      <p style="margin:0 0 8px 0; font-size:16px; color:#374151; line-height:1.6;">
+        ${escapeHtml(inviterName)} has invited you to the
+        <strong>${escapeHtml(organizationName)}</strong> team on Keepr.
+      </p>
+      <p style="margin:0 0 24px 0; font-size:14px; color:#6b7280; line-height:1.5;">
+        Role: <strong>${escapeHtml(role)}</strong>
       </p>
       <table cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px 0;">
         <tr>
@@ -58,9 +60,10 @@ export function buildInviteEmail(params: InviteEmailParams): EmailContent {
   });
 
   const text = [
-    `You've been invited to join ${organizationName} on Keepr`,
+    `${inviterName} has invited you to the ${organizationName} team on Keepr`,
     '',
-    `${inviterName} has invited you to join ${organizationName} as a ${role}.`,
+    `${inviterName} has invited you to the ${organizationName} team on Keepr.`,
+    `Role: ${role}`,
     '',
     `Accept your invitation: ${inviteLink}`,
     '',

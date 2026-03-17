@@ -235,11 +235,6 @@ export default function BacklogPage() {
         );
       }
 
-      // Apply enhanced search (supplement RPC full-text with client-side matching)
-      if (searchQuery) {
-        filteredItems = filteredItems.filter((item) => matchesEnhancedSearch(item, searchQuery));
-      }
-
       const clientTotal = needsClientFilter ? filteredItems.length : data.total_count;
 
       // Client-side pagination when client-side filtering is active
