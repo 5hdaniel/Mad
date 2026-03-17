@@ -89,6 +89,7 @@ export interface PmSprint {
   start_date: string | null;
   end_date: string | null;
   project_id: string | null;
+  original_item_count?: number | null;
   created_at: string;
   updated_at: string;
   // Joined from RPCs (pm_list_sprints)
