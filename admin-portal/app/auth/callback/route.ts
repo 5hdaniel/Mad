@@ -9,7 +9,7 @@
  * 5. Redirects to dashboard or login with error
  */
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 
 /**
@@ -118,29 +118,36 @@ export async function GET(request: Request) {
  * we store the invitation in pending_internal_invitations. On first
  * SSO login, this function picks it up:
  *   1. Ensures public.users record exists
- *   2. Assigns the internal role
+ *   2. Assigns the internal role (direct insert via service role)
  *   3. Deletes the invitation
+ *
+ * Uses the service role client because the admin_add_internal_user RPC
+ * requires the caller to already have an internal role — a chicken-and-egg
+ * problem for first-time users.
  */
 async function processPendingInvitation(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  _supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
   email: string,
   provider: string
 ) {
   if (!email) return;
 
+  // Use service role client to bypass RLS for auto-provisioning
+  const adminClient = createServiceClient();
+
   try {
     // Check for pending invitation
-    const { data: invitation } = await supabase
+    const { data: invitation } = await adminClient
       .from('pending_internal_invitations')
-      .select('id, role_id, email')
+      .select('id, role_id, email, invited_by')
       .eq('email', email.toLowerCase())
       .maybeSingle();
 
     if (!invitation) return;
 
     // Ensure public.users record exists
-    const { data: existingUser } = await supabase
+    const { data: existingUser } = await adminClient
       .from('users')
       .select('id')
       .eq('id', userId)
@@ -148,7 +155,7 @@ async function processPendingInvitation(
 
     if (!existingUser) {
       // Create public.users record for this user
-      const { error: insertError } = await supabase.from('users').insert({
+      const { error: insertError } = await adminClient.from('users').insert({
         id: userId,
         email: email.toLowerCase(),
         oauth_provider: provider,
@@ -163,10 +170,10 @@ async function processPendingInvitation(
       }
     }
 
-    // Look up the role slug for the RPC
-    const { data: role } = await supabase
+    // Verify the role exists
+    const { data: role } = await adminClient
       .from('admin_roles')
-      .select('slug')
+      .select('id, slug')
       .eq('id', invitation.role_id)
       .single();
 
@@ -175,19 +182,22 @@ async function processPendingInvitation(
       return;
     }
 
-    // Assign the internal role via RPC
-    const { error: rpcError } = await supabase.rpc('admin_add_internal_user', {
-      p_email: email.toLowerCase(),
-      p_role: role.slug,
-    });
+    // Assign the internal role directly (bypasses RPC permission check)
+    const { error: insertRoleError } = await adminClient
+      .from('internal_roles')
+      .insert({
+        user_id: userId,
+        role_id: invitation.role_id,
+        created_by: invitation.invited_by ?? userId,
+      });
 
-    if (rpcError) {
-      console.error('[auth-callback] Failed to assign internal role:', rpcError.message);
+    if (insertRoleError) {
+      console.error('[auth-callback] Failed to assign internal role:', insertRoleError.message);
       return;
     }
 
     // Delete the processed invitation
-    await supabase
+    await adminClient
       .from('pending_internal_invitations')
       .delete()
       .eq('id', invitation.id);
