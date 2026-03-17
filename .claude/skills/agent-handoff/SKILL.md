@@ -314,6 +314,65 @@ SELECT * FROM pm_token_metrics WHERE task_id = 'TASK-1234';
 
 ---
 
+## Mandatory Supabase Updates
+
+At each step below, the responsible agent MUST run these SQL commands via `mcp__supabase__execute_sql`.
+
+### Step 1: Resolve Task UUID
+```sql
+SELECT pm_get_task_by_legacy_id('TASK-XXXX');
+-- Returns: {"id": "<uuid>", "status": "pending", "backlog_item_id": "<uuid>", "sprint_id": "<uuid>"}
+-- Save the task UUID and backlog_item_id for all subsequent calls
+```
+
+### Step 4: PM marks task In Progress
+```sql
+SELECT pm_update_task_status('<task_uuid>', 'in_progress');
+SELECT pm_update_item_status('<backlog_item_uuid>', 'in_progress');
+```
+
+### Step 5: PM handoff comment
+```sql
+SELECT pm_add_comment('<backlog_item_uuid>', 'Handed off to Engineer for planning');
+```
+
+### Step 8 (Approved): PM updates status
+```sql
+SELECT pm_add_comment('<backlog_item_uuid>', 'Plan approved, starting implementation');
+```
+
+### Step 8 (Rejected): PM defers task
+```sql
+SELECT pm_update_task_status('<task_uuid>', 'deferred');
+SELECT pm_update_item_status('<backlog_item_uuid>', 'deferred');
+```
+
+### Step 11: PM marks Testing (PR created)
+```sql
+SELECT pm_update_task_status('<task_uuid>', 'testing');
+SELECT pm_update_item_status('<backlog_item_uuid>', 'testing');
+```
+
+### Step 14: PM marks Completed + Records Tokens
+```sql
+SELECT pm_update_task_status('<task_uuid>', 'completed');
+SELECT pm_record_task_tokens(
+  '<task_uuid>',
+  <total_actual_tokens>,
+  '<engineer_agent_id>',
+  'engineer',
+  <input_tokens>, <output_tokens>, <cache_read>, <cache_create>,
+  <duration_ms>, <api_calls>, '<session_id>'
+);
+```
+
+### Step 15: PM closes sprint (if all tasks done)
+```sql
+SELECT pm_update_sprint_status('<sprint_uuid>', 'completed');
+```
+
+---
+
 ## Related Skills
 
 - `.claude/skills/agentic-pm/SKILL.md` - PM responsibilities
