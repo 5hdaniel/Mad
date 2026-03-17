@@ -38,28 +38,28 @@ const quickLinks = [
     description: 'Kanban board view',
     href: '/dashboard/pm/board',
     icon: KanbanSquare,
-    ready: false,
+    ready: true,
   },
   {
     label: 'Sprints',
     description: 'Sprint planning and tracking',
     href: '/dashboard/pm/sprints',
     icon: Calendar,
-    ready: false,
+    ready: true,
   },
   {
     label: 'My Tasks',
     description: 'Items assigned to you',
     href: '/dashboard/pm/my-tasks',
     icon: UserCheck,
-    ready: false,
+    ready: true,
   },
   {
     label: 'Projects',
     description: 'Manage project groupings',
     href: '/dashboard/pm/projects',
     icon: FolderKanban,
-    ready: false,
+    ready: true,
   },
 ];
 
