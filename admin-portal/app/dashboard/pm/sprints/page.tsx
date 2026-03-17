@@ -18,12 +18,14 @@ import { SprintCard } from '../components/SprintCard';
 import { VelocityChart } from '../components/VelocityChart';
 
 type ViewMode = 'list' | 'card';
+type StatusFilter = 'all' | 'active' | 'planned' | 'completed';
 
 export default function SprintsPage() {
   const [sprints, setSprints] = useState<PmSprint[]>([]);
   const [velocityData, setVelocityData] = useState<SprintVelocityEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -54,6 +56,18 @@ export default function SprintsPage() {
     loadData();
   }, [loadData]);
 
+  // Filter sprints by status
+  const filteredSprints = statusFilter === 'all'
+    ? sprints
+    : sprints.filter((s) => s.status === statusFilter);
+
+  const filterTabs: { key: StatusFilter; label: string }[] = [
+    { key: 'all', label: 'All' },
+    { key: 'active', label: 'Active' },
+    { key: 'planned', label: 'Planned' },
+    { key: 'completed', label: 'Completed' },
+  ];
+
   return (
     <div className="max-w-7xl mx-auto">
       {/* Navigation */}
@@ -71,7 +85,7 @@ export default function SprintsPage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Sprints</h1>
             <p className="text-sm text-gray-500 mt-1">
-              {loading ? '...' : `${sprints.length} sprints`}
+              {loading ? '...' : `${filteredSprints.length} sprints`}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -101,6 +115,29 @@ export default function SprintsPage() {
         </div>
       </div>
 
+      {/* Filter Tabs */}
+      <div className="flex items-center gap-1 mb-4 border-b border-gray-200">
+        {filterTabs.map((tab) => {
+          const count = tab.key === 'all'
+            ? sprints.length
+            : sprints.filter((s) => s.status === tab.key).length;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setStatusFilter(tab.key)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                statusFilter === tab.key
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              {tab.label}
+              <span className="ml-1.5 text-xs text-gray-400">({count})</span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Velocity Chart */}
       {velocityData.length > 0 && (
         <div className="mb-6">
@@ -110,7 +147,7 @@ export default function SprintsPage() {
 
       {/* Sprint List or Cards */}
       {viewMode === 'list' ? (
-        <SprintList sprints={sprints} loading={loading} />
+        <SprintList sprints={filteredSprints} loading={loading} />
       ) : loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
@@ -125,13 +162,13 @@ export default function SprintsPage() {
             </div>
           ))}
         </div>
-      ) : sprints.length === 0 ? (
+      ) : filteredSprints.length === 0 ? (
         <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
           <p className="text-gray-500 text-sm">No sprints found.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {sprints.map((sprint) => (
+          {filteredSprints.map((sprint) => (
             <Link key={sprint.id} href={`/dashboard/pm/sprints/${sprint.id}`}>
               <SprintCard sprint={sprint} />
             </Link>

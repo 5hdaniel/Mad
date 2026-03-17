@@ -2,12 +2,23 @@
 
 /**
  * Floating action bar that appears when multiple items are selected on the board.
- * Shows selected count + bulk actions: Change Status, Assign Sprint, Delete.
+ * Shows selected count + bulk actions: Change Status (dropdown), Assign Sprint, Delete.
  * Fixed at the bottom of the viewport with dark styling.
  */
 
-import { X, ArrowRight, Calendar, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { X, ChevronUp, Calendar, Trash2 } from 'lucide-react';
 import type { ItemStatus } from '@/lib/pm-types';
+import { STATUS_LABELS, STATUS_COLORS } from '@/lib/pm-types';
+
+const STATUS_OPTIONS: ItemStatus[] = [
+  'pending',
+  'in_progress',
+  'testing',
+  'completed',
+  'blocked',
+  'deferred',
+];
 
 interface BulkActionBarProps {
   selectedCount: number;
@@ -25,6 +36,8 @@ export function BulkActionBar({
   onAssignToSprint,
   onDelete,
 }: BulkActionBarProps) {
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+
   if (selectedCount === 0) return null;
 
   return (
@@ -37,14 +50,42 @@ export function BulkActionBar({
 
         <div className="w-px h-5 bg-gray-700" />
 
-        {/* Status action */}
-        <button
-          onClick={() => onChangeStatus('in_progress')}
-          className="flex items-center gap-1 text-sm text-gray-300 hover:text-white transition-colors"
-        >
-          <ArrowRight className="h-4 w-4" />
-          Move to In Progress
-        </button>
+        {/* Status dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => setStatusMenuOpen(!statusMenuOpen)}
+            className="flex items-center gap-1 text-sm text-gray-300 hover:text-white transition-colors"
+          >
+            <ChevronUp className="h-4 w-4" />
+            Move to...
+          </button>
+          {statusMenuOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-10"
+                onClick={() => setStatusMenuOpen(false)}
+              />
+              <div className="absolute bottom-full left-0 mb-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden">
+                {STATUS_OPTIONS.map((status) => (
+                  <button
+                    key={status}
+                    onClick={() => {
+                      onChangeStatus(status);
+                      setStatusMenuOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
+                  >
+                    <span
+                      className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[status]}`}
+                    >
+                      {STATUS_LABELS[status]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
 
         {/* Sprint assignment */}
         <button

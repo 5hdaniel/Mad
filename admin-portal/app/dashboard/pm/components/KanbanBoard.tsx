@@ -35,6 +35,9 @@ const COLUMN_ORDER: BoardStatus[] = [
   'blocked',
 ];
 
+/** Set of valid column IDs for quick lookup. */
+const COLUMN_IDS = new Set<string>(COLUMN_ORDER);
+
 interface KanbanBoardProps {
   columns: BoardColumns;
   onStatusChange: (itemId: string, newStatus: ItemStatus) => Promise<void>;
@@ -72,15 +75,29 @@ export function KanbanBoard({
     }
   }
 
+  /** Resolve an over-target ID to its column status.
+   *  If the ID is a column status directly, return it.
+   *  Otherwise, find which column contains the item with that ID. */
+  function resolveColumnStatus(overId: string): ItemStatus | null {
+    if (COLUMN_IDS.has(overId)) return overId as ItemStatus;
+    // overId is a card ID — find which column it belongs to
+    for (const [status, items] of Object.entries(columns)) {
+      if ((items as PmBacklogItem[]).some((i) => i.id === overId)) {
+        return status as ItemStatus;
+      }
+    }
+    return null;
+  }
+
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     setActiveItem(null);
 
     if (!over) return;
 
-    // The "over" container ID is the column status
-    const newStatus = over.id as ItemStatus;
     const itemId = active.id as string;
+    const newStatus = resolveColumnStatus(over.id as string);
+    if (!newStatus) return;
 
     // Find current status
     let currentStatus: ItemStatus | null = null;

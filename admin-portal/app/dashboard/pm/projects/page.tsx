@@ -15,10 +15,13 @@ import { listProjects, createProject } from '@/lib/pm-queries';
 import { ProjectList } from '../components/ProjectList';
 import type { PmProject } from '@/lib/pm-types';
 
+type StatusFilter = 'all' | 'active' | 'archived';
+
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<PmProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   const loadProjects = useCallback(async () => {
     setLoading(true);
@@ -64,8 +67,43 @@ export default function ProjectsPage() {
         </div>
       </div>
 
+      {/* Filter Tabs */}
+      {(() => {
+        const filterTabs: { key: StatusFilter; label: string }[] = [
+          { key: 'all', label: 'All' },
+          { key: 'active', label: 'Active' },
+          { key: 'archived', label: 'Archived' },
+        ];
+        return (
+          <div className="flex items-center gap-1 mb-4 border-b border-gray-200">
+            {filterTabs.map((tab) => {
+              const count = tab.key === 'all'
+                ? projects.length
+                : projects.filter((p) => p.status === tab.key).length;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => setStatusFilter(tab.key)}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                    statusFilter === tab.key
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  {tab.label}
+                  <span className="ml-1.5 text-xs text-gray-400">({count})</span>
+                </button>
+              );
+            })}
+          </div>
+        );
+      })()}
+
       {/* Project Grid */}
-      <ProjectList projects={projects} loading={loading} />
+      <ProjectList
+        projects={statusFilter === 'all' ? projects : projects.filter((p) => p.status === statusFilter)}
+        loading={loading}
+      />
 
       {/* Create Project Dialog */}
       {showCreate && (
