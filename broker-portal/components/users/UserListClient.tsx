@@ -12,7 +12,7 @@
  * TASK-1812: Added deactivate/remove user modals
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import UserCard from './UserCard';
 import UserTableRow from './UserTableRow';
 import UserSearchFilter from './UserSearchFilter';
@@ -23,6 +23,7 @@ import DeactivateUserModal from './DeactivateUserModal';
 import RemoveUserModal from './RemoveUserModal';
 import { EmptyState, SearchIcon } from '@/components/ui/EmptyState';
 import { formatUserDisplayName } from '@/lib/utils/userDisplay';
+import { resendInvite } from '@/lib/actions/resendInvite';
 import type { OrganizationMember, Role } from '@/lib/types/users';
 
 /**
@@ -74,6 +75,20 @@ export default function UserListClient({
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
   const [deactivateMember, setDeactivateMember] = useState<OrganizationMember | null>(null);
   const [removeMember, setRemoveMember] = useState<OrganizationMember | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
+  const [resendResult, setResendResult] = useState<{ memberId: string; success: boolean; error?: string } | null>(null);
+
+  const handleResendInvite = useCallback(async (member: OrganizationMember) => {
+    setResendingId(member.id);
+    setResendResult(null);
+    try {
+      const result = await resendInvite({ memberId: member.id, organizationId });
+      setResendResult({ memberId: member.id, success: result.success, error: result.error });
+      setTimeout(() => setResendResult(null), 3000);
+    } finally {
+      setResendingId(null);
+    }
+  }, [organizationId]);
 
   const filteredMembers = useMemo(() => {
     return initialMembers.filter((member) => {
@@ -184,6 +199,13 @@ export default function UserListClient({
         </div>
       </div>
 
+      {/* Resend invite notification */}
+      {resendResult && (
+        <div className={`rounded-md px-4 py-3 text-sm ${resendResult.success ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+          {resendResult.success ? 'Invitation resent successfully.' : `Failed to resend: ${resendResult.error}`}
+        </div>
+      )}
+
       <UserSearchFilter
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -223,6 +245,7 @@ export default function UserListClient({
                   isCurrentUser={member.user_id === currentUserId}
                   canManage={canManage}
                   onEditRole={setEditRoleMember}
+                  onResendInvite={handleResendInvite}
                   onDeactivate={setDeactivateMember}
                   onRemove={setRemoveMember}
                 />
@@ -261,6 +284,7 @@ export default function UserListClient({
                       canManage={canManage}
                       onToggleSelect={() => toggleSelect(member.id)}
                       onEditRole={() => setEditRoleMember(member)}
+                      onResendInvite={() => handleResendInvite(member)}
                       onDeactivate={() => setDeactivateMember(member)}
                       onRemove={() => setRemoveMember(member)}
                     />

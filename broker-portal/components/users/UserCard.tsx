@@ -25,6 +25,7 @@ interface UserCardProps {
   isCurrentUser: boolean;
   canManage: boolean;
   onEditRole?: (member: OrganizationMember) => void;
+  onResendInvite?: (member: OrganizationMember) => void;
   onDeactivate?: (member: OrganizationMember) => void;
   onRemove?: (member: OrganizationMember) => void;
 }
@@ -48,6 +49,7 @@ export default function UserCard({
   isCurrentUser,
   canManage,
   onEditRole,
+  onResendInvite,
   onDeactivate,
   onRemove,
 }: UserCardProps) {
@@ -104,6 +106,7 @@ export default function UserCard({
             isCurrentUser={isCurrentUser}
             invitationToken={member.invitation_token}
             onEditRole={() => onEditRole?.(member)}
+            onResendInvite={() => onResendInvite?.(member)}
             onDeactivate={() => onDeactivate?.(member)}
             onRemove={() => onRemove?.(member)}
           />

@@ -8,7 +8,7 @@
  */
 
 import { useState, useMemo, useCallback } from 'react';
-import { Shield, ShieldAlert, ShieldCheck, ArrowUpDown, ArrowUp, ArrowDown, Search, Clock, X } from 'lucide-react';
+import { Shield, ShieldAlert, ShieldCheck, ArrowUpDown, ArrowUp, ArrowDown, Search, Clock, X, RotateCw } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { InternalUser, AdminRole, PendingInvitation } from '../page';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
@@ -94,6 +94,31 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, onBulk
   const [changingRole, setChangingRole] = useState<string | null>(null);
   const [roleChangeError, setRoleChangeError] = useState<string | null>(null);
   const [cancellingInvitation, setCancellingInvitation] = useState<string | null>(null);
+  const [resendingInvitation, setResendingInvitation] = useState<string | null>(null);
+  const [resendSuccess, setResendSuccess] = useState<string | null>(null);
+
+  const handleResendInvitation = useCallback(async (invitationId: string) => {
+    setResendingInvitation(invitationId);
+    setResendSuccess(null);
+    try {
+      const res = await fetch('/api/internal-users/resend-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invitationId }),
+      });
+      if (res.ok) {
+        setResendSuccess(invitationId);
+        setTimeout(() => setResendSuccess(null), 3000);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setRoleChangeError(data.error || 'Failed to resend invitation');
+      }
+    } catch {
+      setRoleChangeError('Failed to resend invitation');
+    } finally {
+      setResendingInvitation(null);
+    }
+  }, []);
 
   const handleCancelInvitation = useCallback(async (invitationId: string) => {
     setCancellingInvitation(invitationId);
@@ -483,14 +508,24 @@ export function InternalUsersTable({ users, currentUserId, onRemoveClick, onBulk
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">--</td>
                 {canManage && (
                   <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <button
-                      onClick={() => handleCancelInvitation(invitation.id)}
-                      disabled={cancellingInvitation === invitation.id}
-                      className="inline-flex items-center gap-1 text-sm text-red-600 hover:text-red-800 font-medium transition-colors disabled:opacity-50"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                      {cancellingInvitation === invitation.id ? 'Cancelling...' : 'Cancel'}
-                    </button>
+                    <div className="inline-flex items-center gap-3">
+                      <button
+                        onClick={() => handleResendInvitation(invitation.id)}
+                        disabled={resendingInvitation === invitation.id}
+                        className="inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-800 font-medium transition-colors disabled:opacity-50"
+                      >
+                        <RotateCw className={`h-3.5 w-3.5 ${resendingInvitation === invitation.id ? 'animate-spin' : ''}`} />
+                        {resendSuccess === invitation.id ? 'Sent!' : resendingInvitation === invitation.id ? 'Sending...' : 'Resend'}
+                      </button>
+                      <button
+                        onClick={() => handleCancelInvitation(invitation.id)}
+                        disabled={cancellingInvitation === invitation.id}
+                        className="inline-flex items-center gap-1 text-sm text-red-600 hover:text-red-800 font-medium transition-colors disabled:opacity-50"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                        {cancellingInvitation === invitation.id ? 'Cancelling...' : 'Cancel'}
+                      </button>
+                    </div>
                   </td>
                 )}
               </tr>

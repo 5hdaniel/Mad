@@ -22,6 +22,7 @@ interface UserTableRowProps {
   canManage: boolean;
   onToggleSelect: () => void;
   onEditRole: () => void;
+  onResendInvite: () => void;
   onDeactivate: () => void;
   onRemove: () => void;
 }
@@ -47,6 +48,7 @@ export default function UserTableRow({
   canManage,
   onToggleSelect,
   onEditRole,
+  onResendInvite,
   onDeactivate,
   onRemove,
 }: UserTableRowProps) {
@@ -124,6 +126,7 @@ export default function UserTableRow({
               isCurrentUser={isCurrentUser}
               invitationToken={member.invitation_token}
               onEditRole={onEditRole}
+              onResendInvite={onResendInvite}
               onDeactivate={onDeactivate}
               onRemove={onRemove}
             />
