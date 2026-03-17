@@ -8,6 +8,8 @@
  * KanbanQuickAdd at the bottom for inline item creation.
  */
 
+import { useState } from 'react';
+import { Plus } from 'lucide-react';
 import { useDroppable } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -34,6 +36,7 @@ export function KanbanColumn({
   onToggleSelect,
 }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
+  const [showTopAdd, setShowTopAdd] = useState(false);
 
   return (
     <div
@@ -52,7 +55,27 @@ export function KanbanColumn({
           </span>
           <span className="text-xs text-gray-400">{items.length}</span>
         </div>
+        {onQuickAdd && (
+          <button
+            onClick={() => setShowTopAdd(true)}
+            className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded"
+            title="Add item"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        )}
       </div>
+
+      {/* Top quick add (triggered by header +) */}
+      {showTopAdd && onQuickAdd && (
+        <KanbanQuickAdd
+          onAdd={async (title) => {
+            await onQuickAdd(title);
+            setShowTopAdd(false);
+          }}
+          onCancel={() => setShowTopAdd(false)}
+        />
+      )}
 
       {/* Cards */}
       <SortableContext

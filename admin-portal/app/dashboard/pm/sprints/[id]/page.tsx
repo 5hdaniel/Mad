@@ -4,7 +4,7 @@
  * Sprint Detail Page - /dashboard/pm/sprints/[id]
  *
  * Shows full sprint information: header with status badge, goal, date range,
- * item progress breakdown, burndown chart, est vs actual chart,
+ * item progress breakdown, token metric cards with tooltips,
  * and a paginated task table of sprint items.
  */
 
@@ -23,19 +23,15 @@ import {
   TrendingUp,
   TrendingDown,
   Gauge,
+  Info,
 } from 'lucide-react';
 import { getSprintDetail, listItems } from '@/lib/pm-queries';
 import type {
-  PmSprint,
   PmBacklogItem,
   SprintDetailResponse,
   ItemStatus,
 } from '@/lib/pm-types';
 import { SPRINT_STATUS_LABELS, SPRINT_STATUS_COLORS } from '@/lib/pm-types';
-import { BurndownChart } from '../../components/BurndownChart';
-import type { BurndownDataPoint } from '../../components/BurndownChart';
-import { EstVsActualChart } from '../../components/EstVsActualChart';
-import type { EstVsActualEntry } from '../../components/EstVsActualChart';
 import { TaskTable } from '../../components/TaskTable';
 
 /** Format token count for display (e.g. 1500 → "2K", 1200000 → "1.2M"). */
@@ -43,72 +39,6 @@ function formatTokens(tokens: number): string {
   if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
   if (tokens >= 1000) return `${(tokens / 1000).toFixed(0)}K`;
   return String(tokens);
-}
-
-/** Build simplified burndown data from sprint date range and current state. */
-function buildBurndownData(
-  sprint: PmSprint,
-  totalItems: number,
-  completedItems: number
-): BurndownDataPoint[] {
-  if (!sprint.start_date || !sprint.end_date || totalItems === 0) return [];
-
-  const start = new Date(sprint.start_date);
-  const end = new Date(sprint.end_date);
-  const today = new Date();
-  const totalDays = Math.max(
-    1,
-    Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
-  );
-
-  const points: BurndownDataPoint[] = [];
-  const remaining = totalItems - completedItems;
-
-  // Build ideal line from start to end
-  for (let d = 0; d <= totalDays; d++) {
-    const date = new Date(start);
-    date.setDate(date.getDate() + d);
-    if (date > today && sprint.status !== 'completed') break;
-
-    const ideal = Math.round(totalItems * (1 - d / totalDays));
-    const dateLabel = date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-    });
-
-    // For actual, we only know the current state -- show linear progress to today
-    const dayProgress = Math.min(d / totalDays, 1);
-    const estimatedActual =
-      d === 0
-        ? totalItems
-        : date >= today
-          ? remaining
-          : Math.round(totalItems - (totalItems - remaining) * dayProgress);
-
-    points.push({
-      date: dateLabel,
-      remaining: estimatedActual,
-      ideal,
-    });
-  }
-
-  return points;
-}
-
-/** Build est vs actual chart data from sprint items. */
-function buildEstVsActualData(items: PmBacklogItem[]): EstVsActualEntry[] {
-  return items
-    .filter((item) => item.est_tokens || item.actual_tokens)
-    .slice(0, 20) // Limit to 20 items for readability
-    .map((item) => ({
-      name:
-        item.legacy_id ||
-        (item.title.length > 20
-          ? item.title.substring(0, 20) + '...'
-          : item.title),
-      estimated: Math.round((item.est_tokens || 0) / 1000),
-      actual: Math.round((item.actual_tokens || 0) / 1000),
-    }));
 }
 
 export default function SprintDetailPage() {
@@ -225,14 +155,6 @@ export default function SprintDetailPage() {
     metrics.total_items > 0
       ? Math.round((metrics.completed_items / metrics.total_items) * 100)
       : 0;
-
-  // Build chart data
-  const burndownData = buildBurndownData(
-    sprint,
-    metrics.total_items,
-    metrics.completed_items
-  );
-  const estVsActualData = buildEstVsActualData(items);
 
   // Status breakdown for the progress section
   const statusBreakdown: {
@@ -396,7 +318,15 @@ export default function SprintDetailPage() {
                     />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Variance</p>
+                    <div className="flex items-center gap-1">
+                      <p className="text-sm text-gray-500">Variance</p>
+                      <span className="group relative">
+                        <Info className="h-3.5 w-3.5 text-gray-400 cursor-help" />
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                          (Actual − Estimated) / Estimated × 100
+                        </span>
+                      </span>
+                    </div>
                     <p
                       className={`text-2xl font-bold ${isOver ? 'text-red-600' : 'text-green-600'}`}
                     >
@@ -416,23 +346,20 @@ export default function SprintDetailPage() {
               <Gauge className="h-5 w-5 text-green-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Efficiency</p>
+              <div className="flex items-center gap-1">
+                <p className="text-sm text-gray-500">Efficiency</p>
+                <span className="group relative">
+                  <Info className="h-3.5 w-3.5 text-gray-400 cursor-help" />
+                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                    Completed items / Total items × 100
+                  </span>
+                </span>
+              </div>
               <p className="text-2xl font-bold text-gray-900">{progress}%</p>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Charts Section */}
-      {(burndownData.length > 0 || estVsActualData.length > 0) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <BurndownChart
-            data={burndownData}
-            totalItems={metrics.total_items}
-          />
-          <EstVsActualChart data={estVsActualData} />
-        </div>
-      )}
 
       {/* Sprint Items Table */}
       <div className="mb-6">
