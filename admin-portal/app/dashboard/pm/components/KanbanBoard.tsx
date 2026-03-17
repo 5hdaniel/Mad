@@ -11,6 +11,7 @@ import { useState } from 'react';
 import {
   DndContext,
   DragOverlay,
+  pointerWithin,
   closestCenter,
   KeyboardSensor,
   PointerSensor,
@@ -18,6 +19,7 @@ import {
   useSensors,
   type DragStartEvent,
   type DragEndEvent,
+  type CollisionDetection,
 } from '@dnd-kit/core';
 import type { PmBacklogItem, ItemStatus, BoardColumns } from '@/lib/pm-types';
 import { KanbanColumn } from './KanbanColumn';
@@ -37,6 +39,13 @@ const COLUMN_ORDER: BoardStatus[] = [
 
 /** Set of valid column IDs for quick lookup. */
 const COLUMN_IDS = new Set<string>(COLUMN_ORDER);
+
+/** Custom collision: prefer pointerWithin (exact hit), fall back to closestCenter. */
+const columnCollision: CollisionDetection = (args) => {
+  const within = pointerWithin(args);
+  if (within.length > 0) return within;
+  return closestCenter(args);
+};
 
 interface KanbanBoardProps {
   columns: BoardColumns;
@@ -116,7 +125,7 @@ export function KanbanBoard({
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter}
+      collisionDetection={columnCollision}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >

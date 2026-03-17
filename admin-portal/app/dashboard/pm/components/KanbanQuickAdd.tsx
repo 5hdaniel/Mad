@@ -12,10 +12,12 @@ import { Plus, X } from 'lucide-react';
 
 interface KanbanQuickAddProps {
   onAdd: (title: string) => Promise<void>;
+  /** If provided, component renders in always-open mode (no toggle button). */
+  onCancel?: () => void;
 }
 
-export function KanbanQuickAdd({ onAdd }: KanbanQuickAddProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export function KanbanQuickAdd({ onAdd, onCancel }: KanbanQuickAddProps) {
+  const [isOpen, setIsOpen] = useState(!!onCancel);
   const [title, setTitle] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -57,6 +59,7 @@ export function KanbanQuickAdd({ onAdd }: KanbanQuickAddProps) {
           if (e.key === 'Escape') {
             setIsOpen(false);
             setTitle('');
+            onCancel?.();
           }
         }}
         placeholder="Enter title..."
@@ -76,6 +79,7 @@ export function KanbanQuickAdd({ onAdd }: KanbanQuickAddProps) {
           onClick={() => {
             setIsOpen(false);
             setTitle('');
+            onCancel?.();
           }}
           className="p-1 text-gray-400 hover:text-gray-600"
         >
