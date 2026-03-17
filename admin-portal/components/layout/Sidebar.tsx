@@ -86,8 +86,15 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const { hasPermission, roleName, loading } = usePermissions();
+
+  const displayName =
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    user?.email ||
+    'Admin';
+  const avatarUrl = user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
 
   // Check if any settings sub-item route is active
   const isSettingsActive = pathname.startsWith('/dashboard/settings');
@@ -319,10 +326,25 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         )}
       </nav>
 
-      {/* Role badge + Sign Out */}
+      {/* User info + Role badge + Sign Out */}
       <div className={`border-t border-gray-800 ${collapsed ? 'px-2 py-4' : 'px-3 py-4'}`}>
+        {!collapsed && (
+          <div className="px-3 py-1.5 mb-1">
+            <div className="flex items-center gap-2.5">
+              {avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={avatarUrl} alt={displayName} className="h-8 w-8 rounded-full" />
+              ) : (
+                <div className="h-8 w-8 rounded-full bg-primary-600 flex items-center justify-center text-white text-sm font-medium shrink-0">
+                  {displayName.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <span className="text-sm text-gray-300 truncate">{displayName}</span>
+            </div>
+          </div>
+        )}
         {!collapsed && roleName && (
-          <div className="px-3 py-1.5 mb-2">
+          <div className="px-3 py-1 mb-2 ml-[42px]">
             <span className="text-xs text-gray-500">{roleName}</span>
           </div>
         )}

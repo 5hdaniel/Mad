@@ -8,7 +8,6 @@
 
 import { useState, Suspense } from 'react';
 import { Sidebar } from '@/components/layout/Sidebar';
-import { Header } from '@/components/layout/Header';
 
 export default function DashboardLayout({
   children,
@@ -23,7 +22,6 @@ export default function DashboardLayout({
         <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
       </Suspense>
       <div className="flex-1 flex flex-col min-w-0">
-        <Header />
         <main className="flex-1 p-6 bg-gray-50 overflow-auto">{children}</main>
       </div>
     </div>

@@ -83,13 +83,13 @@ export function TaskStatsCards() {
         return (
           <div
             key={card.label}
-            className="bg-white rounded-lg border border-gray-200 p-5 flex items-center gap-4"
+            className="bg-white rounded-lg border border-gray-200 p-4"
           >
-            <div className={`rounded-lg p-3 ${card.color}`}>
-              <Icon className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-500">{card.label}</p>
+            <p className="text-sm font-medium text-gray-500 mb-2 truncate">{card.label}</p>
+            <div className="flex items-center gap-3">
+              <div className={`rounded-lg p-2.5 ${card.color}`}>
+                <Icon className="h-5 w-5" />
+              </div>
               <p className="text-2xl font-semibold text-gray-900">{card.value}</p>
             </div>
           </div>
