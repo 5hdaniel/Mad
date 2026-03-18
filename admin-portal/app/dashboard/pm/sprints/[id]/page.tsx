@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -19,12 +19,15 @@ import {
   Clock,
   AlertCircle,
   Loader2,
+  Trash2,
   Coins,
   TrendingUp,
   TrendingDown,
   Info,
 } from 'lucide-react';
-import { getSprintDetail, listItems } from '@/lib/pm-queries';
+import { getSprintDetail, listItems, deleteSprint } from '@/lib/pm-queries';
+import { usePermissions } from '@/components/providers/PermissionsProvider';
+import { PERMISSIONS } from '@/lib/permissions';
 import type {
   PmBacklogItem,
   SprintDetailResponse,
@@ -43,7 +46,9 @@ function formatTokens(tokens: number): string {
 
 export default function SprintDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const sprintId = params.id as string;
+  const { hasPermission } = usePermissions();
 
   const [detail, setDetail] = useState<SprintDetailResponse | null>(null);
   const [items, setItems] = useState<PmBacklogItem[]>([]);
@@ -53,6 +58,8 @@ export default function SprintDetailPage() {
   const [loading, setLoading] = useState(true);
   const [itemsLoading, setItemsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const pageSize = 50;
 
@@ -107,6 +114,18 @@ export default function SprintDetailPage() {
     () => (itemId: string) => `/dashboard/pm/tasks/${itemId}?from=sprint&sprintId=${sprintId}`,
     [sprintId]
   );
+
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      await deleteSprint(sprintId);
+      router.push('/dashboard/pm/sprints');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete sprint');
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  }
 
   // Loading state
   if (loading) {
@@ -232,8 +251,42 @@ export default function SprintDetailPage() {
               </p>
             )}
           </div>
+          {hasPermission(PERMISSIONS.PM_ADMIN) && (
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="inline-flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 transition-colors"
+              title="Delete sprint"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Delete Confirmation */}
+      {showDeleteConfirm && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
+          <p className="text-sm text-red-800">
+            Are you sure you want to delete sprint &quot;{sprint.name}&quot;? This will soft-delete the sprint.
+          </p>
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+            >
+              {deleting ? 'Deleting...' : 'Delete'}
+            </button>
+            <button
+              onClick={() => setShowDeleteConfirm(false)}
+              className="px-3 py-1 text-sm bg-white border rounded hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Progress Section */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">

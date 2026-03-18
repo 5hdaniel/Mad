@@ -776,7 +776,21 @@ export async function logAgentMetrics(
 }
 
 // ---------------------------------------------------------------------------
-// 41. listAssignableUsers -- Profiles for assignment picker
+// 41. pm_delete_sprint -- Soft-delete a sprint
+// ---------------------------------------------------------------------------
+
+/** Soft-delete a sprint by setting deleted_at. */
+export async function deleteSprint(sprintId: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from('pm_sprints')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', sprintId);
+  if (error) throw new Error(error.message);
+}
+
+// ---------------------------------------------------------------------------
+// 42. listAssignableUsers -- Profiles for assignment picker
 // ---------------------------------------------------------------------------
 
 /** List users that can be assigned to items (via SECURITY DEFINER RPC to bypass profiles RLS). */
