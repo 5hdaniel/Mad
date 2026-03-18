@@ -183,6 +183,8 @@ export default function BacklogPage() {
 
   // User map for assignee name resolution
   const [userMap, setUserMap] = useState<Map<string, { display_name: string | null; email: string }>>(new Map());
+  // Raw users list for assignee dropdown in inline editing
+  const [users, setUsers] = useState<{ id: string; display_name: string | null; email: string }[]>([]);
 
   const pageSize = 50;
 
@@ -263,15 +265,16 @@ export default function BacklogPage() {
     loadItems();
   }, [loadItems]);
 
-  // Load assignable users once for assignee name resolution
+  // Load assignable users once for assignee name resolution + inline editing
   useEffect(() => {
     listAssignableUsers()
-      .then((users) => {
+      .then((loadedUsers) => {
         const map = new Map<string, { display_name: string | null; email: string }>();
-        for (const user of users) {
+        for (const user of loadedUsers) {
           map.set(user.id, { display_name: user.display_name, email: user.email });
         }
         setUserMap(map);
+        setUsers(loadedUsers);
       })
       .catch(() => {});
   }, []);
@@ -487,6 +490,8 @@ export default function BacklogPage() {
           selectedIds={selectedIds}
           onSelectionChange={setSelectedIds}
           userMap={userMap}
+          onItemUpdated={loadItems}
+          users={users}
         />
       )}
 
