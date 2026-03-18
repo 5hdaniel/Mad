@@ -86,6 +86,7 @@ export function CreateTaskDialog({
   const [parentResults, setParentResults] = useState<PmItemSearchResult[]>([]);
   const [searchingParent, setSearchingParent] = useState(false);
   const [selectedParent, setSelectedParent] = useState<PmItemSearchResult | null>(null);
+  const [parentSearchError, setParentSearchError] = useState<string | null>(null);
 
   const parentSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const parentSearchInputRef = useRef<HTMLInputElement>(null);
@@ -119,14 +120,18 @@ export function CreateTaskDialog({
 
     parentSearchTimer.current = setTimeout(async () => {
       setSearchingParent(true);
+      setParentSearchError(null);
       try {
         const results = await searchItemsForLink(parentQuery);
         if (!cancelled) {
           setParentResults(results);
         }
-      } catch {
+      } catch (err: unknown) {
+        console.error('[CreateTaskDialog] Parent search failed:', err);
         if (!cancelled) {
           setParentResults([]);
+          const msg = err instanceof Error ? err.message : JSON.stringify(err);
+          setParentSearchError(msg);
         }
       } finally {
         if (!cancelled) {
@@ -324,9 +329,9 @@ export function CreateTaskDialog({
                 <span className="text-sm text-gray-900 truncate">
                   {selectedParent ? (
                     <>
-                      {selectedParent.legacy_id && (
+                      {selectedParent.item_number != null && (
                         <span className="text-green-600 text-xs font-medium mr-1">
-                          {selectedParent.legacy_id}
+                          #{selectedParent.item_number}
                         </span>
                       )}
                       {selectedParent.title}
@@ -376,7 +381,7 @@ export function CreateTaskDialog({
                         className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                       >
                         <span className="text-gray-400 text-xs">
-                          {result.legacy_id || `#${result.id.slice(0, 8)}`}
+                          #{result.item_number ?? result.id.slice(0, 8)}
                         </span>{' '}
                         {result.title}
                       </button>
@@ -385,7 +390,9 @@ export function CreateTaskDialog({
                 )}
 
                 {!searchingParent && parentQuery.length >= 1 && parentResults.length === 0 && (
-                  <p className="text-xs text-gray-400 py-1">No items found</p>
+                  <p className="text-xs text-gray-400 py-1">
+                    {parentSearchError ? `Error: ${parentSearchError}` : 'No items found'}
+                  </p>
                 )}
 
                 <button

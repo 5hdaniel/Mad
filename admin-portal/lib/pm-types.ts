@@ -229,6 +229,7 @@ export interface PmItemSearchResult {
   id: string;
   title: string;
   legacy_id: string | null;
+  item_number: number | null;
   status: string;
   type: string;
   priority: string;
