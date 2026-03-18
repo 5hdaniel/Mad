@@ -251,6 +251,8 @@ export interface ItemListParams {
   parent_id?: string | null;
   page?: number;
   page_size?: number;
+  root_only?: boolean;
+  unassigned_only?: boolean;
 }
 
 export interface ItemListResponse {
