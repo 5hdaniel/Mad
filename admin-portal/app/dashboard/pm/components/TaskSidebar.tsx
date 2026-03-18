@@ -10,7 +10,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { Calendar, AlertCircle, User, Tag } from 'lucide-react';
+import { Calendar, AlertCircle, Tag } from 'lucide-react';
 import {
   updateItemStatus,
   updateItemField,
@@ -613,18 +613,7 @@ export function TaskSidebar({ item, onUpdate }: TaskSidebarProps) {
         </div>
       </div>
 
-      {/* Item Number */}
-      <div className="px-4 py-3">
-        <label className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2 block">
-          Details
-        </label>
-        <div className="space-y-1 text-xs text-gray-500">
-          <div className="flex items-center gap-1.5">
-            <User className="h-3 w-3" />
-            Item #{item.item_number}
-          </div>
-        </div>
-      </div>
+      {/* Duplicate "Item ID" section removed -- already shown above under "Item ID" */}
     </div>
   );
 }

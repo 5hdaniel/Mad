@@ -40,20 +40,31 @@ export function HierarchyTree({ items, onItemClick }: HierarchyTreeProps) {
   const toggleExpand = useCallback(
     async (item: PmBacklogItem) => {
       const id = item.id;
-      const isExpanded = expandedNodes.has(id);
 
-      if (isExpanded) {
-        // Collapse
-        setExpandedNodes((prev) => {
+      // Check current expansion state via functional updater to avoid
+      // stale closure over expandedNodes
+      let wasExpanded = false;
+      setExpandedNodes((prev) => {
+        wasExpanded = prev.has(id);
+        if (wasExpanded) {
           const next = new Set(prev);
           next.delete(id);
           return next;
-        });
-        return;
-      }
+        }
+        return prev; // no change yet -- expand happens below after load
+      });
 
-      // Expand -- load children if not already loaded
-      if (!childrenMap[id] && (item.child_count ?? 0) > 0) {
+      if (wasExpanded) return;
+
+      // Expand -- load children if not already loaded.
+      // Read childrenMap via functional updater to avoid stale closure.
+      let needsLoad = false;
+      setChildrenMap((prev) => {
+        needsLoad = !prev[id] && (item.child_count ?? 0) > 0;
+        return prev; // read-only check
+      });
+
+      if (needsLoad) {
         setLoadingNodes((prev) => new Set(prev).add(id));
         try {
           const response = await listItems({ parent_id: id, page_size: 100 });
@@ -71,7 +82,7 @@ export function HierarchyTree({ items, onItemClick }: HierarchyTreeProps) {
 
       setExpandedNodes((prev) => new Set(prev).add(id));
     },
-    [expandedNodes, childrenMap]
+    [] // no external deps needed -- all state accessed via functional updaters
   );
 
   // Static lookup map for status dot colors — avoids dynamic Tailwind class
