@@ -56,8 +56,8 @@ export default function MyTasksPage() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) setUserId(user.id);
-      } catch {
-        // Auth error -- user not signed in
+      } catch (err) {
+        console.error('Failed to get current user:', err);
       }
     }
     getUser();
@@ -72,13 +72,11 @@ export default function MyTasksPage() {
     setLoading(true);
     try {
       const result = await listItems({
+        assignee_id: userId,
         search: searchQuery || undefined,
-        page_size: 500,
+        page_size: 200,
       });
-      const myItems = result.items.filter(
-        (item) => item.assignee_id === userId
-      );
-      setAllMyItems(myItems);
+      setAllMyItems(result.items);
     } catch {
       // Failed to load -- items remain empty
     } finally {

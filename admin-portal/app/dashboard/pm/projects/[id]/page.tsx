@@ -61,17 +61,7 @@ import { usePermissions } from '@/components/providers/PermissionsProvider';
 import { PERMISSIONS } from '@/lib/permissions';
 import { DualProgressBar } from '../../components/DualProgressBar';
 import { InlineEditText } from '../../components/InlineEditText';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Format token count for display (e.g. 1500 -> "2K", 1200000 -> "1.2M"). */
-function formatTokens(tokens: number): string {
-  if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
-  if (tokens >= 1000) return `${(tokens / 1000).toFixed(0)}K`;
-  return String(tokens);
-}
+import { formatTokens } from '@/lib/pm-utils';
 
 const STATUS_ORDER: ItemStatus[] = [
   'pending',
@@ -125,8 +115,8 @@ function InlineItemCreate({ projectId, sprintId, onCreated }: InlineItemCreatePr
           setTitle('');
           setAdding(false);
           onCreated();
-        } catch {
-          // silent -- user can retry
+        } catch (err) {
+          console.error('Failed to create:', err);
         } finally {
           setSubmitting(false);
         }
@@ -200,8 +190,8 @@ function InlineSprintCreate({ projectId, onCreated }: InlineSprintCreateProps) {
           setGoal('');
           setAdding(false);
           onCreated();
-        } catch {
-          // silent -- user can retry
+        } catch (err) {
+          console.error('Failed to create:', err);
         } finally {
           setSubmitting(false);
         }
@@ -360,8 +350,8 @@ function SprintSection({ sprint, projectId, onRefresh }: SprintSectionProps) {
       });
       setItems(res.items);
       setLoaded(true);
-    } catch {
-      // silent
+    } catch (err) {
+      console.error('Failed to load project data:', err);
     } finally {
       setLoading(false);
     }
@@ -520,8 +510,8 @@ export default function ProjectDetailPage() {
       setProject(data.project);
       setSprints(data.sprints);
       setItemsByStatus(data.items_by_status);
-    } catch {
-      // silent
+    } catch (err) {
+      console.error('Failed to load project data:', err);
     } finally {
       setLoadingDetail(false);
     }
@@ -540,8 +530,8 @@ export default function ProjectDetailPage() {
         page_size: 500,
       });
       setAllItems(data.items);
-    } catch {
-      // silent
+    } catch (err) {
+      console.error('Failed to load project data:', err);
     } finally {
       setLoadingItems(false);
     }

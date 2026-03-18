@@ -16,7 +16,7 @@
  * - useBulkActions: bulk delete/export/status change operations
  * - useTransactionModals: modal visibility and selected items
  */
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import AuditTransactionModal from "./AuditTransactionModal";
 import ExportModal from "./ExportModal";
 import {
@@ -79,10 +79,19 @@ function Transactions({
 
   // UI state (local to component)
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<"active" | "closed" | "all">(
     "active"
   );
   const [selectionMode, setSelectionMode] = useState(false);
+
+  // BACKLOG-1106: Debounce search query (300ms) to prevent filtering on every keystroke
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Map component's statusFilter to TransactionFilter type
   // The useTransactionList hook uses TransactionFilter which includes "pending" and "rejected"
@@ -97,7 +106,7 @@ function Transactions({
     error,
     refetch,
     setError,
-  } = useTransactionList(userId, transactionFilter, searchQuery);
+  } = useTransactionList(userId, transactionFilter, debouncedSearchQuery);
 
   // Scan operations
   const { scanning, scanProgress, startScan, stopScan } = useTransactionScan(

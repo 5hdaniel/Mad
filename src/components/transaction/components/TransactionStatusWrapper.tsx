@@ -1,6 +1,6 @@
 import React from "react";
 import type { Transaction } from "@/types";
-import { LicenseGate } from "@/components/common/LicenseGate";
+import { FeatureGate } from "@/components/common/FeatureGate";
 import { useFeatureGate } from "@/hooks/useFeatureGate";
 
 // ============================================
@@ -224,7 +224,7 @@ function TransactionStatusWrapper({
           {/* Right: Action Button */}
           {/* Export button - Individual license only */}
           {config.buttonText === "Export" ? (
-            <LicenseGate requires="individual">
+            <FeatureGate requires="individual">
               <button
                 onClick={handleActionClick}
                 className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${config.buttonBg} ${config.buttonHover} text-white shadow-sm hover:shadow flex items-center gap-1.5`}
@@ -234,7 +234,7 @@ function TransactionStatusWrapper({
                 </svg>
                 {config.buttonText}
               </button>
-            </LicenseGate>
+            </FeatureGate>
           ) : (
             <button
               onClick={handleActionClick}

@@ -12,7 +12,7 @@ import {
 } from "./DetectionBadges";
 // Note: formatCommunicationCounts is available in TransactionCard.tsx but UI uses inline JSX for thread labels
 import { SubmissionStatusBadge } from "../../transactionDetailsModule/components/SubmissionStatusBadge";
-import { LicenseGate } from "../../common/LicenseGate";
+import { FeatureGate } from "../../common/FeatureGate";
 
 // ============================================
 // SVG ICONS (matching TransactionTabs)
@@ -141,7 +141,7 @@ const TransactionListCardInner = function TransactionListCard({
               {transaction.property_address}
             </h3>
             {/* Detection Status Badges - AI add-on only (BACKLOG-462) */}
-            <LicenseGate requires="ai_addon">
+            <FeatureGate requires="ai_addon">
               <div className="flex items-center gap-1.5">
                 <DetectionSourceBadge source={transaction.detection_source} />
                 {transaction.detection_source === "auto" &&
@@ -154,7 +154,7 @@ const TransactionListCardInner = function TransactionListCard({
                   <PendingReviewBadge />
                 )}
               </div>
-            </LicenseGate>
+            </FeatureGate>
             {/* Submission Status Badge (BACKLOG-392) */}
             {transaction.submission_status && transaction.submission_status !== "not_submitted" && (
               <SubmissionStatusBadge status={transaction.submission_status} />
