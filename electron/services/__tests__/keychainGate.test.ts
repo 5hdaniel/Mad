@@ -28,6 +28,17 @@ jest.mock("../logService", () => ({
 // We need to import fresh instances for each test
 let keychainGate: typeof import("../keychainGate").default;
 
+// Helpers to mock process.platform (read at construction time by the service)
+const originalPlatform = process.platform;
+
+function mockPlatform(platform: NodeJS.Platform): void {
+  Object.defineProperty(process, "platform", { value: platform, configurable: true });
+}
+
+function restorePlatform(): void {
+  Object.defineProperty(process, "platform", { value: originalPlatform, configurable: true });
+}
+
 describe("KeychainGateService", () => {
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -36,6 +47,10 @@ describe("KeychainGateService", () => {
     // Re-import to get fresh singleton
     const mod = await import("../keychainGate");
     keychainGate = mod.default;
+  });
+
+  afterEach(() => {
+    restorePlatform();
   });
 
   describe("isUnlocked", () => {
@@ -121,18 +136,49 @@ describe("KeychainGateService", () => {
   });
 
   describe("requiresUserConsent", () => {
-    it("should return true on darwin (macOS)", () => {
-      // The default mock platform is darwin (from process.platform in test)
-      // The service reads process.platform at construction time
-      expect(keychainGate.requiresUserConsent()).toBe(true);
+    it("should return true on darwin (macOS)", async () => {
+      // Mock platform as darwin BEFORE constructing the service instance,
+      // because the service reads process.platform at construction time.
+      mockPlatform("darwin");
+      jest.resetModules();
+      const mod = await import("../keychainGate");
+      const darwinGate = mod.default;
+
+      expect(darwinGate.requiresUserConsent()).toBe(true);
+    });
+
+    it("should return false on win32 (Windows)", async () => {
+      mockPlatform("win32");
+      jest.resetModules();
+      const mod = await import("../keychainGate");
+      const winGate = mod.default;
+
+      expect(winGate.requiresUserConsent()).toBe(false);
     });
   });
 
   describe("autoUnlockIfSilent", () => {
-    it("should not auto-unlock on macOS (requires consent)", () => {
-      keychainGate.autoUnlockIfSilent();
+    it("should not auto-unlock on macOS (requires consent)", async () => {
+      // Mock platform as darwin BEFORE constructing the service instance
+      mockPlatform("darwin");
+      jest.resetModules();
+      const mod = await import("../keychainGate");
+      const darwinGate = mod.default;
+
+      darwinGate.autoUnlockIfSilent();
       // On macOS (darwin), user consent is required, so gate stays locked
-      expect(keychainGate.isUnlocked()).toBe(false);
+      expect(darwinGate.isUnlocked()).toBe(false);
+    });
+
+    it("should auto-unlock on win32 (silent platform)", async () => {
+      mockPlatform("win32");
+      jest.resetModules();
+      const mod = await import("../keychainGate");
+      const winGate = mod.default;
+
+      winGate.autoUnlockIfSilent();
+      // On Windows, no user consent needed — gate auto-unlocks
+      expect(winGate.isUnlocked()).toBe(true);
     });
   });
 });
