@@ -952,35 +952,6 @@ export function registerTransactionCrudHandlers(
   );
 
   // ============================================
-  // PENDING TRANSACTION COUNT (BACKLOG-1124)
-  // ============================================
-
-  /**
-   * Get count of pending auto-detected transactions.
-   * BACKLOG-1124: Runs a SQL COUNT query instead of fetching all transactions
-   * and filtering client-side, avoiding large IPC serialization overhead.
-   */
-  ipcMain.handle(
-    "transactions:get-pending-count",
-    wrapHandler(async (
-      _event: IpcMainInvokeEvent,
-      userId: string,
-    ): Promise<{ success: boolean; count?: number; error?: string }> => {
-      const validatedUserId = validateUserId(userId);
-      if (!validatedUserId) {
-        throw new ValidationError("User ID validation failed", "userId");
-      }
-
-      const count = databaseService.getPendingTransactionCount(validatedUserId);
-
-      return {
-        success: true,
-        count,
-      };
-    }, { module: "Transactions" }),
-  );
-
-  // ============================================
   // AUTO-DETECT START DATE (TASK-1974)
   // ============================================
 
