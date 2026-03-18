@@ -39,6 +39,8 @@ interface TaskTableProps {
   onSort?: (column: SortableColumn) => void;
   /** Build a custom URL for each item row. Defaults to `/dashboard/pm/tasks/${itemId}`. */
   buildItemUrl?: (itemId: string) => string;
+  /** Map of user ID -> { display_name, email } for resolving assignee names. */
+  userMap?: Map<string, { display_name: string | null; email: string }>;
 }
 
 function StatusBadge({ status }: { status: ItemStatus }) {
@@ -147,6 +149,7 @@ export function TaskTable({
   sortDir,
   onSort,
   buildItemUrl,
+  userMap,
 }: TaskTableProps) {
   const router = useRouter();
 
@@ -255,6 +258,9 @@ export function TaskTable({
               <SortableHeader column="type" label="Type" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
               <SortableHeader column="status" label="Status" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
               <SortableHeader column="priority" label="Priority" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Assignee
+              </th>
               <SortableHeader column="area" label="Area" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
               <SortableHeader column="est_tokens" label="Est" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
               <SortableHeader column="created_at" label="Created" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
@@ -312,6 +318,12 @@ export function TaskTable({
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <PriorityBadge priority={item.priority} />
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                    {item.assignee_id && userMap?.has(item.assignee_id)
+                      ? (userMap.get(item.assignee_id)!.display_name || userMap.get(item.assignee_id)!.email)
+                      : <span className="text-gray-300">Unassigned</span>
+                    }
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                     {item.area || '-'}
