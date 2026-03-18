@@ -21,6 +21,7 @@ import { getDeviceId } from "../services/deviceService";
 // Import validation utilities
 import { ValidationError, validateUserId, validateSessionToken } from "../utils/validation";
 import { wrapHandler } from "../utils/wrapHandler";
+import { redactEmail } from "../utils/redactSensitive";
 
 // Import constants
 import {
@@ -538,16 +539,8 @@ async function handleValidateSession(
       return { success: false, valid: false };
     }
 
-    const createdAt =
-      session.created_at instanceof Date
-        ? session.created_at.toISOString()
-        : session.created_at;
-    const lastAccessedAt =
-      session.last_login_at instanceof Date
-        ? session.last_login_at.toISOString()
-        : session.last_login_at;
     const securityCheck = await sessionSecurityService.checkSessionValidity(
-      { created_at: createdAt, last_accessed_at: lastAccessedAt as string },
+      { created_at: session.created_at, last_accessed_at: session.last_login_at as string },
       validatedSessionToken
     );
 
@@ -707,16 +700,8 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
       return { success: false, error: "Session expired or invalid" };
     }
 
-    const dbCreatedAt =
-      dbSession.created_at instanceof Date
-        ? dbSession.created_at.toISOString()
-        : dbSession.created_at;
-    const dbLastAccessedAt =
-      dbSession.last_login_at instanceof Date
-        ? dbSession.last_login_at.toISOString()
-        : dbSession.last_login_at;
     const securityCheck = await sessionSecurityService.checkSessionValidity(
-      { created_at: dbCreatedAt, last_accessed_at: dbLastAccessedAt as string },
+      { created_at: dbSession.created_at, last_accessed_at: dbSession.last_login_at as string },
       session.sessionToken
     );
 
@@ -943,7 +928,7 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
     const user = freshUser || session.user;
 
     setSyncUserId(user.id);
-    Sentry.setUser({ id: user.id, email: session.user.email ?? undefined });
+    Sentry.setUser({ id: user.id, email: session.user.email ? redactEmail(session.user.email) : undefined });
 
     // TASK-1809: Pass cloud user to needsToAcceptTerms for fallback check
     // Even if local sync failed, we can still check cloud terms state

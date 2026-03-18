@@ -472,19 +472,13 @@ export function useAuditTransaction({
         property_coordinates: coordinates,
         transaction_type: txn.transaction_type || "purchase",
         started_at: txn.started_at
-          ? (typeof txn.started_at === "string"
-              ? txn.started_at.split("T")[0]
-              : txn.started_at.toISOString().split("T")[0])
+          ? txn.started_at.split("T")[0]
           : getDefaultStartDate(),
         closing_deadline: txn.closing_deadline
-          ? (typeof txn.closing_deadline === "string"
-              ? txn.closing_deadline.split("T")[0]
-              : txn.closing_deadline.toISOString().split("T")[0])
+          ? txn.closing_deadline.split("T")[0]
           : undefined,
         closed_at: txn.closed_at
-          ? (typeof txn.closed_at === "string"
-              ? txn.closed_at.split("T")[0]
-              : txn.closed_at.toISOString().split("T")[0])
+          ? txn.closed_at.split("T")[0]
           : undefined,
       };
 

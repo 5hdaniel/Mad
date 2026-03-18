@@ -35,6 +35,7 @@ import {
   listProjects,
   getBoardTasks,
   updateItemStatus,
+  updateItemField,
   assignToSprint,
   createItem,
   bulkUpdate,
@@ -70,6 +71,9 @@ function groupItemsByDimension(
         testing: [],
         completed: [],
         blocked: [],
+        deferred: [],
+        obsolete: [],
+        reopened: [],
       });
     }
     return groups.get(key)!;
@@ -144,6 +148,9 @@ export default function BoardPage() {
     testing: [],
     completed: [],
     blocked: [],
+    deferred: [],
+    obsolete: [],
+    reopened: [],
   });
   const [backlogItems, setBacklogItems] = useState<PmBacklogItem[]>([]);
   const [backlogLoading, setBacklogLoading] = useState(false);
@@ -279,6 +286,9 @@ export default function BoardPage() {
           testing: items.filter((i) => i.status === 'testing'),
           completed: items.filter((i) => i.status === 'completed'),
           blocked: items.filter((i) => i.status === 'blocked'),
+          deferred: items.filter((i) => i.status === 'deferred'),
+          obsolete: items.filter((i) => i.status === 'obsolete'),
+          reopened: items.filter((i) => i.status === 'reopened'),
         };
         setColumns(grouped);
       } catch (fallbackErr) {
@@ -309,13 +319,11 @@ export default function BoardPage() {
       setBacklogLoading(true);
       try {
         const result = await listItems({
-          sprint_id: undefined,
+          unassigned_only: true,
           search: search || undefined,
           page_size: 100,
         });
-        // Filter to items without a sprint assignment
-        const unassigned = (result.items || []).filter((i) => !i.sprint_id);
-        setBacklogItems(unassigned);
+        setBacklogItems(result.items || []);
       } catch (err) {
         console.error('Failed to load backlog items:', err);
       } finally {
@@ -502,6 +510,21 @@ export default function BoardPage() {
       if (!over) return;
 
       const data = active.data.current;
+
+      // Board card dropped onto backlog panel -> unassign from sprint
+      if (over.id === 'backlog-panel') {
+        if (data?.type === 'backlog-item') return; // already in backlog, ignore
+        const itemId = active.id as string;
+        try {
+          await updateItemField(itemId, 'sprint_id', null);
+          await loadBoardData();
+          await loadBacklogItems();
+        } catch (err) {
+          console.error('Failed to unassign item from sprint:', err);
+        }
+        return;
+      }
+
       const targetStatus = resolveColumnStatus(over.id as string, columns);
       if (!targetStatus) return;
 
@@ -567,7 +590,7 @@ export default function BoardPage() {
   // -- Render --------------------------------------------------------------
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-[calc(100vh)] -m-6">
       {/* Header bar */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white flex-shrink-0">
         <div className="flex items-center gap-4">
@@ -741,12 +764,10 @@ export default function BoardPage() {
               <div className="space-y-6">
                 {Array.from(swimLaneGroups.entries()).map(
                   ([groupKey, groupColumns]) => {
-                    const itemCount =
-                      groupColumns.pending.length +
-                      groupColumns.in_progress.length +
-                      groupColumns.testing.length +
-                      groupColumns.completed.length +
-                      groupColumns.blocked.length;
+                    const itemCount = Object.values(groupColumns).reduce(
+                      (sum, items) => sum + (items as PmBacklogItem[]).length,
+                      0
+                    );
                     const isCollapsed = collapsedLanes.has(groupKey);
                     return (
                       <div key={groupKey}>

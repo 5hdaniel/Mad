@@ -3,12 +3,17 @@
 # Triggered by SubagentStop hook
 # Writes to tokens.csv (CSV format)
 
+# --- Log directory: user-private, not world-readable /tmp ---
+LOG_DIR="${HOME}/.claude/logs"
+mkdir -p "$LOG_DIR"
+DEBUG_LOG="${LOG_DIR}/hook-debug.log"
+
 # Log that hook was called (for debugging)
-echo "[HOOK FIRED] $(date)" >> /tmp/claude-hook-debug.log
+echo "[HOOK FIRED] $(date)" >> "$DEBUG_LOG"
 
 # Read hook input from stdin
 INPUT=$(cat)
-echo "[HOOK INPUT] $INPUT" >> /tmp/claude-hook-debug.log
+echo "[HOOK INPUT] $INPUT" >> "$DEBUG_LOG"
 
 # Extract fields from hook input
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // ""')
@@ -27,7 +32,7 @@ fi
 
 # Skip if no transcript
 if [ -z "$TRANSCRIPT_PATH" ] || [ ! -f "$TRANSCRIPT_PATH" ]; then
-  echo "[HOOK] No transcript at: $TRANSCRIPT_PATH" >> /tmp/claude-hook-debug.log
+  echo "[HOOK] No transcript at: $TRANSCRIPT_PATH" >> "$DEBUG_LOG"
   echo '{"decision": "allow"}'
   exit 0
 fi
@@ -62,14 +67,15 @@ TOTAL_TOKENS=$((TOTAL_INPUT + TOTAL_OUTPUT + TOTAL_CACHE_READ + TOTAL_CACHE_CREA
 # Billable = actual new work (output + cache creation, NOT cache reads)
 BILLABLE_TOKENS=$((TOTAL_OUTPUT + TOTAL_CACHE_CREATE))
 
-# Extract timing and calculate duration in seconds
+# Extract timing and calculate duration in seconds (portable -- no macOS-only date -j)
 START_TS=$(echo "$STATS" | jq -r '.timing.start // empty')
 END_TS=$(echo "$STATS" | jq -r '.timing.end // empty')
 if [ -n "$START_TS" ] && [ -n "$END_TS" ]; then
-  # Convert ISO timestamps to epoch seconds and calculate difference
-  START_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%S" "${START_TS%.*}" +%s 2>/dev/null || echo "0")
-  END_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%S" "${END_TS%.*}" +%s 2>/dev/null || echo "0")
-  DURATION_SECS=$((END_EPOCH - START_EPOCH))
+  # Use jq to compute duration from ISO timestamps (portable across macOS/Linux)
+  DURATION_SECS=$(jq -n --arg s "$START_TS" --arg e "$END_TS" '
+    def parse_ts: split(".")[0] | strptime("%Y-%m-%dT%H:%M:%S") | mktime;
+    (($e | parse_ts) - ($s | parse_ts)) | if . < 0 then 0 else . end
+  ' 2>/dev/null || echo "0")
 else
   DURATION_SECS=0
   START_TS=""
@@ -84,7 +90,7 @@ TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 CSV_ROW="${TIMESTAMP},${SESSION_ID},${AGENT_ID},,,,$TOTAL_INPUT,$TOTAL_OUTPUT,$TOTAL_CACHE_READ,$TOTAL_CACHE_CREATE,$BILLABLE_TOKENS,$TOTAL_TOKENS,$API_CALLS,$DURATION_SECS,$START_TS,$END_TS"
 
 echo "$CSV_ROW" >> "$METRICS_FILE"
-echo "[HOOK] Logged: $TOTAL_TOKENS tokens to CSV" >> /tmp/claude-hook-debug.log
+echo "[HOOK] Logged: $TOTAL_TOKENS tokens to CSV" >> "$DEBUG_LOG"
 
 # --- Push to Supabase (best-effort, never fails the hook) ---
 # Set PM_SUPABASE_URL and PM_SUPABASE_KEY in your shell profile or .env to enable.
@@ -99,24 +105,38 @@ if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_KEY" ]; then
   MODEL=$(jq -r '[.message.model // empty] | first // "unknown"' "$TRANSCRIPT_PATH" 2>/dev/null | head -1)
   [ -z "$MODEL" ] && MODEL="unknown"
 
+  # Build JSON payload with jq to prevent injection via AGENT_ID, SESSION_ID, or MODEL
+  JSON_PAYLOAD=$(jq -n \
+    --arg agent_id "$AGENT_ID" \
+    --argjson input "$TOTAL_INPUT" \
+    --argjson output "$TOTAL_OUTPUT" \
+    --argjson cache_read "$TOTAL_CACHE_READ" \
+    --argjson cache_create "$TOTAL_CACHE_CREATE" \
+    --argjson total "$TOTAL_TOKENS" \
+    --argjson duration_ms "$DURATION_MS" \
+    --argjson api_calls "$API_CALLS" \
+    --arg session_id "$SESSION_ID" \
+    --arg model "$MODEL" \
+    '{
+      p_agent_id: $agent_id,
+      p_input_tokens: $input,
+      p_output_tokens: $output,
+      p_cache_read: $cache_read,
+      p_cache_create: $cache_create,
+      p_total_tokens: $total,
+      p_duration_ms: $duration_ms,
+      p_api_calls: $api_calls,
+      p_session_id: $session_id,
+      p_model: $model
+    }')
+
   curl -s -X POST "${SUPABASE_URL}/rest/v1/rpc/pm_log_agent_metrics" \
     -H "apikey: ${SUPABASE_KEY}" \
     -H "Authorization: Bearer ${SUPABASE_KEY}" \
     -H "Content-Type: application/json" \
-    -d "{
-      \"p_agent_id\": \"${AGENT_ID}\",
-      \"p_input_tokens\": ${TOTAL_INPUT},
-      \"p_output_tokens\": ${TOTAL_OUTPUT},
-      \"p_cache_read\": ${TOTAL_CACHE_READ},
-      \"p_cache_create\": ${TOTAL_CACHE_CREATE},
-      \"p_total_tokens\": ${TOTAL_TOKENS},
-      \"p_duration_ms\": ${DURATION_MS},
-      \"p_api_calls\": ${API_CALLS},
-      \"p_session_id\": \"${SESSION_ID}\",
-      \"p_model\": \"${MODEL}\"
-    }" 2>/dev/null || true
+    -d "$JSON_PAYLOAD" 2>/dev/null || true
 
-  echo "[HOOK] Pushed to Supabase: $TOTAL_TOKENS tokens" >> /tmp/claude-hook-debug.log
+  echo "[HOOK] Pushed to Supabase: $TOTAL_TOKENS tokens" >> "$DEBUG_LOG"
 fi
 
 echo '{"decision": "allow"}'

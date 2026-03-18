@@ -10,7 +10,7 @@
 // Define type locally to avoid path alias issues with Jest
 // This mirrors the type from @/lib/types/users
 type Role = 'agent' | 'broker' | 'admin' | 'it_admin';
-type LicenseStatus = 'active' | 'pending' | 'suspended' | 'expired';
+type MemberLicenseStatus = 'active' | 'pending' | 'suspended' | 'expired';
 
 // ============================================================================
 // Authorization Tests
@@ -143,11 +143,11 @@ describe('deactivateUser pending invite protection', () => {
 // ============================================================================
 
 describe('deactivateUser status transition', () => {
-  function getNewStatus(): LicenseStatus {
+  function getNewStatus(): MemberLicenseStatus {
     return 'suspended';
   }
 
-  function isValidDeactivation(currentStatus: LicenseStatus): boolean {
+  function isValidDeactivation(currentStatus: MemberLicenseStatus): boolean {
     // Can deactivate active users
     // Cannot deactivate already suspended users (no-op)
     return currentStatus === 'active';
@@ -234,7 +234,7 @@ describe('deactivateUser target validation', () => {
     user_id: string | null;
     role: Role;
     organization_id: string;
-    license_status: LicenseStatus;
+    license_status: MemberLicenseStatus;
   }
 
   function canBeDeactivated(member: MemberInfo | null): { valid: boolean; error?: string } {

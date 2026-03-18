@@ -119,7 +119,7 @@ export function DependencyPanel({ itemId, dependencies, onUpdate }: DependencyPa
         </Link>
         {dep.related_status && (
           <span className="text-xs text-gray-400 capitalize shrink-0">
-            {dep.related_status.replace('_', ' ')}
+            {dep.related_status.replaceAll('_', ' ')}
           </span>
         )}
         <button
@@ -281,7 +281,7 @@ export function DependencyPanel({ itemId, dependencies, onUpdate }: DependencyPa
                       </Link>
                       {dep.related_status && (
                         <span className="text-xs text-gray-400 capitalize shrink-0">
-                          {dep.related_status.replace('_', ' ')}
+                          {dep.related_status.replaceAll('_', ' ')}
                         </span>
                       )}
                     </div>
@@ -311,7 +311,7 @@ export function DependencyPanel({ itemId, dependencies, onUpdate }: DependencyPa
                       </Link>
                       {dep.related_status && (
                         <span className="text-xs text-gray-400 capitalize shrink-0">
-                          {dep.related_status.replace('_', ' ')}
+                          {dep.related_status.replaceAll('_', ' ')}
                         </span>
                       )}
                     </div>

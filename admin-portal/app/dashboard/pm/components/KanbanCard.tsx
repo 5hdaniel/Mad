@@ -10,7 +10,7 @@
  *   Row 4: Assignee avatar+name (inline editable) | Label pills (inline editable)
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import Link from 'next/link';
@@ -23,16 +23,13 @@ import {
   removeItemLabel,
   createLabel,
 } from '@/lib/pm-queries';
+import { useClickOutside } from '@/hooks/useClickOutside';
 import { InlinePriorityPicker } from './InlinePriorityPicker';
 import { InlineAssigneePicker } from './InlineAssigneePicker';
 import type { AssignableUser } from './InlineAssigneePicker';
 
 // Re-export AssignableUser for backward compatibility
 export type { AssignableUser } from './InlineAssigneePicker';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 interface KanbanCardProps {
   item: PmBacklogItem;
@@ -96,17 +93,10 @@ function InlineLabelPicker({
   const [creating, setCreating] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  useClickOutside(ref, close, open);
 
   const currentLabelIds = new Set(currentLabels.map((l) => l.id));
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
 
   async function handleToggleLabel(label: PmLabel) {
     setUpdating(label.id);
@@ -319,7 +309,7 @@ export function KanbanCard({
         </span>
         {/* Title */}
         <Link
-          href={`/dashboard/pm/tasks/${item.id}`}
+          href={`/dashboard/pm/tasks/${item.id}?from=board`}
           className="text-xs text-gray-800 truncate flex-1"
           onClick={(e) => e.stopPropagation()}
         >
@@ -370,7 +360,7 @@ export function KanbanCard({
 
       {/* Row 2-3: Title */}
       <Link
-        href={`/dashboard/pm/tasks/${item.id}`}
+        href={`/dashboard/pm/tasks/${item.id}?from=board`}
         className="block text-sm font-medium text-gray-900 hover:text-blue-600 mt-1 line-clamp-2"
         onClick={(e) => e.stopPropagation()}
       >

@@ -12,7 +12,6 @@ import { useState, useCallback } from 'react';
 import { ChevronRight, ChevronDown, Loader2 } from 'lucide-react';
 import { listItems } from '@/lib/pm-queries';
 import type { PmBacklogItem } from '@/lib/pm-types';
-import { STATUS_COLORS } from '@/lib/pm-types';
 
 interface HierarchyTreeProps {
   items: PmBacklogItem[]; // root-level items (parent_id = null)
@@ -41,20 +40,31 @@ export function HierarchyTree({ items, onItemClick }: HierarchyTreeProps) {
   const toggleExpand = useCallback(
     async (item: PmBacklogItem) => {
       const id = item.id;
-      const isExpanded = expandedNodes.has(id);
 
-      if (isExpanded) {
-        // Collapse
-        setExpandedNodes((prev) => {
+      // Check current expansion state via functional updater to avoid
+      // stale closure over expandedNodes
+      let wasExpanded = false;
+      setExpandedNodes((prev) => {
+        wasExpanded = prev.has(id);
+        if (wasExpanded) {
           const next = new Set(prev);
           next.delete(id);
           return next;
-        });
-        return;
-      }
+        }
+        return prev; // no change yet -- expand happens below after load
+      });
 
-      // Expand -- load children if not already loaded
-      if (!childrenMap[id] && (item.child_count ?? 0) > 0) {
+      if (wasExpanded) return;
+
+      // Expand -- load children if not already loaded.
+      // Read childrenMap via functional updater to avoid stale closure.
+      let needsLoad = false;
+      setChildrenMap((prev) => {
+        needsLoad = !prev[id] && (item.child_count ?? 0) > 0;
+        return prev; // read-only check
+      });
+
+      if (needsLoad) {
         setLoadingNodes((prev) => new Set(prev).add(id));
         try {
           const response = await listItems({ parent_id: id, page_size: 100 });
@@ -72,16 +82,24 @@ export function HierarchyTree({ items, onItemClick }: HierarchyTreeProps) {
 
       setExpandedNodes((prev) => new Set(prev).add(id));
     },
-    [expandedNodes, childrenMap]
+    [] // no external deps needed -- all state accessed via functional updaters
   );
 
+  // Static lookup map for status dot colors — avoids dynamic Tailwind class
+  // generation (e.g. `bg-${color}-500`) which gets purged in production builds.
+  const STATUS_DOT_COLORS: Record<string, string> = {
+    pending: 'bg-gray-400',
+    in_progress: 'bg-blue-500',
+    testing: 'bg-yellow-500',
+    completed: 'bg-green-500',
+    blocked: 'bg-red-500',
+    deferred: 'bg-purple-400',
+    obsolete: 'bg-gray-300',
+    reopened: 'bg-orange-500',
+  };
+
   function getStatusDotColor(status: string): string {
-    const colorClass = (STATUS_COLORS as Record<string, string>)[status];
-    if (!colorClass) return 'bg-gray-400';
-    // Extract the bg color from the Tailwind class (e.g. "bg-blue-100 text-blue-800" -> "bg-blue-500")
-    const match = colorClass.match(/text-(\w+)-(\d+)/);
-    if (match) return `bg-${match[1]}-${match[2]}`;
-    return 'bg-gray-400';
+    return STATUS_DOT_COLORS[status] || 'bg-gray-400';
   }
 
   function renderNode(item: PmBacklogItem, depth: number) {

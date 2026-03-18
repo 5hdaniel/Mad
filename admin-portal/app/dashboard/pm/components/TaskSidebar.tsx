@@ -10,7 +10,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { Calendar, AlertCircle, User, Tag } from 'lucide-react';
+import { Calendar, AlertCircle, Tag } from 'lucide-react';
 import {
   updateItemStatus,
   updateItemField,
@@ -19,9 +19,8 @@ import {
   removeFromSprint,
   listSprints,
   listProjects,
+  listAssignableUsers,
 } from '@/lib/pm-queries';
-import { getAssignableAgents } from '@/lib/support-queries';
-import type { AssignableAgent } from '@/lib/support-queries';
 import type {
   PmBacklogItem,
   PmSprint,
@@ -37,6 +36,7 @@ import {
   PRIORITY_LABELS,
   TYPE_LABELS,
 } from '@/lib/pm-types';
+import { formatTimestamp, formatDate as formatDateShort } from '@/lib/format';
 
 // -- Props -------------------------------------------------------------------
 
@@ -47,30 +47,11 @@ interface TaskSidebarProps {
 
 // -- Helpers -----------------------------------------------------------------
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
-}
-
 /** Parse a date string as local date (not UTC) to avoid timezone shifts */
 function parseLocalDate(dateStr: string): Date {
   // "2026-03-17" or "2026-03-17T..." → treat as local midnight
   const [y, m, d] = dateStr.split('T')[0].split('-').map(Number);
   return new Date(y, m - 1, d);
-}
-
-function formatDateShort(dateStr: string): string {
-  return parseLocalDate(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
 }
 
 function isOverdue(dueDate: string | null, status: ItemStatus): boolean {
@@ -86,7 +67,7 @@ function isOverdue(dueDate: string | null, status: ItemStatus): boolean {
 
 export function TaskSidebar({ item, onUpdate }: TaskSidebarProps) {
   // Dropdown options loaded on mount
-  const [agents, setAgents] = useState<AssignableAgent[]>([]);
+  const [agents, setAgents] = useState<{ id: string; display_name: string | null; email: string }[]>([]);
   const [sprints, setSprints] = useState<PmSprint[]>([]);
   const [projects, setProjects] = useState<PmProject[]>([]);
 
@@ -119,7 +100,7 @@ export function TaskSidebar({ item, onUpdate }: TaskSidebarProps) {
 
   // Load dropdown options on mount
   useEffect(() => {
-    getAssignableAgents().then(setAgents).catch(() => {});
+    listAssignableUsers().then(setAgents).catch(() => {});
     listSprints().then(setSprints).catch(() => {});
     listProjects().then(setProjects).catch(() => {});
   }, []);
@@ -466,8 +447,8 @@ export function TaskSidebar({ item, onUpdate }: TaskSidebarProps) {
           >
             <option value="">Unassigned</option>
             {agents.map((agent) => (
-              <option key={agent.user_id} value={agent.user_id}>
-                {agent.display_name} ({agent.role_name})
+              <option key={agent.id} value={agent.id}>
+                {agent.display_name || agent.email}
               </option>
             ))}
           </select>
@@ -601,16 +582,16 @@ export function TaskSidebar({ item, onUpdate }: TaskSidebarProps) {
         <div className="space-y-1.5">
           <div className="flex items-center gap-1.5 text-xs text-gray-500">
             <Calendar className="h-3 w-3" />
-            Created: {formatDate(item.created_at)}
+            Created: {formatTimestamp(item.created_at)}
           </div>
           <div className="flex items-center gap-1.5 text-xs text-gray-500">
             <Calendar className="h-3 w-3" />
-            Updated: {formatDate(item.updated_at)}
+            Updated: {formatTimestamp(item.updated_at)}
           </div>
           {item.completed_at && (
             <div className="flex items-center gap-1.5 text-xs text-gray-500">
               <Calendar className="h-3 w-3" />
-              Completed: {formatDate(item.completed_at)}
+              Completed: {formatTimestamp(item.completed_at)}
             </div>
           )}
           {item.start_date && (
@@ -632,18 +613,7 @@ export function TaskSidebar({ item, onUpdate }: TaskSidebarProps) {
         </div>
       </div>
 
-      {/* Item Number */}
-      <div className="px-4 py-3">
-        <label className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2 block">
-          Details
-        </label>
-        <div className="space-y-1 text-xs text-gray-500">
-          <div className="flex items-center gap-1.5">
-            <User className="h-3 w-3" />
-            Item #{item.item_number}
-          </div>
-        </div>
-      </div>
+      {/* Duplicate "Item ID" section removed -- already shown above under "Item ID" */}
     </div>
   );
 }

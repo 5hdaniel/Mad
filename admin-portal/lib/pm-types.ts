@@ -45,6 +45,16 @@ export type SprintStatus = 'planned' | 'active' | 'completed' | 'cancelled';
 export type ProjectStatus = 'active' | 'archived';
 
 // ---------------------------------------------------------------------------
+// Assignable user (returned by pm_list_assignable_users RPC)
+// ---------------------------------------------------------------------------
+
+export interface AssignableUser {
+  id: string;
+  display_name: string | null;
+  email: string;
+}
+
+// ---------------------------------------------------------------------------
 // Core interfaces (match DB tables and RPC return shapes)
 // ---------------------------------------------------------------------------
 
@@ -175,6 +185,11 @@ export interface PmLabel {
   created_at?: string;
 }
 
+/**
+ * PmTaskLink represents a relationship between two **backlog items**
+ * (not tasks). The "task" in the name is a historical misnomer from the
+ * pm_task_links table; both source and target are pm_backlog_items.
+ */
 export interface PmTaskLink {
   link_id: string;
   link_type: LinkType;
@@ -198,9 +213,9 @@ export interface PmItemChild {
   id: string;
   title: string;
   legacy_id: string | null;
-  status: string;
-  priority: string;
-  type: string;
+  status: ItemStatus;
+  priority: ItemPriority;
+  type: ItemType;
 }
 
 // ---------------------------------------------------------------------------
@@ -249,8 +264,11 @@ export interface ItemListParams {
   search?: string | null;
   labels?: string[] | null;
   parent_id?: string | null;
+  assignee_id?: string | null;
   page?: number;
   page_size?: number;
+  root_only?: boolean;
+  unassigned_only?: boolean;
 }
 
 export interface ItemListResponse {
@@ -329,6 +347,9 @@ export interface BoardColumns {
   testing: PmBacklogItem[];
   completed: PmBacklogItem[];
   blocked: PmBacklogItem[];
+  deferred: PmBacklogItem[];
+  obsolete: PmBacklogItem[];
+  reopened: PmBacklogItem[];
 }
 
 // ---------------------------------------------------------------------------
@@ -402,6 +423,18 @@ export const TYPE_COLORS: Record<ItemType, string> = {
   epic: 'bg-indigo-100 text-indigo-800',
 };
 
+/** Canonical area list. Add new areas here -- TaskFilters picks them up automatically. */
+export const AREA_LABELS: Record<string, string> = {
+  'admin-portal': 'admin-portal',
+  electron: 'electron',
+  'broker-portal': 'broker-portal',
+  service: 'service',
+  schema: 'schema',
+  ui: 'ui',
+  infra: 'infra',
+  docs: 'docs',
+};
+
 export const SPRINT_STATUS_LABELS: Record<SprintStatus, string> = {
   planned: 'Planned',
   active: 'Active',
@@ -469,7 +502,7 @@ export interface TaskLegacyLookup {
   title: string;
   status: string;
   backlog_item_id: string;
-  sprint_id: string;
+  sprint_id: string | null;
 }
 
 export interface TaskTokenResult {
@@ -483,4 +516,36 @@ export interface TaskTokenResult {
 export interface AgentMetricResult {
   success: boolean;
   metric_id: string;
+}
+
+// ---------------------------------------------------------------------------
+// Typed field names for update operations
+// ---------------------------------------------------------------------------
+
+/** Whitelisted fields that can be passed to pm_update_item_field. */
+export type ItemField =
+  | 'title'
+  | 'description'
+  | 'type'
+  | 'area'
+  | 'priority'
+  | 'project_id'
+  | 'est_tokens'
+  | 'start_date'
+  | 'due_date'
+  | 'sprint_id';
+
+/** Whitelisted fields that can be passed to pm_update_sprint_field. */
+export type SprintField = 'name' | 'goal' | 'start_date' | 'end_date';
+
+/** Whitelisted fields that can be passed to pm_update_project_field. */
+export type ProjectField = 'name' | 'description';
+
+/** Typed updates object for pm_bulk_update. */
+export interface BulkUpdateFields {
+  status?: ItemStatus;
+  priority?: ItemPriority;
+  project_id?: string;
+  area?: string;
+  assignee_id?: string | null;
 }

@@ -8,7 +8,7 @@
  * to add/remove labels and create new ones.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Plus, X, Loader2, Check } from 'lucide-react';
 import {
   listLabels,
@@ -17,6 +17,7 @@ import {
   createLabel,
 } from '@/lib/pm-queries';
 import type { PmLabel } from '@/lib/pm-types';
+import { useClickOutside } from '@/hooks/useClickOutside';
 
 interface LabelPickerProps {
   itemId: string;
@@ -72,19 +73,11 @@ export function LabelPicker({ itemId, currentLabels, onUpdate }: LabelPickerProp
   }, [showDropdown]);
 
   // Close dropdown on outside click
-  useEffect(() => {
-    if (!showDropdown) return;
-
-    function handleClickOutside(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setShowDropdown(false);
-        setSearchQuery('');
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showDropdown]);
+  const closeDropdown = useCallback(() => {
+    setShowDropdown(false);
+    setSearchQuery('');
+  }, []);
+  useClickOutside(dropdownRef, closeDropdown, showDropdown);
 
   const filteredLabels = allLabels.filter((label) =>
     label.name.toLowerCase().includes(searchQuery.toLowerCase())
