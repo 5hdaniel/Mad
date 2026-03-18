@@ -46,9 +46,10 @@ export interface LicenseValidationResult {
 }
 
 /**
- * License status for canPerformAction check
+ * License status info for canPerformAction check.
+ * Note: This is a runtime status object, NOT the LicenseAccountStatus union type.
  */
-export interface LicenseStatus {
+export interface LicenseStatusInfo {
   isValid: boolean;
   licenseType: ValidationLicenseType;
   transactionCount: number;
@@ -208,7 +209,7 @@ export const licenseService = {
   /**
    * Check if an action is allowed based on license status
    */
-  async canPerformAction(status: LicenseStatus, action: LicenseAction): Promise<ApiResult<boolean>> {
+  async canPerformAction(status: LicenseStatusInfo, action: LicenseAction): Promise<ApiResult<boolean>> {
     try {
       if (!window.api?.license?.canPerformAction) {
         return errorResult("License API not available");

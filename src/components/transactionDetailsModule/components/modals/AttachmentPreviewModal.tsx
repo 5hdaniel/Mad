@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Document, Page, pdfjs } from "react-pdf";
 import DOMPurify from "dompurify";
-import mammoth from "mammoth";
+// BACKLOG-1126: mammoth is lazy-loaded at point of use to reduce initial bundle size
 import { formatFileSize } from "../../../../utils/formatUtils";
 
 // Import react-pdf styles for annotations and text layer
@@ -172,8 +172,11 @@ export function AttachmentPreviewModal({
                   }
                   const arrayBuffer = bytes.buffer;
 
+                  // BACKLOG-1126: Lazy-load mammoth only when a DOCX is opened
+                  const mammoth = await import("mammoth");
+                  const convertFn = mammoth.default?.convertToHtml ?? mammoth.convertToHtml;
                   // Convert DOCX to HTML using mammoth
-                  const convertResult = await mammoth.convertToHtml({
+                  const convertResult = await convertFn({
                     arrayBuffer,
                   });
                   // Sanitize HTML to prevent XSS

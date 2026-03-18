@@ -6,11 +6,12 @@
  * Assign Sprint, Delete. Fixed at the bottom of the viewport with dark styling.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, ChevronUp, Calendar, Trash2, UserX } from 'lucide-react';
-import type { ItemStatus } from '@/lib/pm-types';
+import type { ItemStatus, AssignableUser } from '@/lib/pm-types';
 import { STATUS_LABELS, STATUS_COLORS } from '@/lib/pm-types';
 import { listAssignableUsers } from '@/lib/pm-queries';
+import { useClickOutside } from '@/hooks/useClickOutside';
 
 const STATUS_OPTIONS: ItemStatus[] = [
   'pending',
@@ -20,12 +21,6 @@ const STATUS_OPTIONS: ItemStatus[] = [
   'blocked',
   'deferred',
 ];
-
-interface AssignableUser {
-  id: string;
-  display_name: string | null;
-  email: string;
-}
 
 interface BulkActionBarProps {
   selectedCount: number;
@@ -64,18 +59,11 @@ export function BulkActionBar({
   }, [assignMenuOpen, users.length]);
 
   // Close menus on outside click
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (barRef.current && !barRef.current.contains(e.target as Node)) {
-        setStatusMenuOpen(false);
-        setAssignMenuOpen(false);
-      }
-    }
-    if (statusMenuOpen || assignMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [statusMenuOpen, assignMenuOpen]);
+  const closeMenus = useCallback(() => {
+    setStatusMenuOpen(false);
+    setAssignMenuOpen(false);
+  }, []);
+  useClickOutside(barRef, closeMenus, statusMenuOpen || assignMenuOpen);
 
   if (selectedCount === 0) return null;
 

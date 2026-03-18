@@ -37,13 +37,7 @@ import { SPRINT_STATUS_LABELS, SPRINT_STATUS_COLORS } from '@/lib/pm-types';
 import { TaskTable } from '../../components/TaskTable';
 import { DualProgressBar } from '../../components/DualProgressBar';
 import { InlineEditText } from '../../components/InlineEditText';
-
-/** Format token count for display (e.g. 1500 → "2K", 1200000 → "1.2M"). */
-function formatTokens(tokens: number): string {
-  if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
-  if (tokens >= 1000) return `${(tokens / 1000).toFixed(0)}K`;
-  return String(tokens);
-}
+import { formatTokens } from '@/lib/pm-utils';
 
 export default function SprintDetailPage() {
   const params = useParams();

@@ -28,6 +28,13 @@ import type {
   TaskLegacyLookup,
   TaskTokenResult,
   AgentMetricResult,
+  ItemStatus,
+  SprintStatus,
+  TaskStatus,
+  ItemField,
+  SprintField,
+  ProjectField,
+  BulkUpdateFields,
 } from './pm-types';
 
 // ---------------------------------------------------------------------------
@@ -49,11 +56,12 @@ export async function listItems(params: ItemListParams): Promise<ItemListRespons
     p_parent_id: params.parent_id || null,
     p_page: params.page || 1,
     p_page_size: params.page_size || 50,
+    p_assignee_id: params.assignee_id || null,
     p_root_only: params.root_only || false,
     p_unassigned_only: params.unassigned_only || false,
   });
   if (error) throw error;
-  return data as unknown as ItemListResponse;
+  return validateItemListResponse(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -67,7 +75,7 @@ export async function getItemDetail(itemId: string): Promise<ItemDetailResponse>
     p_item_id: itemId,
   });
   if (error) throw error;
-  return data as unknown as ItemDetailResponse;
+  return validateItemDetailResponse(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -103,7 +111,7 @@ export async function createItem(
 /** Update item status. DB validates the transition. */
 export async function updateItemStatus(
   itemId: string,
-  newStatus: string
+  newStatus: ItemStatus
 ): Promise<{ success: boolean; old_status: string; new_status: string; changed?: boolean }> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc('pm_update_item_status', {
@@ -121,7 +129,7 @@ export async function updateItemStatus(
 /** Update a single whitelisted field on a backlog item. */
 export async function updateItemField(
   itemId: string,
-  field: string,
+  field: ItemField,
   value: string | null
 ): Promise<{ success: boolean; field: string; old_value: string | null; new_value: string | null }> {
   const supabase = createClient();
@@ -446,7 +454,7 @@ export async function getSprintDetail(sprintId: string): Promise<SprintDetailRes
     p_sprint_id: sprintId,
   });
   if (error) throw error;
-  return data as unknown as SprintDetailResponse;
+  return validateSprintDetailResponse(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -480,7 +488,7 @@ export async function createSprint(
 /** Update a sprint's status. */
 export async function updateSprintStatus(
   sprintId: string,
-  status: string
+  status: SprintStatus
 ): Promise<{ success: boolean; old_status: string; new_status: string }> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc('pm_update_sprint_status', {
@@ -588,7 +596,7 @@ export async function getStats(): Promise<PmStats> {
 /** Bulk update multiple items with the same set of field changes. */
 export async function bulkUpdate(
   itemIds: string[],
-  updates: Record<string, unknown>
+  updates: BulkUpdateFields
 ): Promise<{ success: boolean; updated_count: number }> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc('pm_bulk_update', {
@@ -680,7 +688,7 @@ export async function getItemByLegacyId(legacyId: string): Promise<ItemDetailRes
 /** Update a task's status. DB validates the transition. */
 export async function updateTaskStatus(
   taskId: string,
-  newStatus: string
+  newStatus: TaskStatus
 ): Promise<TaskStatusUpdateResult> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc('pm_update_task_status', {
@@ -833,7 +841,7 @@ export async function listAssignableUsers(): Promise<
 /** Update a single whitelisted field on a project (name, description). */
 export async function updateProjectField(
   projectId: string,
-  field: string,
+  field: ProjectField,
   value: string | null
 ): Promise<{ success: boolean; field: string; old_value: string | null; new_value: string | null }> {
   const supabase = createClient();
@@ -853,7 +861,7 @@ export async function updateProjectField(
 /** Update a single whitelisted field on a sprint (name, goal). */
 export async function updateSprintField(
   sprintId: string,
-  field: string,
+  field: SprintField,
   value: string | null
 ): Promise<{ success: boolean; field: string; old_value: string | null; new_value: string | null }> {
   const supabase = createClient();
@@ -864,4 +872,70 @@ export async function updateSprintField(
   });
   if (error) throw error;
   return data as unknown as { success: boolean; field: string; old_value: string | null; new_value: string | null };
+}
+
+// ---------------------------------------------------------------------------
+// 44. pm_bulk_delete -- Atomic bulk deletion
+// ---------------------------------------------------------------------------
+
+/** Bulk soft-delete multiple backlog items in a single RPC call. */
+export async function bulkDelete(
+  itemIds: string[]
+): Promise<{ success: boolean; deleted_count: number }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('pm_bulk_delete', {
+    p_item_ids: itemIds,
+  });
+  if (error) throw error;
+  return data as unknown as { success: boolean; deleted_count: number };
+}
+
+// ---------------------------------------------------------------------------
+// Runtime validation helpers (BACKLOG-1061)
+// ---------------------------------------------------------------------------
+
+/**
+ * Lightweight runtime validation for critical RPC responses.
+ * These catch schema drift before it causes silent data bugs.
+ */
+
+function validateItemDetailResponse(data: unknown): ItemDetailResponse {
+  const d = data as Record<string, unknown>;
+  if (!d || typeof d !== 'object') {
+    throw new Error('Invalid response from pm_get_item_detail: not an object');
+  }
+  const item = d.item as Record<string, unknown> | undefined;
+  if (!item?.id || !item?.title || !item?.status) {
+    throw new Error('Invalid response from pm_get_item_detail: missing required fields (id, title, status)');
+  }
+  return d as unknown as ItemDetailResponse;
+}
+
+function validateItemListResponse(data: unknown): ItemListResponse {
+  const d = data as Record<string, unknown>;
+  if (!d || typeof d !== 'object') {
+    throw new Error('Invalid response from pm_list_items: not an object');
+  }
+  if (!Array.isArray(d.items)) {
+    throw new Error('Invalid response from pm_list_items: items is not an array');
+  }
+  if (typeof d.total_count !== 'number') {
+    throw new Error('Invalid response from pm_list_items: total_count is not a number');
+  }
+  return d as unknown as ItemListResponse;
+}
+
+function validateSprintDetailResponse(data: unknown): SprintDetailResponse {
+  const d = data as Record<string, unknown>;
+  if (!d || typeof d !== 'object') {
+    throw new Error('Invalid response from pm_get_sprint_detail: not an object');
+  }
+  const sprint = d.sprint as Record<string, unknown> | undefined;
+  if (!sprint?.id || !sprint?.name) {
+    throw new Error('Invalid response from pm_get_sprint_detail: missing sprint.id or sprint.name');
+  }
+  if (!d.metrics || typeof d.metrics !== 'object') {
+    throw new Error('Invalid response from pm_get_sprint_detail: missing metrics object');
+  }
+  return d as unknown as SprintDetailResponse;
 }

@@ -67,6 +67,10 @@ export function InlineEditText({
   }, [editing, multiline]);
 
   const handleSave = useCallback(async () => {
+    // Guard: skip save if the browser tab is hidden (blur fired by tab switch,
+    // not by the user intentionally leaving the field)
+    if (document.hidden) return;
+
     const trimmed = draft.trim();
     const oldTrimmed = (value || '').trim();
 
