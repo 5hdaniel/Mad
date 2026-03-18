@@ -7,6 +7,7 @@
  */
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { PanelRightClose, PanelRightOpen, Search } from 'lucide-react';
 import { useDraggable } from '@dnd-kit/core';
 import type { PmBacklogItem } from '@/lib/pm-types';
@@ -122,9 +123,13 @@ function BacklogPanelItem({ item }: { item: PmBacklogItem }) {
       }`}
     >
       <span className="text-xs text-gray-400 font-mono">#{item.item_number}</span>
-      <p className="text-xs text-gray-900 font-medium line-clamp-2 mt-0.5">
+      <Link
+        href={`/dashboard/pm/tasks/${item.id}`}
+        className="text-xs text-gray-900 font-medium line-clamp-2 mt-0.5 hover:text-blue-600 hover:underline"
+        onClick={(e) => e.stopPropagation()}
+      >
         {item.title}
-      </p>
+      </Link>
       <div className="flex items-center gap-1.5 mt-1">
         <span className="text-xs text-gray-400">{item.type}</span>
         <span className="text-xs text-gray-300">|</span>
