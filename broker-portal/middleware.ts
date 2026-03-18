@@ -25,7 +25,12 @@ export async function middleware(request: NextRequest) {
     {
       cookies: {
         get(name: string) {
-          return request.cookies.get(name)?.value;
+          try {
+            return request.cookies.get(name)?.value;
+          } catch {
+            // Handle invalid UTF-8 sequences in cookie values
+            return undefined;
+          }
         },
         set(name: string, value: string, options: CookieOptions) {
           request.cookies.set({
@@ -115,7 +120,8 @@ export async function middleware(request: NextRequest) {
 
     // Redirect authenticated users from login page
     if (isAuthRoute && user) {
-      const redirectTo = request.nextUrl.searchParams.get('redirectTo') ?? '/dashboard';
+      const rawRedirect = request.nextUrl.searchParams.get('redirectTo') ?? '/dashboard';
+      const redirectTo = /^\/[a-zA-Z0-9\-_\/\?\&\=\#\.]+$/.test(rawRedirect) ? rawRedirect : '/dashboard';
       return NextResponse.redirect(new URL(redirectTo, request.url));
     }
   } catch {
