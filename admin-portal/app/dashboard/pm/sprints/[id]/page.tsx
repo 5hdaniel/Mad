@@ -297,7 +297,7 @@ export default function SprintDetailPage() {
             </button>
             <button
               onClick={() => setShowDeleteConfirm(false)}
-              className="px-3 py-1 text-sm bg-white border rounded hover:bg-gray-50"
+              className="px-3 py-1 text-sm text-gray-700 bg-white border rounded hover:bg-gray-50"
             >
               Cancel
             </button>
