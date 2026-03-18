@@ -32,6 +32,7 @@ import type {
 } from '@/lib/pm-types';
 import { SPRINT_STATUS_LABELS, SPRINT_STATUS_COLORS } from '@/lib/pm-types';
 import { TaskTable } from '../../components/TaskTable';
+import { DualProgressBar } from '../../components/DualProgressBar';
 
 /** Format token count for display (e.g. 1500 → "2K", 1200000 → "1.2M"). */
 function formatTokens(tokens: number): string {
@@ -236,19 +237,14 @@ export default function SprintDetailPage() {
 
       {/* Progress Section */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-gray-900">Progress</h2>
-          <span className="text-sm font-medium text-gray-700">
-            {metrics.completed_items}/{metrics.total_items} items ({progress}%)
-          </span>
-        </div>
-        <div className="h-3 bg-gray-100 rounded-full overflow-hidden mb-4">
-          <div
-            className="h-full bg-green-500 rounded-full transition-all"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-        <div className="grid grid-cols-3 gap-4">
+        <DualProgressBar
+          completed={metrics.completed_items}
+          total={metrics.total_items}
+          byStatus={sprint.item_counts}
+          estTokens={metrics.total_est_tokens}
+          actualTokens={metrics.total_actual_tokens}
+        />
+        <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-100">
           {statusBreakdown.map((item) => {
             const Icon = item.icon;
             return (
