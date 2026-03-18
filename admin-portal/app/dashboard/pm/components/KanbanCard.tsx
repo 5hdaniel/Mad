@@ -22,6 +22,7 @@ import {
   assignItem,
   addItemLabel,
   removeItemLabel,
+  createLabel,
 } from '@/lib/pm-queries';
 
 // ---------------------------------------------------------------------------
@@ -210,6 +211,24 @@ function AssigneeDropdown({
 // InlineLabelPicker
 // ---------------------------------------------------------------------------
 
+/** Preset color palette for new labels. */
+const LABEL_COLORS = [
+  '#6366f1', // indigo
+  '#8b5cf6', // violet
+  '#ec4899', // pink
+  '#ef4444', // red
+  '#f97316', // orange
+  '#eab308', // yellow
+  '#22c55e', // green
+  '#14b8a6', // teal
+  '#3b82f6', // blue
+  '#6b7280', // gray
+];
+
+function pickRandomColor(): string {
+  return LABEL_COLORS[Math.floor(Math.random() * LABEL_COLORS.length)];
+}
+
 function InlineLabelPicker({
   itemId,
   currentLabels,
@@ -223,7 +242,10 @@ function InlineLabelPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [newLabelName, setNewLabelName] = useState('');
+  const [creating, setCreating] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const currentLabelIds = new Set(currentLabels.map((l) => l.id));
 
@@ -249,6 +271,23 @@ function InlineLabelPicker({
       // Silently fail -- user can retry
     } finally {
       setUpdating(null);
+    }
+  }
+
+  async function handleCreateLabel() {
+    const name = newLabelName.trim();
+    if (!name || creating) return;
+    setCreating(true);
+    try {
+      const color = pickRandomColor();
+      const { id: labelId } = await createLabel(name, color);
+      await addItemLabel(itemId, labelId);
+      setNewLabelName('');
+      onUpdate();
+    } catch {
+      // Silently fail -- user can retry
+    } finally {
+      setCreating(false);
     }
   }
 
@@ -293,9 +332,9 @@ function InlineLabelPicker({
         )}
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 bg-white border rounded-md shadow-lg z-20 py-1 w-44 max-h-48 overflow-y-auto">
-          {allLabels.length === 0 ? (
-            <p className="text-xs text-gray-400 px-3 py-2">No labels available</p>
+        <div className="absolute right-0 top-full mt-1 bg-white border rounded-md shadow-lg z-20 py-1 w-44 max-h-56 overflow-y-auto">
+          {allLabels.length === 0 && newLabelName.trim() === '' ? (
+            <p className="text-xs text-gray-400 px-3 py-2">No labels yet</p>
           ) : (
             allLabels.map((label) => (
               <button
@@ -318,6 +357,36 @@ function InlineLabelPicker({
               </button>
             ))
           )}
+          {/* Create new label input */}
+          <div className="border-t mt-1 pt-1 px-2 pb-1">
+            <div className="flex items-center gap-1">
+              <input
+                ref={inputRef}
+                type="text"
+                value={newLabelName}
+                onChange={(e) => setNewLabelName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleCreateLabel();
+                  }
+                }}
+                placeholder="New label..."
+                className="flex-1 min-w-0 text-xs px-1.5 py-1 border rounded text-gray-900 bg-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              />
+              <button
+                onClick={handleCreateLabel}
+                disabled={!newLabelName.trim() || creating}
+                className="text-xs px-1.5 py-1 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-0.5 shrink-0"
+              >
+                {creating ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Plus className="h-3 w-3" />
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
