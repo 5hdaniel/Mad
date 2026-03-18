@@ -255,18 +255,32 @@ export default function SprintDetailPage() {
                 rows={2}
               />
             </div>
-            {(sprint.start_date || sprint.end_date) && (
-              <p className="text-sm text-gray-500 mt-1 flex items-center gap-1">
-                <Calendar className="h-4 w-4 flex-shrink-0" />
-                {sprint.start_date
-                  ? new Date(sprint.start_date).toLocaleDateString()
-                  : '?'}
-                {' - '}
-                {sprint.end_date
-                  ? new Date(sprint.end_date).toLocaleDateString()
-                  : '?'}
-              </p>
-            )}
+            <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
+              <Calendar className="h-4 w-4 flex-shrink-0" />
+              <input
+                type="date"
+                value={sprint.start_date ? sprint.start_date.slice(0, 10) : ''}
+                onChange={async (e) => {
+                  const val = e.target.value;
+                  await updateSprintField(sprintId, 'start_date', val || null);
+                  loadDetail();
+                }}
+                className="border border-gray-200 rounded px-2 py-0.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                title="Start date"
+              />
+              <span className="text-gray-400">-</span>
+              <input
+                type="date"
+                value={sprint.end_date ? sprint.end_date.slice(0, 10) : ''}
+                onChange={async (e) => {
+                  const val = e.target.value;
+                  await updateSprintField(sprintId, 'end_date', val || null);
+                  loadDetail();
+                }}
+                className="border border-gray-200 rounded px-2 py-0.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                title="End date"
+              />
+            </div>
           </div>
           {hasPermission(PERMISSIONS.PM_ADMIN) && (
             <button

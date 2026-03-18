@@ -800,6 +800,19 @@ export async function deleteSprint(sprintId: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// 41b. pm_delete_project -- Soft-delete a project
+// ---------------------------------------------------------------------------
+
+/** Soft-delete a project by setting deleted_at. */
+export async function deleteProject(projectId: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.rpc('pm_delete_project', {
+    p_project_id: projectId,
+  });
+  if (error) throw new Error(error.message);
+}
+
+// ---------------------------------------------------------------------------
 // 42. listAssignableUsers -- Profiles for assignment picker
 // ---------------------------------------------------------------------------
 
