@@ -126,6 +126,22 @@ jobs:
         env:
           NODE_OPTIONS: "--max-old-space-size=4096"
 
+      - name: Run broker-portal tests
+        working-directory: broker-portal
+        run: |
+          npm ci
+          npx jest --silent --forceExit
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
+
+      - name: Run admin-portal tests
+        working-directory: admin-portal
+        run: |
+          npm ci
+          npx vitest run
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
+
       - name: Upload coverage to Codecov
         if: matrix.os == 'macos-latest' && matrix.node-version == '20.x'
         uses: codecov/codecov-action@v3

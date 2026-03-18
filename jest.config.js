@@ -132,17 +132,17 @@ module.exports = {
     '/worktrees/',
     '/tests/integration/', // Integration tests run locally, not in CI
     'ContactSelectModal.test.tsx', // Hangs in CI during loading
-    // TASK-2010: Electron tests excluded from CI (run locally only)
-    // These tests have pre-existing failures unrelated to CI environment.
-    // Each needs test rewrite (out of scope for TASK-2010) before CI inclusion.
-    'iosMessagesParser.test.ts', // Requires real native sqlite3 binary (NODE_MODULE_VERSION mismatch)
-    'autoLinkService.test.ts', // Stale test expectations after inferred contact source refactor
-    'supabaseService.conflict.test.ts', // Stale mocks — sync/subscription/device tests need rewrite
-    'auth-handlers.integration.test.ts', // Integration test — session restore mock incomplete
-    'transaction-handlers.integration.test.ts', // Integration test — transaction update mock returns undefined
-    'externalContactDbService.worker.test.ts', // Worker thread mocking broken — error/exit paths resolve instead of reject
-    'macOSMessagesImportService.attachments.test.ts', // Windows CI: path.join uses backslashes but assertions expect forward slashes (cross-platform path separator issue)
-    'emailAttachmentService.test.ts', // Windows CI: path separator issue — assertions expect forward slashes but path.join uses backslashes
+    // TASK-2254: Re-enabled tests that now pass:
+    // - iosMessagesParser.test.ts (NODE_MODULE_VERSION issue resolved)
+    // - autoLinkService.test.ts (test expectations updated to match current code)
+    // - auth-handlers.integration.test.ts (mock coverage now sufficient)
+    //
+    // Tests still excluded — each needs targeted fixes before CI inclusion:
+    'supabaseService.conflict.test.ts', // TODO: Stale mocks — onAuthStateChange mock missing, all 15 tests fail
+    'transaction-handlers.integration.test.ts', // TODO: 2/20 failing — updateTransaction mock returns undefined (result.transaction.status)
+    'externalContactDbService.worker.test.ts', // TODO: Worker thread mocking broken — error/exit paths resolve instead of reject (8 failing)
+    'macOSMessagesImportService.attachments.test.ts', // TODO: Windows CI — path.join backslashes vs forward-slash assertions (cross-platform fix needed)
+    'emailAttachmentService.test.ts', // TODO: Windows CI — path separator mismatch in assertions
   ] : [
     '/node_modules/',
     '/dist/',
