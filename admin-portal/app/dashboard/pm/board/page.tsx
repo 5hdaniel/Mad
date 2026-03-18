@@ -13,7 +13,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { KanbanSquare, ChevronDown, ChevronRight, RefreshCw, Loader2 } from 'lucide-react';
+import { KanbanSquare, ChevronDown, ChevronRight, RefreshCw, Loader2, List } from 'lucide-react';
 import { KanbanBoard } from '../components/KanbanBoard';
 import { SwimLaneSelector, type SwimLaneMode } from '../components/SwimLaneSelector';
 import { BacklogSidePanel } from '../components/BacklogSidePanel';
@@ -97,6 +97,7 @@ interface BoardPersistedState {
   selectedSprintId: string;
   swimLane: SwimLaneMode;
   collapsedLanes: string[]; // Set serialized as array
+  compactCards?: boolean;
 }
 
 /** Read persisted board state from localStorage (returns null on failure). */
@@ -145,6 +146,10 @@ export default function BoardPage() {
     const persisted = readPersistedBoardState();
     return persisted?.collapsedLanes ? new Set(persisted.collapsedLanes) : new Set();
   });
+  const [compactCards, setCompactCards] = useState<boolean>(() => {
+    const persisted = readPersistedBoardState();
+    return persisted?.compactCards ?? false;
+  });
   const [nameMap, setNameMap] = useState<Map<string, string>>(new Map());
   const [boardUsers, setBoardUsers] = useState<AssignableUser[]>([]);
   const [boardLabels, setBoardLabels] = useState<PmLabel[]>([]);
@@ -165,12 +170,13 @@ export default function BoardPage() {
         selectedSprintId,
         swimLane,
         collapsedLanes: Array.from(collapsedLanes),
+        compactCards,
       };
       localStorage.setItem(BOARD_STATE_KEY, JSON.stringify(state));
     } catch {
       // localStorage may be full or disabled -- ignore
     }
-  }, [selectedSprintId, swimLane, collapsedLanes]);
+  }, [selectedSprintId, swimLane, collapsedLanes, compactCards]);
 
   // -- Data fetching -------------------------------------------------------
 
@@ -549,6 +555,19 @@ export default function BoardPage() {
               setCollapsedLanes(new Set());
             }}
           />
+
+          {/* Compact card toggle */}
+          <button
+            onClick={() => setCompactCards(!compactCards)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm border rounded-lg transition-colors ${
+              compactCards
+                ? 'bg-blue-50 border-blue-200 text-blue-700'
+                : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <List className="h-3.5 w-3.5" />
+            Compact
+          </button>
         </div>
 
         {/* Right side: refresh + backlog toggle */}
@@ -629,6 +648,7 @@ export default function BoardPage() {
                           onItemUpdated={loadBoardData}
                           users={boardUsers}
                           allLabels={boardLabels}
+                          compact={compactCards}
                         />
                       )}
                     </div>
@@ -652,6 +672,7 @@ export default function BoardPage() {
               onItemUpdated={loadBoardData}
               users={boardUsers}
               allLabels={boardLabels}
+              compact={compactCards}
             />
           )}
         </div>

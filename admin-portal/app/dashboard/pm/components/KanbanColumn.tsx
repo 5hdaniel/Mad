@@ -29,6 +29,7 @@ interface KanbanColumnProps {
   onItemUpdated?: () => void;
   users?: AssignableUser[];
   allLabels?: PmLabel[];
+  compact?: boolean;
 }
 
 export function KanbanColumn({
@@ -40,6 +41,7 @@ export function KanbanColumn({
   onItemUpdated,
   users,
   allLabels,
+  compact,
 }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const [showTopAdd, setShowTopAdd] = useState(false);
@@ -94,6 +96,7 @@ export function KanbanColumn({
               key={item.id}
               item={item}
               isSelected={selectedIds?.has(item.id)}
+              compact={compact}
               onToggleSelect={
                 onToggleSelect ? () => onToggleSelect(item.id) : undefined
               }

@@ -38,11 +38,20 @@ interface KanbanCardProps {
   item: PmBacklogItem;
   isDragOverlay?: boolean;
   isSelected?: boolean;
+  compact?: boolean;
   onToggleSelect?: () => void;
   onItemUpdated?: () => void;
   users?: AssignableUser[];
   allLabels?: PmLabel[];
 }
+
+// Priority dot colors for compact mode
+const PRIORITY_DOT_COLORS: Record<ItemPriority, string> = {
+  low: 'bg-gray-300',
+  medium: 'bg-blue-400',
+  high: 'bg-orange-400',
+  critical: 'bg-red-500',
+};
 
 // ---------------------------------------------------------------------------
 // PriorityDropdown
@@ -323,6 +332,7 @@ export function KanbanCard({
   item,
   isDragOverlay = false,
   isSelected = false,
+  compact = false,
   onToggleSelect,
   onItemUpdated,
   users = [],
@@ -369,6 +379,41 @@ export function KanbanCard({
     onItemUpdated?.();
   }
 
+  // -- Compact layout: single-row title-only view ----------------------------
+  if (compact) {
+    return (
+      <div
+        ref={!isDragOverlay ? setNodeRef : undefined}
+        style={!isDragOverlay ? style : undefined}
+        {...(!isDragOverlay ? attributes : {})}
+        {...(!isDragOverlay ? listeners : {})}
+        className={`bg-white rounded border px-2 py-1.5 cursor-grab active:cursor-grabbing hover:bg-gray-50 transition-colors flex items-center gap-2 ${
+          isSelected
+            ? 'ring-2 ring-blue-500 border-blue-300'
+            : 'border-gray-200'
+        } ${isDragOverlay ? 'shadow-lg rotate-2' : ''}`}
+      >
+        {/* Priority dot */}
+        <div
+          className={`w-2 h-2 rounded-full flex-shrink-0 ${PRIORITY_DOT_COLORS[item.priority]}`}
+        />
+        {/* ID */}
+        <span className="text-[10px] text-gray-400 font-mono flex-shrink-0">
+          #{item.item_number}
+        </span>
+        {/* Title */}
+        <Link
+          href={`/dashboard/pm/tasks/${item.id}`}
+          className="text-xs text-gray-800 truncate flex-1"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {item.title}
+        </Link>
+      </div>
+    );
+  }
+
+  // -- Default layout: full 4-row card ---------------------------------------
   return (
     <div
       ref={!isDragOverlay ? setNodeRef : undefined}
