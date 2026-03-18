@@ -243,11 +243,15 @@ export default function BoardPage() {
     loadProjects();
   }, []);
 
-  /** Load assignable users and labels ONCE at board level for inline editing. */
-  useEffect(() => {
-    listAssignableUsers().then(setBoardUsers).catch(() => {});
+  /** Load assignable users and labels at board level for inline editing. */
+  const refreshLabels = useCallback(() => {
     listLabels().then(setBoardLabels).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    listAssignableUsers().then(setBoardUsers).catch(() => {});
+    refreshLabels();
+  }, [refreshLabels]);
 
   /** Load board data when selected sprint changes. */
   const loadBoardData = useCallback(async () => {
@@ -284,6 +288,12 @@ export default function BoardPage() {
       setRefreshing(false);
     }
   }, [selectedSprintId]);
+
+  /** Refresh board data AND labels (used as onItemUpdated callback). */
+  const handleItemUpdated = useCallback(() => {
+    loadBoardData();
+    refreshLabels();
+  }, [loadBoardData, refreshLabels]);
 
   useEffect(() => {
     if (selectedSprintId) {
@@ -756,7 +766,7 @@ export default function BoardPage() {
                             onQuickAdd={handleQuickAdd}
                             selectedIds={selectedIds}
                             onToggleSelect={handleToggleSelect}
-                            onItemUpdated={loadBoardData}
+                            onItemUpdated={handleItemUpdated}
                             users={boardUsers}
                             allLabels={boardLabels}
                             compact={compactCards}
@@ -779,7 +789,7 @@ export default function BoardPage() {
                 onQuickAdd={handleQuickAdd}
                 selectedIds={selectedIds}
                 onToggleSelect={handleToggleSelect}
-                onItemUpdated={loadBoardData}
+                onItemUpdated={handleItemUpdated}
                 users={boardUsers}
                 allLabels={boardLabels}
                 compact={compactCards}
