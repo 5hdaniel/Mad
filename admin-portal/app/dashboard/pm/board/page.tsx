@@ -14,10 +14,21 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { KanbanSquare, ChevronDown, ChevronRight, RefreshCw, Loader2, List } from 'lucide-react';
-import { KanbanBoard } from '../components/KanbanBoard';
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragStartEvent,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { KanbanBoard, columnCollision, resolveColumnStatus } from '../components/KanbanBoard';
 import { SwimLaneSelector, type SwimLaneMode } from '../components/SwimLaneSelector';
 import { BacklogSidePanel } from '../components/BacklogSidePanel';
 import { BulkActionBar } from '../components/BulkActionBar';
+import { KanbanCard } from '../components/KanbanCard';
 import {
   listSprints,
   listItems,
@@ -153,6 +164,16 @@ export default function BoardPage() {
   const [nameMap, setNameMap] = useState<Map<string, string>>(new Map());
   const [boardUsers, setBoardUsers] = useState<AssignableUser[]>([]);
   const [boardLabels, setBoardLabels] = useState<PmLabel[]>([]);
+  const [activeDragItem, setActiveDragItem] = useState<PmBacklogItem | null>(null);
+  const [activeDragIsBacklog, setActiveDragIsBacklog] = useState(false);
+
+  // -- DnD sensors (shared by board cards AND backlog panel items) ----------
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+    useSensor(KeyboardSensor)
+  );
 
   const toggleLane = useCallback((laneKey: string) => {
     setCollapsedLanes((prev) => {
@@ -421,6 +442,91 @@ export default function BoardPage() {
     [loadBacklogItems]
   );
 
+  // -- Drag-and-drop handlers (shared DndContext) ---------------------------
+
+  /** Find a board item across all columns. */
+  const findBoardItem = useCallback(
+    (id: string): PmBacklogItem | undefined => {
+      for (const items of Object.values(columns)) {
+        const item = (items as PmBacklogItem[]).find((i) => i.id === id);
+        if (item) return item;
+      }
+      return undefined;
+    },
+    [columns]
+  );
+
+  const handleDragStart = useCallback(
+    (event: DragStartEvent) => {
+      const { active } = event;
+      const data = active.data.current;
+
+      if (data?.type === 'backlog-item') {
+        // Dragging from backlog panel
+        setActiveDragItem(data.item as PmBacklogItem);
+        setActiveDragIsBacklog(true);
+      } else {
+        // Dragging a board card
+        const item = findBoardItem(active.id as string);
+        if (item) {
+          setActiveDragItem(item);
+          setActiveDragIsBacklog(false);
+        }
+      }
+    },
+    [findBoardItem]
+  );
+
+  const handleDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      const { active, over } = event;
+      setActiveDragItem(null);
+      setActiveDragIsBacklog(false);
+
+      if (!over) return;
+
+      const data = active.data.current;
+      const targetStatus = resolveColumnStatus(over.id as string, columns);
+      if (!targetStatus) return;
+
+      if (data?.type === 'backlog-item') {
+        // Backlog item dropped onto a board column
+        const item = data.item as PmBacklogItem;
+        if (!selectedSprintId) return;
+
+        try {
+          // 1. Assign to current sprint
+          await assignToSprint([item.id], selectedSprintId);
+          // 2. Set the status to match the target column
+          if (targetStatus !== 'pending') {
+            await updateItemStatus(item.id, targetStatus);
+          }
+          // 3. Refresh both board and backlog
+          await loadBoardData();
+          await loadBacklogItems();
+        } catch (err) {
+          console.error('Failed to assign backlog item to board:', err);
+        }
+      } else {
+        // Board card dragged between columns (existing behavior)
+        const itemId = active.id as string;
+
+        let currentStatus: ItemStatus | null = null;
+        for (const [status, items] of Object.entries(columns)) {
+          if ((items as PmBacklogItem[]).some((i) => i.id === itemId)) {
+            currentStatus = status as ItemStatus;
+            break;
+          }
+        }
+
+        if (currentStatus && currentStatus !== targetStatus) {
+          await handleStatusChange(itemId, targetStatus);
+        }
+      }
+    },
+    [columns, selectedSprintId, loadBoardData, loadBacklogItems, handleStatusChange]
+  );
+
   // -- Swim lane grouping --------------------------------------------------
 
   const swimLaneGroups = useMemo(() => {
@@ -595,97 +701,118 @@ export default function BoardPage() {
         </div>
       </div>
 
-      {/* Main content area */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Board area */}
-        <div className="flex-1 overflow-x-auto p-4">
-          {loading ? (
-            <div className="flex items-center justify-center h-64">
-              <Loader2 className="h-8 w-8 text-gray-300 animate-spin" />
-            </div>
-          ) : !selectedSprintId ? (
-            <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-              <KanbanSquare className="h-12 w-12 mb-3 text-gray-300" />
-              <p className="text-sm">Select a sprint to view the board</p>
-            </div>
-          ) : swimLaneGroups ? (
-            // Swim lane view: grouped boards
-            <div className="space-y-6">
-              {Array.from(swimLaneGroups.entries()).map(
-                ([groupKey, groupColumns]) => {
-                  const itemCount =
-                    groupColumns.pending.length +
-                    groupColumns.in_progress.length +
-                    groupColumns.testing.length +
-                    groupColumns.completed.length +
-                    groupColumns.blocked.length;
-                  const isCollapsed = collapsedLanes.has(groupKey);
-                  return (
-                    <div key={groupKey}>
-                      <button
-                        onClick={() => toggleLane(groupKey)}
-                        className="flex items-center gap-2 w-full text-left py-2 px-1 border-b border-gray-200 mb-3"
-                      >
-                        {isCollapsed ? (
-                          <ChevronRight className="h-4 w-4 text-gray-400" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4 text-gray-400" />
+      {/* Main content area -- single DndContext wraps board + backlog panel */}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={columnCollision}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="flex flex-1 overflow-hidden">
+          {/* Board area */}
+          <div className="flex-1 overflow-x-auto p-4">
+            {loading ? (
+              <div className="flex items-center justify-center h-64">
+                <Loader2 className="h-8 w-8 text-gray-300 animate-spin" />
+              </div>
+            ) : !selectedSprintId ? (
+              <div className="flex flex-col items-center justify-center h-64 text-gray-400">
+                <KanbanSquare className="h-12 w-12 mb-3 text-gray-300" />
+                <p className="text-sm">Select a sprint to view the board</p>
+              </div>
+            ) : swimLaneGroups ? (
+              // Swim lane view: grouped boards
+              <div className="space-y-6">
+                {Array.from(swimLaneGroups.entries()).map(
+                  ([groupKey, groupColumns]) => {
+                    const itemCount =
+                      groupColumns.pending.length +
+                      groupColumns.in_progress.length +
+                      groupColumns.testing.length +
+                      groupColumns.completed.length +
+                      groupColumns.blocked.length;
+                    const isCollapsed = collapsedLanes.has(groupKey);
+                    return (
+                      <div key={groupKey}>
+                        <button
+                          onClick={() => toggleLane(groupKey)}
+                          className="flex items-center gap-2 w-full text-left py-2 px-1 border-b border-gray-200 mb-3"
+                        >
+                          {isCollapsed ? (
+                            <ChevronRight className="h-4 w-4 text-gray-400" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 text-gray-400" />
+                          )}
+                          <span className="text-sm font-semibold text-gray-700">
+                            {nameMap.get(groupKey) || groupKey}
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            ({itemCount} {itemCount === 1 ? 'item' : 'items'})
+                          </span>
+                        </button>
+                        {!isCollapsed && (
+                          <KanbanBoard
+                            columns={groupColumns}
+                            onQuickAdd={handleQuickAdd}
+                            selectedIds={selectedIds}
+                            onToggleSelect={handleToggleSelect}
+                            onItemUpdated={loadBoardData}
+                            users={boardUsers}
+                            allLabels={boardLabels}
+                            compact={compactCards}
+                          />
                         )}
-                        <span className="text-sm font-semibold text-gray-700">
-                          {nameMap.get(groupKey) || groupKey}
-                        </span>
-                        <span className="text-xs text-gray-400">
-                          ({itemCount} {itemCount === 1 ? 'item' : 'items'})
-                        </span>
-                      </button>
-                      {!isCollapsed && (
-                        <KanbanBoard
-                          columns={groupColumns}
-                          onStatusChange={handleStatusChange}
-                          onQuickAdd={handleQuickAdd}
-                          selectedIds={selectedIds}
-                          onToggleSelect={handleToggleSelect}
-                          onItemUpdated={loadBoardData}
-                          users={boardUsers}
-                          allLabels={boardLabels}
-                          compact={compactCards}
-                        />
-                      )}
-                    </div>
-                  );
-                }
-              )}
-              {swimLaneGroups.size === 0 && (
-                <div className="flex flex-col items-center justify-center h-32 text-gray-400">
-                  <p className="text-sm">No items in this sprint</p>
-                </div>
-              )}
-            </div>
-          ) : (
-            // Flat board view
-            <KanbanBoard
-              columns={columns}
-              onStatusChange={handleStatusChange}
-              onQuickAdd={handleQuickAdd}
-              selectedIds={selectedIds}
-              onToggleSelect={handleToggleSelect}
-              onItemUpdated={loadBoardData}
-              users={boardUsers}
-              allLabels={boardLabels}
-              compact={compactCards}
-            />
-          )}
+                      </div>
+                    );
+                  }
+                )}
+                {swimLaneGroups.size === 0 && (
+                  <div className="flex flex-col items-center justify-center h-32 text-gray-400">
+                    <p className="text-sm">No items in this sprint</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              // Flat board view
+              <KanbanBoard
+                columns={columns}
+                onQuickAdd={handleQuickAdd}
+                selectedIds={selectedIds}
+                onToggleSelect={handleToggleSelect}
+                onItemUpdated={loadBoardData}
+                users={boardUsers}
+                allLabels={boardLabels}
+                compact={compactCards}
+              />
+            )}
+          </div>
+
+          {/* Backlog side panel */}
+          <BacklogSidePanel
+            isOpen={backlogOpen}
+            onToggle={() => setBacklogOpen(!backlogOpen)}
+            items={backlogItems}
+            loading={backlogLoading}
+            onSearch={handleBacklogSearch}
+          />
         </div>
 
-        {/* Backlog side panel */}
-        <BacklogSidePanel
-          isOpen={backlogOpen}
-          onToggle={() => setBacklogOpen(!backlogOpen)}
-          items={backlogItems}
-          loading={backlogLoading}
-          onSearch={handleBacklogSearch}
-        />
-      </div>
+        {/* Drag overlay -- shows card preview for both board cards and backlog items */}
+        <DragOverlay>
+          {activeDragItem ? (
+            activeDragIsBacklog ? (
+              <div className="bg-white border border-blue-300 rounded p-2 shadow-lg rotate-2 max-w-[200px]">
+                <span className="text-xs text-gray-400 font-mono">#{activeDragItem.item_number}</span>
+                <p className="text-xs text-gray-900 font-medium line-clamp-2 mt-0.5">
+                  {activeDragItem.title}
+                </p>
+              </div>
+            ) : (
+              <KanbanCard item={activeDragItem} isDragOverlay compact={compactCards} />
+            )
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
       {/* Bulk action bar */}
       <BulkActionBar
