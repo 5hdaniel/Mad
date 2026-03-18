@@ -145,12 +145,14 @@ export class UpdateService {
   }
 
   /**
-   * Simulate update check (placeholder for real implementation)
+   * Check for updates from update server.
+   * TODO(BACKLOG-1123): Wire up electron-updater (autoUpdater) when update
+   * server infrastructure is ready. Until then, this is a no-op that
+   * immediately reports "no updates available" without any artificial delay.
    */
   private async simulateUpdateCheck(): Promise<void> {
-    // In real implementation, this would fetch from update server
-    // For now, simulate no updates available
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    // No-op: electron-updater integration pending server infrastructure.
+    // Previously this had a fake 1-second sleep which was misleading.
     this.availableUpdate = undefined;
   }
 
@@ -183,20 +185,18 @@ export class UpdateService {
   }
 
   /**
-   * Simulate download (placeholder for real implementation)
+   * Download update from update server.
+   * TODO(BACKLOG-1123): Wire up electron-updater downloadUpdate() when ready.
+   * Until then, this is a no-op placeholder.
    */
   private async simulateDownload(): Promise<void> {
-    const totalBytes = this.availableUpdate?.size || 10000000;
-
-    for (let i = 0; i <= 100; i += 10) {
-      this.downloadProgress = {
-        bytesDownloaded: (totalBytes * i) / 100,
-        totalBytes,
-        percentage: i,
-      };
-      this.emit("download-progress", this.downloadProgress);
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
+    const totalBytes = this.availableUpdate?.size || 0;
+    this.downloadProgress = {
+      bytesDownloaded: totalBytes,
+      totalBytes,
+      percentage: 100,
+    };
+    this.emit("download-progress", this.downloadProgress);
   }
 
   /**
@@ -209,9 +209,7 @@ export class UpdateService {
 
     this.emit("before-quit-for-update");
 
-    // In real implementation, this would trigger app restart and update installation
-    // For now, just emit event
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    // TODO(BACKLOG-1123): Wire up electron-updater quitAndInstall() when ready.
     this.emit("update-installed");
   }
 

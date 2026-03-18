@@ -115,6 +115,8 @@ interface ElectronAPI {
   transactions: {
     scan: () => Promise<{ success: boolean }>;
     getAll: () => Promise<unknown[]>;
+    /** BACKLOG-1124: Lightweight count query for pending auto-detected transactions */
+    getPendingCount: (userId: string) => Promise<{ success: boolean; count: number; error?: string }>;
     update: (id: string, data: unknown) => Promise<{ success: boolean }>;
     delete: (id: string) => Promise<{ success: boolean }>;
     bulkDelete: (transactionIds: string[]) => Promise<{ success: boolean; deletedCount?: number; error?: string }>;
@@ -1127,6 +1129,18 @@ interface MainAPI {
     ) => Promise<{
       success: boolean;
       transactions?: Transaction[];
+      error?: string;
+    }>;
+
+    /**
+     * BACKLOG-1124: Get count of pending auto-detected transactions.
+     * Uses server-side SQL COUNT query instead of fetching all transactions.
+     */
+    getPendingCount: (
+      userId: string,
+    ) => Promise<{
+      success: boolean;
+      count?: number;
       error?: string;
     }>;
 

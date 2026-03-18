@@ -211,6 +211,11 @@ export interface IpcChannels {
     request: { userId: string; filters?: TransactionFilters };
     response: Transaction[];
   };
+  /** BACKLOG-1124: Lightweight pending count via SQL COUNT(*) */
+  "transactions:get-pending-count": {
+    request: { userId: string };
+    response: { success: boolean; count: number };
+  };
   "transactions:get-by-id": {
     request: { transactionId: string };
     response: Transaction | null;
@@ -1113,6 +1118,12 @@ export interface WindowApi {
     getAll: (userId: string) => Promise<{
       success: boolean;
       transactions?: Transaction[];
+      error?: string;
+    }>;
+    /** BACKLOG-1124: Lightweight pending count query */
+    getPendingCount: (userId: string) => Promise<{
+      success: boolean;
+      count: number;
       error?: string;
     }>;
     scan: (

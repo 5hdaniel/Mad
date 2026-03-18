@@ -887,8 +887,10 @@ export class BackupService extends EventEmitter {
     lastModified: Date | null;
     sizeBytes: number;
   } | null> {
+    // BACKLOG-1123: Validate UDID before using in path operations
+    const validatedUdid = validateDeviceUdid(udid);
     const backupPath = this.getDefaultBackupPath();
-    const deviceBackupPath = path.join(backupPath, udid);
+    const deviceBackupPath = path.join(backupPath, validatedUdid);
 
     try {
       if (!(await this.pathExists(deviceBackupPath))) {

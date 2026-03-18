@@ -14,6 +14,7 @@ import logService from "../services/logService";
 import { autoLinkCommunicationsForContact } from "../services/autoLinkService";
 import emailSyncService from "../services/emailSyncService";
 import databaseService from "../services/databaseService";
+import { dbGet } from "../services/db/core/dbConnection";
 import { wrapHandler } from "../utils/wrapHandler";
 import type {
   Transaction,
@@ -68,6 +69,27 @@ export function registerTransactionCrudHandlers(
       return {
         success: true,
         transactions,
+      };
+    }, { module: "Transactions" }),
+  );
+
+  // BACKLOG-1124: Get pending transaction count via SELECT COUNT(*) instead of fetching all rows
+  ipcMain.handle(
+    "transactions:get-pending-count",
+    wrapHandler(async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<{ success: boolean; count: number; error?: string }> => {
+      const validatedUserId = validateUserId(userId);
+      if (!validatedUserId) {
+        throw new ValidationError("User ID validation failed", "userId");
+      }
+
+      const count = databaseService.getPendingTransactionCount(validatedUserId);
+
+      return {
+        success: true,
+        count,
       };
     }, { module: "Transactions" }),
   );
@@ -925,6 +947,35 @@ export function registerTransactionCrudHandlers(
         success: errors.length === 0,
         updatedCount,
         errors: errors.length > 0 ? errors : undefined,
+      };
+    }, { module: "Transactions" }),
+  );
+
+  // ============================================
+  // PENDING TRANSACTION COUNT (BACKLOG-1124)
+  // ============================================
+
+  /**
+   * Get count of pending auto-detected transactions.
+   * BACKLOG-1124: Runs a SQL COUNT query instead of fetching all transactions
+   * and filtering client-side, avoiding large IPC serialization overhead.
+   */
+  ipcMain.handle(
+    "transactions:get-pending-count",
+    wrapHandler(async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<{ success: boolean; count?: number; error?: string }> => {
+      const validatedUserId = validateUserId(userId);
+      if (!validatedUserId) {
+        throw new ValidationError("User ID validation failed", "userId");
+      }
+
+      const count = databaseService.getPendingTransactionCount(validatedUserId);
+
+      return {
+        success: true,
+        count,
       };
     }, { module: "Transactions" }),
   );

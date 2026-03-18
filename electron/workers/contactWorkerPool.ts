@@ -32,6 +32,13 @@ let worker: Worker | null = null;
 let ready = false;
 let initPromise: Promise<void> | null = null;
 
+// BACKLOG-1122: Auto-restart tracking
+let restartAttempts = 0;
+let lastDbPath: string | null = null;
+let lastEncryptionKey: string | null = null;
+const MAX_RESTART_ATTEMPTS = 3;
+let shuttingDown = false;
+
 // Pending queries by request ID
 const pendingQueries = new Map<string, PendingQuery>();
 
@@ -78,6 +85,11 @@ function handleWorkerMessage(msg: { type?: string; id?: string; success?: boolea
 export function initializePool(dbPath: string, encryptionKey: string): Promise<void> {
   if (initPromise) return initPromise;
 
+  // BACKLOG-1122: Save credentials for auto-restart
+  lastDbPath = dbPath;
+  lastEncryptionKey = encryptionKey;
+  shuttingDown = false;
+
   initPromise = new Promise<void>((resolve, reject) => {
     try {
       const workerPath = getWorkerPath();
@@ -106,10 +118,35 @@ export function initializePool(dbPath: string, encryptionKey: string): Promise<v
         initPromise = null;
         inflightQueries.clear();
         // Reject remaining pending queries
-        for (const [id, pending] of pendingQueries) {
+        for (const [, pending] of pendingQueries) {
           clearTimeout(pending.timeout);
           pending.reject(new Error(`Worker exited with code ${code}`));
-          pendingQueries.delete(id);
+        }
+        pendingQueries.clear();
+
+        // BACKLOG-1122: Auto-restart on unexpected exit (non-zero code)
+        if (code !== 0 && !shuttingDown && lastDbPath && lastEncryptionKey) {
+          restartAttempts++;
+          if (restartAttempts <= MAX_RESTART_ATTEMPTS) {
+            logService.warn(
+              `[ContactWorkerPool] Auto-restarting worker (attempt ${restartAttempts}/${MAX_RESTART_ATTEMPTS})`,
+              "ContactWorkerPool",
+            );
+            // Restart asynchronously to avoid recursion in the exit handler
+            setTimeout(() => {
+              initializePool(lastDbPath!, lastEncryptionKey!).catch((err) => {
+                logService.error(
+                  `[ContactWorkerPool] Auto-restart failed: ${err.message}`,
+                  "ContactWorkerPool",
+                );
+              });
+            }, 1000 * restartAttempts); // Increasing delay: 1s, 2s, 3s
+          } else {
+            logService.error(
+              `[ContactWorkerPool] Worker crashed ${MAX_RESTART_ATTEMPTS} times — giving up`,
+              "ContactWorkerPool",
+            );
+          }
         }
       });
 
@@ -135,6 +172,8 @@ export function initializePool(dbPath: string, encryptionKey: string): Promise<v
         if (ready) {
           clearInterval(checkReady);
           clearTimeout(initTimeout);
+          // BACKLOG-1122: Reset restart counter on successful init
+          restartAttempts = 0;
           resolve();
         }
       }, 10);
@@ -198,6 +237,7 @@ export function queryContacts(
  * Shutdown the worker pool. Called on app quit.
  */
 export function shutdownPool(): void {
+  shuttingDown = true;
   if (worker) {
     try {
       worker.postMessage({ type: "shutdown" });

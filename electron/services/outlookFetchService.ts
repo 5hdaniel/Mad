@@ -694,7 +694,7 @@ class OutlookFetchService {
       bodyPlain,
     });
 
-    return {
+    const parsed: ParsedEmail = {
       id: message.id,
       threadId: message.conversationId,
       subject: message.subject,
@@ -718,6 +718,12 @@ class OutlookFetchService {
       // TASK-918: Content hash for fallback deduplication
       contentHash,
     };
+
+    // BACKLOG-1125: Clear raw message reference after parsing to reduce memory.
+    // During sync of 500+ emails, keeping the full Graph API response doubles usage.
+    parsed.raw = {} as GraphMessage;
+
+    return parsed;
   }
 
   /**
