@@ -782,10 +782,9 @@ export async function logAgentMetrics(
 /** Soft-delete a sprint by setting deleted_at. */
 export async function deleteSprint(sprintId: string): Promise<void> {
   const supabase = createClient();
-  const { error } = await supabase
-    .from('pm_sprints')
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('id', sprintId);
+  const { error } = await supabase.rpc('pm_delete_sprint', {
+    p_sprint_id: sprintId,
+  });
   if (error) throw new Error(error.message);
 }
 
