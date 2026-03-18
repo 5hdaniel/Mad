@@ -61,7 +61,7 @@ export async function listItems(params: ItemListParams): Promise<ItemListRespons
     p_unassigned_only: params.unassigned_only || false,
   });
   if (error) throw error;
-  return data as unknown as ItemListResponse;
+  return validateItemListResponse(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -75,7 +75,7 @@ export async function getItemDetail(itemId: string): Promise<ItemDetailResponse>
     p_item_id: itemId,
   });
   if (error) throw error;
-  return data as unknown as ItemDetailResponse;
+  return validateItemDetailResponse(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -454,7 +454,7 @@ export async function getSprintDetail(sprintId: string): Promise<SprintDetailRes
     p_sprint_id: sprintId,
   });
   if (error) throw error;
-  return data as unknown as SprintDetailResponse;
+  return validateSprintDetailResponse(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -872,4 +872,70 @@ export async function updateSprintField(
   });
   if (error) throw error;
   return data as unknown as { success: boolean; field: string; old_value: string | null; new_value: string | null };
+}
+
+// ---------------------------------------------------------------------------
+// 44. pm_bulk_delete -- Atomic bulk deletion
+// ---------------------------------------------------------------------------
+
+/** Bulk soft-delete multiple backlog items in a single RPC call. */
+export async function bulkDelete(
+  itemIds: string[]
+): Promise<{ success: boolean; deleted_count: number }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('pm_bulk_delete', {
+    p_item_ids: itemIds,
+  });
+  if (error) throw error;
+  return data as unknown as { success: boolean; deleted_count: number };
+}
+
+// ---------------------------------------------------------------------------
+// Runtime validation helpers (BACKLOG-1061)
+// ---------------------------------------------------------------------------
+
+/**
+ * Lightweight runtime validation for critical RPC responses.
+ * These catch schema drift before it causes silent data bugs.
+ */
+
+function validateItemDetailResponse(data: unknown): ItemDetailResponse {
+  const d = data as Record<string, unknown>;
+  if (!d || typeof d !== 'object') {
+    throw new Error('Invalid response from pm_get_item_detail: not an object');
+  }
+  const item = d.item as Record<string, unknown> | undefined;
+  if (!item?.id || !item?.title || !item?.status) {
+    throw new Error('Invalid response from pm_get_item_detail: missing required fields (id, title, status)');
+  }
+  return d as unknown as ItemDetailResponse;
+}
+
+function validateItemListResponse(data: unknown): ItemListResponse {
+  const d = data as Record<string, unknown>;
+  if (!d || typeof d !== 'object') {
+    throw new Error('Invalid response from pm_list_items: not an object');
+  }
+  if (!Array.isArray(d.items)) {
+    throw new Error('Invalid response from pm_list_items: items is not an array');
+  }
+  if (typeof d.total_count !== 'number') {
+    throw new Error('Invalid response from pm_list_items: total_count is not a number');
+  }
+  return d as unknown as ItemListResponse;
+}
+
+function validateSprintDetailResponse(data: unknown): SprintDetailResponse {
+  const d = data as Record<string, unknown>;
+  if (!d || typeof d !== 'object') {
+    throw new Error('Invalid response from pm_get_sprint_detail: not an object');
+  }
+  const sprint = d.sprint as Record<string, unknown> | undefined;
+  if (!sprint?.id || !sprint?.name) {
+    throw new Error('Invalid response from pm_get_sprint_detail: missing sprint.id or sprint.name');
+  }
+  if (!d.metrics || typeof d.metrics !== 'object') {
+    throw new Error('Invalid response from pm_get_sprint_detail: missing metrics object');
+  }
+  return d as unknown as SprintDetailResponse;
 }

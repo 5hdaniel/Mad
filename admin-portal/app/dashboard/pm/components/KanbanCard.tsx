@@ -15,18 +15,21 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import Link from 'next/link';
 import { Check, Plus, Loader2 } from 'lucide-react';
-import type { PmBacklogItem, ItemPriority, PmLabel, AssignableUser } from '@/lib/pm-types';
-import { PRIORITY_COLORS, PRIORITY_LABELS } from '@/lib/pm-types';
+import type { PmBacklogItem, ItemPriority, PmLabel } from '@/lib/pm-types';
+import { PRIORITY_COLORS } from '@/lib/pm-types';
 import {
   updateItemField,
-  assignItem,
   addItemLabel,
   removeItemLabel,
   createLabel,
 } from '@/lib/pm-queries';
 import { useClickOutside } from '@/hooks/useClickOutside';
+import { InlinePriorityPicker } from './InlinePriorityPicker';
+import { InlineAssigneePicker } from './InlineAssigneePicker';
+import type { AssignableUser } from './InlineAssigneePicker';
 
-export type { AssignableUser } from '@/lib/pm-types';
+// Re-export AssignableUser for backward compatibility
+export type { AssignableUser } from './InlineAssigneePicker';
 
 interface KanbanCardProps {
   item: PmBacklogItem;
@@ -47,200 +50,9 @@ const PRIORITY_DOT_COLORS: Record<ItemPriority, string> = {
   critical: 'bg-red-500',
 };
 
-// ---------------------------------------------------------------------------
-// PriorityDropdown
-// ---------------------------------------------------------------------------
-
-function PriorityDropdown({
-  priority,
-  onUpdate,
-}: {
-  priority: ItemPriority;
-  onUpdate: (p: ItemPriority) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const close = useCallback(() => setOpen(false), []);
-  useClickOutside(ref, close, open);
-
-  return (
-    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
-      <button
-        onClick={(e) => {
-          e.preventDefault();
-          setOpen(!open);
-        }}
-        className={`px-1.5 py-0.5 rounded text-xs font-medium ${PRIORITY_COLORS[priority]}`}
-      >
-        {PRIORITY_LABELS[priority]}
-      </button>
-      {open && (
-        <div className="absolute right-0 top-full mt-1 bg-white border rounded-md shadow-lg z-20 py-1 w-28">
-          {(['low', 'medium', 'high', 'critical'] as ItemPriority[]).map((p) => (
-            <button
-              key={p}
-              onClick={() => {
-                onUpdate(p);
-                setOpen(false);
-              }}
-              className="w-full text-left px-3 py-1 text-xs hover:bg-gray-50"
-            >
-              <span
-                className={`inline-block px-1.5 py-0.5 rounded ${PRIORITY_COLORS[p]}`}
-              >
-                {PRIORITY_LABELS[p]}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// AssigneeDropdown
-// ---------------------------------------------------------------------------
-
-function AssigneeDropdown({
-  assigneeId,
-  users,
-  onUpdate,
-}: {
-  assigneeId: string | null;
-  users: AssignableUser[];
-  onUpdate: (userId: string | null) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const ref = useRef<HTMLDivElement>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const close = useCallback(() => setOpen(false), []);
-  useClickOutside(ref, close, open);
-
-  // Auto-focus search input when dropdown opens
-  useEffect(() => {
-    if (open) {
-      // Use requestAnimationFrame to ensure the DOM has rendered
-      requestAnimationFrame(() => {
-        searchInputRef.current?.focus();
-      });
-    } else {
-      setSearch('');
-    }
-  }, [open]);
-
-  const currentUser = users.find((u) => u.id === assigneeId);
-  const initials = currentUser
-    ? (currentUser.display_name || currentUser.email)
-        .split(' ')
-        .map((w) => w[0])
-        .slice(0, 2)
-        .join('')
-        .toUpperCase()
-    : null;
-
-  // Filter users by search term (case-insensitive match on name or email)
-  const filteredUsers = search.trim()
-    ? users.filter((u) => {
-        const term = search.toLowerCase();
-        const name = (u.display_name || '').toLowerCase();
-        const email = u.email.toLowerCase();
-        return name.includes(term) || email.includes(term);
-      })
-    : users;
-
-  const handleSearchKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      // Prevent card drag/sort handlers from capturing keyboard events
-      e.stopPropagation();
-      if (e.key === 'Escape') {
-        setOpen(false);
-      }
-    },
-    [],
-  );
-
-  return (
-    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
-      <button
-        onClick={(e) => {
-          e.preventDefault();
-          setOpen(!open);
-        }}
-        className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-900 transition-colors"
-      >
-        {currentUser ? (
-          <>
-            <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-              <span className="text-[10px] text-blue-700 font-medium">
-                {initials}
-              </span>
-            </div>
-            <span className="truncate max-w-[80px]">
-              {currentUser.display_name || currentUser.email}
-            </span>
-          </>
-        ) : (
-          <span className="text-gray-400">Unassigned</span>
-        )}
-      </button>
-      {open && (
-        <div className="absolute left-0 top-full mt-1 bg-white border rounded-md shadow-lg z-20 w-48">
-          {/* Search input */}
-          <div className="p-1.5 border-b border-gray-100">
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={handleSearchKeyDown}
-              onClick={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.stopPropagation()}
-              placeholder="Search users..."
-              className="w-full px-2 py-1 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded focus:outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-300 placeholder-gray-400"
-            />
-          </div>
-          {/* User list */}
-          <div className="py-1 max-h-40 overflow-y-auto">
-            {/* Unassigned -- always visible */}
-            <button
-              onClick={() => {
-                onUpdate(null);
-                setOpen(false);
-              }}
-              className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 text-gray-400"
-            >
-              Unassigned
-            </button>
-            {filteredUsers.map((user) => (
-              <button
-                key={user.id}
-                onClick={() => {
-                  onUpdate(user.id);
-                  setOpen(false);
-                }}
-                className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center justify-between ${
-                  user.id === assigneeId ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
-                }`}
-              >
-                <span className="truncate">
-                  {user.display_name || user.email}
-                </span>
-                {user.id === assigneeId && (
-                  <Check className="h-3 w-3 text-blue-600 flex-shrink-0" />
-                )}
-              </button>
-            ))}
-            {filteredUsers.length === 0 && search.trim() && (
-              <p className="px-3 py-1.5 text-xs text-gray-400">No matches</p>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+// PriorityDropdown and AssigneeDropdown are now shared components:
+// - InlinePriorityPicker (./InlinePriorityPicker.tsx)
+// - InlineAssigneePicker (./InlineAssigneePicker.tsx)
 
 // ---------------------------------------------------------------------------
 // InlineLabelPicker
@@ -295,8 +107,8 @@ function InlineLabelPicker({
         await addItemLabel(itemId, label.id);
       }
       onUpdate();
-    } catch {
-      // Silently fail -- user can retry
+    } catch (err) {
+      console.error('Failed to toggle label:', err);
     } finally {
       setUpdating(null);
     }
@@ -312,8 +124,8 @@ function InlineLabelPicker({
       await addItemLabel(itemId, labelId);
       setNewLabelName('');
       onUpdate();
-    } catch {
-      // Silently fail -- user can retry
+    } catch (err) {
+      console.error('Failed to create label:', err);
     } finally {
       setCreating(false);
     }
@@ -459,19 +271,14 @@ export function KanbanCard({
     try {
       await updateItemField(item.id, 'priority', newPriority);
       onItemUpdated?.();
-    } catch {
-      // Silently fail
+    } catch (err) {
+      console.error('Failed to update priority:', err);
     }
   }
 
   async function handleAssigneeUpdate(userId: string | null) {
     if (userId === item.assignee_id) return;
-    try {
-      await assignItem(item.id, userId);
-      onItemUpdated?.();
-    } catch {
-      // Silently fail
-    }
+    onItemUpdated?.();
   }
 
   function handleLabelUpdate() {
@@ -544,9 +351,10 @@ export function KanbanCard({
             #{item.item_number}
           </span>
         </div>
-        <PriorityDropdown
+        <InlinePriorityPicker
           priority={item.priority}
           onUpdate={handlePriorityUpdate}
+          variant="compact"
         />
       </div>
 
@@ -561,10 +369,11 @@ export function KanbanCard({
 
       {/* Row 4: Assignee | Labels */}
       <div className="flex items-center justify-between mt-2">
-        <AssigneeDropdown
+        <InlineAssigneePicker
           assigneeId={item.assignee_id}
           users={users}
           onUpdate={handleAssigneeUpdate}
+          variant="avatar"
         />
         <InlineLabelPicker
           itemId={item.id}

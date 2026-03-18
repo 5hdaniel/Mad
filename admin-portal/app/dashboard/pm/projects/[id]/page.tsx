@@ -115,8 +115,8 @@ function InlineItemCreate({ projectId, sprintId, onCreated }: InlineItemCreatePr
           setTitle('');
           setAdding(false);
           onCreated();
-        } catch {
-          // silent -- user can retry
+        } catch (err) {
+          console.error('Failed to create:', err);
         } finally {
           setSubmitting(false);
         }
@@ -190,8 +190,8 @@ function InlineSprintCreate({ projectId, onCreated }: InlineSprintCreateProps) {
           setGoal('');
           setAdding(false);
           onCreated();
-        } catch {
-          // silent -- user can retry
+        } catch (err) {
+          console.error('Failed to create:', err);
         } finally {
           setSubmitting(false);
         }
@@ -350,8 +350,8 @@ function SprintSection({ sprint, projectId, onRefresh }: SprintSectionProps) {
       });
       setItems(res.items);
       setLoaded(true);
-    } catch {
-      // silent
+    } catch (err) {
+      console.error('Failed to load project data:', err);
     } finally {
       setLoading(false);
     }
@@ -510,8 +510,8 @@ export default function ProjectDetailPage() {
       setProject(data.project);
       setSprints(data.sprints);
       setItemsByStatus(data.items_by_status);
-    } catch {
-      // silent
+    } catch (err) {
+      console.error('Failed to load project data:', err);
     } finally {
       setLoadingDetail(false);
     }
@@ -530,8 +530,8 @@ export default function ProjectDetailPage() {
         page_size: 500,
       });
       setAllItems(data.items);
-    } catch {
-      // silent
+    } catch (err) {
+      console.error('Failed to load project data:', err);
     } finally {
       setLoadingItems(false);
     }

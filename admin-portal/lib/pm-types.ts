@@ -532,10 +532,11 @@ export type ItemField =
   | 'project_id'
   | 'est_tokens'
   | 'start_date'
-  | 'due_date';
+  | 'due_date'
+  | 'sprint_id';
 
 /** Whitelisted fields that can be passed to pm_update_sprint_field. */
-export type SprintField = 'name' | 'goal';
+export type SprintField = 'name' | 'goal' | 'start_date' | 'end_date';
 
 /** Whitelisted fields that can be passed to pm_update_project_field. */
 export type ProjectField = 'name' | 'description';
@@ -546,4 +547,5 @@ export interface BulkUpdateFields {
   priority?: ItemPriority;
   project_id?: string;
   area?: string;
+  assignee_id?: string | null;
 }

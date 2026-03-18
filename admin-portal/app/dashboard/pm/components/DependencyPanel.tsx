@@ -8,15 +8,15 @@
  * validation feedback from the RPC.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import Link from 'next/link';
 import { X, Plus, Loader2, AlertCircle } from 'lucide-react';
 import {
-  searchItemsForLink,
   addDependency,
   removeDependency,
 } from '@/lib/pm-queries';
-import type { PmDependency, PmItemSearchResult } from '@/lib/pm-types';
+import type { PmDependency } from '@/lib/pm-types';
+import { useItemSearch } from '@/hooks/useItemSearch';
 
 interface DependencyPanelProps {
   itemId: string;
@@ -35,14 +35,11 @@ export function DependencyPanel({ itemId, dependencies, onUpdate }: DependencyPa
 
   // Search state for adding new dependencies
   const [addingType, setAddingType] = useState<'depends_on' | 'blocks' | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<PmItemSearchResult[]>([]);
-  const [searching, setSearching] = useState(false);
   const [linking, setLinking] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { query: searchQuery, setQuery: setSearchQuery, results: searchResults, searching, reset: resetSearch } = useItemSearch({ excludeId: itemId });
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Split dependencies into depends_on and blocks
@@ -62,43 +59,15 @@ export function DependencyPanel({ itemId, dependencies, onUpdate }: DependencyPa
 
   const totalCount = dependsOn.length + blocks.length + dependedOnBy.length + blockedBy.length;
 
-  // Debounced search
-  useEffect(() => {
-    if (!searchQuery || searchQuery.length < 1) {
-      setSearchResults([]);
-      return;
+  // Focus search input when search type is selected
+  // (setTimeout to wait for DOM render)
+  const prevAddingType = useRef(addingType);
+  if (addingType !== prevAddingType.current) {
+    prevAddingType.current = addingType;
+    if (addingType) {
+      setTimeout(() => searchInputRef.current?.focus(), 0);
     }
-
-    if (searchTimerRef.current) {
-      clearTimeout(searchTimerRef.current);
-    }
-
-    searchTimerRef.current = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const results = await searchItemsForLink(searchQuery, itemId);
-        setSearchResults(results);
-      } catch (err) {
-        console.error('[DependencyPanel] Search failed:', err);
-        setSearchResults([]);
-      } finally {
-        setSearching(false);
-      }
-    }, 300);
-
-    return () => {
-      if (searchTimerRef.current) {
-        clearTimeout(searchTimerRef.current);
-      }
-    };
-  }, [searchQuery, itemId]);
-
-  // Focus search input when search is opened
-  useEffect(() => {
-    if (addingType && searchInputRef.current) {
-      searchInputRef.current.focus();
-    }
-  }, [addingType]);
+  }
 
   async function handleAdd(targetId: string) {
     if (!addingType) return;
@@ -106,8 +75,7 @@ export function DependencyPanel({ itemId, dependencies, onUpdate }: DependencyPa
     setError(null);
     try {
       await addDependency(itemId, targetId, addingType);
-      setSearchQuery('');
-      setSearchResults([]);
+      resetSearch();
       setAddingType(null);
       onUpdate();
     } catch (err) {
@@ -213,8 +181,7 @@ export function DependencyPanel({ itemId, dependencies, onUpdate }: DependencyPa
         <button
           onClick={() => {
             setAddingType(null);
-            setSearchQuery('');
-            setSearchResults([]);
+            resetSearch();
             setError(null);
           }}
           className="text-xs text-gray-500 hover:text-gray-700"

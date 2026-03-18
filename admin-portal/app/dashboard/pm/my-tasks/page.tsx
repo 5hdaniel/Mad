@@ -56,8 +56,8 @@ export default function MyTasksPage() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) setUserId(user.id);
-      } catch {
-        // Auth error -- user not signed in
+      } catch (err) {
+        console.error('Failed to get current user:', err);
       }
     }
     getUser();

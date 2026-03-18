@@ -37,10 +37,9 @@ import {
   updateItemStatus,
   updateItemField,
   assignToSprint,
-  assignItem,
   createItem,
   bulkUpdate,
-  deleteItem,
+  bulkDelete,
   listAssignableUsers,
   listLabels,
 } from '@/lib/pm-queries';
@@ -121,8 +120,8 @@ function readPersistedBoardState(): BoardPersistedState | null {
   try {
     const saved = localStorage.getItem(BOARD_STATE_KEY);
     if (saved) return JSON.parse(saved) as BoardPersistedState;
-  } catch {
-    // Ignore corrupted localStorage
+  } catch (err) {
+    console.error('Failed to read board state from localStorage:', err);
   }
   return null;
 }
@@ -173,6 +172,8 @@ export default function BoardPage() {
   const [boardLabels, setBoardLabels] = useState<PmLabel[]>([]);
   const [activeDragItem, setActiveDragItem] = useState<PmBacklogItem | null>(null);
   const [activeDragIsBacklog, setActiveDragIsBacklog] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // -- DnD sensors (shared by board cards AND backlog panel items) ----------
   const sensors = useSensors(
@@ -201,8 +202,8 @@ export default function BoardPage() {
         compactCards,
       };
       localStorage.setItem(BOARD_STATE_KEY, JSON.stringify(state));
-    } catch {
-      // localStorage may be full or disabled -- ignore
+    } catch (err) {
+      console.error('Failed to persist board state to localStorage:', err);
     }
   }, [selectedSprintId, swimLane, collapsedLanes, compactCards]);
 
@@ -252,11 +253,11 @@ export default function BoardPage() {
 
   /** Load assignable users and labels at board level for inline editing. */
   const refreshLabels = useCallback(() => {
-    listLabels().then(setBoardLabels).catch(() => {});
+    listLabels().then(setBoardLabels).catch((err) => console.error('Failed to load labels:', err));
   }, []);
 
   useEffect(() => {
-    listAssignableUsers().then(setBoardUsers).catch(() => {});
+    listAssignableUsers().then(setBoardUsers).catch((err) => console.error('Failed to load users:', err));
     refreshLabels();
   }, [refreshLabels]);
 
@@ -415,14 +416,12 @@ export default function BoardPage() {
     }
   }, [selectedIds, selectedSprintId, loadBoardData]);
 
-  /** Bulk assign to user. */
+  /** Bulk assign to user via single RPC call. */
   const handleBulkAssignUser = useCallback(
     async (assigneeId: string | null) => {
       if (selectedIds.size === 0) return;
       try {
-        await Promise.all(
-          Array.from(selectedIds).map((id) => assignItem(id, assigneeId))
-        );
+        await bulkUpdate(Array.from(selectedIds), { assignee_id: assigneeId });
         setSelectedIds(new Set());
         await loadBoardData();
       } catch (err) {
@@ -432,17 +431,24 @@ export default function BoardPage() {
     [selectedIds, loadBoardData]
   );
 
-  /** Bulk delete. */
-  const handleBulkDelete = useCallback(async () => {
+  /** Show bulk delete confirmation dialog. */
+  const handleBulkDeleteRequest = useCallback(() => {
+    if (selectedIds.size === 0) return;
+    setDeleteError(null);
+    setDeleteConfirmOpen(true);
+  }, [selectedIds]);
+
+  /** Execute bulk delete after confirmation. */
+  const handleBulkDeleteConfirm = useCallback(async () => {
     if (selectedIds.size === 0) return;
     try {
-      for (const id of selectedIds) {
-        await deleteItem(id);
-      }
+      await bulkDelete(Array.from(selectedIds));
       setSelectedIds(new Set());
+      setDeleteConfirmOpen(false);
       await loadBoardData();
     } catch (err) {
       console.error('Failed to bulk delete:', err);
+      setDeleteError('Failed to delete items. Please try again.');
     }
   }, [selectedIds, loadBoardData]);
 
@@ -855,8 +861,48 @@ export default function BoardPage() {
         }}
         onAssignToSprint={handleBulkAssignSprint}
         onAssignUser={handleBulkAssignUser}
-        onDelete={handleBulkDelete}
+        onDelete={handleBulkDeleteRequest}
       />
+
+      {/* Bulk delete confirmation dialog */}
+      {deleteConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setDeleteConfirmOpen(false)}
+          />
+          {/* Dialog */}
+          <div className="relative bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4">
+            <h3 className="text-lg font-semibold text-gray-900">
+              Confirm Delete
+            </h3>
+            <p className="mt-2 text-sm text-gray-600">
+              Are you sure you want to delete{' '}
+              <span className="font-medium">{selectedIds.size}</span>{' '}
+              {selectedIds.size === 1 ? 'item' : 'items'}? This action cannot
+              be undone.
+            </p>
+            {deleteError && (
+              <p className="mt-2 text-sm text-red-600">{deleteError}</p>
+            )}
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setDeleteConfirmOpen(false)}
+                className="px-3 py-1.5 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkDeleteConfirm}
+                className="px-3 py-1.5 text-sm text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors"
+              >
+                Delete {selectedIds.size} {selectedIds.size === 1 ? 'item' : 'items'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
