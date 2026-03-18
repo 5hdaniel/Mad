@@ -309,13 +309,11 @@ export default function BoardPage() {
       setBacklogLoading(true);
       try {
         const result = await listItems({
-          sprint_id: undefined,
+          unassigned_only: true,
           search: search || undefined,
           page_size: 100,
         });
-        // Filter to items without a sprint assignment
-        const unassigned = (result.items || []).filter((i) => !i.sprint_id);
-        setBacklogItems(unassigned);
+        setBacklogItems(result.items || []);
       } catch (err) {
         console.error('Failed to load backlog items:', err);
       } finally {

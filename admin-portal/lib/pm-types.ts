@@ -252,6 +252,7 @@ export interface ItemListParams {
   page?: number;
   page_size?: number;
   root_only?: boolean;
+  unassigned_only?: boolean;
 }
 
 export interface ItemListResponse {
