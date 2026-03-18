@@ -15,7 +15,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import Link from 'next/link';
 import { Check, Plus, Loader2 } from 'lucide-react';
-import type { PmBacklogItem, ItemPriority, PmLabel } from '@/lib/pm-types';
+import type { PmBacklogItem, ItemPriority, PmLabel, AssignableUser } from '@/lib/pm-types';
 import { PRIORITY_COLORS, PRIORITY_LABELS } from '@/lib/pm-types';
 import {
   updateItemField,
@@ -24,16 +24,9 @@ import {
   removeItemLabel,
   createLabel,
 } from '@/lib/pm-queries';
+import { useClickOutside } from '@/hooks/useClickOutside';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export interface AssignableUser {
-  id: string;
-  display_name: string | null;
-  email: string;
-}
+export type { AssignableUser } from '@/lib/pm-types';
 
 interface KanbanCardProps {
   item: PmBacklogItem;
@@ -67,15 +60,8 @@ function PriorityDropdown({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+  const close = useCallback(() => setOpen(false), []);
+  useClickOutside(ref, close, open);
 
   return (
     <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
@@ -129,15 +115,8 @@ function AssigneeDropdown({
   const [search, setSearch] = useState('');
   const ref = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+  const close = useCallback(() => setOpen(false), []);
+  useClickOutside(ref, close, open);
 
   // Auto-focus search input when dropdown opens
   useEffect(() => {
@@ -302,17 +281,10 @@ function InlineLabelPicker({
   const [creating, setCreating] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  useClickOutside(ref, close, open);
 
   const currentLabelIds = new Set(currentLabels.map((l) => l.id));
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
 
   async function handleToggleLabel(label: PmLabel) {
     setUpdating(label.id);

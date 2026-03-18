@@ -13,17 +13,7 @@
 import { useState } from 'react';
 import type { ItemStatus } from '@/lib/pm-types';
 import { STATUS_LABELS } from '@/lib/pm-types';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Format token count for display (e.g. 1500 -> "2K", 1200000 -> "1.2M"). */
-function formatTokens(tokens: number): string {
-  if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
-  if (tokens >= 1000) return `${(tokens / 1000).toFixed(0)}K`;
-  return String(tokens);
-}
+import { formatTokens } from '@/lib/pm-utils';
 
 // ---------------------------------------------------------------------------
 // Component

@@ -45,6 +45,16 @@ export type SprintStatus = 'planned' | 'active' | 'completed' | 'cancelled';
 export type ProjectStatus = 'active' | 'archived';
 
 // ---------------------------------------------------------------------------
+// Assignable user (returned by pm_list_assignable_users RPC)
+// ---------------------------------------------------------------------------
+
+export interface AssignableUser {
+  id: string;
+  display_name: string | null;
+  email: string;
+}
+
+// ---------------------------------------------------------------------------
 // Core interfaces (match DB tables and RPC return shapes)
 // ---------------------------------------------------------------------------
 
@@ -485,4 +495,34 @@ export interface TaskTokenResult {
 export interface AgentMetricResult {
   success: boolean;
   metric_id: string;
+}
+
+// ---------------------------------------------------------------------------
+// Typed field names for update operations
+// ---------------------------------------------------------------------------
+
+/** Whitelisted fields that can be passed to pm_update_item_field. */
+export type ItemField =
+  | 'title'
+  | 'description'
+  | 'type'
+  | 'area'
+  | 'priority'
+  | 'project_id'
+  | 'est_tokens'
+  | 'start_date'
+  | 'due_date';
+
+/** Whitelisted fields that can be passed to pm_update_sprint_field. */
+export type SprintField = 'name' | 'goal';
+
+/** Whitelisted fields that can be passed to pm_update_project_field. */
+export type ProjectField = 'name' | 'description';
+
+/** Typed updates object for pm_bulk_update. */
+export interface BulkUpdateFields {
+  status?: ItemStatus;
+  priority?: ItemPriority;
+  project_id?: string;
+  area?: string;
 }

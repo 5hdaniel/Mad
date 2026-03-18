@@ -10,11 +10,11 @@
  * Status, Priority, Type, Assignee, and Area columns support inline editing.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Check } from 'lucide-react';
-import type { PmBacklogItem, ItemStatus, ItemPriority, ItemType, SortableColumn, SortDirection } from '@/lib/pm-types';
+import type { PmBacklogItem, ItemStatus, ItemPriority, ItemType, SortableColumn, SortDirection, AssignableUser } from '@/lib/pm-types';
 import {
   STATUS_LABELS,
   STATUS_COLORS,
@@ -29,16 +29,10 @@ import {
   updateItemField,
   assignItem,
 } from '@/lib/pm-queries';
+import { formatTokens } from '@/lib/pm-utils';
+import { useClickOutside } from '@/hooks/useClickOutside';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export interface AssignableUser {
-  id: string;
-  display_name: string | null;
-  email: string;
-}
+export type { AssignableUser } from '@/lib/pm-types';
 
 interface TaskTableProps {
   items: PmBacklogItem[];
@@ -80,15 +74,8 @@ function InlineStatusDropdown({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+  const close = useCallback(() => setOpen(false), []);
+  useClickOutside(ref, close, open);
 
   const validTransitions = ALLOWED_TRANSITIONS[status] || [];
 
@@ -153,15 +140,8 @@ function InlinePriorityDropdown({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+  const close = useCallback(() => setOpen(false), []);
+  useClickOutside(ref, close, open);
 
   async function handleSelect(newPriority: ItemPriority) {
     setOpen(false);
@@ -224,15 +204,8 @@ function InlineTypeDropdown({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+  const close = useCallback(() => setOpen(false), []);
+  useClickOutside(ref, close, open);
 
   async function handleSelect(newType: ItemType) {
     setOpen(false);
@@ -299,15 +272,8 @@ function InlineAssigneeDropdown({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+  const close = useCallback(() => setOpen(false), []);
+  useClickOutside(ref, close, open);
 
   async function handleSelect(userId: string | null) {
     setOpen(false);
@@ -502,12 +468,6 @@ function formatDate(dateStr: string): string {
   if (diffHours < 24) return `${diffHours}h ago`;
   if (diffDays < 7) return `${diffDays}d ago`;
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
-function formatTokens(tokens: number | null): string {
-  if (tokens === null || tokens === undefined) return '-';
-  if (tokens >= 1000) return `${(tokens / 1000).toFixed(0)}K`;
-  return String(tokens);
 }
 
 // ---------------------------------------------------------------------------
