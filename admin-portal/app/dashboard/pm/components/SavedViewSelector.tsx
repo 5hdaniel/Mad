@@ -28,8 +28,8 @@ export function SavedViewSelector({ currentFilters, onLoadView }: SavedViewSelec
     try {
       const data = await listSavedViews();
       setViews(data);
-    } catch {
-      // Silently fail -- views are non-critical
+    } catch (err) {
+      console.error('Failed to load saved views:', err);
     } finally {
       setLoading(false);
     }

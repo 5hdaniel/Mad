@@ -59,8 +59,8 @@ export function HierarchyTree({ items, onItemClick }: HierarchyTreeProps) {
         try {
           const response = await listItems({ parent_id: id, page_size: 100 });
           setChildrenMap((prev) => ({ ...prev, [id]: response.items }));
-        } catch {
-          // Silently fail; user can retry by collapsing/expanding
+        } catch (err) {
+          console.error('Failed to load children:', err);
         } finally {
           setLoadingNodes((prev) => {
             const next = new Set(prev);

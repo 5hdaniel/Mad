@@ -101,8 +101,8 @@ function TaskDetailContent() {
     try {
       const deps = await listItemDependencies(itemId);
       setDependencies(deps);
-    } catch {
-      // Dependencies are non-critical; don't block the page
+    } catch (err) {
+      console.error('Failed to load dependencies:', err);
       setDependencies([]);
     }
   }, [itemId]);
