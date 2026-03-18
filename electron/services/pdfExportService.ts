@@ -1,12 +1,18 @@
 import { BrowserWindow, app } from "electron";
 import path from "path";
 import fs from "fs/promises";
+import { JSDOM } from "jsdom";
+import createDOMPurify, { type WindowLike } from "dompurify";
 import { Transaction, Communication } from "../types/models";
 import { isEmailMessage, isTextMessage } from "../utils/channelHelpers";
 import { escapeHtml, formatCurrency, formatDate, formatDateTime, getContactNamesByPhones } from "../utils/exportUtils";
 import logService from "./logService";
 import { normalizePhone as sharedNormalizePhone } from "./contactResolutionService";
 import { getThreadKey as sharedGetThreadKey } from "./folderExport/textExportHelpers";
+
+// Create a DOMPurify instance using JSDOM for Node.js / Electron main process
+const domPurifyWindow = new JSDOM("").window;
+const DOMPurify = createDOMPurify(domPurifyWindow as unknown as WindowLike);
 
 /**
  * Format phone number or resolve to contact name
@@ -513,93 +519,38 @@ class PDFExportService {
       .filter((s): s is string => !!s && (s.startsWith('+') || /^\d{7,}$/.test(s.replace(/\D/g, ''))));
     const phoneNameMap = getContactNamesByPhones(textPhones);
 
-    // Helper to sanitize HTML for PDF display
-    // Removes dangerous elements while preserving formatting
-    // Uses while-loop pattern to handle nested/overlapping patterns
-    // (e.g., <scr<script>ipt> after one pass becomes <script>)
+    // Sanitize HTML for PDF display using DOMPurify (BACKLOG-1081)
+    // Replaces previous regex-based sanitization which was fundamentally unreliable
     const sanitizeHtml = (html: string | null | undefined): string => {
       if (!html) return '';
 
-      let sanitized = html;
-      let prev: string;
+      // Use DOMPurify with an allowlist of safe formatting tags
+      // This strips scripts, event handlers, iframes, forms, and all dangerous content
+      const sanitized = DOMPurify.sanitize(html, {
+        // Allow safe formatting tags for email display
+        ALLOWED_TAGS: [
+          'a', 'b', 'blockquote', 'br', 'caption', 'cite', 'code',
+          'col', 'colgroup', 'dd', 'div', 'dl', 'dt', 'em', 'h1',
+          'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'img', 'li',
+          'ol', 'p', 'pre', 'small', 'span', 'strong', 'sub', 'sup',
+          'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'u', 'ul',
+        ],
+        // Allow safe attributes for display/formatting
+        ALLOWED_ATTR: [
+          'href', 'src', 'alt', 'title', 'width', 'height', 'style',
+          'class', 'colspan', 'rowspan', 'align', 'valign', 'border',
+          'cellpadding', 'cellspacing', 'dir', 'lang',
+        ],
+        // Block dangerous URI schemes
+        ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
+        // Remove entire tag (not just attributes) for dangerous elements
+        FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'textarea', 'meta', 'link', 'base'],
+        // Strip document-level wrappers (html, head, body) automatically
+        WHOLE_DOCUMENT: false,
+      });
 
-      // Remove script tags and their content (loop for nested patterns)
-      prev = '';
-      while (sanitized !== prev) {
-        prev = sanitized;
-        sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-      }
-
-      // Remove style tags and their content (loop for nested patterns)
-      prev = '';
-      while (sanitized !== prev) {
-        prev = sanitized;
-        sanitized = sanitized.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
-      }
-
-      // Remove all event handlers (onclick, onerror, onload, etc.)
-      sanitized = sanitized.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '');
-      sanitized = sanitized.replace(/\s+on\w+\s*=\s*[^\s>]+/gi, '');
-
-      // Remove javascript: URLs
-      sanitized = sanitized.replace(/href\s*=\s*["']javascript:[^"']*["']/gi, 'href="#"');
-      sanitized = sanitized.replace(/src\s*=\s*["']javascript:[^"']*["']/gi, 'src=""');
-
-      // Remove data: URLs (could contain malicious content)
-      sanitized = sanitized.replace(/src\s*=\s*["']data:[^"']*["']/gi, 'src=""');
-      sanitized = sanitized.replace(/href\s*=\s*["']data:[^"']*["']/gi, 'href="#"');
-
-      // Remove iframe, embed, object tags (loop for nested patterns)
-      prev = '';
-      while (sanitized !== prev) {
-        prev = sanitized;
-        sanitized = sanitized.replace(/<iframe\b[^>]*>.*?<\/iframe>/gi, '');
-        sanitized = sanitized.replace(/<iframe\b[^>]*\/?>/gi, '');
-      }
-
-      prev = '';
-      while (sanitized !== prev) {
-        prev = sanitized;
-        sanitized = sanitized.replace(/<embed\b[^>]*\/?>/gi, '');
-      }
-
-      prev = '';
-      while (sanitized !== prev) {
-        prev = sanitized;
-        sanitized = sanitized.replace(/<object\b[^>]*>.*?<\/object>/gi, '');
-        sanitized = sanitized.replace(/<object\b[^>]*\/?>/gi, '');
-      }
-
-      // Remove form elements (loop for nested patterns)
-      prev = '';
-      while (sanitized !== prev) {
-        prev = sanitized;
-        sanitized = sanitized.replace(/<form\b[^>]*>.*?<\/form>/gi, '');
-        sanitized = sanitized.replace(/<input\b[^>]*\/?>/gi, '');
-        sanitized = sanitized.replace(/<button\b[^>]*>.*?<\/button>/gi, '');
-        sanitized = sanitized.replace(/<textarea\b[^>]*>.*?<\/textarea>/gi, '');
-      }
-
-      // Remove meta, link, base tags
-      sanitized = sanitized.replace(/<meta\b[^>]*\/?>/gi, '');
-      sanitized = sanitized.replace(/<link\b[^>]*\/?>/gi, '');
-      sanitized = sanitized.replace(/<base\b[^>]*\/?>/gi, '');
-
-      // CRITICAL: Remove document-level tags that can affect the whole PDF
-      // These tags from email HTML bleed styles into our document
-      prev = '';
-      while (sanitized !== prev) {
-        prev = sanitized;
-        sanitized = sanitized.replace(/<!DOCTYPE[^>]*>/gi, '');
-        sanitized = sanitized.replace(/<\/?html\b[^>]*>/gi, '');
-        sanitized = sanitized.replace(/<head\b[^>]*>[\s\S]*?<\/head>/gi, '');
-        sanitized = sanitized.replace(/<\/?body\b[^>]*>/gi, '');
-      }
-
-      // Remove any background-color styles that could affect the page
-      sanitized = sanitized.replace(/background(-color)?\s*:\s*[^;"}]+[;"]?/gi, '');
-
-      return sanitized;
+      // Remove background-color styles that could affect the PDF page
+      return sanitized.replace(/background(-color)?\s*:\s*[^;"}]+[;"]?/gi, '');
     };
 
     // Helper to truncate preview text

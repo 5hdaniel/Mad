@@ -30,6 +30,7 @@ import {
   ChevronRight,
   Loader2,
   Package,
+  Trash2,
 } from 'lucide-react';
 import {
   getProjectDetail,
@@ -37,6 +38,7 @@ import {
   createItem,
   createSprint,
   updateProjectField,
+  deleteProject,
 } from '@/lib/pm-queries';
 import type {
   PmProject,
@@ -55,6 +57,8 @@ import {
   TYPE_LABELS,
   TYPE_COLORS,
 } from '@/lib/pm-types';
+import { usePermissions } from '@/components/providers/PermissionsProvider';
+import { PERMISSIONS } from '@/lib/permissions';
 import { DualProgressBar } from '../../components/DualProgressBar';
 import { InlineEditText } from '../../components/InlineEditText';
 
@@ -488,7 +492,13 @@ function BacklogPanel({ items, projectId, loading, onRefresh }: BacklogPanelProp
 
 export default function ProjectDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const projectId = params.id as string;
+  const { hasPermission } = usePermissions();
+
+  // Delete state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Project detail state
   const [project, setProject] = useState<PmProject | null>(null);
@@ -585,6 +595,20 @@ export default function ProjectDetailPage() {
     loadItems();
   }, [loadDetail, loadItems]);
 
+  // Delete project handler
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  async function handleDeleteProject() {
+    setDeleting(true);
+    try {
+      await deleteProject(projectId);
+      router.push('/dashboard/pm/projects');
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete project');
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  }
+
   // Loading state
   if (loadingDetail) {
     return (
@@ -640,50 +664,92 @@ export default function ProjectDetailPage() {
         </Link>
 
         {/* Project header */}
-        <div className="flex items-start gap-4">
-          <div className="p-3 bg-blue-50 rounded-lg">
-            <FolderKanban className="h-6 w-6 text-blue-600" />
-          </div>
-          <div className="flex-1">
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-gray-900">
+        <div className="flex items-start justify-between">
+          <div className="flex items-start gap-4">
+            <div className="p-3 bg-blue-50 rounded-lg">
+              <FolderKanban className="h-6 w-6 text-blue-600" />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-bold text-gray-900">
+                  <InlineEditText
+                    value={project.name}
+                    placeholder="Project name..."
+                    onSave={async (newValue) => {
+                      if (!newValue) return;
+                      await updateProjectField(projectId, 'name', newValue);
+                      loadDetail();
+                    }}
+                    displayClassName="text-2xl font-bold text-gray-900"
+                  />
+                </h1>
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                    project.status === 'active'
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-gray-100 text-gray-500'
+                  }`}
+                >
+                  {project.status === 'active' ? 'Active' : 'Archived'}
+                </span>
+              </div>
+              <div className="mt-1">
                 <InlineEditText
-                  value={project.name}
-                  placeholder="Project name..."
+                  value={project.description}
+                  placeholder="Add a description..."
+                  multiline
                   onSave={async (newValue) => {
-                    if (!newValue) return;
-                    await updateProjectField(projectId, 'name', newValue);
+                    await updateProjectField(projectId, 'description', newValue);
                     loadDetail();
                   }}
-                  displayClassName="text-2xl font-bold text-gray-900"
+                  displayClassName="text-sm text-gray-500"
+                  rows={2}
                 />
-              </h1>
-              <span
-                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                  project.status === 'active'
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-gray-100 text-gray-500'
-                }`}
-              >
-                {project.status === 'active' ? 'Active' : 'Archived'}
-              </span>
-            </div>
-            <div className="mt-1">
-              <InlineEditText
-                value={project.description}
-                placeholder="Add a description..."
-                multiline
-                onSave={async (newValue) => {
-                  await updateProjectField(projectId, 'description', newValue);
-                  loadDetail();
-                }}
-                displayClassName="text-sm text-gray-500"
-                rows={2}
-              />
+              </div>
             </div>
           </div>
+          {hasPermission(PERMISSIONS.PM_ADMIN) && (
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="inline-flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 transition-colors shrink-0"
+              title="Delete project"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Delete Confirmation */}
+      {showDeleteConfirm && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
+          <p className="text-sm text-red-800">
+            Are you sure you want to delete project &quot;{project.name}&quot;? This will soft-delete the project.
+          </p>
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={handleDeleteProject}
+              disabled={deleting}
+              className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+            >
+              {deleting ? 'Deleting...' : 'Delete'}
+            </button>
+            <button
+              onClick={() => setShowDeleteConfirm(false)}
+              className="px-3 py-1 text-sm text-gray-700 bg-white border rounded hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {deleteError && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
+          <p className="text-sm text-red-800">{deleteError}</p>
+        </div>
+      )}
 
       {/* Status summary with progress bar */}
       <div className="bg-white border border-gray-200 rounded-lg p-4 mb-6">
