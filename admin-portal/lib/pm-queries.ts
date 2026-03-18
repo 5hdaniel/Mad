@@ -801,3 +801,43 @@ export async function listAssignableUsers(): Promise<
   if (error) throw error;
   return (data ?? []) as { id: string; display_name: string | null; email: string }[];
 }
+
+// ---------------------------------------------------------------------------
+// 42. pm_update_project_field -- Update project name/description
+// ---------------------------------------------------------------------------
+
+/** Update a single whitelisted field on a project (name, description). */
+export async function updateProjectField(
+  projectId: string,
+  field: string,
+  value: string | null
+): Promise<{ success: boolean; field: string; old_value: string | null; new_value: string | null }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('pm_update_project_field', {
+    p_project_id: projectId,
+    p_field: field,
+    p_value: value,
+  });
+  if (error) throw error;
+  return data as unknown as { success: boolean; field: string; old_value: string | null; new_value: string | null };
+}
+
+// ---------------------------------------------------------------------------
+// 43. pm_update_sprint_field -- Update sprint name/goal
+// ---------------------------------------------------------------------------
+
+/** Update a single whitelisted field on a sprint (name, goal). */
+export async function updateSprintField(
+  sprintId: string,
+  field: string,
+  value: string | null
+): Promise<{ success: boolean; field: string; old_value: string | null; new_value: string | null }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('pm_update_sprint_field', {
+    p_sprint_id: sprintId,
+    p_field: field,
+    p_value: value,
+  });
+  if (error) throw error;
+  return data as unknown as { success: boolean; field: string; old_value: string | null; new_value: string | null };
+}

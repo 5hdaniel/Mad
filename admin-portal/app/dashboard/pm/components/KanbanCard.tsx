@@ -10,7 +10,7 @@
  *   Row 4: Assignee avatar+name (inline editable) | Label pills (inline editable)
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import Link from 'next/link';
@@ -22,6 +22,7 @@ import {
   assignItem,
   addItemLabel,
   removeItemLabel,
+  createLabel,
 } from '@/lib/pm-queries';
 
 // ---------------------------------------------------------------------------
@@ -125,7 +126,9 @@ function AssigneeDropdown({
   onUpdate: (userId: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const ref = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -134,6 +137,18 @@ function AssigneeDropdown({
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  // Auto-focus search input when dropdown opens
+  useEffect(() => {
+    if (open) {
+      // Use requestAnimationFrame to ensure the DOM has rendered
+      requestAnimationFrame(() => {
+        searchInputRef.current?.focus();
+      });
+    } else {
+      setSearch('');
+    }
   }, [open]);
 
   const currentUser = users.find((u) => u.id === assigneeId);
@@ -145,6 +160,27 @@ function AssigneeDropdown({
         .join('')
         .toUpperCase()
     : null;
+
+  // Filter users by search term (case-insensitive match on name or email)
+  const filteredUsers = search.trim()
+    ? users.filter((u) => {
+        const term = search.toLowerCase();
+        const name = (u.display_name || '').toLowerCase();
+        const email = u.email.toLowerCase();
+        return name.includes(term) || email.includes(term);
+      })
+    : users;
+
+  const handleSearchKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      // Prevent card drag/sort handlers from capturing keyboard events
+      e.stopPropagation();
+      if (e.key === 'Escape') {
+        setOpen(false);
+      }
+    },
+    [],
+  );
 
   return (
     <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
@@ -171,35 +207,56 @@ function AssigneeDropdown({
         )}
       </button>
       {open && (
-        <div className="absolute left-0 top-full mt-1 bg-white border rounded-md shadow-lg z-20 py-1 w-48 max-h-48 overflow-y-auto">
-          <button
-            onClick={() => {
-              onUpdate(null);
-              setOpen(false);
-            }}
-            className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 text-gray-400"
-          >
-            Unassigned
-          </button>
-          {users.map((user) => (
+        <div className="absolute left-0 top-full mt-1 bg-white border rounded-md shadow-lg z-20 w-48">
+          {/* Search input */}
+          <div className="p-1.5 border-b border-gray-100">
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              placeholder="Search users..."
+              className="w-full px-2 py-1 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded focus:outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-300 placeholder-gray-400"
+            />
+          </div>
+          {/* User list */}
+          <div className="py-1 max-h-40 overflow-y-auto">
+            {/* Unassigned -- always visible */}
             <button
-              key={user.id}
               onClick={() => {
-                onUpdate(user.id);
+                onUpdate(null);
                 setOpen(false);
               }}
-              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center justify-between ${
-                user.id === assigneeId ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
-              }`}
+              className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 text-gray-400"
             >
-              <span className="truncate">
-                {user.display_name || user.email}
-              </span>
-              {user.id === assigneeId && (
-                <Check className="h-3 w-3 text-blue-600 flex-shrink-0" />
-              )}
+              Unassigned
             </button>
-          ))}
+            {filteredUsers.map((user) => (
+              <button
+                key={user.id}
+                onClick={() => {
+                  onUpdate(user.id);
+                  setOpen(false);
+                }}
+                className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center justify-between ${
+                  user.id === assigneeId ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
+                }`}
+              >
+                <span className="truncate">
+                  {user.display_name || user.email}
+                </span>
+                {user.id === assigneeId && (
+                  <Check className="h-3 w-3 text-blue-600 flex-shrink-0" />
+                )}
+              </button>
+            ))}
+            {filteredUsers.length === 0 && search.trim() && (
+              <p className="px-3 py-1.5 text-xs text-gray-400">No matches</p>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -209,6 +266,24 @@ function AssigneeDropdown({
 // ---------------------------------------------------------------------------
 // InlineLabelPicker
 // ---------------------------------------------------------------------------
+
+/** Preset color palette for new labels. */
+const LABEL_COLORS = [
+  '#6366f1', // indigo
+  '#8b5cf6', // violet
+  '#ec4899', // pink
+  '#ef4444', // red
+  '#f97316', // orange
+  '#eab308', // yellow
+  '#22c55e', // green
+  '#14b8a6', // teal
+  '#3b82f6', // blue
+  '#6b7280', // gray
+];
+
+function pickRandomColor(): string {
+  return LABEL_COLORS[Math.floor(Math.random() * LABEL_COLORS.length)];
+}
 
 function InlineLabelPicker({
   itemId,
@@ -223,7 +298,10 @@ function InlineLabelPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [newLabelName, setNewLabelName] = useState('');
+  const [creating, setCreating] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const currentLabelIds = new Set(currentLabels.map((l) => l.id));
 
@@ -249,6 +327,23 @@ function InlineLabelPicker({
       // Silently fail -- user can retry
     } finally {
       setUpdating(null);
+    }
+  }
+
+  async function handleCreateLabel() {
+    const name = newLabelName.trim();
+    if (!name || creating) return;
+    setCreating(true);
+    try {
+      const color = pickRandomColor();
+      const { id: labelId } = await createLabel(name, color);
+      await addItemLabel(itemId, labelId);
+      setNewLabelName('');
+      onUpdate();
+    } catch {
+      // Silently fail -- user can retry
+    } finally {
+      setCreating(false);
     }
   }
 
@@ -293,9 +388,9 @@ function InlineLabelPicker({
         )}
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 bg-white border rounded-md shadow-lg z-20 py-1 w-44 max-h-48 overflow-y-auto">
-          {allLabels.length === 0 ? (
-            <p className="text-xs text-gray-400 px-3 py-2">No labels available</p>
+        <div className="absolute right-0 top-full mt-1 bg-white border rounded-md shadow-lg z-20 py-1 w-44 max-h-56 overflow-y-auto">
+          {allLabels.length === 0 && newLabelName.trim() === '' ? (
+            <p className="text-xs text-gray-400 px-3 py-2">No labels yet</p>
           ) : (
             allLabels.map((label) => (
               <button
@@ -318,6 +413,36 @@ function InlineLabelPicker({
               </button>
             ))
           )}
+          {/* Create new label input */}
+          <div className="border-t mt-1 pt-1 px-2 pb-1">
+            <div className="flex items-center gap-1">
+              <input
+                ref={inputRef}
+                type="text"
+                value={newLabelName}
+                onChange={(e) => setNewLabelName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleCreateLabel();
+                  }
+                }}
+                placeholder="New label..."
+                className="flex-1 min-w-0 text-xs px-1.5 py-1 border rounded text-gray-900 bg-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              />
+              <button
+                onClick={handleCreateLabel}
+                disabled={!newLabelName.trim() || creating}
+                className="text-xs px-1.5 py-1 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-0.5 shrink-0"
+              >
+                {creating ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Plus className="h-3 w-3" />
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

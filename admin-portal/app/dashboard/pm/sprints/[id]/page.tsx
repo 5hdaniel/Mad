@@ -25,7 +25,7 @@ import {
   TrendingDown,
   Info,
 } from 'lucide-react';
-import { getSprintDetail, listItems, deleteSprint } from '@/lib/pm-queries';
+import { getSprintDetail, listItems, deleteSprint, updateSprintField } from '@/lib/pm-queries';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
 import { PERMISSIONS } from '@/lib/permissions';
 import type {
@@ -36,6 +36,7 @@ import type {
 import { SPRINT_STATUS_LABELS, SPRINT_STATUS_COLORS } from '@/lib/pm-types';
 import { TaskTable } from '../../components/TaskTable';
 import { DualProgressBar } from '../../components/DualProgressBar';
+import { InlineEditText } from '../../components/InlineEditText';
 
 /** Format token count for display (e.g. 1500 → "2K", 1200000 → "1.2M"). */
 function formatTokens(tokens: number): string {
@@ -64,25 +65,24 @@ export default function SprintDetailPage() {
   const pageSize = 50;
 
   // Load sprint detail
-  useEffect(() => {
+  const loadDetail = useCallback(async () => {
     if (!sprintId) return;
-
-    async function loadDetail() {
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await getSprintDetail(sprintId);
-        setDetail(data);
-      } catch (err) {
-        console.error('Failed to load sprint detail:', err);
-        setError('Failed to load sprint detail.');
-      } finally {
-        setLoading(false);
-      }
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await getSprintDetail(sprintId);
+      setDetail(data);
+    } catch (err) {
+      console.error('Failed to load sprint detail:', err);
+      setError('Failed to load sprint detail.');
+    } finally {
+      setLoading(false);
     }
-
-    loadDetail();
   }, [sprintId]);
+
+  useEffect(() => {
+    loadDetail();
+  }, [loadDetail]);
 
   // Load paginated items
   const loadItems = useCallback(async () => {
@@ -224,7 +224,16 @@ export default function SprintDetailPage() {
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold text-gray-900">
-                {sprint.name}
+                <InlineEditText
+                  value={sprint.name}
+                  placeholder="Sprint name..."
+                  onSave={async (newValue) => {
+                    if (!newValue) return;
+                    await updateSprintField(sprintId, 'name', newValue);
+                    loadDetail();
+                  }}
+                  displayClassName="text-2xl font-bold text-gray-900"
+                />
               </h1>
               <span
                 className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${SPRINT_STATUS_COLORS[sprint.status]}`}
@@ -232,12 +241,20 @@ export default function SprintDetailPage() {
                 {SPRINT_STATUS_LABELS[sprint.status]}
               </span>
             </div>
-            {sprint.goal && (
-              <p className="text-sm text-gray-500 mt-2 flex items-center gap-1">
-                <Target className="h-4 w-4 flex-shrink-0" />
-                {sprint.goal}
-              </p>
-            )}
+            <div className="mt-2 flex items-start gap-1">
+              <Target className="h-4 w-4 flex-shrink-0 text-gray-500 mt-0.5" />
+              <InlineEditText
+                value={sprint.goal}
+                placeholder="Add a sprint goal..."
+                multiline
+                onSave={async (newValue) => {
+                  await updateSprintField(sprintId, 'goal', newValue);
+                  loadDetail();
+                }}
+                displayClassName="text-sm text-gray-500"
+                rows={2}
+              />
+            </div>
             {(sprint.start_date || sprint.end_date) && (
               <p className="text-sm text-gray-500 mt-1 flex items-center gap-1">
                 <Calendar className="h-4 w-4 flex-shrink-0" />
