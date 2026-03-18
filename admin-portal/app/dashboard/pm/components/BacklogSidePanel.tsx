@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { PanelRightClose, PanelRightOpen, Search } from 'lucide-react';
-import { useDraggable } from '@dnd-kit/core';
+import { useDraggable, useDroppable } from '@dnd-kit/core';
 import type { PmBacklogItem } from '@/lib/pm-types';
 
 interface BacklogSidePanelProps {
@@ -28,6 +28,7 @@ export function BacklogSidePanel({
   onSearch,
 }: BacklogSidePanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const { setNodeRef, isOver } = useDroppable({ id: 'backlog-panel' });
 
   function handleSearch(query: string) {
     setSearchQuery(query);
@@ -79,8 +80,13 @@ export function BacklogSidePanel({
           </div>
         </div>
 
-        {/* Items list */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+        {/* Items list (droppable target for unassigning from sprint) */}
+        <div
+          ref={setNodeRef}
+          className={`flex-1 overflow-y-auto p-2 space-y-1.5 transition-colors ${
+            isOver ? 'bg-blue-50 border-blue-200' : ''
+          }`}
+        >
           {loading ? (
             <div className="space-y-2">
               {Array.from({ length: 5 }).map((_, i) => (
