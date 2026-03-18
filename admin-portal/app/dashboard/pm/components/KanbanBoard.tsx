@@ -21,13 +21,16 @@ import type { AssignableUser } from './KanbanCard';
 /** Statuses that appear as board columns (subset of ItemStatus). */
 type BoardStatus = keyof BoardColumns;
 
-// Board columns in display order
+// Board columns in display order (all statuses so no items disappear)
 export const COLUMN_ORDER: BoardStatus[] = [
   'pending',
   'in_progress',
   'testing',
   'completed',
   'blocked',
+  'deferred',
+  'obsolete',
+  'reopened',
 ];
 
 /** Set of valid column IDs for quick lookup. */

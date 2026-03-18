@@ -31,7 +31,7 @@ export interface ExtendedContact extends Contact {
   /** Count of property address mentions in communications */
   address_mention_count?: number;
   /** Last communication date with this contact */
-  last_communication_at?: string | Date | null;
+  last_communication_at?: string | null;
   /** Whether this contact was derived from message participants (not explicitly imported) */
   is_message_derived?: number | boolean;
   /** Total communication count with this contact */
@@ -275,7 +275,7 @@ export interface DashboardStats {
     type: "transaction" | "contact" | "communication";
     id: string;
     description: string;
-    timestamp: Date | string;
+    timestamp: string;
   }>;
 }
 

@@ -4,7 +4,7 @@
  */
 import React from "react";
 import type { Transaction } from "@/types";
-import { LicenseGate } from "@/components/common/LicenseGate";
+import { FeatureGate } from "@/components/common/FeatureGate";
 import { useNetwork } from "@/contexts/NetworkContext";
 
 interface TransactionHeaderProps {
@@ -297,7 +297,7 @@ function ActiveActions({
   return (
     <>
       {/* Submit for Review Button - Team/Enterprise license only */}
-      <LicenseGate requires="team">
+      <FeatureGate requires="team">
         {/* Submit for Review Button - shown when not yet submitted */}
         {onShowSubmitModal && canSubmit && (
           <button
@@ -325,7 +325,7 @@ function ActiveActions({
             Submitted
           </span>
         )}
-      </LicenseGate>
+      </FeatureGate>
       {/* Export Button - Available for ALL license types (BACKLOG-459)
           Team license: secondary action (shown alongside Submit)
           Individual license: primary action */}

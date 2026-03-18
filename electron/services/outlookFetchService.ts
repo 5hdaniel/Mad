@@ -317,7 +317,7 @@ class OutlookFetchService {
                   refresh_token: tokenResponse.refresh_token,
                   token_expires_at: new Date(
                     Date.now() + tokenResponse.expires_in * 1000,
-                  ),
+                  ).toISOString(),
                 },
               );
 

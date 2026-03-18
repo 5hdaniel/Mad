@@ -12,7 +12,7 @@
  * TASK-1809: User list component implementation
  */
 
-import type { OrganizationMember, Role, LicenseStatus, User } from '../../../lib/types/users';
+import type { OrganizationMember, Role, MemberLicenseStatus, User } from '../../../lib/types/users';
 
 // Helper to create mock member
 function createMockMember(
@@ -23,7 +23,7 @@ function createMockMember(
     organization_id: 'org-1',
     user_id: 'user-1',
     role: 'agent' as Role,
-    license_status: 'active' as LicenseStatus,
+    license_status: 'active' as MemberLicenseStatus,
     invited_email: null,
     invitation_token: null,
     invitation_expires_at: null,
