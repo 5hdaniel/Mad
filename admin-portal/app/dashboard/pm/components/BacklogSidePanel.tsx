@@ -130,7 +130,7 @@ function BacklogPanelItem({ item }: { item: PmBacklogItem }) {
     >
       <span className="text-xs text-gray-400 font-mono">#{item.item_number}</span>
       <Link
-        href={`/dashboard/pm/tasks/${item.id}`}
+        href={`/dashboard/pm/tasks/${item.id}?from=board`}
         className="text-xs text-gray-900 font-medium line-clamp-2 mt-0.5 hover:text-blue-600 hover:underline"
         onClick={(e) => e.stopPropagation()}
       >
