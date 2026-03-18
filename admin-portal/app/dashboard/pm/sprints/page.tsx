@@ -25,7 +25,7 @@ export default function SprintsPage() {
   const [velocityData, setVelocityData] = useState<SprintVelocityEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
 
   const loadData = useCallback(async () => {
     setLoading(true);
