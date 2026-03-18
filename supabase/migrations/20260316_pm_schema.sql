@@ -125,7 +125,13 @@ CREATE TABLE pm_events (
 );
 
 -- ============================================
--- 7. pm_task_links (item relationships)
+-- 7. pm_task_links (backlog item relationships)
+--
+-- NAMING NOTE: Despite the name "task_links", this table links
+-- **pm_backlog_items** (not pm_tasks). Both source_id and target_id
+-- reference pm_backlog_items. The name is a historical artifact;
+-- renaming was deferred to avoid breaking existing RPCs and RLS
+-- policies that reference this table.
 -- ============================================
 CREATE TABLE pm_task_links (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -301,9 +301,12 @@ describe("Transactions", () => {
       const searchInput = screen.getByPlaceholderText(/search by address/i);
       await userEvent.type(searchInput, "Main");
 
-      // Only matching transaction visible
-      expect(screen.getByText("123 Main Street")).toBeInTheDocument();
-      expect(screen.queryByText("789 Pine Road")).not.toBeInTheDocument();
+      // BACKLOG-1106: Wait for 300ms debounce to apply filter
+      await waitFor(() => {
+        // Only matching transaction visible
+        expect(screen.getByText("123 Main Street")).toBeInTheDocument();
+        expect(screen.queryByText("789 Pine Road")).not.toBeInTheDocument();
+      });
     });
 
     it("should show no matching transactions message", async () => {

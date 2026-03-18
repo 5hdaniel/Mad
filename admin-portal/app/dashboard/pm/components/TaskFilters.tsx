@@ -12,18 +12,9 @@ import { useEffect, useState } from 'react';
 import { Filter, X } from 'lucide-react';
 import { listSprints, listProjects } from '@/lib/pm-queries';
 import type { PmSprint, PmProject } from '@/lib/pm-types';
-import { STATUS_LABELS, PRIORITY_LABELS, TYPE_LABELS } from '@/lib/pm-types';
+import { STATUS_LABELS, PRIORITY_LABELS, TYPE_LABELS, AREA_LABELS } from '@/lib/pm-types';
 import { MultiSelectDropdown } from './MultiSelectDropdown';
 import type { MultiSelectOption } from './MultiSelectDropdown';
-
-const AREA_OPTIONS: MultiSelectOption[] = [
-  { value: 'admin-portal', label: 'admin-portal' },
-  { value: 'electron', label: 'electron' },
-  { value: 'broker-portal', label: 'broker-portal' },
-  { value: 'service', label: 'service' },
-  { value: 'schema', label: 'schema' },
-  { value: 'ui', label: 'ui' },
-];
 
 interface TaskFiltersProps {
   statuses: string[];
@@ -91,6 +82,10 @@ export function TaskFilters({
     ([key, label]) => ({ value: key, label })
   );
 
+  const areaOptions: MultiSelectOption[] = Object.entries(AREA_LABELS).map(
+    ([key, label]) => ({ value: key, label })
+  );
+
   const sprintOptions: MultiSelectOption[] = sprints.map((s) => ({
     value: s.id,
     label: s.name,
@@ -135,7 +130,7 @@ export function TaskFilters({
       {/* Area filter */}
       <MultiSelectDropdown
         label="All Areas"
-        options={AREA_OPTIONS}
+        options={areaOptions}
         selected={areas}
         onChange={onAreasChange}
       />

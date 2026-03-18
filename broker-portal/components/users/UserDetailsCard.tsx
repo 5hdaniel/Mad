@@ -16,7 +16,7 @@ import { Card } from '@/components/ui/Card';
 import EditRoleModal from './EditRoleModal';
 import DeactivateUserModal from './DeactivateUserModal';
 import RemoveUserModal from './RemoveUserModal';
-import type { Role, LicenseStatus, ProvisioningSource } from '@/lib/types/users';
+import type { Role, MemberLicenseStatus, ProvisioningSource } from '@/lib/types/users';
 import { ROLE_LABELS, LICENSE_STATUS_LABELS, PROVISIONING_SOURCE_LABELS } from '@/lib/types/users';
 import { formatUserDisplayName, getUserInitials } from '@/lib/utils/userDisplay';
 import { formatDate } from '@/lib/utils';
@@ -59,7 +59,7 @@ export interface MemberDetailsData {
   id: string;
   user_id: string | null;
   role: Role;
-  license_status: LicenseStatus;
+  license_status: MemberLicenseStatus;
   invited_email: string | null;
   invited_at: string | null;
   joined_at: string | null;
@@ -93,7 +93,7 @@ const ROLE_COLORS: Record<Role, string> = {
   agent: 'bg-gray-100 text-gray-800',
 };
 
-const STATUS_COLORS: Record<LicenseStatus, string> = {
+const STATUS_COLORS: Record<MemberLicenseStatus, string> = {
   active: 'bg-green-100 text-green-800',
   pending: 'bg-yellow-100 text-yellow-800',
   suspended: 'bg-red-100 text-red-800',

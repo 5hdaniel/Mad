@@ -1,5 +1,5 @@
 import React from "react";
-import { LicenseGate } from "@/components/common/LicenseGate";
+import { FeatureGate } from "@/components/common/FeatureGate";
 import { useFeatureGate } from "@/hooks/useFeatureGate";
 
 // ============================================
@@ -174,7 +174,7 @@ function TransactionToolbar({
                 </span>
               </button>
               {/* Pending Review tab - AI add-on only */}
-              <LicenseGate requires="ai_addon">
+              <FeatureGate requires="ai_addon">
                 <button
                   onClick={() => onFilterChange("pending")}
                   className={`px-2 sm:px-4 py-2 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
@@ -190,7 +190,7 @@ function TransactionToolbar({
                     </span>
                   )}
                 </button>
-              </LicenseGate>
+              </FeatureGate>
               <button
                 onClick={() => onFilterChange("active")}
                 className={`px-2 sm:px-4 py-2 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
@@ -218,7 +218,7 @@ function TransactionToolbar({
                 </span>
               </button>
               {/* Rejected tab - AI add-on only */}
-              <LicenseGate requires="ai_addon">
+              <FeatureGate requires="ai_addon">
                 <button
                   onClick={() => onFilterChange("rejected")}
                   className={`px-2 sm:px-4 py-2 rounded-md font-medium transition-all text-sm whitespace-nowrap ${
@@ -234,7 +234,7 @@ function TransactionToolbar({
                     </span>
                   )}
                 </button>
-              </LicenseGate>
+              </FeatureGate>
 
               {/* Status Info Button */}
               <div className="relative ml-2">
@@ -346,7 +346,7 @@ function TransactionToolbar({
             </button>
 
             {/* Scan/Stop Button - AI add-on only */}
-            <LicenseGate requires="ai_addon">
+            <FeatureGate requires="ai_addon">
               {scanning ? (
                 <button
                   onClick={onStopScan}
@@ -392,7 +392,7 @@ function TransactionToolbar({
                   </span>
                 </button>
               )}
-            </LicenseGate>
+            </FeatureGate>
           </div>
         </div>
 

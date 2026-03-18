@@ -76,16 +76,8 @@ export function EditTransactionModal({
   const [formData, setFormData] = useState({
     property_address: transaction.property_address || "",
     transaction_type: transaction.transaction_type || "purchase",
-    started_at: transaction.started_at
-      ? typeof transaction.started_at === "string"
-        ? transaction.started_at
-        : transaction.started_at.toISOString().split("T")[0]
-      : "",
-    closed_at: transaction.closed_at
-      ? typeof transaction.closed_at === "string"
-        ? transaction.closed_at
-        : transaction.closed_at.toISOString().split("T")[0]
-      : "",
+    started_at: transaction.started_at || "",
+    closed_at: transaction.closed_at || "",
     sale_price: transaction.sale_price || "",
     listing_price: transaction.listing_price || "",
   });

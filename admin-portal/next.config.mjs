@@ -1,3 +1,5 @@
+import { withSentryConfig } from '@sentry/nextjs';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -9,7 +11,7 @@ const nextConfig = {
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: https:",
       "font-src 'self'",
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.sentry.io",
       "frame-src 'self'",
       "worker-src 'self' blob:",
       "frame-ancestors 'none'",
@@ -43,4 +45,14 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  // Suppress source map upload logs during build
+  silent: true,
+
+  // Do not upload source maps unless SENTRY_AUTH_TOKEN is set
+  disableServerWebpackPlugin: !process.env.SENTRY_AUTH_TOKEN,
+  disableClientWebpackPlugin: !process.env.SENTRY_AUTH_TOKEN,
+
+  // Hide source maps from the client bundle
+  hideSourceMaps: true,
+});

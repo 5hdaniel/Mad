@@ -8,12 +8,13 @@
  * Minimized by default; text persists across collapse/expand.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Send, Lock, MessageSquare, ChevronDown, ChevronUp, FileText, Search, X } from 'lucide-react';
 import { addMessage, uploadAttachment, listTemplates } from '@/lib/support-queries';
 import type { MessageType, SupportResponseTemplate } from '@/lib/support-types';
 import { FileUpload } from './FileUpload';
 import type { PendingFile } from './FileUpload';
+import { useClickOutside } from '@/hooks/useClickOutside';
 
 interface ReplyComposerProps {
   ticketId: string;
@@ -61,15 +62,8 @@ function TemplatePicker({
     }
   }, [open, templates.length]);
 
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    if (open) document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [open]);
+  const closeDropdown = useCallback(() => setOpen(false), []);
+  useClickOutside(ref, closeDropdown, open);
 
   const filtered = templates.filter(
     (t) =>

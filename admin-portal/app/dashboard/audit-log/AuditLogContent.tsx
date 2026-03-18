@@ -11,10 +11,11 @@
  * Export respects currently selected columns.
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { FileText, ChevronLeft, ChevronRight, Filter, Clock, User, Search, Download, Columns, Monitor, Globe } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { formatTimestamp } from '@/lib/format';
+import { useClickOutside } from '@/hooks/useClickOutside';
 
 interface AuditLogEntry {
   id: string;
@@ -103,6 +104,7 @@ export function AuditLogContent({ embedded = false }: { embedded?: boolean } = {
   // Column picker
   const [selectedColumns, setSelectedColumns] = useState<ColumnKey[]>(PRESETS.default.columns);
   const [showColumnPicker, setShowColumnPicker] = useState(false);
+  const columnPickerRef = useRef<HTMLDivElement>(null);
 
   // Determine which preset (if any) matches the current selectedColumns
   const activePreset = useMemo(() => {
@@ -116,15 +118,8 @@ export function AuditLogContent({ embedded = false }: { embedded?: boolean } = {
   }, [selectedColumns]);
 
   // Close column picker on click outside
-  useEffect(() => {
-    if (!showColumnPicker) return;
-    function handleClick(e: MouseEvent) {
-      const target = e.target as HTMLElement;
-      if (!target.closest('[data-column-picker]')) setShowColumnPicker(false);
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [showColumnPicker]);
+  const closeColumnPicker = useCallback(() => setShowColumnPicker(false), []);
+  useClickOutside(columnPickerRef, closeColumnPicker, showColumnPicker);
 
   // Debounce searchTarget by 300ms before using it in fetchLogs
   useEffect(() => {
@@ -369,7 +364,7 @@ export function AuditLogContent({ embedded = false }: { embedded?: boolean } = {
           </div>
           <div className="flex items-center gap-4">
             {/* Column picker */}
-            <div className="relative" data-column-picker>
+            <div className="relative" ref={columnPickerRef}>
               <button
                 onClick={() => setShowColumnPicker(!showColumnPicker)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
