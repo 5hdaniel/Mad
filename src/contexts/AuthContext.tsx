@@ -89,16 +89,12 @@ export function AuthProvider({
       const result = await authService.getCurrentUser();
       if (result.success && result.data) {
         const { user, sessionToken, subscription, provider, isNewUser } = result.data;
-        // Convert user to ensure terms_accepted_at is string or undefined
         const convertedUser: User = {
           id: user.id,
           email: user.email,
           display_name: user.display_name,
           avatar_url: user.avatar_url,
-          terms_accepted_at:
-            user.terms_accepted_at instanceof Date
-              ? user.terms_accepted_at.toISOString()
-              : user.terms_accepted_at,
+          terms_accepted_at: user.terms_accepted_at,
         };
         setState({
           isAuthenticated: true,

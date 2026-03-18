@@ -17,8 +17,11 @@ export type LicenseType = 'trial' | 'individual' | 'team';
 /** Trial status tracks the trial lifecycle */
 export type TrialStatus = 'active' | 'expired' | 'converted';
 
-/** License status from the existing status column */
-export type LicenseStatus = 'active' | 'cancelled' | 'expired' | 'suspended';
+/**
+ * License account status from the licenses.status column.
+ * Tracks the status of a license record in public.licenses table.
+ */
+export type LicenseAccountStatus = 'active' | 'cancelled' | 'expired' | 'suspended';
 
 /** Normalized platform values */
 export type DevicePlatform = 'macos' | 'windows' | 'linux';
@@ -37,7 +40,7 @@ export interface License {
   // Original columns
   license_key: string;
   max_devices: number;
-  status: LicenseStatus;
+  status: LicenseAccountStatus;
   expires_at: string | null;
   activated_at: string | null;
 

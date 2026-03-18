@@ -128,22 +128,22 @@ export interface User {
   // Subscription
   subscription_tier: SubscriptionTier;
   subscription_status: SubscriptionStatus;
-  trial_ends_at?: Date | string;
+  trial_ends_at?: string;
 
   // Account Status
   is_active: boolean;
-  created_at: Date | string;
-  updated_at: Date | string;
-  last_login_at?: Date | string;
+  created_at: string;
+  updated_at: string;
+  last_login_at?: string;
 
   // Legal
-  terms_accepted_at?: Date | string;
+  terms_accepted_at?: string;
   terms_version_accepted?: string;
-  privacy_policy_accepted_at?: Date | string;
+  privacy_policy_accepted_at?: string;
   privacy_policy_version_accepted?: string;
 
   // Onboarding
-  email_onboarding_completed_at?: Date | string;
+  email_onboarding_completed_at?: string;
 
   // Preferences
   timezone?: string;
@@ -162,7 +162,7 @@ export interface User {
   organization_id?: string;
 
   // Sync
-  last_cloud_sync_at?: Date | string;
+  last_cloud_sync_at?: string;
 }
 
 export interface OAuthToken {
@@ -174,33 +174,33 @@ export interface OAuthToken {
   // Token Data (encrypted)
   access_token?: string;
   refresh_token?: string;
-  token_expires_at?: Date | string;
+  token_expires_at?: string;
   scopes_granted?: string;
 
   // Mailbox
   connected_email_address?: string;
   mailbox_connected: boolean;
-  permissions_granted_at?: Date | string;
+  permissions_granted_at?: string;
 
   // Token Health
-  token_last_refreshed_at?: Date | string;
+  token_last_refreshed_at?: string;
   token_refresh_failed_count: number;
-  last_sync_at?: Date | string;
+  last_sync_at?: string;
   last_sync_error?: string;
 
   // Status
   is_active: boolean;
-  created_at: Date | string;
-  updated_at: Date | string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Session {
   id: string;
   user_id: string;
   session_token: string;
-  expires_at: Date | string;
-  created_at: Date | string;
-  last_accessed_at: Date | string;
+  expires_at: string;
+  created_at: string;
+  last_accessed_at: string;
 }
 
 export interface Subscription {
@@ -254,21 +254,21 @@ export interface Contact {
   source: ContactSource;
 
   // Engagement Metrics (for CRM/Relationship Agent)
-  last_inbound_at?: Date | string;
-  last_outbound_at?: Date | string;
+  last_inbound_at?: string;
+  last_outbound_at?: string;
   total_messages?: number; // Optional for backwards compat
   tags?: string; // JSON array: ["VIP", "past_client", "lead"]
 
   // Metadata
   metadata?: string; // JSON
-  created_at: Date | string;
-  updated_at: Date | string;
+  created_at: string;
+  updated_at: string;
 
   // Import status
   /** Whether this contact was derived from message participants (not explicitly imported) */
   is_message_derived?: number | boolean;
   /** Last communication date (for message-derived contacts and activity tracking) */
-  last_communication_at?: Date | string | null;
+  last_communication_at?: string | null;
 
   // ========== Array Fields (for display) ==========
   /** All emails for this contact (from contact_emails table) */
@@ -296,7 +296,7 @@ export interface ContactEmail {
   label?: string; // work, personal, etc.
   source?: ContactInfoSource;
 
-  created_at: Date | string;
+  created_at: string;
 }
 
 export interface ContactPhone {
@@ -309,7 +309,7 @@ export interface ContactPhone {
   label?: string; // mobile, home, work, etc.
   source?: ContactInfoSource;
 
-  created_at: Date | string;
+  created_at: string;
 }
 
 // Contact with all related data (for UI display)
@@ -355,8 +355,8 @@ export interface Message {
   thread_id?: string;
 
   // Timestamps
-  sent_at?: Date | string;
-  received_at?: Date | string;
+  sent_at?: string;
+  received_at?: string;
 
   // Attachments
   has_attachments: boolean;
@@ -369,7 +369,7 @@ export interface Message {
   is_transaction_related?: boolean; // null = not classified
   classification_confidence?: number; // 0.0 - 1.0
   classification_method?: ClassificationMethod;
-  classified_at?: Date | string;
+  classified_at?: string;
 
   // False Positive Tracking
   is_false_positive: boolean;
@@ -388,7 +388,7 @@ export interface Message {
   // Metadata
   metadata?: string; // JSON
 
-  created_at: Date | string;
+  created_at: string;
 
   // ========== LLM Analysis (Migration 11) ==========
   /** Full LLM analysis response stored as JSON string */
@@ -448,7 +448,7 @@ export interface Message {
   /** Confidence score for the link (0.0 - 1.0) */
   link_confidence?: number;
   /** When the link was created */
-  linked_at?: Date | string;
+  linked_at?: string;
 
   // Email Link (BACKLOG-506)
   /** ID of the email in the emails table (for email communications) */
@@ -492,7 +492,7 @@ export interface Attachment {
   // Analysis Results (JSON)
   analysis_metadata?: string;
 
-  created_at: Date | string;
+  created_at: string;
 }
 
 // ============================================
@@ -516,9 +516,9 @@ export interface Transaction {
   status: TransactionStatus;
 
   // Key Dates
-  started_at?: Date | string;
-  closed_at?: Date | string;
-  last_activity_at?: Date | string;
+  started_at?: string;
+  closed_at?: string;
+  last_activity_at?: string;
 
   // Confidence
   confidence_score?: number;
@@ -527,7 +527,7 @@ export interface Transaction {
   stage?: TransactionStage;
   stage_source?: ClassificationMethod | "import";
   stage_confidence?: number;
-  stage_updated_at?: Date | string;
+  stage_updated_at?: string;
 
   // Financial Data
   listing_price?: number;
@@ -535,10 +535,10 @@ export interface Transaction {
   earnest_money_amount?: number;
 
   // Key Dates (auto-extracted)
-  mutual_acceptance_date?: Date | string;
-  inspection_deadline?: Date | string;
-  financing_deadline?: Date | string;
-  closing_deadline?: Date | string;
+  mutual_acceptance_date?: string;
+  inspection_deadline?: string;
+  financing_deadline?: string;
+  closing_deadline?: string;
 
   // Stats
   message_count: number;
@@ -555,12 +555,12 @@ export interface Transaction {
   // Export Tracking
   export_status: ExportStatus;
   export_count: number;
-  last_exported_at?: Date | string;
+  last_exported_at?: string;
 
   // Metadata
   metadata?: string; // JSON
-  created_at: Date | string;
-  updated_at: Date | string;
+  created_at: string;
+  updated_at: string;
 
   // ========== AI Detection Fields (Migration 11) ==========
   /** How the transaction was created: manual, auto-detected, or hybrid */
@@ -574,7 +574,7 @@ export interface Transaction {
   /** JSON array of suggested contact assignments */
   suggested_contacts?: string;
   /** When user reviewed the detected transaction */
-  reviewed_at?: Date | string;
+  reviewed_at?: string;
   /** Why user rejected (if detection_status='rejected') */
   rejection_reason?: string;
 
@@ -584,7 +584,7 @@ export interface Transaction {
   /** UUID reference to transaction_submissions in Supabase cloud */
   submission_id?: string | null;
   /** ISO timestamp of last submission to broker portal */
-  submitted_at?: Date | string | null;
+  submitted_at?: string | null;
   /** Most recent broker feedback (synced from cloud) */
   last_review_notes?: string | null;
 
@@ -596,9 +596,9 @@ export interface Transaction {
   /** @deprecated Use message_count instead */
   total_communications_count?: number;
   /** @deprecated Query messages table instead */
-  first_communication_date?: Date | string;
+  first_communication_date?: string;
   /** @deprecated Use last_activity_at instead */
-  last_communication_date?: Date | string;
+  last_communication_date?: string;
   /** @deprecated Use metadata JSON instead */
   closing_date_verified?: boolean;
   /** @deprecated Use message_count instead */
@@ -632,8 +632,8 @@ export interface TransactionParticipant {
   is_primary: boolean;
   notes?: string;
 
-  created_at: Date | string;
-  updated_at: Date | string;
+  created_at: string;
+  updated_at: string;
 }
 
 // Participant with contact details (for UI display)
@@ -651,15 +651,15 @@ export interface AuditPackage {
   user_id: string;
 
   // Package Info
-  generated_at: Date | string;
+  generated_at: string;
   format?: AuditPackageFormat;
   storage_path?: string;
 
   // Content Summary
   message_count?: number;
   attachment_count?: number;
-  date_range_start?: Date | string;
-  date_range_end?: Date | string;
+  date_range_start?: string;
+  date_range_end?: string;
 
   // LLM-Generated Summary
   summary?: string;
@@ -685,7 +685,7 @@ export interface TransactionStageHistory {
   stage: TransactionStage;
   source?: ClassificationMethod;
   confidence?: number;
-  changed_at: Date | string;
+  changed_at: string;
 
   // What triggered this change
   trigger_message_id?: string;
@@ -713,7 +713,7 @@ export interface ClassificationFeedback {
   corrected_value?: string;
   reason?: string;
 
-  created_at: Date | string;
+  created_at: string;
 }
 
 // ============================================
@@ -735,9 +735,9 @@ export interface ExtractedTransactionData {
 
   // Verification
   manually_verified: boolean;
-  verified_at?: Date | string;
+  verified_at?: string;
 
-  created_at: Date | string;
+  created_at: string;
 }
 
 // ============================================
@@ -781,8 +781,8 @@ export interface TransactionFilters {
   status?: TransactionStatus;
   stage?: TransactionStage;
   export_status?: ExportStatus;
-  start_date?: Date | string;
-  end_date?: Date | string;
+  start_date?: string;
+  end_date?: string;
   property_address?: string;
   /** @deprecated Use status instead */
   transaction_status?: string;
@@ -794,8 +794,8 @@ export interface MessageFilters {
   channel?: MessageChannel;
   direction?: MessageDirection;
   is_transaction_related?: boolean;
-  start_date?: Date | string;
-  end_date?: Date | string;
+  start_date?: string;
+  end_date?: string;
   has_attachments?: boolean;
   /** @deprecated Use channel instead */
   communication_type?: string;
@@ -943,8 +943,8 @@ export interface Email {
   references_header?: string;
 
   // Timestamps
-  sent_at?: Date | string;
-  received_at?: Date | string;
+  sent_at?: string;
+  received_at?: string;
 
   // Attachments
   has_attachments?: boolean;
@@ -956,7 +956,7 @@ export interface Email {
 
   // Metadata
   labels?: string;
-  created_at?: Date | string;
+  created_at?: string;
 }
 
 /**
@@ -992,9 +992,9 @@ export interface JunctionCommunication {
   // Link metadata
   link_source?: "auto" | "manual" | "scan";
   link_confidence?: number;
-  linked_at?: Date | string;
+  linked_at?: string;
 
-  created_at?: Date | string;
+  created_at?: string;
 }
 
 /**
@@ -1058,7 +1058,7 @@ export interface UserFeedback {
   original_value?: string;
   corrected_value?: string;
   reason?: string;
-  created_at: Date | string;
+  created_at: string;
 }
 
 // ============================================

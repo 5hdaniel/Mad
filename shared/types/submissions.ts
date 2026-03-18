@@ -196,9 +196,10 @@ export interface Organization {
 export type OrganizationRole = 'admin' | 'broker' | 'agent';
 
 /**
- * License status for agents
+ * License status for organization members.
+ * Maps to: organization_members.license_status CHECK constraint.
  */
-export type LicenseStatus = 'pending' | 'active' | 'expired' | 'suspended';
+export type MemberLicenseStatus = 'pending' | 'active' | 'expired' | 'suspended';
 
 /**
  * Organization member record
@@ -208,7 +209,7 @@ export interface OrganizationMember {
   organization_id: string;
   user_id: string | null;
   role: OrganizationRole;
-  license_status: LicenseStatus;
+  license_status: MemberLicenseStatus;
   joined_at: string | null;
   invited_email: string | null;
   invitation_token: string | null;
