@@ -7,11 +7,13 @@
  * Supports checkbox selection for bulk operations and tree indentation.
  * Each row navigates to the item detail page on click.
  * Column headers are clickable to sort by that column.
+ * Status, Priority, Type, Assignee, and Area columns support inline editing.
  */
 
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Check } from 'lucide-react';
 import type { PmBacklogItem, ItemStatus, ItemPriority, ItemType, SortableColumn, SortDirection } from '@/lib/pm-types';
 import {
   STATUS_LABELS,
@@ -20,7 +22,23 @@ import {
   PRIORITY_COLORS,
   TYPE_LABELS,
   TYPE_COLORS,
+  ALLOWED_TRANSITIONS,
 } from '@/lib/pm-types';
+import {
+  updateItemStatus,
+  updateItemField,
+  assignItem,
+} from '@/lib/pm-queries';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export interface AssignableUser {
+  id: string;
+  display_name: string | null;
+  email: string;
+}
 
 interface TaskTableProps {
   items: PmBacklogItem[];
@@ -41,7 +59,403 @@ interface TaskTableProps {
   buildItemUrl?: (itemId: string) => string;
   /** Map of user ID -> { display_name, email } for resolving assignee names. */
   userMap?: Map<string, { display_name: string | null; email: string }>;
+  /** Callback invoked after any inline edit mutation succeeds. */
+  onItemUpdated?: () => void;
+  /** List of assignable users for the assignee dropdown. */
+  users?: AssignableUser[];
 }
+
+// ---------------------------------------------------------------------------
+// Inline Dropdown: Status (shows only valid transitions)
+// ---------------------------------------------------------------------------
+
+function InlineStatusDropdown({
+  itemId,
+  status,
+  onUpdated,
+}: {
+  itemId: string;
+  status: ItemStatus;
+  onUpdated: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const validTransitions = ALLOWED_TRANSITIONS[status] || [];
+
+  async function handleSelect(newStatus: ItemStatus) {
+    setOpen(false);
+    if (newStatus === status) return;
+    try {
+      await updateItemStatus(itemId, newStatus);
+      onUpdated();
+    } catch {
+      // Silently fail - user can retry
+    }
+  }
+
+  return (
+    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          if (validTransitions.length > 0) setOpen(!open);
+        }}
+        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer ${STATUS_COLORS[status]} ${
+          validTransitions.length > 0 ? 'hover:ring-2 hover:ring-offset-1 hover:ring-gray-300' : ''
+        }`}
+        title={validTransitions.length === 0 ? 'No transitions available' : 'Click to change status'}
+      >
+        {STATUS_LABELS[status]}
+      </button>
+      {open && validTransitions.length > 0 && (
+        <div className="absolute left-0 top-full mt-1 bg-white border rounded-md shadow-lg z-20 py-1 w-36">
+          {validTransitions.map((s) => (
+            <button
+              key={s}
+              onClick={() => handleSelect(s)}
+              className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center gap-2"
+            >
+              <span
+                className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[s]}`}
+              >
+                {STATUS_LABELS[s]}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Inline Dropdown: Priority
+// ---------------------------------------------------------------------------
+
+function InlinePriorityDropdown({
+  itemId,
+  priority,
+  onUpdated,
+}: {
+  itemId: string;
+  priority: ItemPriority;
+  onUpdated: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  async function handleSelect(newPriority: ItemPriority) {
+    setOpen(false);
+    if (newPriority === priority) return;
+    try {
+      await updateItemField(itemId, 'priority', newPriority);
+      onUpdated();
+    } catch {
+      // Silently fail
+    }
+  }
+
+  return (
+    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen(!open);
+        }}
+        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer hover:ring-2 hover:ring-offset-1 hover:ring-gray-300 ${PRIORITY_COLORS[priority]}`}
+      >
+        {PRIORITY_LABELS[priority]}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 bg-white border rounded-md shadow-lg z-20 py-1 w-28">
+          {(['low', 'medium', 'high', 'critical'] as ItemPriority[]).map((p) => (
+            <button
+              key={p}
+              onClick={() => handleSelect(p)}
+              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center justify-between ${
+                p === priority ? 'bg-blue-50' : ''
+              }`}
+            >
+              <span
+                className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLORS[p]}`}
+              >
+                {PRIORITY_LABELS[p]}
+              </span>
+              {p === priority && <Check className="h-3 w-3 text-blue-600" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Inline Dropdown: Type
+// ---------------------------------------------------------------------------
+
+function InlineTypeDropdown({
+  itemId,
+  type,
+  onUpdated,
+}: {
+  itemId: string;
+  type: ItemType;
+  onUpdated: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  async function handleSelect(newType: ItemType) {
+    setOpen(false);
+    if (newType === type) return;
+    try {
+      await updateItemField(itemId, 'type', newType);
+      onUpdated();
+    } catch {
+      // Silently fail
+    }
+  }
+
+  return (
+    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen(!open);
+        }}
+        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer hover:ring-2 hover:ring-offset-1 hover:ring-gray-300 ${TYPE_COLORS[type]}`}
+      >
+        {TYPE_LABELS[type]}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 bg-white border rounded-md shadow-lg z-20 py-1 w-28">
+          {(['feature', 'bug', 'chore', 'spike', 'epic'] as ItemType[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => handleSelect(t)}
+              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center justify-between ${
+                t === type ? 'bg-blue-50' : ''
+              }`}
+            >
+              <span
+                className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${TYPE_COLORS[t]}`}
+              >
+                {TYPE_LABELS[t]}
+              </span>
+              {t === type && <Check className="h-3 w-3 text-blue-600" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Inline Dropdown: Assignee
+// ---------------------------------------------------------------------------
+
+function InlineAssigneeDropdown({
+  itemId,
+  assigneeId,
+  users,
+  userMap,
+  onUpdated,
+}: {
+  itemId: string;
+  assigneeId: string | null;
+  users: AssignableUser[];
+  userMap?: Map<string, { display_name: string | null; email: string }>;
+  onUpdated: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  async function handleSelect(userId: string | null) {
+    setOpen(false);
+    if (userId === assigneeId) return;
+    try {
+      await assignItem(itemId, userId);
+      onUpdated();
+    } catch {
+      // Silently fail
+    }
+  }
+
+  const displayName = assigneeId && userMap?.has(assigneeId)
+    ? (userMap.get(assigneeId)!.display_name || userMap.get(assigneeId)!.email)
+    : null;
+
+  return (
+    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen(!open);
+        }}
+        className="text-sm text-left cursor-pointer hover:text-blue-600 transition-colors"
+      >
+        {displayName ? (
+          <span className="text-gray-700">{displayName}</span>
+        ) : (
+          <span className="text-gray-300">Unassigned</span>
+        )}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 bg-white border rounded-md shadow-lg z-20 py-1 w-52 max-h-60 overflow-y-auto">
+          <button
+            onClick={() => handleSelect(null)}
+            className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 ${
+              !assigneeId ? 'bg-blue-50 text-blue-700' : 'text-gray-400'
+            }`}
+          >
+            Unassigned
+          </button>
+          {users.map((user) => (
+            <button
+              key={user.id}
+              onClick={() => handleSelect(user.id)}
+              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center justify-between ${
+                user.id === assigneeId ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
+              }`}
+            >
+              <span className="truncate">
+                {user.display_name || user.email}
+              </span>
+              {user.id === assigneeId && (
+                <Check className="h-3 w-3 text-blue-600 flex-shrink-0" />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Inline Text Input: Area
+// ---------------------------------------------------------------------------
+
+function InlineAreaEditor({
+  itemId,
+  area,
+  onUpdated,
+}: {
+  itemId: string;
+  area: string | null;
+  onUpdated: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(area || '');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  async function handleSave() {
+    setEditing(false);
+    const newValue = value.trim();
+    if (newValue === (area || '')) return;
+    try {
+      await updateItemField(itemId, 'area', newValue || null);
+      onUpdated();
+    } catch {
+      // Revert on failure
+      setValue(area || '');
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter') {
+      handleSave();
+    } else if (e.key === 'Escape') {
+      setValue(area || '');
+      setEditing(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <div onClick={(e) => e.stopPropagation()}>
+        <input
+          ref={inputRef}
+          type="text"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onBlur={handleSave}
+          onKeyDown={handleKeyDown}
+          className="w-full px-2 py-0.5 text-sm text-gray-900 bg-white border border-blue-400 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div onClick={(e) => e.stopPropagation()}>
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          setValue(area || '');
+          setEditing(true);
+        }}
+        className="text-sm text-left cursor-pointer hover:text-blue-600 transition-colors"
+      >
+        {area ? (
+          <span className="text-gray-500">{area}</span>
+        ) : (
+          <span className="text-gray-300">-</span>
+        )}
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Read-only badges (kept for fallback when no onItemUpdated)
+// ---------------------------------------------------------------------------
 
 function StatusBadge({ status }: { status: ItemStatus }) {
   return (
@@ -73,6 +487,10 @@ function TypeBadge({ type }: { type: ItemType }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
@@ -91,6 +509,10 @@ function formatTokens(tokens: number | null): string {
   if (tokens >= 1000) return `${(tokens / 1000).toFixed(0)}K`;
   return String(tokens);
 }
+
+// ---------------------------------------------------------------------------
+// Sort icons and headers
+// ---------------------------------------------------------------------------
 
 interface SortIconProps {
   column: SortableColumn;
@@ -134,6 +556,10 @@ function SortableHeader({ column, label, sortBy, sortDir, onSort }: SortableHead
   );
 }
 
+// ---------------------------------------------------------------------------
+// TaskTable component
+// ---------------------------------------------------------------------------
+
 export function TaskTable({
   items,
   totalCount,
@@ -150,8 +576,13 @@ export function TaskTable({
   onSort,
   buildItemUrl,
   userMap,
+  onItemUpdated,
+  users,
 }: TaskTableProps) {
   const router = useRouter();
+
+  // Whether inline editing is enabled (requires callback)
+  const editable = !!onItemUpdated;
 
   function getItemUrl(itemId: string): string {
     if (buildItemUrl) return buildItemUrl(itemId);
@@ -275,7 +706,7 @@ export function TaskTable({
                   onClick={(e: React.MouseEvent<HTMLTableRowElement>) => {
                     // Don't navigate if clicking a link, checkbox, or interactive element
                     const target = e.target as HTMLElement;
-                    if (target.closest('a') || target.closest('input')) return;
+                    if (target.closest('a') || target.closest('input') || target.closest('button') || target.closest('[data-inline-edit]')) return;
                     router.push(itemUrl);
                   }}
                   className="hover:bg-gray-50 cursor-pointer transition-colors"
@@ -310,23 +741,67 @@ export function TaskTable({
                       </span>
                     ) : null}
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <TypeBadge type={item.type} />
+                  <td className="px-4 py-3 whitespace-nowrap" data-inline-edit>
+                    {editable ? (
+                      <InlineTypeDropdown
+                        itemId={item.id}
+                        type={item.type}
+                        onUpdated={onItemUpdated!}
+                      />
+                    ) : (
+                      <TypeBadge type={item.type} />
+                    )}
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <StatusBadge status={item.status} />
+                  <td className="px-4 py-3 whitespace-nowrap" data-inline-edit>
+                    {editable ? (
+                      <InlineStatusDropdown
+                        itemId={item.id}
+                        status={item.status}
+                        onUpdated={onItemUpdated!}
+                      />
+                    ) : (
+                      <StatusBadge status={item.status} />
+                    )}
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <PriorityBadge priority={item.priority} />
+                  <td className="px-4 py-3 whitespace-nowrap" data-inline-edit>
+                    {editable ? (
+                      <InlinePriorityDropdown
+                        itemId={item.id}
+                        priority={item.priority}
+                        onUpdated={onItemUpdated!}
+                      />
+                    ) : (
+                      <PriorityBadge priority={item.priority} />
+                    )}
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                    {item.assignee_id && userMap?.has(item.assignee_id)
-                      ? (userMap.get(item.assignee_id)!.display_name || userMap.get(item.assignee_id)!.email)
-                      : <span className="text-gray-300">Unassigned</span>
-                    }
+                  <td className="px-4 py-3 whitespace-nowrap" data-inline-edit>
+                    {editable && users ? (
+                      <InlineAssigneeDropdown
+                        itemId={item.id}
+                        assigneeId={item.assignee_id}
+                        users={users}
+                        userMap={userMap}
+                        onUpdated={onItemUpdated!}
+                      />
+                    ) : (
+                      <span className="text-sm text-gray-500">
+                        {item.assignee_id && userMap?.has(item.assignee_id)
+                          ? (userMap.get(item.assignee_id)!.display_name || userMap.get(item.assignee_id)!.email)
+                          : <span className="text-gray-300">Unassigned</span>
+                        }
+                      </span>
+                    )}
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                    {item.area || '-'}
+                  <td className="px-4 py-3 whitespace-nowrap" data-inline-edit>
+                    {editable ? (
+                      <InlineAreaEditor
+                        itemId={item.id}
+                        area={item.area}
+                        onUpdated={onItemUpdated!}
+                      />
+                    ) : (
+                      <span className="text-sm text-gray-500">{item.area || '-'}</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                     {formatTokens(item.est_tokens)}
