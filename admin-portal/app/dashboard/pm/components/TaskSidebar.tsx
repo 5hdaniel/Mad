@@ -36,6 +36,7 @@ import {
   PRIORITY_LABELS,
   TYPE_LABELS,
 } from '@/lib/pm-types';
+import { formatTimestamp, formatDate as formatDateShort } from '@/lib/format';
 
 // -- Props -------------------------------------------------------------------
 
@@ -46,30 +47,11 @@ interface TaskSidebarProps {
 
 // -- Helpers -----------------------------------------------------------------
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
-}
-
 /** Parse a date string as local date (not UTC) to avoid timezone shifts */
 function parseLocalDate(dateStr: string): Date {
   // "2026-03-17" or "2026-03-17T..." → treat as local midnight
   const [y, m, d] = dateStr.split('T')[0].split('-').map(Number);
   return new Date(y, m - 1, d);
-}
-
-function formatDateShort(dateStr: string): string {
-  return parseLocalDate(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
 }
 
 function isOverdue(dueDate: string | null, status: ItemStatus): boolean {
@@ -600,16 +582,16 @@ export function TaskSidebar({ item, onUpdate }: TaskSidebarProps) {
         <div className="space-y-1.5">
           <div className="flex items-center gap-1.5 text-xs text-gray-500">
             <Calendar className="h-3 w-3" />
-            Created: {formatDate(item.created_at)}
+            Created: {formatTimestamp(item.created_at)}
           </div>
           <div className="flex items-center gap-1.5 text-xs text-gray-500">
             <Calendar className="h-3 w-3" />
-            Updated: {formatDate(item.updated_at)}
+            Updated: {formatTimestamp(item.updated_at)}
           </div>
           {item.completed_at && (
             <div className="flex items-center gap-1.5 text-xs text-gray-500">
               <Calendar className="h-3 w-3" />
-              Completed: {formatDate(item.completed_at)}
+              Completed: {formatTimestamp(item.completed_at)}
             </div>
           )}
           {item.start_date && (
