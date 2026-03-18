@@ -561,7 +561,7 @@ describe("DatabaseService", () => {
         const mockTransaction = {
           id: "test-uuid-1234",
           ...transactionData,
-          transaction_status: "completed",
+          status: "active",
         };
 
         mockStatement.get.mockReturnValue(mockTransaction);
@@ -781,20 +781,21 @@ describe("DatabaseService", () => {
 
     describe("createCommunication", () => {
       it("should create communication with all fields", async () => {
+        // BACKLOG-1107: communications is a pure junction table.
+        // Content fields (subject, body, sender, etc.) live in the emails/messages tables.
         const commData = {
           user_id: "user-123",
-          communication_type: "email" as const,
-          sender: "sender@example.com",
-          recipients: "recipient@example.com",
-          subject: "Test Subject",
-          body: "<p>Test body</p>",
-          body_plain: "Test body",
-          sent_at: "2024-01-15T10:00:00Z",
+          transaction_id: "txn-456",
+          email_id: "email-789",
+          link_source: "manual" as const,
         };
 
         const mockComm = {
           id: "test-uuid-1234",
           ...commData,
+          has_attachments: false,
+          is_false_positive: false,
+          created_at: new Date().toISOString(),
         };
 
         mockStatement.get.mockReturnValue(mockComm);
@@ -802,7 +803,7 @@ describe("DatabaseService", () => {
         const communication =
           await databaseService.createCommunication(commData);
 
-        expect(communication.subject).toBe("Test Subject");
+        expect(communication.user_id).toBe("user-123");
       });
     });
 

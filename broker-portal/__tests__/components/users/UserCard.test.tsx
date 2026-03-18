@@ -13,7 +13,7 @@
  * TASK-1809: User list component implementation
  */
 
-import type { OrganizationMember, User, Role, LicenseStatus } from '../../../lib/types/users';
+import type { OrganizationMember, User, Role, MemberLicenseStatus } from '../../../lib/types/users';
 import { ROLE_LABELS, LICENSE_STATUS_LABELS } from '../../../lib/types/users';
 import { formatUserDisplayName, getUserInitials } from '../../../lib/utils/userDisplay';
 import { formatDate } from '../../../lib/utils';
@@ -27,7 +27,7 @@ function createMockMember(
     organization_id: 'org-1',
     user_id: 'user-1',
     role: 'agent' as Role,
-    license_status: 'active' as LicenseStatus,
+    license_status: 'active' as MemberLicenseStatus,
     invited_email: null,
     invitation_token: null,
     invitation_expires_at: null,
@@ -228,7 +228,7 @@ describe('UserCard Logic', () => {
   });
 
   describe('status colors mapping', () => {
-    const STATUS_COLORS: Record<LicenseStatus, string> = {
+    const STATUS_COLORS: Record<MemberLicenseStatus, string> = {
       active: 'bg-green-100 text-green-800',
       pending: 'bg-yellow-100 text-yellow-800',
       suspended: 'bg-red-100 text-red-800',
@@ -236,7 +236,7 @@ describe('UserCard Logic', () => {
     };
 
     it('should have colors for all statuses', () => {
-      const statuses: LicenseStatus[] = ['active', 'pending', 'suspended', 'expired'];
+      const statuses: MemberLicenseStatus[] = ['active', 'pending', 'suspended', 'expired'];
       statuses.forEach((status) => {
         expect(STATUS_COLORS[status]).toBeDefined();
         expect(STATUS_COLORS[status].length).toBeGreaterThan(0);

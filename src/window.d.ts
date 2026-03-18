@@ -2157,8 +2157,6 @@ interface MainAPI {
     }>;
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [key: string]: any; // Allow other properties for backwards compatibility
 }
 
 // Augment the global Window interface

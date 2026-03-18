@@ -10,16 +10,16 @@
  * Pattern: Adapted from support/RelatedTicketsPanel.tsx
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import Link from 'next/link';
 import { Link2, X, Plus, Loader2 } from 'lucide-react';
 import {
-  searchItemsForLink,
   linkItems,
   unlinkItems,
 } from '@/lib/pm-queries';
-import type { PmTaskLink, LinkType, PmItemSearchResult } from '@/lib/pm-types';
+import type { PmTaskLink, LinkType } from '@/lib/pm-types';
 import { STATUS_COLORS } from '@/lib/pm-types';
+import { useItemSearch } from '@/hooks/useItemSearch';
 
 interface LinkedItemsPanelProps {
   itemId: string;
@@ -40,64 +40,33 @@ export function LinkedItemsPanel({ itemId, links, onUpdate }: LinkedItemsPanelPr
 
   // Link search state
   const [showSearch, setShowSearch] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<PmItemSearchResult[]>([]);
-  const [searching, setSearching] = useState(false);
   const [linkType, setLinkType] = useState<LinkType>('related_to');
   const [linking, setLinking] = useState(false);
   const [unlinking, setUnlinking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { query: searchQuery, setQuery: setSearchQuery, results: searchResults, searching, reset: resetSearch } = useItemSearch({ excludeId: itemId });
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Debounced search
-  useEffect(() => {
-    if (!searchQuery || searchQuery.length < 1) {
-      setSearchResults([]);
-      return;
+  // Focus search input when search panel opens
+  const prevShowSearch = useRef(showSearch);
+  if (showSearch !== prevShowSearch.current) {
+    prevShowSearch.current = showSearch;
+    if (showSearch) {
+      setTimeout(() => searchInputRef.current?.focus(), 0);
     }
-
-    if (searchTimerRef.current) {
-      clearTimeout(searchTimerRef.current);
-    }
-
-    searchTimerRef.current = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const results = await searchItemsForLink(searchQuery, itemId);
-        setSearchResults(results);
-      } catch {
-        setSearchResults([]);
-      } finally {
-        setSearching(false);
-      }
-    }, 300);
-
-    return () => {
-      if (searchTimerRef.current) {
-        clearTimeout(searchTimerRef.current);
-      }
-    };
-  }, [searchQuery, itemId]);
-
-  // Focus search input when search is opened
-  useEffect(() => {
-    if (showSearch && searchInputRef.current) {
-      searchInputRef.current.focus();
-    }
-  }, [showSearch]);
+  }
 
   async function handleLink(targetItemId: string) {
     setLinking(true);
     setError(null);
     try {
       await linkItems(itemId, targetItemId, linkType);
-      setSearchQuery('');
-      setSearchResults([]);
+      resetSearch();
       setShowSearch(false);
       onUpdate();
     } catch (err) {
+      console.error('Failed to link item:', err);
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('unique') || msg.includes('duplicate')) {
         setError('These items are already linked');
@@ -116,6 +85,7 @@ export function LinkedItemsPanel({ itemId, links, onUpdate }: LinkedItemsPanelPr
       await unlinkItems(linkId);
       onUpdate();
     } catch (err) {
+      console.error('Failed to unlink item:', err);
       setError(err instanceof Error ? err.message : 'Failed to unlink item');
     } finally {
       setUnlinking(null);
@@ -270,8 +240,7 @@ export function LinkedItemsPanel({ itemId, links, onUpdate }: LinkedItemsPanelPr
               <button
                 onClick={() => {
                   setShowSearch(false);
-                  setSearchQuery('');
-                  setSearchResults([]);
+                  resetSearch();
                 }}
                 className="text-xs text-gray-500 hover:text-gray-700"
               >

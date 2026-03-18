@@ -151,9 +151,9 @@ export async function getTransactions(
     params.push(filters.transaction_type);
   }
 
-  if (filters?.transaction_status || filters?.status) {
+  if (filters?.status) {
     sql += " AND t.status = ?";
-    params.push(filters.transaction_status || filters.status);
+    params.push(filters.status);
   }
 
   if (filters?.export_status) {

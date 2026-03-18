@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, ChevronUp, Loader2, UserX } from 'lucide-react';
-import type { ItemStatus, ItemPriority, PmSprint, PmProject } from '@/lib/pm-types';
+import type { ItemStatus, ItemPriority, PmSprint, PmProject, AssignableUser } from '@/lib/pm-types';
 import {
   STATUS_LABELS,
   STATUS_COLORS,
@@ -21,6 +21,7 @@ import {
   SPRINT_STATUS_COLORS,
 } from '@/lib/pm-types';
 import { bulkUpdate, assignToSprint, assignItem, listSprints, listProjects, listAssignableUsers } from '@/lib/pm-queries';
+import { useClickOutside } from '@/hooks/useClickOutside';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -55,12 +56,6 @@ const COMMON_AREAS = [
 // ---------------------------------------------------------------------------
 
 type DropdownType = 'status' | 'priority' | 'sprint' | 'project' | 'area' | 'assign' | null;
-
-interface AssignableUser {
-  id: string;
-  display_name: string | null;
-  email: string;
-}
 
 interface BacklogBulkBarProps {
   selectedIds: Set<string>;
@@ -121,17 +116,8 @@ export function BacklogBulkBar({
   // Close dropdown on outside click
   // -------------------------------------------------------------------------
 
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (barRef.current && !barRef.current.contains(e.target as Node)) {
-        setOpenDropdown(null);
-      }
-    }
-    if (openDropdown) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [openDropdown]);
+  const closeDropdown = useCallback(() => setOpenDropdown(null), []);
+  useClickOutside(barRef, closeDropdown, openDropdown !== null);
 
   // -------------------------------------------------------------------------
   // Action handlers
