@@ -16,7 +16,7 @@ import Link from 'next/link';
 import { ArrowLeft, Trash2 } from 'lucide-react';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
 import { PERMISSIONS } from '@/lib/permissions';
-import { getItemDetail, deleteItem, listItemDependencies } from '@/lib/pm-queries';
+import { getItemDetail, deleteItem, listItemDependencies, updateItemField } from '@/lib/pm-queries';
 import type { ItemDetailResponse, PmDependency } from '@/lib/pm-types';
 import { TaskStatusBadge } from '../../components/TaskStatusBadge';
 import { TaskPriorityBadge } from '../../components/TaskPriorityBadge';
@@ -28,6 +28,7 @@ import { TaskSidebar } from '../../components/TaskSidebar';
 import { DependencyPanel } from '../../components/DependencyPanel';
 import { LinkedItemsPanel } from '../../components/LinkedItemsPanel';
 import { LabelPicker } from '../../components/LabelPicker';
+import { InlineEditText } from '../../components/InlineEditText';
 
 // -- Loading Skeleton --------------------------------------------------------
 
@@ -182,7 +183,18 @@ function TaskDetailContent() {
                   #{item.item_number}
                 </span>
               </div>
-              <h1 className="text-xl font-bold text-gray-900">{item.title}</h1>
+              <h1 className="text-xl font-bold text-gray-900">
+                <InlineEditText
+                  value={item.title}
+                  placeholder="Task title..."
+                  onSave={async (newValue) => {
+                    if (!newValue) return;
+                    await updateItemField(item.id, 'title', newValue);
+                    loadDetail();
+                  }}
+                  displayClassName="text-xl font-bold text-gray-900"
+                />
+              </h1>
             </div>
           </div>
           <div className="flex items-center gap-2">
