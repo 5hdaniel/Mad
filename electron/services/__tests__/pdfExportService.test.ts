@@ -17,6 +17,12 @@ jest.mock("electron", () => ({
     loadFile: jest.fn().mockResolvedValue(undefined),
     webContents: {
       printToPDF: jest.fn().mockResolvedValue(Buffer.from("mock-pdf-data")),
+      // Handle event-based page load (did-finish-load / did-fail-load)
+      on: jest.fn().mockImplementation((event: string, cb: (...args: unknown[]) => void) => {
+        if (event === "did-finish-load") {
+          cb();
+        }
+      }),
     },
     close: jest.fn(),
   })),
@@ -31,6 +37,7 @@ jest.mock("electron", () => ({
 // Mock fs/promises
 jest.mock("fs/promises", () => ({
   writeFile: jest.fn().mockResolvedValue(undefined),
+  unlink: jest.fn().mockResolvedValue(undefined),
 }));
 
 describe("PDFExportService", () => {
@@ -196,6 +203,11 @@ describe("PDFExportService", () => {
           printToPDF: jest
             .fn()
             .mockRejectedValue(new Error("PDF generation failed")),
+          on: jest.fn().mockImplementation((event: string, cb: (...args: unknown[]) => void) => {
+            if (event === "did-finish-load") {
+              cb();
+            }
+          }),
         },
         close: jest.fn(),
       };
