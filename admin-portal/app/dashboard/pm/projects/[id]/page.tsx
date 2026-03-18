@@ -54,6 +54,7 @@ import {
   TYPE_LABELS,
   TYPE_COLORS,
 } from '@/lib/pm-types';
+import { DualProgressBar } from '../../components/DualProgressBar';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -667,24 +668,22 @@ export default function ProjectDetailPage() {
 
       {/* Status summary with progress bar */}
       <div className="bg-white border border-gray-200 rounded-lg p-4 mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-gray-900">
-            Status Summary
-          </h2>
-          <span className="text-sm text-gray-500">{progressPct}% complete</span>
-        </div>
+        <h2 className="text-sm font-semibold text-gray-900 mb-3">
+          Status Summary
+        </h2>
 
-        {/* Progress bar */}
-        <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-4">
-          <div
-            className="h-full bg-green-500 rounded-full transition-all"
-            style={{ width: `${progressPct}%` }}
-          />
-        </div>
+        <DualProgressBar
+          completed={completedItems}
+          total={totalItems}
+          byStatus={itemsByStatus}
+          estTokens={tokenSums.estTotal}
+          actualTokens={tokenSums.actualTotal}
+          showLegend={false}
+        />
 
         {/* Status badges */}
         {totalItems > 0 ? (
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-3 mt-4">
             {STATUS_ORDER.filter((s) => (itemsByStatus[s] ?? 0) > 0).map(
               (status) => (
                 <div key={status} className="flex items-center gap-1.5">
@@ -701,7 +700,7 @@ export default function ProjectDetailPage() {
             )}
           </div>
         ) : (
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-gray-400 mt-4">
             No items in this project yet.
           </p>
         )}
