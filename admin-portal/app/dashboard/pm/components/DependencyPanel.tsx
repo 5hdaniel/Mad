@@ -52,12 +52,15 @@ export function DependencyPanel({ itemId, dependencies, onUpdate }: DependencyPa
   const blocks = dependencies.filter(
     (d) => d.dependency_type === 'blocks' && d.source_id === itemId
   );
-  // Also show reverse: items that depend on this one
+  // Also show reverse: items that depend on this one / block this one
   const dependedOnBy = dependencies.filter(
     (d) => d.dependency_type === 'depends_on' && d.target_id === itemId
   );
+  const blockedBy = dependencies.filter(
+    (d) => d.dependency_type === 'blocks' && d.target_id === itemId
+  );
 
-  const totalCount = dependsOn.length + blocks.length + dependedOnBy.length;
+  const totalCount = dependsOn.length + blocks.length + dependedOnBy.length + blockedBy.length;
 
   // Debounced search
   useEffect(() => {
@@ -75,7 +78,8 @@ export function DependencyPanel({ itemId, dependencies, onUpdate }: DependencyPa
       try {
         const results = await searchItemsForLink(searchQuery, itemId);
         setSearchResults(results);
-      } catch {
+      } catch (err) {
+        console.error('[DependencyPanel] Search failed:', err);
         setSearchResults([]);
       } finally {
         setSearching(false);
@@ -289,6 +293,36 @@ export function DependencyPanel({ itemId, dependencies, onUpdate }: DependencyPa
               </button>
             )}
           </div>
+
+          {/* Blocked By section (read-only, reverse of "blocks") */}
+          {blockedBy.length > 0 && (
+            <div>
+              <h4 className="text-xs font-medium text-red-500 mb-1">Blocked By</h4>
+              <div className="space-y-0.5">
+                {blockedBy.map((dep) => {
+                  const label = dep.related_title
+                    ? `${dep.related_item_number ? `#${dep.related_item_number} ` : ''}${dep.related_title}`
+                    : dep.source_id.slice(0, 8) + '...';
+                  return (
+                    <div key={dep.id} className="py-1 flex items-center gap-2">
+                      <Link
+                        href={`/dashboard/pm/tasks/${dep.source_id}`}
+                        className="text-sm text-gray-700 hover:text-blue-600 truncate flex-1"
+                        title={label}
+                      >
+                        {label}
+                      </Link>
+                      {dep.related_status && (
+                        <span className="text-xs text-gray-400 capitalize shrink-0">
+                          {dep.related_status.replace('_', ' ')}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Depended on by section (read-only) */}
           {dependedOnBy.length > 0 && (
