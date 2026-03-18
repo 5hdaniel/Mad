@@ -10,7 +10,7 @@
  *   Row 4: Assignee avatar+name (inline editable) | Label pills (inline editable)
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import Link from 'next/link';
@@ -125,7 +125,9 @@ function AssigneeDropdown({
   onUpdate: (userId: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const ref = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -134,6 +136,18 @@ function AssigneeDropdown({
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  // Auto-focus search input when dropdown opens
+  useEffect(() => {
+    if (open) {
+      // Use requestAnimationFrame to ensure the DOM has rendered
+      requestAnimationFrame(() => {
+        searchInputRef.current?.focus();
+      });
+    } else {
+      setSearch('');
+    }
   }, [open]);
 
   const currentUser = users.find((u) => u.id === assigneeId);
@@ -145,6 +159,27 @@ function AssigneeDropdown({
         .join('')
         .toUpperCase()
     : null;
+
+  // Filter users by search term (case-insensitive match on name or email)
+  const filteredUsers = search.trim()
+    ? users.filter((u) => {
+        const term = search.toLowerCase();
+        const name = (u.display_name || '').toLowerCase();
+        const email = u.email.toLowerCase();
+        return name.includes(term) || email.includes(term);
+      })
+    : users;
+
+  const handleSearchKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      // Prevent card drag/sort handlers from capturing keyboard events
+      e.stopPropagation();
+      if (e.key === 'Escape') {
+        setOpen(false);
+      }
+    },
+    [],
+  );
 
   return (
     <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
@@ -171,35 +206,56 @@ function AssigneeDropdown({
         )}
       </button>
       {open && (
-        <div className="absolute left-0 top-full mt-1 bg-white border rounded-md shadow-lg z-20 py-1 w-48 max-h-48 overflow-y-auto">
-          <button
-            onClick={() => {
-              onUpdate(null);
-              setOpen(false);
-            }}
-            className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 text-gray-400"
-          >
-            Unassigned
-          </button>
-          {users.map((user) => (
+        <div className="absolute left-0 top-full mt-1 bg-white border rounded-md shadow-lg z-20 w-48">
+          {/* Search input */}
+          <div className="p-1.5 border-b border-gray-100">
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              placeholder="Search users..."
+              className="w-full px-2 py-1 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded focus:outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-300 placeholder-gray-400"
+            />
+          </div>
+          {/* User list */}
+          <div className="py-1 max-h-40 overflow-y-auto">
+            {/* Unassigned -- always visible */}
             <button
-              key={user.id}
               onClick={() => {
-                onUpdate(user.id);
+                onUpdate(null);
                 setOpen(false);
               }}
-              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center justify-between ${
-                user.id === assigneeId ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
-              }`}
+              className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 text-gray-400"
             >
-              <span className="truncate">
-                {user.display_name || user.email}
-              </span>
-              {user.id === assigneeId && (
-                <Check className="h-3 w-3 text-blue-600 flex-shrink-0" />
-              )}
+              Unassigned
             </button>
-          ))}
+            {filteredUsers.map((user) => (
+              <button
+                key={user.id}
+                onClick={() => {
+                  onUpdate(user.id);
+                  setOpen(false);
+                }}
+                className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center justify-between ${
+                  user.id === assigneeId ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
+                }`}
+              >
+                <span className="truncate">
+                  {user.display_name || user.email}
+                </span>
+                {user.id === assigneeId && (
+                  <Check className="h-3 w-3 text-blue-600 flex-shrink-0" />
+                )}
+              </button>
+            ))}
+            {filteredUsers.length === 0 && search.trim() && (
+              <p className="px-3 py-1.5 text-xs text-gray-400">No matches</p>
+            )}
+          </div>
         </div>
       )}
     </div>
