@@ -291,9 +291,10 @@ class OutlookFetchService {
 
         const response = await axios(config);
         return response.data;
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Handle token expiration with refresh
-        if (error.response && error.response.status === 401 && !isRetry) {
+        const axiosErr = error as { response?: { status?: number } };
+        if (axiosErr.response && axiosErr.response.status === 401 && !isRetry) {
           if (this.refreshToken && this.userId) {
             logService.info(
               "Access token expired, attempting refresh",
@@ -1244,9 +1245,10 @@ class OutlookFetchService {
         success: true,
         contacts: mappedContacts,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Handle 403 Forbidden — token lacks Contacts.Read scope
-      if (error?.response?.status === 403) {
+      const axiosErr = error as { response?: { status?: number } };
+      if (axiosErr.response?.status === 403) {
         logService.info(
           "403 Forbidden fetching contacts — token lacks Contacts.Read scope",
           "OutlookFetch",

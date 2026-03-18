@@ -172,7 +172,7 @@ class ConnectionStatusService {
         error: null,
       };
       return this.connectionStatus.google;
-    } catch (error: any) {
+    } catch (error: unknown) {
       logService.error(
         "[ConnectionStatus] Error checking Google connection:",
         "ConnectionStatus",
@@ -190,7 +190,7 @@ class ConnectionStatusService {
           userMessage: "Could not verify Gmail connection",
           action: "Check your Gmail connection",
           actionHandler: "reconnect-google",
-          details: error.message,
+          details: error instanceof Error ? error.message : "Unknown error",
         },
       };
       return this.connectionStatus.google;
@@ -294,7 +294,7 @@ class ConnectionStatusService {
         error: null,
       };
       return this.connectionStatus.microsoft;
-    } catch (error: any) {
+    } catch (error: unknown) {
       logService.error(
         "[ConnectionStatus] Error checking Microsoft connection:",
         "ConnectionStatus",
@@ -312,7 +312,7 @@ class ConnectionStatusService {
           userMessage: "Could not verify Outlook connection",
           action: "Check your Outlook connection",
           actionHandler: "reconnect-microsoft",
-          details: error.message,
+          details: error instanceof Error ? error.message : "Unknown error",
         },
       };
       return this.connectionStatus.microsoft;
