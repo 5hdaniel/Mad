@@ -27,27 +27,21 @@ function ExportModal({
   // Start Date (started_at) - when agent began working on transaction
   const [startDate, setStartDate] = useState(
     transaction.started_at
-      ? typeof transaction.started_at === "string"
-        ? transaction.started_at.split("T")[0]
-        : transaction.started_at.toISOString().split("T")[0]
+      ? transaction.started_at.split("T")[0]
       : "",
   );
 
   // Closing Date (closing_deadline) - scheduled/expected closing date
   const [closingDate, setClosingDate] = useState(
     transaction.closing_deadline
-      ? typeof transaction.closing_deadline === "string"
-        ? transaction.closing_deadline.split("T")[0]
-        : transaction.closing_deadline.toISOString().split("T")[0]
+      ? transaction.closing_deadline.split("T")[0]
       : "",
   );
 
   // End Date (closed_at) - when transaction actually ended (for filtering)
   const [endDate, setEndDate] = useState(
     transaction.closed_at
-      ? typeof transaction.closed_at === "string"
-        ? transaction.closed_at.split("T")[0]
-        : transaction.closed_at.toISOString().split("T")[0]
+      ? transaction.closed_at.split("T")[0]
       : "",
   );
 

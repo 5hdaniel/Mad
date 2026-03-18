@@ -561,7 +561,7 @@ describe("DatabaseService", () => {
         const mockTransaction = {
           id: "test-uuid-1234",
           ...transactionData,
-          transaction_status: "completed",
+          status: "active",
         };
 
         mockStatement.get.mockReturnValue(mockTransaction);

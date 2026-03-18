@@ -538,16 +538,8 @@ async function handleValidateSession(
       return { success: false, valid: false };
     }
 
-    const createdAt =
-      session.created_at instanceof Date
-        ? session.created_at.toISOString()
-        : session.created_at;
-    const lastAccessedAt =
-      session.last_login_at instanceof Date
-        ? session.last_login_at.toISOString()
-        : session.last_login_at;
     const securityCheck = await sessionSecurityService.checkSessionValidity(
-      { created_at: createdAt, last_accessed_at: lastAccessedAt as string },
+      { created_at: session.created_at, last_accessed_at: session.last_login_at as string },
       validatedSessionToken
     );
 
@@ -707,16 +699,8 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
       return { success: false, error: "Session expired or invalid" };
     }
 
-    const dbCreatedAt =
-      dbSession.created_at instanceof Date
-        ? dbSession.created_at.toISOString()
-        : dbSession.created_at;
-    const dbLastAccessedAt =
-      dbSession.last_login_at instanceof Date
-        ? dbSession.last_login_at.toISOString()
-        : dbSession.last_login_at;
     const securityCheck = await sessionSecurityService.checkSessionValidity(
-      { created_at: dbCreatedAt, last_accessed_at: dbLastAccessedAt as string },
+      { created_at: dbSession.created_at, last_accessed_at: dbSession.last_login_at as string },
       session.sessionToken
     );
 

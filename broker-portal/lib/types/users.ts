@@ -18,10 +18,10 @@
 export type Role = 'agent' | 'broker' | 'admin' | 'it_admin';
 
 /**
- * License/membership status
- * Maps to: organization_members.license_status CHECK constraint
+ * License status for organization members.
+ * Maps to: organization_members.license_status CHECK constraint.
  */
-export type LicenseStatus = 'pending' | 'active' | 'suspended' | 'expired';
+export type MemberLicenseStatus = 'pending' | 'active' | 'suspended' | 'expired';
 
 /**
  * How a user/member was provisioned
@@ -80,7 +80,7 @@ export interface OrganizationMember {
   organization_id: string;
   user_id: string | null;
   role: Role;
-  license_status: LicenseStatus;
+  license_status: MemberLicenseStatus;
   // Invitation fields
   invited_email: string | null;
   invitation_token: string | null;
@@ -192,7 +192,7 @@ export const ROLE_LABELS: Record<Role, string> = {
 /**
  * Human-readable license status labels
  */
-export const LICENSE_STATUS_LABELS: Record<LicenseStatus, string> = {
+export const LICENSE_STATUS_LABELS: Record<MemberLicenseStatus, string> = {
   pending: 'Pending',
   active: 'Active',
   suspended: 'Suspended',

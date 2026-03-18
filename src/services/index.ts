@@ -96,7 +96,7 @@ export { licenseService } from "./licenseService";
 export type {
   LicenseInfo,
   LicenseValidationResult,
-  LicenseStatus,
+  LicenseStatusInfo,
   LicenseAction,
   ValidationLicenseType,
 } from "./licenseService";
