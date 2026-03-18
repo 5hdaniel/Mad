@@ -422,11 +422,13 @@ function InlineLabelPicker({
                 value={newLabelName}
                 onChange={(e) => setNewLabelName(e.target.value)}
                 onKeyDown={(e) => {
+                  e.stopPropagation();
                   if (e.key === 'Enter') {
                     e.preventDefault();
                     handleCreateLabel();
                   }
                 }}
+                onMouseDown={(e) => e.stopPropagation()}
                 placeholder="New label..."
                 className="flex-1 min-w-0 text-xs px-1.5 py-1 border rounded text-gray-900 bg-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
               />
