@@ -19,9 +19,8 @@ import {
   removeFromSprint,
   listSprints,
   listProjects,
+  listAssignableUsers,
 } from '@/lib/pm-queries';
-import { getAssignableAgents } from '@/lib/support-queries';
-import type { AssignableAgent } from '@/lib/support-queries';
 import type {
   PmBacklogItem,
   PmSprint,
@@ -86,7 +85,7 @@ function isOverdue(dueDate: string | null, status: ItemStatus): boolean {
 
 export function TaskSidebar({ item, onUpdate }: TaskSidebarProps) {
   // Dropdown options loaded on mount
-  const [agents, setAgents] = useState<AssignableAgent[]>([]);
+  const [agents, setAgents] = useState<{ id: string; display_name: string | null; email: string }[]>([]);
   const [sprints, setSprints] = useState<PmSprint[]>([]);
   const [projects, setProjects] = useState<PmProject[]>([]);
 
@@ -119,7 +118,7 @@ export function TaskSidebar({ item, onUpdate }: TaskSidebarProps) {
 
   // Load dropdown options on mount
   useEffect(() => {
-    getAssignableAgents().then(setAgents).catch(() => {});
+    listAssignableUsers().then(setAgents).catch(() => {});
     listSprints().then(setSprints).catch(() => {});
     listProjects().then(setProjects).catch(() => {});
   }, []);
@@ -466,8 +465,8 @@ export function TaskSidebar({ item, onUpdate }: TaskSidebarProps) {
           >
             <option value="">Unassigned</option>
             {agents.map((agent) => (
-              <option key={agent.user_id} value={agent.user_id}>
-                {agent.display_name} ({agent.role_name})
+              <option key={agent.id} value={agent.id}>
+                {agent.display_name || agent.email}
               </option>
             ))}
           </select>
