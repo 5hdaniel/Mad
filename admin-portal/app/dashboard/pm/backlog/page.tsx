@@ -18,7 +18,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, List, GitBranch } from 'lucide-react';
-import { listItems } from '@/lib/pm-queries';
+import { listItems, listAssignableUsers } from '@/lib/pm-queries';
 import type { PmBacklogItem, SortableColumn, SortDirection, ItemStatus, ItemPriority, ItemType } from '@/lib/pm-types';
 import { TaskStatsCards } from '../components/TaskStatsCards';
 import { TaskFilters } from '../components/TaskFilters';
@@ -181,6 +181,9 @@ export default function BacklogPage() {
   const [treeMode, setTreeMode] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
+  // User map for assignee name resolution
+  const [userMap, setUserMap] = useState<Map<string, { display_name: string | null; email: string }>>(new Map());
+
   const pageSize = 50;
 
   // ---------------------------------------------------------------------------
@@ -259,6 +262,19 @@ export default function BacklogPage() {
   useEffect(() => {
     loadItems();
   }, [loadItems]);
+
+  // Load assignable users once for assignee name resolution
+  useEffect(() => {
+    listAssignableUsers()
+      .then((users) => {
+        const map = new Map<string, { display_name: string | null; email: string }>();
+        for (const user of users) {
+          map.set(user.id, { display_name: user.display_name, email: user.email });
+        }
+        setUserMap(map);
+      })
+      .catch(() => {});
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Derived: sort the current page of items client-side
@@ -470,6 +486,7 @@ export default function BacklogPage() {
           onSort={handleSort}
           selectedIds={selectedIds}
           onSelectionChange={setSelectedIds}
+          userMap={userMap}
         />
       )}
 
