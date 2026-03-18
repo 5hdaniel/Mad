@@ -21,9 +21,9 @@ import {
   type DragEndEvent,
   type CollisionDetection,
 } from '@dnd-kit/core';
-import type { PmBacklogItem, ItemStatus, BoardColumns } from '@/lib/pm-types';
+import type { PmBacklogItem, ItemStatus, BoardColumns, PmLabel } from '@/lib/pm-types';
 import { KanbanColumn } from './KanbanColumn';
-import { KanbanCard } from './KanbanCard';
+import { KanbanCard, type AssignableUser } from './KanbanCard';
 
 /** Statuses that appear as board columns (subset of ItemStatus). */
 type BoardStatus = keyof BoardColumns;
@@ -54,6 +54,9 @@ interface KanbanBoardProps {
   /** Optional: items currently selected for bulk actions */
   selectedIds?: Set<string>;
   onToggleSelect?: (itemId: string) => void;
+  onItemUpdated?: () => void;
+  users?: AssignableUser[];
+  allLabels?: PmLabel[];
 }
 
 export function KanbanBoard({
@@ -62,6 +65,9 @@ export function KanbanBoard({
   onQuickAdd,
   selectedIds,
   onToggleSelect,
+  onItemUpdated,
+  users,
+  allLabels,
 }: KanbanBoardProps) {
   const [activeItem, setActiveItem] = useState<PmBacklogItem | null>(null);
 
@@ -140,6 +146,9 @@ export function KanbanBoard({
             }
             selectedIds={selectedIds}
             onToggleSelect={onToggleSelect}
+            onItemUpdated={onItemUpdated}
+            users={users}
+            allLabels={allLabels}
           />
         ))}
       </div>

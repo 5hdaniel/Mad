@@ -29,13 +29,17 @@ import {
   createItem,
   bulkUpdate,
   deleteItem,
+  listAssignableUsers,
+  listLabels,
 } from '@/lib/pm-queries';
 import type {
   PmBacklogItem,
   PmSprint,
+  PmLabel,
   ItemStatus,
   BoardColumns,
 } from '@/lib/pm-types';
+import type { AssignableUser } from '../components/KanbanCard';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -142,6 +146,8 @@ export default function BoardPage() {
     return persisted?.collapsedLanes ? new Set(persisted.collapsedLanes) : new Set();
   });
   const [nameMap, setNameMap] = useState<Map<string, string>>(new Map());
+  const [boardUsers, setBoardUsers] = useState<AssignableUser[]>([]);
+  const [boardLabels, setBoardLabels] = useState<PmLabel[]>([]);
 
   const toggleLane = useCallback((laneKey: string) => {
     setCollapsedLanes((prev) => {
@@ -208,6 +214,12 @@ export default function BoardPage() {
       }
     }
     loadProjects();
+  }, []);
+
+  /** Load assignable users and labels ONCE at board level for inline editing. */
+  useEffect(() => {
+    listAssignableUsers().then(setBoardUsers).catch(() => {});
+    listLabels().then(setBoardLabels).catch(() => {});
   }, []);
 
   /** Load board data when selected sprint changes. */
@@ -614,6 +626,9 @@ export default function BoardPage() {
                           onQuickAdd={handleQuickAdd}
                           selectedIds={selectedIds}
                           onToggleSelect={handleToggleSelect}
+                          onItemUpdated={loadBoardData}
+                          users={boardUsers}
+                          allLabels={boardLabels}
                         />
                       )}
                     </div>
@@ -634,6 +649,9 @@ export default function BoardPage() {
               onQuickAdd={handleQuickAdd}
               selectedIds={selectedIds}
               onToggleSelect={handleToggleSelect}
+              onItemUpdated={loadBoardData}
+              users={boardUsers}
+              allLabels={boardLabels}
             />
           )}
         </div>
