@@ -1,7 +1,7 @@
 import React from "react";
 import type { Transaction } from "../types";
 import { usePendingTransactions } from "../hooks/usePendingTransactions";
-import { LicenseGate } from "./common/LicenseGate";
+import { FeatureGate } from "./common/FeatureGate";
 import { AlertBanner, AlertIcons } from "./common/AlertBanner";
 import { useLicense } from "../contexts/LicenseContext";
 import { useFeatureGate } from "../hooks/useFeatureGate";
@@ -75,7 +75,7 @@ function StartNewAuditModal({
           </div>
           <div className="flex items-center gap-2">
             {/* Sync button - AI add-on only */}
-            <LicenseGate requires="ai_addon">
+            <FeatureGate requires="ai_addon">
               {onSync && (
                 <button
                   onClick={() => {
@@ -109,7 +109,7 @@ function StartNewAuditModal({
                   {isSyncing ? "Syncing..." : "Sync Now"}
                 </button>
               )}
-            </LicenseGate>
+            </FeatureGate>
             <button
               onClick={onClose}
               className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
@@ -137,7 +137,7 @@ function StartNewAuditModal({
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
           {/* Pending Transactions Section - AI add-on only */}
-          <LicenseGate requires="ai_addon">
+          <FeatureGate requires="ai_addon">
             <div className="mb-6">
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
@@ -285,7 +285,7 @@ function StartNewAuditModal({
                 </span>
               </div>
             </div>
-          </LicenseGate>
+          </FeatureGate>
 
           {/* Transaction Limit Warning */}
           {!canCreateTransaction && (
