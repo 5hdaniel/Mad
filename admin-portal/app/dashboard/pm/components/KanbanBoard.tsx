@@ -57,6 +57,8 @@ interface KanbanBoardProps {
   onItemUpdated?: () => void;
   users?: AssignableUser[];
   allLabels?: PmLabel[];
+  /** When true, cards render in compact (title-only) mode */
+  compact?: boolean;
 }
 
 export function KanbanBoard({
@@ -68,6 +70,7 @@ export function KanbanBoard({
   onItemUpdated,
   users,
   allLabels,
+  compact,
 }: KanbanBoardProps) {
   const [activeItem, setActiveItem] = useState<PmBacklogItem | null>(null);
 
@@ -149,13 +152,16 @@ export function KanbanBoard({
             onItemUpdated={onItemUpdated}
             users={users}
             allLabels={allLabels}
+            compact={compact}
           />
         ))}
       </div>
 
       {/* Drag overlay -- shows card being dragged */}
       <DragOverlay>
-        {activeItem ? <KanbanCard item={activeItem} isDragOverlay /> : null}
+        {activeItem ? (
+          <KanbanCard item={activeItem} isDragOverlay compact={compact} />
+        ) : null}
       </DragOverlay>
     </DndContext>
   );
