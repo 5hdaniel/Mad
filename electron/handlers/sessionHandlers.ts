@@ -21,6 +21,7 @@ import { getDeviceId } from "../services/deviceService";
 // Import validation utilities
 import { ValidationError, validateUserId, validateSessionToken } from "../utils/validation";
 import { wrapHandler } from "../utils/wrapHandler";
+import { redactEmail } from "../utils/redactSensitive";
 
 // Import constants
 import {
@@ -943,7 +944,7 @@ async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
     const user = freshUser || session.user;
 
     setSyncUserId(user.id);
-    Sentry.setUser({ id: user.id, email: session.user.email ?? undefined });
+    Sentry.setUser({ id: user.id, email: session.user.email ? redactEmail(session.user.email) : undefined });
 
     // TASK-1809: Pass cloud user to needsToAcceptTerms for fallback check
     // Even if local sync failed, we can still check cloud terms state

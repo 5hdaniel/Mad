@@ -12,6 +12,7 @@
  */
 
 import React, { Component, ErrorInfo, ReactNode } from "react";
+import * as Sentry from "@sentry/electron/renderer";
 import logger from '../utils/logger';
 
 interface Props {
@@ -51,6 +52,15 @@ class ErrorBoundary extends Component<Props, State> {
   async componentDidCatch(error: Error, errorInfo: ErrorInfo): Promise<void> {
     logger.error("[ErrorBoundary] Caught error:", error);
     logger.error("[ErrorBoundary] Error info:", errorInfo);
+
+    // Report error to Sentry (BACKLOG-1119)
+    Sentry.captureException(error, {
+      contexts: {
+        react: {
+          componentStack: errorInfo.componentStack ?? undefined,
+        },
+      },
+    });
 
     this.setState({ errorInfo });
 
