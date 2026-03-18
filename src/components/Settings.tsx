@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { LLMSettings } from "./settings/LLMSettings";
 import { MacOSMessagesImportSettings } from "./settings/MacOSMessagesImportSettings";
 import { ImportSourceSettings } from "./settings/ImportSourceSettings";
-import { LicenseGate } from "./common/LicenseGate";
+import { FeatureGate } from "./common/FeatureGate";
 import { SettingsTabBar } from "./settings/SettingsTabBar";
 import { GeneralSettings } from "./settings/GeneralSettings";
 import { EmailSettings } from "./settings/EmailSettings";
@@ -149,8 +149,8 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
               isGoogleConnected={isGoogleConnected}
             />
 
-            {/* AI Settings - Only visible with AI add-on */}
-            <LicenseGate requires="ai_addon">
+            {/* AI Settings - Only visible with AI add-on (BACKLOG-462) */}
+            <FeatureGate requires="ai_addon">
               <div id="settings-ai" className="mb-8">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">AI Settings</h3>
                 <div className="space-y-4">
@@ -168,7 +168,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                   <LLMSettings userId={userId} />
                 </div>
               </div>
-            </LicenseGate>
+            </FeatureGate>
 
             <SecuritySettings userId={userId} onLogout={onLogout} />
             <DataPrivacySettings userId={userId} />

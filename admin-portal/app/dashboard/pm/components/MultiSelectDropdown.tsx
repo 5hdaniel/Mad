@@ -8,8 +8,9 @@
  * (e.g., "In Progress" AND "Blocked" statuses at once).
  */
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { ChevronDown, X } from 'lucide-react';
+import { useClickOutside } from '@/hooks/useClickOutside';
 
 export interface MultiSelectOption {
   value: string;
@@ -36,18 +37,8 @@ export function MultiSelectDropdown({
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Close on click outside
-  useEffect(() => {
-    if (!open) return;
-
-    function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [open]);
+  const close = useCallback(() => setOpen(false), []);
+  useClickOutside(containerRef, close, open);
 
   function toggleValue(value: string) {
     if (selected.includes(value)) {
