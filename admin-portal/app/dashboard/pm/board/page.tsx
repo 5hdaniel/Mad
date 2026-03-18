@@ -35,6 +35,7 @@ import {
   listProjects,
   getBoardTasks,
   updateItemStatus,
+  updateItemField,
   assignToSprint,
   assignItem,
   createItem,
@@ -494,6 +495,21 @@ export default function BoardPage() {
       if (!over) return;
 
       const data = active.data.current;
+
+      // Board card dropped onto backlog panel -> unassign from sprint
+      if (over.id === 'backlog-panel') {
+        if (data?.type === 'backlog-item') return; // already in backlog, ignore
+        const itemId = active.id as string;
+        try {
+          await updateItemField(itemId, 'sprint_id', null);
+          await loadBoardData();
+          await loadBacklogItems();
+        } catch (err) {
+          console.error('Failed to unassign item from sprint:', err);
+        }
+        return;
+      }
+
       const targetStatus = resolveColumnStatus(over.id as string, columns);
       if (!targetStatus) return;
 
