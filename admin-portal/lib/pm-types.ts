@@ -249,6 +249,7 @@ export interface ItemListParams {
   search?: string | null;
   labels?: string[] | null;
   parent_id?: string | null;
+  assignee_id?: string | null;
   page?: number;
   page_size?: number;
 }
@@ -329,6 +330,9 @@ export interface BoardColumns {
   testing: PmBacklogItem[];
   completed: PmBacklogItem[];
   blocked: PmBacklogItem[];
+  deferred: PmBacklogItem[];
+  obsolete: PmBacklogItem[];
+  reopened: PmBacklogItem[];
 }
 
 // ---------------------------------------------------------------------------
@@ -400,6 +404,18 @@ export const TYPE_COLORS: Record<ItemType, string> = {
   chore: 'bg-gray-100 text-gray-800',
   spike: 'bg-purple-100 text-purple-800',
   epic: 'bg-indigo-100 text-indigo-800',
+};
+
+/** Canonical area list. Add new areas here -- TaskFilters picks them up automatically. */
+export const AREA_LABELS: Record<string, string> = {
+  'admin-portal': 'admin-portal',
+  electron: 'electron',
+  'broker-portal': 'broker-portal',
+  service: 'service',
+  schema: 'schema',
+  ui: 'ui',
+  infra: 'infra',
+  docs: 'docs',
 };
 
 export const SPRINT_STATUS_LABELS: Record<SprintStatus, string> = {
