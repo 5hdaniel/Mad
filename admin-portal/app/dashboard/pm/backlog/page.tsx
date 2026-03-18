@@ -230,7 +230,7 @@ export default function BacklogPage() {
         sprint_id: rpcSprint,
         project_id: rpcProject,
         search: searchQuery || undefined,
-        parent_id: treeMode ? null : undefined,
+        root_only: treeMode ? true : undefined,
         page: needsClientFilter ? 1 : page,
         page_size: fetchSize,
       });
