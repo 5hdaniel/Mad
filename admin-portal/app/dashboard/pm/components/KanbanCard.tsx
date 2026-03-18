@@ -14,7 +14,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import Link from 'next/link';
-import { Check, Plus, Loader2 } from 'lucide-react';
+import { Check, Plus, Loader2, X } from 'lucide-react';
 import type { PmBacklogItem, ItemPriority, PmLabel } from '@/lib/pm-types';
 import { PRIORITY_COLORS, PRIORITY_LABELS } from '@/lib/pm-types';
 import {
@@ -23,6 +23,7 @@ import {
   addItemLabel,
   removeItemLabel,
   createLabel,
+  deleteLabel,
 } from '@/lib/pm-queries';
 
 // ---------------------------------------------------------------------------
@@ -330,6 +331,19 @@ function InlineLabelPicker({
     }
   }
 
+  async function handleDeleteLabel(e: React.MouseEvent, labelId: string) {
+    e.stopPropagation();
+    setUpdating(labelId);
+    try {
+      await deleteLabel(labelId);
+      onUpdate();
+    } catch {
+      // Silently fail -- user can retry
+    } finally {
+      setUpdating(null);
+    }
+  }
+
   async function handleCreateLabel() {
     const name = newLabelName.trim();
     if (!name || creating) return;
@@ -393,24 +407,33 @@ function InlineLabelPicker({
             <p className="text-xs text-gray-400 px-3 py-2">No labels yet</p>
           ) : (
             allLabels.map((label) => (
-              <button
-                key={label.id}
-                onClick={() => handleToggleLabel(label)}
-                disabled={updating === label.id}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-              >
-                <span
-                  className="h-2.5 w-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: label.color }}
-                />
-                <span className="truncate flex-1 text-left">{label.name}</span>
-                {currentLabelIds.has(label.id) && (
-                  <Check className="h-3 w-3 text-blue-600 shrink-0" />
-                )}
-                {updating === label.id && (
-                  <Loader2 className="h-3 w-3 animate-spin shrink-0" />
-                )}
-              </button>
+              <div key={label.id} className="group/label flex items-center">
+                <button
+                  onClick={() => handleToggleLabel(label)}
+                  disabled={updating === label.id}
+                  className="flex-1 flex items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  <span
+                    className="h-2.5 w-2.5 rounded-full shrink-0"
+                    style={{ backgroundColor: label.color }}
+                  />
+                  <span className="truncate flex-1 text-left">{label.name}</span>
+                  {currentLabelIds.has(label.id) && (
+                    <Check className="h-3 w-3 text-blue-600 shrink-0" />
+                  )}
+                  {updating === label.id && (
+                    <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                  )}
+                </button>
+                <button
+                  onClick={(e) => handleDeleteLabel(e, label.id)}
+                  disabled={updating === label.id}
+                  className="opacity-0 group-hover/label:opacity-100 p-1 mr-1 text-gray-400 hover:text-red-500 transition-opacity disabled:opacity-50"
+                  title="Delete label"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
             ))
           )}
           {/* Create new label input */}

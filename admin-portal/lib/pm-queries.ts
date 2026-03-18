@@ -274,6 +274,15 @@ export async function createLabel(
   return data as unknown as { id: string };
 }
 
+/** Delete a label entirely (removes all item associations). */
+export async function deleteLabel(labelId: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.rpc('pm_delete_label', {
+    p_label_id: labelId,
+  });
+  if (error) throw new Error(error.message);
+}
+
 // ---------------------------------------------------------------------------
 // 13. pm_add_item_label
 // ---------------------------------------------------------------------------
