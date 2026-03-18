@@ -75,6 +75,17 @@ export interface NewEmail {
   labels?: string;
 }
 
+// BACKLOG-1107: Explicit column lists for SELECT queries instead of SELECT *.
+const EMAIL_COLUMNS = `id, user_id, external_id, source, account_id, direction,
+  subject, body_plain, body_html, sender, recipients, cc, bcc,
+  thread_id, in_reply_to, references_header, sent_at, received_at,
+  has_attachments, attachment_count, message_id_header, content_hash, labels, created_at`;
+
+const EMAIL_COLUMNS_LIGHT = `id, user_id, external_id, source, account_id, direction,
+  subject, sender, recipients, cc, bcc, thread_id, in_reply_to, references_header,
+  sent_at, received_at, has_attachments, attachment_count, message_id_header,
+  content_hash, labels, created_at`;
+
 // ============================================
 // CRUD OPERATIONS
 // ============================================
@@ -132,10 +143,32 @@ export async function createEmail(emailData: NewEmail): Promise<Email> {
 
   dbRun(sql, params);
 
-  const email = await getEmailById(id);
-  if (!email) {
-    throw new DatabaseError("Failed to create email");
-  }
+  // BACKLOG-1107: Return data from memory instead of INSERT-then-SELECT.
+  const email: Email = {
+    id, user_id: emailData.user_id,
+    external_id: emailData.external_id || undefined,
+    source: emailData.source || undefined,
+    account_id: emailData.account_id || undefined,
+    direction: emailData.direction || undefined,
+    subject: emailData.subject || undefined,
+    body_plain: emailData.body_plain || undefined,
+    body_html: emailData.body_html || undefined,
+    sender: emailData.sender || undefined,
+    recipients: emailData.recipients || undefined,
+    cc: emailData.cc || undefined,
+    bcc: emailData.bcc || undefined,
+    thread_id: emailData.thread_id || undefined,
+    in_reply_to: emailData.in_reply_to || undefined,
+    references_header: emailData.references_header || undefined,
+    sent_at: emailData.sent_at || undefined,
+    received_at: emailData.received_at || undefined,
+    has_attachments: emailData.has_attachments || false,
+    attachment_count: emailData.attachment_count || 0,
+    message_id_header: emailData.message_id_header || undefined,
+    content_hash: emailData.content_hash || undefined,
+    labels: emailData.labels || undefined,
+    created_at: new Date().toISOString(),
+  };
 
   return email;
 }
@@ -144,7 +177,7 @@ export async function createEmail(emailData: NewEmail): Promise<Email> {
  * Get an email by ID
  */
 export async function getEmailById(emailId: string): Promise<Email | null> {
-  const sql = "SELECT * FROM emails WHERE id = ?";
+  const sql = `SELECT ${EMAIL_COLUMNS} FROM emails WHERE id = ?`;
   const email = dbGet<Email>(sql, [emailId]);
   return email || null;
 }
@@ -157,7 +190,7 @@ export async function getEmailByExternalId(
   userId: string,
   externalId: string
 ): Promise<Email | null> {
-  const sql = "SELECT * FROM emails WHERE user_id = ? AND external_id = ?";
+  const sql = `SELECT ${EMAIL_COLUMNS_LIGHT} FROM emails WHERE user_id = ? AND external_id = ?`;
   const email = dbGet<Email>(sql, [userId, externalId]);
   return email || null;
 }
@@ -170,7 +203,7 @@ export async function getEmailByMessageIdHeader(
   userId: string,
   messageIdHeader: string
 ): Promise<Email | null> {
-  const sql = "SELECT * FROM emails WHERE user_id = ? AND message_id_header = ?";
+  const sql = `SELECT ${EMAIL_COLUMNS_LIGHT} FROM emails WHERE user_id = ? AND message_id_header = ?`;
   const email = dbGet<Email>(sql, [userId, messageIdHeader]);
   return email || null;
 }
@@ -180,7 +213,7 @@ export async function getEmailByMessageIdHeader(
  */
 export async function getEmailsByUser(userId: string): Promise<Email[]> {
   const sql = `
-    SELECT * FROM emails
+    SELECT ${EMAIL_COLUMNS} FROM emails
     WHERE user_id = ?
     ORDER BY sent_at DESC
   `;
@@ -195,7 +228,7 @@ export async function getEmailsByThread(
   threadId: string
 ): Promise<Email[]> {
   const sql = `
-    SELECT * FROM emails
+    SELECT ${EMAIL_COLUMNS} FROM emails
     WHERE user_id = ? AND thread_id = ?
     ORDER BY sent_at ASC
   `;
