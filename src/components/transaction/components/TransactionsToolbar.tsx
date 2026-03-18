@@ -4,7 +4,7 @@
  */
 import React, { useState } from "react";
 import type { Transaction } from "../../../../electron/types/models";
-import { LicenseGate } from "../../common/LicenseGate";
+import { FeatureGate } from "../../common/FeatureGate";
 import { TransactionLimitModal } from "../../common/TransactionLimitModal";
 import { useLicense } from "../../../contexts/LicenseContext";
 
@@ -198,7 +198,7 @@ export function TransactionsToolbar({
           </button>
 
           {/* Scan/Stop Button - AI add-on only (BACKLOG-462) */}
-          <LicenseGate requires="ai_addon">
+          <FeatureGate requires="ai_addon">
             {scanning ? (
               <button
                 onClick={onStopScan}
@@ -244,7 +244,7 @@ export function TransactionsToolbar({
                 </span>
               </button>
             )}
-          </LicenseGate>
+          </FeatureGate>
         </div>
       </div>
 

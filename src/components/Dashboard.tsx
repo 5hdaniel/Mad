@@ -5,7 +5,7 @@ import { usePendingTransactionCount } from "../hooks/usePendingTransactionCount"
 import { useSyncOrchestrator } from "../hooks/useSyncOrchestrator";
 import { SyncStatusIndicator } from "./dashboard/index";
 import StartNewAuditModal from "./StartNewAuditModal";
-import { LicenseGate } from "./common/LicenseGate";
+import { FeatureGate } from "./common/FeatureGate";
 import { AlertBanner, AlertIcons } from "./common/AlertBanner";
 import { TransactionLimitModal } from "./common/TransactionLimitModal";
 import { useLicense } from "../contexts/LicenseContext";
@@ -286,13 +286,13 @@ function Dashboard({
                 </h2>
               </div>
               {/* Pending count badge - AI add-on only */}
-              <LicenseGate requires="ai_addon">
+              <FeatureGate requires="ai_addon">
                 {pendingCount > 0 && (
                   <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-sm font-semibold bg-indigo-100 text-indigo-800 animate-pulse">
                     {pendingCount} new
                   </span>
                 )}
-              </LicenseGate>
+              </FeatureGate>
               <svg
                 className="w-5 h-5 text-blue-600 group-hover:translate-x-1 transition-transform"
                 fill="none"

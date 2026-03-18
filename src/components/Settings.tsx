@@ -3,7 +3,7 @@ import { LLMSettings } from "./settings/LLMSettings";
 import { MacOSMessagesImportSettings } from "./settings/MacOSMessagesImportSettings";
 import { ContactsImportSettings } from "./settings/MacOSContactsImportSettings";
 import { ImportSourceSettings } from "./settings/ImportSourceSettings";
-import { LicenseGate } from "./common/LicenseGate";
+import { FeatureGate } from "./common/FeatureGate";
 import { SettingsTabBar } from "./settings/SettingsTabBar";
 import { useNotification } from "@/hooks/useNotification";
 import { useScrollSpy } from "@/hooks/useScrollSpy";
@@ -1453,7 +1453,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
 
             {/* Export Settings */}
             {/* AI Settings - Only visible with AI add-on (BACKLOG-462) */}
-            <LicenseGate requires="ai_addon">
+            <FeatureGate requires="ai_addon">
               <div id="settings-ai" className="mb-8">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">
                   AI Settings
@@ -1476,7 +1476,7 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
                   <LLMSettings userId={userId} />
                 </div>
               </div>
-            </LicenseGate>
+            </FeatureGate>
 
             {/* Security */}
             <div id="settings-security" className="mb-8">

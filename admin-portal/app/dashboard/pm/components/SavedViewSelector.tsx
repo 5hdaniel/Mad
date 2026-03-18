@@ -7,7 +7,7 @@
  * Uses pm_list_saved_views, pm_save_view, pm_delete_saved_view RPCs.
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Bookmark, X, Save, ChevronDown } from 'lucide-react';
 import { listSavedViews, saveView, deleteSavedView } from '@/lib/pm-queries';
 import type { PmSavedView } from '@/lib/pm-types';
@@ -23,13 +23,26 @@ export function SavedViewSelector({ currentFilters, onLoadView }: SavedViewSelec
   const [saving, setSaving] = useState(false);
   const [newName, setNewName] = useState('');
   const [loading, setLoading] = useState(true);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
 
   const loadViews = useCallback(async () => {
     try {
       const data = await listSavedViews();
       setViews(data);
-    } catch {
-      // Silently fail -- views are non-critical
+    } catch (err) {
+      console.error('Failed to load saved views:', err);
     } finally {
       setLoading(false);
     }
@@ -67,7 +80,7 @@ export function SavedViewSelector({ currentFilters, onLoadView }: SavedViewSelec
   }
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <button
         onClick={() => setOpen(!open)}
         className="inline-flex items-center gap-2 px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"

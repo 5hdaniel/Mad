@@ -519,7 +519,6 @@ class TransactionService {
       property_state: addressParts.state || undefined,
       property_zip: addressParts.zip || undefined,
       transaction_type: summary.transactionType,
-      transaction_status: "completed",
       status: "active",
       closed_at: toISOString(summary.closingDate),
       closing_date_verified: false,
@@ -972,7 +971,6 @@ class TransactionService {
         property_state: addressParts.state || undefined,
         property_zip: addressParts.zip || undefined,
         transaction_type: txType,
-        transaction_status: "pending",
         status: "active",
         closed_at: toISOString(detected.dateRange?.end),
         closing_date_verified: false,
@@ -1104,7 +1102,6 @@ class TransactionService {
       property_state: transactionData.property_state,
       property_zip: transactionData.property_zip,
       transaction_type: transactionData.transaction_type,
-      transaction_status: "pending",
       status: transactionData.status || "active",
       started_at: transactionData.started_at,
       closed_at: transactionData.closed_at,
@@ -1153,7 +1150,6 @@ class TransactionService {
         property_zip,
         property_coordinates,
         transaction_type,
-        transaction_status: "pending",
         status: "active",
         started_at,
         closed_at,
@@ -1403,10 +1399,7 @@ class TransactionService {
       transaction_id: communication.transaction_id,
       email_subject: communication.subject,
       email_sender: communication.sender,
-      email_sent_at:
-        communication.sent_at instanceof Date
-          ? communication.sent_at.toISOString()
-          : communication.sent_at,
+      email_sent_at: communication.sent_at,
       email_thread_id: communication.email_thread_id,
       original_communication_id: communicationId,
       reason: reason || "Manually unlinked by user",
