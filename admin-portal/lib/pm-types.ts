@@ -175,6 +175,11 @@ export interface PmLabel {
   created_at?: string;
 }
 
+/**
+ * PmTaskLink represents a relationship between two **backlog items**
+ * (not tasks). The "task" in the name is a historical misnomer from the
+ * pm_task_links table; both source and target are pm_backlog_items.
+ */
 export interface PmTaskLink {
   link_id: string;
   link_type: LinkType;
@@ -198,9 +203,9 @@ export interface PmItemChild {
   id: string;
   title: string;
   legacy_id: string | null;
-  status: string;
-  priority: string;
-  type: string;
+  status: ItemStatus;
+  priority: ItemPriority;
+  type: ItemType;
 }
 
 // ---------------------------------------------------------------------------
@@ -469,7 +474,7 @@ export interface TaskLegacyLookup {
   title: string;
   status: string;
   backlog_item_id: string;
-  sprint_id: string;
+  sprint_id: string | null;
 }
 
 export interface TaskTokenResult {

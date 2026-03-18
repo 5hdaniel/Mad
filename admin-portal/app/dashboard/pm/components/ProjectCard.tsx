@@ -61,17 +61,10 @@ export function ProjectCard({ project }: ProjectCardProps) {
           </div>
         </div>
 
-        {/* Progress bar (placeholder -- actual progress computed by parent page) */}
-        {itemCount > 0 && (
-          <div className="mt-3">
-            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-green-500 rounded-full transition-all"
-                style={{ width: '0%' }}
-              />
-            </div>
-          </div>
-        )}
+        {/* Progress bar removed: the project list RPC does not return
+            per-status item counts, so there is no data to compute a real
+            completion percentage. Re-add once pm_list_projects returns
+            completed_item_count. */}
       </div>
     </Link>
   );
