@@ -5,15 +5,11 @@
  * This is a pure extraction of the routing logic from App.tsx.
  */
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, lazy, Suspense } from "react";
 import Login from "../components/Login";
 import MicrosoftLogin from "../components/MicrosoftLogin";
-import ConversationList from "../components/ConversationList";
-import ExportComplete from "../components/ExportComplete";
-import OutlookExport from "../components/OutlookExport";
 import Dashboard from "../components/Dashboard";
 import OfflineFallback from "../components/OfflineFallback";
-import { OnboardingFlow } from "../components/onboarding";
 import { UpgradeScreen, type UpgradeReason } from "../components/license/UpgradeScreen";
 import type { AppStateMachine } from "./state/types";
 import {
@@ -22,6 +18,14 @@ import {
   LoadingScreen,
   transformOutlookResults,
 } from "./routing";
+
+// BACKLOG-1096: Lazy-load route components not needed on initial render.
+const OnboardingFlow = lazy(() =>
+  import("../components/onboarding").then((m) => ({ default: m.OnboardingFlow }))
+);
+const ConversationList = lazy(() => import("../components/ConversationList"));
+const OutlookExport = lazy(() => import("../components/OutlookExport"));
+const ExportComplete = lazy(() => import("../components/ExportComplete"));
 
 interface AppRouterProps {
   app: AppStateMachine;
@@ -77,7 +81,7 @@ export function AppRouter({ app }: AppRouterProps) {
 
   // New onboarding architecture (when enabled)
   if (USE_NEW_ONBOARDING && isOnboardingStep(currentStep)) {
-    return <OnboardingFlow app={app} />;
+    return <Suspense fallback={<LoadingScreen />}><OnboardingFlow app={app} /></Suspense>;
   }
 
   // Loading state
@@ -179,37 +183,43 @@ export function AppRouter({ app }: AppRouterProps) {
     );
   }
 
-  // Contacts/Conversation list
+  // Contacts/Conversation list (lazy-loaded)
   if (currentStep === "contacts") {
     return (
-      <ConversationList
-        onExportComplete={handleExportComplete}
-        onOutlookExport={handleOutlookExport}
-        onConnectOutlook={handleConnectOutlook}
-        outlookConnected={outlookConnected}
-      />
+      <Suspense fallback={<LoadingScreen />}>
+        <ConversationList
+          onExportComplete={handleExportComplete}
+          onOutlookExport={handleOutlookExport}
+          onConnectOutlook={handleConnectOutlook}
+          outlookConnected={outlookConnected}
+        />
+      </Suspense>
     );
   }
 
-  // Outlook export
+  // Outlook export (lazy-loaded)
   if (currentStep === "outlook") {
     return (
-      <OutlookExport
-        conversations={conversations}
-        selectedIds={selectedConversationIds}
-        onComplete={(results) => {
-          setExportResult(transformOutlookResults(results));
-          goToStep("complete");
-        }}
-        onCancel={handleOutlookCancel}
-      />
+      <Suspense fallback={<LoadingScreen />}>
+        <OutlookExport
+          conversations={conversations}
+          selectedIds={selectedConversationIds}
+          onComplete={(results) => {
+            setExportResult(transformOutlookResults(results));
+            goToStep("complete");
+          }}
+          onCancel={handleOutlookCancel}
+        />
+      </Suspense>
     );
   }
 
-  // Export complete
+  // Export complete (lazy-loaded)
   if (currentStep === "complete" && exportResult) {
     return (
-      <ExportComplete result={exportResult} onStartOver={handleStartOver} />
+      <Suspense fallback={<LoadingScreen />}>
+        <ExportComplete result={exportResult} onStartOver={handleStartOver} />
+      </Suspense>
     );
   }
 
