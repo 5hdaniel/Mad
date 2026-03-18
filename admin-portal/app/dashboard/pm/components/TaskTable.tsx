@@ -22,23 +22,19 @@ import {
   PRIORITY_COLORS,
   TYPE_LABELS,
   TYPE_COLORS,
-  ALLOWED_TRANSITIONS,
 } from '@/lib/pm-types';
-import {
-  updateItemStatus,
-  updateItemField,
-  assignItem,
-} from '@/lib/pm-queries';
+import { updateItemField } from '@/lib/pm-queries';
+import { InlineStatusPicker } from './InlineStatusPicker';
+import { InlinePriorityPicker } from './InlinePriorityPicker';
+import { InlineAssigneePicker } from './InlineAssigneePicker';
+import type { AssignableUser } from './InlineAssigneePicker';
+
+// Re-export AssignableUser for backward compatibility
+export type { AssignableUser } from './InlineAssigneePicker';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-export interface AssignableUser {
-  id: string;
-  display_name: string | null;
-  email: string;
-}
 
 interface TaskTableProps {
   items: PmBacklogItem[];
@@ -65,149 +61,9 @@ interface TaskTableProps {
   users?: AssignableUser[];
 }
 
-// ---------------------------------------------------------------------------
-// Inline Dropdown: Status (shows only valid transitions)
-// ---------------------------------------------------------------------------
-
-function InlineStatusDropdown({
-  itemId,
-  status,
-  onUpdated,
-}: {
-  itemId: string;
-  status: ItemStatus;
-  onUpdated: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
-  const validTransitions = ALLOWED_TRANSITIONS[status] || [];
-
-  async function handleSelect(newStatus: ItemStatus) {
-    setOpen(false);
-    if (newStatus === status) return;
-    try {
-      await updateItemStatus(itemId, newStatus);
-      onUpdated();
-    } catch {
-      // Silently fail - user can retry
-    }
-  }
-
-  return (
-    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
-      <button
-        onClick={(e) => {
-          e.preventDefault();
-          if (validTransitions.length > 0) setOpen(!open);
-        }}
-        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer ${STATUS_COLORS[status]} ${
-          validTransitions.length > 0 ? 'hover:ring-2 hover:ring-offset-1 hover:ring-gray-300' : ''
-        }`}
-        title={validTransitions.length === 0 ? 'No transitions available' : 'Click to change status'}
-      >
-        {STATUS_LABELS[status]}
-      </button>
-      {open && validTransitions.length > 0 && (
-        <div className="absolute left-0 top-full mt-1 bg-white border rounded-md shadow-lg z-20 py-1 w-36">
-          {validTransitions.map((s) => (
-            <button
-              key={s}
-              onClick={() => handleSelect(s)}
-              className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center gap-2"
-            >
-              <span
-                className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[s]}`}
-              >
-                {STATUS_LABELS[s]}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Inline Dropdown: Priority
-// ---------------------------------------------------------------------------
-
-function InlinePriorityDropdown({
-  itemId,
-  priority,
-  onUpdated,
-}: {
-  itemId: string;
-  priority: ItemPriority;
-  onUpdated: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
-  async function handleSelect(newPriority: ItemPriority) {
-    setOpen(false);
-    if (newPriority === priority) return;
-    try {
-      await updateItemField(itemId, 'priority', newPriority);
-      onUpdated();
-    } catch {
-      // Silently fail
-    }
-  }
-
-  return (
-    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
-      <button
-        onClick={(e) => {
-          e.preventDefault();
-          setOpen(!open);
-        }}
-        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer hover:ring-2 hover:ring-offset-1 hover:ring-gray-300 ${PRIORITY_COLORS[priority]}`}
-      >
-        {PRIORITY_LABELS[priority]}
-      </button>
-      {open && (
-        <div className="absolute left-0 top-full mt-1 bg-white border rounded-md shadow-lg z-20 py-1 w-28">
-          {(['low', 'medium', 'high', 'critical'] as ItemPriority[]).map((p) => (
-            <button
-              key={p}
-              onClick={() => handleSelect(p)}
-              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center justify-between ${
-                p === priority ? 'bg-blue-50' : ''
-              }`}
-            >
-              <span
-                className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLORS[p]}`}
-              >
-                {PRIORITY_LABELS[p]}
-              </span>
-              {p === priority && <Check className="h-3 w-3 text-blue-600" />}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+// InlineStatusDropdown and InlinePriorityDropdown are now shared components:
+// - InlineStatusPicker (./InlineStatusPicker.tsx)
+// - InlinePriorityPicker (./InlinePriorityPicker.tsx)
 
 // ---------------------------------------------------------------------------
 // Inline Dropdown: Type
@@ -240,8 +96,8 @@ function InlineTypeDropdown({
     try {
       await updateItemField(itemId, 'type', newType);
       onUpdated();
-    } catch {
-      // Silently fail
+    } catch (err) {
+      console.error('Failed to update type:', err);
     }
   }
 
@@ -280,96 +136,8 @@ function InlineTypeDropdown({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Inline Dropdown: Assignee
-// ---------------------------------------------------------------------------
-
-function InlineAssigneeDropdown({
-  itemId,
-  assigneeId,
-  users,
-  userMap,
-  onUpdated,
-}: {
-  itemId: string;
-  assigneeId: string | null;
-  users: AssignableUser[];
-  userMap?: Map<string, { display_name: string | null; email: string }>;
-  onUpdated: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
-  async function handleSelect(userId: string | null) {
-    setOpen(false);
-    if (userId === assigneeId) return;
-    try {
-      await assignItem(itemId, userId);
-      onUpdated();
-    } catch {
-      // Silently fail
-    }
-  }
-
-  const displayName = assigneeId && userMap?.has(assigneeId)
-    ? (userMap.get(assigneeId)!.display_name || userMap.get(assigneeId)!.email)
-    : null;
-
-  return (
-    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
-      <button
-        onClick={(e) => {
-          e.preventDefault();
-          setOpen(!open);
-        }}
-        className="text-sm text-left cursor-pointer hover:text-blue-600 transition-colors"
-      >
-        {displayName ? (
-          <span className="text-gray-700">{displayName}</span>
-        ) : (
-          <span className="text-gray-300">Unassigned</span>
-        )}
-      </button>
-      {open && (
-        <div className="absolute left-0 top-full mt-1 bg-white border rounded-md shadow-lg z-20 py-1 w-52 max-h-60 overflow-y-auto">
-          <button
-            onClick={() => handleSelect(null)}
-            className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 ${
-              !assigneeId ? 'bg-blue-50 text-blue-700' : 'text-gray-400'
-            }`}
-          >
-            Unassigned
-          </button>
-          {users.map((user) => (
-            <button
-              key={user.id}
-              onClick={() => handleSelect(user.id)}
-              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center justify-between ${
-                user.id === assigneeId ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
-              }`}
-            >
-              <span className="truncate">
-                {user.display_name || user.email}
-              </span>
-              {user.id === assigneeId && (
-                <Check className="h-3 w-3 text-blue-600 flex-shrink-0" />
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+// InlineAssigneeDropdown is now a shared component:
+// - InlineAssigneePicker (./InlineAssigneePicker.tsx)
 
 // ---------------------------------------------------------------------------
 // Inline Text Input: Area
@@ -402,8 +170,8 @@ function InlineAreaEditor({
     try {
       await updateItemField(itemId, 'area', newValue || null);
       onUpdated();
-    } catch {
-      // Revert on failure
+    } catch (err) {
+      console.error('Failed to update area:', err);
       setValue(area || '');
     }
   }
@@ -754,7 +522,7 @@ export function TaskTable({
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap" data-inline-edit>
                     {editable ? (
-                      <InlineStatusDropdown
+                      <InlineStatusPicker
                         itemId={item.id}
                         status={item.status}
                         onUpdated={onItemUpdated!}
@@ -765,7 +533,7 @@ export function TaskTable({
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap" data-inline-edit>
                     {editable ? (
-                      <InlinePriorityDropdown
+                      <InlinePriorityPicker
                         itemId={item.id}
                         priority={item.priority}
                         onUpdated={onItemUpdated!}
@@ -776,11 +544,12 @@ export function TaskTable({
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap" data-inline-edit>
                     {editable && users ? (
-                      <InlineAssigneeDropdown
+                      <InlineAssigneePicker
                         itemId={item.id}
                         assigneeId={item.assignee_id}
                         users={users}
                         userMap={userMap}
+                        variant="text"
                         onUpdated={onItemUpdated!}
                       />
                     ) : (
