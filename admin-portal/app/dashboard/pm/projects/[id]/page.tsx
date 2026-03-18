@@ -36,6 +36,7 @@ import {
   listItems,
   createItem,
   createSprint,
+  updateProjectField,
 } from '@/lib/pm-queries';
 import type {
   PmProject,
@@ -55,6 +56,7 @@ import {
   TYPE_COLORS,
 } from '@/lib/pm-types';
 import { DualProgressBar } from '../../components/DualProgressBar';
+import { InlineEditText } from '../../components/InlineEditText';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -645,7 +647,16 @@ export default function ProjectDetailPage() {
           <div className="flex-1">
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold text-gray-900">
-                {project.name}
+                <InlineEditText
+                  value={project.name}
+                  placeholder="Project name..."
+                  onSave={async (newValue) => {
+                    if (!newValue) return;
+                    await updateProjectField(projectId, 'name', newValue);
+                    loadDetail();
+                  }}
+                  displayClassName="text-2xl font-bold text-gray-900"
+                />
               </h1>
               <span
                 className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -657,11 +668,19 @@ export default function ProjectDetailPage() {
                 {project.status === 'active' ? 'Active' : 'Archived'}
               </span>
             </div>
-            {project.description && (
-              <p className="text-sm text-gray-500 mt-1">
-                {project.description}
-              </p>
-            )}
+            <div className="mt-1">
+              <InlineEditText
+                value={project.description}
+                placeholder="Add a description..."
+                multiline
+                onSave={async (newValue) => {
+                  await updateProjectField(projectId, 'description', newValue);
+                  loadDetail();
+                }}
+                displayClassName="text-sm text-gray-500"
+                rows={2}
+              />
+            </div>
           </div>
         </div>
       </div>
