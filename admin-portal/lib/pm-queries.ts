@@ -28,6 +28,13 @@ import type {
   TaskLegacyLookup,
   TaskTokenResult,
   AgentMetricResult,
+  ItemStatus,
+  SprintStatus,
+  TaskStatus,
+  ItemField,
+  SprintField,
+  ProjectField,
+  BulkUpdateFields,
 } from './pm-types';
 
 // ---------------------------------------------------------------------------
@@ -101,7 +108,7 @@ export async function createItem(
 /** Update item status. DB validates the transition. */
 export async function updateItemStatus(
   itemId: string,
-  newStatus: string
+  newStatus: ItemStatus
 ): Promise<{ success: boolean; old_status: string; new_status: string; changed?: boolean }> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc('pm_update_item_status', {
@@ -119,7 +126,7 @@ export async function updateItemStatus(
 /** Update a single whitelisted field on a backlog item. */
 export async function updateItemField(
   itemId: string,
-  field: string,
+  field: ItemField,
   value: string | null
 ): Promise<{ success: boolean; field: string; old_value: string | null; new_value: string | null }> {
   const supabase = createClient();
@@ -478,7 +485,7 @@ export async function createSprint(
 /** Update a sprint's status. */
 export async function updateSprintStatus(
   sprintId: string,
-  status: string
+  status: SprintStatus
 ): Promise<{ success: boolean; old_status: string; new_status: string }> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc('pm_update_sprint_status', {
@@ -586,7 +593,7 @@ export async function getStats(): Promise<PmStats> {
 /** Bulk update multiple items with the same set of field changes. */
 export async function bulkUpdate(
   itemIds: string[],
-  updates: Record<string, unknown>
+  updates: BulkUpdateFields
 ): Promise<{ success: boolean; updated_count: number }> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc('pm_bulk_update', {
@@ -678,7 +685,7 @@ export async function getItemByLegacyId(legacyId: string): Promise<ItemDetailRes
 /** Update a task's status. DB validates the transition. */
 export async function updateTaskStatus(
   taskId: string,
-  newStatus: string
+  newStatus: TaskStatus
 ): Promise<TaskStatusUpdateResult> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc('pm_update_task_status', {
@@ -818,7 +825,7 @@ export async function listAssignableUsers(): Promise<
 /** Update a single whitelisted field on a project (name, description). */
 export async function updateProjectField(
   projectId: string,
-  field: string,
+  field: ProjectField,
   value: string | null
 ): Promise<{ success: boolean; field: string; old_value: string | null; new_value: string | null }> {
   const supabase = createClient();
@@ -838,7 +845,7 @@ export async function updateProjectField(
 /** Update a single whitelisted field on a sprint (name, goal). */
 export async function updateSprintField(
   sprintId: string,
-  field: string,
+  field: SprintField,
   value: string | null
 ): Promise<{ success: boolean; field: string; old_value: string | null; new_value: string | null }> {
   const supabase = createClient();
