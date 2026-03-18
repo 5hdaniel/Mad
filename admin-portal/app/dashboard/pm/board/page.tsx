@@ -72,6 +72,9 @@ function groupItemsByDimension(
         testing: [],
         completed: [],
         blocked: [],
+        deferred: [],
+        obsolete: [],
+        reopened: [],
       });
     }
     return groups.get(key)!;
@@ -146,6 +149,9 @@ export default function BoardPage() {
     testing: [],
     completed: [],
     blocked: [],
+    deferred: [],
+    obsolete: [],
+    reopened: [],
   });
   const [backlogItems, setBacklogItems] = useState<PmBacklogItem[]>([]);
   const [backlogLoading, setBacklogLoading] = useState(false);
@@ -279,6 +285,9 @@ export default function BoardPage() {
           testing: items.filter((i) => i.status === 'testing'),
           completed: items.filter((i) => i.status === 'completed'),
           blocked: items.filter((i) => i.status === 'blocked'),
+          deferred: items.filter((i) => i.status === 'deferred'),
+          obsolete: items.filter((i) => i.status === 'obsolete'),
+          reopened: items.filter((i) => i.status === 'reopened'),
         };
         setColumns(grouped);
       } catch (fallbackErr) {
@@ -749,12 +758,10 @@ export default function BoardPage() {
               <div className="space-y-6">
                 {Array.from(swimLaneGroups.entries()).map(
                   ([groupKey, groupColumns]) => {
-                    const itemCount =
-                      groupColumns.pending.length +
-                      groupColumns.in_progress.length +
-                      groupColumns.testing.length +
-                      groupColumns.completed.length +
-                      groupColumns.blocked.length;
+                    const itemCount = Object.values(groupColumns).reduce(
+                      (sum, items) => sum + (items as PmBacklogItem[]).length,
+                      0
+                    );
                     const isCollapsed = collapsedLanes.has(groupKey);
                     return (
                       <div key={groupKey}>
