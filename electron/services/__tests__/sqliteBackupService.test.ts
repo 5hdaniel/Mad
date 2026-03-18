@@ -80,6 +80,12 @@ const MockDatabase = jest.fn().mockImplementation(() => ({
 }));
 jest.mock("better-sqlite3-multiple-ciphers", () => MockDatabase);
 
+// Mock db/core/dbConnection to control ensureDb() used by WAL checkpoint
+const mockEnsureDb = jest.fn();
+jest.mock("../db/core/dbConnection", () => ({
+  ensureDb: mockEnsureDb,
+}));
+
 import {
   backupDatabase,
   verifyBackup,
@@ -116,11 +122,17 @@ describe("SqliteBackupService", () => {
     mockTestDbPragma.mockReset();
     mockTestDbPrepare.mockReset();
     MockDatabase.mockClear();
+    mockEnsureDb.mockReset();
 
     // Set common defaults
     mockGetPath.mockReturnValue("/mock/userData");
     mockIsInitialized.mockReturnValue(true);
     mockGetEncryptionKey.mockResolvedValue("abcdef1234567890");
+
+    // Default: ensureDb returns a mock db where WAL checkpoint succeeds (busy=0)
+    mockEnsureDb.mockReturnValue({
+      pragma: jest.fn().mockReturnValue([{ busy: 0, checkpointed: 1, log: 1 }]),
+    });
   });
 
   describe("generateBackupFilename", () => {
