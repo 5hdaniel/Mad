@@ -6,6 +6,9 @@
 -- Sprint: SPRINT-147 / TASK-2244 / BACKLOG-1049
 -- ============================================
 
+-- Drop old 11-param version to avoid ambiguous function name
+DROP FUNCTION IF EXISTS pm_list_items(TEXT, TEXT, TEXT, TEXT, UUID, UUID, TEXT, UUID[], UUID, INT, INT);
+
 CREATE OR REPLACE FUNCTION pm_list_items(
   p_status TEXT DEFAULT NULL,
   p_priority TEXT DEFAULT NULL,
