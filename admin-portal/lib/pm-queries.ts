@@ -49,6 +49,7 @@ export async function listItems(params: ItemListParams): Promise<ItemListRespons
     p_parent_id: params.parent_id || null,
     p_page: params.page || 1,
     p_page_size: params.page_size || 50,
+    p_unassigned_only: params.unassigned_only || false,
   });
   if (error) throw error;
   return data as unknown as ItemListResponse;
