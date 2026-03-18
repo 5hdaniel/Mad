@@ -793,6 +793,12 @@ export default function ProjectDetailPage() {
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Backlog panel (left on wide, top on narrow) */}
         <div className="w-full lg:w-1/3 lg:max-h-[calc(100vh-200px)] lg:overflow-y-auto">
+          <div className="flex items-center gap-2 mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Backlog</h2>
+            <span className="text-sm text-gray-500">
+              ({backlogItems.length})
+            </span>
+          </div>
           <BacklogPanel
             items={backlogItems}
             projectId={projectId}
@@ -803,7 +809,7 @@ export default function ProjectDetailPage() {
 
         {/* Sprint sections (right on wide, bottom on narrow) */}
         <div className="flex-1 space-y-4">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Sprints</h2>
             <span className="text-sm text-gray-500">
               ({sortedSprints.length})
