@@ -50,6 +50,8 @@ export async function listItems(params: ItemListParams): Promise<ItemListRespons
     p_page: params.page || 1,
     p_page_size: params.page_size || 50,
     p_assignee_id: params.assignee_id || null,
+    p_root_only: params.root_only || false,
+    p_unassigned_only: params.unassigned_only || false,
   });
   if (error) throw error;
   return data as unknown as ItemListResponse;
@@ -794,6 +796,19 @@ export async function deleteSprint(sprintId: string): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.rpc('pm_delete_sprint', {
     p_sprint_id: sprintId,
+  });
+  if (error) throw new Error(error.message);
+}
+
+// ---------------------------------------------------------------------------
+// 41b. pm_delete_project -- Soft-delete a project
+// ---------------------------------------------------------------------------
+
+/** Soft-delete a project by setting deleted_at. */
+export async function deleteProject(projectId: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.rpc('pm_delete_project', {
+    p_project_id: projectId,
   });
   if (error) throw new Error(error.message);
 }

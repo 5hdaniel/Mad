@@ -91,6 +91,9 @@ function TaskDetailContent() {
         return { label: 'Back to Sprint', href: `/dashboard/pm/sprints/${sprintId}` };
       }
     }
+    if (from === 'board') {
+      return { label: 'Back to Board', href: '/dashboard/pm/board' };
+    }
     if (from === 'my-tasks') {
       return { label: 'Back to My Tasks', href: '/dashboard/pm/my-tasks' };
     }
