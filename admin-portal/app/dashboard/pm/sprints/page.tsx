@@ -10,12 +10,15 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, List, LayoutGrid } from 'lucide-react';
+import { ArrowLeft, List, LayoutGrid, Plus } from 'lucide-react';
 import { listSprints, getSprintVelocity } from '@/lib/pm-queries';
 import type { PmSprint, SprintVelocityEntry } from '@/lib/pm-types';
+import { usePermissions } from '@/components/providers/PermissionsProvider';
+import { PERMISSIONS } from '@/lib/permissions';
 import { SprintList } from '../components/SprintList';
 import { SprintCard } from '../components/SprintCard';
 import { VelocityChart } from '../components/VelocityChart';
+import { CreateSprintDialog } from '../components/CreateSprintDialog';
 
 type ViewMode = 'list' | 'card';
 type StatusFilter = 'all' | 'active' | 'planned' | 'completed';
@@ -26,6 +29,8 @@ export default function SprintsPage() {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const { hasPermission } = usePermissions();
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -111,6 +116,15 @@ export default function SprintsPage() {
               <LayoutGrid className="h-4 w-4" />
               Cards
             </button>
+            {hasPermission(PERMISSIONS.PM_MANAGE) && (
+              <button
+                onClick={() => setShowCreateDialog(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700"
+              >
+                <Plus className="h-4 w-4" />
+                New Sprint
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -175,6 +189,13 @@ export default function SprintsPage() {
           ))}
         </div>
       )}
+
+      {/* Create Sprint Dialog */}
+      <CreateSprintDialog
+        open={showCreateDialog}
+        onClose={() => setShowCreateDialog(false)}
+        onCreated={loadData}
+      />
     </div>
   );
 }
