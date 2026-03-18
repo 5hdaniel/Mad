@@ -530,7 +530,7 @@ export function KanbanCard({
         </span>
         {/* Title */}
         <Link
-          href={`/dashboard/pm/tasks/${item.id}`}
+          href={`/dashboard/pm/tasks/${item.id}?from=board`}
           className="text-xs text-gray-800 truncate flex-1"
           onClick={(e) => e.stopPropagation()}
         >
@@ -580,7 +580,7 @@ export function KanbanCard({
 
       {/* Row 2-3: Title */}
       <Link
-        href={`/dashboard/pm/tasks/${item.id}`}
+        href={`/dashboard/pm/tasks/${item.id}?from=board`}
         className="block text-sm font-medium text-gray-900 hover:text-blue-600 mt-1 line-clamp-2"
         onClick={(e) => e.stopPropagation()}
       >

@@ -35,6 +35,7 @@ import {
   listProjects,
   getBoardTasks,
   updateItemStatus,
+  updateItemField,
   assignToSprint,
   assignItem,
   createItem,
@@ -308,13 +309,11 @@ export default function BoardPage() {
       setBacklogLoading(true);
       try {
         const result = await listItems({
-          sprint_id: undefined,
+          unassigned_only: true,
           search: search || undefined,
           page_size: 100,
         });
-        // Filter to items without a sprint assignment
-        const unassigned = (result.items || []).filter((i) => !i.sprint_id);
-        setBacklogItems(unassigned);
+        setBacklogItems(result.items || []);
       } catch (err) {
         console.error('Failed to load backlog items:', err);
       } finally {
@@ -496,6 +495,21 @@ export default function BoardPage() {
       if (!over) return;
 
       const data = active.data.current;
+
+      // Board card dropped onto backlog panel -> unassign from sprint
+      if (over.id === 'backlog-panel') {
+        if (data?.type === 'backlog-item') return; // already in backlog, ignore
+        const itemId = active.id as string;
+        try {
+          await updateItemField(itemId, 'sprint_id', null);
+          await loadBoardData();
+          await loadBacklogItems();
+        } catch (err) {
+          console.error('Failed to unassign item from sprint:', err);
+        }
+        return;
+      }
+
       const targetStatus = resolveColumnStatus(over.id as string, columns);
       if (!targetStatus) return;
 
@@ -561,7 +575,7 @@ export default function BoardPage() {
   // -- Render --------------------------------------------------------------
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-[calc(100vh)] -m-6">
       {/* Header bar */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white flex-shrink-0">
         <div className="flex items-center gap-4">

@@ -183,7 +183,7 @@ export function InlineEditText({
       }}
     >
       {value || <span className="text-gray-400 italic">{placeholder}</span>}
-      <Pencil className="h-3 w-3 text-gray-400 opacity-0 group-hover/inline-edit:opacity-100 transition-opacity shrink-0" />
+      <Pencil className="h-3 w-3 text-gray-300 group-hover/inline-edit:text-gray-500 transition-colors shrink-0" />
     </span>
   );
 }
