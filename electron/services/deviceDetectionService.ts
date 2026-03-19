@@ -9,6 +9,7 @@ import { spawn, exec } from "child_process";
 import { promisify } from "util";
 import { EventEmitter } from "events";
 import log from "electron-log";
+import * as Sentry from "@sentry/electron/main";
 import { iOSDevice, DeviceStorageInfo } from "../types/device";
 import { getCommand, canUseLibimobiledevice } from "./libimobiledeviceService";
 import { validateDeviceUdid, isValidDeviceUdid, ValidationError } from "../utils/validation";
@@ -27,6 +28,29 @@ const MOCK_DEVICE: iOSDevice = {
   serialNumber: "MOCK123456789",
   isConnected: true,
 };
+
+/**
+ * Structured result from a single diagnostic step.
+ */
+export interface DiagnosticStep {
+  name: string;
+  status: "pass" | "fail" | "skip";
+  durationMs: number;
+  detail?: string;
+  error?: string;
+}
+
+/**
+ * Full diagnostic chain result for device detection troubleshooting.
+ * Used by startup health checks and settings diagnostic panels.
+ */
+export interface DeviceDetectionDiagnostic {
+  timestamp: string;
+  platform: string;
+  steps: DiagnosticStep[];
+  overallStatus: "success" | "partial" | "failed";
+  connectedDeviceCount: number;
+}
 
 /**
  * Service for detecting connected iOS devices via USB.
@@ -139,6 +163,201 @@ export class DeviceDetectionService extends EventEmitter {
   }
 
   /**
+   * Run full diagnostic chain for troubleshooting device detection issues.
+   * Reports each step to Sentry as breadcrumbs.
+   * Called by startup health checks (TASK-2275) and settings diagnostics (TASK-2276).
+   */
+  async runDiagnosticChain(): Promise<DeviceDetectionDiagnostic> {
+    const steps: DiagnosticStep[] = [];
+    let connectedDeviceCount = 0;
+
+    // Step 1: Platform check
+    const platformStart = Date.now();
+    const platformSupported =
+      process.platform === "win32" || process.platform === "darwin";
+    const platformStep: DiagnosticStep = {
+      name: "platform_check",
+      status: platformSupported ? "pass" : "fail",
+      durationMs: Date.now() - platformStart,
+      detail: `Platform: ${process.platform}`,
+    };
+    if (!platformSupported) {
+      platformStep.error = `Unsupported platform: ${process.platform}`;
+    }
+    steps.push(platformStep);
+
+    Sentry.addBreadcrumb({
+      category: "diagnostics.device",
+      message: `Platform check: ${platformStep.status}`,
+      level: platformStep.status === "pass" ? "info" : "warning",
+      data: { platform: process.platform },
+    });
+
+    // Step 2: libimobiledevice availability
+    const toolStart = Date.now();
+    let toolAvailable = false;
+    const toolStep: DiagnosticStep = {
+      name: "libimobiledevice_check",
+      status: "fail",
+      durationMs: 0,
+    };
+
+    if (!platformSupported) {
+      toolStep.status = "skip";
+      toolStep.detail = "Skipped: platform not supported";
+    } else {
+      try {
+        // Reset cached value so we do a fresh check
+        this.libimobiledeviceAvailable = null;
+        toolAvailable = await this.checkLibimobiledeviceAvailable();
+        toolStep.status = toolAvailable ? "pass" : "fail";
+        toolStep.detail = toolAvailable
+          ? "libimobiledevice is available"
+          : "libimobiledevice not found";
+        if (!toolAvailable) {
+          toolStep.error = "libimobiledevice CLI tools not available";
+        }
+      } catch (err) {
+        toolStep.status = "fail";
+        toolStep.error =
+          err instanceof Error ? err.message : "Unknown error checking tools";
+      }
+    }
+    toolStep.durationMs = Date.now() - toolStart;
+    steps.push(toolStep);
+
+    Sentry.addBreadcrumb({
+      category: "diagnostics.device",
+      message: `libimobiledevice check: ${toolStep.status}`,
+      level: toolStep.status === "pass" ? "info" : "warning",
+      data: { available: toolAvailable },
+    });
+
+    // Step 3: Device enumeration
+    const enumStart = Date.now();
+    const enumStep: DiagnosticStep = {
+      name: "device_enumeration",
+      status: "fail",
+      durationMs: 0,
+    };
+    let deviceUdids: string[] = [];
+
+    if (!toolAvailable) {
+      enumStep.status = "skip";
+      enumStep.detail = "Skipped: libimobiledevice not available";
+    } else {
+      try {
+        deviceUdids = await this.listDevices();
+        enumStep.status = deviceUdids.length > 0 ? "pass" : "fail";
+        enumStep.detail = `Found ${deviceUdids.length} device(s)`;
+        if (deviceUdids.length === 0) {
+          enumStep.error = "No devices detected via USB";
+        }
+      } catch (err) {
+        enumStep.status = "fail";
+        enumStep.error =
+          err instanceof Error
+            ? err.message
+            : "Unknown error enumerating devices";
+      }
+    }
+    enumStep.durationMs = Date.now() - enumStart;
+    steps.push(enumStep);
+
+    Sentry.addBreadcrumb({
+      category: "diagnostics.device",
+      message: `Device enumeration: ${enumStep.status}`,
+      level: enumStep.status === "pass" ? "info" : "warning",
+      data: { deviceCount: deviceUdids.length },
+    });
+
+    // Step 4: Device info (if devices found)
+    const infoStart = Date.now();
+    const infoStep: DiagnosticStep = {
+      name: "device_info",
+      status: "fail",
+      durationMs: 0,
+    };
+
+    if (deviceUdids.length === 0) {
+      infoStep.status = "skip";
+      infoStep.detail = "Skipped: no devices to query";
+    } else {
+      try {
+        let successCount = 0;
+        for (const udid of deviceUdids) {
+          try {
+            await this.getDeviceInfo(udid);
+            successCount++;
+          } catch {
+            // Individual device info failure is non-fatal
+          }
+        }
+        connectedDeviceCount = successCount;
+        infoStep.status = successCount > 0 ? "pass" : "fail";
+        infoStep.detail = `Got info for ${successCount}/${deviceUdids.length} device(s)`;
+        if (successCount === 0) {
+          infoStep.error = "Failed to get info for any device";
+        }
+      } catch (err) {
+        infoStep.status = "fail";
+        infoStep.error =
+          err instanceof Error
+            ? err.message
+            : "Unknown error getting device info";
+      }
+    }
+    infoStep.durationMs = Date.now() - infoStart;
+    steps.push(infoStep);
+
+    Sentry.addBreadcrumb({
+      category: "diagnostics.device",
+      message: `Device info: ${infoStep.status}`,
+      level: infoStep.status === "pass" ? "info" : "warning",
+      data: { connectedDeviceCount },
+    });
+
+    // Determine overall status
+    const passCount = steps.filter((s) => s.status === "pass").length;
+    const failCount = steps.filter((s) => s.status === "fail").length;
+    let overallStatus: "success" | "partial" | "failed";
+    if (failCount === 0) {
+      overallStatus = "success";
+    } else if (passCount > 0) {
+      overallStatus = "partial";
+    } else {
+      overallStatus = "failed";
+    }
+
+    // Summary breadcrumb
+    Sentry.addBreadcrumb({
+      category: "diagnostics.device",
+      message: `Device detection diagnostic: ${overallStatus}`,
+      level: overallStatus === "success" ? "info" : "warning",
+      data: {
+        steps: steps.map((s) => ({ name: s.name, status: s.status })),
+      },
+    });
+
+    // Report failure to Sentry
+    if (overallStatus === "failed") {
+      Sentry.captureMessage("Device detection diagnostic failed", {
+        level: "warning",
+        tags: { platform: process.platform, diagnostic: "device_detection" },
+        extra: { steps, connectedDeviceCount: 0 },
+      });
+    }
+
+    return {
+      timestamp: new Date().toISOString(),
+      platform: process.platform,
+      steps,
+      overallStatus,
+      connectedDeviceCount,
+    };
+  }
+
+  /**
    * Polls for connected devices and emits appropriate events.
    */
   private async pollDevices(): Promise<void> {
@@ -163,6 +382,12 @@ export class DeviceDetectionService extends EventEmitter {
             log.info(
               `[DeviceDetection] Device connected: ${deviceInfo.name} (${udid})`,
             );
+            Sentry.addBreadcrumb({
+              category: "device.connect",
+              message: `Device connected: ${deviceInfo.name} (${deviceInfo.productType})`,
+              level: "info",
+              data: { udid: udid.substring(0, 8) + "...", productType: deviceInfo.productType },
+            });
             this.emit("device-connected", deviceInfo);
           } catch (err) {
             log.error(
@@ -184,6 +409,12 @@ export class DeviceDetectionService extends EventEmitter {
             log.info(
               `[DeviceDetection] Device disconnected: ${device.name} (${udid})`,
             );
+            Sentry.addBreadcrumb({
+              category: "device.disconnect",
+              message: `Device disconnected: ${device.name} (${device.productType})`,
+              level: "info",
+              data: { udid: udid.substring(0, 8) + "...", productType: device.productType },
+            });
             this.emit("device-disconnected", device);
           }
         }
@@ -230,6 +461,12 @@ export class DeviceDetectionService extends EventEmitter {
         if (code !== 0) {
           if (stderr.trim()) {
             log.debug(`[DeviceDetection] idevice_id stderr: ${stderr.trim()}`);
+            Sentry.addBreadcrumb({
+              category: "device.detection",
+              message: `idevice_id failed with code ${code}`,
+              level: "warning",
+              data: { exitCode: code, stderr: stderr.substring(0, 200) },
+            });
           }
           // Non-zero exit with no devices is normal
           resolve([]);
