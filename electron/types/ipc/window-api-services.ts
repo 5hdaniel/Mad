@@ -1,0 +1,274 @@
+/**
+ * WindowApi Services sub-interfaces
+ * Smaller service APIs: preferences, user, feedback, address, shell,
+ * notification, update, errorLogging, app, llm
+ */
+
+import type { LLMHandlerResponse, LLMUserConfig, LLMPreferences, LLMUsageStats, LLMAvailability, LLMProvider } from "./llm";
+
+/**
+ * Preferences methods on window.api
+ */
+export interface WindowApiPreferences {
+  get: (
+    userId: string,
+  ) => Promise<{ success: boolean; preferences?: Record<string, unknown> }>;
+  save: (
+    userId: string,
+    preferences: Record<string, unknown>,
+  ) => Promise<{ success: boolean }>;
+  update: (
+    userId: string,
+    partialPreferences: Record<string, unknown>,
+  ) => Promise<{ success: boolean }>;
+}
+
+/**
+ * LLM methods on window.api
+ */
+export interface WindowApiLlm {
+  getConfig: (userId: string) => Promise<LLMHandlerResponse<LLMUserConfig>>;
+  setApiKey: (
+    userId: string,
+    provider: LLMProvider,
+    apiKey: string,
+  ) => Promise<LLMHandlerResponse<void>>;
+  validateKey: (
+    provider: LLMProvider,
+    apiKey: string,
+  ) => Promise<LLMHandlerResponse<boolean>>;
+  removeApiKey: (
+    userId: string,
+    provider: LLMProvider,
+  ) => Promise<LLMHandlerResponse<void>>;
+  updatePreferences: (
+    userId: string,
+    preferences: LLMPreferences,
+  ) => Promise<LLMHandlerResponse<void>>;
+  recordConsent: (
+    userId: string,
+    consent: boolean,
+  ) => Promise<LLMHandlerResponse<void>>;
+  getUsage: (userId: string) => Promise<LLMHandlerResponse<LLMUsageStats>>;
+  canUse: (userId: string) => Promise<LLMHandlerResponse<LLMAvailability>>;
+}
+
+/**
+ * Feedback methods for AI transaction detection
+ */
+export interface WindowApiFeedback {
+  submit: (
+    userId: string,
+    feedbackData: Record<string, unknown>,
+  ) => Promise<{ success: boolean; feedbackId?: string; error?: string }>;
+  getForTransaction: (
+    transactionId: string,
+  ) => Promise<{ success: boolean; feedback?: unknown[]; error?: string }>;
+  getMetrics: (
+    userId: string,
+    fieldName: string,
+  ) => Promise<{ success: boolean; metrics?: unknown; error?: string }>;
+  getSuggestion: (
+    userId: string,
+    fieldName: string,
+    extractedValue: unknown,
+    confidence: number,
+  ) => Promise<{ success: boolean; suggestion?: unknown; confidence?: number; error?: string }>;
+  getLearningStats: (
+    userId: string,
+    fieldName: string,
+  ) => Promise<{ success: boolean; stats?: unknown; error?: string }>;
+  recordTransaction: (
+    userId: string,
+    feedback: {
+      detectedTransactionId: string;
+      action: "confirm" | "reject" | "merge";
+      corrections?: {
+        propertyAddress?: string;
+        transactionType?: string;
+        addCommunications?: string[];
+        removeCommunications?: string[];
+        reason?: string;
+      };
+      modelVersion?: string;
+      promptVersion?: string;
+    },
+  ) => Promise<{ success: boolean; error?: string }>;
+  recordRole: (
+    userId: string,
+    feedback: {
+      transactionId: string;
+      contactId: string;
+      originalRole: string;
+      correctedRole: string;
+      modelVersion?: string;
+      promptVersion?: string;
+    },
+  ) => Promise<{ success: boolean; error?: string }>;
+  recordRelevance: (
+    userId: string,
+    feedback: {
+      communicationId: string;
+      wasRelevant: boolean;
+      correctTransactionId?: string;
+      modelVersion?: string;
+      promptVersion?: string;
+    },
+  ) => Promise<{ success: boolean; error?: string }>;
+  getStats: (
+    userId: string,
+  ) => Promise<{ success: boolean; data?: unknown; error?: string }>;
+}
+
+/**
+ * User preference methods (stored in local database)
+ */
+export interface WindowApiUser {
+  getPhoneType: (userId: string) => Promise<{
+    success: boolean;
+    phoneType: "iphone" | "android" | null;
+    error?: string;
+  }>;
+  setPhoneType: (
+    userId: string,
+    phoneType: "iphone" | "android",
+  ) => Promise<{ success: boolean; error?: string }>;
+}
+
+/**
+ * Address lookup methods on window.api
+ */
+export interface WindowApiAddress {
+  initialize: (
+    apiKey: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+  getSuggestions: (
+    input: string,
+    sessionToken?: string,
+  ) => Promise<{
+    success: boolean;
+    suggestions?: Array<{ description: string; placeId: string }>;
+    error?: string;
+  }>;
+  getDetails: (placeId: string) => Promise<{
+    success: boolean;
+    address?: {
+      formatted_address?: string;
+      street?: string;
+      city?: string;
+      state?: string;
+      state_short?: string;
+      zip?: string;
+      coordinates?: { lat: number; lng: number };
+    };
+    formatted_address?: string;
+    street?: string;
+    city?: string;
+    state?: string;
+    state_short?: string;
+    zip?: string;
+    coordinates?: { lat: number; lng: number };
+    error?: string;
+  }>;
+  geocode: (
+    address: string,
+  ) => Promise<{ lat: number; lng: number; formattedAddress: string }>;
+}
+
+/**
+ * Shell methods on window.api
+ */
+export interface WindowApiShell {
+  openExternal: (url: string) => Promise<void>;
+  openPopup: (url: string, title?: string) => Promise<{ success: boolean }>;
+  openFolder: (folderPath: string) => Promise<{ success: boolean }>;
+}
+
+/**
+ * OS Notifications on window.api
+ */
+export interface WindowApiNotification {
+  /** Check if notifications are supported on this platform */
+  isSupported: () => Promise<{ success: boolean; supported: boolean }>;
+  /** Send an OS notification */
+  send: (title: string, body: string) => Promise<{ success: boolean; error?: string }>;
+}
+
+/**
+ * Auto-update methods (migrated from window.electron)
+ */
+export interface WindowApiUpdate {
+  onAvailable: (callback: (info: unknown) => void) => () => void;
+  onProgress: (callback: (progress: unknown) => void) => () => void;
+  onDownloaded: (callback: (info: unknown) => void) => () => void;
+  install: () => void;
+  checkForUpdates: () => Promise<{
+    updateAvailable: boolean;
+    version?: string;
+    currentVersion: string;
+    error?: string;
+  }>;
+}
+
+/**
+ * Error Logging API (TASK-1800)
+ */
+export interface WindowApiErrorLogging {
+  /**
+   * Submit an error report to Supabase
+   * @param payload - Error details and optional user feedback
+   * @returns Result with success status and error ID
+   */
+  submit: (payload: {
+    errorType: string;
+    errorCode?: string;
+    errorMessage: string;
+    stackTrace?: string;
+    currentScreen?: string;
+    userFeedback?: string;
+    breadcrumbs?: Record<string, unknown>[];
+    appState?: Record<string, unknown>;
+  }) => Promise<{
+    success: boolean;
+    errorId?: string;
+    error?: string;
+  }>;
+  /**
+   * Process queued errors (call when connection restored)
+   * @returns Number of errors successfully processed
+   */
+  processQueue: () => Promise<{
+    success: boolean;
+    processedCount?: number;
+    error?: string;
+  }>;
+  /**
+   * Get current queue size (for diagnostics)
+   * @returns Queue size
+   */
+  getQueueSize: () => Promise<{
+    success: boolean;
+    queueSize?: number;
+    error?: string;
+  }>;
+}
+
+/**
+ * App Reset API (TASK-1802)
+ */
+export interface WindowApiApp {
+  /**
+   * Perform a complete app data reset
+   * WARNING: This is a destructive operation that will:
+   * - Delete all local data (database, preferences, cached data)
+   * - Restart the app fresh
+   *
+   * Cloud data (Supabase) is NOT affected.
+   *
+   * @returns Result with success status
+   */
+  reset: () => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
+}
