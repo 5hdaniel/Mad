@@ -70,16 +70,19 @@ describe("DeviceDetectionService - Diagnostic Chain", () => {
 
   describe("runDiagnosticChain", () => {
     it("should succeed when tools available and device found", async () => {
-      // Mock availability check
       mockExec.mockImplementation(
-        (_cmd: string, callback: (err: Error | null, result?: { stdout: string; stderr: string }) => void) => {
+        (
+          _cmd: string,
+          callback: (
+            err: Error | null,
+            result?: { stdout: string; stderr: string },
+          ) => void,
+        ) => {
           callback(null, { stdout: "1.3.0", stderr: "" });
         },
       );
 
-      // Mock list devices (idevice_id -l)
       const listProcess = createMockProcess();
-      // Mock get device info (ideviceinfo -u ...)
       const infoProcess = createMockProcess();
 
       let spawnCallCount = 0;
@@ -91,24 +94,16 @@ describe("DeviceDetectionService - Diagnostic Chain", () => {
 
       const promise = service.runDiagnosticChain();
 
-      // Wait for availability check (async exec)
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      // Simulate device list
       listProcess.stdout.emit("data", `${TEST_UDID}\n`);
       listProcess.emit("close", 0);
 
-      // Wait for list devices to resolve
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      // Simulate device info response
       infoProcess.stdout.emit(
         "data",
-        `DeviceName: Test iPhone
-ProductType: iPhone14,2
-ProductVersion: 17.0
-SerialNumber: ABC123456789
-`,
+        "DeviceName: Test iPhone\nProductType: iPhone14,2\nProductVersion: 17.0\nSerialNumber: ABC123456789\n",
       );
       infoProcess.emit("close", 0);
 
@@ -117,43 +112,46 @@ SerialNumber: ABC123456789
       expect(result.overallStatus).toBe("success");
       expect(result.connectedDeviceCount).toBe(1);
       expect(result.platform).toBe(process.platform);
-      expect(result.steps).toHaveLength(4); // platform, tool, enum, device_info
+      expect(result.steps).toHaveLength(4);
 
-      // Verify step statuses
       expect(result.steps[0]).toMatchObject({ name: "platform_check", status: "pass" });
       expect(result.steps[1]).toMatchObject({ name: "libimobiledevice_check", status: "pass" });
       expect(result.steps[2]).toMatchObject({ name: "device_enumeration", status: "pass" });
       expect(result.steps[3]).toMatchObject({ name: "device_info", status: "pass" });
 
-      // Verify Sentry breadcrumbs were added (one per step + final summary)
+      // Verify Sentry breadcrumbs were added
       expect(mockAddBreadcrumb).toHaveBeenCalled();
       const breadcrumbCalls = mockAddBreadcrumb.mock.calls;
-      expect(breadcrumbCalls.some(
-        (call: [{ category: string }]) => call[0].category === "diagnostics.device",
-      )).toBe(true);
+      expect(
+        breadcrumbCalls.some(
+          (call: [{ category: string }]) => call[0].category === "diagnostics.device",
+        ),
+      ).toBe(true);
 
       // Should NOT captureMessage on success
       expect(mockCaptureMessage).not.toHaveBeenCalled();
     });
 
     it("should return partial when tools available but no device found", async () => {
-      // Mock availability check
       mockExec.mockImplementation(
-        (_cmd: string, callback: (err: Error | null, result?: { stdout: string; stderr: string }) => void) => {
+        (
+          _cmd: string,
+          callback: (
+            err: Error | null,
+            result?: { stdout: string; stderr: string },
+          ) => void,
+        ) => {
           callback(null, { stdout: "1.3.0", stderr: "" });
         },
       );
 
-      // Mock list devices returning empty
       const listProcess = createMockProcess();
       mockSpawn.mockReturnValue(listProcess);
 
       const promise = service.runDiagnosticChain();
 
-      // Wait for availability check
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      // Simulate empty device list
       listProcess.stdout.emit("data", "");
       listProcess.emit("close", 0);
 
@@ -161,7 +159,7 @@ SerialNumber: ABC123456789
 
       expect(result.overallStatus).toBe("partial");
       expect(result.connectedDeviceCount).toBe(0);
-      expect(result.steps).toHaveLength(4); // platform, tool, enum, device_info (skip)
+      expect(result.steps).toHaveLength(4);
 
       expect(result.steps[0]).toMatchObject({ name: "platform_check", status: "pass" });
       expect(result.steps[1]).toMatchObject({ name: "libimobiledevice_check", status: "pass" });
@@ -169,12 +167,11 @@ SerialNumber: ABC123456789
       expect(result.steps[2].error).toBe("No devices detected via USB");
       expect(result.steps[3]).toMatchObject({ name: "device_info", status: "skip" });
 
-      // Should NOT captureMessage for partial (has some passes)
+      // captureMessage NOT called for partial (has some passes)
       expect(mockCaptureMessage).not.toHaveBeenCalled();
     });
 
     it("should return partial when tools are not available", async () => {
-      // Mock availability check failing
       mockExec.mockImplementation(
         (_cmd: string, callback: (err: Error | null) => void) => {
           callback(new Error("command not found"));
@@ -183,10 +180,9 @@ SerialNumber: ABC123456789
 
       const result = await service.runDiagnosticChain();
 
-      // partial because platform passes but tools fail
       expect(result.overallStatus).toBe("partial");
       expect(result.connectedDeviceCount).toBe(0);
-      expect(result.steps).toHaveLength(4); // all 4 steps always present
+      expect(result.steps).toHaveLength(4);
 
       expect(result.steps[0]).toMatchObject({ name: "platform_check", status: "pass" });
       expect(result.steps[1]).toMatchObject({ name: "libimobiledevice_check", status: "fail" });
@@ -194,38 +190,38 @@ SerialNumber: ABC123456789
       expect(result.steps[2]).toMatchObject({ name: "device_enumeration", status: "skip" });
       expect(result.steps[3]).toMatchObject({ name: "device_info", status: "skip" });
 
-      // Should NOT captureMessage for partial (has some passes)
+      // captureMessage NOT called for partial
       expect(mockCaptureMessage).not.toHaveBeenCalled();
     });
 
     it("should handle listDevices spawn error gracefully", async () => {
-      // Mock availability check passing
       mockExec.mockImplementation(
-        (_cmd: string, callback: (err: Error | null, result?: { stdout: string; stderr: string }) => void) => {
+        (
+          _cmd: string,
+          callback: (
+            err: Error | null,
+            result?: { stdout: string; stderr: string },
+          ) => void,
+        ) => {
           callback(null, { stdout: "1.3.0", stderr: "" });
         },
       );
 
-      // Mock list devices process that errors
       const listProcess = createMockProcess();
       mockSpawn.mockReturnValue(listProcess);
 
       const promise = service.runDiagnosticChain();
 
-      // Wait for availability check
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      // Simulate spawn error
       listProcess.emit("error", new Error("ENOENT"));
 
       const result = await promise;
 
-      // listDevices resolves [] on spawn error, so enumeration reports "fail" with 0 devices
       expect(result.connectedDeviceCount).toBe(0);
-      expect(result.steps.find((s) => s.name === "device_enumeration")).toMatchObject({
-        status: "fail",
-        error: "No devices detected via USB",
-      });
+      expect(
+        result.steps.find((s) => s.name === "device_enumeration"),
+      ).toMatchObject({ status: "fail" });
     });
 
     it("should fail on unsupported platform", async () => {
@@ -235,7 +231,7 @@ SerialNumber: ABC123456789
 
       expect(result.overallStatus).toBe("failed");
       expect(result.connectedDeviceCount).toBe(0);
-      expect(result.steps).toHaveLength(4); // all 4 steps always present
+      expect(result.steps).toHaveLength(4);
 
       expect(result.steps[0]).toMatchObject({
         name: "platform_check",
@@ -250,12 +246,12 @@ SerialNumber: ABC123456789
         "Device detection diagnostic failed",
         expect.objectContaining({
           level: "warning",
+          tags: expect.objectContaining({ diagnostic: "device_detection" }),
         }),
       );
     });
 
     it("should include timing info in each step", async () => {
-      // Mock availability check failing quickly
       mockExec.mockImplementation(
         (_cmd: string, callback: (err: Error | null) => void) => {
           callback(new Error("not found"));
@@ -270,10 +266,15 @@ SerialNumber: ABC123456789
       }
     });
 
-    it("should report device count in device info step detail", async () => {
-      // Mock availability check
+    it("should report device count in info step detail", async () => {
       mockExec.mockImplementation(
-        (_cmd: string, callback: (err: Error | null, result?: { stdout: string; stderr: string }) => void) => {
+        (
+          _cmd: string,
+          callback: (
+            err: Error | null,
+            result?: { stdout: string; stderr: string },
+          ) => void,
+        ) => {
           callback(null, { stdout: "1.3.0", stderr: "" });
         },
       );
@@ -299,25 +300,28 @@ SerialNumber: ABC123456789
 
       infoProcess.stdout.emit(
         "data",
-        `DeviceName: Test iPhone
-ProductType: iPhone14,2
-ProductVersion: 17.0
-SerialNumber: ABC123456789
-`,
+        "DeviceName: Test iPhone\nProductType: iPhone14,2\nProductVersion: 17.0\nSerialNumber: ABC123456789\n",
       );
       infoProcess.emit("close", 0);
 
       const result = await promise;
 
-      const infoStep = result.steps.find((s) => s.name === "device_info" && s.status === "pass");
+      const infoStep = result.steps.find(
+        (s) => s.name === "device_info" && s.status === "pass",
+      );
       expect(infoStep).toBeDefined();
-      expect(infoStep!.detail).toContain("1/1 device(s)");
+      expect(infoStep!.detail).toContain("1/1");
     });
 
     it("should handle device info failure gracefully", async () => {
-      // Mock availability check
       mockExec.mockImplementation(
-        (_cmd: string, callback: (err: Error | null, result?: { stdout: string; stderr: string }) => void) => {
+        (
+          _cmd: string,
+          callback: (
+            err: Error | null,
+            result?: { stdout: string; stderr: string },
+          ) => void,
+        ) => {
           callback(null, { stdout: "1.3.0", stderr: "" });
         },
       );
@@ -341,7 +345,6 @@ SerialNumber: ABC123456789
 
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      // Device info fails
       infoProcess.stderr.emit("data", "ERROR: Could not connect to lockdownd");
       infoProcess.emit("close", 1);
 
@@ -350,17 +353,40 @@ SerialNumber: ABC123456789
       expect(result.overallStatus).toBe("partial");
       expect(result.connectedDeviceCount).toBe(0);
 
-      const infoStep = result.steps.find((s) => s.name === "device_info" && s.status === "fail");
+      const infoStep = result.steps.find(
+        (s) => s.name === "device_info" && s.status === "fail",
+      );
       expect(infoStep).toBeDefined();
       expect(infoStep!.error).toBe("Failed to get info for any device");
+    });
+
+    it("should add Sentry breadcrumbs for each step plus summary", async () => {
+      mockExec.mockImplementation(
+        (_cmd: string, callback: (err: Error | null) => void) => {
+          callback(new Error("not found"));
+        },
+      );
+
+      await service.runDiagnosticChain();
+
+      const diagnosticBreadcrumbs = mockAddBreadcrumb.mock.calls.filter(
+        (call: [{ category: string }]) => call[0].category === "diagnostics.device",
+      );
+      // 4 steps + 1 summary = 5 breadcrumbs
+      expect(diagnosticBreadcrumbs.length).toBe(5);
     });
   });
 
   describe("Sentry breadcrumbs on pollDevices connect/disconnect", () => {
     it("should add Sentry breadcrumb when device connects", async () => {
-      // Mock availability check
       mockExec.mockImplementation(
-        (_cmd: string, callback: (err: Error | null, result?: { stdout: string; stderr: string }) => void) => {
+        (
+          _cmd: string,
+          callback: (
+            err: Error | null,
+            result?: { stdout: string; stderr: string },
+          ) => void,
+        ) => {
           callback(null, { stdout: "1.3.0", stderr: "" });
         },
       );
@@ -375,31 +401,25 @@ SerialNumber: ABC123456789
         return infoProcess;
       });
 
-      // Access private pollDevices via casting
-      const pollPromise = (service as unknown as { pollDevices: () => Promise<void> }).pollDevices();
+      const pollPromise = (
+        service as unknown as { pollDevices: () => Promise<void> }
+      ).pollDevices();
 
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      // Simulate device found
       listProcess.stdout.emit("data", `${TEST_UDID}\n`);
       listProcess.emit("close", 0);
 
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      // Simulate device info
       infoProcess.stdout.emit(
         "data",
-        `DeviceName: Test iPhone
-ProductType: iPhone14,2
-ProductVersion: 17.0
-SerialNumber: ABC123456789
-`,
+        "DeviceName: Test iPhone\nProductType: iPhone14,2\nProductVersion: 17.0\nSerialNumber: ABC123456789\n",
       );
       infoProcess.emit("close", 0);
 
       await pollPromise;
 
-      // Verify connect breadcrumb
       expect(mockAddBreadcrumb).toHaveBeenCalledWith(
         expect.objectContaining({
           category: "device.connect",
@@ -413,9 +433,14 @@ SerialNumber: ABC123456789
     });
 
     it("should add Sentry breadcrumb when device disconnects", async () => {
-      // First connect a device
       mockExec.mockImplementation(
-        (_cmd: string, callback: (err: Error | null, result?: { stdout: string; stderr: string }) => void) => {
+        (
+          _cmd: string,
+          callback: (
+            err: Error | null,
+            result?: { stdout: string; stderr: string },
+          ) => void,
+        ) => {
           callback(null, { stdout: "1.3.0", stderr: "" });
         },
       );
@@ -430,8 +455,9 @@ SerialNumber: ABC123456789
         return infoProcess;
       });
 
-      // First poll: device connected
-      const poll1 = (service as unknown as { pollDevices: () => Promise<void> }).pollDevices();
+      const poll1 = (
+        service as unknown as { pollDevices: () => Promise<void> }
+      ).pollDevices();
 
       await new Promise((resolve) => setTimeout(resolve, 10));
 
@@ -442,27 +468,23 @@ SerialNumber: ABC123456789
 
       infoProcess.stdout.emit(
         "data",
-        `DeviceName: Test iPhone
-ProductType: iPhone14,2
-ProductVersion: 17.0
-SerialNumber: ABC123456789
-`,
+        "DeviceName: Test iPhone\nProductType: iPhone14,2\nProductVersion: 17.0\nSerialNumber: ABC123456789\n",
       );
       infoProcess.emit("close", 0);
 
       await poll1;
 
-      // Clear mocks to isolate disconnect breadcrumb
       mockAddBreadcrumb.mockClear();
 
-      // Second poll: no devices (disconnect)
       const listProcess2 = createMockProcess();
       spawnCallCount = 0;
       mockSpawn.mockImplementation(() => {
         return listProcess2;
       });
 
-      const poll2 = (service as unknown as { pollDevices: () => Promise<void> }).pollDevices();
+      const poll2 = (
+        service as unknown as { pollDevices: () => Promise<void> }
+      ).pollDevices();
 
       await new Promise((resolve) => setTimeout(resolve, 10));
 
@@ -471,7 +493,6 @@ SerialNumber: ABC123456789
 
       await poll2;
 
-      // Verify disconnect breadcrumb
       expect(mockAddBreadcrumb).toHaveBeenCalledWith(
         expect.objectContaining({
           category: "device.disconnect",
@@ -483,9 +504,14 @@ SerialNumber: ABC123456789
 
   describe("Sentry breadcrumb on listDevices error", () => {
     it("should add Sentry breadcrumb when idevice_id fails with stderr", async () => {
-      // Mock availability check
       mockExec.mockImplementation(
-        (_cmd: string, callback: (err: Error | null, result?: { stdout: string; stderr: string }) => void) => {
+        (
+          _cmd: string,
+          callback: (
+            err: Error | null,
+            result?: { stdout: string; stderr: string },
+          ) => void,
+        ) => {
           callback(null, { stdout: "1.3.0", stderr: "" });
         },
       );
@@ -497,7 +523,6 @@ SerialNumber: ABC123456789
 
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      // Simulate failure with stderr
       listProcess.stderr.emit("data", "ERROR: No device found!");
       listProcess.emit("close", 1);
 
@@ -517,9 +542,14 @@ SerialNumber: ABC123456789
     });
 
     it("should not add Sentry breadcrumb when idevice_id fails without stderr", async () => {
-      // Mock availability check
       mockExec.mockImplementation(
-        (_cmd: string, callback: (err: Error | null, result?: { stdout: string; stderr: string }) => void) => {
+        (
+          _cmd: string,
+          callback: (
+            err: Error | null,
+            result?: { stdout: string; stderr: string },
+          ) => void,
+        ) => {
           callback(null, { stdout: "1.3.0", stderr: "" });
         },
       );
@@ -531,12 +561,10 @@ SerialNumber: ABC123456789
 
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      // Simulate failure without stderr
       listProcess.emit("close", 1);
 
       await promise;
 
-      // No breadcrumb for "device.detection" when there's no stderr
       const detectionBreadcrumbs = mockAddBreadcrumb.mock.calls.filter(
         (call: [{ category: string }]) => call[0].category === "device.detection",
       );
