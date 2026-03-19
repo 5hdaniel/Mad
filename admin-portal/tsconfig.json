@@ -25,6 +25,12 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@keepr/shared": [
+        "../packages/shared/src"
+      ],
+      "@keepr/shared/*": [
+        "../packages/shared/src/*"
       ]
     },
     "target": "ES2017"
