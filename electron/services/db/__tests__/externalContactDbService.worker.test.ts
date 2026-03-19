@@ -1,29 +1,27 @@
 /**
  * Unit tests for getAllForUserAsync (TASK-1956, BACKLOG-661)
  *
- * Tests the worker thread wrapper that offloads the external contacts
+ * Tests the worker pool wrapper that offloads the external contacts
  * query to avoid blocking the Electron main process.
+ *
+ * Updated: Tests now mock contactWorkerPool (the actual dependency)
+ * instead of worker_threads (the old direct-Worker implementation).
  */
 
-// Mock worker_threads before any imports
-const mockOn = jest.fn();
-const mockTerminate = jest.fn();
-const mockWorkerInstance = {
-  on: mockOn,
-  terminate: mockTerminate,
-};
+const mockQueryContacts = jest.fn();
+const mockIsPoolReady = jest.fn();
 
-jest.mock('worker_threads', () => ({
-  Worker: jest.fn().mockImplementation(() => mockWorkerInstance),
-  parentPort: null,
-  workerData: null,
+jest.mock('../../../workers/contactWorkerPool', () => ({
+  queryContacts: mockQueryContacts,
+  isPoolReady: mockIsPoolReady,
 }));
 
-// Mock dbConnection to provide path and key
+// Mock dbConnection for the sync fallback path (getAllForUser)
+const mockDbAll = jest.fn().mockReturnValue([]);
 jest.mock('../core/dbConnection', () => ({
   getDbPath: jest.fn().mockReturnValue('/fake/path/mad.db'),
   getEncryptionKey: jest.fn().mockReturnValue('fake-encryption-key'),
-  dbAll: jest.fn().mockReturnValue([]),
+  dbAll: mockDbAll,
   dbRun: jest.fn().mockReturnValue({ lastInsertRowid: 0, changes: 0 }),
   dbGet: jest.fn().mockReturnValue(undefined),
   dbTransaction: jest.fn().mockImplementation((fn: () => unknown) => fn()),
@@ -39,19 +37,15 @@ jest.mock('../../logService', () => ({
   },
 }));
 
-import { Worker } from 'worker_threads';
-import { getDbPath, getEncryptionKey } from '../core/dbConnection';
 import { getAllForUserAsync } from '../externalContactDbService';
 
 describe('getAllForUserAsync', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Reset the on handler registry
-    mockOn.mockReset();
-    mockTerminate.mockReset();
+    mockIsPoolReady.mockReturnValue(true);
   });
 
-  it('should resolve with parsed contacts when worker succeeds', async () => {
+  it('should resolve with parsed contacts when worker pool returns rows', async () => {
     const mockRows = [
       {
         id: 'ext-1',
@@ -67,13 +61,7 @@ describe('getAllForUserAsync', () => {
       },
     ];
 
-    // Capture the 'message' handler when worker.on('message', ...) is called
-    mockOn.mockImplementation((event: string, handler: (data: unknown) => void) => {
-      if (event === 'message') {
-        // Simulate worker posting a message immediately
-        setTimeout(() => handler({ success: true, data: mockRows }), 0);
-      }
-    });
+    mockQueryContacts.mockResolvedValue(mockRows);
 
     const result = await getAllForUserAsync('user-1');
 
@@ -91,20 +79,10 @@ describe('getAllForUserAsync', () => {
       synced_at: '2026-01-01T00:00:00Z',
     });
 
-    // Verify Worker was constructed with correct params
-    expect(Worker).toHaveBeenCalledWith(
-      expect.stringContaining('contactQueryWorker'),
-      expect.objectContaining({
-        workerData: {
-          dbPath: '/fake/path/mad.db',
-          encryptionKey: 'fake-encryption-key',
-          userId: 'user-1',
-        },
-      }),
-    );
+    expect(mockQueryContacts).toHaveBeenCalledWith('external', 'user-1', 30_000);
   });
 
-  it('should parse empty phones_json and emails_json as empty arrays', async () => {
+  it('should parse null phones_json and emails_json as empty arrays', async () => {
     const mockRows = [
       {
         id: 'ext-2',
@@ -120,11 +98,7 @@ describe('getAllForUserAsync', () => {
       },
     ];
 
-    mockOn.mockImplementation((event: string, handler: (data: unknown) => void) => {
-      if (event === 'message') {
-        setTimeout(() => handler({ success: true, data: mockRows }), 0);
-      }
-    });
+    mockQueryContacts.mockResolvedValue(mockRows);
 
     const result = await getAllForUserAsync('user-1');
 
@@ -132,68 +106,66 @@ describe('getAllForUserAsync', () => {
     expect(result[0].emails).toEqual([]);
   });
 
-  it('should reject when worker posts an error message', async () => {
-    mockOn.mockImplementation((event: string, handler: (data: unknown) => void) => {
-      if (event === 'message') {
-        setTimeout(() => handler({ success: false, error: 'Database encryption failed' }), 0);
-      }
-    });
+  it('should reject when worker pool rejects with an error', async () => {
+    mockQueryContacts.mockRejectedValue(new Error('Database encryption failed'));
 
     await expect(getAllForUserAsync('user-1')).rejects.toThrow('Database encryption failed');
   });
 
-  it('should reject when worker emits an error event', async () => {
-    mockOn.mockImplementation((event: string, handler: (data: unknown) => void) => {
-      if (event === 'error') {
-        setTimeout(() => handler(new Error('Worker crashed')), 0);
-      }
-    });
+  it('should reject when worker pool times out', async () => {
+    mockQueryContacts.mockRejectedValue(new Error('Contact query worker timed out after 100ms'));
 
-    await expect(getAllForUserAsync('user-1')).rejects.toThrow('Worker crashed');
-  });
-
-  it('should reject on timeout and terminate the worker', async () => {
-    // Don't trigger any events - let it timeout
-    mockOn.mockImplementation(() => {
-      // No-op: worker never responds
-    });
-
-    const promise = getAllForUserAsync('user-1', 100); // 100ms timeout for fast test
-
-    await expect(promise).rejects.toThrow('Contact query worker timed out after 100ms');
-    expect(mockTerminate).toHaveBeenCalled();
-  });
-
-  it('should reject when database is not initialized (no path)', async () => {
-    (getDbPath as jest.Mock).mockReturnValueOnce(null);
-
-    await expect(getAllForUserAsync('user-1')).rejects.toThrow(
-      'Database not initialized: missing path or encryption key',
+    await expect(getAllForUserAsync('user-1', 100)).rejects.toThrow(
+      'Contact query worker timed out after 100ms',
     );
 
-    // Worker should NOT be created
-    expect(Worker).not.toHaveBeenCalled();
+    expect(mockQueryContacts).toHaveBeenCalledWith('external', 'user-1', 100);
   });
 
-  it('should reject when database is not initialized (no encryption key)', async () => {
-    (getEncryptionKey as jest.Mock).mockReturnValueOnce(null);
+  it('should pass custom timeout to queryContacts', async () => {
+    mockQueryContacts.mockResolvedValue([]);
 
-    await expect(getAllForUserAsync('user-1')).rejects.toThrow(
-      'Database not initialized: missing path or encryption key',
-    );
+    await getAllForUserAsync('user-1', 5000);
 
-    expect(Worker).not.toHaveBeenCalled();
+    expect(mockQueryContacts).toHaveBeenCalledWith('external', 'user-1', 5000);
   });
 
-  it('should reject when worker exits with non-zero code', async () => {
-    mockOn.mockImplementation((event: string, handler: (data: unknown) => void) => {
-      if (event === 'exit') {
-        setTimeout(() => handler(1), 0);
-      }
-    });
+  it('should fall back to sync getAllForUser when pool is not ready', async () => {
+    mockIsPoolReady.mockReturnValue(false);
+    mockDbAll.mockReturnValue([
+      {
+        id: 'ext-3',
+        user_id: 'user-1',
+        name: 'Sync Contact',
+        phones_json: '["555-9999"]',
+        emails_json: '["sync@example.com"]',
+        company: null,
+        last_message_at: null,
+        external_record_id: 'record-3',
+        source: 'macos',
+        synced_at: '2026-01-01T00:00:00Z',
+      },
+    ]);
 
-    await expect(getAllForUserAsync('user-1')).rejects.toThrow(
-      'Contact query worker exited with code 1',
-    );
+    const result = await getAllForUserAsync('user-1');
+
+    expect(mockQueryContacts).not.toHaveBeenCalled();
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('Sync Contact');
+    expect(result[0].phones).toEqual(['555-9999']);
+  });
+
+  it('should return empty array when pool returns no rows', async () => {
+    mockQueryContacts.mockResolvedValue([]);
+
+    const result = await getAllForUserAsync('user-1');
+
+    expect(result).toEqual([]);
+  });
+
+  it('should propagate worker pool errors with original message', async () => {
+    mockQueryContacts.mockRejectedValue(new Error('Worker crashed unexpectedly'));
+
+    await expect(getAllForUserAsync('user-1')).rejects.toThrow('Worker crashed unexpectedly');
   });
 });
