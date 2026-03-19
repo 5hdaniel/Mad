@@ -30,6 +30,7 @@ interface BulkActionBarProps {
   onAssignToSprint: () => void;
   onAssignUser: (assigneeId: string | null) => void;
   onDelete: () => void;
+  error?: string | null;
 }
 
 export function BulkActionBar({
@@ -39,6 +40,7 @@ export function BulkActionBar({
   onAssignToSprint,
   onAssignUser,
   onDelete,
+  error,
 }: BulkActionBarProps) {
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [assignMenuOpen, setAssignMenuOpen] = useState(false);
@@ -213,6 +215,11 @@ export function BulkActionBar({
         >
           <X className="h-4 w-4" />
         </button>
+
+        {/* Error feedback */}
+        {error && (
+          <span className="text-xs text-red-400 ml-1">{error}</span>
+        )}
       </div>
     </div>
   );

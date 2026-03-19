@@ -278,6 +278,16 @@ export interface ItemListResponse {
   page_size: number;
 }
 
+export interface PmItemParent {
+  id: string;
+  title: string;
+  item_number: number;
+  legacy_id: string | null;
+  status: ItemStatus;
+  priority: ItemPriority;
+  type: ItemType;
+}
+
 export interface ItemDetailResponse {
   item: PmBacklogItem;
   comments: PmComment[];
@@ -285,6 +295,7 @@ export interface ItemDetailResponse {
   links: PmTaskLink[];
   labels: PmLabel[];
   children: PmItemChild[];
+  parent: PmItemParent | null;
 }
 
 export interface CreateItemParams {

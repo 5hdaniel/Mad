@@ -44,6 +44,7 @@ import {
   updateItemField,
   assignToSprint,
   createItem,
+  assignItem,
   bulkUpdate,
   bulkDelete,
   listAssignableUsers,
@@ -55,6 +56,7 @@ import type {
   PmLabel,
   ItemStatus,
   BoardColumns,
+  CreateItemParams,
 } from '@/lib/pm-types';
 import { STATUS_LABELS, STATUS_COLORS } from '@/lib/pm-types';
 import type { AssignableUser } from '../components/KanbanCard';
@@ -441,26 +443,42 @@ export default function BoardPage() {
     [loadBoardData]
   );
 
-  /** Quick add item at the bottom of a column. */
+  /** Quick add item at the bottom of a column.
+   *  When in swim lane mode, groupKey carries the project_id / area / assignee
+   *  so the new item lands in the correct lane. */
   const handleQuickAdd = useCallback(
-    async (title: string, status: ItemStatus) => {
+    async (title: string, status: ItemStatus, groupKey?: string) => {
       if (!selectedSprintId) return;
       try {
-        await createItem({
+        const params: CreateItemParams = {
           title,
           sprint_id: selectedSprintId,
-        });
-        // After creation, update its status if not pending
-        // (createItem defaults to pending)
-        if (status !== 'pending') {
-          // We'd need the new item's ID -- reload instead
+        };
+        // Set the swim lane dimension so item lands in the right row
+        if (groupKey && swimLane === 'project') {
+          params.project_id = groupKey;
+        } else if (groupKey && swimLane === 'area') {
+          params.area = groupKey;
+        }
+        const created = await createItem(params);
+        // Set status to match the column the item was added in
+        if (status !== 'pending' && created.id) {
+          await updateItemStatus(created.id, status);
+        }
+        // Assign user if swim lane is assignee mode
+        if (groupKey && swimLane === 'assignee' && created.id) {
+          try {
+            await assignItem(created.id, groupKey);
+          } catch {
+            // non-fatal: item created but assignee failed
+          }
         }
         await loadBoardData();
       } catch (err) {
         console.error('Failed to quick-add item:', err);
       }
     },
-    [selectedSprintId, loadBoardData]
+    [selectedSprintId, swimLane, loadBoardData]
   );
 
   /** Toggle item selection for bulk actions. */
@@ -931,7 +949,7 @@ export default function BoardPage() {
                                 selectedIds={selectedIds}
                                 onToggleSelect={handleToggleSelect}
                                 onItemUpdated={handleItemUpdated}
-                                onQuickAdd={(title) => handleQuickAdd(title, status)}
+                                onQuickAdd={(title) => handleQuickAdd(title, status, groupKey)}
                                 users={boardUsers}
                                 allLabels={boardLabels}
                                 compact={compactCards}
