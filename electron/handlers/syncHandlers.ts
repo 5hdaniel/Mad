@@ -338,9 +338,15 @@ function setupEventForwarding(): void {
   });
 
   // Forward error events
-  orchestrator.on("error", (error: Error) => {
-    log.error("[SyncHandlers] Sync error event", { error: error.message });
-    sendToRenderer("sync:error", { message: error.message });
+  // TASK-2276: Support enriched error payload with optional userError field.
+  // The orchestrator may emit either a plain Error or an enriched object
+  // { message: string, userError?: UserFacingError }. Forward the userError
+  // to the renderer so the UI can display structured messages.
+  orchestrator.on("error", (error: Error | { message: string; userError?: unknown }) => {
+    const message = error instanceof Error ? error.message : error.message;
+    const userError = error instanceof Error ? undefined : (error as { userError?: unknown }).userError;
+    log.error("[SyncHandlers] Sync error event", { error: message, hasUserError: !!userError });
+    sendToRenderer("sync:error", { message, ...(userError ? { userError } : {}) });
   });
 
   // Forward completion events and persist data

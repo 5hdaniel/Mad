@@ -27,6 +27,13 @@ import { BackupService } from "./backupService";
 import { BackupDecryptionService } from "./backupDecryptionService";
 import { iOSMessagesParser } from "./iosMessagesParser";
 import { iOSContactsParser } from "./iosContactsParser";
+import { checkDiskSpaceForOperation } from "./diagnostics/diskSpaceDiagnostics";
+import {
+  formatDiskSpaceError,
+  formatMissingDriversError,
+  formatDriverServiceStoppedError,
+} from "./diagnostics/userFacingErrors";
+import { checkAppleDrivers } from "./appleDriverService";
 import type { iOSDevice } from "../types/device";
 import type { iOSMessage, iOSConversation } from "../types/iosMessages";
 import type { iOSContact } from "../types/iosContacts";
@@ -240,6 +247,39 @@ export class DeviceSyncOrchestrator extends EventEmitter {
     log.info("[DeviceSyncOrchestrator] Starting sync", { udid: options.udid, sessionId });
 
     try {
+      // TASK-2276: Pre-sync checks with user-facing error messages
+      // Check disk space using the diagnostic utility (enriched errors for UI)
+      const diskCheck = await checkDiskSpaceForOperation("sync");
+      if (!diskCheck.sufficient) {
+        const userError = formatDiskSpaceError(diskCheck.availableMB, diskCheck.requiredMB);
+        log.warn("[DeviceSyncOrchestrator] Pre-sync disk space check failed", {
+          availableMB: diskCheck.availableMB,
+          requiredMB: diskCheck.requiredMB,
+        });
+        this.isRunning = false;
+        this.emit("error", { message: userError.description, userError });
+        return this.errorResult(userError.description);
+      }
+
+      // TASK-2276: On Windows, check Apple drivers before attempting sync
+      if (process.platform === "win32") {
+        const driverStatus = await checkAppleDrivers();
+        if (!driverStatus.isInstalled) {
+          const userError = formatMissingDriversError();
+          log.warn("[DeviceSyncOrchestrator] Apple drivers not installed");
+          this.isRunning = false;
+          this.emit("error", { message: userError.description, userError });
+          return this.errorResult(userError.description);
+        }
+        if (!driverStatus.serviceRunning) {
+          const userError = formatDriverServiceStoppedError();
+          log.warn("[DeviceSyncOrchestrator] Apple Mobile Device Service not running");
+          this.isRunning = false;
+          this.emit("error", { message: userError.description, userError });
+          return this.errorResult(userError.description);
+        }
+      }
+
       // Step 0: Check for existing/interrupted backups
       this.emitProgress({
         phase: "backup",
