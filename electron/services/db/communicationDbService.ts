@@ -58,10 +58,22 @@ export async function createCommunication(
   ];
 
   dbRun(sql, params);
-  const communication = await getCommunicationById(id);
-  if (!communication) {
-    throw new DatabaseError("Failed to create communication");
-  }
+
+  // BACKLOG-1107: Return data from memory instead of INSERT-then-SELECT.
+  const communication = {
+    id,
+    user_id: communicationData.user_id,
+    transaction_id: communicationData.transaction_id || null,
+    message_id: communicationData.message_id || null,
+    email_id: communicationData.email_id || null,
+    thread_id: communicationData.thread_id || null,
+    link_source: communicationData.link_source || null,
+    link_confidence: communicationData.link_confidence || null,
+    linked_at: communicationData.linked_at || null,
+    has_attachments: false,
+    is_false_positive: false,
+    created_at: new Date().toISOString(),
+  } as unknown as Communication;
 
   // BACKLOG-396: Update thread count if this is a text message linked to a transaction
   // Check if linked message is a text type
@@ -88,7 +100,10 @@ export async function createCommunication(
 export async function getCommunicationById(
   communicationId: string,
 ): Promise<Communication | null> {
-  const sql = "SELECT * FROM communications WHERE id = ?";
+  // BACKLOG-1107: Explicit column list instead of SELECT *
+  const sql = `SELECT id, user_id, transaction_id, message_id, email_id, thread_id,
+    link_source, link_confidence, linked_at, created_at
+    FROM communications WHERE id = ?`;
   const communication = dbGet<Communication>(sql, [communicationId]);
   return communication || null;
 }
@@ -104,7 +119,8 @@ export async function getCommunicationById(
 export async function getCommunications(
   filters?: CommunicationFilters,
 ): Promise<Communication[]> {
-  let sql = "SELECT * FROM communications WHERE 1=1";
+  // BACKLOG-1107: Explicit column list
+  let sql = "SELECT id, user_id, transaction_id, message_id, email_id, thread_id, link_source, link_confidence, linked_at, created_at FROM communications WHERE 1=1";
   const params: unknown[] = [];
 
   if (filters?.user_id) {
@@ -136,8 +152,11 @@ export async function getCommunications(
 export async function getCommunicationsByTransaction(
   transactionId: string,
 ): Promise<Communication[]> {
+  // BACKLOG-1107: Explicit column list
   const sql = `
-    SELECT * FROM communications
+    SELECT id, user_id, transaction_id, message_id, email_id, thread_id,
+           link_source, link_confidence, linked_at, created_at
+    FROM communications
     WHERE transaction_id = ?
     ORDER BY created_at DESC
   `;
@@ -294,14 +313,19 @@ export async function addIgnoredCommunication(
 
   dbRun(sql, params);
 
-  const ignoredComm = dbGet<IgnoredCommunication>(
-    "SELECT * FROM ignored_communications WHERE id = ?",
-    [id],
-  );
-
-  if (!ignoredComm) {
-    throw new DatabaseError("Failed to create ignored communication record");
-  }
+  // BACKLOG-1107: Return data from memory instead of INSERT-then-SELECT.
+  const ignoredComm: IgnoredCommunication = {
+    id,
+    user_id: data.user_id,
+    transaction_id: data.transaction_id,
+    email_subject: data.email_subject || null,
+    email_sender: data.email_sender || null,
+    email_sent_at: data.email_sent_at || null,
+    email_thread_id: data.email_thread_id || null,
+    original_communication_id: data.original_communication_id || null,
+    reason: data.reason || null,
+    ignored_at: new Date().toISOString(),
+  } as IgnoredCommunication;
 
   return ignoredComm;
 }
@@ -476,10 +500,21 @@ export async function createCommunicationReference(
 
   dbRun(sql, params);
 
-  const communication = await getCommunicationById(id);
-  if (!communication) {
-    throw new DatabaseError("Failed to create communication reference");
-  }
+  // BACKLOG-1107: Return data from memory instead of INSERT-then-SELECT.
+  const communication = {
+    id,
+    user_id: data.user_id,
+    transaction_id: data.transaction_id,
+    message_id: data.message_id,
+    email_id: null,
+    thread_id: null,
+    link_source: data.link_source || 'auto',
+    link_confidence: data.link_confidence || null,
+    linked_at: new Date().toISOString(),
+    has_attachments: false,
+    is_false_positive: false,
+    created_at: new Date().toISOString(),
+  } as unknown as Communication;
 
   // BACKLOG-396: Check if the linked message is a text and update thread count
   const message = dbGet<{ channel: string | null }>(
@@ -891,7 +926,27 @@ export function updateTransactionThreadCount(transactionId: string): void {
  * BACKLOG-396: Migration helper for existing transactions.
  */
 export function backfillAllTransactionThreadCounts(): { updated: number; errors: number } {
-  // Get all transaction IDs
+  // BACKLOG-1095: Single GROUP BY query replaces N+1 per-transaction queries.
+  const threadCountsSql = `
+    SELECT c.transaction_id, COUNT(DISTINCT COALESCE(m.thread_id, m.id)) as thread_count
+    FROM communications c
+    LEFT JOIN messages m ON (
+      (c.message_id IS NOT NULL AND c.message_id = m.id)
+      OR
+      (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+    )
+    WHERE c.transaction_id IS NOT NULL
+      AND (m.channel IN ('text', 'sms', 'imessage') OR (m.id IS NULL AND c.thread_id IS NOT NULL))
+    GROUP BY c.transaction_id
+  `;
+
+  const threadCounts = dbAll<{ transaction_id: string; thread_count: number }>(threadCountsSql);
+
+  const countMap = new Map<string, number>();
+  for (const row of threadCounts) {
+    countMap.set(row.transaction_id, row.thread_count);
+  }
+
   const transactions = dbAll<{ id: string }>(`SELECT id FROM transactions`);
 
   let updated = 0;
@@ -899,7 +954,8 @@ export function backfillAllTransactionThreadCounts(): { updated: number; errors:
 
   for (const tx of transactions) {
     try {
-      updateTransactionThreadCount(tx.id);
+      const count = countMap.get(tx.id) || 0;
+      dbRun(`UPDATE transactions SET text_thread_count = ? WHERE id = ?`, [count, tx.id]);
       updated++;
     } catch {
       errors++;

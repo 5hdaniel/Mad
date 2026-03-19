@@ -9,7 +9,7 @@
  */
 
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { AppRouter } from "../AppRouter";
 import type { AppStateMachine } from "../state/types";
@@ -330,23 +330,28 @@ describe("AppRouter", () => {
   });
 
   describe("Contacts State", () => {
-    it("should render ConversationList when step is contacts", () => {
+    it("should render ConversationList when step is contacts", async () => {
       const app = createAppStateMock({ currentStep: "contacts" });
       render(<AppRouter app={app} />);
-      expect(screen.getByTestId("conversation-list-component")).toBeInTheDocument();
+      // BACKLOG-1096: React.lazy requires async resolution
+      await waitFor(() => {
+        expect(screen.getByTestId("conversation-list-component")).toBeInTheDocument();
+      });
     });
   });
 
   describe("Outlook Export State", () => {
-    it("should render OutlookExport when step is outlook", () => {
+    it("should render OutlookExport when step is outlook", async () => {
       const app = createAppStateMock({ currentStep: "outlook" });
       render(<AppRouter app={app} />);
-      expect(screen.getByTestId("outlook-export-component")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByTestId("outlook-export-component")).toBeInTheDocument();
+      });
     });
   });
 
   describe("Export Complete State", () => {
-    it("should render ExportComplete when step is complete and exportResult exists", () => {
+    it("should render ExportComplete when step is complete and exportResult exists", async () => {
       const app = createAppStateMock({
         currentStep: "complete",
         exportResult: {
@@ -355,7 +360,9 @@ describe("AppRouter", () => {
         },
       });
       render(<AppRouter app={app} />);
-      expect(screen.getByTestId("export-complete-component")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByTestId("export-complete-component")).toBeInTheDocument();
+      });
     });
 
     it("should not render ExportComplete when step is complete but no exportResult", () => {

@@ -41,10 +41,14 @@ export function getDbPath(): string | null {
 }
 
 /**
- * Get the encryption key
+ * Get the encryption key.
+ * BACKLOG-1123: Delegates to databaseEncryptionService's cached key to reduce duplication.
+ * The local `encryptionKey` variable is kept as a synchronous fallback for openDb().
  */
 export function getEncryptionKey(): string | null {
-  return encryptionKey;
+  // Prefer the canonical source (encryption service cache) when available
+  const serviceKey = databaseEncryptionService.getCachedKey();
+  return serviceKey ?? encryptionKey;
 }
 
 /**

@@ -19,16 +19,22 @@ import {
   DragOverlay,
   KeyboardSensor,
   PointerSensor,
+  useDroppable,
   useSensor,
   useSensors,
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import { KanbanBoard, columnCollision, resolveColumnStatus } from '../components/KanbanBoard';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { KanbanBoard, COLUMN_ORDER, columnCollision, resolveColumnStatus } from '../components/KanbanBoard';
 import { SwimLaneSelector, type SwimLaneMode } from '../components/SwimLaneSelector';
 import { BacklogSidePanel } from '../components/BacklogSidePanel';
 import { BulkActionBar } from '../components/BulkActionBar';
 import { KanbanCard } from '../components/KanbanCard';
+import { KanbanQuickAdd } from '../components/KanbanQuickAdd';
 import {
   listSprints,
   listItems,
@@ -38,6 +44,7 @@ import {
   updateItemField,
   assignToSprint,
   createItem,
+  assignItem,
   bulkUpdate,
   bulkDelete,
   listAssignableUsers,
@@ -49,7 +56,9 @@ import type {
   PmLabel,
   ItemStatus,
   BoardColumns,
+  CreateItemParams,
 } from '@/lib/pm-types';
+import { STATUS_LABELS, STATUS_COLORS } from '@/lib/pm-types';
 import type { AssignableUser } from '../components/KanbanCard';
 
 // ---------------------------------------------------------------------------
@@ -99,6 +108,62 @@ function groupItemsByDimension(
   }
 
   return groups;
+}
+
+// ---------------------------------------------------------------------------
+// SwimLaneCell -- A single droppable cell in the swim lane grid
+// ---------------------------------------------------------------------------
+
+function SwimLaneCell({
+  droppableId,
+  items,
+  selectedIds,
+  onToggleSelect,
+  onItemUpdated,
+  onQuickAdd,
+  users,
+  allLabels,
+  compact,
+}: {
+  droppableId: string;
+  items: PmBacklogItem[];
+  selectedIds?: Set<string>;
+  onToggleSelect?: (itemId: string) => void;
+  onItemUpdated?: () => void;
+  onQuickAdd?: (title: string) => Promise<void>;
+  users?: AssignableUser[];
+  allLabels?: PmLabel[];
+  compact?: boolean;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: droppableId });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`min-w-[260px] flex-1 bg-gray-50 px-2 py-2 min-h-[5rem] ${
+        isOver ? 'ring-2 ring-blue-400 ring-inset bg-blue-50' : ''
+      }`}
+    >
+      <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+        <div className="space-y-2">
+          {items.map((item) => (
+            <KanbanCard
+              key={item.id}
+              item={item}
+              isSelected={selectedIds?.has(item.id)}
+              compact={compact}
+              onToggleSelect={
+                onToggleSelect ? () => onToggleSelect(item.id) : undefined
+              }
+              onItemUpdated={onItemUpdated}
+              users={users}
+              allLabels={allLabels}
+            />
+          ))}
+        </div>
+      </SortableContext>
+      {onQuickAdd && <KanbanQuickAdd onAdd={onQuickAdd} />}
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -174,6 +239,7 @@ export default function BoardPage() {
   const [activeDragIsBacklog, setActiveDragIsBacklog] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [bulkError, setBulkError] = useState<string | null>(null);
 
   // -- DnD sensors (shared by board cards AND backlog panel items) ----------
   const sensors = useSensors(
@@ -344,36 +410,77 @@ export default function BoardPage() {
   /** Drag card between columns -> update status. */
   const handleStatusChange = useCallback(
     async (itemId: string, newStatus: ItemStatus) => {
+      // Optimistic update: move card in local state immediately
+      setColumns((prev) => {
+        const updated = { ...prev };
+        let movedItem: PmBacklogItem | null = null;
+        // Remove from current column
+        for (const status of Object.keys(updated) as ItemStatus[]) {
+          const items = updated[status] as PmBacklogItem[];
+          const idx = items.findIndex((i) => i.id === itemId);
+          if (idx !== -1) {
+            movedItem = { ...items[idx], status: newStatus };
+            updated[status] = [...items.slice(0, idx), ...items.slice(idx + 1)] as typeof items;
+            break;
+          }
+        }
+        // Add to target column
+        if (movedItem) {
+          const target = (updated[newStatus] || []) as PmBacklogItem[];
+          (updated as Record<string, PmBacklogItem[]>)[newStatus] = [...target, movedItem];
+        }
+        return updated;
+      });
+      // Persist to DB in background (no full reload)
       try {
         await updateItemStatus(itemId, newStatus);
-        await loadBoardData();
       } catch (err) {
         console.error('Failed to update status:', err);
+        // Revert on failure
+        await loadBoardData();
       }
     },
     [loadBoardData]
   );
 
-  /** Quick add item at the bottom of a column. */
+  /** Quick add item at the bottom of a column.
+   *  When in swim lane mode, groupKey carries the project_id / area / assignee
+   *  so the new item lands in the correct lane. */
   const handleQuickAdd = useCallback(
-    async (title: string, status: ItemStatus) => {
+    async (title: string, status: ItemStatus, groupKey?: string) => {
       if (!selectedSprintId) return;
       try {
-        await createItem({
+        const params: CreateItemParams = {
           title,
           sprint_id: selectedSprintId,
-        });
-        // After creation, update its status if not pending
-        // (createItem defaults to pending)
-        if (status !== 'pending') {
-          // We'd need the new item's ID -- reload instead
+        };
+        // Set the swim lane dimension so item lands in the right row
+        // Skip placeholder keys like "No Project", "No Area", "Unassigned"
+        const isRealGroup = groupKey && !groupKey.startsWith('No ') && groupKey !== 'Unassigned';
+        if (isRealGroup && swimLane === 'project') {
+          params.project_id = groupKey;
+        } else if (isRealGroup && swimLane === 'area') {
+          params.area = groupKey;
+        }
+        const created = await createItem(params);
+        // Set status to match the column the item was added in
+        if (status !== 'pending' && created.id) {
+          await updateItemStatus(created.id, status);
+        }
+        // Assign user if swim lane is assignee mode
+        if (isRealGroup && swimLane === 'assignee' && created.id) {
+          try {
+            await assignItem(created.id, groupKey);
+          } catch {
+            // non-fatal: item created but assignee failed
+          }
         }
         await loadBoardData();
       } catch (err) {
         console.error('Failed to quick-add item:', err);
       }
     },
-    [selectedSprintId, loadBoardData]
+    [selectedSprintId, swimLane, loadBoardData]
   );
 
   /** Toggle item selection for bulk actions. */
@@ -393,12 +500,14 @@ export default function BoardPage() {
   const handleBulkStatusChange = useCallback(
     async (status: ItemStatus) => {
       if (selectedIds.size === 0) return;
+      setBulkError(null);
       try {
         await bulkUpdate(Array.from(selectedIds), { status });
         setSelectedIds(new Set());
         await loadBoardData();
       } catch (err) {
         console.error('Failed to bulk update status:', err);
+        setBulkError('Failed to update status. Please try again.');
       }
     },
     [selectedIds, loadBoardData]
@@ -413,6 +522,7 @@ export default function BoardPage() {
       await loadBoardData();
     } catch (err) {
       console.error('Failed to bulk assign to sprint:', err);
+      setBulkError('Failed to assign to sprint. Please try again.');
     }
   }, [selectedIds, selectedSprintId, loadBoardData]);
 
@@ -426,6 +536,7 @@ export default function BoardPage() {
         await loadBoardData();
       } catch (err) {
         console.error('Failed to bulk assign user:', err);
+        setBulkError('Failed to assign user. Please try again.');
       }
     },
     [selectedIds, loadBoardData]
@@ -570,7 +681,18 @@ export default function BoardPage() {
 
   const swimLaneGroups = useMemo(() => {
     if (swimLane === 'off') return null;
-    return groupItemsByDimension(columns, swimLane);
+    const groups = groupItemsByDimension(columns, swimLane);
+    // Sort by group name for stable order (push "No Project"/"Unassigned" to end)
+    const sorted = new Map(
+      Array.from(groups.entries()).sort(([a], [b]) => {
+        const aIsDefault = a.startsWith('No ') || a === 'Unassigned';
+        const bIsDefault = b.startsWith('No ') || b === 'Unassigned';
+        if (aIsDefault && !bIsDefault) return 1;
+        if (!aIsDefault && bIsDefault) return -1;
+        return a.localeCompare(b);
+      })
+    );
+    return sorted;
   }, [columns, swimLane]);
 
   // -- Selected sprint label -----------------------------------------------
@@ -760,8 +882,28 @@ export default function BoardPage() {
                 <p className="text-sm">Select a sprint to view the board</p>
               </div>
             ) : swimLaneGroups ? (
-              // Swim lane view: grouped boards
-              <div className="space-y-6">
+              // Swim lane grid view: project col + status columns
+              <div className="min-w-fit">
+                {/* Sticky header row */}
+                <div className="flex gap-0 sticky top-0 z-10 border-b border-gray-300">
+                  {/* Project column header */}
+                  <div className="w-[180px] min-w-[180px] bg-gray-100 px-3 py-2 sticky left-0 z-20">
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      {swimLane === 'project' ? 'Project' : swimLane === 'area' ? 'Area' : 'Assignee'}
+                    </span>
+                  </div>
+                  {COLUMN_ORDER.map((status) => (
+                    <div key={status} className="min-w-[260px] flex-1 bg-gray-100 px-3 py-2">
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[status]}`}
+                      >
+                        {STATUS_LABELS[status]}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Swim lane rows */}
                 {Array.from(swimLaneGroups.entries()).map(
                   ([groupKey, groupColumns]) => {
                     const itemCount = Object.values(groupColumns).reduce(
@@ -770,34 +912,52 @@ export default function BoardPage() {
                     );
                     const isCollapsed = collapsedLanes.has(groupKey);
                     return (
-                      <div key={groupKey}>
-                        <button
-                          onClick={() => toggleLane(groupKey)}
-                          className="flex items-center gap-2 w-full text-left py-2 px-1 border-b border-gray-200 mb-3"
-                        >
-                          {isCollapsed ? (
-                            <ChevronRight className="h-4 w-4 text-gray-400" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4 text-gray-400" />
-                          )}
-                          <span className="text-sm font-semibold text-gray-700">
-                            {nameMap.get(groupKey) || groupKey}
-                          </span>
-                          <span className="text-xs text-gray-400">
-                            ({itemCount} {itemCount === 1 ? 'item' : 'items'})
-                          </span>
-                        </button>
-                        {!isCollapsed && (
-                          <KanbanBoard
-                            columns={groupColumns}
-                            onQuickAdd={handleQuickAdd}
-                            selectedIds={selectedIds}
-                            onToggleSelect={handleToggleSelect}
-                            onItemUpdated={handleItemUpdated}
-                            users={boardUsers}
-                            allLabels={boardLabels}
-                            compact={compactCards}
-                          />
+                      <div key={groupKey} className="flex gap-0 border-b border-gray-200">
+                        {/* Project name column */}
+                        <div className="w-[180px] min-w-[180px] bg-gray-50 px-3 py-3 sticky left-0 z-10 border-r border-gray-200">
+                          <button
+                            onClick={() => toggleLane(groupKey)}
+                            className="flex items-center gap-1.5 text-left w-full"
+                          >
+                            {isCollapsed ? (
+                              <ChevronRight className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                            ) : (
+                              <ChevronDown className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                            )}
+                            <div>
+                              <span className="text-sm font-semibold text-gray-700 block">
+                                {nameMap.get(groupKey) || groupKey}
+                              </span>
+                              <span className="text-xs text-gray-400">
+                                {itemCount} {itemCount === 1 ? 'item' : 'items'}
+                              </span>
+                            </div>
+                          </button>
+                        </div>
+                        {/* Status columns — hidden when collapsed */}
+                        {isCollapsed ? (
+                          <div className="flex-1 bg-gray-50 px-3 py-3 flex items-center">
+                            <span className="text-xs text-gray-400 italic">Collapsed</span>
+                          </div>
+                        ) : (
+                          COLUMN_ORDER.map((status) => {
+                            const items = (groupColumns[status] || []) as PmBacklogItem[];
+                            const droppableId = `${groupKey}::${status}`;
+                            return (
+                              <SwimLaneCell
+                                key={status}
+                                droppableId={droppableId}
+                                items={items}
+                                selectedIds={selectedIds}
+                                onToggleSelect={handleToggleSelect}
+                                onItemUpdated={handleItemUpdated}
+                                onQuickAdd={(title) => handleQuickAdd(title, status, groupKey)}
+                                users={boardUsers}
+                                allLabels={boardLabels}
+                                compact={compactCards}
+                              />
+                            );
+                          })
                         )}
                       </div>
                     );
@@ -854,7 +1014,7 @@ export default function BoardPage() {
       {/* Bulk action bar */}
       <BulkActionBar
         selectedCount={selectedIds.size}
-        onClearSelection={() => setSelectedIds(new Set())}
+        onClearSelection={() => { setSelectedIds(new Set()); setBulkError(null); }}
         onChangeStatus={handleBulkStatusChange}
         onChangePriority={() => {
           // Priority change not implemented in this version
@@ -862,6 +1022,7 @@ export default function BoardPage() {
         onAssignToSprint={handleBulkAssignSprint}
         onAssignUser={handleBulkAssignUser}
         onDelete={handleBulkDeleteRequest}
+        error={bulkError}
       />
 
       {/* Bulk delete confirmation dialog */}

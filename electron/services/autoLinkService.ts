@@ -203,17 +203,16 @@ async function findEmailsByContactEmails(
     return [];
   }
 
-  // Build email patterns for LIKE matching (sender, recipients, and cc)
-  // BACKLOG-506: Query emails table (content) and check communications (junction) for links
+  // BACKLOG-1095: Exact matching for sender (single email), LIKE for recipients/cc (comma-separated).
   const emailConditions = contactEmails
-    .map(() => "(LOWER(e.sender) LIKE ? OR LOWER(e.recipients) LIKE ? OR LOWER(e.cc) LIKE ?)")
+    .map(() => "(LOWER(e.sender) = ? OR LOWER(e.recipients) LIKE ? OR LOWER(e.cc) LIKE ?)")
     .join(" OR ");
 
   const params: (string | number)[] = [userId, transactionId];
 
-  // Add email patterns
+  // BACKLOG-1095: exact match for sender, LIKE for recipients/cc
   for (const email of contactEmails) {
-    params.push(`%${email}%`, `%${email}%`, `%${email}%`);
+    params.push(email, `%${email}%`, `%${email}%`);
   }
 
   // Add date range
@@ -252,7 +251,7 @@ async function findEmailsByContactEmails(
   // Reorder params: transactionId for JOIN, userId for WHERE, then email patterns, then date range, then address
   const reorderedParams: (string | number)[] = [transactionId, userId];
   for (const email of contactEmails) {
-    reorderedParams.push(`%${email}%`, `%${email}%`, `%${email}%`);
+    reorderedParams.push(email, `%${email}%`, `%${email}%`);
   }
   reorderedParams.push(dateRange.start.toISOString());
   reorderedParams.push(dateRange.end.toISOString());
@@ -305,9 +304,9 @@ async function countEmailsMatchingAddress(
     return 0;
   }
 
-  // Build email patterns for LIKE matching (sender, recipients, and cc)
+  // BACKLOG-1095: Exact matching for sender, LIKE for recipients/cc
   const emailConditions = contactEmails
-    .map(() => "(LOWER(e.sender) LIKE ? OR LOWER(e.recipients) LIKE ? OR LOWER(e.cc) LIKE ?)")
+    .map(() => "(LOWER(e.sender) = ? OR LOWER(e.recipients) LIKE ? OR LOWER(e.cc) LIKE ?)")
     .join(" OR ");
 
   // Build address clause (same as findEmailsByContactEmails)
@@ -331,7 +330,7 @@ async function countEmailsMatchingAddress(
 
   const params: (string | number)[] = [userId];
   for (const email of contactEmails) {
-    params.push(`%${email}%`, `%${email}%`, `%${email}%`);
+    params.push(email, `%${email}%`, `%${email}%`);
   }
   params.push(dateRange.start.toISOString());
   params.push(dateRange.end.toISOString());

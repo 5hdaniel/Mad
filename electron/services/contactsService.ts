@@ -445,15 +445,15 @@ function resolveContactName(
       return contactMap[contactId];
     }
 
-    // Try normalized phone number match
+    // Try normalized phone number match (E.164 format: +15551234567)
     const normalized = normalizePhoneNumber(contactId);
     if (normalized && contactMap[normalized]) {
       return contactMap[normalized];
     }
 
-    // If not found and number has country code 1, try without it
-    if (normalized && normalized.startsWith("1") && normalized.length === 11) {
-      const withoutCountryCode = normalized.substring(1);
+    // If not found and number has US country code (+1), try without it
+    if (normalized && normalized.startsWith("+1") && normalized.length === 12) {
+      const withoutCountryCode = "+" + normalized.substring(2);
       if (contactMap[withoutCountryCode]) {
         return contactMap[withoutCountryCode];
       }
@@ -477,9 +477,9 @@ function resolveContactName(
       return contactMap[normalized];
     }
 
-    // If not found and number has country code 1, try without it
-    if (normalized && normalized.startsWith("1") && normalized.length === 11) {
-      const withoutCountryCode = normalized.substring(1);
+    // If not found and number has US country code (+1), try without it
+    if (normalized && normalized.startsWith("+1") && normalized.length === 12) {
+      const withoutCountryCode = "+" + normalized.substring(2);
       if (contactMap[withoutCountryCode]) {
         return contactMap[withoutCountryCode];
       }

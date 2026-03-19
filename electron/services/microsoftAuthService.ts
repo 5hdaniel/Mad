@@ -79,10 +79,13 @@ class MicrosoftAuthService {
   private authorizeUrl: string = "";
   private tokenUrl: string = "";
   private server: http.Server | null = null;
+  private serverTimeout: NodeJS.Timeout | null = null;
   // Store resolve/reject functions to allow direct code resolution from navigation interception
   private codeResolver: ((code: string) => void) | null = null;
   private codeRejecter: ((error: Error) => void) | null = null;
   private initialized: boolean = false;
+  /** BACKLOG-1121: Auth server timeout (5 minutes) to prevent port leak */
+  private static readonly AUTH_TIMEOUT_MS = 5 * 60 * 1000;
 
   constructor() {
     // Lazy initialization - don't read env vars here
@@ -158,10 +161,11 @@ class MicrosoftAuthService {
   }
 
   /**
-   * Start a temporary local HTTP server to catch OAuth redirect
-   * @returns {Promise<string>} Authorization code from redirect
+   * Start a temporary local HTTP server to catch OAuth redirect.
+   * BACKLOG-1121: Uses port 0 (OS-assigned) and 5-min timeout.
+   * @returns Object with codePromise (resolves to auth code) and listeningPromise (resolves to assigned port)
    */
-  startLocalServer(): Promise<string> {
+  startLocalServer(): { codePromise: Promise<string>; listeningPromise: Promise<number> } {
     // Stop any existing server before starting a new one
     // This prevents EADDRINUSE errors when user retries auth
     if (this.server) {
@@ -172,7 +176,12 @@ class MicrosoftAuthService {
       this.stopLocalServer();
     }
 
-    return new Promise((resolve, reject) => {
+    let resolveListening: (port: number) => void;
+    const listeningPromise = new Promise<number>((resolve) => {
+      resolveListening = resolve;
+    });
+
+    const codePromise = new Promise<string>((resolve, reject) => {
       // Store resolve/reject for direct resolution from navigation interception
       this.codeResolver = resolve;
       this.codeRejecter = reject;
@@ -291,23 +300,57 @@ class MicrosoftAuthService {
         }
       });
 
-      this.server.listen(3000, "localhost", () => {
+      // BACKLOG-1121: Use port 0 for OS-assigned port to avoid EADDRINUSE
+      this.server.listen(0, "localhost", () => {
+        const addr = this.server!.address();
+        const port = typeof addr === "object" && addr ? addr.port : 0;
+        // Update redirect URI with the actual assigned port
+        this.redirectUri = `http://localhost:${port}/callback`;
         logService.info(
-          "[MicrosoftAuth] Local callback server listening on http://localhost:3000",
+          `[MicrosoftAuth] Local callback server listening on http://localhost:${port}`,
           "MicrosoftAuth"
         );
+        resolveListening!(port);
       });
 
       this.server.on("error", (err: Error) => {
+        this._clearAuthTimeout();
         reject(err);
       });
+
+      // BACKLOG-1121: 5-minute timeout to prevent port leak if user abandons auth
+      this.serverTimeout = setTimeout(() => {
+        logService.warn(
+          "[MicrosoftAuth] Auth server timed out after 5 minutes — closing",
+          "MicrosoftAuth"
+        );
+        const rejecter = this.codeRejecter;
+        this.stopLocalServer();
+        if (rejecter) {
+          rejecter(new Error("OAuth authentication timed out after 5 minutes"));
+        }
+      }, MicrosoftAuthService.AUTH_TIMEOUT_MS);
     });
+
+    return { codePromise, listeningPromise };
+  }
+
+  /**
+   * Clear the auth timeout timer
+   * @private
+   */
+  private _clearAuthTimeout(): void {
+    if (this.serverTimeout) {
+      clearTimeout(this.serverTimeout);
+      this.serverTimeout = null;
+    }
   }
 
   /**
    * Stop the local HTTP server
    */
   stopLocalServer(): void {
+    this._clearAuthTimeout();
     if (this.server) {
       this.server.close();
       this.server = null;
@@ -336,7 +379,11 @@ class MicrosoftAuthService {
       .update(codeVerifier)
       .digest("base64url");
 
-    // Build authorization URL
+    // BACKLOG-1121: Start server first to get dynamic port, then build auth URL
+    const { codePromise, listeningPromise } = this.startLocalServer();
+    await listeningPromise;
+
+    // Build authorization URL with dynamically assigned redirect URI
     const params = new URLSearchParams({
       client_id: this.clientId,
       response_type: "code",
@@ -349,9 +396,6 @@ class MicrosoftAuthService {
     });
 
     const authUrl = `${this.authorizeUrl}?${params.toString()}`;
-
-    // Start local server to catch redirect
-    const codePromise = this.startLocalServer();
 
     return {
       authUrl,
@@ -384,13 +428,19 @@ class MicrosoftAuthService {
       .update(codeVerifier)
       .digest("base64url");
 
+    // Start local server to catch redirect (port 0 = OS-assigned)
+    const { codePromise, listeningPromise } = this.startLocalServer();
+
+    // Wait for the server to start listening so redirectUri has the dynamic port
+    await listeningPromise;
+
     const params = new URLSearchParams({
       client_id: this.clientId,
       response_type: "code",
       redirect_uri: this.redirectUri,
       scope: scopes.join(" "),
       response_mode: "query",
-      prompt: "select_account", // Show account picker, only consent if needed
+      prompt: "select_account",
       code_challenge: codeChallenge,
       code_challenge_method: "S256",
     });
@@ -400,7 +450,6 @@ class MicrosoftAuthService {
     }
 
     const authUrl = `${this.authorizeUrl}?${params.toString()}`;
-    const codePromise = this.startLocalServer();
 
     return {
       authUrl,

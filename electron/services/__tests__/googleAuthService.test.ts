@@ -247,7 +247,7 @@ describe("GoogleAuthService - Direct Code Resolution", () => {
   describe("resolveCodeDirectly", () => {
     it("should resolve the code promise when resolver is set", async () => {
       // Start local server to set up the resolver
-      const codePromise = googleAuthService.startLocalServer();
+      const { codePromise } = googleAuthService.startLocalServer();
 
       // Resolve directly
       googleAuthService.resolveCodeDirectly("test-auth-code");
@@ -272,7 +272,7 @@ describe("GoogleAuthService - Direct Code Resolution", () => {
   describe("rejectCodeDirectly", () => {
     it("should reject the code promise when rejecter is set", async () => {
       // Start local server to set up the rejecter
-      const codePromise = googleAuthService.startLocalServer();
+      const { codePromise } = googleAuthService.startLocalServer();
 
       // Reject directly
       googleAuthService.rejectCodeDirectly("Auth error");
@@ -285,7 +285,7 @@ describe("GoogleAuthService - Direct Code Resolution", () => {
       const stopSpy = jest.spyOn(googleAuthService, "stopLocalServer");
 
       // Start and then reject - must catch the rejected promise
-      const codePromise = googleAuthService.startLocalServer();
+      const { codePromise } = googleAuthService.startLocalServer();
       googleAuthService.rejectCodeDirectly("error");
 
       // Await the rejection to prevent unhandled promise rejection

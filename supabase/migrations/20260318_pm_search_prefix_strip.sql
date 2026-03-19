@@ -170,29 +170,34 @@ BEGIN
     v_extracted_number := (regexp_replace(p_query, '^(BACKLOG|TASK|BL|#)-?', '', 'i'))::int;
   END IF;
 
-  SELECT COALESCE(jsonb_agg(jsonb_build_object(
-    'id', i.id,
-    'title', i.title,
-    'legacy_id', i.legacy_id,
-    'item_number', i.item_number,
-    'status', i.status,
-    'type', i.type,
-    'priority', i.priority
-  )), '[]'::jsonb)
+  -- BACKLOG-1275: Use subquery to apply ORDER BY and LIMIT before aggregation
+  -- This avoids the GROUP BY error when jsonb_agg is used with ORDER BY on non-aggregated columns
+  SELECT COALESCE(jsonb_agg(sub.item_obj), '[]'::jsonb)
   INTO v_results
-  FROM pm_backlog_items i
-  WHERE i.deleted_at IS NULL
-    AND (p_exclude_id IS NULL OR i.id != p_exclude_id)
-    AND (
-      i.search_vector @@ plainto_tsquery('english', p_query)
-      OR i.title ILIKE '%' || v_safe_query || '%'
-      OR i.legacy_id ILIKE '%' || v_safe_query || '%'
-      OR i.item_number::text ILIKE '%' || v_safe_query || '%'
-      OR (p_query ~ '^\d+$' AND i.item_number = p_query::int)
-      OR (v_extracted_number IS NOT NULL AND i.item_number = v_extracted_number)
-    )
-  ORDER BY i.item_number DESC
-  LIMIT 10;
+  FROM (
+    SELECT jsonb_build_object(
+      'id', i.id,
+      'title', i.title,
+      'legacy_id', i.legacy_id,
+      'item_number', i.item_number,
+      'status', i.status,
+      'type', i.type,
+      'priority', i.priority
+    ) AS item_obj
+    FROM pm_backlog_items i
+    WHERE i.deleted_at IS NULL
+      AND (p_exclude_id IS NULL OR i.id != p_exclude_id)
+      AND (
+        i.search_vector @@ plainto_tsquery('english', p_query)
+        OR i.title ILIKE '%' || v_safe_query || '%'
+        OR i.legacy_id ILIKE '%' || v_safe_query || '%'
+        OR i.item_number::text ILIKE '%' || v_safe_query || '%'
+        OR (p_query ~ '^\d+$' AND i.item_number = p_query::int)
+        OR (v_extracted_number IS NOT NULL AND i.item_number = v_extracted_number)
+      )
+    ORDER BY i.item_number DESC
+    LIMIT 10
+  ) sub;
 
   RETURN v_results;
 END;

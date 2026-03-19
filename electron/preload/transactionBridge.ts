@@ -69,6 +69,15 @@ export const transactionBridge = {
     ipcRenderer.invoke("transactions:get-all", userId),
 
   /**
+   * BACKLOG-1124: Get count of pending auto-detected transactions.
+   * Uses a server-side SQL COUNT query instead of fetching all transactions.
+   * @param userId - User ID to count pending transactions for
+   * @returns Count of pending transactions
+   */
+  getPendingCount: (userId: string) =>
+    ipcRenderer.invoke("transactions:get-pending-count", userId),
+
+  /**
    * Creates a new manual transaction
    * @param userId - User ID creating the transaction
    * @param transactionData - Transaction details (address, type, status, dates, etc.)

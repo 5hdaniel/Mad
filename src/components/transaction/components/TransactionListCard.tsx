@@ -76,10 +76,9 @@ export interface TransactionListCardProps {
 // ============================================
 
 /**
- * TransactionListCard
- * Renders a single transaction card with selection, badges, and quick export
+ * TransactionListCard - BACKLOG-1096: Wrapped with React.memo
  */
-export function TransactionListCard({
+const TransactionListCardInner = function TransactionListCard({
   transaction,
   selectionMode,
   isSelected,
@@ -272,5 +271,7 @@ export function TransactionListCard({
     </div>
   );
 }
+
+export const TransactionListCard = React.memo(TransactionListCardInner);
 
 export default TransactionListCard;

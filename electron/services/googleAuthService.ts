@@ -90,9 +90,12 @@ class GoogleAuthService {
   private initialized: boolean = false;
   private redirectUri: string = "http://localhost:3001/callback"; // Different port than Microsoft
   private server: http.Server | null = null;
+  private serverTimeout: NodeJS.Timeout | null = null;
   // Store resolve/reject functions to allow direct code resolution from navigation interception
   private codeResolver: ((code: string) => void) | null = null;
   private codeRejecter: ((error: Error) => void) | null = null;
+  /** BACKLOG-1121: Auth server timeout (5 minutes) to prevent port leak */
+  private static readonly AUTH_TIMEOUT_MS = 5 * 60 * 1000;
 
   /**
    * Initialize Google OAuth2 configuration (PKCE + client_secret)
@@ -195,10 +198,11 @@ class GoogleAuthService {
   }
 
   /**
-   * Start a temporary local HTTP server to catch OAuth redirect
-   * @returns {Promise<string>} Authorization code from redirect
+   * Start a temporary local HTTP server to catch OAuth redirect.
+   * BACKLOG-1121: Uses port 0 (OS-assigned) and 5-min timeout.
+   * @returns Object with codePromise and listeningPromise (resolves to assigned port)
    */
-  startLocalServer(): Promise<string> {
+  startLocalServer(): { codePromise: Promise<string>; listeningPromise: Promise<number> } {
     // Stop any existing server before starting a new one
     // This prevents EADDRINUSE errors when user retries auth
     if (this.server) {
@@ -209,7 +213,12 @@ class GoogleAuthService {
       this.stopLocalServer();
     }
 
-    return new Promise((resolve, reject) => {
+    let resolveListening: (port: number) => void;
+    const listeningPromise = new Promise<number>((resolve) => {
+      resolveListening = resolve;
+    });
+
+    const codePromise = new Promise<string>((resolve, reject) => {
       // Store resolve/reject for direct resolution from navigation interception
       this.codeResolver = resolve;
       this.codeRejecter = reject;
@@ -256,17 +265,39 @@ class GoogleAuthService {
         }
       });
 
-      this.server.listen(3001, "localhost", () => {
+      // BACKLOG-1121: Use port 0 for OS-assigned port to avoid EADDRINUSE
+      this.server.listen(0, "localhost", () => {
+        const addr = this.server!.address();
+        const port = typeof addr === "object" && addr ? addr.port : 0;
+        // Update redirect URI with the actual assigned port
+        this.redirectUri = `http://localhost:${port}/callback`;
         logService.info(
-          "[GoogleAuth] Local callback server listening on http://localhost:3001",
+          `[GoogleAuth] Local callback server listening on http://localhost:${port}`,
           "GoogleAuth",
         );
+        resolveListening!(port);
       });
 
       this.server.on("error", (err: Error) => {
+        this._clearAuthTimeout();
         reject(err);
       });
+
+      // BACKLOG-1121: 5-minute timeout to prevent port leak if user abandons auth
+      this.serverTimeout = setTimeout(() => {
+        logService.warn(
+          "[GoogleAuth] Auth server timed out after 5 minutes — closing",
+          "GoogleAuth",
+        );
+        const rejecter = this.codeRejecter;
+        this.stopLocalServer();
+        if (rejecter) {
+          rejecter(new Error("OAuth authentication timed out after 5 minutes"));
+        }
+      }, GoogleAuthService.AUTH_TIMEOUT_MS);
     });
+
+    return { codePromise, listeningPromise };
   }
 
   /**
@@ -349,9 +380,21 @@ class GoogleAuthService {
   }
 
   /**
-   * Stop the local HTTP server
+   * Clear the auth timeout timer
+   * @private
+   */
+  private _clearAuthTimeout(): void {
+    if (this.serverTimeout) {
+      clearTimeout(this.serverTimeout);
+      this.serverTimeout = null;
+    }
+  }
+
+  /**
+   * Stop the local HTTP server and clear timeout
    */
   stopLocalServer(): void {
+    this._clearAuthTimeout();
     if (this.server) {
       this.server.close();
       this.server = null;
@@ -379,17 +422,18 @@ class GoogleAuthService {
       // Generate PKCE challenge
       const { codeVerifier, codeChallenge } = this._generatePKCE();
 
-      // Start local server to catch redirect
-      const codePromise = this.startLocalServer();
+      // BACKLOG-1121: Start server first to get dynamic port, then build auth URL
+      const { codePromise, listeningPromise } = this.startLocalServer();
+      await listeningPromise;
 
-      // Build authorization URL manually with PKCE parameters
+      // Build authorization URL with dynamically assigned redirect URI
       const params = new URLSearchParams({
         client_id: this.clientId,
         response_type: "code",
         redirect_uri: this.redirectUri,
         scope: scopes.join(" "),
         access_type: "offline",
-        prompt: "select_account", // Show account picker, only consent if needed
+        prompt: "select_account",
         code_challenge: codeChallenge,
         code_challenge_method: "S256",
       });
@@ -499,10 +543,11 @@ class GoogleAuthService {
       // Generate PKCE challenge
       const { codeVerifier, codeChallenge } = this._generatePKCE();
 
-      // Start local server to catch redirect
-      const codePromise = this.startLocalServer();
+      // BACKLOG-1121: Start server first to get dynamic port, then build auth URL
+      const { codePromise, listeningPromise } = this.startLocalServer();
+      await listeningPromise;
 
-      // Build authorization URL manually with PKCE parameters
+      // Build authorization URL with dynamically assigned redirect URI
       const params = new URLSearchParams({
         client_id: this.clientId,
         response_type: "code",
