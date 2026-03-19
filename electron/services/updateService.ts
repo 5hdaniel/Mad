@@ -3,6 +3,7 @@
  * Manages checking, downloading, and installing application updates
  */
 
+import * as Sentry from "@sentry/electron/main";
 import logService from "./logService";
 
 /**
@@ -57,6 +58,52 @@ export interface UpdateConfig {
  * Update event callback type
  */
 export type UpdateEventCallback = (data?: unknown) => void;
+
+/**
+ * Classified failure reasons for auto-update errors
+ */
+export type UpdateFailureReason =
+  | "network_error"
+  | "download_failed"
+  | "install_failed"
+  | "insufficient_storage"
+  | "permissions_error"
+  | "unknown";
+
+/**
+ * Classify an update error into a specific failure reason
+ */
+export function classifyUpdateError(error: unknown): UpdateFailureReason {
+  const message =
+    error instanceof Error
+      ? error.message.toLowerCase()
+      : String(error).toLowerCase();
+
+  if (
+    message.includes("enospc") ||
+    message.includes("disk") ||
+    message.includes("space")
+  ) {
+    return "insufficient_storage";
+  }
+  if (message.includes("eacces") || message.includes("permission")) {
+    return "permissions_error";
+  }
+  if (
+    message.includes("network") ||
+    message.includes("timeout") ||
+    message.includes("econnrefused")
+  ) {
+    return "network_error";
+  }
+  if (message.includes("download")) {
+    return "download_failed";
+  }
+  if (message.includes("install")) {
+    return "install_failed";
+  }
+  return "unknown";
+}
 
 /**
  * Update Service Class
@@ -119,12 +166,33 @@ export class UpdateService {
     this.status = "checking";
     this.emit("checking-for-update");
 
+    Sentry.addBreadcrumb({
+      category: "update.check",
+      message: `Checking for updates (channel: ${this.config.channel}, current: ${this.currentVersion})`,
+      level: "info",
+      data: {
+        channel: this.config.channel,
+        currentVersion: this.currentVersion,
+      },
+    });
+
     try {
       // Simulate update check (in real implementation, this would call an API)
       await this.simulateUpdateCheck();
 
       if (this.availableUpdate) {
         this.status = "available";
+
+        Sentry.addBreadcrumb({
+          category: "update.available",
+          message: `Update available: ${this.availableUpdate.version}`,
+          level: "info",
+          data: {
+            version: this.availableUpdate.version,
+            size: this.availableUpdate.size,
+          },
+        });
+
         this.emit("update-available", this.availableUpdate);
 
         if (this.config.autoDownload) {
@@ -134,11 +202,34 @@ export class UpdateService {
         return this.availableUpdate;
       } else {
         this.status = "not-available";
+
+        Sentry.addBreadcrumb({
+          category: "update.status",
+          message: "No update available",
+          level: "info",
+        });
+
         this.emit("update-not-available");
         return null;
       }
     } catch (error) {
       this.status = "error";
+      const reason = classifyUpdateError(error);
+
+      Sentry.captureMessage("Auto-update check failed", {
+        level: "error",
+        tags: {
+          component: "auto_update",
+          failureReason: reason,
+          currentVersion: this.currentVersion,
+        },
+        extra: {
+          channel: this.config.channel,
+          errorMessage:
+            error instanceof Error ? error.message : String(error),
+        },
+      });
+
       this.emit("error", error);
       throw error;
     }
@@ -165,6 +256,17 @@ export class UpdateService {
     }
 
     this.status = "downloading";
+
+    Sentry.addBreadcrumb({
+      category: "update.download",
+      message: `Downloading update ${this.availableUpdate.version}`,
+      level: "info",
+      data: {
+        version: this.availableUpdate.version,
+        size: this.availableUpdate.size,
+      },
+    });
+
     this.emit("download-started");
 
     try {
@@ -172,6 +274,13 @@ export class UpdateService {
       await this.simulateDownload();
 
       this.status = "downloaded";
+
+      Sentry.addBreadcrumb({
+        category: "update.download",
+        message: "Download completed",
+        level: "info",
+      });
+
       this.emit("download-completed");
 
       if (this.config.autoInstall) {
@@ -179,6 +288,22 @@ export class UpdateService {
       }
     } catch (error) {
       this.status = "error";
+      const reason = classifyUpdateError(error);
+
+      Sentry.captureMessage("Auto-update download failed", {
+        level: "error",
+        tags: {
+          component: "auto_update",
+          failureReason: reason,
+          currentVersion: this.currentVersion,
+        },
+        extra: {
+          version: this.availableUpdate.version,
+          errorMessage:
+            error instanceof Error ? error.message : String(error),
+        },
+      });
+
       this.emit("error", error);
       throw error;
     }
@@ -206,6 +331,16 @@ export class UpdateService {
     if (this.status !== "downloaded") {
       throw new Error("Update must be downloaded before installing");
     }
+
+    Sentry.addBreadcrumb({
+      category: "update.install",
+      message: "Installing update",
+      level: "info",
+      data: {
+        version: this.availableUpdate?.version,
+        currentVersion: this.currentVersion,
+      },
+    });
 
     this.emit("before-quit-for-update");
 
