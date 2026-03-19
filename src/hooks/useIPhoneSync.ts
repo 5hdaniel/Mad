@@ -4,6 +4,7 @@ import type {
   BackupProgress,
   SyncStatus,
   UseIPhoneSyncReturn,
+  UserFacingError,
 } from "../types/iphone";
 import logger from '../utils/logger';
 import { syncOrchestrator } from '../services/SyncOrchestratorService';
@@ -50,6 +51,8 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
   const [progress, setProgress] = useState<BackupProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // TASK-2276: Structured error for rich UI display
+  const [userError, setUserError] = useState<UserFacingError | null>(null);
   const [needsPassword, setNeedsPassword] = useState(false);
   const [pendingPassword, setPendingPassword] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
@@ -298,6 +301,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       }
 
       // Sync error events
+      // TASK-2276: Handle enriched error payload with optional userError field
       if (syncApi.onError) {
         const unsub = syncApi.onError((err) => {
           // Ignore errors from a cancelled sync — cancelSync already reset state
@@ -308,6 +312,15 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
           logger.error("[useIPhoneSync] Sync error:", err.message);
           setSyncStatus("error");
           setError(err.message);
+
+          // TASK-2276: Extract structured error for rich UI display
+          const enrichedErr = err as { message: string; userError?: UserFacingError };
+          if (enrichedErr.userError) {
+            logger.info("[useIPhoneSync] Received structured user error:", enrichedErr.userError.code);
+            setUserError(enrichedErr.userError);
+          } else {
+            setUserError(null);
+          }
 
           // TASK-2119: Notify orchestrator of error
           syncOrchestrator.completeExternalSync('iphone', { status: 'error', error: err.message });
@@ -543,6 +556,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
 
     setSyncStatus("syncing");
     setError(null);
+    setUserError(null); // TASK-2276: Clear structured error on new sync
     setNeedsPassword(false);
     setProgress({
       phase: "preparing",
@@ -678,6 +692,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     setProgress(null);
     setNeedsPassword(false);
     setError(null);
+    setUserError(null); // TASK-2276: Clear structured error on cancel
     setPendingPassword(null);
     setSyncLocked(false);
     setLockReason(null);
@@ -692,6 +707,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     setSyncStatus("idle");
     setProgress(null);
     setError(null);
+    setUserError(null); // TASK-2276: Clear structured error on dismiss
   }, []);
 
   return {
@@ -700,6 +716,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     syncStatus,
     progress,
     error,
+    userError, // TASK-2276: Structured error for rich UI display
     needsPassword,
     lastSyncTime,
     isWaitingForPasscode,
