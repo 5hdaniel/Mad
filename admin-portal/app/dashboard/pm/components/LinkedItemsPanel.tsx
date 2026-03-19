@@ -27,20 +27,39 @@ interface LinkedItemsPanelProps {
   onUpdate: () => void;
 }
 
-const LINK_TYPE_LABELS: Record<LinkType, string> = {
+/**
+ * Display-level link type that splits 'parent_child' into separate
+ * 'parent' and 'child' options so users can choose directionality.
+ */
+type DisplayLinkType = Exclude<LinkType, 'parent_child'> | 'parent' | 'child';
+
+const DISPLAY_LINK_TYPE_LABELS: Record<DisplayLinkType, string> = {
   blocked_by: 'Blocked By',
   blocks: 'Blocks',
   related_to: 'Related',
-  parent_child: 'Parent/Child',
+  parent: 'Parent of',
+  child: 'Child of',
   duplicates: 'Duplicates',
 };
+
+/**
+ * Resolve the display label for a stored link, taking direction into account
+ * so that parent_child links render as "Parent of" or "Child of".
+ */
+function getLinkDisplayLabel(link: PmTaskLink): string {
+  if (link.link_type === 'parent_child') {
+    // outgoing = this item is the source (parent), incoming = this item is the child
+    return link.direction === 'outgoing' ? 'Parent of' : 'Child of';
+  }
+  return DISPLAY_LINK_TYPE_LABELS[link.link_type] ?? link.link_type;
+}
 
 export function LinkedItemsPanel({ itemId, links, onUpdate }: LinkedItemsPanelProps) {
   const [expanded, setExpanded] = useState(true);
 
   // Link search state
   const [showSearch, setShowSearch] = useState(false);
-  const [linkType, setLinkType] = useState<LinkType>('related_to');
+  const [linkType, setLinkType] = useState<DisplayLinkType>('related_to');
   const [linking, setLinking] = useState(false);
   const [unlinking, setUnlinking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +80,15 @@ export function LinkedItemsPanel({ itemId, links, onUpdate }: LinkedItemsPanelPr
     setLinking(true);
     setError(null);
     try {
-      await linkItems(itemId, targetItemId, linkType);
+      if (linkType === 'parent') {
+        // "Parent of" => current item is parent (source), target is child
+        await linkItems(itemId, targetItemId, 'parent_child');
+      } else if (linkType === 'child') {
+        // "Child of" => target item is parent (source), current item is child
+        await linkItems(targetItemId, itemId, 'parent_child');
+      } else {
+        await linkItems(itemId, targetItemId, linkType);
+      }
       resetSearch();
       setShowSearch(false);
       onUpdate();
@@ -114,8 +141,7 @@ export function LinkedItemsPanel({ itemId, links, onUpdate }: LinkedItemsPanelPr
               {link.item_status.replace('_', ' ')}
             </span>
             <span className="text-xs text-gray-400">
-              {LINK_TYPE_LABELS[link.link_type]}
-              {link.direction === 'incoming' ? ' (incoming)' : ''}
+              {getLinkDisplayLabel(link)}
             </span>
           </div>
         </div>
@@ -189,10 +215,10 @@ export function LinkedItemsPanel({ itemId, links, onUpdate }: LinkedItemsPanelPr
 
               <select
                 value={linkType}
-                onChange={(e) => setLinkType(e.target.value as LinkType)}
+                onChange={(e) => setLinkType(e.target.value as DisplayLinkType)}
                 className="w-full text-xs text-gray-900 border border-gray-300 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {(Object.entries(LINK_TYPE_LABELS) as [LinkType, string][]).map(
+                {(Object.entries(DISPLAY_LINK_TYPE_LABELS) as [DisplayLinkType, string][]).map(
                   ([value, label]) => (
                     <option key={value} value={value}>
                       Type: {label}
