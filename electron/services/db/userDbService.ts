@@ -8,6 +8,7 @@ import type { User, NewUser, OAuthProvider } from "../../types";
 import { DatabaseError, NotFoundError } from "../../types";
 import { dbGet, dbRun } from "./core/dbConnection";
 import { validateFields } from "../../utils/sqlFieldWhitelist";
+import { UserSchema, validateResponse } from "../../schemas";
 
 /**
  * Create a new user
@@ -60,7 +61,8 @@ export async function createUser(userData: NewUser & { id?: string }): Promise<U
 export async function getUserById(userId: string): Promise<User | null> {
   const sql = "SELECT * FROM users_local WHERE id = ?";
   const user = dbGet<User>(sql, [userId]);
-  return user || null;
+  if (!user) return null;
+  return validateResponse(UserSchema, user, 'userDbService.getUserById') as User;
 }
 
 /**
