@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Users, MoreVertical, ExternalLink, Ban, CheckCircle, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { suspendUser, unsuspendUser } from '@/lib/admin-queries';
 import { formatDate } from '@/lib/format';
-import type { MemberLicenseStatus } from '@keepr/shared';
+type MemberLicenseStatus = 'pending' | 'active' | 'expired' | 'suspended';
 
 export interface MemberRow {
   user_id: string;

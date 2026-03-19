@@ -12,6 +12,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import { Plus } from 'lucide-react';
 import { listTickets } from '@/lib/support-queries';
 import type {
@@ -21,8 +22,9 @@ import type {
 } from '@/lib/support-types';
 import { StatsCards } from './components/StatsCards';
 import { TicketFilters } from './components/TicketFilters';
-import { TicketTable } from './components/TicketTable';
 import { CreateTicketDialog } from './components/CreateTicketDialog';
+
+const TicketTable = dynamic(() => import('./components/TicketTable').then(m => m.TicketTable), { ssr: false });
 import { SearchBar } from './components/SearchBar';
 
 export default function SupportPage() {
