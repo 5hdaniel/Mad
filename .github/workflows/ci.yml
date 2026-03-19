@@ -126,6 +126,17 @@ jobs:
         env:
           NODE_OPTIONS: "--max-old-space-size=4096"
 
+      # broker-portal: No test infrastructure (no jest, no test files, no jest config).
+      # Re-add this step when broker-portal has tests.
+
+      - name: Run admin-portal tests
+        working-directory: admin-portal
+        run: |
+          npm ci
+          npx vitest run
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
+
       - name: Upload coverage to Codecov
         if: matrix.os == 'macos-latest' && matrix.node-version == '20.x'
         uses: codecov/codecov-action@ab904c41d6ece82784817410c45d8b8c02684457 # v3
