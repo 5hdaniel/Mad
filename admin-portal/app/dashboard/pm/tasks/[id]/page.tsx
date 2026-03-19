@@ -164,7 +164,7 @@ function TaskDetailContent() {
     );
   }
 
-  const { item, comments, events, links, labels, children } = detail;
+  const { item, comments, events, links, labels, children, parent } = detail;
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -185,6 +185,17 @@ function TaskDetailContent() {
                 <span className="text-sm text-gray-500 font-mono">
                   #{item.item_number}
                 </span>
+                {parent && (
+                  <span className="text-xs text-gray-400">
+                    child of{' '}
+                    <Link
+                      href={`/dashboard/pm/tasks/${parent.id}`}
+                      className="text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      #{parent.item_number} {parent.title}
+                    </Link>
+                  </span>
+                )}
               </div>
               <h1 className="text-xl font-bold text-gray-900">
                 <InlineEditText
