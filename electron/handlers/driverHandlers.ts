@@ -14,7 +14,7 @@ import {
   getITunesWebUrl,
   checkForDriverUpdate,
   downloadAppleDrivers,
-} from "./services/appleDriverService";
+} from "../services/appleDriverService";
 
 /**
  * Register driver-related IPC handlers

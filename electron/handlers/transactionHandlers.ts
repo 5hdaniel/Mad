@@ -5,12 +5,12 @@
 // ============================================
 
 import type { BrowserWindow } from "electron";
-import { registerTransactionCrudHandlers } from "./handlers/transactionCrudHandlers";
-import { registerTransactionExportHandlers, cleanupTransactionHandlers } from "./handlers/transactionExportHandlers";
-import { registerEmailSyncHandlers } from "./handlers/emailSyncHandlers";
-import { registerEmailLinkingHandlers } from "./handlers/emailLinkingHandlers";
-import { registerEmailAutoLinkHandlers } from "./handlers/emailAutoLinkHandlers";
-import { registerAttachmentHandlers } from "./handlers/attachmentHandlers";
+import { registerTransactionCrudHandlers } from "./transactionCrudHandlers";
+import { registerTransactionExportHandlers, cleanupTransactionHandlers } from "./transactionExportHandlers";
+import { registerEmailSyncHandlers } from "./emailSyncHandlers";
+import { registerEmailLinkingHandlers } from "./emailLinkingHandlers";
+import { registerEmailAutoLinkHandlers } from "./emailAutoLinkHandlers";
+import { registerAttachmentHandlers } from "./attachmentHandlers";
 
 /**
  * Register all transaction-related IPC handlers (delegates to domain files).

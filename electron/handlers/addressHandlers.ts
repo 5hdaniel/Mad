@@ -7,16 +7,16 @@ import { ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 
 // Services
-import logService from "./services/logService";
+import logService from "../services/logService";
 const addressVerificationService =
-  require("./services/addressVerificationService").default;
+  require("../services/addressVerificationService").default;
 
 // Import validation utilities
 import {
   ValidationError,
   validateString,
   validateSessionToken,
-} from "./utils/validation";
+} from "../utils/validation";
 
 // Type definitions
 interface AddressResponse {

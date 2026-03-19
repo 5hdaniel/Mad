@@ -4,9 +4,9 @@
 // This file provides backwards compatibility for existing tests.
 // ============================================
 
-import { registerDiagnosticHandlers } from "./handlers/diagnosticHandlers";
-import { registerUserSettingsHandlers } from "./handlers/userSettingsHandlers";
-import { registerSystemHandlers as registerSystemCoreHandlers } from "./handlers/systemHandlers";
+import { registerDiagnosticHandlers } from "./diagnosticHandlers";
+import { registerUserSettingsHandlers } from "./userSettingsHandlers";
+import { registerSystemHandlers as registerSystemCoreHandlers } from "./systemHandlers";
 
 /**
  * Register all system-related IPC handlers (delegates to domain files).

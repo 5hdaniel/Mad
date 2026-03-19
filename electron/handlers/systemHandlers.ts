@@ -19,7 +19,7 @@ const macOSPermissionHelper = require("../services/macOSPermissionHelper").defau
 import { databaseEncryptionService } from "../services/databaseEncryptionService";
 import databaseService from "../services/databaseService";
 import supabaseService from "../services/supabaseService";
-import { initializeDatabase } from "../auth-handlers";
+import { initializeDatabase } from "./authHandlers";
 import { getAndClearPendingDeepLinkUser } from "../main";
 import { initializePool } from "../workers/contactWorkerPool";
 import { getDbPath, getEncryptionKey } from "../services/db/core/dbConnection";

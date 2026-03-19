@@ -22,7 +22,7 @@ import supabaseService from "../services/supabaseService";
 import auditService from "../services/auditService";
 import logService from "../services/logService";
 import sessionService from "../services/sessionService";
-import { setSyncUserId } from "../sync-handlers";
+import { setSyncUserId } from "./syncHandlers";
 
 // Import validation utilities
 import { getValidUserId } from "../utils/userIdHelper";

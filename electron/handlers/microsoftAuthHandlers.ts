@@ -20,7 +20,7 @@ import sessionService from "../services/sessionService";
 import rateLimitService from "../services/rateLimitService";
 import auditService from "../services/auditService";
 import logService from "../services/logService";
-import { setSyncUserId } from "../sync-handlers";
+import { setSyncUserId } from "./syncHandlers";
 
 // Import validation utilities
 import { getValidUserId } from "../utils/userIdHelper";

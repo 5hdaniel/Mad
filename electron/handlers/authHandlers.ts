@@ -13,16 +13,16 @@
 import type { BrowserWindow } from "electron";
 
 // Import services for initializeDatabase
-import databaseService from "./services/databaseService";
-import supabaseService from "./services/supabaseService";
-import auditService from "./services/auditService";
-import logService from "./services/logService";
+import databaseService from "../services/databaseService";
+import supabaseService from "../services/supabaseService";
+import auditService from "../services/auditService";
+import logService from "../services/logService";
 
 // Import handler registrations
-import { registerGoogleAuthHandlers } from "./handlers/googleAuthHandlers";
-import { registerMicrosoftAuthHandlers } from "./handlers/microsoftAuthHandlers";
-import { registerSessionHandlers } from "./handlers/sessionHandlers";
-import { registerSharedAuthHandlers } from "./handlers/sharedAuthHandlers";
+import { registerGoogleAuthHandlers } from "./googleAuthHandlers";
+import { registerMicrosoftAuthHandlers } from "./microsoftAuthHandlers";
+import { registerSessionHandlers } from "./sessionHandlers";
+import { registerSharedAuthHandlers } from "./sharedAuthHandlers";
 
 /**
  * Initialize database and audit service

@@ -5,12 +5,12 @@
 
 import { ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
-import sessionService from "./services/sessionService";
-import { getUserById } from "./services/db/userDbService";
-import { dbRun } from "./services/db/core/dbConnection";
-import logService from "./services/logService";
-import supabaseService from "./services/supabaseService";
-import type { LicenseType, UserLicense } from "./types/models";
+import sessionService from "../services/sessionService";
+import { getUserById } from "../services/db/userDbService";
+import { dbRun } from "../services/db/core/dbConnection";
+import logService from "../services/logService";
+import supabaseService from "../services/supabaseService";
+import type { LicenseType, UserLicense } from "../types/models";
 
 // SPRINT-062: License validation service imports
 import {
@@ -19,7 +19,7 @@ import {
   incrementTransactionCount,
   clearLicenseCache,
   canPerformAction,
-} from "./services/licenseService";
+} from "../services/licenseService";
 import {
   registerDevice,
   getUserDevices,
@@ -28,8 +28,8 @@ import {
   getDeviceId,
   isDeviceRegistered,
   updateDeviceHeartbeat,
-} from "./services/deviceService";
-import type { LicenseValidationResult } from "./types/license";
+} from "../services/deviceService";
+import type { LicenseValidationResult } from "../types/license";
 
 // Type definitions
 interface LicenseResponse {

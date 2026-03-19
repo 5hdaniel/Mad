@@ -9,11 +9,11 @@
 
 import { ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
-import sessionService from "./services/sessionService";
-import supabaseService from "./services/supabaseService";
-import featureGateService from "./services/featureGateService";
-import type { FeatureAccess } from "./services/featureGateService";
-import logService from "./services/logService";
+import sessionService from "../services/sessionService";
+import supabaseService from "../services/supabaseService";
+import featureGateService from "../services/featureGateService";
+import type { FeatureAccess } from "../services/featureGateService";
+import logService from "../services/logService";
 
 /**
  * Resolve the organization ID for the current user.

@@ -147,7 +147,7 @@ jest.mock("../services/db/externalContactDbService", () => ({
 }));
 
 // Import after mocks are set up
-import { registerContactHandlers } from "../contact-handlers";
+import { registerContactHandlers } from "../handlers/contactHandlers";
 import databaseService from "../services/databaseService";
 import { getContactNames } from "../services/contactsService";
 import auditService from "../services/auditService";
