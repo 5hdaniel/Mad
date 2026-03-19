@@ -1,6 +1,5 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../contexts/AuthContext";
-import type { Transaction } from "../types";
 
 interface UsePendingTransactionCountResult {
   pendingCount: number;
@@ -12,25 +11,24 @@ interface UsePendingTransactionCountResult {
 /**
  * Hook to fetch and track the count of pending auto-detected transactions.
  *
- * Uses the transactions.getAll API and filters client-side for
- * detection_status === 'pending'. This is acceptable for dashboard
- * display purposes where we only need the count.
+ * BACKLOG-1124: Uses the dedicated getPendingCount IPC handler that runs
+ * a SQL COUNT query server-side, instead of fetching all transactions
+ * and filtering client-side (which serialized the entire array over IPC).
  *
  * The hook handles:
  * - Initial fetch on mount (when user is authenticated)
- * - Memoization of the pending count
  * - Loading and error states
  * - Refetch capability for manual refresh
  */
 export function usePendingTransactionCount(): UsePendingTransactionCountResult {
   const { currentUser } = useAuth();
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [pendingCount, setPendingCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchTransactions = useCallback(async () => {
+  const fetchPendingCount = useCallback(async () => {
     if (!currentUser?.id) {
-      setTransactions([]);
+      setPendingCount(0);
       return;
     }
 
@@ -38,17 +36,17 @@ export function usePendingTransactionCount(): UsePendingTransactionCountResult {
     setError(null);
 
     try {
-      const result = await window.api.transactions.getAll(currentUser.id);
-      if (result.success && result.transactions) {
-        setTransactions(result.transactions);
+      const result = await window.api.transactions.getPendingCount(currentUser.id);
+      if (result.success && result.count !== undefined) {
+        setPendingCount(result.count);
       } else {
-        setError(result.error || "Failed to fetch transactions");
-        setTransactions([]);
+        setError(result.error || "Failed to fetch pending count");
+        setPendingCount(0);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       setError(message);
-      setTransactions([]);
+      setPendingCount(0);
     } finally {
       setIsLoading(false);
     }
@@ -57,20 +55,15 @@ export function usePendingTransactionCount(): UsePendingTransactionCountResult {
   // Fetch on mount and when user changes
   useEffect(() => {
     if (currentUser?.id) {
-      fetchTransactions();
+      fetchPendingCount();
     }
-  }, [currentUser?.id, fetchTransactions]);
-
-  // Memoize the pending count calculation
-  const pendingCount = useMemo(() => {
-    return transactions.filter((t) => t.detection_status === "pending").length;
-  }, [transactions]);
+  }, [currentUser?.id, fetchPendingCount]);
 
   return {
     pendingCount,
     isLoading,
     error,
-    refetch: fetchTransactions,
+    refetch: fetchPendingCount,
   };
 }
 

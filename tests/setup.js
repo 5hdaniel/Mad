@@ -48,6 +48,7 @@ if (typeof window !== 'undefined') {
     },
     transactions: {
       getAll: jest.fn(),
+      getPendingCount: jest.fn(),
       create: jest.fn(),
       createAudited: jest.fn(),
       update: jest.fn(),

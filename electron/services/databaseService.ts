@@ -1240,6 +1240,13 @@ class DatabaseService implements IDatabaseService {
     return transactionDb.getTransactions(filters);
   }
 
+  /**
+   * BACKLOG-1124: Get count of pending auto-detected transactions using SQL COUNT.
+   */
+  getPendingTransactionCount(userId: string): number {
+    return transactionDb.getPendingTransactionCount(userId);
+  }
+
   async getTransactionById(transactionId: string): Promise<Transaction | null> {
     return transactionDb.getTransactionById(transactionId);
   }

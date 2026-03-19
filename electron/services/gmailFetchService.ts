@@ -441,7 +441,7 @@ class GmailFetchService {
       bodyPlain: bodyPlainForHash,
     });
 
-    return {
+    const parsed: ParsedEmail = {
       id: message.id || "",
       threadId: message.threadId || "",
       subject: subject,
@@ -461,6 +461,13 @@ class GmailFetchService {
       messageIdHeader: extractMessageIdHeader(headers),
       contentHash,
     };
+
+    // BACKLOG-1125: Clear raw message reference after parsing to reduce memory.
+    // During sync of 500+ emails, keeping the full API response doubles usage.
+    // The raw field is typed as required so we set it to an empty object.
+    parsed.raw = {} as gmail_v1.Schema$Message;
+
+    return parsed;
   }
 
   /**

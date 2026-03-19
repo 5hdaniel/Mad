@@ -254,7 +254,7 @@ describe("MicrosoftAuthService - Direct Code Resolution", () => {
   describe("resolveCodeDirectly", () => {
     it("should resolve the code promise when resolver is set", async () => {
       // Start local server to set up the resolver
-      const codePromise = microsoftAuthService.startLocalServer();
+      const { codePromise } = microsoftAuthService.startLocalServer();
 
       // Resolve directly
       microsoftAuthService.resolveCodeDirectly("test-auth-code");
@@ -279,7 +279,7 @@ describe("MicrosoftAuthService - Direct Code Resolution", () => {
   describe("rejectCodeDirectly", () => {
     it("should reject the code promise when rejecter is set", async () => {
       // Start local server to set up the rejecter
-      const codePromise = microsoftAuthService.startLocalServer();
+      const { codePromise } = microsoftAuthService.startLocalServer();
 
       // Reject directly
       microsoftAuthService.rejectCodeDirectly("Auth error");
@@ -292,7 +292,7 @@ describe("MicrosoftAuthService - Direct Code Resolution", () => {
       const stopSpy = jest.spyOn(microsoftAuthService, "stopLocalServer");
 
       // Start and then reject - must catch the rejected promise
-      const codePromise = microsoftAuthService.startLocalServer();
+      const { codePromise } = microsoftAuthService.startLocalServer();
       microsoftAuthService.rejectCodeDirectly("error");
 
       // Await the rejection to prevent unhandled promise rejection
