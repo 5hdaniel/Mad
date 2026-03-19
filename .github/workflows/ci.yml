@@ -126,13 +126,8 @@ jobs:
         env:
           NODE_OPTIONS: "--max-old-space-size=4096"
 
-      - name: Run broker-portal tests
-        working-directory: broker-portal
-        run: |
-          npm ci
-          npx jest --silent --forceExit
-        env:
-          NODE_OPTIONS: "--max-old-space-size=4096"
+      # broker-portal: No test infrastructure (no jest, no test files, no jest config).
+      # Re-add this step when broker-portal has tests.
 
       - name: Run admin-portal tests
         working-directory: admin-portal
