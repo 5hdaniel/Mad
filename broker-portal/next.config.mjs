@@ -6,7 +6,7 @@ const nextConfig = {
   reactStrictMode: true,
 
   // Transpile shared types from parent directory
-  transpilePackages: ['@shared'],
+  transpilePackages: ['@shared', '@keepr/shared'],
 
   async headers() {
     const cspDirectives = [

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Users, MoreVertical, ExternalLink, Ban, CheckCircle, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { suspendUser, unsuspendUser } from '@/lib/admin-queries';
 import { formatDate } from '@/lib/format';
+import type { MemberLicenseStatus } from '@keepr/shared';
 
 export interface MemberRow {
   user_id: string;
@@ -37,7 +38,7 @@ function getRoleBadgeColor(role: string): string {
   }
 }
 
-function LicenseStatusBadge({ status }: { status: string | null }) {
+function LicenseStatusBadge({ status }: { status: MemberLicenseStatus | string | null }) {
   const statusText = status || 'none';
   const colorMap: Record<string, string> = {
     active: 'bg-success-50 text-success-600',

@@ -11,7 +11,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import UserActionsDropdown from './UserActionsDropdown';
 import { ROLE_LABELS, LICENSE_STATUS_LABELS } from '@/lib/types/users';
-import type { OrganizationMember, Role, MemberLicenseStatus } from '@/lib/types/users';
+import type { MemberLicenseStatus } from '@keepr/shared';
+import type { OrganizationMember, Role } from '@/lib/types/users';
 import { formatUserDisplayName, getUserInitials } from '@/lib/utils/userDisplay';
 import { formatDate } from '@/lib/utils';
 

@@ -23,7 +23,9 @@
     "paths": {
       "@/*": ["src/*"],
       "@electron/*": ["electron/*"],
-      "@types/*": ["types/*"]
+      "@types/*": ["types/*"],
+      "@keepr/shared": ["packages/shared/src"],
+      "@keepr/shared/*": ["packages/shared/src/*"]
     },
 
     // Type checking (strict mode enabled - Sprint 3)
