@@ -14,6 +14,7 @@ import fs from "fs";
 import https from "https";
 import { app } from "electron";
 import log from "electron-log";
+import * as Sentry from "@sentry/electron/main";
 
 const execAsync = promisify(exec);
 
@@ -52,6 +53,96 @@ export interface DriverInstallResult {
 }
 
 /**
+ * Comprehensive driver diagnostics for display in Settings UI.
+ * Consumed by TASK-2277 (Sync Tools UI).
+ */
+export interface DriverDiagnostics {
+  isInstalled: boolean;
+  version: string | null;
+  serviceRunning: boolean;
+  bundledDriverAvailable: boolean;
+  lastError: string | null;
+  lastCheckTimestamp: string;
+}
+
+/** Classification of driver install failure reasons */
+export type DriverFailureReason =
+  | "insufficient_storage"
+  | "permissions_denied"
+  | "network_error"
+  | "extraction_failed"
+  | "msi_not_found"
+  | "user_cancelled"
+  | "unknown";
+
+/**
+ * Classify the reason for a driver installation failure.
+ * Used for Sentry tagging and user-facing error messages (TASK-2276).
+ */
+export function classifyInstallFailure(
+  result: DriverInstallResult,
+  msiPath: string | null,
+): DriverFailureReason {
+  if (result.cancelled) return "user_cancelled";
+  if (!msiPath) return "msi_not_found";
+  if (result.error?.includes("1603")) return "permissions_denied";
+  if (result.error?.includes("disk") || result.error?.includes("space"))
+    return "insufficient_storage";
+  return "unknown";
+}
+
+/**
+ * Report a driver installation failure to Sentry with classification and context.
+ * Does not report on non-Windows platforms (drivers are N/A on macOS).
+ */
+function reportInstallFailure(
+  result: DriverInstallResult,
+  msiPath: string | null,
+): void {
+  if (process.platform !== "win32") return;
+
+  const reason = classifyInstallFailure(result, msiPath);
+  Sentry.captureMessage("Apple driver installation failed", {
+    level: reason === "user_cancelled" ? "info" : "error",
+    tags: {
+      component: "apple_driver",
+      platform: "win32",
+      failureReason: reason,
+    },
+    extra: {
+      error: result.error,
+      rebootRequired: result.rebootRequired,
+      msiPathAvailable: !!msiPath,
+    },
+  });
+}
+
+/**
+ * Get comprehensive driver diagnostics for display in Settings.
+ * Called by TASK-2277 (Sync Tools UI).
+ */
+export async function getDriverDiagnostics(): Promise<DriverDiagnostics> {
+  const status = await checkAppleDrivers();
+  const hasBundled = hasBundledDrivers();
+
+  Sentry.addBreadcrumb({
+    category: "diagnostics.driver",
+    message: `Driver check: installed=${status.isInstalled}, service=${status.serviceRunning}`,
+    level: "info",
+    data: { ...status, bundledAvailable: hasBundled },
+  });
+
+  return {
+    isInstalled: status.isInstalled,
+    version: status.version,
+    serviceRunning: status.serviceRunning,
+    bundledDriverAvailable: hasBundled,
+    lastError: status.error,
+    lastCheckTimestamp: new Date().toISOString(),
+  };
+}
+
+/**
  * Check if Apple Mobile Device Support drivers are installed
  */
 export async function checkAppleDrivers(): Promise<AppleDriverStatus> {
@@ -71,14 +162,51 @@ export async function checkAppleDrivers(): Promise<AppleDriverStatus> {
     // Check if the service exists and is running
     const serviceStatus = await checkAppleMobileDeviceService();
 
-    return {
+    const result: AppleDriverStatus = {
       isInstalled: registryCheck.installed,
       version: registryCheck.version,
       serviceRunning: serviceStatus,
       error: null,
     };
+
+    // Persist driver state on Sentry scope for enrichment of future events
+    Sentry.setContext("apple_drivers", {
+      isInstalled: result.isInstalled,
+      version: result.version,
+      serviceRunning: result.serviceRunning,
+    });
+
+    Sentry.addBreadcrumb({
+      category: "driver.check",
+      message: `Apple driver check: installed=${result.isInstalled}, version=${result.version}, service=${result.serviceRunning}`,
+      level: "info",
+      data: {
+        isInstalled: result.isInstalled,
+        version: result.version,
+        serviceRunning: result.serviceRunning,
+      },
+    });
+
+    return result;
   } catch (error) {
     log.error("[AppleDriverService] Error checking drivers:", error);
+
+    Sentry.setContext("apple_drivers", {
+      isInstalled: false,
+      version: null,
+      serviceRunning: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+
+    Sentry.addBreadcrumb({
+      category: "driver.check",
+      message: "Apple driver check failed",
+      level: "error",
+      data: {
+        error: error instanceof Error ? error.message : "Unknown error",
+      },
+    });
+
     return {
       isInstalled: false,
       version: null,
@@ -231,17 +359,37 @@ export async function installAppleDrivers(): Promise<DriverInstallResult> {
     };
   }
 
+  Sentry.addBreadcrumb({
+    category: "driver.install",
+    message: "Starting Apple driver installation",
+    level: "info",
+  });
+
   const msiPath = getBundledDriverPath();
   if (!msiPath) {
-    return {
+    Sentry.addBreadcrumb({
+      category: "driver.install",
+      message: "MSI package not found",
+      level: "warning",
+    });
+    const failResult: DriverInstallResult = {
       success: false,
       error:
         "Apple driver package not found. Please install iTunes from the Microsoft Store.",
       rebootRequired: false,
     };
+    reportInstallFailure(failResult, msiPath);
+    return failResult;
   }
 
   log.info("[AppleDriverService] Installing Apple drivers from:", msiPath);
+
+  Sentry.addBreadcrumb({
+    category: "driver.install",
+    message: "Running MSI installer",
+    level: "info",
+    data: { msiPathAvailable: true },
+  });
 
   try {
     // Run MSI installer silently
@@ -253,34 +401,75 @@ export async function installAppleDrivers(): Promise<DriverInstallResult> {
     if (result.success) {
       log.info("[AppleDriverService] Installer reported success, verifying...");
 
+      Sentry.addBreadcrumb({
+        category: "driver.install",
+        message: "MSI installer succeeded, verifying installation",
+        level: "info",
+      });
+
       // Verify that drivers are actually installed
       // This catches cases where UAC was declined but exit code was 0
       const verification = await checkAppleDrivers();
 
       if (!verification.isInstalled) {
         log.warn("[AppleDriverService] Verification failed - drivers not installed despite success code");
-        return {
+        Sentry.addBreadcrumb({
+          category: "driver.install",
+          message: "Post-install verification failed - drivers not detected",
+          level: "warning",
+        });
+        const cancelledResult: DriverInstallResult = {
           success: false,
           error: null,
           rebootRequired: false,
           cancelled: true, // Assume user cancelled UAC
         };
+        reportInstallFailure(cancelledResult, msiPath);
+        return cancelledResult;
       }
 
       log.info("[AppleDriverService] Driver installation verified successfully");
+
+      Sentry.addBreadcrumb({
+        category: "driver.install",
+        message: "Driver installation verified successfully",
+        level: "info",
+      });
 
       // Start the service if it's not running
       await startAppleMobileDeviceService();
     }
 
+    if (!result.success) {
+      Sentry.addBreadcrumb({
+        category: "driver.install",
+        message: `MSI installer failed: ${result.error ?? "unknown"}`,
+        level: "error",
+        data: { cancelled: result.cancelled },
+      });
+      reportInstallFailure(result, msiPath);
+    }
+
     return result;
   } catch (error) {
     log.error("[AppleDriverService] Installation failed:", error);
-    return {
+
+    Sentry.addBreadcrumb({
+      category: "driver.install",
+      message: "Driver installation threw exception",
+      level: "error",
+      data: {
+        error: error instanceof Error ? error.message : "Unknown error",
+      },
+    });
+
+    const errorResult: DriverInstallResult = {
       success: false,
       error: error instanceof Error ? error.message : "Installation failed",
       rebootRequired: false,
     };
+    reportInstallFailure(errorResult, msiPath);
+    return errorResult;
   }
 }
 
@@ -751,6 +940,19 @@ export async function downloadAppleDrivers(
     }
 
     if (!msiPath) {
+      if (process.platform === "win32") {
+        Sentry.captureMessage("Apple driver extraction failed", {
+          level: "error",
+          tags: {
+            component: "apple_driver",
+            platform: "win32",
+            failureReason: "extraction_failed",
+          },
+          extra: {
+            phase: "extracting",
+          },
+        });
+      }
       return {
         success: false,
         error:
@@ -762,6 +964,29 @@ export async function downloadAppleDrivers(
     return { success: true, msiPath };
   } catch (error) {
     log.error("[AppleDriverService] Failed to download drivers:", error);
+
+    if (process.platform === "win32") {
+      const errorMsg =
+        error instanceof Error ? error.message : "Download failed";
+      const isNetworkError =
+        errorMsg.includes("ECONNREFUSED") ||
+        errorMsg.includes("ENOTFOUND") ||
+        errorMsg.includes("ETIMEDOUT") ||
+        errorMsg.includes("Failed to download");
+      Sentry.captureMessage("Apple driver download failed", {
+        level: "error",
+        tags: {
+          component: "apple_driver",
+          platform: "win32",
+          failureReason: isNetworkError ? "network_error" : "unknown",
+        },
+        extra: {
+          error: errorMsg,
+          phase: "downloading",
+        },
+      });
+    }
+
     return {
       success: false,
       error: error instanceof Error ? error.message : "Download failed",

@@ -49,6 +49,13 @@ jest.mock("child_process", () => ({
   })),
 }));
 
+// Mock Sentry to prevent unresolved module errors
+jest.mock("@sentry/electron/main", () => ({
+  addBreadcrumb: jest.fn(),
+  captureMessage: jest.fn(),
+  setContext: jest.fn(),
+}));
+
 // Mock fs to prevent file system access issues
 jest.mock("fs", () => ({
   existsSync: jest.fn(() => false),
