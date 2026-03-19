@@ -80,19 +80,21 @@ export async function resolvePhoneNames(
 
   // Source 1: App's imported contacts (contact_phones table)
   try {
-    const normalizedPhones = phones.map((p) => p.replace(/\D/g, "").slice(-10));
+    const normalizedPhones = phones.map((p) => normalizePhone(p));
 
     const rows = databaseService.getContactNamesByPhoneDigits(normalizedPhones);
 
     for (const row of rows) {
       if (row.display_name) {
+        // Store under multiple key formats to handle E.164 vs raw digit mismatches
+        // (BACKLOG-1083): Some paths store +1234567890, others 1234567890
         if (row.phone_e164) {
-          const norm = row.phone_e164.replace(/\D/g, "").slice(-10);
+          const norm = normalizePhone(row.phone_e164);
           result[norm] = row.display_name;
           result[row.phone_e164] = row.display_name;
         }
         if (row.phone_display) {
-          const norm = row.phone_display.replace(/\D/g, "").slice(-10);
+          const norm = normalizePhone(row.phone_display);
           result[norm] = row.display_name;
           result[row.phone_display] = row.display_name;
         }
@@ -118,10 +120,12 @@ export async function resolvePhoneNames(
       if (result[normalized] || result[phone]) continue;
 
       // Try multiple key formats to match macOS contacts
+      // (BACKLOG-1083): Also try E.164 format to handle +1 prefix variations
       const possibleKeys = [
         phone,
         normalized,
         digitsOnly,
+        `+${digitsOnly}`,
         `+1${normalized}`,
         `1${normalized}`,
         normalized.slice(-10),
@@ -133,6 +137,11 @@ export async function resolvePhoneNames(
         if (key && contactMap[key]) {
           result[normalized] = contactMap[key];
           result[phone] = contactMap[key];
+          // Also store under E.164 format for callers that look up with + prefix
+          if (!phone.includes("@")) {
+            const e164 = `+${digitsOnly.length === 10 ? "1" + digitsOnly : digitsOnly}`;
+            result[e164] = contactMap[key];
+          }
           break;
         }
       }

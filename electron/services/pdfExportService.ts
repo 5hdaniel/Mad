@@ -8,6 +8,7 @@ import { isEmailMessage, isTextMessage } from "../utils/channelHelpers";
 import { escapeHtml, formatCurrency, formatDate, formatDateTime, getContactNamesByPhones } from "../utils/exportUtils";
 import logService from "./logService";
 import { normalizePhone as sharedNormalizePhone } from "./contactResolutionService";
+import { getThreadKey as sharedGetThreadKey } from "./folderExport/textExportHelpers";
 
 // Create a DOMPurify instance using JSDOM for Node.js / Electron main process
 const domPurifyWindow = new JSDOM("").window;
@@ -74,7 +75,8 @@ class PDFExportService {
       // Write HTML to temp file
       await fs.writeFile(tempFile, html, "utf8");
 
-      // Create hidden window for PDF generation
+      // Create hidden, sandboxed window for PDF generation
+      // sandbox + contextIsolation protect against user-provided data in transaction details
       this.exportWindow = new BrowserWindow({
         width: 800,
         height: 1200,
@@ -82,14 +84,20 @@ class PDFExportService {
         webPreferences: {
           nodeIntegration: false,
           contextIsolation: true,
+          sandbox: true,
         },
       });
 
       // Load HTML from temp file (avoids data URL length limits)
-      await this.exportWindow.loadFile(tempFile);
-
-      // Wait for page to fully render
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Use did-finish-load event instead of fixed setTimeout for reliable rendering
+      await new Promise<void>((resolve, reject) => {
+        const win = this.exportWindow!;
+        win.webContents.on("did-finish-load", () => resolve());
+        win.webContents.on("did-fail-load", (_event, errorCode, errorDescription) => {
+          reject(new Error(`Failed to load PDF content: ${errorDescription} (code ${errorCode})`));
+        });
+        win.loadFile(tempFile);
+      });
 
       // Generate PDF
       const pdfData = await this.exportWindow.webContents.printToPDF({
@@ -558,36 +566,10 @@ class PDFExportService {
     // TASK-2027: Use shared normalizePhone that handles email handles correctly
     const normalizePhone = sharedNormalizePhone;
 
-    // Helper to get thread key (matches UI logic)
-    const getThreadKey = (msg: Communication): string => {
-      // Use thread_id if available
-      if (msg.thread_id) return msg.thread_id;
-
-      // Fallback: compute from participants
-      try {
-        if (msg.participants) {
-          const parsed = typeof msg.participants === 'string'
-            ? JSON.parse(msg.participants)
-            : msg.participants;
-
-          const allParticipants = new Set<string>();
-          if (parsed.from) allParticipants.add(normalizePhone(parsed.from));
-          if (parsed.to) {
-            const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
-            toList.forEach((p: string) => allParticipants.add(normalizePhone(p)));
-          }
-
-          if (allParticipants.size > 0) {
-            return 'participants-' + Array.from(allParticipants).sort().join('-');
-          }
-        }
-      } catch {
-        // Fall through
-      }
-
-      // Last resort: use message id
-      return 'msg-' + msg.id;
-    };
+    // BACKLOG-1084: Use shared getThreadKey for consistent thread deduplication
+    // (prefers thread_id, falls back to subject+participants for emails,
+    //  phone-based participants for texts, message id as last resort)
+    const getThreadKey = sharedGetThreadKey;
 
     // Helper to extract phone/contact name from thread
     const getThreadContact = (msgs: Communication[]): { phone: string; name: string | null } => {

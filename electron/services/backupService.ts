@@ -242,8 +242,15 @@ export class BackupService extends EventEmitter {
 
     // Check if previous backup exists (for incremental detection)
     // SECURITY: Use validated UDID in path operations
+    // BACKLOG-1086: Use atomic stat instead of check-then-act (TOCTOU fix)
     const deviceBackupPath = path.join(backupPath, validatedUdid);
-    const previousBackupExists = await this.pathExists(deviceBackupPath);
+    let previousBackupExists = false;
+    try {
+      await fs.stat(deviceBackupPath);
+      previousBackupExists = true;
+    } catch {
+      // Directory doesn't exist — not an incremental backup
+    }
 
     // Build command arguments
     // SECURITY: Pass validatedUdid to buildBackupArgs
@@ -835,24 +842,38 @@ export class BackupService extends EventEmitter {
   }
 
   /**
-   * Calculate the total size of a backup directory
+   * Calculate the total size of a backup directory.
+   * BACKLOG-1086: Use atomic readdir instead of check-then-read (TOCTOU fix).
    */
   private async calculateBackupSize(backupPath: string): Promise<number> {
     try {
-      if (!(await this.pathExists(backupPath))) {
-        return 0;
-      }
-
       let totalSize = 0;
-      const files = await fs.readdir(backupPath, { withFileTypes: true });
+      // Atomic: attempt readdir directly, handle ENOENT if path disappeared
+      let files: import("fs").Dirent[];
+      try {
+        files = await fs.readdir(backupPath, { withFileTypes: true });
+      } catch (err: unknown) {
+        if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "ENOENT") {
+          return 0;
+        }
+        throw err;
+      }
 
       for (const file of files) {
         const filePath = path.join(backupPath, file.name);
         if (file.isDirectory()) {
           totalSize += await this.calculateBackupSize(filePath);
         } else {
-          const stats = await fs.stat(filePath);
-          totalSize += stats.size;
+          try {
+            const stats = await fs.stat(filePath);
+            totalSize += stats.size;
+          } catch (statErr: unknown) {
+            // File may have been removed between readdir and stat; skip it
+            if (statErr && typeof statErr === "object" && "code" in statErr && (statErr as { code: string }).code === "ENOENT") {
+              continue;
+            }
+            throw statErr;
+          }
         }
       }
 
@@ -893,36 +914,48 @@ export class BackupService extends EventEmitter {
     const deviceBackupPath = path.join(backupPath, validatedUdid);
 
     try {
-      if (!(await this.pathExists(deviceBackupPath))) {
-        return null;
+      // Atomic: stat directly, handle ENOENT instead of check-then-act (TOCTOU)
+      let stats: Awaited<ReturnType<typeof fs.stat>>;
+      try {
+        stats = await fs.stat(deviceBackupPath);
+      } catch (err: unknown) {
+        if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "ENOENT") {
+          return null;
+        }
+        throw err;
       }
 
-      const stats = await fs.stat(deviceBackupPath);
       const size = await this.calculateBackupSize(deviceBackupPath);
 
-      // Check for key files that indicate backup completeness
+      // Check for key files atomically by attempting to access them directly
       const manifestPath = path.join(deviceBackupPath, "Manifest.db");
       const infoPlistPath = path.join(deviceBackupPath, "Info.plist");
       const statusPlistPath = path.join(deviceBackupPath, "Status.plist");
 
-      const hasManifest = await this.pathExists(manifestPath);
-      const hasInfoPlist = await this.pathExists(infoPlistPath);
-      const hasStatusPlist = await this.pathExists(statusPlistPath);
+      const fileExists = async (p: string): Promise<boolean> => {
+        try { await fs.access(p); return true; } catch { return false; }
+      };
+
+      const [hasManifest, hasInfoPlist] = await Promise.all([
+        fileExists(manifestPath),
+        fileExists(infoPlistPath),
+      ]);
 
       // A complete backup should have Manifest.db and Info.plist
-      // Status.plist contains backup state info
       const isComplete = hasManifest && hasInfoPlist;
 
-      // Check for corruption indicators
+      // Check for corruption indicators: read directly, handle ENOENT
       let isCorrupted = false;
-      if (hasStatusPlist) {
-        try {
-          const statusContent = await fs.readFile(statusPlistPath, "utf8");
-          // If Status.plist indicates backup was in progress, it was interrupted
-          if (statusContent.includes("BackupState") && statusContent.includes("InProgress")) {
-            isCorrupted = true;
-          }
-        } catch {
+      try {
+        const statusContent = await fs.readFile(statusPlistPath, "utf8");
+        // If Status.plist indicates backup was in progress, it was interrupted
+        if (statusContent.includes("BackupState") && statusContent.includes("InProgress")) {
+          isCorrupted = true;
+        }
+      } catch (statusErr: unknown) {
+        if (statusErr && typeof statusErr === "object" && "code" in statusErr && (statusErr as { code: string }).code === "ENOENT") {
+          // Status.plist doesn't exist — not corrupted by this metric
+        } else {
           // Can't read status, assume potentially corrupted
           isCorrupted = !isComplete;
         }
@@ -934,7 +967,6 @@ export class BackupService extends EventEmitter {
         isCorrupted,
         hasManifest,
         hasInfoPlist,
-        hasStatusPlist,
         sizeBytes: size,
       });
 
@@ -1002,18 +1034,24 @@ export class BackupService extends EventEmitter {
   }
 
   /**
-   * List existing backups
+   * List existing backups.
+   * BACKLOG-1086: Use atomic readdir instead of check-then-read (TOCTOU fix).
    */
   async listBackups(): Promise<BackupInfo[]> {
     const backupPath = this.getDefaultBackupPath();
     const backups: BackupInfo[] = [];
 
     try {
-      if (!(await this.pathExists(backupPath))) {
-        return backups;
+      // Atomic: attempt readdir directly, handle ENOENT if path doesn't exist
+      let entries: import("fs").Dirent[];
+      try {
+        entries = await fs.readdir(backupPath, { withFileTypes: true });
+      } catch (err: unknown) {
+        if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "ENOENT") {
+          return backups;
+        }
+        throw err;
       }
-
-      const entries = await fs.readdir(backupPath, { withFileTypes: true });
 
       for (const entry of entries) {
         if (entry.isDirectory()) {
@@ -1047,9 +1085,9 @@ export class BackupService extends EventEmitter {
       let iosVersion: string | null = null;
       let isEncrypted = false;
 
+      // Atomic: read directly, handle ENOENT instead of check-then-act (TOCTOU)
       const infoPlistPath = path.join(backupPath, "Info.plist");
-      if (await this.pathExists(infoPlistPath)) {
-        // Basic parsing - in production, use a proper plist parser
+      try {
         const content = await fs.readFile(infoPlistPath, "utf8");
         const deviceNameMatch = content.match(
           /<key>Device Name<\/key>\s*<string>([^<]+)<\/string>/,
@@ -1064,6 +1102,11 @@ export class BackupService extends EventEmitter {
         if (deviceNameMatch) deviceName = deviceNameMatch[1];
         if (versionMatch) iosVersion = versionMatch[1];
         if (encryptedMatch) isEncrypted = encryptedMatch[1] === "true";
+      } catch (plistErr: unknown) {
+        if (!(plistErr && typeof plistErr === "object" && "code" in plistErr && (plistErr as { code: string }).code === "ENOENT")) {
+          log.warn("[BackupService] Error reading Info.plist:", plistErr);
+        }
+        // Info.plist not found or unreadable — continue with defaults
       }
 
       return {
@@ -1087,19 +1130,23 @@ export class BackupService extends EventEmitter {
   async deleteBackup(backupPath: string): Promise<void> {
     log.info("[BackupService] Deleting backup:", backupPath);
 
-    if (!(await this.pathExists(backupPath))) {
-      log.warn("[BackupService] Backup path does not exist:", backupPath);
-      return;
-    }
-
-    // Validate path is within our backup directory for safety
+    // Validate path is within our backup directory for safety (before any FS ops)
     const defaultPath = this.getDefaultBackupPath();
     if (!backupPath.startsWith(defaultPath)) {
       throw new Error("Cannot delete backup outside of backup directory");
     }
 
-    await fs.rm(backupPath, { recursive: true, force: true });
-    log.info("[BackupService] Backup deleted successfully");
+    // Atomic: attempt delete directly, handle ENOENT instead of check-then-act (TOCTOU)
+    try {
+      await fs.rm(backupPath, { recursive: true, force: true });
+      log.info("[BackupService] Backup deleted successfully");
+    } catch (err: unknown) {
+      if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "ENOENT") {
+        log.warn("[BackupService] Backup path does not exist:", backupPath);
+        return;
+      }
+      throw err;
+    }
   }
 
   /**

@@ -562,12 +562,19 @@ function findFilesRecursive(
  */
 /**
  * Validate that a file path is safe for use in shell commands.
- * Rejects paths containing shell metacharacters that could enable injection.
+ * Rejects paths containing shell metacharacters that could enable injection
+ * and path traversal sequences that could escape the intended directory.
+ *
+ * BACKLOG-1085: Added path traversal check for consistent validation.
  */
 function validateShellPath(p: string): string {
   // Only allow alphanumeric, path separators, dots, hyphens, underscores, spaces
   if (/[`$|;&<>(){}!\[\]'"\\*?~#]/.test(p)) {
     throw new Error(`Unsafe characters in path: ${p}`);
+  }
+  // Reject path traversal sequences (.. as a path component)
+  if (/(?:^|[\\/])\.\.(?:[\\/]|$)/.test(p)) {
+    throw new Error(`Path traversal detected in path: ${p}`);
   }
   return p;
 }
@@ -577,9 +584,15 @@ async function extractMsiFromInstaller(
   outputDir: string,
 ): Promise<string | null> {
   try {
-    // Validate paths before shell usage to prevent command injection
+    // Validate paths before shell usage to prevent command injection and traversal
+    // BACKLOG-1085: Consistent validation for all paths before any extraction method
     const safeInstallerPath = validateShellPath(installerPath);
     const safeOutputDir = validateShellPath(outputDir);
+
+    // Verify installer file exists before attempting extraction
+    if (!fs.existsSync(safeInstallerPath)) {
+      throw new Error(`Installer file does not exist: ${safeInstallerPath}`);
+    }
 
     // Create output directory
     if (!fs.existsSync(safeOutputDir)) {
@@ -610,27 +623,30 @@ async function extractMsiFromInstaller(
 
       // Method 2: Try running installer with /extract (some Apple installers support this)
       try {
-        await execAsync(`"${installerPath}" /extract "${outputDir}"`, {
-          timeout: 120000,
-        });
+        await execAsync(
+          `"${safeInstallerPath}" /extract "${safeOutputDir}"`,
+          { timeout: 120000 },
+        );
         log.info("[AppleDriverService] /extract flag worked");
       } catch {
         log.info("[AppleDriverService] /extract flag not supported");
 
         // Method 3: Try expand command (works for some archive types)
         try {
-          await execAsync(`expand "${installerPath}" -F:* "${outputDir}"`, {
-            timeout: 120000,
-          });
+          await execAsync(
+            `expand "${safeInstallerPath}" -F:* "${safeOutputDir}"`,
+            { timeout: 120000 },
+          );
           log.info("[AppleDriverService] expand command worked");
         } catch {
           log.info("[AppleDriverService] expand command failed");
 
           // Method 4: Try 7z command from PATH
           try {
-            await execAsync(`7z x "${installerPath}" -o"${outputDir}" -y`, {
-              timeout: 120000,
-            });
+            await execAsync(
+              `7z x "${safeInstallerPath}" -o"${safeOutputDir}" -y`,
+              { timeout: 120000 },
+            );
             log.info("[AppleDriverService] 7z from PATH worked");
           } catch {
             log.error("[AppleDriverService] No extraction method available");
