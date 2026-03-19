@@ -11,6 +11,7 @@ import logService from "../logService";
 import { validateFields } from "../../utils/sqlFieldWhitelist";
 import { getContactNames } from "../contactsService";
 import { queryContacts, isPoolReady } from "../../workers/contactWorkerPool";
+import { ContactSchema, validateResponse } from "../../schemas";
 
 // Contact with activity metadata
 interface ContactWithActivity extends Contact {
@@ -395,11 +396,12 @@ export async function getContactById(contactId: string): Promise<Contact | null>
     : [];
 
   const { all_emails_json, all_phones_json, ...rest } = row;
-  return {
+  const contact = {
     ...rest,
     allEmails,
     allPhones,
   } as Contact;
+  return validateResponse(ContactSchema, contact, 'contactDbService.getContactById') as Contact;
 }
 
 /**
