@@ -324,9 +324,45 @@ class GmailFetchService {
 
       return fullMessages;
     } catch (error) {
+      // TASK-2273: Structured Sentry context for Gmail API errors
+      const gaxiosErr = error as {
+        response?: { status?: number; headers?: Record<string, string>; data?: { error?: { code?: number; message?: string; status?: string } } };
+        code?: string | number;
+      };
+      if (gaxiosErr.response) {
+        const status = gaxiosErr.response.status;
+        if (status === 429) {
+          const retryAfter = gaxiosErr.response.headers?.["retry-after"] ?? "unknown";
+          Sentry.addBreadcrumb({
+            category: "email_sync.rate_limit",
+            message: `Gmail API rate limited (429)`,
+            level: "warning",
+            data: {
+              provider: "gmail",
+              component: "email_sync",
+              retryAfter,
+            },
+          });
+        } else if (status && status >= 400) {
+          const errorCode = gaxiosErr.response.data?.error?.status ?? String(gaxiosErr.response.data?.error?.code ?? "unknown");
+          const errorMessage = gaxiosErr.response.data?.error?.message ?? "";
+          Sentry.addBreadcrumb({
+            category: "email_sync.api_error",
+            message: `Gmail API error: ${status}`,
+            level: "error",
+            data: {
+              provider: "gmail",
+              component: "email_sync",
+              responseStatus: status,
+              errorCode,
+              errorMessage: errorMessage.substring(0, 200),
+            },
+          });
+        }
+      }
       logService.error("Search emails failed", "GmailFetch", { error });
       Sentry.captureException(error, {
-        tags: { service: "gmail-fetch", operation: "searchEmails" },
+        tags: { service: "gmail-fetch", operation: "searchEmails", provider: "gmail", component: "email_sync" },
       });
       throw error;
     }
@@ -354,11 +390,39 @@ class GmailFetchService {
       const message = response.data;
       return this._parseMessage(message);
     } catch (error) {
+      // TASK-2273: Enrich Gmail API errors with response context
+      const gaxiosErr = error as {
+        response?: { status?: number; headers?: Record<string, string>; data?: { error?: { code?: number; message?: string; status?: string } } };
+      };
+      if (gaxiosErr.response?.status === 429) {
+        Sentry.addBreadcrumb({
+          category: "email_sync.rate_limit",
+          message: `Gmail API rate limited (429)`,
+          level: "warning",
+          data: {
+            provider: "gmail",
+            component: "email_sync",
+            retryAfter: gaxiosErr.response.headers?.["retry-after"] ?? "unknown",
+          },
+        });
+      } else if (gaxiosErr.response?.status && gaxiosErr.response.status >= 400) {
+        Sentry.addBreadcrumb({
+          category: "email_sync.api_error",
+          message: `Gmail API error: ${gaxiosErr.response.status}`,
+          level: "error",
+          data: {
+            provider: "gmail",
+            component: "email_sync",
+            responseStatus: gaxiosErr.response.status,
+            errorCode: gaxiosErr.response.data?.error?.status ?? String(gaxiosErr.response.data?.error?.code ?? "unknown"),
+          },
+        });
+      }
       logService.error(`Failed to get message ${messageId}`, "GmailFetch", {
         error,
       });
       Sentry.captureException(error, {
-        tags: { service: "gmail-fetch", operation: "getEmailById" },
+        tags: { service: "gmail-fetch", operation: "getEmailById", provider: "gmail", component: "email_sync" },
       });
       throw error;
     }
@@ -698,13 +762,41 @@ class GmailFetchService {
 
       return fullMessages;
     } catch (error) {
+      // TASK-2273: Enrich Gmail label fetch errors with response context
+      const gaxiosErr = error as {
+        response?: { status?: number; headers?: Record<string, string>; data?: { error?: { code?: number; status?: string } } };
+      };
+      if (gaxiosErr.response?.status === 429) {
+        Sentry.addBreadcrumb({
+          category: "email_sync.rate_limit",
+          message: `Gmail API rate limited (429)`,
+          level: "warning",
+          data: {
+            provider: "gmail",
+            component: "email_sync",
+            retryAfter: gaxiosErr.response.headers?.["retry-after"] ?? "unknown",
+          },
+        });
+      } else if (gaxiosErr.response?.status && gaxiosErr.response.status >= 400) {
+        Sentry.addBreadcrumb({
+          category: "email_sync.api_error",
+          message: `Gmail API error: ${gaxiosErr.response.status}`,
+          level: "error",
+          data: {
+            provider: "gmail",
+            component: "email_sync",
+            responseStatus: gaxiosErr.response.status,
+            errorCode: gaxiosErr.response.data?.error?.status ?? String(gaxiosErr.response.data?.error?.code ?? "unknown"),
+          },
+        });
+      }
       logService.error(
         `Failed to fetch emails for label ${labelId}`,
         "GmailFetch",
         { error }
       );
       Sentry.captureException(error, {
-        tags: { service: "gmail-fetch", operation: "searchEmailsByLabel" },
+        tags: { service: "gmail-fetch", operation: "searchEmailsByLabel", provider: "gmail", component: "email_sync" },
       });
       throw error;
     }
@@ -792,13 +884,41 @@ class GmailFetchService {
 
       return allEmails;
     } catch (error) {
+      // TASK-2273: Enrich Gmail all-labels fetch errors with response context
+      const gaxiosErr = error as {
+        response?: { status?: number; headers?: Record<string, string>; data?: { error?: { code?: number; status?: string } } };
+      };
+      if (gaxiosErr.response?.status === 429) {
+        Sentry.addBreadcrumb({
+          category: "email_sync.rate_limit",
+          message: `Gmail API rate limited (429)`,
+          level: "warning",
+          data: {
+            provider: "gmail",
+            component: "email_sync",
+            retryAfter: gaxiosErr.response.headers?.["retry-after"] ?? "unknown",
+          },
+        });
+      } else if (gaxiosErr.response?.status && gaxiosErr.response.status >= 400) {
+        Sentry.addBreadcrumb({
+          category: "email_sync.api_error",
+          message: `Gmail API error: ${gaxiosErr.response.status}`,
+          level: "error",
+          data: {
+            provider: "gmail",
+            component: "email_sync",
+            responseStatus: gaxiosErr.response.status,
+            errorCode: gaxiosErr.response.data?.error?.status ?? String(gaxiosErr.response.data?.error?.code ?? "unknown"),
+          },
+        });
+      }
       logService.error(
         "Failed to search all labels",
         "GmailFetch",
         { error }
       );
       Sentry.captureException(error, {
-        tags: { service: "gmail-fetch", operation: "searchAllLabels" },
+        tags: { service: "gmail-fetch", operation: "searchAllLabels", provider: "gmail", component: "email_sync" },
       });
       throw error;
     }
