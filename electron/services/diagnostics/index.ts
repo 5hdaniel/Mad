@@ -1,5 +1,5 @@
 /**
- * Diagnostics barrel export (TASK-2270, TASK-2276)
+ * Diagnostics barrel export (TASK-2270, TASK-2275, TASK-2276)
  */
 export {
   checkDiskSpaceForOperation,
@@ -9,6 +9,12 @@ export type {
   DiskOperation,
   DiskSpaceCheckResult,
 } from "./diskSpaceDiagnostics";
+
+export {
+  collectStartupDiagnostics,
+  getLatestDiagnostics,
+} from "./startupDiagnosticsCollector";
+export type { StartupDiagnostics } from "./startupDiagnosticsCollector";
 
 export {
   formatDiskSpaceError,
