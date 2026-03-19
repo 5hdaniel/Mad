@@ -4,9 +4,6 @@ import { withSentryConfig } from '@sentry/nextjs';
 const nextConfig = {
   reactStrictMode: true,
 
-  // Transpile shared types from workspace package
-  transpilePackages: ['@keepr/shared'],
-
   async headers() {
     const cspDirectives = [
       "default-src 'self'",

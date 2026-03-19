@@ -64,8 +64,8 @@ export function VelocityChart({ data }: VelocityChartProps) {
               borderRadius: '8px',
               fontSize: '13px',
             }}
-            formatter={(value: number | undefined, name: string | undefined) => [
-              `${value ?? 0}K tokens`,
+            formatter={(value, name) => [
+              `${Number(value) || 0}K tokens`,
               name === 'estimated' ? 'Estimated' : 'Actual',
             ]}
           />

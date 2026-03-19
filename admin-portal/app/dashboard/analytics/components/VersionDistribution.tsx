@@ -73,7 +73,7 @@ export function VersionDistribution({ data }: Props) {
                 borderRadius: '8px',
                 fontSize: '13px',
               }}
-              formatter={(value: number | undefined) => [value ?? 0, 'Users']}
+              formatter={(value) => [Number(value) || 0, 'Users']}
             />
             <Bar dataKey="user_count" radius={[4, 4, 0, 0]}>
               {data.map((_, index) => (

@@ -9,6 +9,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import { Inbox, CheckCircle2, Clock } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { listTickets, getTicketStats } from '@/lib/support-queries';
@@ -18,8 +19,9 @@ import type {
   TicketPriority,
 } from '@/lib/support-types';
 import { TicketFilters } from '../components/TicketFilters';
-import { TicketTable } from '../components/TicketTable';
 import { SearchBar } from '../components/SearchBar';
+
+const TicketTable = dynamic(() => import('../components/TicketTable').then(m => m.TicketTable), { ssr: false });
 
 export default function MyTicketsPage() {
   const { user } = useAuth();
