@@ -249,8 +249,8 @@ class SessionService {
 
       await logService.info("Session loaded successfully", "SessionService");
       return session;
-    } catch (error: any) {
-      if (error.code === "ENOENT") {
+    } catch (error: unknown) {
+      if (error instanceof Error && (error as NodeJS.ErrnoException).code === "ENOENT") {
         await logService.info("No existing session found", "SessionService");
         return null;
       }
@@ -272,8 +272,8 @@ class SessionService {
       await fs.unlink(this.getSessionFilePath());
       await logService.info("Session cleared successfully", "SessionService");
       return true;
-    } catch (error: any) {
-      if (error.code === "ENOENT") {
+    } catch (error: unknown) {
+      if (error instanceof Error && (error as NodeJS.ErrnoException).code === "ENOENT") {
         // File doesn't exist, that's fine
         return true;
       }
