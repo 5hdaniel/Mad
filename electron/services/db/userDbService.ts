@@ -6,9 +6,10 @@
 import crypto from "crypto";
 import type { User, NewUser, OAuthProvider } from "../../types";
 import { DatabaseError, NotFoundError } from "../../types";
-import { dbGet, dbRun } from "./core/dbConnection";
+import { dbGet, dbRun, ensureDb } from "./core/dbConnection";
 import { validateFields } from "../../utils/sqlFieldWhitelist";
 import { UserSchema, validateResponse } from "../../schemas";
+import logService from "../logService";
 
 /**
  * Create a new user
@@ -218,4 +219,86 @@ export async function hasCompletedEmailOnboarding(
     result?.email_onboarding_completed_at !== null &&
     result?.email_onboarding_completed_at !== undefined
   );
+}
+
+/**
+ * Migrate a local user's ID to match Supabase auth.uid()
+ * BACKLOG-600: This handles users created before TASK-1507G (user ID unification)
+ *
+ * Updates all FK references across tables:
+ * - users_local (primary)
+ * - messages, contacts, transactions, emails, etc.
+ * - sessions, oauth_tokens, email_accounts
+ *
+ * @param oldUserId - The current local user ID
+ * @param newUserId - The Supabase auth.uid() to migrate to
+ */
+export async function migrateUserIdForUnification(oldUserId: string, newUserId: string): Promise<void> {
+  const db = ensureDb();
+
+  try {
+    // CRITICAL: Disable FK checks during migration to avoid circular dependency issues
+    // The old ID is referenced by child tables, and we need to update both parent and children
+    db.pragma("foreign_keys = OFF");
+
+    // Use a transaction to ensure atomicity
+    const migrate = db.transaction(() => {
+      // Update the users_local table FIRST (the primary record)
+      // With FK checks off, this won't cause issues
+      db.prepare("UPDATE users_local SET id = ? WHERE id = ?").run(newUserId, oldUserId);
+      logService.info("[DB Migration] Updated users_local primary record", "userDbService");
+
+      // Tables with user_id FK that need to be updated
+      const tablesToUpdate = [
+        "messages",
+        "contacts",
+        "contact_phones",
+        "contact_emails",
+        "transactions",
+        "emails",
+        "communications",
+        "sessions",
+        "oauth_tokens",
+        "email_accounts",
+        "user_preferences",
+        "external_contacts",
+        "attachments",
+        "audit_logs_local",
+      ];
+
+      for (const table of tablesToUpdate) {
+        try {
+          // Check if table exists and has user_id column
+          const tableInfo = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+          const hasUserId = tableInfo.some((col) => col.name === "user_id");
+
+          if (hasUserId) {
+            const result = db.prepare(`UPDATE ${table} SET user_id = ? WHERE user_id = ?`).run(newUserId, oldUserId);
+            if (result.changes > 0) {
+              logService.info(`[DB Migration] Updated ${result.changes} rows in ${table}`, "userDbService");
+            }
+          }
+        } catch (tableError) {
+          // Table might not exist, skip it
+          logService.debug(`[DB Migration] Skipping table ${table}: ${tableError}`, "userDbService");
+        }
+      }
+    });
+
+    try {
+      migrate();
+      logService.info("[DB Migration] User ID migration completed successfully", "userDbService", {
+        oldId: oldUserId.substring(0, 8) + "...",
+        newId: newUserId.substring(0, 8) + "...",
+      });
+    } catch (error) {
+      logService.error("[DB Migration] User ID migration failed, rolled back", "userDbService", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  } finally {
+    // CRITICAL: Re-enable FK checks
+    db.pragma("foreign_keys = ON");
+  }
 }
