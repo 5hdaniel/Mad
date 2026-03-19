@@ -10,6 +10,7 @@ import { ContactsSettings } from "./settings/ContactsSettings";
 import { SecuritySettings } from "./settings/SecuritySettings";
 import { DataPrivacySettings } from "./settings/DataPrivacySettings";
 import { AboutSettings } from "./settings/AboutSettings";
+import { SyncToolsSettings } from "./settings/SyncToolsSettings";
 import { useScrollSpy } from "@/hooks/useScrollSpy";
 import { useFeatureGate } from "@/hooks/useFeatureGate";
 import { OfflineNotice } from './common/OfflineNotice';
@@ -24,9 +25,13 @@ const SETTINGS_TABS = [
   { id: "settings-contacts", label: "Contacts" },
   { id: "settings-ai", label: "AI" },
   { id: "settings-security", label: "Security" },
+  { id: "settings-sync", label: "Sync" },
   { id: "settings-data", label: "Data & Privacy" },
   { id: "settings-about", label: "About" },
 ];
+
+/** Detect Windows platform via IPC bridge */
+const isWindows = window.api?.system?.platform === "win32";
 
 interface SettingsComponentProps {
   onClose: () => void;
@@ -43,7 +48,12 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const visibleTabs = useMemo(
-    () => SETTINGS_TABS.filter((t) => t.id !== "settings-ai" || hasAIAddon),
+    () =>
+      SETTINGS_TABS.filter((t) => {
+        if (t.id === "settings-ai" && !hasAIAddon) return false;
+        if (t.id === "settings-sync" && !isWindows) return false;
+        return true;
+      }),
     [hasAIAddon]
   );
   const visibleTabIds = useMemo(() => visibleTabs.map((t) => t.id), [visibleTabs]);
@@ -171,6 +181,10 @@ function Settings({ onClose, userId, onLogout, onEmailConnected, onEmailDisconne
             </FeatureGate>
 
             <SecuritySettings userId={userId} onLogout={onLogout} />
+
+            {/* Sync Tools — Windows only (TASK-2277) */}
+            {isWindows && <SyncToolsSettings />}
+
             <DataPrivacySettings userId={userId} />
             <AboutSettings />
           </>
