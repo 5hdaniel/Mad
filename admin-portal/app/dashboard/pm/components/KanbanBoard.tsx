@@ -45,12 +45,18 @@ export const columnCollision: CollisionDetection = (args) => {
 
 /** Resolve an over-target ID to its column status.
  *  If the ID is a column status directly, return it.
+ *  If the ID is a swim lane cell ("groupKey::status"), extract the status part.
  *  Otherwise, find which column contains the item with that ID. */
 export function resolveColumnStatus(
   overId: string,
   columns: BoardColumns
 ): ItemStatus | null {
   if (COLUMN_IDS.has(overId)) return overId as ItemStatus;
+  // Handle swim lane droppable IDs formatted as "groupKey::status"
+  if (overId.includes('::')) {
+    const status = overId.split('::')[1];
+    if (status && COLUMN_IDS.has(status)) return status as ItemStatus;
+  }
   // overId is a card ID — find which column it belongs to
   for (const [status, items] of Object.entries(columns)) {
     if ((items as PmBacklogItem[]).some((i) => i.id === overId)) {
