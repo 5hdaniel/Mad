@@ -5,8 +5,8 @@
 
 import { ipcMain, BrowserWindow } from "electron";
 import log from "electron-log";
-import { deviceDetectionService } from "./services/deviceDetectionService";
-import type { iOSDevice } from "./types/device";
+import { deviceDetectionService } from "../services/deviceDetectionService";
+import type { iOSDevice } from "../types/device";
 
 /**
  * Response type for device-related IPC handlers

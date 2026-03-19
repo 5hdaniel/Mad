@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@keepr/shared": "*",
     "@azure/identity": "^4.13.0",
     "@microsoft/clarity": "^1.0.2",
     "@microsoft/microsoft-graph-client": "^3.0.7",

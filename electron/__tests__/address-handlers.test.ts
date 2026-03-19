@@ -33,7 +33,7 @@ jest.mock("../services/addressVerificationService", () => ({
 }));
 
 // Import after mocks are set up
-import { registerAddressHandlers } from "../address-handlers";
+import { registerAddressHandlers } from "../handlers/addressHandlers";
 
 // Test session tokens (needs to be 20+ chars)
 const TEST_SESSION_TOKEN = "550e8400-e29b-41d4-a716-446655440001";

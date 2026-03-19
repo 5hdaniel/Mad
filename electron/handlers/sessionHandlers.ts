@@ -14,7 +14,7 @@ import sessionService from "../services/sessionService";
 import sessionSecurityService from "../services/sessionSecurityService";
 import auditService from "../services/auditService";
 import logService from "../services/logService";
-import { setSyncUserId } from "../sync-handlers";
+import { setSyncUserId } from "./syncHandlers";
 import failureLogService from "../services/failureLogService";
 import { getDeviceId } from "../services/deviceService";
 

@@ -40,3 +40,11 @@ export * from "./transactionContactDbService";
 export * from "./communicationDbService";
 export * from "./feedbackDbService";
 export * from "./auditLogDbService";
+
+// Domain services - Phase 5 (TASK-2260)
+export * from "./messageDbService";
+export * from "./diagnosticDbService";
+export * from "./attachmentDbService";
+export * from "./submissionDbService";
+export * from "./syncDbService";
+export * from "./maintenanceDbService";

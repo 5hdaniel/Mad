@@ -7,19 +7,19 @@
 
 import { ipcMain, BrowserWindow } from "electron";
 import log from "electron-log";
-import { redactId } from "./utils/redactSensitive";
+import { redactId } from "../utils/redactSensitive";
 import {
   DeviceSyncOrchestrator,
   deviceSyncOrchestrator,
   SyncProgress,
   SyncResult,
-} from "./services/deviceSyncOrchestrator";
-import { iPhoneSyncStorageService } from "./services/iPhoneSyncStorageService";
-import sessionService from "./services/sessionService";
-import type { iOSDevice } from "./types/device";
-import { rateLimiters } from "./utils/rateLimit";
-import { syncStatusService } from "./services/syncStatusService";
-import supabaseService from "./services/supabaseService";
+} from "../services/deviceSyncOrchestrator";
+import { iPhoneSyncStorageService } from "../services/iPhoneSyncStorageService";
+import sessionService from "../services/sessionService";
+import type { iOSDevice } from "../types/device";
+import { rateLimiters } from "../utils/rateLimit";
+import { syncStatusService } from "../services/syncStatusService";
+import supabaseService from "../services/supabaseService";
 
 let orchestrator: DeviceSyncOrchestrator | null = null;
 let mainWindowRef: BrowserWindow | null = null;

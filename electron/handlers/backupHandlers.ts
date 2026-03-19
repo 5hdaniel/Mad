@@ -8,10 +8,10 @@
 
 import { ipcMain, BrowserWindow, app } from "electron";
 import log from "electron-log";
-import { backupService } from "./services/backupService";
-import { backupDecryptionService } from "./services/backupDecryptionService";
-import { BackupOptions, BackupProgress } from "./types/backup";
-import { rateLimiters } from "./utils/rateLimit";
+import { backupService } from "../services/backupService";
+import { backupDecryptionService } from "../services/backupDecryptionService";
+import { BackupOptions, BackupProgress } from "../types/backup";
+import { rateLimiters } from "../utils/rateLimit";
 
 /**
  * Register all backup-related IPC handlers

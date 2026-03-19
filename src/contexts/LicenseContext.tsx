@@ -31,7 +31,7 @@ import React, {
   useRef,
 } from "react";
 import type { LicenseType } from "../../electron/types/models";
-import type { LicenseValidationResult } from "../../shared/types/license";
+import type { LicenseValidationResult } from "@keepr/shared";
 import { licenseService } from "../services";
 import { useFeatureGate } from "../hooks/useFeatureGate";
 import logger from '../utils/logger';
