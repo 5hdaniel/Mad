@@ -3,29 +3,35 @@
  *
  * Service abstraction for message-related API calls (iMessage/macOS Messages).
  * Centralizes all window.api.messages calls and provides type-safe wrappers.
+ *
+ * Type signatures match electron/types/ipc.ts MainAPI.messages exactly.
  */
 
 import { getErrorMessage } from "./index";
 
 /**
- * Message import status
+ * Message import status (from getImportStatus)
  */
 export interface MessageImportStatus {
-  isRunning: boolean;
-  progress?: number;
-  total?: number;
+  success: boolean;
+  messageCount?: number;
+  lastImportAt?: string | null;
   error?: string;
 }
 
 /**
- * Conversation data from messages
+ * macOS import result (matches ipc.ts importMacOSMessages return type)
  */
-export interface ConversationData {
-  id: string;
-  participants: string[];
-  lastMessage?: string;
-  lastMessageDate?: string;
-  messageCount?: number;
+export interface MacOSImportServiceResult {
+  success: boolean;
+  messagesImported: number;
+  messagesSkipped: number;
+  attachmentsImported: number;
+  attachmentsSkipped: number;
+  duration: number;
+  error?: string;
+  totalAvailable?: number;
+  wasCapped?: boolean;
 }
 
 /**
@@ -33,106 +39,131 @@ export interface ConversationData {
  */
 export const messageService = {
   /**
-   * Get conversations from macOS Messages
+   * Get conversations from macOS Messages.
+   * Returns conversations as ConversationSummary[] (no arguments).
    */
-  async getConversations(
-    userId: string,
-    options?: Record<string, unknown>
-  ): Promise<{ success: boolean; conversations?: ConversationData[]; error?: string }> {
+  async getConversations(): Promise<{
+    success: boolean;
+    conversations?: unknown[];
+    error?: string;
+  }> {
     try {
       if (!window.api.messages) {
         return { success: false, error: "Messages API not available" };
       }
-      return await window.api.messages.getConversations(userId, options);
+      return await window.api.messages.getConversations();
     } catch (error) {
       return { success: false, error: getErrorMessage(error) };
     }
   },
 
   /**
-   * Get import count (number of messages available for import)
+   * Get count of messages available for import from macOS Messages.
+   * Accepts optional filters for lookback period and max count.
    */
   async getImportCount(
-    userId: string
-  ): Promise<{ success: boolean; count?: number; error?: string }> {
+    filters?: { lookbackMonths?: number | null; maxMessages?: number | null }
+  ): Promise<{ success: boolean; count?: number; filteredCount?: number; error?: string }> {
     try {
       if (!window.api.messages) {
         return { success: false, error: "Messages API not available" };
       }
-      return await window.api.messages.getImportCount(userId);
+      return await window.api.messages.getImportCount(filters);
     } catch (error) {
       return { success: false, error: getErrorMessage(error) };
     }
   },
 
   /**
-   * Get current import status
+   * Get macOS messages import status (count and last import time).
+   * Requires userId parameter.
    */
-  async getImportStatus(): Promise<MessageImportStatus> {
-    try {
-      if (!window.api.messages) {
-        return { isRunning: false };
-      }
-      return await window.api.messages.getImportStatus();
-    } catch {
-      return { isRunning: false };
-    }
-  },
-
-  /**
-   * Import macOS Messages for a user
-   */
-  async importMacOSMessages(
-    userId: string,
-    options?: Record<string, unknown>
-  ): Promise<{ success: boolean; imported?: number; error?: string }> {
+  async getImportStatus(userId: string): Promise<MessageImportStatus> {
     try {
       if (!window.api.messages) {
         return { success: false, error: "Messages API not available" };
       }
-      return await window.api.messages.importMacOSMessages(userId, options);
+      return await window.api.messages.getImportStatus(userId);
     } catch (error) {
       return { success: false, error: getErrorMessage(error) };
     }
   },
 
   /**
-   * Export conversations
+   * Import macOS Messages for a user.
+   * Returns detailed import result with counts and duration.
+   */
+  async importMacOSMessages(userId: string): Promise<MacOSImportServiceResult> {
+    try {
+      if (!window.api.messages) {
+        return {
+          success: false,
+          messagesImported: 0,
+          messagesSkipped: 0,
+          attachmentsImported: 0,
+          attachmentsSkipped: 0,
+          duration: 0,
+          error: "Messages API not available",
+        };
+      }
+      return await window.api.messages.importMacOSMessages(userId);
+    } catch (error) {
+      return {
+        success: false,
+        messagesImported: 0,
+        messagesSkipped: 0,
+        attachmentsImported: 0,
+        attachmentsSkipped: 0,
+        duration: 0,
+        error: getErrorMessage(error),
+      };
+    }
+  },
+
+  /**
+   * Export conversations by their IDs.
    */
   async exportConversations(
-    options: Record<string, unknown>
-  ): Promise<{ success: boolean; error?: string }> {
+    conversationIds: string[]
+  ): Promise<{ success: boolean; exportPath?: string; canceled?: boolean; error?: string }> {
     try {
       if (!window.api.messages) {
         return { success: false, error: "Messages API not available" };
       }
-      return await window.api.messages.exportConversations(options);
+      return await window.api.messages.exportConversations(conversationIds);
     } catch (error) {
       return { success: false, error: getErrorMessage(error) };
     }
   },
 
   /**
-   * Get message attachments in batch
+   * Get attachments for multiple messages at once.
+   * Returns a map of messageId -> attachment info arrays.
    */
   async getMessageAttachmentsBatch(
     messageIds: string[]
-  ): Promise<{ success: boolean; attachments?: Record<string, unknown>[]; error?: string }> {
+  ): Promise<Record<string, unknown[]>> {
     try {
       if (!window.api.messages) {
-        return { success: false, error: "Messages API not available" };
+        return {};
       }
       return await window.api.messages.getMessageAttachmentsBatch(messageIds);
-    } catch (error) {
-      return { success: false, error: getErrorMessage(error) };
+    } catch {
+      return {};
     }
   },
 
   /**
-   * Register callback for import progress events
+   * Register callback for import progress events.
+   * Callback receives progress with phase, current, total, percent.
    */
   onImportProgress(
-    callback: (progress: { current: number; total: number; phase?: string }) => void
+    callback: (progress: {
+      phase: "deleting" | "importing" | "attachments";
+      current: number;
+      total: number;
+      percent: number;
+    }) => void
   ): (() => void) | undefined {
     if (!window.api.messages) return undefined;
     return window.api.messages.onImportProgress(callback);

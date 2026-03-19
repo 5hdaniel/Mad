@@ -103,7 +103,8 @@ export type {
 
 // Outlook service
 export { outlookService } from "./outlookService";
+export type { OutlookExportContact, OutlookExportResult } from "./outlookService";
 
 // Message service (iMessage/macOS Messages)
 export { messageService } from "./messageService";
-export type { MessageImportStatus, ConversationData } from "./messageService";
+export type { MessageImportStatus, MacOSImportServiceResult } from "./messageService";
