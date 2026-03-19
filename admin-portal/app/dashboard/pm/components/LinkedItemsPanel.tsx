@@ -45,7 +45,7 @@ export function LinkedItemsPanel({ itemId, links, onUpdate }: LinkedItemsPanelPr
   const [unlinking, setUnlinking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const { query: searchQuery, setQuery: setSearchQuery, results: searchResults, searching, reset: resetSearch } = useItemSearch({ excludeId: itemId });
+  const { query: searchQuery, setQuery: setSearchQuery, results: searchResults, searching, error: searchError, reset: resetSearch } = useItemSearch({ excludeId: itemId });
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Focus search input when search panel opens
@@ -208,7 +208,11 @@ export function LinkedItemsPanel({ itemId, links, onUpdate }: LinkedItemsPanelPr
                 </div>
               )}
 
-              {!searching && searchResults.length > 0 && (
+              {searchError && !searching && (
+                <p className="text-xs text-red-500 py-1">Search failed: {searchError}</p>
+              )}
+
+              {!searching && !searchError && searchResults.length > 0 && (
                 <div className="space-y-1 max-h-40 overflow-y-auto">
                   {searchResults.map((result) => (
                     <button
@@ -233,7 +237,7 @@ export function LinkedItemsPanel({ itemId, links, onUpdate }: LinkedItemsPanelPr
                 </div>
               )}
 
-              {!searching && searchQuery.length >= 1 && searchResults.length === 0 && (
+              {!searching && !searchError && searchQuery.length >= 1 && searchResults.length === 0 && (
                 <p className="text-xs text-gray-400 py-1">No items found</p>
               )}
 

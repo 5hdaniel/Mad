@@ -39,7 +39,7 @@ export function DependencyPanel({ itemId, dependencies, onUpdate }: DependencyPa
   const [removing, setRemoving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const { query: searchQuery, setQuery: setSearchQuery, results: searchResults, searching, reset: resetSearch } = useItemSearch({ excludeId: itemId });
+  const { query: searchQuery, setQuery: setSearchQuery, results: searchResults, searching, error: searchError, reset: resetSearch } = useItemSearch({ excludeId: itemId });
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Split dependencies into depends_on and blocks
@@ -157,7 +157,11 @@ export function DependencyPanel({ itemId, dependencies, onUpdate }: DependencyPa
           </div>
         )}
 
-        {!searching && searchResults.length > 0 && (
+        {searchError && !searching && (
+          <p className="text-xs text-red-500 py-1">Search failed: {searchError}</p>
+        )}
+
+        {!searching && !searchError && searchResults.length > 0 && (
           <div className="space-y-1 max-h-32 overflow-y-auto">
             {searchResults.map((result) => (
               <button
@@ -174,7 +178,7 @@ export function DependencyPanel({ itemId, dependencies, onUpdate }: DependencyPa
           </div>
         )}
 
-        {!searching && searchQuery.length >= 1 && searchResults.length === 0 && (
+        {!searching && !searchError && searchQuery.length >= 1 && searchResults.length === 0 && (
           <p className="text-xs text-gray-400 py-1">No items found</p>
         )}
 
