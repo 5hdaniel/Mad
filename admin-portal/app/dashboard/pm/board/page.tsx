@@ -455,9 +455,11 @@ export default function BoardPage() {
           sprint_id: selectedSprintId,
         };
         // Set the swim lane dimension so item lands in the right row
-        if (groupKey && swimLane === 'project') {
+        // Skip placeholder keys like "No Project", "No Area", "Unassigned"
+        const isRealGroup = groupKey && !groupKey.startsWith('No ') && groupKey !== 'Unassigned';
+        if (isRealGroup && swimLane === 'project') {
           params.project_id = groupKey;
-        } else if (groupKey && swimLane === 'area') {
+        } else if (isRealGroup && swimLane === 'area') {
           params.area = groupKey;
         }
         const created = await createItem(params);
@@ -466,7 +468,7 @@ export default function BoardPage() {
           await updateItemStatus(created.id, status);
         }
         // Assign user if swim lane is assignee mode
-        if (groupKey && swimLane === 'assignee' && created.id) {
+        if (isRealGroup && swimLane === 'assignee' && created.id) {
           try {
             await assignItem(created.id, groupKey);
           } catch {
