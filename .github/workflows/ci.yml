@@ -131,9 +131,7 @@ jobs:
 
       - name: Run admin-portal tests
         working-directory: admin-portal
-        run: |
-          npm ci
-          npx vitest run
+        run: npx vitest run
         env:
           NODE_OPTIONS: "--max-old-space-size=4096"
 
