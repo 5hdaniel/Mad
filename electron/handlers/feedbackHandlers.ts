@@ -5,19 +5,19 @@
 
 import { ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
-import databaseService from "./services/databaseService";
-import logService from "./services/logService";
-import type { UserFeedback } from "./types/models";
+import databaseService from "../services/databaseService";
+import logService from "../services/logService";
+import type { UserFeedback } from "../types/models";
 import {
   getFeedbackService,
   TransactionFeedback,
   RoleFeedback,
   CommunicationFeedback,
-} from "./services/feedbackService";
+} from "../services/feedbackService";
 
 // Services (still JS - to be migrated)
 const feedbackLearningService =
-  require("./services/feedbackLearningService").default;
+  require("../services/feedbackLearningService").default;
 
 // Import validation utilities
 import {
@@ -26,7 +26,7 @@ import {
   validateTransactionId,
   validateString,
   sanitizeObject,
-} from "./utils/validation";
+} from "../utils/validation";
 
 // Type definitions
 interface FeedbackResponse {

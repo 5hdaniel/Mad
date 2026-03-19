@@ -56,7 +56,7 @@ jest.mock("../services/feedbackService", () => ({
 }));
 
 // Import after mocks are set up
-import { registerFeedbackHandlers } from "../feedback-handlers";
+import { registerFeedbackHandlers } from "../handlers/feedbackHandlers";
 import databaseService from "../services/databaseService";
 
 // Get the feedbackLearningService mock - need to use require since it's a CommonJS require in source

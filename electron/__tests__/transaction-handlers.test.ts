@@ -103,7 +103,7 @@ jest.mock("../services/databaseService", () => ({
 }));
 
 // Import after mocks are set up
-import { registerTransactionHandlers } from "../transaction-handlers";
+import { registerTransactionHandlers } from "../handlers/transactionHandlers";
 import transactionService from "../services/transactionService";
 import auditService from "../services/auditService";
 import logService from "../services/logService";

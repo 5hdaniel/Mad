@@ -6,8 +6,8 @@
 import { ipcMain, BrowserWindow } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import { randomUUID } from "crypto";
-import databaseService, { TransactionWithRoles as DbTransactionWithRoles } from "./services/databaseService";
-import failureLogService from "./services/failureLogService";
+import databaseService, { TransactionWithRoles as DbTransactionWithRoles } from "../services/databaseService";
+import failureLogService from "../services/failureLogService";
 import {
   getContactEmailEntries,
   getContactPhoneEntries,
@@ -15,15 +15,15 @@ import {
   setContactPrimaryEmail,
   syncContactPhones,
   setContactPrimaryPhone,
-} from "./services/db/contactDbService";
-import { getContactNames } from "./services/contactsService";
-import { resolveHandles } from "./services/contactResolutionService";
-import auditService from "./services/auditService";
-import logService from "./services/logService";
-import * as externalContactDb from "./services/db/externalContactDbService";
-import { queryContacts, isPoolReady } from "./workers/contactWorkerPool";
-import { dbAll, dbGet } from "./services/db/core/dbConnection";
-import type { Contact, Transaction, ContactSource } from "./types/models";
+} from "../services/db/contactDbService";
+import { getContactNames } from "../services/contactsService";
+import { resolveHandles } from "../services/contactResolutionService";
+import auditService from "../services/auditService";
+import logService from "../services/logService";
+import * as externalContactDb from "../services/db/externalContactDbService";
+import { queryContacts, isPoolReady } from "../workers/contactWorkerPool";
+import { dbAll, dbGet } from "../services/db/core/dbConnection";
+import type { Contact, Transaction, ContactSource } from "../types/models";
 
 // Import validation utilities
 import {
@@ -32,11 +32,11 @@ import {
   validateContactData,
   validateString,
   sanitizeObject,
-} from "./utils/validation";
-import { normalizePhoneNumber } from "./utils/phoneNormalization";
-import { getValidUserId } from "./utils/userIdHelper";
-import { isContactSourceEnabled } from "./utils/preferenceHelper";
-import outlookFetchService from "./services/outlookFetchService";
+} from "../utils/validation";
+import { normalizePhoneNumber } from "../utils/phoneNormalization";
+import { getValidUserId } from "../utils/userIdHelper";
+import { isContactSourceEnabled } from "../utils/preferenceHelper";
+import outlookFetchService from "../services/outlookFetchService";
 
 // Import handler types
 import type {
@@ -44,7 +44,7 @@ import type {
   ImportableContact,
   ExistingDbContactRecord,
   NewContactData,
-} from "./types/handlerTypes";
+} from "../types/handlerTypes";
 
 // Type definitions
 interface ContactResponse {

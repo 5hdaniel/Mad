@@ -27,7 +27,7 @@ jest.mock("../services/supabaseService", () => ({
 }));
 
 // Import after mocks are set up
-import { registerPreferenceHandlers } from "../preference-handlers";
+import { registerPreferenceHandlers } from "../handlers/preferenceHandlers";
 import supabaseService from "../services/supabaseService";
 
 // Get reference to mocked service

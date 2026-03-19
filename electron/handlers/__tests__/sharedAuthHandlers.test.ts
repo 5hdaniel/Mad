@@ -96,7 +96,7 @@ jest.mock("../../services/sessionService", () => ({
   default: mockSessionService,
 }));
 
-jest.mock("../../sync-handlers", () => ({
+jest.mock("../syncHandlers", () => ({
   setSyncUserId: jest.fn(),
 }));
 

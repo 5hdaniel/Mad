@@ -5,17 +5,17 @@
 
 import { ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
-import supabaseService from "./services/supabaseService";
-import logService from "./services/logService";
-import updateService from "./services/updateService";
-import failureLogService from "./services/failureLogService";
+import supabaseService from "../services/supabaseService";
+import logService from "../services/logService";
+import updateService from "../services/updateService";
+import failureLogService from "../services/failureLogService";
 
 // Import validation utilities
 import {
   ValidationError,
   validateUserId,
   sanitizeObject,
-} from "./utils/validation";
+} from "../utils/validation";
 
 // Type definitions
 interface PreferenceResponse {

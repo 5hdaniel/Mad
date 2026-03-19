@@ -10,15 +10,15 @@
 
 import { ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
-import logService from './services/logService';
+import logService from '../services/logService';
 import {
   LLMConfigService,
   type LLMUserConfig,
   type LLMPreferences,
   type LLMUsageStats,
   type LLMAvailability,
-} from './services/llm/llmConfigService';
-import { LLMError, type LLMProvider } from './services/llm/types';
+} from '../services/llm/llmConfigService';
+import { LLMError, type LLMProvider } from '../services/llm/types';
 
 /**
  * Response wrapper for consistent error handling across all LLM handlers.
