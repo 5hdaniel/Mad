@@ -10,9 +10,11 @@
  * - Delete button with confirmation dialog
  */
 
+import { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, FolderKanban, Trash2 } from 'lucide-react';
-import type { PmProject, ProjectField } from '@/lib/pm-types';
+import { ArrowLeft, FolderKanban, Trash2, ChevronDown, Loader2 } from 'lucide-react';
+import type { PmProject, ProjectField, ProjectStatus } from '@/lib/pm-types';
+import { PROJECT_STATUS_LABELS, PROJECT_STATUS_COLORS } from '@/lib/pm-types';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
 import { PERMISSIONS } from '@/lib/permissions';
 import { InlineEditText } from '../../../components/InlineEditText';
@@ -60,15 +62,12 @@ export function ProjectHeader({
                   displayClassName="text-2xl font-bold text-gray-900"
                 />
               </h1>
-              <span
-                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                  project.status === 'active'
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-gray-100 text-gray-500'
-                }`}
-              >
-                {project.status === 'active' ? 'Active' : 'Archived'}
-              </span>
+              <ProjectStatusDropdown
+                status={project.status}
+                onChangeStatus={async (newStatus) => {
+                  await onUpdateField('status', newStatus);
+                }}
+              />
             </div>
             <div className="mt-1">
               <InlineEditText
@@ -100,8 +99,99 @@ export function ProjectHeader({
 }
 
 // ---------------------------------------------------------------------------
-// DeleteConfirmation -- Inline confirmation banner for project deletion
+// ProjectStatusDropdown -- Clickable status badge with dropdown menu
 // ---------------------------------------------------------------------------
+
+const ALL_STATUSES: ProjectStatus[] = ['active', 'on_hold', 'completed', 'archived'];
+
+interface ProjectStatusDropdownProps {
+  status: ProjectStatus;
+  onChangeStatus: (status: ProjectStatus) => Promise<void>;
+}
+
+function ProjectStatusDropdown({ status, onChangeStatus }: ProjectStatusDropdownProps) {
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+
+  const handleSelect = useCallback(async (newStatus: ProjectStatus) => {
+    if (newStatus === status) {
+      setOpen(false);
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await onChangeStatus(newStatus);
+      setOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update status');
+    } finally {
+      setSaving(false);
+    }
+  }, [status, onChangeStatus]);
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        disabled={saving}
+        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors hover:ring-2 hover:ring-offset-1 hover:ring-blue-300 ${
+          PROJECT_STATUS_COLORS[status]
+        } ${saving ? 'opacity-50' : ''}`}
+      >
+        {saving ? (
+          <Loader2 className="h-3 w-3 animate-spin" />
+        ) : null}
+        {PROJECT_STATUS_LABELS[status]}
+        <ChevronDown className="h-3 w-3" />
+      </button>
+
+      {error && (
+        <div className="absolute top-full left-0 mt-1 z-20 bg-red-50 border border-red-200 rounded px-2 py-1 text-xs text-red-700 whitespace-nowrap">
+          {error}
+        </div>
+      )}
+
+      {open && !saving && (
+        <div className="absolute top-full left-0 mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[140px]">
+          {ALL_STATUSES.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => handleSelect(s)}
+              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center gap-2 ${
+                s === status ? 'font-semibold' : ''
+              }`}
+            >
+              <span
+                className={`inline-block w-2 h-2 rounded-full ${
+                  PROJECT_STATUS_COLORS[s].split(' ')[0]
+                }`}
+              />
+              {PROJECT_STATUS_LABELS[s]}
+              {s === status && <span className="ml-auto text-gray-400">&#10003;</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // BackLink -- Shared "Back to Projects" link
