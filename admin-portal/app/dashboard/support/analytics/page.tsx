@@ -111,7 +111,7 @@ export default function SupportAnalyticsPage() {
   ];
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
