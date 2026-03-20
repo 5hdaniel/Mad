@@ -14,6 +14,8 @@ import { ChevronLeft, ChevronRight, ArrowUp, ArrowDown } from 'lucide-react';
 import DOMPurify from 'isomorphic-dompurify';
 import type { SupportTicket, TicketStatus, TicketPriority, SearchHighlight, SortColumn, SortDirection } from '@/lib/support-types';
 import { STATUS_LABELS, PRIORITY_LABELS, STATUS_COLORS, PRIORITY_COLORS } from '@/lib/support-types';
+import type { ColumnKey } from './ColumnSelector';
+import { DEFAULT_VISIBLE_COLUMNS } from './ColumnSelector';
 
 interface TicketTableProps {
   tickets: SupportTicket[];
@@ -27,6 +29,7 @@ interface TicketTableProps {
   sortColumn?: SortColumn;
   sortDirection?: SortDirection;
   onSort?: (column: SortColumn) => void;
+  visibleColumns?: ColumnKey[];
 }
 
 function StatusBadge({ status }: { status: TicketStatus }) {
@@ -131,6 +134,11 @@ function SortableHeader({ column, label, currentColumn, currentDirection, onSort
   );
 }
 
+function truncateText(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  return text.slice(0, maxLen).trimEnd() + '...';
+}
+
 export function TicketTable({
   tickets,
   totalCount,
@@ -143,8 +151,11 @@ export function TicketTable({
   sortColumn = 'created_at',
   sortDirection = 'desc',
   onSort,
+  visibleColumns = DEFAULT_VISIBLE_COLUMNS,
 }: TicketTableProps) {
   const router = useRouter();
+  const show = (col: ColumnKey) => visibleColumns.includes(col);
+  const visibleCount = visibleColumns.length;
 
   if (loading) {
     return (
@@ -208,54 +219,75 @@ export function TicketTable({
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <SortableHeader
-                column="ticket_number"
-                label="#"
-                currentColumn={sortColumn}
-                currentDirection={sortDirection}
-                onSort={onSort}
-              />
-              <SortableHeader
-                column="subject"
-                label="Subject"
-                currentColumn={sortColumn}
-                currentDirection={sortDirection}
-                onSort={onSort}
-              />
-              <SortableHeader
-                column="status"
-                label="Status"
-                currentColumn={sortColumn}
-                currentDirection={sortDirection}
-                onSort={onSort}
-              />
-              <SortableHeader
-                column="priority"
-                label="Priority"
-                currentColumn={sortColumn}
-                currentDirection={sortDirection}
-                onSort={onSort}
-              />
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Category
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Requester
-              </th>
-              <SortableHeader
-                column="assignee_name"
-                label="Assignee"
-                currentColumn={sortColumn}
-                currentDirection={sortDirection}
-                onSort={onSort}
-              />
-              <SortableHeader
-                column="created_at"
-                label="Created"
-                currentColumn={sortColumn}
-                currentDirection={sortDirection}
-                onSort={onSort}
-              />
+              {show('ticket_number') && (
+                <SortableHeader
+                  column="ticket_number"
+                  label="#"
+                  currentColumn={sortColumn}
+                  currentDirection={sortDirection}
+                  onSort={onSort}
+                />
+              )}
+              {show('subject') && (
+                <SortableHeader
+                  column="subject"
+                  label="Subject"
+                  currentColumn={sortColumn}
+                  currentDirection={sortDirection}
+                  onSort={onSort}
+                />
+              )}
+              {show('status') && (
+                <SortableHeader
+                  column="status"
+                  label="Status"
+                  currentColumn={sortColumn}
+                  currentDirection={sortDirection}
+                  onSort={onSort}
+                />
+              )}
+              {show('priority') && (
+                <SortableHeader
+                  column="priority"
+                  label="Priority"
+                  currentColumn={sortColumn}
+                  currentDirection={sortDirection}
+                  onSort={onSort}
+                />
+              )}
+              {show('category') && (
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Category
+                </th>
+              )}
+              {show('requester') && (
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Requester
+                </th>
+              )}
+              {show('assignee') && (
+                <SortableHeader
+                  column="assignee_name"
+                  label="Assignee"
+                  currentColumn={sortColumn}
+                  currentDirection={sortDirection}
+                  onSort={onSort}
+                />
+              )}
+              {show('created_at') && (
+                <SortableHeader
+                  column="created_at"
+                  label="Created"
+                  currentColumn={sortColumn}
+                  currentDirection={sortDirection}
+                  onSort={onSort}
+                />
+              )}
+              {show('description') && (
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Description
+                </th>
+              )}
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -265,52 +297,75 @@ export function TicketTable({
                   onClick={() => router.push(`/dashboard/support/${ticket.id}`)}
                   className="hover:bg-gray-50 cursor-pointer transition-colors"
                 >
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                    {ticket.ticket_number}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate font-medium [&_mark]:bg-yellow-200 [&_mark]:px-0.5 [&_mark]:rounded-sm">
-                    {(() => {
-                      const subjectHighlight = searchActive && ticket.search_highlights?.find(
-                        h => h.field === 'subject'
-                      );
-                      if (subjectHighlight) {
-                        // Content sanitized by DOMPurify - only <mark> tags allowed
-                        const sanitized = DOMPurify.sanitize(subjectHighlight.snippet, { ALLOWED_TAGS: ['mark'] });
-                        return <span dangerouslySetInnerHTML={{ __html: sanitized }} />;
-                      }
-                      return ticket.subject;
-                    })()}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <StatusBadge status={ticket.status} />
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <PriorityBadge priority={ticket.priority} />
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                    {ticket.category_name || '-'}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                    <div className="truncate max-w-[160px] [&_mark]:bg-yellow-200 [&_mark]:px-0.5 [&_mark]:rounded-sm" title={ticket.requester_email}>
+                  {show('ticket_number') && (
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                      {ticket.ticket_number}
+                    </td>
+                  )}
+                  {show('subject') && (
+                    <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate font-medium [&_mark]:bg-yellow-200 [&_mark]:px-0.5 [&_mark]:rounded-sm">
                       {(() => {
-                        const requesterHighlight = searchActive && ticket.search_highlights?.find(
-                          h => h.field === 'requester_name' || h.field === 'requester_email'
+                        const subjectHighlight = searchActive && ticket.search_highlights?.find(
+                          h => h.field === 'subject'
                         );
-                        if (requesterHighlight) {
+                        if (subjectHighlight) {
                           // Content sanitized by DOMPurify - only <mark> tags allowed
-                          const sanitized = DOMPurify.sanitize(requesterHighlight.snippet, { ALLOWED_TAGS: ['mark'] });
+                          const sanitized = DOMPurify.sanitize(subjectHighlight.snippet, { ALLOWED_TAGS: ['mark'] });
                           return <span dangerouslySetInnerHTML={{ __html: sanitized }} />;
                         }
-                        return ticket.requester_name;
+                        return ticket.subject;
                       })()}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                    {ticket.assignee_name || <span className="text-gray-400 italic">Unassigned</span>}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                    {formatDate(ticket.created_at)}
-                  </td>
+                    </td>
+                  )}
+                  {show('status') && (
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <StatusBadge status={ticket.status} />
+                    </td>
+                  )}
+                  {show('priority') && (
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <PriorityBadge priority={ticket.priority} />
+                    </td>
+                  )}
+                  {show('category') && (
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                      {ticket.category_name || '-'}
+                    </td>
+                  )}
+                  {show('requester') && (
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                      <div className="truncate max-w-[160px] [&_mark]:bg-yellow-200 [&_mark]:px-0.5 [&_mark]:rounded-sm" title={ticket.requester_email}>
+                        {(() => {
+                          const requesterHighlight = searchActive && ticket.search_highlights?.find(
+                            h => h.field === 'requester_name' || h.field === 'requester_email'
+                          );
+                          if (requesterHighlight) {
+                            // Content sanitized by DOMPurify - only <mark> tags allowed
+                            const sanitized = DOMPurify.sanitize(requesterHighlight.snippet, { ALLOWED_TAGS: ['mark'] });
+                            return <span dangerouslySetInnerHTML={{ __html: sanitized }} />;
+                          }
+                          return ticket.requester_name;
+                        })()}
+                      </div>
+                    </td>
+                  )}
+                  {show('assignee') && (
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                      {ticket.assignee_name || <span className="text-gray-400 italic">Unassigned</span>}
+                    </td>
+                  )}
+                  {show('created_at') && (
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                      {formatDate(ticket.created_at)}
+                    </td>
+                  )}
+                  {show('description') && (
+                    <td className="px-4 py-3 text-sm text-gray-500 max-w-xs">
+                      <span className="block truncate" title={ticket.description}>
+                        {truncateText(ticket.description || '', 100)}
+                      </span>
+                    </td>
+                  )}
                 </tr>
                 {(() => {
                   const snippetHighlight = searchActive && ticket.search_highlights?.find(
@@ -318,7 +373,7 @@ export function TicketTable({
                   );
                   return snippetHighlight ? (
                     <tr className="border-b border-gray-100">
-                      <td colSpan={8} className="px-4 py-1.5 bg-gray-50">
+                      <td colSpan={visibleCount} className="px-4 py-1.5 bg-gray-50">
                         <div className="flex items-start gap-2 text-xs text-gray-500 pl-4">
                           <HighlightSnippet highlight={snippetHighlight} />
                         </div>

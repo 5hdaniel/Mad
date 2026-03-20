@@ -22,6 +22,8 @@ import type {
 } from '@/lib/support-types';
 import { TicketFilters } from '../components/TicketFilters';
 import { SearchBar } from '../components/SearchBar';
+import { ColumnSelector, loadColumnPreferences, saveColumnPreferences } from '../components/ColumnSelector';
+import type { ColumnKey } from '../components/ColumnSelector';
 
 const TicketTable = dynamic(() => import('../components/TicketTable').then(m => m.TicketTable), { ssr: false });
 
@@ -48,6 +50,14 @@ export default function MyTicketsPage() {
   // Sort
   const [sortColumn, setSortColumn] = useState<SortColumn>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+
+  // Column visibility
+  const [visibleColumns, setVisibleColumns] = useState<ColumnKey[]>(loadColumnPreferences);
+
+  const handleColumnsChange = useCallback((columns: ColumnKey[]) => {
+    setVisibleColumns(columns);
+    saveColumnPreferences(columns);
+  }, []);
 
   const pageSize = 20;
 
@@ -178,8 +188,8 @@ export default function MyTicketsPage() {
         <SearchBar onSearch={handleSearch} />
       </div>
 
-      {/* Filters */}
-      <div className="mb-4">
+      {/* Filters + Column Selector */}
+      <div className="mb-4 flex items-start justify-between gap-4">
         <TicketFilters
           status={statusFilter}
           priority={priorityFilter}
@@ -187,6 +197,10 @@ export default function MyTicketsPage() {
           onStatusChange={handleStatusChange}
           onPriorityChange={handlePriorityChange}
           onCategoryChange={handleCategoryChange}
+        />
+        <ColumnSelector
+          visibleColumns={visibleColumns}
+          onColumnsChange={handleColumnsChange}
         />
       </div>
 
@@ -203,6 +217,7 @@ export default function MyTicketsPage() {
         sortColumn={sortColumn}
         sortDirection={sortDirection}
         onSort={handleSort}
+        visibleColumns={visibleColumns}
       />
     </div>
   );
