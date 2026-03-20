@@ -264,7 +264,8 @@ export async function assignTicket(
 export async function addMessage(
   ticketId: string,
   body: string,
-  messageType: 'reply' | 'internal_note' = 'reply'
+  messageType: 'reply' | 'internal_note' = 'reply',
+  ticketMeta?: { subject: string; ticket_number: number; requester_email: string }
 ): Promise<{ id: string; ticket_id: string; message_type: string }> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc('support_add_message', {
@@ -275,23 +276,17 @@ export async function addMessage(
   if (error) throw error;
 
   // Fire-and-forget: notify customer of agent reply (never for internal notes).
-  // Entire notification path is non-blocking -- we don't await any of it.
-  if (messageType === 'reply') {
+  // Uses ticketMeta passed from the caller to avoid a direct table query
+  // (RLS blocks direct support_tickets reads from the browser client).
+  if (messageType === 'reply' && ticketMeta) {
     const brokerPortalUrl =
       process.env.NEXT_PUBLIC_BROKER_PORTAL_URL || 'https://app.keeprcompliance.com';
 
-    Promise.all([
-      supabase
-        .from('support_tickets')
-        .select('subject, ticket_number, requester_email')
-        .eq('id', ticketId)
-        .single(),
-      supabase.auth.getUser(),
-    ])
-      .then(([ticketResult, userResult]) => {
-        if (ticketResult.data && userResult.data?.user) {
-          const agentName = userResult.data.user.user_metadata?.full_name || 'Support Team';
-          notifyCustomerOfReply(ticketId, body, ticketResult.data, agentName, brokerPortalUrl);
+    supabase.auth.getUser()
+      .then(({ data: userData }) => {
+        if (userData?.user) {
+          const agentName = userData.user.user_metadata?.full_name || 'Support Team';
+          notifyCustomerOfReply(ticketId, body, ticketMeta, agentName, brokerPortalUrl);
         }
       })
       .catch((notifyErr) => {

@@ -22,6 +22,8 @@ interface ReplyComposerProps {
   requesterName?: string;
   ticketNumber?: number;
   agentName?: string;
+  ticketSubject?: string;
+  requesterEmail?: string;
 }
 
 function applyTemplateVariables(
@@ -151,7 +153,7 @@ function TemplatePicker({
   );
 }
 
-export function ReplyComposer({ ticketId, onMessageSent, requesterName, ticketNumber, agentName }: ReplyComposerProps) {
+export function ReplyComposer({ ticketId, onMessageSent, requesterName, ticketNumber, agentName, ticketSubject, requesterEmail }: ReplyComposerProps) {
   const [body, setBody] = useState('');
   const [messageType, setMessageType] = useState<MessageType>('internal_note');
   const [sending, setSending] = useState(false);
@@ -172,7 +174,10 @@ export function ReplyComposer({ ticketId, onMessageSent, requesterName, ticketNu
     setUploadProgress(null);
 
     try {
-      const result = await addMessage(ticketId, body.trim(), messageType);
+      const ticketMeta = ticketSubject && ticketNumber && requesterEmail
+        ? { subject: ticketSubject, ticket_number: ticketNumber, requester_email: requesterEmail }
+        : undefined;
+      const result = await addMessage(ticketId, body.trim(), messageType, ticketMeta);
       const messageId = result.id;
 
       if (validFiles.length > 0) {
