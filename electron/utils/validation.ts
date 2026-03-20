@@ -259,6 +259,12 @@ export function validateAuthCode(authCode: unknown): string {
   return trimmed;
 }
 
+/** Minimum expected session token length */
+export const SESSION_TOKEN_MIN_LENGTH = 20;
+
+/** Maximum expected session token length */
+export const SESSION_TOKEN_MAX_LENGTH = 200;
+
 /**
  * Validate session token
  * @param sessionToken - Session token to validate
@@ -276,7 +282,7 @@ export function validateSessionToken(sessionToken: unknown): string {
   const trimmed = sessionToken.trim();
 
   // Session tokens should be UUIDs or similar format
-  if (trimmed.length < 20 || trimmed.length > 200) {
+  if (trimmed.length < SESSION_TOKEN_MIN_LENGTH || trimmed.length > SESSION_TOKEN_MAX_LENGTH) {
     throw new ValidationError(
       "Session token has invalid length",
       "sessionToken",
@@ -284,6 +290,21 @@ export function validateSessionToken(sessionToken: unknown): string {
   }
 
   return trimmed;
+}
+
+/**
+ * Check if an error is a session token corruption error (invalid length).
+ * Used to trigger recovery logic instead of showing an error to the user.
+ *
+ * @param error - The caught error to check
+ * @returns true if this is a session token length corruption error
+ */
+export function isSessionTokenCorruptionError(error: unknown): boolean {
+  return (
+    error instanceof ValidationError &&
+    error.message.includes("invalid length") &&
+    error.field === "sessionToken"
+  );
 }
 
 /**

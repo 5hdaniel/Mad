@@ -474,9 +474,13 @@ describe("OutlookFetchService", () => {
   });
 
   describe("getAttachment", () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const Sentry = require("@sentry/electron/main");
+
     beforeEach(async () => {
       mockDatabaseService.getOAuthToken.mockResolvedValue(mockTokenRecord);
       await outlookFetchService.initialize(mockUserId);
+      jest.clearAllMocks();
     });
 
     it("should fetch specific attachment data", async () => {
@@ -502,25 +506,110 @@ describe("OutlookFetchService", () => {
           ),
         }),
       );
-      expect(result.toString()).toBe("attachment data");
+      expect(result).not.toBeNull();
+      expect(result!.toString()).toBe("attachment data");
     });
 
-    it("should throw error when no contentBytes", async () => {
+    it("should return null when no contentBytes (ELECTRON-16)", async () => {
       mockAxios.mockResolvedValue({
-        data: { id: "att-456", name: "file.pdf" }, // No contentBytes
+        data: { id: "att-456", name: "file.pdf", contentType: "application/pdf", size: 1024 },
       });
 
-      await expect(
-        outlookFetchService.getAttachment("msg-123", "att-456"),
-      ).rejects.toThrow("No attachment data found");
+      const result = await outlookFetchService.getAttachment(
+        "msg-123",
+        "att-456",
+      );
+
+      expect(result).toBeNull();
     });
 
-    it("should handle fetch errors", async () => {
+    it("should log to Sentry with context when no contentBytes", async () => {
+      mockAxios.mockResolvedValue({
+        data: { id: "att-456", name: "file.pdf", contentType: "application/pdf", size: 2048 },
+      });
+
+      await outlookFetchService.getAttachment("msg-123", "att-456");
+
+      expect(Sentry.captureMessage).toHaveBeenCalledWith(
+        "Outlook attachment: no data returned",
+        expect.objectContaining({
+          level: "warning",
+          tags: { service: "outlook-fetch", operation: "getAttachment" },
+          extra: expect.objectContaining({
+            messageId: "msg-123",
+            attachmentId: "att-456",
+            contentType: "application/pdf",
+            size: 2048,
+          }),
+        }),
+      );
+    });
+
+    it("should add Sentry breadcrumb when no contentBytes", async () => {
+      mockAxios.mockResolvedValue({
+        data: { id: "att-456", name: "file.pdf", contentType: "image/png", size: 512 },
+      });
+
+      await outlookFetchService.getAttachment("msg-123", "att-456");
+
+      expect(Sentry.addBreadcrumb).toHaveBeenCalledWith(
+        expect.objectContaining({
+          category: "email_sync.attachment",
+          message: "Outlook attachment: no data returned",
+          level: "warning",
+          data: expect.objectContaining({
+            provider: "outlook",
+            messageId: "msg-123",
+            attachmentId: "att-456",
+          }),
+        }),
+      );
+    });
+
+    it("should return null on fetch error instead of throwing", async () => {
       mockAxios.mockRejectedValue(new Error("Attachment error"));
 
-      await expect(
-        outlookFetchService.getAttachment("msg-123", "invalid"),
-      ).rejects.toThrow("Attachment error");
+      const result = await outlookFetchService.getAttachment(
+        "msg-123",
+        "invalid",
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it("should report fetch errors to Sentry with enriched context", async () => {
+      const error = new Error("Network timeout");
+      mockAxios.mockRejectedValue(error);
+
+      await outlookFetchService.getAttachment("msg-123", "att-789");
+
+      expect(Sentry.captureException).toHaveBeenCalledWith(
+        error,
+        expect.objectContaining({
+          tags: { service: "outlook-fetch", operation: "getAttachment" },
+          extra: { messageId: "msg-123", attachmentId: "att-789" },
+        }),
+      );
+    });
+
+    it("should add Sentry breadcrumb on fetch error", async () => {
+      mockAxios.mockRejectedValue(new Error("Server error"));
+
+      await outlookFetchService.getAttachment("msg-123", "att-789");
+
+      expect(Sentry.addBreadcrumb).toHaveBeenCalledWith(
+        expect.objectContaining({
+          category: "email_sync.attachment",
+          message: "Outlook attachment fetch failed",
+          level: "error",
+          data: expect.objectContaining({
+            provider: "outlook",
+            messageId: "msg-123",
+            attachmentId: "att-789",
+            errorType: "Error",
+          }),
+        }),
+      );
     });
   });
 

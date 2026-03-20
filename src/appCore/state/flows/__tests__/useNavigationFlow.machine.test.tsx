@@ -231,12 +231,12 @@ describe("useNavigationFlow - State Machine Path", () => {
       expect(result.current.currentStep).toBe("dashboard");
     });
 
-    it("returns 'loading' when in error state", () => {
+    it("returns 'error' when in error state", () => {
       const { result } = renderHook(() => useNavigationFlow(defaultOptions), {
         wrapper: createWrapper(errorState),
       });
-      // Error state maps to loading (error handled elsewhere)
-      expect(result.current.currentStep).toBe("loading");
+      // TASK-2278: Error state now maps to 'error' (shows ErrorScreen with retry)
+      expect(result.current.currentStep).toBe("error");
     });
 
     describe("onboarding step mapping", () => {
@@ -509,8 +509,8 @@ describe("deriveAppStep mapping completeness", () => {
       },
       {
         state: errorState,
-        expectedAppStep: "loading",
-        description: "error -> loading",
+        expectedAppStep: "error",
+        description: "error -> error",
       },
     ];
 

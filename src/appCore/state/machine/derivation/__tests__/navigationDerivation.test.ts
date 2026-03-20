@@ -8,6 +8,7 @@
 import {
   deriveNavigationTarget,
   deriveScreen,
+  deriveAppStep,
   shouldShowOnboarding,
   isAppReady,
   isLoading,
@@ -348,5 +349,33 @@ describe("needsNavigation", () => {
     expect(needsNavigation("onboarding", "onboarding")).toBe(false);
     expect(needsNavigation("dashboard", "dashboard")).toBe(false);
     expect(needsNavigation("error", "error")).toBe(false);
+  });
+});
+
+// =============================================================================
+// deriveAppStep TESTS (TASK-2278)
+// =============================================================================
+
+describe("deriveAppStep", () => {
+  it("should return 'loading' for loading state", () => {
+    expect(deriveAppStep(createLoadingState())).toBe("loading");
+  });
+
+  it("should return 'login' for unauthenticated state", () => {
+    expect(deriveAppStep(createUnauthenticatedState())).toBe("login");
+  });
+
+  it("should return 'dashboard' for ready state", () => {
+    expect(deriveAppStep(createReadyState())).toBe("dashboard");
+  });
+
+  // TASK-2278: Error state should return 'error', not 'loading'
+  it("should return 'error' for error state (not 'loading')", () => {
+    expect(deriveAppStep(createErrorState(true))).toBe("error");
+    expect(deriveAppStep(createErrorState(false))).toBe("error");
+  });
+
+  it("should return 'phone-type-selection' for onboarding phone-type step", () => {
+    expect(deriveAppStep(createOnboardingState())).toBe("phone-type-selection");
   });
 });

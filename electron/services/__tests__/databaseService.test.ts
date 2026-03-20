@@ -210,6 +210,38 @@ describe("DatabaseService", () => {
 
       await expect(databaseService.initialize()).rejects.toThrow();
     });
+
+    it("should create app data directory with recursive option before DB open", async () => {
+      const freshFs = await import("fs");
+      const freshPath = await import("path");
+
+      await databaseService.initialize();
+
+      // Use path.join + path.dirname to match production code's path construction
+      // (path.join normalizes separators per platform: / on macOS, \ on Windows)
+      const expectedDir = freshPath.dirname(freshPath.join("/mock/user/data", "mad.db"));
+      expect(freshFs.mkdirSync).toHaveBeenCalledWith(
+        expectedDir,
+        { recursive: true },
+      );
+    });
+
+    it("should call mkdirSync unconditionally without existsSync guard", async () => {
+      const freshFs = await import("fs");
+      const freshPath = await import("path");
+
+      // Even when directory exists, mkdirSync should still be called
+      // (recursive:true is a safe no-op for existing dirs)
+      (freshFs.existsSync as jest.Mock).mockReturnValue(true);
+
+      await databaseService.initialize();
+
+      const expectedDir = freshPath.dirname(freshPath.join("/mock/user/data", "mad.db"));
+      expect(freshFs.mkdirSync).toHaveBeenCalledWith(
+        expectedDir,
+        { recursive: true },
+      );
+    });
   });
 
   describe("User Operations", () => {

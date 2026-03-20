@@ -723,8 +723,8 @@ describe("Hook Migration Integration Tests", () => {
       expect(result.current.secureStorage.isDatabaseInitialized).toBe(false);
       expect(result.current.phoneType.hasSelectedPhoneType).toBe(false);
       expect(result.current.emailOnboarding.hasCompletedEmailOnboarding).toBe(false);
-      // Navigation derives 'loading' for error state
-      expect(result.current.navigationFlow.currentStep).toBe("loading");
+      // Navigation derives 'error' for error state (shows error-with-retry UI)
+      expect(result.current.navigationFlow.currentStep).toBe("error");
     });
   });
 });

@@ -1,10 +1,12 @@
 /**
  * SupportTicketDialog Component
  * TASK-2180: Desktop In-App Support Ticket Dialog with Diagnostics
+ * TASK-2282: Added name/email fields for unauthenticated users
  *
  * Full-featured support ticket creation modal with:
  * - Subject, description, priority, category fields
- * - Auto-filled requester info from session
+ * - Auto-filled requester info from session (when authenticated)
+ * - Name/email input fields (when unauthenticated)
  * - Screenshot capture via desktopCapturer
  * - Collapsible diagnostics preview
  * - Submission to support platform via Supabase RPC
@@ -22,9 +24,9 @@ import { ScreenshotCapture } from "./ScreenshotCapture";
 interface SupportTicketDialogProps {
   /** Close the dialog */
   onClose: () => void;
-  /** User email from session */
+  /** User email from session (empty string when unauthenticated) */
   userEmail: string;
-  /** User display name from session */
+  /** User display name from session (empty string when unauthenticated) */
   userName: string;
   /** Auto-capture a screenshot when the dialog opens (used by the floating widget) */
   autoCaptureScreenshot?: boolean;
@@ -69,6 +71,11 @@ export function SupportTicketDialog({
   const [priority, setPriority] = useState<TicketPriority>("normal");
   const [categoryId, setCategoryId] = useState<string | null>(null);
 
+  // TASK-2282: Name/email form fields for unauthenticated users
+  const isAuthenticated = !!userEmail && !!userName;
+  const [formName, setFormName] = useState("");
+  const [formEmail, setFormEmail] = useState("");
+
   // Collect diagnostics when dialog opens
   useEffect(() => {
     collectDiagnostics();
@@ -86,6 +93,12 @@ export function SupportTicketDialog({
 
     if (!subject.trim() || !description.trim()) return;
 
+    // TASK-2282: Use form fields when unauthenticated
+    const effectiveName = isAuthenticated ? userName : formName.trim();
+    const effectiveEmail = isAuthenticated ? userEmail : formEmail.trim();
+
+    if (!effectiveName || !effectiveEmail) return;
+
     const form: TicketFormData = {
       subject: subject.trim(),
       description: description.trim(),
@@ -93,7 +106,7 @@ export function SupportTicketDialog({
       category_id: categoryId,
     };
 
-    await submitTicket(form, userEmail, userName);
+    await submitTicket(form, effectiveEmail, effectiveName);
   };
 
   const handleClose = () => {
@@ -199,6 +212,48 @@ export function SupportTicketDialog({
           onSubmit={handleSubmit}
           className="flex-1 overflow-y-auto p-6 space-y-4"
         >
+          {/* TASK-2282: Name and Email fields for unauthenticated users */}
+          {!isAuthenticated && (
+            <>
+              <div>
+                <label
+                  htmlFor="support-name"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Your Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="support-name"
+                  type="text"
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  placeholder="Your name"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  required
+                  maxLength={100}
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="support-email"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Your Email <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="support-email"
+                  type="email"
+                  value={formEmail}
+                  onChange={(e) => setFormEmail(e.target.value)}
+                  placeholder="Your email address"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  required
+                  maxLength={200}
+                />
+              </div>
+            </>
+          )}
+
           {/* Subject */}
           <div>
             <label
@@ -213,7 +268,7 @@ export function SupportTicketDialog({
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               placeholder="Brief summary of your issue"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               required
               maxLength={200}
             />
@@ -232,7 +287,7 @@ export function SupportTicketDialog({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Please describe the issue in detail. What were you trying to do? What happened instead?"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
               rows={4}
               required
               maxLength={5000}
@@ -252,7 +307,7 @@ export function SupportTicketDialog({
                 id="support-priority"
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as TicketPriority)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               >
                 {PRIORITY_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -275,7 +330,7 @@ export function SupportTicketDialog({
                 onChange={(e) =>
                   setCategoryId(e.target.value || null)
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               >
                 <option value="">Select category...</option>
                 {topCategories.map((cat) => (
@@ -301,10 +356,12 @@ export function SupportTicketDialog({
             loading={diagnosticsLoading}
           />
 
-          {/* Submitting as */}
-          <div className="text-xs text-gray-400">
-            Submitting as {userName} ({userEmail})
-          </div>
+          {/* Submitting as (only shown for authenticated users) */}
+          {isAuthenticated && (
+            <div className="text-xs text-gray-400">
+              Submitting as {userName} ({userEmail})
+            </div>
+          )}
 
           {/* Error */}
           {error && (
@@ -327,7 +384,7 @@ export function SupportTicketDialog({
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={submitting || !subject.trim() || !description.trim()}
+            disabled={submitting || !subject.trim() || !description.trim() || (!isAuthenticated && (!formName.trim() || !formEmail.trim()))}
             className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {submitting ? (

@@ -14,7 +14,7 @@ import { OfflineBanner } from "./shell";
 import SystemHealthMonitor from "../components/SystemHealthMonitor";
 import { isOnboardingStep } from "./routing";
 import { useSessionValidator } from "../hooks/useSessionValidator";
-import { SupportWidget } from "../components/support/SupportWidget";
+// TASK-2282: SupportWidget moved to App.tsx (outside auth routes)
 
 // OAuthProvider type to match SystemHealthMonitor expectations
 // Note: 'azure' is Microsoft's Azure AD provider
@@ -132,13 +132,7 @@ export function AppShell({ app, children }: AppShellProps) {
         {children}
       </div>
 
-      {/* Floating Support Widget - Only for authenticated users, not during onboarding */}
-      {isAuthenticated && currentUser && !isOnboardingStep(currentStep) && (
-        <SupportWidget
-          userEmail={currentUser.email}
-          userName={currentUser.display_name || currentUser.email}
-        />
-      )}
+      {/* TASK-2282: SupportWidget moved to App.tsx to be visible on ALL screens */}
     </div>
   );
 }
