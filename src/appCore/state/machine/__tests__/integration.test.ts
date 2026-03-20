@@ -303,10 +303,18 @@ describe("AppState Integration Tests", () => {
   // ============================================
 
   describe("Error Recovery", () => {
+    // TASK-2278: These tests use AppStateProvider directly (without LoadingOrchestrator)
+    // because LoadingOrchestrator now renders ErrorScreen for error states, which
+    // unmounts children hooks. The tests verify state machine behavior, not UI.
     it("handles storage check failure", async () => {
       setupStorageCheckFailure("Storage access denied");
 
-      const { result } = renderAppStateHook();
+      const { result } = renderHook(() => useAppState(), {
+        wrapper: ({ children }: { children: React.ReactNode }) =>
+          React.createElement(AuthProvider, null,
+            React.createElement(AppStateProvider, null, children)
+          ),
+      });
 
       await waitFor(() => {
         expect(result.current.state.status).toBe("error");
@@ -321,7 +329,12 @@ describe("AppState Integration Tests", () => {
     it("handles database init failure", async () => {
       setupDbInitFailure("Keychain access denied");
 
-      const { result } = renderAppStateHook();
+      const { result } = renderHook(() => useAppState(), {
+        wrapper: ({ children }: { children: React.ReactNode }) =>
+          React.createElement(AuthProvider, null,
+            React.createElement(AppStateProvider, null, children)
+          ),
+      });
 
       await waitFor(() => {
         expect(result.current.state.status).toBe("error");
@@ -376,10 +389,16 @@ describe("AppState Integration Tests", () => {
       }
     });
 
+    // TASK-2278: Use provider directly (see comment above)
     it("retry restores previous state context", async () => {
       setupDbInitFailure();
 
-      const { result } = renderAppStateHook();
+      const { result } = renderHook(() => useAppState(), {
+        wrapper: ({ children }: { children: React.ReactNode }) =>
+          React.createElement(AuthProvider, null,
+            React.createElement(AppStateProvider, null, children)
+          ),
+      });
 
       // Wait for error
       await waitFor(() => {
