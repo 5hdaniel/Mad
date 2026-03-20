@@ -30,6 +30,12 @@ interface TicketTableProps {
   sortDirection?: SortDirection;
   onSort?: (column: SortColumn) => void;
   visibleColumns?: ColumnKey[];
+  /** Bulk selection: set of currently selected ticket IDs */
+  selectedIds?: Set<string>;
+  /** Callback when a single row checkbox is toggled */
+  onToggleSelect?: (id: string) => void;
+  /** Callback when the select-all header checkbox is toggled */
+  onToggleSelectAll?: () => void;
 }
 
 function StatusBadge({ status }: { status: TicketStatus }) {
@@ -152,10 +158,17 @@ export function TicketTable({
   sortDirection = 'desc',
   onSort,
   visibleColumns = DEFAULT_VISIBLE_COLUMNS,
+  selectedIds,
+  onToggleSelect,
+  onToggleSelectAll,
 }: TicketTableProps) {
   const router = useRouter();
   const show = (col: ColumnKey) => visibleColumns.includes(col);
-  const visibleCount = visibleColumns.length;
+  const selectionEnabled = !!selectedIds && !!onToggleSelect && !!onToggleSelectAll;
+  const allSelected = selectionEnabled && tickets.length > 0 && tickets.every(t => selectedIds!.has(t.id));
+  const someSelected = selectionEnabled && tickets.some(t => selectedIds!.has(t.id)) && !allSelected;
+  // +1 for checkbox column when selection is enabled
+  const visibleCount = visibleColumns.length + (selectionEnabled ? 1 : 0);
 
   if (loading) {
     return (
@@ -219,6 +232,18 @@ export function TicketTable({
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
+              {selectionEnabled && (
+                <th className="px-3 py-3 w-10">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    ref={(el) => { if (el) el.indeterminate = someSelected; }}
+                    onChange={onToggleSelectAll}
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    aria-label="Select all tickets"
+                  />
+                </th>
+              )}
               {show('ticket_number') && (
                 <SortableHeader
                   column="ticket_number"
@@ -295,8 +320,19 @@ export function TicketTable({
               <Fragment key={ticket.id}>
                 <tr
                   onClick={() => router.push(`/dashboard/support/${ticket.id}`)}
-                  className="hover:bg-gray-50 cursor-pointer transition-colors"
+                  className={`hover:bg-gray-50 cursor-pointer transition-colors ${selectionEnabled && selectedIds!.has(ticket.id) ? 'bg-blue-50' : ''}`}
                 >
+                  {selectionEnabled && (
+                    <td className="px-3 py-3 w-10" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds!.has(ticket.id)}
+                        onChange={() => onToggleSelect!(ticket.id)}
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        aria-label={`Select ticket ${ticket.ticket_number}`}
+                      />
+                    </td>
+                  )}
                   {show('ticket_number') && (
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                       {ticket.ticket_number}

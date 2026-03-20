@@ -371,6 +371,22 @@ export async function getAgentAnalytics(periodDays: number = 30): Promise<AgentA
   return data as unknown as AgentAnalyticsResponse;
 }
 
+// --- Bulk update functions (TASK-2292) ---
+
+export async function bulkUpdateTickets(
+  ticketIds: string[],
+  options: { status?: string; assignee_id?: string }
+): Promise<{ updated_count: number; ticket_ids: string[] }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_bulk_update_tickets', {
+    p_ticket_ids: ticketIds,
+    p_status: options.status || null,
+    p_assignee_id: options.assignee_id || null,
+  });
+  if (error) throw error;
+  return data as unknown as { updated_count: number; ticket_ids: string[] };
+}
+
 // --- Delete functions ---
 
 export async function deleteTicket(ticketId: string): Promise<{ deleted: boolean; ticket_number: number }> {

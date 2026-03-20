@@ -11,7 +11,7 @@
  * - Create ticket button
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { Plus } from 'lucide-react';
 import { listTickets } from '@/lib/support-queries';
@@ -25,6 +25,7 @@ import type {
 import { StatsCards } from './components/StatsCards';
 import { TicketFilters } from './components/TicketFilters';
 import { CreateTicketDialog } from './components/CreateTicketDialog';
+import { BulkActionBar } from './components/BulkActionBar';
 import { ColumnSelector, loadColumnPreferences, saveColumnPreferences } from './components/ColumnSelector';
 import type { ColumnKey } from './components/ColumnSelector';
 
@@ -50,6 +51,9 @@ export default function SupportPage() {
   const [sortColumn, setSortColumn] = useState<SortColumn>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
+  // Bulk selection (TASK-2292)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
   // Column visibility
   const [visibleColumns, setVisibleColumns] = useState<ColumnKey[]>(loadColumnPreferences);
 
@@ -58,7 +62,34 @@ export default function SupportPage() {
     saveColumnPreferences(columns);
   }, []);
 
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds((prev) => {
+      const allIds = tickets.map(t => t.id);
+      const allSelected = allIds.length > 0 && allIds.every(id => prev.has(id));
+      return allSelected ? new Set() : new Set(allIds);
+    });
+  }, [tickets]);
+
+  const handleBulkComplete = useCallback(() => {
+    clearSelection();
+    loadTicketsRef.current();
+  }, [clearSelection]);
+
   const pageSize = 20;
+
+  // Ref to allow handleBulkComplete to call loadTickets without circular deps
+  const loadTicketsRef = useRef<() => void>(() => {});
 
   const loadTickets = useCallback(async () => {
     setLoading(true);
@@ -84,9 +115,16 @@ export default function SupportPage() {
     }
   }, [statusFilter, priorityFilter, categoryFilter, assigneeFilter, searchQuery, page, sortColumn, sortDirection]);
 
+  loadTicketsRef.current = loadTickets;
+
   useEffect(() => {
     loadTickets();
   }, [loadTickets]);
+
+  // Clear selection when filters, page, or sort change
+  useEffect(() => {
+    clearSelection();
+  }, [statusFilter, priorityFilter, categoryFilter, assigneeFilter, searchQuery, page, sortColumn, sortDirection, clearSelection]);
 
   // Reset to page 1 when filters change
   function handleStatusChange(status: TicketStatus | null) {
@@ -187,6 +225,16 @@ export default function SupportPage() {
         sortDirection={sortDirection}
         onSort={handleSort}
         visibleColumns={visibleColumns}
+        selectedIds={selectedIds}
+        onToggleSelect={toggleSelect}
+        onToggleSelectAll={toggleSelectAll}
+      />
+
+      {/* Bulk Action Bar */}
+      <BulkActionBar
+        selectedIds={selectedIds}
+        onClearSelection={clearSelection}
+        onComplete={handleBulkComplete}
       />
 
       {/* Create Ticket Dialog */}

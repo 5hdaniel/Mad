@@ -4,7 +4,7 @@
  * Used by both the admin portal (agent dashboard) and shared query layer.
  */
 
-export type TicketStatus = 'new' | 'assigned' | 'in_progress' | 'pending' | 'resolved' | 'closed';
+export type TicketStatus = 'new' | 'assigned' | 'in_progress' | 'pending' | 'resolved' | 'closed' | 'deleted';
 export type TicketPriority = 'low' | 'normal' | 'high' | 'urgent';
 export type MessageType = 'reply' | 'internal_note';
 export type SourceChannel = 'web_form' | 'email' | 'in_app_redirect' | 'admin_created';
@@ -256,6 +256,7 @@ export const ALLOWED_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
   pending: ['in_progress'],
   resolved: ['in_progress', 'closed'],
   closed: ['in_progress'], // admin reopen only
+  deleted: ['new'], // recovery: reopen as new
 };
 
 export const STATUS_LABELS: Record<TicketStatus, string> = {
@@ -265,6 +266,7 @@ export const STATUS_LABELS: Record<TicketStatus, string> = {
   pending: 'Pending',
   resolved: 'Resolved',
   closed: 'Closed',
+  deleted: 'Deleted',
 };
 
 export const PRIORITY_LABELS: Record<TicketPriority, string> = {
@@ -281,6 +283,7 @@ export const STATUS_COLORS: Record<TicketStatus, string> = {
   pending: 'bg-orange-100 text-orange-800',
   resolved: 'bg-purple-100 text-purple-800',
   closed: 'bg-gray-100 text-gray-800',
+  deleted: 'bg-red-100 text-red-800',
 };
 
 export const PRIORITY_COLORS: Record<TicketPriority, string> = {

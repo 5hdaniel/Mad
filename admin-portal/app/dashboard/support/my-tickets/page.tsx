@@ -8,7 +8,7 @@
  * but pre-filters all queries by the current user's assignee_id.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { Inbox, CheckCircle2, Clock } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -22,6 +22,7 @@ import type {
 } from '@/lib/support-types';
 import { TicketFilters } from '../components/TicketFilters';
 import { SearchBar } from '../components/SearchBar';
+import { BulkActionBar } from '../components/BulkActionBar';
 import { ColumnSelector, loadColumnPreferences, saveColumnPreferences } from '../components/ColumnSelector';
 import type { ColumnKey } from '../components/ColumnSelector';
 
@@ -51,6 +52,9 @@ export default function MyTicketsPage() {
   const [sortColumn, setSortColumn] = useState<SortColumn>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
+  // Bulk selection (TASK-2292)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
   // Column visibility
   const [visibleColumns, setVisibleColumns] = useState<ColumnKey[]>(loadColumnPreferences);
 
@@ -59,7 +63,36 @@ export default function MyTicketsPage() {
     saveColumnPreferences(columns);
   }, []);
 
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds((prev) => {
+      const allIds = tickets.map(t => t.id);
+      const allSelected = allIds.length > 0 && allIds.every(id => prev.has(id));
+      return allSelected ? new Set() : new Set(allIds);
+    });
+  }, [tickets]);
+
+  const handleBulkComplete = useCallback(() => {
+    clearSelection();
+    loadTicketsRef.current();
+    loadMyStatsRef.current();
+  }, [clearSelection]);
+
   const pageSize = 20;
+
+  // Refs to allow handleBulkComplete to call functions without circular deps
+  const loadTicketsRef = useRef<() => void>(() => {});
+  const loadMyStatsRef = useRef<() => void>(() => {});
 
   const loadTickets = useCallback(async () => {
     if (!user?.id) return;
@@ -106,6 +139,9 @@ export default function MyTicketsPage() {
     }
   }, [user?.id]);
 
+  loadTicketsRef.current = loadTickets;
+  loadMyStatsRef.current = loadMyStats;
+
   useEffect(() => {
     loadTickets();
   }, [loadTickets]);
@@ -113,6 +149,11 @@ export default function MyTicketsPage() {
   useEffect(() => {
     loadMyStats();
   }, [loadMyStats]);
+
+  // Clear selection when filters, page, or sort change
+  useEffect(() => {
+    clearSelection();
+  }, [statusFilter, priorityFilter, categoryFilter, searchQuery, page, sortColumn, sortDirection, clearSelection]);
 
   function handleStatusChange(status: TicketStatus | null) {
     setStatusFilter(status);
@@ -218,6 +259,16 @@ export default function MyTicketsPage() {
         sortDirection={sortDirection}
         onSort={handleSort}
         visibleColumns={visibleColumns}
+        selectedIds={selectedIds}
+        onToggleSelect={toggleSelect}
+        onToggleSelectAll={toggleSelectAll}
+      />
+
+      {/* Bulk Action Bar */}
+      <BulkActionBar
+        selectedIds={selectedIds}
+        onClearSelection={clearSelection}
+        onComplete={handleBulkComplete}
       />
     </div>
   );
