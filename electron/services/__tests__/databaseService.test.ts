@@ -212,20 +212,24 @@ describe("DatabaseService", () => {
     });
 
     it("should create app data directory with recursive option before DB open", async () => {
-      // Re-import fs to get the same mock instance used by the re-imported databaseService
+      // Re-import fs and path to get the same mock instances used by databaseService
       const freshFs = await import("fs");
+      const freshPath = await import("path");
 
       await databaseService.initialize();
 
+      // Use path.dirname to compute expected path (handles Windows backslashes)
+      const expectedDir = freshPath.dirname("/mock/user/data/mad.db");
       expect(freshFs.mkdirSync).toHaveBeenCalledWith(
-        "/mock/user/data",
+        expectedDir,
         { recursive: true },
       );
     });
 
     it("should call mkdirSync unconditionally without existsSync guard", async () => {
-      // Re-import fs to get the same mock instance used by the re-imported databaseService
+      // Re-import fs and path to get the same mock instances used by databaseService
       const freshFs = await import("fs");
+      const freshPath = await import("path");
 
       // Even when directory exists, mkdirSync should still be called
       // (recursive:true is a safe no-op for existing dirs)
@@ -233,8 +237,10 @@ describe("DatabaseService", () => {
 
       await databaseService.initialize();
 
+      // Use path.dirname to compute expected path (handles Windows backslashes)
+      const expectedDir = freshPath.dirname("/mock/user/data/mad.db");
       expect(freshFs.mkdirSync).toHaveBeenCalledWith(
-        "/mock/user/data",
+        expectedDir,
         { recursive: true },
       );
     });
