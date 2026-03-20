@@ -25,6 +25,8 @@ import type {
 import { StatsCards } from './components/StatsCards';
 import { TicketFilters } from './components/TicketFilters';
 import { CreateTicketDialog } from './components/CreateTicketDialog';
+import { ColumnSelector, loadColumnPreferences, saveColumnPreferences } from './components/ColumnSelector';
+import type { ColumnKey } from './components/ColumnSelector';
 
 const TicketTable = dynamic(() => import('./components/TicketTable').then(m => m.TicketTable), { ssr: false });
 import { SearchBar } from './components/SearchBar';
@@ -47,6 +49,14 @@ export default function SupportPage() {
   // Sort
   const [sortColumn, setSortColumn] = useState<SortColumn>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+
+  // Column visibility
+  const [visibleColumns, setVisibleColumns] = useState<ColumnKey[]>(loadColumnPreferences);
+
+  const handleColumnsChange = useCallback((columns: ColumnKey[]) => {
+    setVisibleColumns(columns);
+    saveColumnPreferences(columns);
+  }, []);
 
   const pageSize = 20;
 
@@ -145,8 +155,8 @@ export default function SupportPage() {
         <SearchBar onSearch={handleSearch} />
       </div>
 
-      {/* Filters */}
-      <div className="mb-4">
+      {/* Filters + Column Selector */}
+      <div className="mb-4 flex items-start justify-between gap-4">
         <TicketFilters
           status={statusFilter}
           priority={priorityFilter}
@@ -156,6 +166,10 @@ export default function SupportPage() {
           onPriorityChange={handlePriorityChange}
           onCategoryChange={handleCategoryChange}
           onAssigneeChange={handleAssigneeChange}
+        />
+        <ColumnSelector
+          visibleColumns={visibleColumns}
+          onColumnsChange={handleColumnsChange}
         />
       </div>
 
@@ -172,6 +186,7 @@ export default function SupportPage() {
         sortColumn={sortColumn}
         sortDirection={sortDirection}
         onSort={handleSort}
+        visibleColumns={visibleColumns}
       />
 
       {/* Create Ticket Dialog */}
