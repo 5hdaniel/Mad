@@ -91,7 +91,7 @@
     "cross-env": "^7.0.3",
     "depcheck": "^1.4.7",
     "dotenv-cli": "^7.4.2",
-    "electron": "^35.7.5",
+    "electron": "^41.0.3",
     "electron-builder": "^25.1.8",
     "electron-rebuild": "^3.2.9",
     "esbuild": "^0.27.0",
