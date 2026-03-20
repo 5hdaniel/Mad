@@ -88,6 +88,11 @@ export default function MyTicketsPage() {
     loadMyStatsRef.current();
   }, [clearSelection]);
 
+  const handleTicketUpdated = useCallback(() => {
+    loadTicketsRef.current();
+    loadMyStatsRef.current();
+  }, []);
+
   const pageSize = 20;
 
   // Refs to allow handleBulkComplete to call functions without circular deps
@@ -262,6 +267,7 @@ export default function MyTicketsPage() {
         selectedIds={selectedIds}
         onToggleSelect={toggleSelect}
         onToggleSelectAll={toggleSelectAll}
+        onTicketUpdated={handleTicketUpdated}
       />
 
       {/* Bulk Action Bar */}

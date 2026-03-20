@@ -16,6 +16,7 @@ import type { SupportTicket, TicketStatus, TicketPriority, SearchHighlight, Sort
 import { STATUS_LABELS, PRIORITY_LABELS, STATUS_COLORS, PRIORITY_COLORS } from '@/lib/support-types';
 import type { ColumnKey } from './ColumnSelector';
 import { DEFAULT_VISIBLE_COLUMNS } from './ColumnSelector';
+import { InlineStatusEdit, InlinePriorityEdit, InlineAssigneeEdit, InlineCategoryEdit } from './InlineTicketEdit';
 
 interface TicketTableProps {
   tickets: SupportTicket[];
@@ -36,6 +37,8 @@ interface TicketTableProps {
   onToggleSelect?: (id: string) => void;
   /** Callback when the select-all header checkbox is toggled */
   onToggleSelectAll?: () => void;
+  /** Callback after an inline edit saves successfully -- parent should refresh data */
+  onTicketUpdated?: () => void;
 }
 
 function StatusBadge({ status }: { status: TicketStatus }) {
@@ -161,6 +164,7 @@ export function TicketTable({
   selectedIds,
   onToggleSelect,
   onToggleSelectAll,
+  onTicketUpdated,
 }: TicketTableProps) {
   const router = useRouter();
   const show = (col: ColumnKey) => visibleColumns.includes(col);
@@ -355,17 +359,42 @@ export function TicketTable({
                   )}
                   {show('status') && (
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <StatusBadge status={ticket.status} />
+                      {onTicketUpdated ? (
+                        <InlineStatusEdit
+                          ticketId={ticket.id}
+                          status={ticket.status}
+                          onUpdated={onTicketUpdated}
+                        />
+                      ) : (
+                        <StatusBadge status={ticket.status} />
+                      )}
                     </td>
                   )}
                   {show('priority') && (
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <PriorityBadge priority={ticket.priority} />
+                      {onTicketUpdated ? (
+                        <InlinePriorityEdit
+                          ticketId={ticket.id}
+                          priority={ticket.priority}
+                          onUpdated={onTicketUpdated}
+                        />
+                      ) : (
+                        <PriorityBadge priority={ticket.priority} />
+                      )}
                     </td>
                   )}
                   {show('category') && (
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                      {ticket.category_name || '-'}
+                      {onTicketUpdated ? (
+                        <InlineCategoryEdit
+                          ticketId={ticket.id}
+                          categoryName={ticket.category_name}
+                          categoryId={ticket.category_id}
+                          onUpdated={onTicketUpdated}
+                        />
+                      ) : (
+                        ticket.category_name || '-'
+                      )}
                     </td>
                   )}
                   {show('requester') && (
@@ -387,7 +416,15 @@ export function TicketTable({
                   )}
                   {show('assignee') && (
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                      {ticket.assignee_name || <span className="text-gray-400 italic">Unassigned</span>}
+                      {onTicketUpdated ? (
+                        <InlineAssigneeEdit
+                          ticketId={ticket.id}
+                          assigneeName={ticket.assignee_name}
+                          onUpdated={onTicketUpdated}
+                        />
+                      ) : (
+                        ticket.assignee_name || <span className="text-gray-400 italic">Unassigned</span>
+                      )}
                     </td>
                   )}
                   {show('created_at') && (

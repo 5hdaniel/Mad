@@ -228,6 +228,7 @@ export default function SupportPage() {
         selectedIds={selectedIds}
         onToggleSelect={toggleSelect}
         onToggleSelectAll={toggleSelectAll}
+        onTicketUpdated={loadTickets}
       />
 
       {/* Bulk Action Bar */}
