@@ -9,7 +9,7 @@ import { isEmailMessage, isTextMessage } from "../../utils/channelHelpers";
 import { escapeHtml, formatCurrency, formatDate } from "../../utils/exportUtils";
 import { countTextThreads, generateTextIndex, getMessageTypeCounts } from "./textExportHelpers";
 import { extractParticipantHandles } from "../contactResolutionService";
-import { getContactNamesByPhones } from "../../utils/exportUtils";
+import { getContactNamesByHandles } from "../../utils/exportUtils";
 
 /**
  * Generate HTML for summary report
@@ -230,7 +230,7 @@ export function generateSummaryHTML(
   <div class="section">
     <h3>Text Threads Index (${countTextThreads(texts)})</h3>
     <div class="email-list">
-      ${generateTextIndex(texts, phoneNameMap, getContactNamesByPhones, extractParticipantHandles)}
+      ${generateTextIndex(texts, phoneNameMap, getContactNamesByHandles, extractParticipantHandles)}
     </div>
     <div class="note">
       Full text conversations are available in the /texts folder as individual PDF files.

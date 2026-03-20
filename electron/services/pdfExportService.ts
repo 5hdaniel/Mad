@@ -5,9 +5,9 @@ import { JSDOM } from "jsdom";
 import createDOMPurify, { type WindowLike } from "dompurify";
 import { Transaction, Communication } from "../types/models";
 import { isEmailMessage, isTextMessage } from "../utils/channelHelpers";
-import { escapeHtml, formatCurrency, formatDate, formatDateTime, getContactNamesByPhones } from "../utils/exportUtils";
+import { escapeHtml, formatCurrency, formatDate, formatDateTime, getContactNamesByHandles } from "../utils/exportUtils";
 import logService from "./logService";
-import { normalizePhone as sharedNormalizePhone } from "./contactResolutionService";
+import { normalizePhone as sharedNormalizePhone, extractParticipantHandles } from "./contactResolutionService";
 import { getThreadKey as sharedGetThreadKey } from "./folderExport/textExportHelpers";
 
 // Create a DOMPurify instance using JSDOM for Node.js / Electron main process
@@ -513,11 +513,11 @@ class PDFExportService {
       (!c.channel && !c.communication_type && (!c.subject || c.subject.length === 0))
     );
 
-    // Look up contact names for text message phone numbers
-    const textPhones = texts
-      .map(t => t.sender)
-      .filter((s): s is string => !!s && (s.startsWith('+') || /^\d{7,}$/.test(s.replace(/\D/g, ''))));
-    const phoneNameMap = getContactNamesByPhones(textPhones);
+    // TASK-2288: Extract ALL participant handles (from, to, chat_members, sender)
+    // for complete contact name resolution. Previously only extracted sender phones,
+    // causing "Unknown Contact" for outbound message recipients and email handles.
+    const allHandles = extractParticipantHandles(texts);
+    const phoneNameMap = getContactNamesByHandles(allHandles);
 
     // Sanitize HTML for PDF display using DOMPurify (BACKLOG-1081)
     // Replaces previous regex-based sanitization which was fundamentally unreliable
