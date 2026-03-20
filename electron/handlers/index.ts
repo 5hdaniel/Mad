@@ -52,3 +52,45 @@ export {
   handleSavePendingMailboxTokens,
   handleDisconnectMailbox,
 } from "./sharedAuthHandlers";
+
+// Auth handlers facade (TASK-2263: migrated from electron/ root)
+export { registerAuthHandlers, initializeDatabase } from "./authHandlers";
+
+// Contact handlers (TASK-2263: migrated from electron/ root)
+export { registerContactHandlers } from "./contactHandlers";
+
+// Address handlers (TASK-2263: migrated from electron/ root)
+export { registerAddressHandlers } from "./addressHandlers";
+
+// Feedback handlers (TASK-2263: migrated from electron/ root)
+export { registerFeedbackHandlers } from "./feedbackHandlers";
+
+// Backup handlers (TASK-2263: migrated from electron/ root)
+export { registerBackupHandlers } from "./backupHandlers";
+
+// Sync handlers (TASK-2263: migrated from electron/ root)
+export { registerSyncHandlers, cleanupSyncHandlers, setSyncUserId } from "./syncHandlers";
+
+// License handlers (TASK-2263: migrated from electron/ root)
+export { registerLicenseHandlers } from "./licenseHandlers";
+
+// Preference handlers (TASK-2263: migrated from electron/ root)
+export { registerPreferenceHandlers } from "./preferenceHandlers";
+
+// LLM handlers (TASK-2263: migrated from electron/ root)
+export { registerLLMHandlers } from "./llmHandlers";
+
+// Device handlers (TASK-2263: migrated from electron/ root)
+export { registerDeviceHandlers, cleanupDeviceHandlers } from "./deviceHandlers";
+
+// Driver handlers (TASK-2263: migrated from electron/ root)
+export { registerDriverHandlers } from "./driverHandlers";
+
+// Feature gate handlers (TASK-2263: migrated from electron/ root)
+export { registerFeatureGateHandlers } from "./featureGateHandlers";
+
+// Transaction handlers compat (TASK-2263: migrated from electron/ root)
+export { registerTransactionHandlers, cleanupTransactionHandlers } from "./transactionHandlers";
+
+// System handlers compat (TASK-2263: migrated from electron/ root)
+export { registerSystemHandlers as registerSystemHandlersCompat } from "./systemHandlersCompat";

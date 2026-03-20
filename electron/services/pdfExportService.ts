@@ -1,11 +1,18 @@
 import { BrowserWindow, app } from "electron";
 import path from "path";
 import fs from "fs/promises";
+import { JSDOM } from "jsdom";
+import createDOMPurify, { type WindowLike } from "dompurify";
 import { Transaction, Communication } from "../types/models";
 import { isEmailMessage, isTextMessage } from "../utils/channelHelpers";
 import { escapeHtml, formatCurrency, formatDate, formatDateTime, getContactNamesByPhones } from "../utils/exportUtils";
 import logService from "./logService";
 import { normalizePhone as sharedNormalizePhone } from "./contactResolutionService";
+import { getThreadKey as sharedGetThreadKey } from "./folderExport/textExportHelpers";
+
+// Create a DOMPurify instance using JSDOM for Node.js / Electron main process
+const domPurifyWindow = new JSDOM("").window;
+const DOMPurify = createDOMPurify(domPurifyWindow as unknown as WindowLike);
 
 /**
  * Format phone number or resolve to contact name
@@ -68,7 +75,8 @@ class PDFExportService {
       // Write HTML to temp file
       await fs.writeFile(tempFile, html, "utf8");
 
-      // Create hidden window for PDF generation
+      // Create hidden, sandboxed window for PDF generation
+      // sandbox + contextIsolation protect against user-provided data in transaction details
       this.exportWindow = new BrowserWindow({
         width: 800,
         height: 1200,
@@ -76,14 +84,20 @@ class PDFExportService {
         webPreferences: {
           nodeIntegration: false,
           contextIsolation: true,
+          sandbox: true,
         },
       });
 
       // Load HTML from temp file (avoids data URL length limits)
-      await this.exportWindow.loadFile(tempFile);
-
-      // Wait for page to fully render
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Use did-finish-load event instead of fixed setTimeout for reliable rendering
+      await new Promise<void>((resolve, reject) => {
+        const win = this.exportWindow!;
+        win.webContents.on("did-finish-load", () => resolve());
+        win.webContents.on("did-fail-load", (_event, errorCode, errorDescription) => {
+          reject(new Error(`Failed to load PDF content: ${errorDescription} (code ${errorCode})`));
+        });
+        win.loadFile(tempFile);
+      });
 
       // Generate PDF
       const pdfData = await this.exportWindow.webContents.printToPDF({
@@ -505,93 +519,38 @@ class PDFExportService {
       .filter((s): s is string => !!s && (s.startsWith('+') || /^\d{7,}$/.test(s.replace(/\D/g, ''))));
     const phoneNameMap = getContactNamesByPhones(textPhones);
 
-    // Helper to sanitize HTML for PDF display
-    // Removes dangerous elements while preserving formatting
-    // Uses while-loop pattern to handle nested/overlapping patterns
-    // (e.g., <scr<script>ipt> after one pass becomes <script>)
+    // Sanitize HTML for PDF display using DOMPurify (BACKLOG-1081)
+    // Replaces previous regex-based sanitization which was fundamentally unreliable
     const sanitizeHtml = (html: string | null | undefined): string => {
       if (!html) return '';
 
-      let sanitized = html;
-      let prev: string;
+      // Use DOMPurify with an allowlist of safe formatting tags
+      // This strips scripts, event handlers, iframes, forms, and all dangerous content
+      const sanitized = DOMPurify.sanitize(html, {
+        // Allow safe formatting tags for email display
+        ALLOWED_TAGS: [
+          'a', 'b', 'blockquote', 'br', 'caption', 'cite', 'code',
+          'col', 'colgroup', 'dd', 'div', 'dl', 'dt', 'em', 'h1',
+          'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'img', 'li',
+          'ol', 'p', 'pre', 'small', 'span', 'strong', 'sub', 'sup',
+          'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'u', 'ul',
+        ],
+        // Allow safe attributes for display/formatting
+        ALLOWED_ATTR: [
+          'href', 'src', 'alt', 'title', 'width', 'height', 'style',
+          'class', 'colspan', 'rowspan', 'align', 'valign', 'border',
+          'cellpadding', 'cellspacing', 'dir', 'lang',
+        ],
+        // Block dangerous URI schemes
+        ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
+        // Remove entire tag (not just attributes) for dangerous elements
+        FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'textarea', 'meta', 'link', 'base'],
+        // Strip document-level wrappers (html, head, body) automatically
+        WHOLE_DOCUMENT: false,
+      });
 
-      // Remove script tags and their content (loop for nested patterns)
-      prev = '';
-      while (sanitized !== prev) {
-        prev = sanitized;
-        sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-      }
-
-      // Remove style tags and their content (loop for nested patterns)
-      prev = '';
-      while (sanitized !== prev) {
-        prev = sanitized;
-        sanitized = sanitized.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
-      }
-
-      // Remove all event handlers (onclick, onerror, onload, etc.)
-      sanitized = sanitized.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '');
-      sanitized = sanitized.replace(/\s+on\w+\s*=\s*[^\s>]+/gi, '');
-
-      // Remove javascript: URLs
-      sanitized = sanitized.replace(/href\s*=\s*["']javascript:[^"']*["']/gi, 'href="#"');
-      sanitized = sanitized.replace(/src\s*=\s*["']javascript:[^"']*["']/gi, 'src=""');
-
-      // Remove data: URLs (could contain malicious content)
-      sanitized = sanitized.replace(/src\s*=\s*["']data:[^"']*["']/gi, 'src=""');
-      sanitized = sanitized.replace(/href\s*=\s*["']data:[^"']*["']/gi, 'href="#"');
-
-      // Remove iframe, embed, object tags (loop for nested patterns)
-      prev = '';
-      while (sanitized !== prev) {
-        prev = sanitized;
-        sanitized = sanitized.replace(/<iframe\b[^>]*>.*?<\/iframe>/gi, '');
-        sanitized = sanitized.replace(/<iframe\b[^>]*\/?>/gi, '');
-      }
-
-      prev = '';
-      while (sanitized !== prev) {
-        prev = sanitized;
-        sanitized = sanitized.replace(/<embed\b[^>]*\/?>/gi, '');
-      }
-
-      prev = '';
-      while (sanitized !== prev) {
-        prev = sanitized;
-        sanitized = sanitized.replace(/<object\b[^>]*>.*?<\/object>/gi, '');
-        sanitized = sanitized.replace(/<object\b[^>]*\/?>/gi, '');
-      }
-
-      // Remove form elements (loop for nested patterns)
-      prev = '';
-      while (sanitized !== prev) {
-        prev = sanitized;
-        sanitized = sanitized.replace(/<form\b[^>]*>.*?<\/form>/gi, '');
-        sanitized = sanitized.replace(/<input\b[^>]*\/?>/gi, '');
-        sanitized = sanitized.replace(/<button\b[^>]*>.*?<\/button>/gi, '');
-        sanitized = sanitized.replace(/<textarea\b[^>]*>.*?<\/textarea>/gi, '');
-      }
-
-      // Remove meta, link, base tags
-      sanitized = sanitized.replace(/<meta\b[^>]*\/?>/gi, '');
-      sanitized = sanitized.replace(/<link\b[^>]*\/?>/gi, '');
-      sanitized = sanitized.replace(/<base\b[^>]*\/?>/gi, '');
-
-      // CRITICAL: Remove document-level tags that can affect the whole PDF
-      // These tags from email HTML bleed styles into our document
-      prev = '';
-      while (sanitized !== prev) {
-        prev = sanitized;
-        sanitized = sanitized.replace(/<!DOCTYPE[^>]*>/gi, '');
-        sanitized = sanitized.replace(/<\/?html\b[^>]*>/gi, '');
-        sanitized = sanitized.replace(/<head\b[^>]*>[\s\S]*?<\/head>/gi, '');
-        sanitized = sanitized.replace(/<\/?body\b[^>]*>/gi, '');
-      }
-
-      // Remove any background-color styles that could affect the page
-      sanitized = sanitized.replace(/background(-color)?\s*:\s*[^;"}]+[;"]?/gi, '');
-
-      return sanitized;
+      // Remove background-color styles that could affect the PDF page
+      return sanitized.replace(/background(-color)?\s*:\s*[^;"}]+[;"]?/gi, '');
     };
 
     // Helper to truncate preview text
@@ -607,36 +566,10 @@ class PDFExportService {
     // TASK-2027: Use shared normalizePhone that handles email handles correctly
     const normalizePhone = sharedNormalizePhone;
 
-    // Helper to get thread key (matches UI logic)
-    const getThreadKey = (msg: Communication): string => {
-      // Use thread_id if available
-      if (msg.thread_id) return msg.thread_id;
-
-      // Fallback: compute from participants
-      try {
-        if (msg.participants) {
-          const parsed = typeof msg.participants === 'string'
-            ? JSON.parse(msg.participants)
-            : msg.participants;
-
-          const allParticipants = new Set<string>();
-          if (parsed.from) allParticipants.add(normalizePhone(parsed.from));
-          if (parsed.to) {
-            const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
-            toList.forEach((p: string) => allParticipants.add(normalizePhone(p)));
-          }
-
-          if (allParticipants.size > 0) {
-            return 'participants-' + Array.from(allParticipants).sort().join('-');
-          }
-        }
-      } catch {
-        // Fall through
-      }
-
-      // Last resort: use message id
-      return 'msg-' + msg.id;
-    };
+    // BACKLOG-1084: Use shared getThreadKey for consistent thread deduplication
+    // (prefers thread_id, falls back to subject+participants for emails,
+    //  phone-based participants for texts, message id as last resort)
+    const getThreadKey = sharedGetThreadKey;
 
     // Helper to extract phone/contact name from thread
     const getThreadContact = (msgs: Communication[]): { phone: string; name: string | null } => {

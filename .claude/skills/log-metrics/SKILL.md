@@ -152,6 +152,15 @@ python .claude/skills/log-metrics/sum_effort.py --task TASK-1234 --pretty
 
 Metrics are stored in: `.claude/metrics/tokens.csv`
 
+## Supabase Alternative
+
+The `pm_token_metrics` table exists in Supabase as an alternative storage for metrics data. The CSV-based `log_metrics.py` script continues to work and remains the primary method for logging metrics during agent workflows. Supabase metrics can be queried via:
+
+```sql
+-- Query metrics from Supabase
+SELECT * FROM pm_token_metrics WHERE task_id = 'TASK-1234' ORDER BY created_at;
+```
+
 ## CSV Columns
 
 ```

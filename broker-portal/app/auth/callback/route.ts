@@ -12,13 +12,16 @@ import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { extractEmail } from '@/lib/auth/helpers';
 
-// Allowed roles for broker portal access
-const ALLOWED_ROLES = ['broker', 'admin', 'it_admin'];
+// Allowed roles for broker portal access (dashboard)
+const PORTAL_ROLES = ['broker', 'admin', 'it_admin'];
+// Roles that should be redirected to the desktop app download page
+const DESKTOP_ROLES = ['agent'];
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
-  const next = searchParams.get('next') ?? '/dashboard';
+  const rawNext = searchParams.get('next') ?? '/dashboard';
+  const next = /^\/[a-zA-Z0-9\-_\/\?\&\=\#\.]+$/.test(rawNext) ? rawNext : '/dashboard';
 
   if (code) {
     const supabase = await createClient();
@@ -35,16 +38,20 @@ export async function GET(request: Request) {
     } = await supabase.auth.getUser();
 
     if (user) {
-      // Check for existing membership with allowed role
+      // Check for existing membership
       const { data: membership } = await supabase
         .from('organization_members')
         .select('role, organization_id')
         .eq('user_id', user.id)
-        .in('role', ALLOWED_ROLES)
         .limit(1)
         .single();
 
-      if (membership) {
+      if (membership && DESKTOP_ROLES.includes(membership.role)) {
+        // Agent role - redirect to desktop app download
+        return NextResponse.redirect(`${origin}/download`);
+      }
+
+      if (membership && PORTAL_ROLES.includes(membership.role)) {
         // If IT admin, check if org needs admin consent for desktop app permissions
         if (membership.role === 'it_admin' || membership.role === 'admin') {
           const { data: org } = await supabase
@@ -117,6 +124,10 @@ export async function GET(request: Request) {
           } else {
             if (process.env.NODE_ENV === 'development') {
               console.log('Successfully linked invite to user');
+            }
+            // Redirect agents to download page, portal users to dashboard
+            if (DESKTOP_ROLES.includes(pendingInvite.role)) {
+              return NextResponse.redirect(`${origin}/download`);
             }
             return NextResponse.redirect(`${origin}${next}`);
           }

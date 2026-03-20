@@ -1,15 +1,17 @@
+import { withSentryConfig } from '@sentry/nextjs';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Enable React strict mode for better development
   reactStrictMode: true,
 
   // Transpile shared types from parent directory
-  transpilePackages: ['@shared'],
+  transpilePackages: ['@shared', '@keepr/shared'],
 
   async headers() {
     const cspDirectives = [
       "default-src 'self'",
-      // unsafe-eval required in both dev (HMR) and prod (Clarity uses new Function())
+      // unsafe-eval required in both dev (HMR) and prod (Clarity uses dynamic evaluation)
       "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.clarity.ms https://scripts.clarity.ms",
       "style-src 'self' 'unsafe-inline'",
       // blob: required for HEIC image conversion (AttachmentViewerModal, AttachmentList)
@@ -17,7 +19,7 @@ const nextConfig = {
       // next/font/google downloads at build time and self-hosts - no external font CDN needed
       "font-src 'self'",
       // Supabase API and Realtime WebSocket connections
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.clarity.ms",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.clarity.ms https://*.sentry.io",
       // PDF preview uses iframes with signed Supabase storage URLs
       "frame-src 'self' https://*.supabase.co",
       // Video preview uses <video src={signedUrl}> from Supabase storage
@@ -56,4 +58,14 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  // Suppress source map upload logs during build
+  silent: true,
+
+  // Do not upload source maps unless SENTRY_AUTH_TOKEN is set
+  disableServerWebpackPlugin: !process.env.SENTRY_AUTH_TOKEN,
+  disableClientWebpackPlugin: !process.env.SENTRY_AUTH_TOKEN,
+
+  // Hide source maps from the client bundle
+  hideSourceMaps: true,
+});

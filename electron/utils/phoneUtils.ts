@@ -1,18 +1,52 @@
 /**
  * Phone Number Utilities
  * Handles phone number normalization and formatting
+ *
+ * BACKLOG-1083: normalizePhoneNumber now produces E.164-ish format (+digits)
+ * consistent with phoneNormalization.ts to prevent lookup mismatches.
  */
 
 import { REGEX_PATTERNS } from "../constants";
 
 /**
- * Normalize phone number by removing all non-digit characters
+ * Normalize phone number to E.164-ish format for consistent matching.
+ * Preserves email handles as lowercase.
+ *
  * @param phone - Phone number to normalize
- * @returns Normalized phone number (digits only)
+ * @returns Normalized phone number with + prefix (E.164-ish) or empty string
+ *
+ * @example
+ * normalizePhoneNumber('(555) 123-4567')  // '+15551234567'
+ * normalizePhoneNumber('+1 555 123 4567') // '+15551234567'
+ * normalizePhoneNumber('5551234567')      // '+15551234567'
+ * normalizePhoneNumber('user@email.com')  // 'user@email.com'
  */
 export function normalizePhoneNumber(phone: string | null | undefined): string {
   if (!phone) return "";
   if (phone.includes("@")) return phone.toLowerCase();
+
+  // Remove all non-digit characters
+  let digits = phone.replace(REGEX_PATTERNS.PHONE_NORMALIZE, "");
+
+  if (!digits) return "";
+
+  // Handle US numbers (10 digits without country code)
+  if (digits.length === 10) {
+    digits = "1" + digits;
+  }
+
+  // Return with + prefix (E.164-ish format)
+  return "+" + digits;
+}
+
+/**
+ * Extract just the digits from a phone number.
+ * Useful when digits-only format is explicitly needed.
+ * @param phone - Phone number string
+ * @returns Only the digit characters
+ */
+export function extractDigits(phone: string | null | undefined): string {
+  if (!phone) return "";
   return phone.replace(REGEX_PATTERNS.PHONE_NORMALIZE, "");
 }
 
@@ -30,8 +64,8 @@ export function formatPhoneNumber(phone: string | null | undefined): string {
     return phone;
   }
 
-  // Remove all non-digits
-  const cleaned = normalizePhoneNumber(phone);
+  // Extract digits only for formatting (not E.164 normalization)
+  const cleaned = extractDigits(phone);
 
   // Format based on length
   if (cleaned.length === 11 && cleaned[0] === "1") {
@@ -51,6 +85,9 @@ export function formatPhoneNumber(phone: string | null | undefined): string {
 
 /**
  * Check if two phone numbers match (after normalization)
+ * Uses E.164 normalization for exact match, with suffix fallback for
+ * numbers that may have different country code handling.
+ *
  * @param phone1 - First phone number
  * @param phone2 - Second phone number
  * @returns True if phone numbers match
@@ -64,12 +101,14 @@ export function phoneNumbersMatch(
 
   if (!normalized1 || !normalized2) return false;
 
-  // Exact match
+  // Exact match after E.164 normalization
   if (normalized1 === normalized2) return true;
 
-  // Match last 10 digits (for numbers with/without country code)
-  if (normalized1.length >= 10 && normalized2.length >= 10) {
-    return normalized1.slice(-10) === normalized2.slice(-10);
+  // Fallback: match last 10 digits (handles country code differences)
+  const digits1 = extractDigits(phone1);
+  const digits2 = extractDigits(phone2);
+  if (digits1.length >= 10 && digits2.length >= 10) {
+    return digits1.slice(-10) === digits2.slice(-10);
   }
 
   return false;

@@ -4,6 +4,31 @@ This module covers sprint lifecycle operations: creating sprints, monitoring exe
 
 ---
 
+## Sprint RPCs (Supabase)
+
+Sprint operations should use Supabase RPCs as the primary data source. Use the Supabase MCP tool (`mcp__supabase__execute_sql`) to run these:
+
+```sql
+-- Create sprint
+SELECT pm_create_sprint(p_name := 'SPRINT-140', p_goal := 'Sprint goal');
+
+-- List all sprints
+SELECT pm_list_sprints();
+
+-- Get sprint detail (items, status)
+SELECT pm_get_sprint_detail('<sprint-uuid>');
+
+-- Assign item to sprint
+SELECT pm_assign_to_sprint(p_item_id := '<item-uuid>', p_sprint_id := '<sprint-uuid>');
+
+-- Update item status within sprint
+SELECT pm_update_item_status('<item-uuid>', 'in_progress');
+```
+
+> **Note:** Sprint markdown files (`.claude/plans/sprints/SPRINT-XXX.md`) are still maintained as commit artifacts alongside Supabase updates.
+
+---
+
 ## Token Monitoring (MANDATORY - HOTFIX BACKLOG-136)
 
 **CRITICAL: This section is non-negotiable. Failure to follow this workflow results in meaningless estimates.**
@@ -146,10 +171,11 @@ Estimates capture planning assumptions at sprint start. Changing them retroactiv
 
 ### Sprint Creation Checklist
 
+- [ ] Sprint created in Supabase: `SELECT pm_create_sprint(p_name := 'SPRINT-XXX', p_goal := 'Sprint goal');`
 - [ ] Sprint file created: `.claude/plans/sprints/SPRINT-XXX-slug.md`
 - [ ] All task files created in `.claude/plans/tasks/`
+- [ ] Items assigned to sprint in Supabase: `SELECT pm_assign_to_sprint(p_item_id := '<uuid>', p_sprint_id := '<uuid>');`
 - [ ] INDEX.md updated with sprint assignment
-- [ ] **Backlog CSV updated** - All items have `sprint` column set
 - [ ] Worktrees ready for parallel tasks (BACKLOG-132)
 
 ---
@@ -311,6 +337,7 @@ Every sprint file must have a `## Sprint Retrospective` section (populated at cl
 
 - [ ] **PR Audit complete** - `gh pr list --state open` shows no sprint PRs
 - [ ] **All PRs verified MERGED** - Not just approved, actually merged
+- [ ] **All item statuses updated in Supabase** - `pm_update_item_status('<uuid>', 'completed')` for each item
 - [ ] **All agent metrics labeled** - Every agent_id from handoffs labeled in tokens.csv
 - [ ] **Per-task actuals recorded** - sum_effort.py run for each task
 - [ ] All task files have actual (monitored) token data
@@ -478,7 +505,8 @@ Before starting implementation phase:
 
 ### How to Move
 
-1. Update task file with new sprint assignment
-2. Update INDEX.md
-3. Update both sprint files
-4. Note reason for move in decision log
+1. Update sprint assignment in Supabase: `SELECT pm_assign_to_sprint(p_item_id := '<uuid>', p_sprint_id := '<new-sprint-uuid>');`
+2. Update task file with new sprint assignment
+3. Update INDEX.md
+4. Update both sprint files
+5. Note reason for move in decision log

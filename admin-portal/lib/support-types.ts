@@ -11,6 +11,13 @@ export type SourceChannel = 'web_form' | 'email' | 'in_app_redirect' | 'admin_cr
 export type ParticipantRole = 'cc' | 'watcher';
 export type PendingReason = 'customer' | 'vendor' | 'internal';
 
+export interface SearchHighlight {
+  field: 'subject' | 'description' | 'requester_name' | 'requester_email' | 'message';
+  snippet: string;  // Contains <mark> tags from ts_headline
+  sender_name?: string;  // Only for field: 'message'
+  sent_at?: string;      // Only for field: 'message'
+}
+
 export interface SupportTicket {
   id: string;
   ticket_number: number;
@@ -39,6 +46,8 @@ export interface SupportTicket {
   subcategory_name?: string | null;
   assignee_name?: string | null;
   assignee_email?: string | null;
+  // Search highlight snippets (populated when search is active)
+  search_highlights?: SearchHighlight[] | null;
 }
 
 export interface SupportTicketMessage {
@@ -143,6 +152,8 @@ export interface CreateTicketParams {
   requester_email: string;
   requester_name: string;
   source_channel?: SourceChannel;
+  requester_phone?: string;
+  preferred_contact?: PreferredContact;
 }
 
 export interface SupportResponseTemplate {
@@ -154,6 +165,82 @@ export interface SupportResponseTemplate {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// --- Related Tickets types ---
+
+export type TicketLinkType = 'related' | 'duplicate' | 'parent' | 'child';
+
+export interface RelatedTicket {
+  id: string;
+  ticket_number: number;
+  subject: string;
+  status: string;
+  priority: string;
+  created_at: string;
+  link_source: 'auto' | 'manual';
+  link_type?: TicketLinkType;
+  link_id?: string;
+}
+
+export interface RelatedTicketsResponse {
+  auto_related: RelatedTicket[];
+  manual_links: RelatedTicket[];
+}
+
+export interface TicketLinkSearchResult {
+  id: string;
+  ticket_number: number;
+  subject: string;
+  status: string;
+  requester_name: string;
+}
+
+// --- Requester Lookup types ---
+
+export type PreferredContact = 'email' | 'phone' | 'either';
+
+export interface RequesterSearchResult {
+  user_id: string;
+  email: string;
+  name: string;
+  phone: string | null;
+  organization_id: string | null;
+  organization_name: string | null;
+  open_ticket_count: number;
+}
+
+export interface RecentTicket {
+  id: string;
+  ticket_number: number;
+  subject: string;
+  status: string;
+  priority: string;
+  created_at: string;
+}
+
+// --- Analytics types ---
+
+export interface AgentAnalytics {
+  agent_id: string;
+  agent_email: string;
+  agent_name: string;
+  open_tickets: number;
+  closed_tickets: number;
+  avg_first_response_minutes: number | null;
+  avg_resolution_minutes: number | null;
+}
+
+export interface SupportSummary {
+  total_open: number;
+  closed_in_period: number;
+  avg_first_response_minutes: number | null;
+  avg_resolution_minutes: number | null;
+}
+
+export interface AgentAnalyticsResponse {
+  summary: SupportSummary;
+  agents: AgentAnalytics[];
 }
 
 // Status transition map for UI validation
@@ -197,3 +284,9 @@ export const PRIORITY_COLORS: Record<TicketPriority, string> = {
   high: 'bg-orange-100 text-orange-800',
   urgent: 'bg-red-100 text-red-800',
 };
+
+// --- Timeline types ---
+
+export type TimelineEntry =
+  | { type: 'message'; data: SupportTicketMessage; timestamp: string }
+  | { type: 'event'; data: SupportTicketEvent; timestamp: string };

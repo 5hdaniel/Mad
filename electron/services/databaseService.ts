@@ -73,6 +73,12 @@ import * as transactionContactDb from "./db/transactionContactDbService";
 import * as communicationDb from "./db/communicationDbService";
 import * as feedbackDb from "./db/feedbackDbService";
 import * as auditDb from "./db/auditLogDbService";
+import * as messageDb from "./db/messageDbService";
+import * as diagnosticDb from "./db/diagnosticDbService";
+import * as attachmentDb from "./db/attachmentDbService";
+import * as submissionDb from "./db/submissionDbService";
+import * as syncDb from "./db/syncDbService";
+import * as maintenanceDb from "./db/maintenanceDbService";
 
 // Re-export types for backward compatibility
 export type { ContactAssignmentOperation } from "./db/transactionContactDbService";
@@ -177,7 +183,6 @@ class DatabaseService implements IDatabaseService {
         }
 
         if (restoreResult.restored) {
-          // Show success dialog (non-blocking -- do not await)
           dialog.showMessageBox({
             type: "warning",
             title: "Database Update Notice",
@@ -186,7 +191,6 @@ class DatabaseService implements IDatabaseService {
             buttons: ["OK"],
           });
         } else {
-          // Show failure dialog (non-blocking -- do not await)
           dialog.showMessageBox({
             type: "error",
             title: "Database Update Failed",
@@ -229,18 +233,18 @@ class DatabaseService implements IDatabaseService {
     if (!this.dbPath) throw new DatabaseError("Database path is not set");
     if (!this.encryptionKey) throw new DatabaseError("Encryption key is not set");
 
-    const db = new Database(this.dbPath);
-    db.pragma(`key = "x'${this.encryptionKey}'"`);
-    db.pragma("cipher_compatibility = 4");
-    db.pragma("foreign_keys = ON");
+    const openedDb = new Database(this.dbPath);
+    openedDb.pragma(`key = "x'${this.encryptionKey}'"`);
+    openedDb.pragma("cipher_compatibility = 4");
+    openedDb.pragma("foreign_keys = ON");
 
     try {
-      db.pragma("cipher_integrity_check");
+      openedDb.pragma("cipher_integrity_check");
     } catch {
       throw new DatabaseError("Failed to decrypt database. Encryption key may be invalid.");
     }
 
-    return db;
+    return openedDb;
   }
 
   private async _checkMigrationNeeded(): Promise<boolean> {
@@ -338,7 +342,6 @@ class DatabaseService implements IDatabaseService {
 
   private async _secureDelete(filePath: string): Promise<void> {
     try {
-      // Open first, then fstat to avoid TOCTOU race between stat and open
       const fd = fs.openSync(filePath, "r+");
       try {
         const stats = fs.fstatSync(fd);
@@ -360,18 +363,6 @@ class DatabaseService implements IDatabaseService {
   // MIGRATION FAILURE AUTO-RESTORE (TASK-2057)
   // ============================================
 
-  /**
-   * Attempt to auto-restore from the most recent pre-migration backup.
-   *
-   * Flow:
-   * 1. Find the most recent backup file
-   * 2. Verify its integrity (encrypted PRAGMA integrity_check)
-   * 3. Close the current (possibly corrupted) database
-   * 4. Copy backup over the main database file
-   * 5. Re-open and update shared references
-   *
-   * @returns Object describing restore outcome for Sentry tagging
-   */
   private async _attemptAutoRestore(
     _migrationError: unknown
   ): Promise<{
@@ -386,16 +377,15 @@ class DatabaseService implements IDatabaseService {
     const dbDir = path.dirname(this.dbPath);
     const dbName = path.basename(this.dbPath, ".db");
 
-    // Find the most recent backup
     let backupFiles: string[] = [];
     try {
       backupFiles = fs
         .readdirSync(dbDir)
         .filter((f) => f.startsWith(`${dbName}-backup-`) && f.endsWith(".db"))
         .sort()
-        .reverse(); // newest first (timestamp-based names sort chronologically)
+        .reverse();
     } catch {
-      // Cannot read directory -- no backups available
+      // Cannot read directory
     }
 
     if (backupFiles.length === 0) {
@@ -405,7 +395,6 @@ class DatabaseService implements IDatabaseService {
 
     const latestBackupPath = path.join(dbDir, backupFiles[0]);
 
-    // Verify backup integrity
     const isValid = this._verifyBackupIntegrity(latestBackupPath, this.encryptionKey);
     if (!isValid) {
       await logService.error("Backup file failed integrity check, cannot auto-restore", "DatabaseService", {
@@ -419,32 +408,21 @@ class DatabaseService implements IDatabaseService {
     });
 
     try {
-      // Close the current (corrupted) database connection
       if (this.db) {
-        try {
-          this.db.close();
-        } catch {
-          // May already be in a bad state -- ignore close errors
-        }
+        try { this.db.close(); } catch { /* May already be in a bad state */ }
         this.db = null;
       }
 
-      // Copy the backup file over the main database file
       fs.copyFileSync(latestBackupPath, this.dbPath);
       await logService.info("Backup file restored over main database", "DatabaseService");
 
-      // Re-open the database connection with the same encryption params
       const newDb = this._openDatabase();
-
-      // Update local reference
       this.db = newDb;
 
-      // Update shared references so sub-services get the new connection
       setDb(newDb);
       setDbPath(this.dbPath);
       setEncryptionKey(this.encryptionKey);
 
-      // Post-restore connectivity check: confirm the DB is truly functional
       try {
         const probe = newDb.prepare("SELECT 1 AS ok").get() as { ok: number } | undefined;
         if (!probe || probe.ok !== 1) {
@@ -467,26 +445,13 @@ class DatabaseService implements IDatabaseService {
     }
   }
 
-  /**
-   * Verify backup file integrity using PRAGMA integrity_check.
-   *
-   * CRITICAL: The backup is encrypted with the same key as the main DB.
-   * Must open with `pragma key` and `cipher_compatibility = 4` or
-   * integrity_check will always fail on production encrypted databases.
-   *
-   * @param backupPath - Path to the backup file
-   * @param encryptionKey - The encryption key for the database
-   * @returns true if backup is a valid, readable SQLite database
-   */
-  private _verifyBackupIntegrity(backupPath: string, encryptionKey: string): boolean {
+  private _verifyBackupIntegrity(backupPath: string, key: string): boolean {
     let testDb: DatabaseType | null = null;
     try {
-      if (!fs.existsSync(backupPath)) {
-        return false;
-      }
+      if (!fs.existsSync(backupPath)) return false;
 
       testDb = new Database(backupPath, { readonly: true });
-      testDb.pragma(`key = "x'${encryptionKey}'"`);
+      testDb.pragma(`key = "x'${key}'"`);
       testDb.pragma("cipher_compatibility = 4");
 
       const result = testDb.pragma("integrity_check") as Array<{ integrity_check: string }>;
@@ -495,11 +460,7 @@ class DatabaseService implements IDatabaseService {
       return false;
     } finally {
       if (testDb) {
-        try {
-          testDb.close();
-        } catch {
-          // Ignore close errors during verification
-        }
+        try { testDb.close(); } catch { /* Ignore close errors */ }
       }
     }
   }
@@ -508,17 +469,8 @@ class DatabaseService implements IDatabaseService {
   // MIGRATIONS (Version-based runner)
   // ============================================
 
-  /**
-   * Run database migrations.
-   *
-   * 1. Create pre-migration backup
-   * 2. Run schema.sql (all IF NOT EXISTS — safe for existing DBs)
-   * 3. Run versioned migrations for anything beyond the baseline
-   *
-   * Baseline version = 29 (all historical migrations 1-28 folded into schema.sql)
-   */
   async runMigrations(): Promise<void> {
-    const db = this._ensureDb();
+    const currentDb = this._ensureDb();
     const schemaPath = path.join(__dirname, "../database/schema.sql");
     const schemaSql = fs.readFileSync(schemaPath, "utf8");
 
@@ -526,16 +478,12 @@ class DatabaseService implements IDatabaseService {
     if (this.dbPath && fs.existsSync(this.dbPath)) {
       try {
         const timestamp = new Date().toISOString().replace(/[:.]/g, "").slice(0, 15);
-        const backupPath = this.dbPath.replace(".db", `-backup-${timestamp}.db`);
+        const bkPath = this.dbPath.replace(".db", `-backup-${timestamp}.db`);
 
-        try {
-          db.pragma("wal_checkpoint(TRUNCATE)");
-        } catch {
-          // WAL may not be enabled — safe to ignore
-        }
+        try { currentDb.pragma("wal_checkpoint(TRUNCATE)"); } catch { /* WAL may not be enabled */ }
 
-        fs.copyFileSync(this.dbPath, backupPath);
-        await logService.info(`Pre-migration backup created: ${backupPath}`, "DatabaseService");
+        fs.copyFileSync(this.dbPath, bkPath);
+        await logService.info(`Pre-migration backup created: ${bkPath}`, "DatabaseService");
       } catch (backupError) {
         await logService.warn("Pre-migration backup failed", "DatabaseService", { error: backupError instanceof Error ? backupError.message : String(backupError) });
         Sentry.captureException(backupError, {
@@ -545,10 +493,7 @@ class DatabaseService implements IDatabaseService {
     }
 
     try {
-      // schema.sql uses CREATE TABLE/INDEX IF NOT EXISTS throughout,
-      // so it's safe to run on both fresh and existing databases.
-      db.exec(schemaSql);
-
+      currentDb.exec(schemaSql);
       await this._runVersionedMigrations();
     } catch (error) {
       await logService.error("Failed to run migrations", "DatabaseService", {
@@ -560,7 +505,7 @@ class DatabaseService implements IDatabaseService {
       throw error;
     }
 
-    // Backup retention: keep last 3, delete older (SR review gap #2)
+    // Backup retention: keep last 3, delete older
     if (this.dbPath) {
       try {
         const dbDir = path.dirname(this.dbPath);
@@ -569,7 +514,7 @@ class DatabaseService implements IDatabaseService {
           .readdirSync(dbDir)
           .filter((f) => f.startsWith(`${dbName}-backup-`) && f.endsWith(".db"))
           .sort()
-          .reverse(); // newest first (timestamp-based names sort chronologically)
+          .reverse();
 
         for (const old of backupFiles.slice(3)) {
           fs.unlinkSync(path.join(dbDir, old));
@@ -584,10 +529,6 @@ class DatabaseService implements IDatabaseService {
   /** Baseline version -- schema.sql contains everything through migration 28 */
   static readonly BASELINE_VERSION = 29;
 
-  /**
-   * Registered migrations. Only add new entries at the end.
-   * Baseline = 29. Versions start at 30.
-   */
   static readonly MIGRATIONS: MigrationEntry[] = [
     {
       version: 30,
@@ -636,8 +577,6 @@ class DatabaseService implements IDatabaseService {
       version: 32,
       description: "Add sync_session_id columns and indexes for ACID rollback on cancelled iPhone sync (TASK-2110)",
       migrate: (d) => {
-        // Add columns individually — ALTER TABLE can't be batched in SQLite,
-        // and we use try/catch per column so re-runs are idempotent.
         const columns: [string, string][] = [
           ["messages", "sync_session_id"],
           ["attachments", "sync_session_id"],
@@ -658,32 +597,18 @@ class DatabaseService implements IDatabaseService {
     },
   ];
 
-  // ---- Migration validation helpers (static for testability) ----
-
-  /**
-   * Detect duplicate version numbers in migration list.
-   * Throws with a clear message listing the duplicates.
-   */
   static validateNoDuplicateVersions(migrations: MigrationEntry[]): void {
     const seen = new Set<number>();
     const duplicates: number[] = [];
     for (const m of migrations) {
-      if (seen.has(m.version)) {
-        duplicates.push(m.version);
-      }
+      if (seen.has(m.version)) duplicates.push(m.version);
       seen.add(m.version);
     }
     if (duplicates.length > 0) {
-      throw new Error(
-        `Duplicate migration versions detected: ${[...new Set(duplicates)].join(", ")}`
-      );
+      throw new Error(`Duplicate migration versions detected: ${[...new Set(duplicates)].join(", ")}`);
     }
   }
 
-  /**
-   * Detect gaps in migration version sequence starting from the first version.
-   * Throws if versions are not consecutive (e.g. 30, 32 missing 31).
-   */
   static validateNoVersionGaps(migrations: MigrationEntry[]): void {
     if (migrations.length === 0) return;
     const versions = migrations.map((m) => m.version).sort((a, b) => a - b);
@@ -695,17 +620,13 @@ class DatabaseService implements IDatabaseService {
     }
   }
 
-  /**
-   * Ensure the schema_version table exists and has the migrated_at column.
-   * Adds the column if it is missing (backwards-compatible upgrade).
-   */
-  _ensureSchemaVersionTable(db: DatabaseType): void {
-    const schemaVersionExists = db.prepare(
+  _ensureSchemaVersionTable(currentDb: DatabaseType): void {
+    const schemaVersionExists = currentDb.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
     ).get();
 
     if (!schemaVersionExists) {
-      db.exec(`
+      currentDb.exec(`
         CREATE TABLE IF NOT EXISTS schema_version (
           id INTEGER PRIMARY KEY CHECK (id = 1),
           version INTEGER NOT NULL DEFAULT 1,
@@ -715,39 +636,25 @@ class DatabaseService implements IDatabaseService {
         INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, ${DatabaseService.BASELINE_VERSION});
       `);
     } else {
-      // Add migrated_at column if missing (backwards-compatible)
-      const columns = db.prepare("PRAGMA table_info(schema_version)").all() as Array<{ name: string }>;
+      const columns = currentDb.prepare("PRAGMA table_info(schema_version)").all() as Array<{ name: string }>;
       const hasMigratedAt = columns.some((c) => c.name === "migrated_at");
       if (!hasMigratedAt) {
-        db.exec("ALTER TABLE schema_version ADD COLUMN migrated_at TEXT");
+        currentDb.exec("ALTER TABLE schema_version ADD COLUMN migrated_at TEXT");
       }
     }
   }
 
-  /**
-   * Version-based migration runner.
-   *
-   * Reads current schema version, then runs any migrations with version > current.
-   * After each migration, the version is bumped in the schema_version table.
-   *
-   * Baseline = 29 (schema.sql contains everything through migration 28).
-   * Future migrations add entries to the static MIGRATIONS array above.
-   *
-   * @param dryRun  When true, returns the migration plan without executing anything.
-   */
   async _runVersionedMigrations(dryRun: boolean = false): Promise<MigrationPlan | void> {
-    const db = this._ensureDb();
+    const currentDb = this._ensureDb();
     const migrations = DatabaseService.MIGRATIONS;
 
-    // --- Structural validation (always runs, even in dry-run) ---
     DatabaseService.validateNoDuplicateVersions(migrations);
     DatabaseService.validateNoVersionGaps(migrations);
 
-    // --- Schema version table ---
-    this._ensureSchemaVersionTable(db);
+    this._ensureSchemaVersionTable(currentDb);
 
     const currentVersion = (
-      db.prepare("SELECT version FROM schema_version WHERE id = 1").get() as
+      currentDb.prepare("SELECT version FROM schema_version WHERE id = 1").get() as
         { version: number } | undefined
     )?.version || 0;
 
@@ -758,13 +665,11 @@ class DatabaseService implements IDatabaseService {
       );
     }
 
-    // Filter to only pending migrations
     const pendingMigrations = migrations.filter((m) => m.version > currentVersion);
     const targetVersion = pendingMigrations.length > 0
       ? pendingMigrations[pendingMigrations.length - 1].version
       : currentVersion;
 
-    // --- Dry-run mode: return plan without executing ---
     if (dryRun) {
       return {
         currentVersion,
@@ -777,7 +682,6 @@ class DatabaseService implements IDatabaseService {
       };
     }
 
-    // --- Backup verification (only when there are pending migrations) ---
     if (pendingMigrations.length > 0 && this.dbPath && fs.existsSync(this.dbPath)) {
       const dbDir = path.dirname(this.dbPath);
       const dbName = path.basename(this.dbPath, ".db");
@@ -794,33 +698,23 @@ class DatabaseService implements IDatabaseService {
       }
     }
 
-    // --- Execute pending migrations ---
     for (const m of pendingMigrations) {
-      await logService.info(
-        `Running migration ${m.version}: ${m.description}`,
-        "DatabaseService"
-      );
+      await logService.info(`Running migration ${m.version}: ${m.description}`, "DatabaseService");
       try {
-        // Wrap migration + version bump in a transaction so partial failures
-        // don't leave the DB in a half-migrated state (SR review gap #1)
-        const runInTransaction = db.transaction(() => {
-          m.migrate(db);
-          db.prepare(
+        const runInTransaction = currentDb.transaction(() => {
+          m.migrate(currentDb);
+          currentDb.prepare(
             "UPDATE schema_version SET version = ?, updated_at = CURRENT_TIMESTAMP, migrated_at = datetime('now') WHERE id = 1"
           ).run(m.version);
         });
         runInTransaction();
-        await logService.info(
-          `Migration ${m.version} completed: ${m.description}`,
-          "DatabaseService"
-        );
+        await logService.info(`Migration ${m.version} completed: ${m.description}`, "DatabaseService");
       } catch (error) {
         await logService.error(
           `Migration ${m.version} FAILED: ${m.description}`,
           "DatabaseService",
           { error: error instanceof Error ? error.message : String(error) }
         );
-        // Transaction auto-rolled back by better-sqlite3, DB stays at previous version
         throw new Error(
           `Migration ${m.version} (${m.description}) failed: ${error instanceof Error ? error.message : String(error)}. ` +
           `Database remains at version ${m.version - 1}. Pre-migration backup available.`
@@ -828,9 +722,8 @@ class DatabaseService implements IDatabaseService {
       }
     }
 
-    // Ensure version is at least baseline (the consolidated baseline)
     if (currentVersion < DatabaseService.BASELINE_VERSION) {
-      db.exec(
+      currentDb.exec(
         `UPDATE schema_version SET version = ${DatabaseService.BASELINE_VERSION}, updated_at = CURRENT_TIMESTAMP WHERE id = 1`
       );
     }
@@ -842,7 +735,6 @@ class DatabaseService implements IDatabaseService {
   // USER OPERATIONS (Delegate to userDbService)
   // ============================================
 
-  // TASK-1507G: Accept optional ID to unify user IDs across local SQLite and Supabase
   async createUser(userData: NewUser & { id?: string }): Promise<User> {
     return userDb.createUser(userData);
   }
@@ -883,87 +775,8 @@ class DatabaseService implements IDatabaseService {
     return userDb.hasCompletedEmailOnboarding(userId);
   }
 
-  /**
-   * Migrate a local user's ID to match Supabase auth.uid()
-   * BACKLOG-600: This handles users created before TASK-1507G (user ID unification)
-   *
-   * Updates all FK references across tables:
-   * - users_local (primary)
-   * - messages, contacts, transactions, emails, etc.
-   * - sessions, oauth_tokens, email_accounts
-   *
-   * @param oldUserId - The current local user ID
-   * @param newUserId - The Supabase auth.uid() to migrate to
-   */
   async migrateUserIdForUnification(oldUserId: string, newUserId: string): Promise<void> {
-    const db = this.getRawDatabase();
-
-    try {
-      // CRITICAL: Disable FK checks during migration to avoid circular dependency issues
-      // The old ID is referenced by child tables, and we need to update both parent and children
-      db.exec("PRAGMA foreign_keys = OFF");
-
-      // Use a transaction to ensure atomicity
-      db.exec("BEGIN TRANSACTION");
-
-      try {
-        // Update the users_local table FIRST (the primary record)
-        // With FK checks off, this won't cause issues
-        db.prepare("UPDATE users_local SET id = ? WHERE id = ?").run(newUserId, oldUserId);
-        logService.info("[DB Migration] Updated users_local primary record", "DatabaseService");
-
-        // Tables with user_id FK that need to be updated
-        const tablesToUpdate = [
-          "messages",
-          "contacts",
-          "contact_phones",
-          "contact_emails",
-          "transactions",
-          "emails",
-          "communications",
-          "sessions",
-          "oauth_tokens",
-          "email_accounts",
-          "user_preferences",
-          "external_contacts",
-          "attachments",
-          "audit_logs_local",
-        ];
-
-        for (const table of tablesToUpdate) {
-          try {
-            // Check if table exists and has user_id column
-            const tableInfo = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
-            const hasUserId = tableInfo.some((col) => col.name === "user_id");
-
-            if (hasUserId) {
-              const result = db.prepare(`UPDATE ${table} SET user_id = ? WHERE user_id = ?`).run(newUserId, oldUserId);
-              if (result.changes > 0) {
-                logService.info(`[DB Migration] Updated ${result.changes} rows in ${table}`, "DatabaseService");
-              }
-            }
-          } catch (tableError) {
-            // Table might not exist, skip it
-            logService.debug(`[DB Migration] Skipping table ${table}: ${tableError}`, "DatabaseService");
-          }
-        }
-
-        db.exec("COMMIT");
-        logService.info("[DB Migration] User ID migration completed successfully", "DatabaseService", {
-          oldId: oldUserId.substring(0, 8) + "...",
-          newId: newUserId.substring(0, 8) + "...",
-        });
-      } catch (error) {
-        db.exec("ROLLBACK");
-        logService.error("[DB Migration] User ID migration failed, rolled back", "DatabaseService", {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        throw error;
-      }
-    } finally {
-      // CRITICAL: Re-enable FK checks
-      db.exec("PRAGMA foreign_keys = ON");
-    }
+    return userDb.migrateUserIdForUnification(oldUserId, newUserId);
   }
 
   // ============================================
@@ -995,7 +808,7 @@ class DatabaseService implements IDatabaseService {
   }
 
   // ============================================
-  // CONTACT OPERATIONS (Delegate to contactDbService)
+  // CONTACT OPERATIONS (Delegate to contactDbService + messageDbService)
   // ============================================
 
   async createContact(contactData: NewContact): Promise<Contact> {
@@ -1025,7 +838,6 @@ class DatabaseService implements IDatabaseService {
     return contactDb.getImportedContactsByUserId(userId);
   }
 
-  /** TASK-1956: Non-blocking version using worker thread */
   async getImportedContactsByUserIdAsync(userId: string): Promise<Contact[]> {
     return contactDb.getImportedContactsByUserIdAsync(userId);
   }
@@ -1078,114 +890,16 @@ class DatabaseService implements IDatabaseService {
     return contactDb.getContactByPhone(phone);
   }
 
-  /**
-   * Get the most recent message date for a phone number using lookup table
-   * Falls back to direct query if lookup table is empty (BACKLOG-567)
-   */
   getLastMessageDateForPhone(userId: string, normalizedPhone: string): string | null {
-    const db = this.getRawDatabase();
-
-    // Fast indexed lookup from phone_last_message table
-    const result = db.prepare(`
-      SELECT last_message_at as last_date
-      FROM phone_last_message
-      WHERE user_id = ?
-        AND phone_normalized = ?
-    `).get(userId, normalizedPhone) as { last_date: string | null } | undefined;
-
-    return result?.last_date || null;
+    return messageDb.getLastMessageDateForPhone(userId, normalizedPhone);
   }
 
-  /**
-   * Batch lookup for multiple phones (much more efficient than N queries)
-   * Returns a Map of normalized phone -> last_message_at (BACKLOG-567)
-   */
   getLastMessageDatesForPhones(userId: string, phones: string[]): Map<string, string> {
-    const db = this.getRawDatabase();
-    const result = new Map<string, string>();
-
-    if (phones.length === 0) return result;
-
-    // Use parameterized query for safety
-    const placeholders = phones.map(() => '?').join(',');
-    const rows = db.prepare(`
-      SELECT phone_normalized, last_message_at
-      FROM phone_last_message
-      WHERE user_id = ?
-        AND phone_normalized IN (${placeholders})
-    `).all(userId, ...phones) as { phone_normalized: string; last_message_at: string }[];
-
-    for (const row of rows) {
-      result.set(row.phone_normalized, row.last_message_at);
-    }
-
-    return result;
+    return messageDb.getLastMessageDatesForPhones(userId, phones);
   }
 
-  /**
-   * Populate phone_last_message lookup table from messages (BACKLOG-567)
-   * This aggregates all SMS/iMessage into a phone->lastDate lookup for O(1) queries
-   */
   async backfillPhoneLastMessageTable(userId: string): Promise<number> {
-    const db = this.getRawDatabase();
-
-    await logService.info("Backfilling phone_last_message table", "DatabaseService", { userId });
-
-    // Get all distinct phone numbers from participants_flat and their max sent_at
-    // participants_flat format: ",16508685180,16508685180" (comma-separated digits)
-    const messages = db.prepare(`
-      SELECT participants_flat, MAX(sent_at) as last_date
-      FROM messages
-      WHERE user_id = ?
-        AND (channel = 'sms' OR channel = 'imessage')
-        AND participants_flat IS NOT NULL
-        AND participants_flat != ''
-      GROUP BY participants_flat
-    `).all(userId) as { participants_flat: string; last_date: string }[];
-
-    // Parse and aggregate phones
-    const phoneLastDates = new Map<string, string>();
-
-    for (const msg of messages) {
-      // Split comma-separated phones and normalize each
-      const phones = msg.participants_flat.split(',').filter(p => p.trim().length >= 7);
-
-      for (const phone of phones) {
-        const normalized = phone.trim().slice(-10); // Last 10 digits
-        if (normalized.length < 7) continue;
-
-        const existing = phoneLastDates.get(normalized);
-        if (!existing || msg.last_date > existing) {
-          phoneLastDates.set(normalized, msg.last_date);
-        }
-      }
-    }
-
-    // Insert/update all phones in a transaction
-    const insertStmt = db.prepare(`
-      INSERT OR REPLACE INTO phone_last_message (phone_normalized, user_id, last_message_at)
-      VALUES (?, ?, ?)
-    `);
-
-    db.exec('BEGIN TRANSACTION');
-    try {
-      let count = 0;
-      for (const [phone, lastDate] of phoneLastDates) {
-        insertStmt.run(phone, userId, lastDate);
-        count++;
-      }
-      db.exec('COMMIT');
-
-      await logService.info("Phone last message backfill complete", "DatabaseService", {
-        userId,
-        phonesUpdated: count,
-      });
-
-      return count;
-    } catch (error) {
-      db.exec('ROLLBACK');
-      throw error;
-    }
+    return messageDb.backfillPhoneLastMessageTable(userId);
   }
 
   async getContactNamesByPhones(phones: string[]): Promise<Map<string, string>> {
@@ -1240,6 +954,10 @@ class DatabaseService implements IDatabaseService {
     return transactionDb.getTransactions(filters);
   }
 
+  getPendingTransactionCount(userId: string): number {
+    return transactionDb.getPendingTransactionCount(userId);
+  }
+
   async getTransactionById(transactionId: string): Promise<Transaction | null> {
     return transactionDb.getTransactionById(transactionId);
   }
@@ -1280,7 +998,6 @@ class DatabaseService implements IDatabaseService {
   }
 
   async getCommunicationsByTransaction(transactionId: string, channelFilter?: "email" | "text", limit?: number): Promise<Communication[]> {
-    // TASK-992: Use getCommunicationsWithMessages to include direction from messages table
     return communicationDb.getCommunicationsWithMessages(transactionId, channelFilter, limit);
   }
 
@@ -1296,10 +1013,6 @@ class DatabaseService implements IDatabaseService {
     return communicationDb.deleteCommunicationByMessageId(messageId);
   }
 
-  /**
-   * Delete communication records by thread_id for a specific transaction.
-   * TASK-1116: Used when unlinking a thread from a transaction.
-   */
   async deleteCommunicationByThread(threadId: string, transactionId: string): Promise<void> {
     return communicationDb.deleteCommunicationByThread(threadId, transactionId);
   }
@@ -1413,508 +1126,87 @@ class DatabaseService implements IDatabaseService {
   }
 
   // ============================================
-  // LLM ANALYSIS OPERATIONS (Keep in facade - no db/* equivalent)
+  // LLM ANALYSIS OPERATIONS (Delegate to messageDbService)
   // ============================================
 
   async getMessagesForLLMAnalysis(userId: string, limit = 100): Promise<Message[]> {
-    const db = this._ensureDb();
-    const sql = `
-      SELECT * FROM messages
-      WHERE user_id = ?
-        AND is_transaction_related IS NULL
-        AND duplicate_of IS NULL
-      ORDER BY received_at DESC
-      LIMIT ?
-    `;
-    return db.prepare(sql).all(userId, limit) as Message[];
+    return messageDb.getMessagesForLLMAnalysis(userId, limit);
   }
 
   async getPendingLLMAnalysisCount(userId: string): Promise<number> {
-    const db = this._ensureDb();
-    const sql = `
-      SELECT COUNT(*) as count FROM messages
-      WHERE user_id = ?
-        AND is_transaction_related IS NULL
-        AND duplicate_of IS NULL
-    `;
-    const result = db.prepare(sql).get(userId) as { count: number } | undefined;
-    return result?.count ?? 0;
+    return messageDb.getPendingLLMAnalysisCount(userId);
   }
 
   // ============================================
-  // MESSAGES TABLE OPERATIONS (Direct queries for text messages)
+  // MESSAGES TABLE OPERATIONS (Delegate to messageDbService)
   // ============================================
 
-  /**
-   * Get unlinked text messages (SMS/iMessage) from the messages table
-   * These are messages not yet attached to any transaction
-   * Limited to 1000 most recent messages to prevent UI freeze
-   */
   async getUnlinkedTextMessages(userId: string, limit = 1000): Promise<Message[]> {
-    const db = this._ensureDb();
-    const sql = `
-      SELECT * FROM messages
-      WHERE user_id = ?
-        AND transaction_id IS NULL
-        AND channel IN ('sms', 'imessage')
-      ORDER BY sent_at DESC
-      LIMIT ?
-    `;
-    return db.prepare(sql).all(userId, limit) as Message[];
+    return messageDb.getUnlinkedTextMessages(userId, limit);
   }
 
-  /**
-   * Get unlinked emails - emails not attached to any transaction
-   * BACKLOG-506: Now queries emails table directly since communications is a junction table
-   */
   async getUnlinkedEmails(userId: string, limit = 500): Promise<Communication[]> {
-    const db = this._ensureDb();
-    // Get emails that don't have a corresponding communication link with a transaction
-    const sql = `
-      SELECT
-        e.id,
-        e.user_id,
-        NULL as transaction_id,
-        e.subject,
-        e.sender,
-        e.sent_at,
-        SUBSTR(e.body_plain, 1, 200) as body_preview
-      FROM emails e
-      WHERE e.user_id = ?
-        AND NOT EXISTS (
-          SELECT 1 FROM communications c
-          WHERE c.email_id = e.id
-            AND c.transaction_id IS NOT NULL
-        )
-      ORDER BY e.sent_at DESC
-      LIMIT ?
-    `;
-    return db.prepare(sql).all(userId, limit) as Communication[];
+    return messageDb.getUnlinkedEmails(userId, limit);
   }
 
-  /**
-   * Get distinct contacts (phone numbers) with unlinked message counts
-   * Used for contact-first message browsing
-   */
   async getMessageContacts(userId: string): Promise<{ contact: string; messageCount: number; lastMessageAt: string }[]> {
-    const db = this._ensureDb();
-    // Extract phone number from participants JSON and group by it
-    // This query handles the JSON structure where participants.from or participants.to contains the phone
-    const sql = `
-      SELECT
-        COALESCE(
-          CASE
-            WHEN direction = 'inbound' THEN json_extract(participants, '$.from')
-            ELSE json_extract(participants, '$.to[0]')
-          END,
-          thread_id
-        ) as contact,
-        COUNT(*) as messageCount,
-        MAX(sent_at) as lastMessageAt
-      FROM messages
-      WHERE user_id = ?
-        AND transaction_id IS NULL
-        AND channel IN ('sms', 'imessage')
-        AND participants IS NOT NULL
-      GROUP BY contact
-      HAVING contact IS NOT NULL AND contact != 'me' AND contact != 'unknown' AND contact != ''
-      ORDER BY lastMessageAt DESC
-    `;
-    return db.prepare(sql).all(userId) as { contact: string; messageCount: number; lastMessageAt: string }[];
+    return messageDb.getMessageContacts(userId);
   }
 
-  /**
-   * Get unlinked messages for a specific contact (phone number)
-   * Used after user selects a contact in the contact-first UI
-   *
-   * Strategy: First find all thread_ids where the contact appears, then fetch
-   * ALL messages from those threads. This ensures group chats are fully captured
-   * even when individual messages have different handles.
-   */
   async getMessagesByContact(userId: string, contact: string): Promise<Message[]> {
-    const db = this._ensureDb();
-
-    // Step 1: Find all thread_ids where the contact appears in any message
-    const threadIdsSql = `
-      SELECT DISTINCT thread_id FROM messages
-      WHERE user_id = ?
-        AND transaction_id IS NULL
-        AND channel IN ('sms', 'imessage')
-        AND thread_id IS NOT NULL
-        AND (
-          json_extract(participants, '$.from') = ?
-          OR json_extract(participants, '$.to[0]') = ?
-        )
-    `;
-    const threadRows = db.prepare(threadIdsSql).all(userId, contact, contact) as { thread_id: string }[];
-    const threadIds = threadRows.map(r => r.thread_id);
-
-    if (threadIds.length === 0) {
-      // Fallback: return messages directly matching the contact (for cases without thread_id)
-      const fallbackSql = `
-        SELECT * FROM messages
-        WHERE user_id = ?
-          AND transaction_id IS NULL
-          AND channel IN ('sms', 'imessage')
-          AND (
-            json_extract(participants, '$.from') = ?
-            OR json_extract(participants, '$.to[0]') = ?
-          )
-        ORDER BY sent_at DESC
-      `;
-      return db.prepare(fallbackSql).all(userId, contact, contact) as Message[];
-    }
-
-    // Step 2: Fetch ALL messages from those threads (not just messages where contact appears)
-    // This captures all messages in group chats where the contact is a participant
-    const placeholders = threadIds.map(() => '?').join(', ');
-    const messagesSql = `
-      SELECT * FROM messages
-      WHERE user_id = ?
-        AND transaction_id IS NULL
-        AND channel IN ('sms', 'imessage')
-        AND thread_id IN (${placeholders})
-      ORDER BY sent_at DESC
-    `;
-    return db.prepare(messagesSql).all(userId, ...threadIds) as Message[];
+    return messageDb.getMessagesByContact(userId, contact);
   }
 
-  /**
-   * Update a message in the messages table
-   */
   async updateMessage(messageId: string, updates: Partial<Message>): Promise<void> {
-    const db = this._ensureDb();
-    const allowedFields = [
-      "transaction_id",
-      "transaction_link_confidence",
-      "transaction_link_source",
-      "is_transaction_related",
-      "classification_confidence",
-      "classification_method",
-      "classified_at",
-      "is_false_positive",
-      "false_positive_reason",
-      "stage_hint",
-      "stage_hint_source",
-      "stage_hint_confidence",
-      "llm_analysis",
-    ];
-
-    const entries = Object.entries(updates).filter(([key]) =>
-      allowedFields.includes(key)
-    );
-
-    if (entries.length === 0) return;
-
-    const setClause = entries.map(([key]) => `${key} = ?`).join(", ");
-    const values = entries.map(([, value]) => value);
-    values.push(messageId);
-
-    db.prepare(`UPDATE messages SET ${setClause} WHERE id = ?`).run(...values);
+    return messageDb.updateMessage(messageId, updates);
   }
 
-  /**
-   * Link a message to a transaction
-   */
   async linkMessageToTransaction(messageId: string, transactionId: string): Promise<void> {
-    const db = this._ensureDb();
-    db.prepare(`UPDATE messages SET transaction_id = ? WHERE id = ?`).run(
-      transactionId,
-      messageId
-    );
+    return messageDb.linkMessageToTransaction(messageId, transactionId);
   }
 
-  /**
-   * Unlink a message from a transaction
-   */
   async unlinkMessageFromTransaction(messageId: string): Promise<void> {
-    const db = this._ensureDb();
-    db.prepare(`UPDATE messages SET transaction_id = NULL WHERE id = ?`).run(messageId);
+    return messageDb.unlinkMessageFromTransaction(messageId);
   }
 
-  /**
-   * Get messages linked to a transaction
-   */
   async getMessagesByTransaction(transactionId: string): Promise<Message[]> {
-    const db = this._ensureDb();
-    const sql = `
-      SELECT * FROM messages
-      WHERE transaction_id = ?
-      ORDER BY sent_at DESC
-    `;
-    return db.prepare(sql).all(transactionId) as Message[];
+    return messageDb.getMessagesByTransaction(transactionId);
   }
 
-  /**
-   * Get a single message by ID
-   */
   async getMessageById(messageId: string): Promise<Message | null> {
-    const db = this._ensureDb();
-    const sql = `SELECT * FROM messages WHERE id = ?`;
-    const result = db.prepare(sql).get(messageId) as Message | undefined;
-    return result || null;
+    return messageDb.getMessageById(messageId);
   }
 
   // ============================================
-  // DIAGNOSTIC OPERATIONS (for debugging data issues)
+  // DIAGNOSTIC OPERATIONS (Delegate to diagnosticDbService)
   // ============================================
 
-  /**
-   * Diagnostic: Find messages with NULL thread_id
-   * These messages use fallback grouping which can cause incorrect merging
-   */
-  async diagnosticGetMessagesWithNullThreadId(userId: string): Promise<{
-    count: number;
-    samples: Array<{ id: string; body_text: string; participants: string; sent_at: string }>;
-  }> {
-    const db = this._ensureDb();
-
-    const countResult = db.prepare(`
-      SELECT COUNT(*) as count FROM messages
-      WHERE user_id = ? AND thread_id IS NULL AND channel IN ('sms', 'imessage')
-    `).get(userId) as { count: number };
-
-    const samples = db.prepare(`
-      SELECT id, body_text, participants, sent_at FROM messages
-      WHERE user_id = ? AND thread_id IS NULL AND channel IN ('sms', 'imessage')
-      ORDER BY sent_at DESC LIMIT 10
-    `).all(userId) as Array<{ id: string; body_text: string; participants: string; sent_at: string }>;
-
-    return { count: countResult.count, samples };
+  async diagnosticGetMessagesWithNullThreadId(userId: string) {
+    return diagnosticDb.diagnosticGetMessagesWithNullThreadId(userId);
   }
 
-  /**
-   * Diagnostic: Get recent messages with unknown recipient
-   * Returns external_id (macOS ROWID) for cross-referencing
-   */
-  async diagnosticUnknownRecipientMessages(userId: string): Promise<{
-    samples: Array<{ external_id: string; body_text: string; participants: string; sent_at: string }>;
-  }> {
-    const db = this._ensureDb();
-
-    const samples = db.prepare(`
-      SELECT external_id, body_text, participants, sent_at FROM messages
-      WHERE user_id = ? AND thread_id IS NULL AND channel IN ('sms', 'imessage')
-      AND participants LIKE '%"unknown"%'
-      ORDER BY sent_at DESC LIMIT 10
-    `).all(userId) as Array<{ external_id: string; body_text: string; participants: string; sent_at: string }>;
-
-    return { samples };
+  async diagnosticUnknownRecipientMessages(userId: string) {
+    return diagnosticDb.diagnosticUnknownRecipientMessages(userId);
   }
 
-  /**
-   * Diagnostic: Find messages with potential garbage text
-   * Looks for binary signatures in body_text
-   */
-  async diagnosticGetMessagesWithGarbageText(userId: string): Promise<{
-    count: number;
-    samples: Array<{ id: string; body_text: string; thread_id: string | null; sent_at: string }>;
-  }> {
-    const db = this._ensureDb();
-
-    // DETERMINISTIC: Check for exact fallback messages (no heuristics)
-    // These are the only values the parser returns when it cannot parse
-    const countResult = db.prepare(`
-      SELECT COUNT(*) as count FROM messages
-      WHERE user_id = ? AND channel IN ('sms', 'imessage')
-      AND body_text IN (
-        '[Unable to parse message]',
-        '[Message text - parsing error]',
-        '[Message text - unable to extract from rich format]'
-      )
-    `).get(userId) as { count: number };
-
-    const samples = db.prepare(`
-      SELECT id, body_text, thread_id, sent_at FROM messages
-      WHERE user_id = ? AND channel IN ('sms', 'imessage')
-      AND body_text IN (
-        '[Unable to parse message]',
-        '[Message text - parsing error]',
-        '[Message text - unable to extract from rich format]'
-      )
-      ORDER BY sent_at DESC LIMIT 10
-    `).all(userId) as Array<{ id: string; body_text: string; thread_id: string | null; sent_at: string }>;
-
-    return { count: countResult.count, samples };
+  async diagnosticGetMessagesWithGarbageText(userId: string) {
+    return diagnosticDb.diagnosticGetMessagesWithGarbageText(userId);
   }
 
-  /**
-   * Diagnostic: Complete message health report
-   * Shows total counts and breakdown of parsing issues
-   */
-  async diagnosticMessageHealthReport(userId: string): Promise<{
-    total: number;
-    withThreadId: number;
-    withNullThreadId: number;
-    withGarbageText: number;
-    withEmptyText: number;
-    healthy: number;
-    healthPercentage: number;
-  }> {
-    const db = this._ensureDb();
-
-    // Total messages
-    const totalResult = db.prepare(`
-      SELECT COUNT(*) as count FROM messages
-      WHERE user_id = ? AND channel IN ('sms', 'imessage')
-    `).get(userId) as { count: number };
-
-    // With thread_id
-    const withThreadIdResult = db.prepare(`
-      SELECT COUNT(*) as count FROM messages
-      WHERE user_id = ? AND channel IN ('sms', 'imessage') AND thread_id IS NOT NULL
-    `).get(userId) as { count: number };
-
-    // With NULL thread_id
-    const withNullThreadIdResult = db.prepare(`
-      SELECT COUNT(*) as count FROM messages
-      WHERE user_id = ? AND channel IN ('sms', 'imessage') AND thread_id IS NULL
-    `).get(userId) as { count: number };
-
-    // DETERMINISTIC: Count messages that failed to parse (exact fallback messages)
-    // No heuristics - only count messages where parser returned a known fallback
-    const withGarbageResult = db.prepare(`
-      SELECT COUNT(*) as count FROM messages
-      WHERE user_id = ? AND channel IN ('sms', 'imessage')
-      AND body_text IN (
-        '[Unable to parse message]',
-        '[Message text - parsing error]',
-        '[Message text - unable to extract from rich format]'
-      )
-    `).get(userId) as { count: number };
-
-    // With empty or very short text
-    const withEmptyResult = db.prepare(`
-      SELECT COUNT(*) as count FROM messages
-      WHERE user_id = ? AND channel IN ('sms', 'imessage')
-      AND (body_text IS NULL OR LENGTH(body_text) < 1)
-    `).get(userId) as { count: number };
-
-    // Calculate healthy (has thread_id, no garbage, has text)
-    const healthy = totalResult.count - withNullThreadIdResult.count - withGarbageResult.count - withEmptyResult.count;
-    const healthPercentage = totalResult.count > 0
-      ? Math.round((healthy / totalResult.count) * 100 * 10) / 10
-      : 100;
-
-    return {
-      total: totalResult.count,
-      withThreadId: withThreadIdResult.count,
-      withNullThreadId: withNullThreadIdResult.count,
-      withGarbageText: withGarbageResult.count,
-      withEmptyText: withEmptyResult.count,
-      healthy: Math.max(0, healthy),
-      healthPercentage,
-    };
+  async diagnosticMessageHealthReport(userId: string) {
+    return diagnosticDb.diagnosticMessageHealthReport(userId);
   }
 
-  /**
-   * Diagnostic: Get thread_id distribution for a contact
-   * Shows which chats a contact appears in
-   */
-  async diagnosticGetThreadsForContact(userId: string, phoneDigits: string): Promise<{
-    threads: Array<{ thread_id: string | null; message_count: number; participants_sample: string }>;
-  }> {
-    const db = this._ensureDb();
-
-    const threads = db.prepare(`
-      SELECT
-        thread_id,
-        COUNT(*) as message_count,
-        (SELECT participants FROM messages m2
-         WHERE m2.thread_id = messages.thread_id
-         AND m2.user_id = ? LIMIT 1) as participants_sample
-      FROM messages
-      WHERE user_id = ?
-        AND channel IN ('sms', 'imessage')
-        AND participants_flat LIKE ?
-      GROUP BY thread_id
-      ORDER BY message_count DESC
-    `).all(userId, userId, `%${phoneDigits}%`) as Array<{
-      thread_id: string | null;
-      message_count: number;
-      participants_sample: string;
-    }>;
-
-    return { threads };
+  async diagnosticGetThreadsForContact(userId: string, phoneDigits: string) {
+    return diagnosticDb.diagnosticGetThreadsForContact(userId, phoneDigits);
   }
 
-  /**
-   * Diagnostic: Detailed analysis of NULL thread_id messages
-   * Groups by sender, channel, and month to identify patterns
-   */
-  async diagnosticNullThreadIdAnalysis(userId: string): Promise<{
-    total: number;
-    byChannel: Array<{ channel: string; count: number }>;
-    bySender: Array<{ sender: string; count: number; sampleText: string }>;
-    byMonth: Array<{ month: string; count: number }>;
-    unknownRecipient: number;
-  }> {
-    const db = this._ensureDb();
-
-    // Total NULL thread_id count
-    const totalResult = db.prepare(`
-      SELECT COUNT(*) as count FROM messages
-      WHERE user_id = ? AND thread_id IS NULL AND channel IN ('sms', 'imessage')
-    `).get(userId) as { count: number };
-
-    // Breakdown by channel
-    const byChannel = db.prepare(`
-      SELECT channel, COUNT(*) as count FROM messages
-      WHERE user_id = ? AND thread_id IS NULL AND channel IN ('sms', 'imessage')
-      GROUP BY channel ORDER BY count DESC
-    `).all(userId) as Array<{ channel: string; count: number }>;
-
-    // Top 20 senders with counts
-    const bySender = db.prepare(`
-      SELECT
-        CASE
-          WHEN participants LIKE '%"from":"me"%' THEN
-            json_extract(participants, '$.to[0]')
-          ELSE
-            json_extract(participants, '$.from')
-        END as sender,
-        COUNT(*) as count,
-        (SELECT body_text FROM messages m2
-         WHERE m2.user_id = ? AND m2.thread_id IS NULL
-         AND m2.participants = messages.participants
-         LIMIT 1) as sampleText
-      FROM messages
-      WHERE user_id = ? AND thread_id IS NULL AND channel IN ('sms', 'imessage')
-      GROUP BY sender
-      ORDER BY count DESC
-      LIMIT 20
-    `).all(userId, userId) as Array<{ sender: string; count: number; sampleText: string }>;
-
-    // Distribution by month
-    const byMonth = db.prepare(`
-      SELECT
-        strftime('%Y-%m', sent_at) as month,
-        COUNT(*) as count
-      FROM messages
-      WHERE user_id = ? AND thread_id IS NULL AND channel IN ('sms', 'imessage')
-      GROUP BY month
-      ORDER BY month DESC
-      LIMIT 12
-    `).all(userId) as Array<{ month: string; count: number }>;
-
-    // Count with unknown recipient
-    const unknownResult = db.prepare(`
-      SELECT COUNT(*) as count FROM messages
-      WHERE user_id = ? AND thread_id IS NULL AND channel IN ('sms', 'imessage')
-      AND participants LIKE '%"unknown"%'
-    `).get(userId) as { count: number };
-
-    return {
-      total: totalResult.count,
-      byChannel,
-      bySender,
-      byMonth,
-      unknownRecipient: unknownResult.count,
-    };
+  async diagnosticNullThreadIdAnalysis(userId: string) {
+    return diagnosticDb.diagnosticNullThreadIdAnalysis(userId);
   }
 
   // ============================================
-  // UTILITY OPERATIONS
+  // UTILITY OPERATIONS (Keep in facade)
   // ============================================
 
   async vacuum(): Promise<void> {
@@ -1922,8 +1214,6 @@ class DatabaseService implements IDatabaseService {
   }
 
   async close(): Promise<void> {
-    // Close and clear the shared connection in dbConnection module first
-    // This also clears the module-level db reference used by db/* services
     await closeDb();
     this.db = null;
     this.encryptionKey = null;
@@ -1931,9 +1221,9 @@ class DatabaseService implements IDatabaseService {
   }
 
   async rekeyDatabase(newKey: string): Promise<void> {
-    const db = this._ensureDb();
+    const currentDb = this._ensureDb();
     try {
-      db.pragma(`rekey = "x'${newKey}'"`);
+      currentDb.pragma(`rekey = "x'${newKey}'"`);
       this.encryptionKey = newKey;
       await logService.info("Database re-keyed successfully", "DatabaseService");
     } catch (error) {
@@ -1958,901 +1248,152 @@ class DatabaseService implements IDatabaseService {
     return { isEncrypted, keyMetadata };
   }
 
-  /**
-   * Reindex all performance indexes
-   * Recreates indexes that optimize query performance for contacts, communications, and messages.
-   * This can help resolve slowness caused by fragmented or outdated indexes.
-   *
-   * @returns Object with reindex results including index count and duration
-   */
+  // ============================================
+  // MAINTENANCE OPERATIONS (Delegate to maintenanceDbService)
+  // ============================================
+
   async reindexDatabase(): Promise<{
     success: boolean;
     indexesRebuilt: number;
     durationMs: number;
     error?: string;
   }> {
-    const db = this._ensureDb();
-    const startTime = Date.now();
-    let indexesRebuilt = 0;
-
-    try {
-      await logService.info("Starting database reindex operation", "DatabaseService");
-
-      // Performance indexes — drop and recreate to ensure fresh, optimized indexes
-      const performanceIndexes = [
-        // Contact indexes
-        { name: "idx_contacts_user_id", sql: "CREATE INDEX IF NOT EXISTS idx_contacts_user_id ON contacts(user_id)" },
-        { name: "idx_contact_emails_contact_id", sql: "CREATE INDEX IF NOT EXISTS idx_contact_emails_contact_id ON contact_emails(contact_id)" },
-        { name: "idx_contact_emails_email", sql: "CREATE INDEX IF NOT EXISTS idx_contact_emails_email ON contact_emails(email)" },
-        { name: "idx_contact_phones_contact_id", sql: "CREATE INDEX IF NOT EXISTS idx_contact_phones_contact_id ON contact_phones(contact_id)" },
-        // Communication indexes (pure junction table — no sender/sent_at columns)
-        { name: "idx_communications_user_id", sql: "CREATE INDEX IF NOT EXISTS idx_communications_user_id ON communications(user_id)" },
-        { name: "idx_communications_transaction", sql: "CREATE INDEX IF NOT EXISTS idx_communications_transaction ON communications(transaction_id)" },
-        // Message indexes
-        { name: "idx_messages_user_id", sql: "CREATE INDEX IF NOT EXISTS idx_messages_user_id ON messages(user_id)" },
-        { name: "idx_messages_sent_at", sql: "CREATE INDEX IF NOT EXISTS idx_messages_sent_at ON messages(sent_at)" },
-        { name: "idx_messages_thread_id", sql: "CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id)" },
-        { name: "idx_messages_user_sent", sql: "CREATE INDEX IF NOT EXISTS idx_messages_user_sent ON messages(user_id, sent_at)" },
-        { name: "idx_messages_channel", sql: "CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel)" },
-      ];
-
-      // Use a transaction for consistency
-      db.exec("BEGIN TRANSACTION");
-
-      try {
-        for (const index of performanceIndexes) {
-          // Drop the existing index if it exists
-          db.exec(`DROP INDEX IF EXISTS ${index.name}`);
-          // Recreate the index
-          db.exec(index.sql);
-          indexesRebuilt++;
-        }
-
-        // Run ANALYZE to update statistics used by the query planner
-        db.exec("ANALYZE");
-
-        db.exec("COMMIT");
-      } catch (error) {
-        db.exec("ROLLBACK");
-        throw error;
-      }
-
-      const durationMs = Date.now() - startTime;
-      await logService.info(
-        `Database reindex completed: ${indexesRebuilt} indexes rebuilt in ${durationMs}ms`,
-        "DatabaseService"
-      );
-
-      return {
-        success: true,
-        indexesRebuilt,
-        durationMs,
-      };
-    } catch (error) {
-      const durationMs = Date.now() - startTime;
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      await logService.error("Database reindex failed", "DatabaseService", {
-        error: errorMessage,
-        indexesRebuilt,
-        durationMs,
-      });
-      Sentry.captureException(error, {
-        tags: { service: "database-service", operation: "reindexDatabase" },
-      });
-
-      return {
-        success: false,
-        indexesRebuilt,
-        durationMs,
-        error: errorMessage,
-      };
-    }
+    return maintenanceDb.reindexDatabase();
   }
 
   // ============================================
-  // CONTACT RESOLUTION QUERIES (TASK-2100)
+  // CONTACT RESOLUTION QUERIES (Delegate to attachmentDbService)
   // ============================================
 
-  /**
-   * Look up contact display names by phone numbers.
-   * Matches against last 10 digits of both phone_e164 and phone_display.
-   */
-  getContactNamesByPhoneDigits(
-    normalizedPhones: string[]
-  ): { phone_e164: string | null; phone_display: string | null; display_name: string | null }[] {
-    if (normalizedPhones.length === 0) return [];
-    const db = this._ensureDb();
-    const placeholders = normalizedPhones.map(() => "?").join(", ");
-    const sql = `
-      SELECT
-        cp.phone_e164,
-        cp.phone_display,
-        c.display_name
-      FROM contact_phones cp
-      JOIN contacts c ON cp.contact_id = c.id
-      WHERE substr(replace(replace(replace(cp.phone_e164, '+', ''), '-', ''), ' ', ''), -10) IN (${placeholders})
-         OR substr(replace(replace(replace(cp.phone_display, '+', ''), '-', ''), ' ', ''), -10) IN (${placeholders})
-    `;
-    return db.prepare(sql).all(...normalizedPhones, ...normalizedPhones) as {
-      phone_e164: string | null;
-      phone_display: string | null;
-      display_name: string | null;
-    }[];
+  getContactNamesByPhoneDigits(normalizedPhones: string[]) {
+    return attachmentDb.getContactNamesByPhoneDigits(normalizedPhones);
   }
 
-  /**
-   * Look up contact display names by email addresses (case-insensitive).
-   */
-  getContactNamesByEmails(
-    lowerEmails: string[]
-  ): { email: string; display_name: string | null }[] {
-    if (lowerEmails.length === 0) return [];
-    const db = this._ensureDb();
-    const placeholders = lowerEmails.map(() => "?").join(", ");
-    const sql = `
-      SELECT
-        LOWER(ce.email) as email,
-        c.display_name
-      FROM contact_emails ce
-      JOIN contacts c ON ce.contact_id = c.id
-      WHERE LOWER(ce.email) IN (${placeholders})
-    `;
-    return db.prepare(sql).all(...lowerEmails) as {
-      email: string;
-      display_name: string | null;
-    }[];
+  getContactNamesByEmails(lowerEmails: string[]) {
+    return attachmentDb.getContactNamesByEmails(lowerEmails);
   }
 
-  /**
-   * Look up a contact display name by Apple ID prefix (email prefix match).
-   */
-  getContactNameByAppleIdPrefix(
-    appleIdLower: string
-  ): { email: string; display_name: string | null } | undefined {
-    const db = this._ensureDb();
-    const sql = `
-      SELECT
-        LOWER(ce.email) as email,
-        c.display_name
-      FROM contact_emails ce
-      JOIN contacts c ON ce.contact_id = c.id
-      WHERE LOWER(ce.email) LIKE ? || '@%'
-      LIMIT 1
-    `;
-    return db.prepare(sql).get(appleIdLower) as {
-      email: string;
-      display_name: string | null;
-    } | undefined;
+  getContactNameByAppleIdPrefix(appleIdLower: string) {
+    return attachmentDb.getContactNameByAppleIdPrefix(appleIdLower);
   }
 
   // ============================================
-  // EMAIL ATTACHMENT QUERIES (TASK-2100)
+  // EMAIL ATTACHMENT QUERIES (Delegate to attachmentDbService)
   // ============================================
 
-  /**
-   * Get all attachment storage paths (for content hash deduplication).
-   */
-  getAttachmentStoragePaths(): { storage_path: string }[] {
-    const db = this._ensureDb();
-    return db
-      .prepare(`SELECT storage_path FROM attachments WHERE storage_path IS NOT NULL`)
-      .all() as { storage_path: string }[];
+  getAttachmentStoragePaths() {
+    return attachmentDb.getAttachmentStoragePaths();
   }
 
-  /**
-   * Check if an attachment already exists for a given email and filename.
-   */
-  hasAttachmentForEmail(emailId: string, filename: string): boolean {
-    const db = this._ensureDb();
-    const row = db
-      .prepare(`SELECT id FROM attachments WHERE email_id = ? AND filename = ?`)
-      .get(emailId, filename);
-    return !!row;
+  hasAttachmentForEmail(emailId: string, filename: string) {
+    return attachmentDb.hasAttachmentForEmail(emailId, filename);
   }
 
-  /**
-   * Create an attachment record in the database.
-   */
-  createAttachmentRecord(params: {
-    id: string;
-    emailId: string;
-    externalEmailId: string;
-    filename: string;
-    mimeType: string;
-    fileSizeBytes: number;
-    storagePath: string;
-  }): void {
-    const db = this._ensureDb();
-    db.prepare(
-      `
-      INSERT INTO attachments (
-        id, email_id, external_message_id, filename, mime_type, file_size_bytes, storage_path, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `
-    ).run(
-      params.id,
-      params.emailId,
-      params.externalEmailId,
-      params.filename,
-      params.mimeType,
-      params.fileSizeBytes,
-      params.storagePath
-    );
+  createAttachmentRecord(params: Parameters<typeof attachmentDb.createAttachmentRecord>[0]) {
+    return attachmentDb.createAttachmentRecord(params);
   }
 
-  /**
-   * Get attachments for an email by email_id.
-   */
-  getAttachmentsByEmailId(
-    emailId: string
-  ): {
-    id: string;
-    filename: string;
-    mime_type: string | null;
-    file_size_bytes: number | null;
-    storage_path: string | null;
-  }[] {
-    const db = this._ensureDb();
-    return db
-      .prepare(
-        `
-        SELECT id, filename, mime_type, file_size_bytes, storage_path
-        FROM attachments
-        WHERE email_id = ?
-      `
-      )
-      .all(emailId) as {
-      id: string;
-      filename: string;
-      mime_type: string | null;
-      file_size_bytes: number | null;
-      storage_path: string | null;
-    }[];
+  getAttachmentsByEmailId(emailId: string) {
+    return attachmentDb.getAttachmentsByEmailId(emailId);
   }
 
   // ============================================
-  // FOLDER EXPORT ATTACHMENT QUERIES (TASK-2100)
+  // FOLDER EXPORT ATTACHMENT QUERIES (Delegate to attachmentDbService)
   // ============================================
 
-  /**
-   * Get attachments for a text message by message_id, with fallback to external_message_id.
-   */
-  getAttachmentsForMessageWithFallback(
-    messageId: string,
-    externalId?: string
-  ): {
-    id: string;
-    filename: string;
-    mime_type: string | null;
-    storage_path: string | null;
-    file_size_bytes: number | null;
-  }[] {
-    const db = this._ensureDb();
-
-    // Direct message_id lookup
-    let rows = db
-      .prepare(
-        `SELECT id, filename, mime_type, storage_path, file_size_bytes
-         FROM attachments WHERE message_id = ?`
-      )
-      .all(messageId) as {
-      id: string;
-      filename: string;
-      mime_type: string | null;
-      storage_path: string | null;
-      file_size_bytes: number | null;
-    }[];
-
-    // Fallback to external_message_id
-    if (rows.length === 0) {
-      let lookupExternalId = externalId;
-      if (!lookupExternalId) {
-        const messageRow = db
-          .prepare(`SELECT external_id FROM messages WHERE id = ?`)
-          .get(messageId) as { external_id: string | null } | undefined;
-        lookupExternalId = messageRow?.external_id || undefined;
-      }
-
-      if (lookupExternalId) {
-        rows = db
-          .prepare(
-            `SELECT id, filename, mime_type, storage_path, file_size_bytes
-             FROM attachments WHERE external_message_id = ?`
-          )
-          .all(lookupExternalId) as typeof rows;
-
-        // Update stale message_id for future queries
-        if (rows.length > 0) {
-          db.prepare(
-            `UPDATE attachments SET message_id = ? WHERE external_message_id = ?`
-          ).run(messageId, lookupExternalId);
-        }
-      }
-    }
-
-    return rows;
+  getAttachmentsForMessageWithFallback(messageId: string, externalId?: string) {
+    return attachmentDb.getAttachmentsForMessageWithFallback(messageId, externalId);
   }
 
-  /**
-   * Get attachments for an email by email_id (folder export variant).
-   */
-  getAttachmentsForEmailExport(
-    emailId: string
-  ): {
-    id: string;
-    filename: string;
-    mime_type: string | null;
-    storage_path: string | null;
-    file_size_bytes: number | null;
-  }[] {
-    const db = this._ensureDb();
-    return db
-      .prepare(
-        `SELECT id, filename, mime_type, storage_path, file_size_bytes
-         FROM attachments WHERE email_id = ?`
-      )
-      .all(emailId) as {
-      id: string;
-      filename: string;
-      mime_type: string | null;
-      storage_path: string | null;
-      file_size_bytes: number | null;
-    }[];
+  getAttachmentsForEmailExport(emailId: string) {
+    return attachmentDb.getAttachmentsForEmailExport(emailId);
   }
 
-  /**
-   * Bulk query attachments by message_ids, external_message_ids, and email_ids.
-   * Used by folderExportService for building attachment manifests.
-   */
-  getAttachmentsForExportBulk(
-    messageIds: string[],
-    externalIds: string[],
-    emailIds: string[]
-  ): {
-    id: string;
-    message_id: string | null;
-    email_id: string | null;
-    filename: string;
-    mime_type: string | null;
-    file_size_bytes: number | null;
-    storage_path: string | null;
-  }[] {
-    const db = this._ensureDb();
-    type AttachmentRow = {
-      id: string;
-      message_id: string | null;
-      email_id: string | null;
-      filename: string;
-      mime_type: string | null;
-      file_size_bytes: number | null;
-      storage_path: string | null;
-    };
-    let attachmentRows: AttachmentRow[] = [];
-
-    if (messageIds.length > 0) {
-      const placeholders = messageIds.map(() => "?").join(", ");
-      const textRows = db
-        .prepare(
-          `SELECT id, message_id, NULL as email_id, filename, mime_type, file_size_bytes, storage_path
-           FROM attachments WHERE message_id IN (${placeholders})`
-        )
-        .all(...messageIds) as AttachmentRow[];
-      attachmentRows = [...attachmentRows, ...textRows];
-
-      if (externalIds.length > 0) {
-        const externalPlaceholders = externalIds.map(() => "?").join(", ");
-        const fallbackRows = db
-          .prepare(
-            `SELECT id, message_id, NULL as email_id, filename, mime_type, file_size_bytes, storage_path
-             FROM attachments
-             WHERE external_message_id IN (${externalPlaceholders})
-               AND id NOT IN (SELECT id FROM attachments WHERE message_id IN (${placeholders}))`
-          )
-          .all(...externalIds, ...messageIds) as AttachmentRow[];
-        attachmentRows = [...attachmentRows, ...fallbackRows];
-      }
-    }
-
-    if (emailIds.length > 0) {
-      const emailPlaceholders = emailIds.map(() => "?").join(", ");
-      const emailRows = db
-        .prepare(
-          `SELECT id, NULL as message_id, email_id, filename, mime_type, file_size_bytes, storage_path
-           FROM attachments WHERE email_id IN (${emailPlaceholders})`
-        )
-        .all(...emailIds) as AttachmentRow[];
-      attachmentRows = [...attachmentRows, ...emailRows];
-    }
-
-    return attachmentRows;
+  getAttachmentsForExportBulk(messageIds: string[], externalIds: string[], emailIds: string[]) {
+    return attachmentDb.getAttachmentsForExportBulk(messageIds, externalIds, emailIds);
   }
 
   // ============================================
-  // SUBMISSION QUERIES (TASK-2100)
+  // SUBMISSION QUERIES (Delegate to submissionDbService)
   // ============================================
 
-  /**
-   * Load messages linked to a transaction via communications junction table,
-   * with optional audit date range filter.
-   */
-  getTransactionMessages(
-    transactionId: string,
-    auditStartDate?: Date | null,
-    auditEndDate?: Date | null
-  ): Message[] {
-    const db = this._ensureDb();
-
-    let sql = `
-      SELECT DISTINCT m.*
-      FROM messages m
-      INNER JOIN communications c ON (
-        (c.message_id IS NOT NULL AND c.message_id = m.id)
-        OR
-        (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
-      )
-      WHERE c.transaction_id = ?
-    `;
-    const params: (string | number)[] = [transactionId];
-
-    if (auditStartDate) {
-      sql += ` AND m.sent_at >= ?`;
-      params.push(auditStartDate.toISOString());
-    }
-    if (auditEndDate) {
-      const endOfDay = new Date(auditEndDate);
-      endOfDay.setHours(23, 59, 59, 999);
-      sql += ` AND m.sent_at <= ?`;
-      params.push(endOfDay.toISOString());
-    }
-
-    sql += ` ORDER BY m.sent_at ASC`;
-    return db.prepare(sql).all(...params) as Message[];
+  getTransactionMessages(transactionId: string, auditStartDate?: Date | null, auditEndDate?: Date | null) {
+    return submissionDb.getTransactionMessages(transactionId, auditStartDate, auditEndDate);
   }
 
-  /**
-   * Load emails linked to a transaction via communications.email_id,
-   * with optional audit date range filter.
-   */
-  getTransactionEmails(
-    transactionId: string,
-    auditStartDate?: Date | null,
-    auditEndDate?: Date | null
-  ): Record<string, unknown>[] {
-    const db = this._ensureDb();
-
-    let sql = `
-      SELECT DISTINCT e.*
-      FROM emails e
-      INNER JOIN communications c ON c.email_id = e.id
-      WHERE c.transaction_id = ?
-    `;
-    const params: (string | number)[] = [transactionId];
-
-    if (auditStartDate) {
-      sql += ` AND e.sent_at >= ?`;
-      params.push(auditStartDate.toISOString());
-    }
-    if (auditEndDate) {
-      const endOfDay = new Date(auditEndDate);
-      endOfDay.setHours(23, 59, 59, 999);
-      sql += ` AND e.sent_at <= ?`;
-      params.push(endOfDay.toISOString());
-    }
-
-    sql += ` ORDER BY e.sent_at ASC`;
-    return db.prepare(sql).all(...params) as Record<string, unknown>[];
+  getTransactionEmails(transactionId: string, auditStartDate?: Date | null, auditEndDate?: Date | null) {
+    return submissionDb.getTransactionEmails(transactionId, auditStartDate, auditEndDate);
   }
 
-  /**
-   * Load attachments linked to a transaction (both text message and email attachments),
-   * with optional audit date range filter.
-   */
-  getTransactionAttachments(
-    transactionId: string,
-    auditStartDate?: Date | null,
-    auditEndDate?: Date | null
-  ): Attachment[] {
-    const db = this._ensureDb();
+  getTransactionAttachments(transactionId: string, auditStartDate?: Date | null, auditEndDate?: Date | null) {
+    return submissionDb.getTransactionAttachments(transactionId, auditStartDate, auditEndDate);
+  }
 
-    // Build date filter conditions for text messages
-    let dateFilter = "";
-    const dateParams: string[] = [];
-    if (auditStartDate) {
-      dateFilter += " AND m.sent_at >= ?";
-      dateParams.push(auditStartDate.toISOString());
-    }
-    if (auditEndDate) {
-      const endOfDay = new Date(auditEndDate);
-      endOfDay.setHours(23, 59, 59, 999);
-      dateFilter += " AND m.sent_at <= ?";
-      dateParams.push(endOfDay.toISOString());
-    }
+  getTransactionBySubmissionId(submissionId: string) {
+    return submissionDb.getTransactionBySubmissionId(submissionId);
+  }
 
-    // Query 1: Text message attachments
-    const textAttachmentsSql = `
-      SELECT DISTINCT a.*
-      FROM attachments a
-      INNER JOIN messages m ON a.message_id = m.id
-      INNER JOIN communications c ON (
-        (c.message_id IS NOT NULL AND c.message_id = m.id)
-        OR
-        (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
-      )
-      WHERE c.transaction_id = ?
-      AND a.storage_path IS NOT NULL
-      ${dateFilter}
-    `;
-    const textAttachments = db
-      .prepare(textAttachmentsSql)
-      .all(transactionId, ...dateParams) as Attachment[];
+  getSubmittedTransactionById(transactionId: string) {
+    return submissionDb.getSubmittedTransactionById(transactionId);
+  }
 
-    // Build email date filter
-    let emailDateFilter = "";
-    const emailDateParams: string[] = [];
-    if (auditStartDate) {
-      emailDateFilter += " AND e.sent_at >= ?";
-      emailDateParams.push(auditStartDate.toISOString());
-    }
-    if (auditEndDate) {
-      const endOfDay = new Date(auditEndDate);
-      endOfDay.setHours(23, 59, 59, 999);
-      emailDateFilter += " AND e.sent_at <= ?";
-      emailDateParams.push(endOfDay.toISOString());
-    }
+  getActiveSubmittedTransactions() {
+    return submissionDb.getActiveSubmittedTransactions();
+  }
 
-    // Query 2: Email attachments
-    const emailAttachmentsSql = `
-      SELECT DISTINCT a.*
-      FROM attachments a
-      INNER JOIN emails e ON a.email_id = e.id
-      INNER JOIN communications c ON c.email_id = e.id
-      WHERE c.transaction_id = ?
-      AND a.email_id IS NOT NULL
-      AND a.storage_path IS NOT NULL
-      ${emailDateFilter}
-    `;
-    const emailAttachments = db
-      .prepare(emailAttachmentsSql)
-      .all(transactionId, ...emailDateParams) as Attachment[];
-
-    // Combine, deduplicate by id, and sort by created_at
-    const allAttachments = [...textAttachments, ...emailAttachments];
-    const uniqueAttachments = Array.from(
-      new Map(allAttachments.map((a) => [a.id, a])).values()
-    );
-    uniqueAttachments.sort((a, b) => {
-      const aTime = a.created_at ? new Date(a.created_at as string).getTime() : 0;
-      const bTime = b.created_at ? new Date(b.created_at as string).getTime() : 0;
-      return aTime - bTime;
-    });
-
-    return uniqueAttachments;
+  updateTransactionSubmissionStatus(transactionId: string, submissionStatus: string, lastReviewNotes: string | null) {
+    return submissionDb.updateTransactionSubmissionStatus(transactionId, submissionStatus, lastReviewNotes);
   }
 
   // ============================================
-  // SUBMISSION SYNC QUERIES (TASK-2100)
+  // iPHONE SYNC QUERIES (Delegate to syncDbService)
   // ============================================
 
-  /**
-   * Find a local transaction by its cloud submission_id.
-   */
-  getTransactionBySubmissionId(
-    submissionId: string
-  ): { id: string; property_address: string; submission_id: string; submission_status: string | null; last_review_notes: string | null } | undefined {
-    const db = this._ensureDb();
-    return db
-      .prepare(
-        `SELECT id, property_address, submission_id, submission_status, last_review_notes
-         FROM transactions WHERE submission_id = ?`
-      )
-      .get(submissionId) as { id: string; property_address: string; submission_id: string; submission_status: string | null; last_review_notes: string | null } | undefined;
+  getExistingMessageExternalIds(userId: string) {
+    return syncDb.getExistingMessageExternalIds(userId);
   }
 
-  /**
-   * Find a local transaction by id that has a submission_id (i.e., has been submitted).
-   */
-  getSubmittedTransactionById(
-    transactionId: string
-  ): { id: string; property_address: string; submission_id: string; submission_status: string | null; last_review_notes: string | null } | undefined {
-    const db = this._ensureDb();
-    return db
-      .prepare(
-        `SELECT id, property_address, submission_id, submission_status, last_review_notes
-         FROM transactions WHERE id = ? AND submission_id IS NOT NULL`
-      )
-      .get(transactionId) as { id: string; property_address: string; submission_id: string; submission_status: string | null; last_review_notes: string | null } | undefined;
-  }
-
-  /**
-   * Get all locally submitted transactions that still have active (non-final) statuses.
-   */
-  getActiveSubmittedTransactions(): { id: string; property_address: string; submission_id: string; submission_status: string | null; last_review_notes: string | null }[] {
-    const db = this._ensureDb();
-    return db
-      .prepare(
-        `SELECT id, property_address, submission_id, submission_status, last_review_notes
-         FROM transactions
-         WHERE submission_id IS NOT NULL
-         AND submission_status NOT IN ('approved', 'rejected', 'not_submitted')
-         ORDER BY submitted_at DESC`
-      )
-      .all() as { id: string; property_address: string; submission_id: string; submission_status: string | null; last_review_notes: string | null }[];
-  }
-
-  /**
-   * Update a transaction's submission status and review notes.
-   */
-  updateTransactionSubmissionStatus(
-    transactionId: string,
-    submissionStatus: string,
-    lastReviewNotes: string | null
-  ): void {
-    const db = this._ensureDb();
-    db.prepare(
-      `UPDATE transactions
-       SET submission_status = ?,
-           last_review_notes = ?,
-           updated_at = ?
-       WHERE id = ?`
-    ).run(submissionStatus, lastReviewNotes, new Date().toISOString(), transactionId);
-  }
-
-  // ============================================
-  // iPHONE SYNC QUERIES (TASK-2100)
-  // ============================================
-
-  /**
-   * Get existing message external_ids for a user (for deduplication).
-   */
-  getExistingMessageExternalIds(userId: string): Set<string> {
-    const db = this._ensureDb();
-    const rows = db
-      .prepare(
-        `SELECT external_id FROM messages WHERE user_id = ? AND external_id IS NOT NULL`
-      )
-      .all(userId) as { external_id: string }[];
-    const ids = new Set<string>();
-    for (const row of rows) {
-      ids.add(row.external_id);
-    }
-    return ids;
-  }
-
-  /**
-   * Batch insert messages using a prepared statement within a transaction.
-   * Returns count of inserted and skipped messages.
-   */
   batchInsertMessages(
-    messages: {
-      id: string;
-      userId: string;
-      channel: string;
-      externalId: string;
-      direction: string;
-      bodyText: string | null;
-      participants: string;
-      participantsFlat: string;
-      threadId: string;
-      sentAt: string;
-      hasAttachments: number;
-      messageType: string | null;
-      metadata: string | null;
-    }[],
+    messages: Parameters<typeof syncDb.batchInsertMessages>[0],
     batchSize: number,
     sessionId?: string,
     cancelSignal?: { cancelled: boolean }
-  ): { stored: number; skipped: number } {
-    const db = this._ensureDb();
-    const insertStmt = db.prepare(`
-      INSERT OR IGNORE INTO messages (
-        id, user_id, channel, external_id, direction,
-        body_text, participants, participants_flat, thread_id, sent_at,
-        has_attachments, message_type, metadata, sync_session_id, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `);
-
-    let stored = 0;
-    let skipped = 0;
-    const totalBatches = Math.ceil(messages.length / batchSize);
-
-    for (let batchNum = 0; batchNum < totalBatches; batchNum++) {
-      // TASK-2110: Check cancel signal between batches
-      if (cancelSignal?.cancelled) {
-        logService.info(
-          `Batch insert cancelled after ${batchNum}/${totalBatches} batches (${stored} stored)`,
-          "DatabaseService"
-        );
-        break;
-      }
-
-      const start = batchNum * batchSize;
-      const end = Math.min(start + batchSize, messages.length);
-      const batch = messages.slice(start, end);
-
-      const runBatch = db.transaction(() => {
-        for (const msg of batch) {
-          const result = insertStmt.run(
-            msg.id,
-            msg.userId,
-            msg.channel,
-            msg.externalId,
-            msg.direction,
-            msg.bodyText,
-            msg.participants,
-            msg.participantsFlat,
-            msg.threadId,
-            msg.sentAt,
-            msg.hasAttachments,
-            msg.messageType,
-            msg.metadata,
-            sessionId || null
-          );
-          if (result.changes > 0) {
-            stored++;
-          } else {
-            skipped++;
-          }
-        }
-      });
-      runBatch();
-    }
-
-    return { stored, skipped };
+  ) {
+    return syncDb.batchInsertMessages(messages, batchSize, sessionId, cancelSignal);
   }
 
-  /**
-   * Get message id/external_id map for a user (for attachment linking).
-   */
-  getMessageIdMap(userId: string): Map<string, string> {
-    const db = this._ensureDb();
-    const rows = db
-      .prepare(
-        `SELECT id, external_id FROM messages WHERE user_id = ? AND external_id IS NOT NULL`
-      )
-      .all(userId) as { id: string; external_id: string }[];
-    const map = new Map<string, string>();
-    for (const row of rows) {
-      map.set(row.external_id, row.id);
-    }
-    return map;
+  getMessageIdMap(userId: string) {
+    return syncDb.getMessageIdMap(userId);
   }
 
-  /**
-   * Get existing attachment records for deduplication (message_id + filename pairs).
-   */
-  getExistingAttachmentRecords(): Set<string> {
-    const db = this._ensureDb();
-    const rows = db
-      .prepare(
-        `SELECT message_id, filename FROM attachments WHERE message_id IS NOT NULL`
-      )
-      .all() as { message_id: string; filename: string }[];
-    const records = new Set<string>();
-    for (const row of rows) {
-      records.add(`${row.message_id}:${row.filename}`);
-    }
-    return records;
+  getExistingAttachmentRecords() {
+    return syncDb.getExistingAttachmentRecords();
   }
 
-  /**
-   * Insert a single attachment record (for iPhone sync).
-   */
-  insertAttachment(params: {
-    id: string;
-    messageId: string;
-    externalMessageId: string;
-    filename: string;
-    mimeType: string;
-    fileSizeBytes: number;
-    storagePath: string;
-    sessionId?: string;
-  }): void {
-    const db = this._ensureDb();
-    db.prepare(
-      `INSERT OR IGNORE INTO attachments (
-        id, message_id, external_message_id, filename, mime_type, file_size_bytes, storage_path, sync_session_id, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
-    ).run(
-      params.id,
-      params.messageId,
-      params.externalMessageId,
-      params.filename,
-      params.mimeType,
-      params.fileSizeBytes,
-      params.storagePath,
-      params.sessionId || null
-    );
+  insertAttachment(params: Parameters<typeof syncDb.insertAttachment>[0]) {
+    return syncDb.insertAttachment(params);
   }
 
   // ============================================
-  // SYNC SESSION ROLLBACK (TASK-2110)
+  // SYNC SESSION ROLLBACK (Delegate to syncDbService)
   // ============================================
 
-  /**
-   * Delete all messages inserted during a specific sync session.
-   * Used for ACID rollback when user cancels iPhone sync.
-   */
-  deleteMessagesBySessionId(userId: string, sessionId: string): number {
-    const db = this._ensureDb();
-    const result = db.prepare(
-      `DELETE FROM messages WHERE user_id = ? AND sync_session_id = ?`
-    ).run(userId, sessionId);
-    logService.info(
-      `Deleted ${result.changes} messages for session ${sessionId}`,
-      "DatabaseService"
-    );
-    return result.changes;
+  deleteMessagesBySessionId(userId: string, sessionId: string) {
+    return syncDb.deleteMessagesBySessionId(userId, sessionId);
   }
 
-  /**
-   * Delete all attachments inserted during a specific sync session.
-   * Returns the storage_path values so callers can clean up orphaned files.
-   *
-   * TASK-2110: Content-addressed files are only deleted if no other
-   * attachment record references the same storage_path.
-   */
-  deleteAttachmentsBySessionId(sessionId: string): { deleted: number; orphanedFiles: string[] } {
-    const db = this._ensureDb();
-
-    // Step 1: Get storage paths for attachments in this session
-    const sessionAttachments = db.prepare(
-      `SELECT id, storage_path FROM attachments WHERE sync_session_id = ?`
-    ).all(sessionId) as { id: string; storage_path: string | null }[];
-
-    if (sessionAttachments.length === 0) {
-      return { deleted: 0, orphanedFiles: [] };
-    }
-
-    // Step 2: Delete the attachment records
-    const deleteResult = db.prepare(
-      `DELETE FROM attachments WHERE sync_session_id = ?`
-    ).run(sessionId);
-
-    // Step 3: Find orphaned files (no other attachment references the same storage_path)
-    const orphanedFiles: string[] = [];
-    const checkStmt = db.prepare(
-      `SELECT COUNT(*) as cnt FROM attachments WHERE storage_path = ?`
-    );
-
-    for (const att of sessionAttachments) {
-      if (!att.storage_path) continue;
-      const row = checkStmt.get(att.storage_path) as { cnt: number };
-      if (row.cnt === 0) {
-        orphanedFiles.push(att.storage_path);
-      }
-    }
-
-    logService.info(
-      `Deleted ${deleteResult.changes} attachments for session ${sessionId}, ${orphanedFiles.length} orphaned files`,
-      "DatabaseService"
-    );
-
-    return { deleted: deleteResult.changes, orphanedFiles };
+  deleteAttachmentsBySessionId(sessionId: string) {
+    return syncDb.deleteAttachmentsBySessionId(sessionId);
   }
 
-  /**
-   * Delete all external contacts inserted during a specific sync session.
-   */
-  deleteContactsBySessionId(userId: string, sessionId: string): number {
-    const db = this._ensureDb();
-    const result = db.prepare(
-      `DELETE FROM external_contacts WHERE user_id = ? AND sync_session_id = ?`
-    ).run(userId, sessionId);
-    logService.info(
-      `Deleted ${result.changes} contacts for session ${sessionId}`,
-      "DatabaseService"
-    );
-    return result.changes;
+  deleteContactsBySessionId(userId: string, sessionId: string) {
+    return syncDb.deleteContactsBySessionId(userId, sessionId);
   }
 
   // ============================================
   // EMAIL DEDUPLICATION (TASK-2100)
   // ============================================
 
-  /**
-   * Get the raw database handle for use by EmailDeduplicationService.
-   * This is a controlled accessor -- only use for classes that need direct DB access.
-   */
   getDatabaseForDeduplication(): DatabaseType {
     return this._ensureDb();
   }

@@ -110,6 +110,19 @@ export async function createTransaction(
 }
 
 /**
+ * Get count of pending auto-detected transactions for a user.
+ * BACKLOG-1124: Uses a SQL COUNT query instead of fetching all transactions
+ * and filtering client-side, avoiding large IPC serialization overhead.
+ */
+export function getPendingTransactionCount(userId: string): number {
+  const result = dbGet<{ count: number }>(
+    "SELECT COUNT(*) as count FROM transactions WHERE user_id = ? AND detection_status = 'pending'",
+    [userId],
+  );
+  return result?.count ?? 0;
+}
+
+/**
  * Get all transactions for a user
  */
 export async function getTransactions(
@@ -138,9 +151,9 @@ export async function getTransactions(
     params.push(filters.transaction_type);
   }
 
-  if (filters?.transaction_status || filters?.status) {
+  if (filters?.status) {
     sql += " AND t.status = ?";
-    params.push(filters.transaction_status || filters.status);
+    params.push(filters.status);
   }
 
   if (filters?.export_status) {

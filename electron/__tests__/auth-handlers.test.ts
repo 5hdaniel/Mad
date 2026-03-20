@@ -168,7 +168,7 @@ jest.mock("../services/logService", () => ({
 }));
 
 // Mock sync-handlers for setSyncUserId
-jest.mock("../sync-handlers", () => ({
+jest.mock("../handlers/syncHandlers", () => ({
   setSyncUserId: jest.fn(),
 }));
 
@@ -178,7 +178,7 @@ jest.mock("../sync-handlers", () => ({
 // ARE mocked above, so the handlers will work with mocked dependencies.
 
 // Import after mocks are set up
-import { registerAuthHandlers, initializeDatabase } from "../auth-handlers";
+import { registerAuthHandlers, initializeDatabase } from "../handlers/authHandlers";
 import databaseService from "../services/databaseService";
 import googleAuthService from "../services/googleAuthService";
 import microsoftAuthService from "../services/microsoftAuthService";

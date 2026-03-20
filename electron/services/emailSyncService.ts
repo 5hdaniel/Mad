@@ -15,7 +15,7 @@ import logService from "./logService";
 import { autoLinkCommunicationsForContact } from "./autoLinkService";
 import type { AutoLinkResult } from "./autoLinkService";
 import { createEmail, getEmailByExternalId, countEmailsByUser } from "./db/emailDbService";
-import { dbGet } from "./db/core/dbConnection";
+import { dbGet, dbAll, getRawDatabase } from "./db/core/dbConnection";
 import gmailFetchService from "./gmailFetchService";
 import outlookFetchService from "./outlookFetchService";
 import databaseService from "./databaseService";
@@ -89,6 +89,41 @@ export function classifyProviderError(error: unknown): string {
     return "Your email connection has expired. Please reconnect in Settings.";
   }
   return "Could not reach your email provider. Showing cached results only.";
+}
+
+// ============================================
+// TASK-2273: Email sync failure classification for Sentry
+// ============================================
+
+/**
+ * Classifies email sync errors into structured categories for Sentry reporting.
+ * Used to tag Sentry events with actionable failure reasons.
+ */
+export type EmailSyncFailureReason =
+  | "token_expired"
+  | "rate_limited"
+  | "network_error"
+  | "storage_error"
+  | "api_error"
+  | "unknown";
+
+/**
+ * Classifies an email sync error into a structured failure reason.
+ * Uses existing isTokenExpiryError() and isNetworkError() helpers,
+ * then falls back to HTTP status and error message pattern matching.
+ */
+export function classifyEmailSyncError(error: unknown): EmailSyncFailureReason {
+  if (isTokenExpiryError(error)) return "token_expired";
+  if (isNetworkError(error)) return "network_error";
+
+  const status = (error as { response?: { status?: number } })?.response?.status;
+  if (status === 429) return "rate_limited";
+  if (status && status >= 400) return "api_error";
+
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  if (message.includes("disk") || message.includes("space") || message.includes("enospc")) return "storage_error";
+
+  return "unknown";
 }
 
 // TASK-2060: Safety cap for sent items (per-contact email search)
@@ -202,80 +237,144 @@ async function fetchStoreAndDedup(params: {
 
   fetched = newEmails.length;
 
-  // TASK-2049: Store emails individually -- each saved email is preserved
-  // even if a subsequent save or fetch fails due to network disconnect
-  for (const email of newEmails) {
-    try {
-      let emailRecord = await getEmailByExternalId(userId, email.id);
-      if (!emailRecord) {
-        emailRecord = await createEmail({
-          user_id: userId,
-          external_id: email.id,
-          source: provider,
-          thread_id: email.threadId,
-          sender: email.from ?? undefined,
-          recipients: email.to ?? undefined,
-          cc: email.cc ?? undefined,
-          subject: email.subject ?? undefined,
-          body_html: email.body,
-          body_plain: email.bodyPlain,
-          sent_at: email.date ? new Date(email.date).toISOString() : undefined,
-          has_attachments: email.hasAttachments || false,
-          attachment_count: email.attachmentCount || 0,
-        });
-        stored++;
+  // BACKLOG-1115: Batch dedup check -- find which external_ids already exist in one query
+  // instead of N individual SELECT queries. This is the highest-impact perf optimization.
+  const existingExternalIds = new Set<string>();
+  if (newEmails.length > 0) {
+    // Process in chunks of 500 to avoid SQLite variable limit
+    const CHUNK_SIZE = 500;
+    for (let i = 0; i < newEmails.length; i += CHUNK_SIZE) {
+      const chunk = newEmails.slice(i, i + CHUNK_SIZE);
+      const placeholders = chunk.map(() => "?").join(",");
+      const rows = dbAll<{ external_id: string }>(
+        `SELECT external_id FROM emails WHERE user_id = ? AND external_id IN (${placeholders})`,
+        [userId, ...chunk.map((e) => e.id)],
+      );
+      for (const row of rows) {
+        existingExternalIds.add(row.external_id);
+      }
+    }
+  }
 
-        // Download attachments if present
-        if (email.hasAttachments && emailRecord) {
+  // Filter to only truly new emails (not in DB)
+  const emailsToInsert = newEmails.filter((e) => !existingExternalIds.has(e.id));
+
+  // BACKLOG-1115: Batch INSERT within a single SQLite transaction for throughput.
+  // Prepared statement is reused across all inserts.
+  if (emailsToInsert.length > 0) {
+    try {
+      const db = getRawDatabase();
+      const crypto = await import("crypto");
+      const insertStmt = db.prepare(`
+        INSERT INTO emails (
+          id, user_id, external_id, source, account_id, direction,
+          subject, body_plain, body_html,
+          sender, recipients, cc, bcc,
+          thread_id, in_reply_to, references_header,
+          sent_at, received_at,
+          has_attachments, attachment_count,
+          message_id_header, content_hash, labels,
+          created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      `);
+
+      // Map of external_id -> generated internal id for attachment processing
+      const insertedEmailMap = new Map<string, string>();
+
+      const runTransaction = db.transaction(() => {
+        for (const email of emailsToInsert) {
           try {
-            if (provider === "outlook" && getAttachmentsFn) {
-              // Outlook: fetch attachment metadata from Graph API
-              const graphAttachments = await getAttachmentsFn(email.id);
-              if (graphAttachments.length > 0) {
-                await emailAttachmentService.downloadEmailAttachments(
-                  userId,
-                  emailRecord.id,
-                  email.id,
-                  "outlook",
-                  graphAttachments.map((att) => ({
-                    filename: att.name || "attachment",
-                    mimeType: att.contentType || "application/octet-stream",
-                    size: att.size || 0,
-                    attachmentId: att.id,
-                  })),
-                );
-              }
-            } else if (provider === "gmail" && email.attachments && email.attachments.length > 0) {
-              // Gmail: attachment metadata is included in searchEmails response
+            const id = crypto.randomUUID();
+            insertStmt.run(
+              id,
+              userId,
+              email.id,
+              provider,
+              null, // account_id
+              null, // direction
+              email.subject ?? null,
+              email.bodyPlain ?? null,
+              email.body ?? null,
+              email.from ?? null,
+              email.to ?? null,
+              email.cc ?? null,
+              null, // bcc
+              email.threadId ?? null,
+              null, // in_reply_to
+              null, // references_header
+              email.date ? new Date(email.date).toISOString() : null,
+              null, // received_at
+              email.hasAttachments ? 1 : 0,
+              email.attachmentCount || 0,
+              null, // message_id_header
+              null, // content_hash
+              null, // labels
+            );
+            insertedEmailMap.set(email.id, id);
+            stored++;
+          } catch (emailError) {
+            errors++;
+            logService.warn(`Failed to store ${provider} email in batch`, "Transactions", {
+              error: emailError instanceof Error ? emailError.message : "Unknown",
+            });
+          }
+        }
+      });
+
+      runTransaction();
+
+      // Download attachments AFTER the batch insert (outside transaction)
+      // This keeps the DB transaction fast and avoids holding locks during network I/O
+      for (const email of emailsToInsert) {
+        const internalId = insertedEmailMap.get(email.id);
+        if (!internalId || !email.hasAttachments) continue;
+
+        try {
+          if (provider === "outlook" && getAttachmentsFn) {
+            const graphAttachments = await getAttachmentsFn(email.id);
+            if (graphAttachments.length > 0) {
               await emailAttachmentService.downloadEmailAttachments(
                 userId,
-                emailRecord.id,
+                internalId,
                 email.id,
-                "gmail",
-                email.attachments.map((att) => ({
-                  filename: att.filename || att.name || "attachment",
-                  mimeType: att.mimeType || att.contentType || "application/octet-stream",
+                "outlook",
+                graphAttachments.map((att) => ({
+                  filename: att.name || "attachment",
+                  mimeType: att.contentType || "application/octet-stream",
                   size: att.size || 0,
-                  attachmentId: att.attachmentId || att.id || "",
+                  attachmentId: att.id,
                 })),
               );
             }
-          } catch (attError) {
-            // Attachment download failure is non-blocking for email save
-            if (!isNetworkError(attError)) {
-              logService.warn(`Failed to download ${provider} attachments during sync`, "Transactions", {
-                emailId: emailRecord.id,
-                error: attError instanceof Error ? attError.message : "Unknown",
-              });
-            }
-            // Network errors on attachment download are non-fatal; email is already saved
+          } else if (provider === "gmail" && email.attachments && email.attachments.length > 0) {
+            await emailAttachmentService.downloadEmailAttachments(
+              userId,
+              internalId,
+              email.id,
+              "gmail",
+              email.attachments.map((att) => ({
+                filename: att.filename || att.name || "attachment",
+                mimeType: att.mimeType || att.contentType || "application/octet-stream",
+                size: att.size || 0,
+                attachmentId: att.attachmentId || att.id || "",
+              })),
+            );
+          }
+        } catch (attError) {
+          if (!isNetworkError(attError)) {
+            logService.warn(`Failed to download ${provider} attachments during sync`, "Transactions", {
+              emailId: internalId,
+              error: attError instanceof Error ? attError.message : "Unknown",
+            });
           }
         }
       }
-    } catch (emailError) {
-      errors++;
-      logService.warn(`Failed to store ${provider} email`, "Transactions", {
-        error: emailError instanceof Error ? emailError.message : "Unknown",
+    } catch (batchError) {
+      // If the entire batch transaction fails, log and count all as errors
+      errors += emailsToInsert.length - stored;
+      logService.warn(`Batch email insert failed for ${provider}`, "Transactions", {
+        error: batchError instanceof Error ? batchError.message : "Unknown",
+        attempted: emailsToInsert.length,
       });
     }
   }
@@ -308,6 +407,18 @@ class EmailSyncService {
     transactionDetails: TransactionWithDetails;
   }): Promise<TransactionResponse> {
     const { transactionId, userId, contactAssignments, contactEmails, transactionDetails } = params;
+
+    // TASK-2273: Breadcrumb at sync orchestration start with full context
+    Sentry.addBreadcrumb({
+      category: "email_sync.start",
+      message: `Starting email sync for transaction`,
+      level: "info",
+      data: {
+        provider: "all",
+        contactCount: contactAssignments.length,
+        contactEmailCount: contactEmails.length,
+      },
+    });
 
     if (contactEmails.length === 0) {
       // No contact emails -- still run auto-link for phone-based message matching
@@ -620,6 +731,21 @@ class EmailSyncService {
         } else {
           providerWarning = "Could not reach your email provider. Showing cached results only.";
         }
+        // TASK-2273: Structured failure reporting
+        const reason = classifyEmailSyncError(gmailError);
+        Sentry.captureMessage(`Email sync failed: ${reason}`, {
+          level: reason === "rate_limited" ? "warning" : "error",
+          tags: {
+            component: "email_sync",
+            provider: "gmail",
+            failureReason: reason,
+          },
+          extra: {
+            emailsFetchedSoFar: emails.length,
+            errorMessage: gmailError instanceof Error ? gmailError.message : String(gmailError),
+            responseStatus: (gmailError as any)?.response?.status,
+          },
+        });
       }
     }
 
@@ -691,6 +817,21 @@ class EmailSyncService {
             providerWarning = "Could not reach your email provider. Showing cached results only.";
           }
         }
+        // TASK-2273: Structured failure reporting
+        const reason = classifyEmailSyncError(outlookError);
+        Sentry.captureMessage(`Email sync failed: ${reason}`, {
+          level: reason === "rate_limited" ? "warning" : "error",
+          tags: {
+            component: "email_sync",
+            provider: "outlook",
+            failureReason: reason,
+          },
+          extra: {
+            emailsFetchedSoFar: emails.length,
+            errorMessage: outlookError instanceof Error ? outlookError.message : String(outlookError),
+            responseStatus: (outlookError as any)?.response?.status,
+          },
+        });
       }
     }
 
@@ -852,15 +993,16 @@ class EmailSyncService {
     let stored = 0;
 
     Sentry.addBreadcrumb({
-      category: 'sync',
-      message: 'Outlook email fetch started',
+      category: 'email_sync.start',
+      message: 'Starting outlook email sync',
       level: 'info',
       data: {
         syncType: 'emails',
         provider: 'outlook',
         operation: 'sync-and-fetch-emails',
         transactionId,
-        contactEmailCount: contactEmails.length,
+        contactCount: contactEmails.length,
+        dateRange: { after: emailFetchSinceDate?.toISOString() },
       },
     });
 
@@ -945,6 +1087,23 @@ class EmailSyncService {
 
       return { fetched, stored, networkError: false };
     } catch (outlookError) {
+      // TASK-2273: Structured failure reporting for all Outlook sync errors
+      const reason = classifyEmailSyncError(outlookError);
+      Sentry.captureMessage(`Email sync failed: ${reason}`, {
+        level: reason === "rate_limited" ? "warning" : "error",
+        tags: {
+          component: "email_sync",
+          provider: "outlook",
+          failureReason: reason,
+        },
+        extra: {
+          emailsFetchedSoFar: fetched,
+          expectedTotal: EMAIL_FETCH_SAFETY_CAP,
+          errorMessage: outlookError instanceof Error ? outlookError.message : String(outlookError),
+          responseStatus: (outlookError as any)?.response?.status,
+        },
+      });
+
       if (isNetworkError(outlookError)) {
         // TASK-2049: Network error after all retries exhausted
         networkResilienceService.recordPartialSync(userId, "outlook", stored);
@@ -1009,15 +1168,16 @@ class EmailSyncService {
     let stored = 0;
 
     Sentry.addBreadcrumb({
-      category: 'sync',
-      message: 'Gmail email fetch started',
+      category: 'email_sync.start',
+      message: 'Starting gmail email sync',
       level: 'info',
       data: {
         syncType: 'emails',
         provider: 'gmail',
         operation: 'sync-and-fetch-emails',
         transactionId,
-        contactEmailCount: contactEmails.length,
+        contactCount: contactEmails.length,
+        dateRange: { after: emailFetchSinceDate?.toISOString() },
       },
     });
 
@@ -1094,6 +1254,22 @@ class EmailSyncService {
       return { fetched, stored, networkError: false };
     } catch (gmailError) {
       const totalStored = currentEmailsStored + stored;
+      // TASK-2273: Structured failure reporting for all Gmail sync errors
+      const reason = classifyEmailSyncError(gmailError);
+      Sentry.captureMessage(`Email sync failed: ${reason}`, {
+        level: reason === "rate_limited" ? "warning" : "error",
+        tags: {
+          component: "email_sync",
+          provider: "gmail",
+          failureReason: reason,
+        },
+        extra: {
+          emailsFetchedSoFar: fetched,
+          expectedTotal: EMAIL_FETCH_SAFETY_CAP,
+          errorMessage: gmailError instanceof Error ? gmailError.message : String(gmailError),
+          responseStatus: (gmailError as any)?.response?.status,
+        },
+      });
       if (isNetworkError(gmailError)) {
         // TASK-2049: Network error after all retries exhausted
         networkResilienceService.recordPartialSync(userId, "gmail", totalStored);

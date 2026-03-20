@@ -1,0 +1,91 @@
+name: PM Task Status Sync
+
+# Auto-mark tasks as completed in Supabase when their PR is merged.
+# Extracts TASK-XXXX from the branch name and calls pm_update_task_status RPC.
+# The auto-close trigger on pm_tasks handles backlog item completion.
+#
+# GitHub Secrets required:
+#   PM_SUPABASE_URL              - Supabase project URL
+#   PM_SUPABASE_SERVICE_ROLE_KEY - Supabase service-role key (renamed from PM_SUPABASE_KEY;
+#                                  update the secret name in repo Settings > Secrets if needed)
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [develop, main]
+
+jobs:
+  sync-task-status:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract task ID from branch name
+        id: extract
+        env:
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          echo "Branch: $BRANCH"
+          # Extract TASK-XXXX pattern from branch name (grep -oE for POSIX portability)
+          TASK_ID=$(echo "$BRANCH" | grep -oE 'TASK-[0-9]+' | head -1)
+          if [ -z "$TASK_ID" ]; then
+            echo "No TASK-XXXX found in branch name, skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Found task: $TASK_ID"
+            echo "task_id=$TASK_ID" >> "$GITHUB_OUTPUT"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Look up task UUID
+        if: steps.extract.outputs.skip == 'false'
+        id: lookup
+        env:
+          SUPABASE_URL: ${{ secrets.PM_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.PM_SUPABASE_SERVICE_ROLE_KEY }}
+          TASK_LEGACY_ID: ${{ steps.extract.outputs.task_id }}
+        run: |
+          RESPONSE=$(curl -s -X POST \
+            "${SUPABASE_URL}/rest/v1/rpc/pm_get_task_by_legacy_id" \
+            -H "apikey: ${SUPABASE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"p_legacy_id\": \"${TASK_LEGACY_ID}\"}")
+          echo "Lookup response: $RESPONSE"
+
+          # Extract UUID from response
+          TASK_UUID=$(echo "$RESPONSE" | jq -r '.id // empty')
+          if [ -z "$TASK_UUID" ]; then
+            echo "Task not found in Supabase, skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Task UUID: $TASK_UUID"
+            echo "task_uuid=$TASK_UUID" >> "$GITHUB_OUTPUT"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Mark task as completed
+        if: steps.extract.outputs.skip == 'false' && steps.lookup.outputs.skip != 'true'
+        env:
+          SUPABASE_URL: ${{ secrets.PM_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.PM_SUPABASE_SERVICE_ROLE_KEY }}
+          TASK_UUID: ${{ steps.lookup.outputs.task_uuid }}
+          TASK_LEGACY_ID: ${{ steps.extract.outputs.task_id }}
+        run: |
+          RESPONSE=$(curl -s -X POST \
+            "${SUPABASE_URL}/rest/v1/rpc/pm_update_task_status" \
+            -H "apikey: ${SUPABASE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"p_task_id\": \"${TASK_UUID}\", \"p_new_status\": \"completed\"}")
+          echo "Update response: $RESPONSE"
+
+          # Check success
+          SUCCESS=$(echo "$RESPONSE" | jq -r '.success // false')
+          CHANGED=$(echo "$RESPONSE" | jq -r '.changed // false')
+          echo "Success: $SUCCESS, Changed: $CHANGED"
+
+          if [ "$SUCCESS" = "true" ]; then
+            echo "✅ ${TASK_LEGACY_ID} marked as completed"
+          else
+            echo "⚠️ Could not update task status (may already be completed)"
+          fi

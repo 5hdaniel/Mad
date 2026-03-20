@@ -90,6 +90,23 @@ export interface SyncProgressProps {
 }
 
 // ============================================
+// USER-FACING ERROR TYPES (TASK-2276)
+// ============================================
+
+/**
+ * Structured error for user-facing display.
+ * Contains actionable information (title, description, suggestion)
+ * instead of raw technical error messages.
+ */
+export interface UserFacingError {
+  title: string;
+  description: string;
+  actionSuggestion: string;
+  /** Error code for programmatic handling */
+  code: string;
+}
+
+// ============================================
 // HOOK RETURN TYPES
 // ============================================
 
@@ -99,6 +116,8 @@ export interface UseIPhoneSyncReturn {
   syncStatus: SyncStatus;
   progress: BackupProgress | null;
   error: string | null;
+  /** TASK-2276: Structured error for rich UI display (title + description + suggestion) */
+  userError: UserFacingError | null;
   needsPassword: boolean;
   /** Last sync time for this device (from backup status) */
   lastSyncTime: Date | null;

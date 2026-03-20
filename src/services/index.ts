@@ -96,7 +96,15 @@ export { licenseService } from "./licenseService";
 export type {
   LicenseInfo,
   LicenseValidationResult,
-  LicenseStatus,
+  LicenseStatusInfo,
   LicenseAction,
   ValidationLicenseType,
 } from "./licenseService";
+
+// Outlook service
+export { outlookService } from "./outlookService";
+export type { OutlookExportContact, OutlookExportResult } from "./outlookService";
+
+// Message service (iMessage/macOS Messages)
+export { messageService } from "./messageService";
+export type { MessageImportStatus, MacOSImportServiceResult } from "./messageService";

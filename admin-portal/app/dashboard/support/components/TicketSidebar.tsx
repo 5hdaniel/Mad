@@ -18,7 +18,6 @@ import type {
   TicketPriority,
   PendingReason,
   SupportTicketParticipant,
-  SupportTicketEvent,
 } from '@/lib/support-types';
 import {
   ALLOWED_TRANSITIONS,
@@ -28,27 +27,16 @@ import {
 import { StatusBadge } from './StatusBadge';
 import { PriorityBadge } from './PriorityBadge';
 import { ParticipantsPanel } from './ParticipantsPanel';
-import { EventsTimeline } from './EventsTimeline';
+import { RelatedTicketsPanel } from './RelatedTicketsPanel';
+import { formatTimestamp } from '@/lib/format';
 
 interface TicketSidebarProps {
   ticket: SupportTicket;
   participants: SupportTicketParticipant[];
-  events: SupportTicketEvent[];
   onTicketUpdated: () => void;
 }
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
-}
-
-export function TicketSidebar({ ticket, participants, events, onTicketUpdated }: TicketSidebarProps) {
+export function TicketSidebar({ ticket, participants, onTicketUpdated }: TicketSidebarProps) {
   const [agents, setAgents] = useState<AssignableAgent[]>([]);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [updatingPriority, setUpdatingPriority] = useState(false);
@@ -297,8 +285,12 @@ export function TicketSidebar({ ticket, participants, events, onTicketUpdated }:
         onUpdated={onTicketUpdated}
       />
 
-      {/* Events Timeline */}
-      <EventsTimeline events={events} />
+      {/* Related Tickets */}
+      <RelatedTicketsPanel
+        ticketId={ticket.id}
+        onTicketUpdated={onTicketUpdated}
+      />
+
 
       {/* Timestamps */}
       <div className="px-4 py-3">
@@ -308,22 +300,22 @@ export function TicketSidebar({ ticket, participants, events, onTicketUpdated }:
         <div className="space-y-1.5">
           <div className="flex items-center gap-1.5 text-xs text-gray-500">
             <Calendar className="h-3 w-3" />
-            Created: {formatDate(ticket.created_at)}
+            Created: {formatTimestamp(ticket.created_at)}
           </div>
           <div className="flex items-center gap-1.5 text-xs text-gray-500">
             <Calendar className="h-3 w-3" />
-            Updated: {formatDate(ticket.updated_at)}
+            Updated: {formatTimestamp(ticket.updated_at)}
           </div>
           {ticket.first_response_at && (
             <div className="flex items-center gap-1.5 text-xs text-gray-500">
               <Calendar className="h-3 w-3" />
-              First response: {formatDate(ticket.first_response_at)}
+              First response: {formatTimestamp(ticket.first_response_at)}
             </div>
           )}
           {ticket.resolved_at && (
             <div className="flex items-center gap-1.5 text-xs text-gray-500">
               <Calendar className="h-3 w-3" />
-              Resolved: {formatDate(ticket.resolved_at)}
+              Resolved: {formatTimestamp(ticket.resolved_at)}
             </div>
           )}
         </div>

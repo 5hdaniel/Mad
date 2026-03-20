@@ -14,7 +14,8 @@ interface ConversationCardProps {
   isFirstCard?: boolean;
 }
 
-export function ConversationCard({
+// BACKLOG-1096: Wrapped with React.memo
+export const ConversationCard = React.memo(function ConversationCard({
   conversation,
   isSelected,
   onToggle,
@@ -175,4 +176,4 @@ export function ConversationCard({
       </div>
     </div>
   );
-}
+});

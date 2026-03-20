@@ -8,7 +8,7 @@
  * TASK-1813: User details view
  */
 
-import type { Role, LicenseStatus, ProvisioningSource } from '../../../lib/types/users';
+import type { Role, MemberLicenseStatus, ProvisioningSource } from '../../../lib/types/users';
 import {
   ROLE_LABELS,
   LICENSE_STATUS_LABELS,
@@ -46,7 +46,7 @@ interface MemberDetailsData {
   id: string;
   user_id: string | null;
   role: Role;
-  license_status: LicenseStatus;
+  license_status: MemberLicenseStatus;
   invited_email: string | null;
   invited_at: string | null;
   joined_at: string | null;
@@ -435,7 +435,7 @@ describe('UserDetailsCard Logic', () => {
   });
 
   describe('status colors mapping', () => {
-    const STATUS_COLORS: Record<LicenseStatus, string> = {
+    const STATUS_COLORS: Record<MemberLicenseStatus, string> = {
       active: 'bg-green-100 text-green-800',
       pending: 'bg-yellow-100 text-yellow-800',
       suspended: 'bg-red-100 text-red-800',
@@ -443,7 +443,7 @@ describe('UserDetailsCard Logic', () => {
     };
 
     it('should have distinct colors for all statuses', () => {
-      const statuses: LicenseStatus[] = ['active', 'pending', 'suspended', 'expired'];
+      const statuses: MemberLicenseStatus[] = ['active', 'pending', 'suspended', 'expired'];
       const colors = new Set(statuses.map((status) => STATUS_COLORS[status]));
 
       expect(colors.size).toBe(4); // All colors are unique

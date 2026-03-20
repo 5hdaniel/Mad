@@ -1,11 +1,16 @@
 /**
  * Unit tests for Phone Utilities
+ *
+ * BACKLOG-1083: Updated tests to reflect E.164-ish normalization format.
+ * normalizePhoneNumber now produces +digits format for consistency with
+ * phoneNormalization.ts and messageMatchingService.ts.
  */
 
 import {
   normalizePhoneNumber,
   formatPhoneNumber,
   phoneNumbersMatch,
+  extractDigits,
 } from "../phoneUtils";
 
 describe("phoneUtils", () => {
@@ -22,33 +27,41 @@ describe("phoneUtils", () => {
       expect(normalizePhoneNumber("")).toBe("");
     });
 
-    it("should remove dashes from phone number", () => {
-      expect(normalizePhoneNumber("555-123-4567")).toBe("5551234567");
+    it("should normalize 10-digit US number to E.164 with +1 prefix", () => {
+      expect(normalizePhoneNumber("5551234567")).toBe("+15551234567");
     });
 
-    it("should remove parentheses from phone number", () => {
-      expect(normalizePhoneNumber("(555) 123-4567")).toBe("5551234567");
+    it("should normalize formatted US number to E.164", () => {
+      expect(normalizePhoneNumber("(555) 123-4567")).toBe("+15551234567");
     });
 
-    it("should remove spaces from phone number", () => {
-      expect(normalizePhoneNumber("555 123 4567")).toBe("5551234567");
+    it("should normalize number with dashes to E.164", () => {
+      expect(normalizePhoneNumber("555-123-4567")).toBe("+15551234567");
     });
 
-    it("should remove plus sign from phone number", () => {
-      expect(normalizePhoneNumber("+1 555 123 4567")).toBe("15551234567");
+    it("should normalize number with spaces to E.164", () => {
+      expect(normalizePhoneNumber("555 123 4567")).toBe("+15551234567");
     });
 
-    it("should remove dots from phone number", () => {
-      expect(normalizePhoneNumber("555.123.4567")).toBe("5551234567");
+    it("should normalize number with dots to E.164", () => {
+      expect(normalizePhoneNumber("555.123.4567")).toBe("+15551234567");
     });
 
-    it("should handle already normalized numbers", () => {
-      expect(normalizePhoneNumber("5551234567")).toBe("5551234567");
+    it("should normalize number with existing +1 prefix", () => {
+      expect(normalizePhoneNumber("+1 555 123 4567")).toBe("+15551234567");
     });
 
-    it("should remove all non-digit characters", () => {
+    it("should normalize 11-digit number with 1 prefix", () => {
+      expect(normalizePhoneNumber("15551234567")).toBe("+15551234567");
+    });
+
+    it("should handle international numbers (keep all digits)", () => {
+      expect(normalizePhoneNumber("+44 20 7946 0958")).toBe("+442079460958");
+    });
+
+    it("should handle numbers with extension (keep all digits)", () => {
       expect(normalizePhoneNumber("+1 (555) 123-4567 ext. 890")).toBe(
-        "15551234567890",
+        "+15551234567890",
       );
     });
 
@@ -64,6 +77,24 @@ describe("phoneUtils", () => {
       expect(normalizePhoneNumber("madison.jones+tag@gmail.com")).toBe(
         "madison.jones+tag@gmail.com",
       );
+    });
+
+    it("should handle short numbers (< 10 digits)", () => {
+      expect(normalizePhoneNumber("1234567")).toBe("+1234567");
+    });
+  });
+
+  describe("extractDigits", () => {
+    it("should return empty string for null input", () => {
+      expect(extractDigits(null)).toBe("");
+    });
+
+    it("should extract only digits from phone number", () => {
+      expect(extractDigits("(555) 123-4567")).toBe("5551234567");
+    });
+
+    it("should extract digits from E.164 number", () => {
+      expect(extractDigits("+1 555 123 4567")).toBe("15551234567");
     });
   });
 
@@ -167,6 +198,10 @@ describe("phoneUtils", () => {
     it("should match based on last 10 digits when lengths differ", () => {
       // 11 digit vs 10 digit - should match on last 10
       expect(phoneNumbersMatch("15551234567", "5551234567")).toBe(true);
+    });
+
+    it("should match E.164 format against formatted number", () => {
+      expect(phoneNumbersMatch("+15551234567", "(555) 123-4567")).toBe(true);
     });
   });
 });

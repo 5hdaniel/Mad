@@ -83,31 +83,32 @@ import {
 } from "./constants";
 
 // Import handler registration functions
-import { registerAuthHandlers } from "./auth-handlers";
+import { registerAuthHandlers } from "./handlers/authHandlers";
 import { registerTransactionCrudHandlers } from "./handlers/transactionCrudHandlers";
 import { registerTransactionExportHandlers, cleanupTransactionHandlers } from "./handlers/transactionExportHandlers";
 import { registerEmailSyncHandlers } from "./handlers/emailSyncHandlers";
 import { registerEmailLinkingHandlers } from "./handlers/emailLinkingHandlers";
 import { registerEmailAutoLinkHandlers } from "./handlers/emailAutoLinkHandlers";
 import { registerAttachmentHandlers } from "./handlers/attachmentHandlers";
-import { registerContactHandlers } from "./contact-handlers";
-import { registerAddressHandlers } from "./address-handlers";
-import { registerFeedbackHandlers } from "./feedback-handlers";
+import { registerContactHandlers } from "./handlers/contactHandlers";
+import { registerAddressHandlers } from "./handlers/addressHandlers";
+import { registerFeedbackHandlers } from "./handlers/feedbackHandlers";
 import { registerSystemHandlers } from "./handlers/systemHandlers";
 import { registerDiagnosticHandlers } from "./handlers/diagnosticHandlers";
 import { registerUserSettingsHandlers } from "./handlers/userSettingsHandlers";
-import { registerPreferenceHandlers } from "./preference-handlers";
+import { registerPreferenceHandlers } from "./handlers/preferenceHandlers";
 import {
   registerDeviceHandlers,
   cleanupDeviceHandlers,
-} from "./device-handlers";
-import { registerBackupHandlers } from "./backup-handlers";
-import { registerSyncHandlers, cleanupSyncHandlers } from "./sync-handlers";
-import { registerDriverHandlers } from "./driver-handlers";
-import { registerLLMHandlers } from "./llm-handlers";
-import { registerLicenseHandlers } from "./license-handlers";
-import { registerFeatureGateHandlers } from "./feature-gate-handlers";
+} from "./handlers/deviceHandlers";
+import { registerBackupHandlers } from "./handlers/backupHandlers";
+import { registerSyncHandlers, cleanupSyncHandlers } from "./handlers/syncHandlers";
+import { registerDriverHandlers } from "./handlers/driverHandlers";
+import { registerLLMHandlers } from "./handlers/llmHandlers";
+import { registerLicenseHandlers } from "./handlers/licenseHandlers";
+import { registerFeatureGateHandlers } from "./handlers/featureGateHandlers";
 import { registerPreAuthValidationHandler } from "./handlers/preAuthValidationHandler";
+import { registerSupportTicketHandlers } from "./handlers/supportTicketHandlers";
 import { LLMConfigService } from "./services/llm/llmConfigService";
 
 // Import license and device services for deep link auth validation (TASK-1507)
@@ -387,7 +388,7 @@ async function handleDeepLinkCallback(url: string): Promise<void> {
       }
 
       const user = sessionData.user;
-      Sentry.setUser({ id: user.id, email: user.email ?? undefined });
+      Sentry.setUser({ id: user.id, email: user.email ? redactEmail(user.email) : undefined });
       log.info("[DeepLink] Session established for user:", redactId(user.id));
 
       // TASK-1507: Step 2 - Validate license
@@ -1066,6 +1067,7 @@ app.whenReady().then(async () => {
   registerBackupRestoreHandlers();
   registerCcpaHandlers();
   registerFailureLogHandlers();
+  registerSupportTicketHandlers();
 
   // DEV-ONLY: Manual deep link handler for testing when protocol handler fails
   // Usage from DevTools console: window.api.system.manualDeepLink("keepr://callback?access_token=...&refresh_token=...")

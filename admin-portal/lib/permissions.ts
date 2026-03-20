@@ -30,6 +30,11 @@ export const PERMISSIONS = {
   SUPPORT_ASSIGN: 'support.assign',
   SUPPORT_MANAGE: 'support.manage',
   SUPPORT_ADMIN: 'support.admin',
+  PM_VIEW: 'pm.view',
+  PM_EDIT: 'pm.edit',
+  PM_ASSIGN: 'pm.assign',
+  PM_MANAGE: 'pm.manage',
+  PM_ADMIN: 'pm.admin',
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -44,5 +49,6 @@ export const PERMISSION_CATEGORIES = [
   { key: 'audit', label: 'Audit' },
   { key: 'plans', label: 'Plans' },
   { key: 'support', label: 'Support' },
+  { key: 'pm', label: 'Projects' },
   { key: 'settings', label: 'Settings' },
 ] as const;

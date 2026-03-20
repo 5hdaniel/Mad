@@ -85,6 +85,15 @@ class DatabaseEncryptionService {
   }
 
   /**
+   * BACKLOG-1123: Synchronous getter for the cached key.
+   * Returns null if the key hasn't been loaded yet (call getEncryptionKey() first).
+   * Used by dbConnection to avoid duplicating the key in a separate module variable.
+   */
+  getCachedKey(): string | null {
+    return this.cachedKey;
+  }
+
+  /**
    * Get or create database encryption key
    * Key is stored in OS keychain via Electron safeStorage
    * @returns {Promise<string>} The encryption key (hex encoded)

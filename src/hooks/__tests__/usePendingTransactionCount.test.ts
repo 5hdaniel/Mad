@@ -1,5 +1,8 @@
 /**
  * Unit tests for usePendingTransactionCount hook
+ *
+ * BACKLOG-1124: Hook now uses getPendingCount IPC (server-side COUNT query)
+ * instead of getAll + client-side filter.
  */
 
 import { renderHook, waitFor } from "@testing-library/react";
@@ -19,14 +22,6 @@ import { useAuth } from "../../contexts/AuthContext";
 const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
 
 describe("usePendingTransactionCount", () => {
-  const mockTransactions = [
-    { id: "1", detection_status: "pending", property_address: "123 Main St" },
-    { id: "2", detection_status: "confirmed", property_address: "456 Oak Ave" },
-    { id: "3", detection_status: "pending", property_address: "789 Elm St" },
-    { id: "4", detection_status: "rejected", property_address: "321 Pine Rd" },
-    { id: "5", detection_status: "pending", property_address: "555 Cedar Ln" },
-  ];
-
   beforeEach(() => {
     jest.clearAllMocks();
     // Reset the mock to default user
@@ -46,14 +41,14 @@ describe("usePendingTransactionCount", () => {
       clearTermsRequirement: jest.fn(),
     });
     // Reset the transactions API mock
-    (window.api.transactions.getAll as jest.Mock).mockReset();
+    (window.api.transactions.getPendingCount as jest.Mock).mockReset();
   });
 
   describe("initial fetch", () => {
-    it("should fetch transactions on mount when user is authenticated", async () => {
-      (window.api.transactions.getAll as jest.Mock).mockResolvedValue({
+    it("should fetch pending count on mount when user is authenticated", async () => {
+      (window.api.transactions.getPendingCount as jest.Mock).mockResolvedValue({
         success: true,
-        transactions: mockTransactions,
+        count: 3,
       });
 
       const { result } = renderHook(() => usePendingTransactionCount());
@@ -62,35 +57,15 @@ describe("usePendingTransactionCount", () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(window.api.transactions.getAll).toHaveBeenCalledWith("user-123");
-      expect(result.current.pendingCount).toBe(3); // 3 pending transactions
+      expect(window.api.transactions.getPendingCount).toHaveBeenCalledWith("user-123");
+      expect(result.current.pendingCount).toBe(3);
       expect(result.current.error).toBeNull();
     });
 
-    it("should return 0 when no transactions exist", async () => {
-      (window.api.transactions.getAll as jest.Mock).mockResolvedValue({
+    it("should return 0 when count is zero", async () => {
+      (window.api.transactions.getPendingCount as jest.Mock).mockResolvedValue({
         success: true,
-        transactions: [],
-      });
-
-      const { result } = renderHook(() => usePendingTransactionCount());
-
-      await waitFor(() => {
-        expect(result.current.isLoading).toBe(false);
-      });
-
-      expect(result.current.pendingCount).toBe(0);
-    });
-
-    it("should return 0 when all transactions are confirmed/rejected", async () => {
-      const confirmedTransactions = [
-        { id: "1", detection_status: "confirmed", property_address: "123 Main St" },
-        { id: "2", detection_status: "rejected", property_address: "456 Oak Ave" },
-      ];
-
-      (window.api.transactions.getAll as jest.Mock).mockResolvedValue({
-        success: true,
-        transactions: confirmedTransactions,
+        count: 0,
       });
 
       const { result } = renderHook(() => usePendingTransactionCount());
@@ -104,7 +79,7 @@ describe("usePendingTransactionCount", () => {
   });
 
   describe("when user is not authenticated", () => {
-    it("should not fetch transactions when currentUser is null", async () => {
+    it("should not fetch when currentUser is null", async () => {
       mockUseAuth.mockReturnValue({
         currentUser: null,
         isAuthenticated: false,
@@ -128,14 +103,14 @@ describe("usePendingTransactionCount", () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(window.api.transactions.getAll).not.toHaveBeenCalled();
+      expect(window.api.transactions.getPendingCount).not.toHaveBeenCalled();
       expect(result.current.pendingCount).toBe(0);
     });
   });
 
   describe("error handling", () => {
     it("should handle API errors gracefully", async () => {
-      (window.api.transactions.getAll as jest.Mock).mockResolvedValue({
+      (window.api.transactions.getPendingCount as jest.Mock).mockResolvedValue({
         success: false,
         error: "Database error",
       });
@@ -151,7 +126,7 @@ describe("usePendingTransactionCount", () => {
     });
 
     it("should handle exceptions gracefully", async () => {
-      (window.api.transactions.getAll as jest.Mock).mockRejectedValue(
+      (window.api.transactions.getPendingCount as jest.Mock).mockRejectedValue(
         new Error("Network error")
       );
 
@@ -168,17 +143,14 @@ describe("usePendingTransactionCount", () => {
 
   describe("refetch functionality", () => {
     it("should allow manual refetch", async () => {
-      (window.api.transactions.getAll as jest.Mock)
+      (window.api.transactions.getPendingCount as jest.Mock)
         .mockResolvedValueOnce({
           success: true,
-          transactions: [{ id: "1", detection_status: "pending" }],
+          count: 1,
         })
         .mockResolvedValueOnce({
           success: true,
-          transactions: [
-            { id: "1", detection_status: "pending" },
-            { id: "2", detection_status: "pending" },
-          ],
+          count: 5,
         });
 
       const { result } = renderHook(() => usePendingTransactionCount());
@@ -191,23 +163,18 @@ describe("usePendingTransactionCount", () => {
       await result.current.refetch();
 
       await waitFor(() => {
-        expect(result.current.pendingCount).toBe(2);
+        expect(result.current.pendingCount).toBe(5);
       });
 
-      expect(window.api.transactions.getAll).toHaveBeenCalledTimes(2);
+      expect(window.api.transactions.getPendingCount).toHaveBeenCalledTimes(2);
     });
   });
 
   describe("memoization", () => {
     it("should memoize the pending count calculation", async () => {
-      const transactions = [
-        { id: "1", detection_status: "pending" },
-        { id: "2", detection_status: "pending" },
-      ];
-
-      (window.api.transactions.getAll as jest.Mock).mockResolvedValue({
+      (window.api.transactions.getPendingCount as jest.Mock).mockResolvedValue({
         success: true,
-        transactions,
+        count: 2,
       });
 
       const { result, rerender } = renderHook(() =>
@@ -220,10 +187,10 @@ describe("usePendingTransactionCount", () => {
 
       const firstCount = result.current.pendingCount;
 
-      // Re-render without changing transactions
+      // Re-render without changing state
       rerender();
 
-      // Count should be the same reference (memoized)
+      // Count should be the same value (memoized)
       expect(result.current.pendingCount).toBe(firstCount);
     });
   });

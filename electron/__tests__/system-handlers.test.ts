@@ -100,7 +100,7 @@ jest.mock("../services/logService", () => ({
   },
 }));
 
-jest.mock("../auth-handlers", () => ({
+jest.mock("../handlers/authHandlers", () => ({
   initializeDatabase: jest.fn(),
 }));
 
@@ -134,7 +134,7 @@ jest.mock("../main", () => ({
 }));
 
 // Import after mocks are set up
-import { registerSystemHandlers } from "../system-handlers";
+import { registerSystemHandlers } from "../handlers/systemHandlersCompat";
 
 // Test UUIDs
 const TEST_USER_ID = "550e8400-e29b-41d4-a716-446655440000";

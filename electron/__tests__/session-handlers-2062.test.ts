@@ -103,7 +103,7 @@ jest.mock("../services/logService", () => ({
 }));
 
 // Mock sync-handlers
-jest.mock("../sync-handlers", () => ({
+jest.mock("../handlers/syncHandlers", () => ({
   setSyncUserId: jest.fn(),
 }));
 

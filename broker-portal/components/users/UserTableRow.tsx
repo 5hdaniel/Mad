@@ -11,7 +11,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import UserActionsDropdown from './UserActionsDropdown';
 import { ROLE_LABELS, LICENSE_STATUS_LABELS } from '@/lib/types/users';
-import type { OrganizationMember, Role, LicenseStatus } from '@/lib/types/users';
+import type { MemberLicenseStatus } from '@keepr/shared';
+import type { OrganizationMember, Role } from '@/lib/types/users';
 import { formatUserDisplayName, getUserInitials } from '@/lib/utils/userDisplay';
 import { formatDate } from '@/lib/utils';
 
@@ -22,6 +23,7 @@ interface UserTableRowProps {
   canManage: boolean;
   onToggleSelect: () => void;
   onEditRole: () => void;
+  onResendInvite: () => void;
   onDeactivate: () => void;
   onRemove: () => void;
 }
@@ -33,7 +35,7 @@ const ROLE_COLORS: Record<Role, string> = {
   agent: 'bg-gray-100 text-gray-800',
 };
 
-const STATUS_COLORS: Record<LicenseStatus, string> = {
+const STATUS_COLORS: Record<MemberLicenseStatus, string> = {
   active: 'bg-green-100 text-green-800',
   pending: 'bg-yellow-100 text-yellow-800',
   suspended: 'bg-red-100 text-red-800',
@@ -47,6 +49,7 @@ export default function UserTableRow({
   canManage,
   onToggleSelect,
   onEditRole,
+  onResendInvite,
   onDeactivate,
   onRemove,
 }: UserTableRowProps) {
@@ -124,6 +127,7 @@ export default function UserTableRow({
               isCurrentUser={isCurrentUser}
               invitationToken={member.invitation_token}
               onEditRole={onEditRole}
+              onResendInvite={onResendInvite}
               onDeactivate={onDeactivate}
               onRemove={onRemove}
             />

@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedUser } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,11 +8,7 @@ export const dynamic = 'force-dynamic';
  * otherwise redirects to /login
  */
 export default async function Home() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user } = await getAuthenticatedUser();
 
   if (user) {
     const { data: internalRole } = await supabase

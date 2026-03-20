@@ -3,6 +3,7 @@
  * Manages checking, downloading, and installing application updates
  */
 
+import * as Sentry from "@sentry/electron/main";
 import logService from "./logService";
 
 /**
@@ -57,6 +58,52 @@ export interface UpdateConfig {
  * Update event callback type
  */
 export type UpdateEventCallback = (data?: unknown) => void;
+
+/**
+ * Classified failure reasons for auto-update errors
+ */
+export type UpdateFailureReason =
+  | "network_error"
+  | "download_failed"
+  | "install_failed"
+  | "insufficient_storage"
+  | "permissions_error"
+  | "unknown";
+
+/**
+ * Classify an update error into a specific failure reason
+ */
+export function classifyUpdateError(error: unknown): UpdateFailureReason {
+  const message =
+    error instanceof Error
+      ? error.message.toLowerCase()
+      : String(error).toLowerCase();
+
+  if (
+    message.includes("enospc") ||
+    message.includes("disk") ||
+    message.includes("space")
+  ) {
+    return "insufficient_storage";
+  }
+  if (message.includes("eacces") || message.includes("permission")) {
+    return "permissions_error";
+  }
+  if (
+    message.includes("network") ||
+    message.includes("timeout") ||
+    message.includes("econnrefused")
+  ) {
+    return "network_error";
+  }
+  if (message.includes("download")) {
+    return "download_failed";
+  }
+  if (message.includes("install")) {
+    return "install_failed";
+  }
+  return "unknown";
+}
 
 /**
  * Update Service Class
@@ -119,12 +166,33 @@ export class UpdateService {
     this.status = "checking";
     this.emit("checking-for-update");
 
+    Sentry.addBreadcrumb({
+      category: "update.check",
+      message: `Checking for updates (channel: ${this.config.channel}, current: ${this.currentVersion})`,
+      level: "info",
+      data: {
+        channel: this.config.channel,
+        currentVersion: this.currentVersion,
+      },
+    });
+
     try {
       // Simulate update check (in real implementation, this would call an API)
       await this.simulateUpdateCheck();
 
       if (this.availableUpdate) {
         this.status = "available";
+
+        Sentry.addBreadcrumb({
+          category: "update.available",
+          message: `Update available: ${this.availableUpdate.version}`,
+          level: "info",
+          data: {
+            version: this.availableUpdate.version,
+            size: this.availableUpdate.size,
+          },
+        });
+
         this.emit("update-available", this.availableUpdate);
 
         if (this.config.autoDownload) {
@@ -134,23 +202,48 @@ export class UpdateService {
         return this.availableUpdate;
       } else {
         this.status = "not-available";
+
+        Sentry.addBreadcrumb({
+          category: "update.status",
+          message: "No update available",
+          level: "info",
+        });
+
         this.emit("update-not-available");
         return null;
       }
     } catch (error) {
       this.status = "error";
+      const reason = classifyUpdateError(error);
+
+      Sentry.captureMessage("Auto-update check failed", {
+        level: "error",
+        tags: {
+          component: "auto_update",
+          failureReason: reason,
+          currentVersion: this.currentVersion,
+        },
+        extra: {
+          channel: this.config.channel,
+          errorMessage:
+            error instanceof Error ? error.message : String(error),
+        },
+      });
+
       this.emit("error", error);
       throw error;
     }
   }
 
   /**
-   * Simulate update check (placeholder for real implementation)
+   * Check for updates from update server.
+   * TODO(BACKLOG-1123): Wire up electron-updater (autoUpdater) when update
+   * server infrastructure is ready. Until then, this is a no-op that
+   * immediately reports "no updates available" without any artificial delay.
    */
   private async simulateUpdateCheck(): Promise<void> {
-    // In real implementation, this would fetch from update server
-    // For now, simulate no updates available
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    // No-op: electron-updater integration pending server infrastructure.
+    // Previously this had a fake 1-second sleep which was misleading.
     this.availableUpdate = undefined;
   }
 
@@ -163,6 +256,17 @@ export class UpdateService {
     }
 
     this.status = "downloading";
+
+    Sentry.addBreadcrumb({
+      category: "update.download",
+      message: `Downloading update ${this.availableUpdate.version}`,
+      level: "info",
+      data: {
+        version: this.availableUpdate.version,
+        size: this.availableUpdate.size,
+      },
+    });
+
     this.emit("download-started");
 
     try {
@@ -170,6 +274,13 @@ export class UpdateService {
       await this.simulateDownload();
 
       this.status = "downloaded";
+
+      Sentry.addBreadcrumb({
+        category: "update.download",
+        message: "Download completed",
+        level: "info",
+      });
+
       this.emit("download-completed");
 
       if (this.config.autoInstall) {
@@ -177,26 +288,40 @@ export class UpdateService {
       }
     } catch (error) {
       this.status = "error";
+      const reason = classifyUpdateError(error);
+
+      Sentry.captureMessage("Auto-update download failed", {
+        level: "error",
+        tags: {
+          component: "auto_update",
+          failureReason: reason,
+          currentVersion: this.currentVersion,
+        },
+        extra: {
+          version: this.availableUpdate.version,
+          errorMessage:
+            error instanceof Error ? error.message : String(error),
+        },
+      });
+
       this.emit("error", error);
       throw error;
     }
   }
 
   /**
-   * Simulate download (placeholder for real implementation)
+   * Download update from update server.
+   * TODO(BACKLOG-1123): Wire up electron-updater downloadUpdate() when ready.
+   * Until then, this is a no-op placeholder.
    */
   private async simulateDownload(): Promise<void> {
-    const totalBytes = this.availableUpdate?.size || 10000000;
-
-    for (let i = 0; i <= 100; i += 10) {
-      this.downloadProgress = {
-        bytesDownloaded: (totalBytes * i) / 100,
-        totalBytes,
-        percentage: i,
-      };
-      this.emit("download-progress", this.downloadProgress);
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
+    const totalBytes = this.availableUpdate?.size || 0;
+    this.downloadProgress = {
+      bytesDownloaded: totalBytes,
+      totalBytes,
+      percentage: 100,
+    };
+    this.emit("download-progress", this.downloadProgress);
   }
 
   /**
@@ -207,11 +332,19 @@ export class UpdateService {
       throw new Error("Update must be downloaded before installing");
     }
 
+    Sentry.addBreadcrumb({
+      category: "update.install",
+      message: "Installing update",
+      level: "info",
+      data: {
+        version: this.availableUpdate?.version,
+        currentVersion: this.currentVersion,
+      },
+    });
+
     this.emit("before-quit-for-update");
 
-    // In real implementation, this would trigger app restart and update installation
-    // For now, just emit event
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    // TODO(BACKLOG-1123): Wire up electron-updater quitAndInstall() when ready.
     this.emit("update-installed");
   }
 

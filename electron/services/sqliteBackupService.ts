@@ -19,6 +19,7 @@ import * as Sentry from "@sentry/electron/main";
 import logService from "./logService";
 import databaseService from "./databaseService";
 import { databaseEncryptionService } from "./databaseEncryptionService";
+import { ensureDb } from "./db/core/dbConnection";
 
 /** Result of a backup operation */
 export interface BackupResult {
@@ -92,6 +93,45 @@ export async function backupDatabase(
       `Starting database backup to: ${destinationPath}`,
       "SqliteBackupService"
     );
+
+    // BACKLOG-1122: Flush WAL to main database file before copying.
+    // Without this, the backup may be inconsistent if writes are in-flight.
+    try {
+      const db = ensureDb();
+      if (db) {
+        const result = db.pragma("wal_checkpoint(TRUNCATE)") as Array<{ busy: number; checkpointed: number; log: number }>;
+        const checkpointResult = result[0];
+        if (checkpointResult && checkpointResult.busy !== 0) {
+          // Checkpoint was blocked by concurrent readers/writers - abort backup
+          await logService.error(
+            "WAL checkpoint blocked by concurrent access - aborting backup",
+            "SqliteBackupService",
+            { busy: checkpointResult.busy }
+          );
+          return {
+            success: false,
+            error: "Database is busy. Please try again in a moment.",
+          };
+        }
+        await logService.info(
+          "WAL checkpoint completed before backup",
+          "SqliteBackupService",
+          { checkpointed: checkpointResult?.checkpointed, log: checkpointResult?.log }
+        );
+      }
+    } catch (walError) {
+      // If checkpoint fails, abort backup rather than creating an inconsistent copy
+      const walErrorMsg = walError instanceof Error ? walError.message : String(walError);
+      await logService.error(
+        "WAL checkpoint failed - aborting backup",
+        "SqliteBackupService",
+        { error: walErrorMsg }
+      );
+      return {
+        success: false,
+        error: `WAL checkpoint failed: ${walErrorMsg}`,
+      };
+    }
 
     // Use fs.copyFileSync for encrypted databases -- SQLite backup API
     // creates an unencrypted destination which is incompatible with SQLCipher.

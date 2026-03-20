@@ -4,85 +4,87 @@ This module covers backlog cleanup, task archiving, and housekeeping procedures.
 
 ---
 
-## Backlog CSV Maintenance (MANDATORY)
+## Backlog Maintenance (MANDATORY)
 
-**CRITICAL: The backlog.csv file is the source of truth for the dashboard. It MUST be updated in real-time.**
+**CRITICAL: Supabase is the source of truth for backlog data. It MUST be updated in real-time via RPCs.**
 
-### Location
+> **Note:** Legacy CSV files at `.claude/plans/backlog/data/` are preserved as a read-only archive. Do NOT update CSVs for new changes — use Supabase RPCs.
 
+### Data Source
+
+Use the Supabase MCP tool (`mcp__supabase__execute_sql`) to run RPCs:
+
+```sql
+-- List items with filters
+SELECT pm_list_items(p_status := 'pending', p_priority := 'high');
+
+-- Get item by legacy ID
+SELECT pm_get_item_by_legacy_id('BACKLOG-460');
+
+-- Get item detail
+SELECT pm_get_item_detail('<uuid>');
 ```
-.claude/plans/backlog/data/backlog.csv
-```
 
-### Status Values
-
-Use these exact status values:
+### Status Values (Supabase underscore format)
 
 | Status | Meaning | When to Use |
 |--------|---------|-------------|
-| `Pending` | Not started | Default for new items |
-| `In Progress` | Active development | Engineer has started |
-| `Implemented` | Code done, needs testing | Code merged but not QA verified |
-| `Testing` | In QA/verification | QA session in progress |
-| `Completed` | Fully done and verified | QA passed, sprint closed |
-| `Blocked` | Cannot proceed | Has unresolved dependency |
-| `Deferred` | Intentionally postponed | Not doing this sprint |
-| `Obsolete` | No longer relevant | Superseded by other work |
+| `pending` | Not started | Default for new items |
+| `in_progress` | Active development | Engineer has started |
+| `implemented` | Code done, needs testing | Code merged but not QA verified |
+| `testing` | In QA/verification | QA session in progress |
+| `completed` | Fully done and verified | QA passed, sprint closed |
+| `blocked` | Cannot proceed | Has unresolved dependency |
+| `deferred` | Intentionally postponed | Not doing this sprint |
+| `obsolete` | No longer relevant | Superseded by other work |
 
-### When to Update the CSV
+### When to Update (via Supabase RPCs)
 
-| Event | CSV Update Required |
-|-------|---------------------|
-| New backlog item created | Add row with `Pending` status |
-| Item assigned to sprint | Set `sprint` column |
-| Engineer starts work | Set status to `In Progress` |
-| PR merged | Set status to `Implemented` |
-| QA passed | Set status to `Completed`, set `completed_at` |
-| Sprint closed | Verify all items have correct status |
+| Event | Supabase RPC |
+|-------|--------------|
+| New backlog item created | `pm_create_item(p_title, p_type, p_priority)` |
+| Item assigned to sprint | `pm_assign_to_sprint(p_item_id, p_sprint_id)` |
+| Engineer starts work | `pm_update_item_status('<uuid>', 'in_progress')` |
+| PR merged | `pm_update_item_status('<uuid>', 'implemented')` |
+| QA passed | `pm_update_item_status('<uuid>', 'completed')` |
+| Sprint closed | Verify all items have correct status via `pm_list_items` |
 
-### CSV Columns
-
-```
-id,title,category,priority,status,sprint,est_tokens,actual_tokens,variance,created_at,completed_at,file
-```
-
-### Example Updates
+### Example Operations
 
 **New item created:**
-```csv
-BACKLOG-460,New Feature,feature,High,Pending,-,~30K,-,-,2026-01-23,,[BACKLOG-460.md](items/BACKLOG-460.md)
+```sql
+SELECT pm_create_item(
+  p_title := 'New Feature',
+  p_type := 'feature',
+  p_priority := 'high'
+);
 ```
 
 **Item assigned to sprint:**
-```csv
-BACKLOG-460,New Feature,feature,High,Pending,SPRINT-052,~30K,-,-,2026-01-23,,[BACKLOG-460.md](items/BACKLOG-460.md)
+```sql
+SELECT pm_assign_to_sprint(
+  p_item_id := '<item-uuid>',
+  p_sprint_id := '<sprint-uuid>'
+);
 ```
 
-**Implementation complete, not yet tested:**
-```csv
-BACKLOG-460,New Feature,feature,High,Implemented,SPRINT-052,~30K,~35K,+17%,2026-01-23,,[BACKLOG-460.md](items/BACKLOG-460.md)
+**Status update (implementation complete):**
+```sql
+SELECT pm_update_item_status('<item-uuid>', 'implemented');
 ```
 
 **Fully complete:**
-```csv
-BACKLOG-460,New Feature,feature,High,Completed,SPRINT-052,~30K,~35K,+17%,2026-01-23,2026-01-25,[BACKLOG-460.md](items/BACKLOG-460.md)
-```
-
-### Dashboard Regeneration
-
-After updating the CSV, regenerate the dashboard:
-
-```bash
-python .claude/plans/backlog/scripts/generate_dashboard.py
-open backlog-dashboard.html
+```sql
+SELECT pm_update_item_status('<item-uuid>', 'completed');
 ```
 
 ### Common Mistakes to Avoid
 
-1. **Creating backlog items without adding to CSV** - Dashboard won't show them
-2. **Using non-standard status values** - Dashboard filters won't work
-3. **Not updating sprint column** - Can't track sprint velocity
-4. **Marking as Completed before QA** - Use `Implemented` instead
+1. **Creating backlog items without using Supabase RPCs** - They won't be in the source of truth
+2. **Using non-standard status values** - Database constraints enforce valid values
+3. **Not assigning to sprint** - Can't track sprint velocity
+4. **Marking as `completed` before QA** - Use `implemented` instead
+5. **Updating only the CSV** - CSV is archived; Supabase is the source of truth
 
 ---
 

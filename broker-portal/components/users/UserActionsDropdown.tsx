@@ -18,6 +18,7 @@ interface UserActionsDropdownProps {
   isCurrentUser: boolean;
   invitationToken?: string | null;
   onEditRole?: () => void;
+  onResendInvite?: () => void;
   onDeactivate: () => void;
   onRemove: () => void;
 }
@@ -29,6 +30,7 @@ export default function UserActionsDropdown({
   isCurrentUser,
   invitationToken,
   onEditRole,
+  onResendInvite,
   onDeactivate,
   onRemove,
 }: UserActionsDropdownProps) {
@@ -106,6 +108,19 @@ export default function UserActionsDropdown({
                 role="menuitem"
               >
                 {linkCopied ? 'Copied!' : 'Copy Invite Link'}
+              </button>
+            )}
+            {/* Resend Invite - for pending invites */}
+            {isPending && onResendInvite && (
+              <button
+                onClick={() => {
+                  setIsOpen(false);
+                  onResendInvite();
+                }}
+                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
+                role="menuitem"
+              >
+                Resend Invite
               </button>
             )}
             {/* Edit Role - for active members */}

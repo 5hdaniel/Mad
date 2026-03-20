@@ -15,7 +15,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Card } from '@/components/ui/Card';
 import UserActionsDropdown from './UserActionsDropdown';
-import type { OrganizationMember, Role, LicenseStatus } from '@/lib/types/users';
+import type { OrganizationMember, Role, MemberLicenseStatus } from '@/lib/types/users';
 import { ROLE_LABELS, LICENSE_STATUS_LABELS } from '@/lib/types/users';
 import { formatUserDisplayName, getUserInitials } from '@/lib/utils/userDisplay';
 import { formatDate } from '@/lib/utils';
@@ -25,6 +25,7 @@ interface UserCardProps {
   isCurrentUser: boolean;
   canManage: boolean;
   onEditRole?: (member: OrganizationMember) => void;
+  onResendInvite?: (member: OrganizationMember) => void;
   onDeactivate?: (member: OrganizationMember) => void;
   onRemove?: (member: OrganizationMember) => void;
 }
@@ -36,7 +37,7 @@ const ROLE_COLORS: Record<Role, string> = {
   agent: 'bg-gray-100 text-gray-800',
 };
 
-const STATUS_COLORS: Record<LicenseStatus, string> = {
+const STATUS_COLORS: Record<MemberLicenseStatus, string> = {
   active: 'bg-green-100 text-green-800',
   pending: 'bg-yellow-100 text-yellow-800',
   suspended: 'bg-red-100 text-red-800',
@@ -48,6 +49,7 @@ export default function UserCard({
   isCurrentUser,
   canManage,
   onEditRole,
+  onResendInvite,
   onDeactivate,
   onRemove,
 }: UserCardProps) {
@@ -104,6 +106,7 @@ export default function UserCard({
             isCurrentUser={isCurrentUser}
             invitationToken={member.invitation_token}
             onEditRole={() => onEditRole?.(member)}
+            onResendInvite={() => onResendInvite?.(member)}
             onDeactivate={() => onDeactivate?.(member)}
             onRemove={() => onRemove?.(member)}
           />

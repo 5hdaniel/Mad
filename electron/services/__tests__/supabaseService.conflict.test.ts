@@ -18,6 +18,16 @@ import { jest } from "@jest/globals";
 const mockSupabaseClient = {
   from: jest.fn(),
   rpc: jest.fn(),
+  auth: {
+    getSession: jest.fn().mockResolvedValue({
+      data: { session: { user: { id: "auth-user-123" } } },
+      error: null,
+    }),
+    onAuthStateChange: jest.fn(() => ({
+      data: { subscription: { unsubscribe: jest.fn() } },
+    })),
+    signOut: jest.fn().mockResolvedValue({ error: null }),
+  },
   functions: {
     invoke: jest.fn(),
   },

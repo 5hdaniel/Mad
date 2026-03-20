@@ -58,6 +58,15 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true, // Enable sourcemaps for better debugging
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-joyride': ['react-joyride'],
+          'dompurify': ['dompurify'],
+          'canvas-confetti': ['canvas-confetti'],
+        },
+      },
+    },
   },
   // Ensure TypeScript files are handled
   esbuild: {
