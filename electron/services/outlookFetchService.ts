@@ -790,12 +790,12 @@ class OutlookFetchService {
    * Get specific attachment
    * @param messageId - Outlook message ID
    * @param attachmentId - Attachment ID
-   * @returns Attachment data
+   * @returns Attachment data, or null if the attachment could not be fetched
    */
   async getAttachment(
     messageId: string,
     attachmentId: string,
-  ): Promise<Buffer> {
+  ): Promise<Buffer | null> {
     try {
       const data = await this._graphRequest<GraphAttachment>(
         `/me/messages/${messageId}/attachments/${attachmentId}`,
@@ -805,13 +805,62 @@ class OutlookFetchService {
         return Buffer.from(data.contentBytes, "base64");
       }
 
-      throw new Error("No attachment data found");
+      // Permanent failure: API returned successfully but no data.
+      // Log to Sentry and skip -- do NOT retry (ELECTRON-16).
+      logService.warn(
+        "Outlook attachment: no data returned, skipping",
+        "OutlookFetch",
+        { messageId, attachmentId, contentType: data.contentType ?? "unknown" },
+      );
+      Sentry.addBreadcrumb({
+        category: "email_sync.attachment",
+        message: "Outlook attachment: no data returned",
+        level: "warning",
+        data: {
+          provider: "outlook",
+          component: "email_sync",
+          messageId,
+          attachmentId,
+          contentType: data.contentType ?? "unknown",
+          size: data.size ?? 0,
+        },
+      });
+      Sentry.captureMessage("Outlook attachment: no data returned", {
+        level: "warning",
+        tags: { service: "outlook-fetch", operation: "getAttachment" },
+        extra: {
+          messageId,
+          attachmentId,
+          contentType: data.contentType ?? "unknown",
+          size: data.size ?? 0,
+        },
+      });
+      return null;
     } catch (error) {
-      logService.error("Failed to get attachment", "OutlookFetch", { error });
+      // Network/API errors that exhausted _graphRequest retries.
+      // Log with enriched context and skip gracefully (ELECTRON-16).
+      logService.error("Failed to get attachment, skipping", "OutlookFetch", {
+        messageId,
+        attachmentId,
+        error,
+      });
+      Sentry.addBreadcrumb({
+        category: "email_sync.attachment",
+        message: "Outlook attachment fetch failed",
+        level: "error",
+        data: {
+          provider: "outlook",
+          component: "email_sync",
+          messageId,
+          attachmentId,
+          errorType: error instanceof Error ? error.constructor.name : "unknown",
+        },
+      });
       Sentry.captureException(error, {
         tags: { service: "outlook-fetch", operation: "getAttachment" },
+        extra: { messageId, attachmentId },
       });
-      throw error;
+      return null;
     }
   }
 
