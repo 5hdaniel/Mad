@@ -32,12 +32,41 @@ import type {
   PmBacklogItem,
   SprintDetailResponse,
   ItemStatus,
+  SortableColumn,
+  SortDirection,
 } from '@/lib/pm-types';
 import { SPRINT_STATUS_LABELS, SPRINT_STATUS_COLORS } from '@/lib/pm-types';
 import { TaskTable } from '../../components/TaskTable';
 import { DualProgressBar } from '../../components/DualProgressBar';
 import { InlineEditText } from '../../components/InlineEditText';
 import { formatTokens } from '@/lib/pm-utils';
+
+// ---------------------------------------------------------------------------
+// Client-side sorting (same as backlog page)
+// ---------------------------------------------------------------------------
+
+const PRIORITY_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+const STATUS_ORDER: Record<string, number> = { blocked: 0, in_progress: 1, testing: 2, reopened: 3, pending: 4, deferred: 5, completed: 6, obsolete: 7 };
+const TYPE_ORDER: Record<string, number> = { epic: 0, feature: 1, bug: 2, spike: 3, chore: 4 };
+
+function sortItems(items: PmBacklogItem[], col: SortableColumn | null, dir: SortDirection): PmBacklogItem[] {
+  if (!col) return items;
+  const d = dir === 'asc' ? 1 : -1;
+  return [...items].sort((a, b) => {
+    let cmp = 0;
+    switch (col) {
+      case 'item_number': cmp = a.item_number - b.item_number; break;
+      case 'title': cmp = a.title.localeCompare(b.title); break;
+      case 'type': cmp = (TYPE_ORDER[a.type] ?? 99) - (TYPE_ORDER[b.type] ?? 99); break;
+      case 'status': cmp = (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99); break;
+      case 'priority': cmp = (PRIORITY_ORDER[a.priority] ?? 99) - (PRIORITY_ORDER[b.priority] ?? 99); break;
+      case 'area': cmp = (a.area || '').localeCompare(b.area || ''); break;
+      case 'est_tokens': cmp = (a.est_tokens ?? 0) - (b.est_tokens ?? 0); break;
+      case 'created_at': cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime(); break;
+    }
+    return cmp * d;
+  });
+}
 
 export default function SprintDetailPage() {
   const params = useParams();
@@ -55,6 +84,8 @@ export default function SprintDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [sortBy, setSortBy] = useState<SortableColumn | null>(null);
+  const [sortDir, setSortDir] = useState<SortDirection>('asc');
 
   const pageSize = 50;
 
@@ -102,6 +133,18 @@ export default function SprintDetailPage() {
   useEffect(() => {
     loadItems();
   }, [loadItems]);
+
+  // Sort handler
+  function handleSort(column: SortableColumn) {
+    if (sortBy === column) {
+      setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(column);
+      setSortDir('asc');
+    }
+  }
+
+  const sortedItems = useMemo(() => sortItems(items, sortBy, sortDir), [items, sortBy, sortDir]);
 
   // Build task URL with sprint context (must be before early returns for hook rules)
   const buildItemUrl = useMemo(
@@ -454,7 +497,7 @@ export default function SprintDetailPage() {
           Sprint Items ({totalCount})
         </h2>
         <TaskTable
-          items={items}
+          items={sortedItems}
           totalCount={totalCount}
           page={page}
           pageSize={pageSize}
@@ -462,6 +505,9 @@ export default function SprintDetailPage() {
           onPageChange={setPage}
           loading={itemsLoading}
           buildItemUrl={buildItemUrl}
+          sortBy={sortBy}
+          sortDir={sortDir}
+          onSort={handleSort}
         />
       </div>
     </div>

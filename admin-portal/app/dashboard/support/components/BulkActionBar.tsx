@@ -12,9 +12,9 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, ChevronUp, Loader2, Trash2 } from 'lucide-react';
-import type { TicketStatus } from '@/lib/support-types';
-import { STATUS_LABELS, STATUS_COLORS } from '@/lib/support-types';
-import { getAssignableAgents, bulkUpdateTickets } from '@/lib/support-queries';
+import type { TicketStatus, TicketPriority, SupportCategory } from '@/lib/support-types';
+import { STATUS_LABELS, STATUS_COLORS, PRIORITY_LABELS, PRIORITY_COLORS } from '@/lib/support-types';
+import { getAssignableAgents, bulkUpdateTickets, getCategories } from '@/lib/support-queries';
 import type { AssignableAgent } from '@/lib/support-queries';
 import { useClickOutside } from '@/hooks/useClickOutside';
 
@@ -32,11 +32,13 @@ const BULK_STATUS_OPTIONS: TicketStatus[] = [
   'closed',
 ];
 
+const BULK_PRIORITY_OPTIONS: TicketPriority[] = ['low', 'normal', 'high', 'urgent'];
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type DropdownType = 'status' | 'assign' | null;
+type DropdownType = 'status' | 'assign' | 'priority' | 'category' | null;
 
 interface BulkActionBarProps {
   selectedIds: Set<string>;
@@ -58,6 +60,8 @@ export function BulkActionBar({
   const [loading, setLoading] = useState(false);
   const [agents, setAgents] = useState<AssignableAgent[]>([]);
   const [agentSearch, setAgentSearch] = useState('');
+  const [categories, setCategories] = useState<SupportCategory[]>([]);
+  const [categorySearch, setCategorySearch] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
 
@@ -75,6 +79,21 @@ export function BulkActionBar({
       setAgentSearch('');
     }
   }, [openDropdown, agents.length]);
+
+  // -------------------------------------------------------------------------
+  // Fetch categories when category dropdown opens
+  // -------------------------------------------------------------------------
+
+  useEffect(() => {
+    if (openDropdown === 'category' && categories.length === 0) {
+      getCategories()
+        .then(setCategories)
+        .catch((err) => console.error('Failed to load categories:', err));
+    }
+    if (openDropdown !== 'category') {
+      setCategorySearch('');
+    }
+  }, [openDropdown, categories.length]);
 
   // -------------------------------------------------------------------------
   // Close dropdown on outside click
@@ -118,6 +137,23 @@ export function BulkActionBar({
   const handleAssign = useCallback(
     (agentId: string) =>
       handleAction(() => bulkUpdateTickets(ids, { assignee_id: agentId })),
+    [ids, handleAction]
+  );
+
+  const handleUnassign = useCallback(
+    () => handleAction(() => bulkUpdateTickets(ids, { unassign: true })),
+    [ids, handleAction]
+  );
+
+  const handlePriorityChange = useCallback(
+    (priority: TicketPriority) =>
+      handleAction(() => bulkUpdateTickets(ids, { priority })),
+    [ids, handleAction]
+  );
+
+  const handleCategoryChange = useCallback(
+    (categoryId: string) =>
+      handleAction(() => bulkUpdateTickets(ids, { category_id: categoryId })),
     [ids, handleAction]
   );
 
@@ -209,6 +245,34 @@ export function BulkActionBar({
           )}
         </div>
 
+        {/* Priority dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => toggleDropdown('priority')}
+            className="flex items-center gap-1 text-sm text-gray-300 hover:text-white transition-colors whitespace-nowrap"
+          >
+            <ChevronUp className="h-4 w-4" />
+            Priority
+          </button>
+          {openDropdown === 'priority' && (
+            <div className="absolute bottom-full left-0 mb-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+              {BULK_PRIORITY_OPTIONS.map((priority) => (
+                <button
+                  key={priority}
+                  onClick={() => handlePriorityChange(priority)}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
+                >
+                  <span
+                    className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${PRIORITY_COLORS[priority]}`}
+                  >
+                    {PRIORITY_LABELS[priority]}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Assign dropdown */}
         <div className="relative">
           <button
@@ -233,6 +297,13 @@ export function BulkActionBar({
               </div>
               {/* Agent list */}
               <div className="max-h-48 overflow-y-auto">
+                {/* Unassign option */}
+                <button
+                  onClick={() => handleUnassign()}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-500 hover:bg-gray-50 transition-colors border-b border-gray-100 italic"
+                >
+                  Unassign
+                </button>
                 {agents.length === 0 ? (
                   <div className="px-3 py-2 text-sm text-gray-400">Loading...</div>
                 ) : (
@@ -259,6 +330,52 @@ export function BulkActionBar({
                             {agent.email}
                           </div>
                         )}
+                      </button>
+                    ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Category dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => toggleDropdown('category')}
+            className="flex items-center gap-1 text-sm text-gray-300 hover:text-white transition-colors whitespace-nowrap"
+          >
+            <ChevronUp className="h-4 w-4" />
+            Category
+          </button>
+          {openDropdown === 'category' && (
+            <div className="absolute bottom-full right-0 mb-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+              {/* Search input */}
+              <div className="px-3 py-2 border-b border-gray-100">
+                <input
+                  type="text"
+                  value={categorySearch}
+                  onChange={(e) => setCategorySearch(e.target.value)}
+                  placeholder="Search categories..."
+                  className="w-full px-2 py-1 text-sm text-gray-900 bg-white border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
+                  autoFocus
+                />
+              </div>
+              <div className="max-h-48 overflow-y-auto">
+                {categories.length === 0 ? (
+                  <div className="px-3 py-2 text-sm text-gray-400">Loading...</div>
+                ) : (
+                  categories
+                    .filter((c) => {
+                      if (!categorySearch.trim()) return true;
+                      return c.name.toLowerCase().includes(categorySearch.toLowerCase());
+                    })
+                    .map((cat) => (
+                      <button
+                        key={cat.id}
+                        onClick={() => handleCategoryChange(cat.id)}
+                        className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors truncate"
+                      >
+                        {cat.name}
                       </button>
                     ))
                 )}

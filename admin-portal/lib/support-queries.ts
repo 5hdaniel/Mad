@@ -375,13 +375,16 @@ export async function getAgentAnalytics(periodDays: number = 30): Promise<AgentA
 
 export async function bulkUpdateTickets(
   ticketIds: string[],
-  options: { status?: string; assignee_id?: string }
+  options: { status?: string; assignee_id?: string; priority?: string; category_id?: string; unassign?: boolean }
 ): Promise<{ updated_count: number; ticket_ids: string[] }> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc('support_bulk_update_tickets', {
     p_ticket_ids: ticketIds,
     p_status: options.status || null,
     p_assignee_id: options.assignee_id || null,
+    p_priority: options.priority || null,
+    p_category_id: options.category_id || null,
+    p_unassign: options.unassign || false,
   });
   if (error) throw error;
   return data as unknown as { updated_count: number; ticket_ids: string[] };
