@@ -9,6 +9,7 @@
  * - TrialStatusBanner: Shows trial days remaining (SPRINT-062)
  * - AppRouter: Screen routing based on current step
  * - AppModals: Modal dialogs (profile, settings, etc.)
+ * - SupportWidget: Floating "?" button (TASK-2282: visible on ALL screens)
  *
  * Note: LicenseProvider is in main.tsx (must wrap App for useAppStateMachine to use useLicense).
  *
@@ -27,6 +28,7 @@ import { NotificationProvider } from "./contexts/NotificationContext";
 import { IPhoneSyncProvider } from "./contexts/IPhoneSyncContext";
 import { LicenseGate, TrialStatusBanner } from "./components/license";
 import UpdateNotification from "./components/UpdateNotification";
+import { SupportWidget } from "./components/support/SupportWidget";
 
 function App() {
   const app = useAppStateMachine();
@@ -45,6 +47,10 @@ function App() {
           </AppShell>
         </IPhoneSyncProvider>
       </LicenseGate>
+      {/* TASK-2282: SupportWidget outside LicenseGate so it's visible on ALL screens
+          including login, onboarding, error states, and license-blocked states.
+          Widget detects auth state internally via IPC. */}
+      <SupportWidget />
     </NotificationProvider>
   );
 }

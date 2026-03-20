@@ -808,4 +808,52 @@ describe("DatabaseService Migration Robustness (TASK-2048)", () => {
       ).rejects.toThrow("Pre-migration backup available");
     });
   });
+
+  // ============================================
+  // FAILURE_LOG SAFETY CHECK (TASK-2279)
+  // ============================================
+
+  describe("_ensureFailureLogTable (TASK-2279)", () => {
+    it("should create failure_log table when it does not exist", () => {
+      // Call the safety check method directly
+      (databaseService as unknown as { _ensureFailureLogTable: (db: typeof mockDb) => void })
+        ._ensureFailureLogTable(mockDb as unknown as import("better-sqlite3").Database);
+
+      // Verify exec was called with CREATE TABLE IF NOT EXISTS
+      expect(mockDb.exec).toHaveBeenCalledWith(
+        expect.stringContaining("CREATE TABLE IF NOT EXISTS failure_log")
+      );
+      // Verify indexes are also created
+      expect(mockDb.exec).toHaveBeenCalledWith(
+        expect.stringContaining("CREATE INDEX IF NOT EXISTS idx_failure_log_timestamp")
+      );
+      expect(mockDb.exec).toHaveBeenCalledWith(
+        expect.stringContaining("CREATE INDEX IF NOT EXISTS idx_failure_log_acknowledged")
+      );
+    });
+
+    it("should be idempotent -- no error when table already exists", () => {
+      // First call creates the table
+      (databaseService as unknown as { _ensureFailureLogTable: (db: typeof mockDb) => void })
+        ._ensureFailureLogTable(mockDb as unknown as import("better-sqlite3").Database);
+
+      // Second call should also succeed (IF NOT EXISTS handles this)
+      expect(() => {
+        (databaseService as unknown as { _ensureFailureLogTable: (db: typeof mockDb) => void })
+          ._ensureFailureLogTable(mockDb as unknown as import("better-sqlite3").Database);
+      }).not.toThrow();
+    });
+
+    it("should not throw when exec fails -- logs warning instead", () => {
+      mockDb.exec.mockImplementationOnce(() => {
+        throw new Error("disk I/O error");
+      });
+
+      // Should not throw -- the method catches errors internally
+      expect(() => {
+        (databaseService as unknown as { _ensureFailureLogTable: (db: typeof mockDb) => void })
+          ._ensureFailureLogTable(mockDb as unknown as import("better-sqlite3").Database);
+      }).not.toThrow();
+    });
+  });
 });

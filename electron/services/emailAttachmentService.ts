@@ -266,11 +266,20 @@ class EmailAttachmentService {
     // Download attachment with timeout
     let data: Buffer;
     try {
-      data = await withTimeout(
+      const result = await withTimeout(
         this.downloadAttachment(source, externalEmailId, attachment.attachmentId),
         DOWNLOAD_TIMEOUT_MS,
         `Download ${sanitizedFilename}`
       );
+      // Handle null return (Outlook graceful skip for unavailable attachments)
+      if (result === null) {
+        return {
+          filename: sanitizedFilename,
+          status: "error",
+          reason: "Attachment data unavailable (skipped by provider)",
+        };
+      }
+      data = result;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Download failed";
       return {
@@ -325,12 +334,13 @@ class EmailAttachmentService {
 
   /**
    * Download attachment from Gmail or Outlook API
+   * Returns null if the attachment could not be fetched (Outlook graceful skip)
    */
   private async downloadAttachment(
     source: "gmail" | "outlook",
     messageId: string,
     attachmentId: string
-  ): Promise<Buffer> {
+  ): Promise<Buffer | null> {
     if (source === "gmail") {
       return gmailFetchService.getAttachment(messageId, attachmentId);
     } else {

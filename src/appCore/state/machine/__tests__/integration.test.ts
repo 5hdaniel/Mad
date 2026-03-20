@@ -15,7 +15,7 @@
  */
 
 import React from "react";
-import { act, waitFor, renderHook } from "@testing-library/react";
+import { act, waitFor, renderHook, screen } from "@testing-library/react";
 
 // Mock useNetwork to prevent "useNetwork must be used within a NetworkProvider" error
 // (OfflineNotice in LoadingScreen/ErrorScreen calls useNetwork)
@@ -47,6 +47,7 @@ import {
 } from "./testUtils";
 import { useAppState } from "../useAppState";
 import { AppStateProvider } from "../AppStateContext";
+import { AuthProvider } from "../../../../contexts";
 import type { AppState, ReadyState, UserData } from "../types";
 
 // ============================================
@@ -303,37 +304,41 @@ describe("AppState Integration Tests", () => {
   // ============================================
 
   describe("Error Recovery", () => {
+    // TASK-2278: These tests use renderWithStateMachine (renders full UI) because
+    // LoadingOrchestrator now renders ErrorScreen for error states, unmounting
+    // children hooks. We verify the ErrorScreen appears with correct messages.
     it("handles storage check failure", async () => {
       setupStorageCheckFailure("Storage access denied");
 
-      const { result } = renderAppStateHook();
+      renderWithStateMachine(
+        React.createElement("div", { "data-testid": "children" }, "App Content")
+      );
 
+      // Should show error screen with the error message (not children)
       await waitFor(() => {
-        expect(result.current.state.status).toBe("error");
+        expect(screen.getByText("Something went wrong")).toBeInTheDocument();
       });
-
-      if (result.current.state.status === "error") {
-        expect(result.current.state.error.code).toBe("STORAGE_CHECK_FAILED");
-        expect(result.current.state.recoverable).toBe(true);
-      }
+      expect(screen.getByText(/Storage access denied/)).toBeInTheDocument();
+      // Recoverable error shows retry button
+      expect(screen.getByRole("button", { name: "Try Again" })).toBeInTheDocument();
+      expect(screen.queryByTestId("children")).not.toBeInTheDocument();
     });
 
     it("handles database init failure", async () => {
       setupDbInitFailure("Keychain access denied");
 
-      const { result } = renderAppStateHook();
+      renderWithStateMachine(
+        React.createElement("div", { "data-testid": "children" }, "App Content")
+      );
 
+      // Should show error screen with the error message (not children/onboarding)
       await waitFor(() => {
-        expect(result.current.state.status).toBe("error");
+        expect(screen.getByText("Something went wrong")).toBeInTheDocument();
       });
-
-      if (result.current.state.status === "error") {
-        expect(result.current.state.error.code).toBe("DB_INIT_FAILED");
-        expect(result.current.state.error.message).toContain(
-          "Keychain access denied"
-        );
-        expect(result.current.state.recoverable).toBe(true);
-      }
+      expect(screen.getByText(/Keychain access denied/)).toBeInTheDocument();
+      // DB_INIT_FAILED is recoverable, so retry button should be present
+      expect(screen.getByRole("button", { name: "Try Again" })).toBeInTheDocument();
+      expect(screen.queryByTestId("children")).not.toBeInTheDocument();
     });
 
     it("allows retry from error state", async () => {
@@ -376,20 +381,48 @@ describe("AppState Integration Tests", () => {
       }
     });
 
+    // TASK-2278: Verify retry from error state transitions back to loading.
+    // Uses direct initial state (not async initialization) to avoid timing issues
+    // with LoadingOrchestrator unmounting hook children on error.
     it("retry restores previous state context", async () => {
-      setupDbInitFailure();
+      const errorState: AppState = {
+        status: "error",
+        error: {
+          code: "DB_INIT_FAILED",
+          message: "Failed to initialize database",
+        },
+        recoverable: true,
+        previousState: {
+          status: "loading",
+          phase: "initializing-db",
+        },
+      };
 
-      const { result } = renderAppStateHook();
+      const wrapper = ({ children }: { children: React.ReactNode }) =>
+        React.createElement(
+          AppStateProvider,
+          { initialState: errorState },
+          children
+        );
 
-      // Wait for error
-      await waitFor(() => {
-        expect(result.current.state.status).toBe("error");
+      const { result } = renderHook(() => useAppState(), { wrapper });
+
+      expect(result.current.state.status).toBe("error");
+      if (result.current.state.status === "error") {
+        expect(result.current.state.error.code).toBe("DB_INIT_FAILED");
+        expect(result.current.state.recoverable).toBe(true);
+        expect(result.current.state.previousState).toBeDefined();
+      }
+
+      // Dispatch retry
+      act(() => {
+        result.current.dispatch({ type: "RETRY" });
       });
 
-      // Error state should have previousState
-      if (result.current.state.status === "error") {
-        expect(result.current.state.previousState).toBeDefined();
-        expect(result.current.state.previousState?.status).toBe("loading");
+      // Should return to previous state (loading)
+      expect(result.current.state.status).toBe("loading");
+      if (result.current.state.status === "loading") {
+        expect(result.current.state.phase).toBe("initializing-db");
       }
     });
 

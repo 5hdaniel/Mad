@@ -134,10 +134,11 @@ class DatabaseService implements IDatabaseService {
 
       await logService.info("Initializing database", "DatabaseService", { path: this.dbPath });
 
+      // Ensure app data directory exists before any DB file operations.
+      // Uses recursive:true which is a safe no-op if directory already exists,
+      // avoiding TOCTOU race with existsSync. Fixes Sentry ELECTRON-33.
       const dbDir = path.dirname(this.dbPath);
-      if (!fs.existsSync(dbDir)) {
-        fs.mkdirSync(dbDir, { recursive: true });
-      }
+      fs.mkdirSync(dbDir, { recursive: true });
 
       await databaseEncryptionService.initialize();
       this.encryptionKey = await databaseEncryptionService.getEncryptionKey();
@@ -154,6 +155,10 @@ class DatabaseService implements IDatabaseService {
       setDb(this.db);
       setDbPath(this.dbPath);
       setEncryptionKey(this.encryptionKey);
+
+      // Safety check: ensure failure_log table exists even if migration v31 failed
+      // (e.g., disk full during migration). Fixes Sentry ELECTRON-2P / ELECTRON-2X.
+      this._ensureFailureLogTable(this.db);
 
       try {
         await this.runMigrations();
@@ -245,6 +250,38 @@ class DatabaseService implements IDatabaseService {
     }
 
     return openedDb;
+  }
+
+  /**
+   * Safety check: ensure the failure_log table exists.
+   *
+   * If migration v31 failed (e.g., disk full), this table may not exist,
+   * causing "no such table: failure_log" errors (Sentry ELECTRON-2P, ELECTRON-2X).
+   * This runs BEFORE migrations so that any migration error logging that
+   * touches failure_log will not crash.
+   */
+  private _ensureFailureLogTable(currentDb: DatabaseType): void {
+    try {
+      currentDb.exec(`
+        CREATE TABLE IF NOT EXISTS failure_log (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+          operation TEXT NOT NULL,
+          error_message TEXT NOT NULL,
+          metadata TEXT,
+          acknowledged INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_failure_log_timestamp ON failure_log(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_failure_log_acknowledged ON failure_log(acknowledged);
+      `);
+      log.info("[DatabaseService] failure_log table safety check passed");
+    } catch (err) {
+      // Log but do not throw -- this is a safety net, not a hard requirement
+      log.warn(
+        "[DatabaseService] failure_log safety check failed:",
+        err instanceof Error ? err.message : String(err)
+      );
+    }
   }
 
   private async _checkMigrationNeeded(): Promise<boolean> {

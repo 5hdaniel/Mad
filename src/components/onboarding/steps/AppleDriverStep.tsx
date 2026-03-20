@@ -7,13 +7,14 @@
  * @module onboarding/steps/AppleDriverStep
  */
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import type {
   OnboardingStep,
   OnboardingStepMeta,
   OnboardingStepContentProps,
 } from "../types";
 import logger from '../../../utils/logger';
+import { reportOnboardingFailure } from '../sentryOnboarding';
 
 // =============================================================================
 // TYPES
@@ -118,6 +119,8 @@ function AppleDriverStepContent({
   const [hasBundled, setHasBundled] = useState(false);
   const [installedVersion, setInstalledVersion] = useState<string | null>(null);
   const [bundledVersion, setBundledVersion] = useState<string | null>(null);
+  // Guard to ensure Sentry event fires only once per error occurrence
+  const hasSentryReportedRef = useRef(false);
 
   // Check driver status on mount
   useEffect(() => {
@@ -179,11 +182,24 @@ function AppleDriverStepContent({
   const handleInstall = useCallback(async () => {
     setStatus("installing");
     setErrorMessage(null);
+    // Reset Sentry guard so a new failure can report again
+    hasSentryReportedRef.current = false;
 
     const drivers = getDriversAPI();
     if (!drivers) {
       setStatus("error");
       setErrorMessage("Driver management is not available.");
+      if (!hasSentryReportedRef.current) {
+        hasSentryReportedRef.current = true;
+        reportOnboardingFailure({
+          step: 'apple_driver',
+          reason: 'driver_install_failed',
+          dbInitialized: true,
+          networkOnline: navigator.onLine,
+          hasSession: true,
+          errorMessage: 'Driver management is not available.',
+        });
+      }
       return;
     }
 
@@ -197,18 +213,51 @@ function AppleDriverStepContent({
         setErrorMessage(
           "Installation was cancelled. You can try again or skip for now."
         );
+        if (!hasSentryReportedRef.current) {
+          hasSentryReportedRef.current = true;
+          reportOnboardingFailure({
+            step: 'apple_driver',
+            reason: 'driver_cancelled',
+            dbInitialized: true,
+            networkOnline: navigator.onLine,
+            hasSession: true,
+          });
+        }
       } else {
         setStatus("error");
         setErrorMessage(
           result.error ||
             "Installation failed. Please try again or install iTunes manually."
         );
+        if (!hasSentryReportedRef.current) {
+          hasSentryReportedRef.current = true;
+          reportOnboardingFailure({
+            step: 'apple_driver',
+            reason: 'driver_install_failed',
+            dbInitialized: true,
+            networkOnline: navigator.onLine,
+            hasSession: true,
+            errorMessage: result.error || undefined,
+          });
+        }
       }
     } catch (error) {
       setStatus("error");
       setErrorMessage(
         error instanceof Error ? error.message : "An unexpected error occurred"
       );
+      if (!hasSentryReportedRef.current) {
+        hasSentryReportedRef.current = true;
+        reportOnboardingFailure({
+          step: 'apple_driver',
+          reason: 'driver_install_failed',
+          dbInitialized: true,
+          networkOnline: navigator.onLine,
+          hasSession: true,
+          errorMessage:
+            error instanceof Error ? error.message : String(error),
+        });
+      }
     }
   }, []);
 

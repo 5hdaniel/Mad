@@ -13,13 +13,14 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Hash, Eye, EyeOff, Trash2 } from 'lucide-react';
 import { usePermissions } from '@/components/providers/PermissionsProvider';
 import { PERMISSIONS } from '@/lib/permissions';
-import { getTicketDetail, deleteTicket } from '@/lib/support-queries';
+import { getTicketDetail, getTicketDiagnostics, deleteTicket } from '@/lib/support-queries';
 import type { TicketDetailResponse } from '@/lib/support-types';
 import { StatusBadge } from '../components/StatusBadge';
 import { TicketDescription } from '../components/ConversationThread';
 import { ActivityTimeline } from '../components/ActivityTimeline';
 import { ReplyComposer } from '../components/ReplyComposer';
 import { TicketSidebar } from '../components/TicketSidebar';
+import { DiagnosticsPanel } from '../components/DiagnosticsPanel';
 
 export default function TicketDetailPage() {
   const params = useParams();
@@ -29,6 +30,7 @@ export default function TicketDetailPage() {
   const { hasPermission } = usePermissions();
 
   const [detail, setDetail] = useState<TicketDetailResponse | null>(null);
+  const [diagnostics, setDiagnostics] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAttachments, setShowAttachments] = useState(true);
@@ -41,6 +43,11 @@ export default function TicketDetailPage() {
       const data = await getTicketDetail(ticketId);
       setDetail(data);
       setError(null);
+
+      // Load diagnostics from attachment (best-effort, never blocks UI)
+      getTicketDiagnostics(ticketId, data.attachments)
+        .then(setDiagnostics)
+        .catch(() => setDiagnostics(null));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load ticket');
     } finally {
@@ -188,12 +195,13 @@ export default function TicketDetailPage() {
         </div>
 
         {/* Right: Sidebar */}
-        <div>
+        <div className="space-y-4">
           <TicketSidebar
             ticket={ticket}
             participants={participants}
             onTicketUpdated={loadDetail}
           />
+          <DiagnosticsPanel diagnostics={diagnostics} />
         </div>
       </div>
 

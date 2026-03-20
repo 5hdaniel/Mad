@@ -4,6 +4,14 @@
  * TicketList - Customer Ticket List
  *
  * Shows tickets for the current user (authenticated) or by email lookup (unauthenticated).
+ *
+ * TASK-2287: For authenticated users we do NOT pass p_requester_email to the
+ * support_list_tickets RPC.  That parameter is treated as an agent-only filter
+ * (see 20260313_support_security_fixes migration).  The RPC's audience filter
+ * already restricts non-agent callers to their own tickets via auth.uid() and
+ * the caller's email from auth.users -- so passing it explicitly caused
+ * the condition `(v_is_agent AND t.requester_email = p_requester_email)` to
+ * evaluate to FALSE, hiding all tickets from non-agent users.
  */
 
 import { useState, useEffect } from 'react';
@@ -31,9 +39,10 @@ export function TicketList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [emailInput, setEmailInput] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [lookupEmail, setLookupEmail] = useState<string | null>(null);
+  // readyToLoad flips true once auth check completes (authenticated) or once
+  // a manual email lookup is submitted (unauthenticated).
+  const [readyToLoad, setReadyToLoad] = useState(false);
 
   // Check auth on mount
   useEffect(() => {
@@ -42,20 +51,23 @@ export function TicketList() {
       if (user?.email) {
         setUserEmail(user.email);
         setIsAuthenticated(true);
-        setLookupEmail(user.email);
+        // Trigger ticket load without passing email as p_requester_email
+        setReadyToLoad(true);
       } else {
         setLoading(false);
       }
     });
   }, []);
 
-  // Load tickets when we have an email to look up
+  // Load tickets once ready
   useEffect(() => {
-    if (!lookupEmail) return;
+    if (!readyToLoad) return;
 
     setLoading(true);
     setError(null);
-    listTickets(lookupEmail)
+    // For authenticated users, pass no requester email -- the RPC audience
+    // filter handles scoping to the caller's own tickets.
+    listTickets(isAuthenticated ? undefined : (userEmail ?? undefined))
       .then((data) => {
         setTickets(data.tickets);
       })
@@ -65,17 +77,19 @@ export function TicketList() {
       .finally(() => {
         setLoading(false);
       });
-  }, [lookupEmail]);
+  }, [readyToLoad, isAuthenticated, userEmail]);
 
   function handleEmailLookup(e: React.FormEvent) {
     e.preventDefault();
-    if (emailInput.trim()) {
-      setLookupEmail(emailInput.trim());
+    const input = (e.target as HTMLFormElement).elements.namedItem('email') as HTMLInputElement;
+    if (input?.value?.trim()) {
+      setUserEmail(input.value.trim());
+      setReadyToLoad(true);
     }
   }
 
   // Unauthenticated: prompt to log in or submit a new ticket
-  if (!isAuthenticated && !lookupEmail) {
+  if (!isAuthenticated && !readyToLoad) {
     return (
       <div>
         <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
@@ -126,7 +140,7 @@ export function TicketList() {
     return (
       <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
         <p className="text-gray-500 text-sm mb-4">
-          No tickets found{lookupEmail ? ` for ${lookupEmail}` : ''}.
+          No tickets found{userEmail && !isAuthenticated ? ` for ${userEmail}` : ''}.
         </p>
         <Link
           href="/support/new"
@@ -140,8 +154,8 @@ export function TicketList() {
 
   return (
     <div>
-      {lookupEmail && !isAuthenticated && (
-        <p className="text-sm text-gray-500 mb-3">Showing tickets for {lookupEmail}</p>
+      {userEmail && !isAuthenticated && (
+        <p className="text-sm text-gray-500 mb-3">Showing tickets for {userEmail}</p>
       )}
       <div className="space-y-3">
         {tickets.map((ticket) => (

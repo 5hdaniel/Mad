@@ -16,6 +16,10 @@ import {
   isValidDeviceUdid,
   validateExecutablePath,
   validateMsiPath,
+  validateSessionToken,
+  isSessionTokenCorruptionError,
+  SESSION_TOKEN_MIN_LENGTH,
+  SESSION_TOKEN_MAX_LENGTH,
 } from "../validation";
 
 describe("Contact Validation", () => {
@@ -691,6 +695,79 @@ describe("Security Validation - TASK-601", () => {
         expect(() => validateMsiPath("", allowedPaths)).toThrow(
           "MSI path is required",
         );
+      });
+    });
+  });
+
+  // TASK-2280: Session token validation and corruption detection
+  describe("Session Token Validation", () => {
+    describe("validateSessionToken", () => {
+      it("should accept valid session tokens", () => {
+        const validToken = "a".repeat(36); // UUID-like length
+        expect(validateSessionToken(validToken)).toBe(validToken);
+      });
+
+      it("should accept tokens at minimum length boundary", () => {
+        const token = "x".repeat(SESSION_TOKEN_MIN_LENGTH);
+        expect(validateSessionToken(token)).toBe(token);
+      });
+
+      it("should accept tokens at maximum length boundary", () => {
+        const token = "y".repeat(SESSION_TOKEN_MAX_LENGTH);
+        expect(validateSessionToken(token)).toBe(token);
+      });
+
+      it("should trim whitespace from valid tokens", () => {
+        const token = "  " + "a".repeat(36) + "  ";
+        expect(validateSessionToken(token)).toBe("a".repeat(36));
+      });
+
+      it("should throw ValidationError for tokens that are too short", () => {
+        expect(() => validateSessionToken("short")).toThrow(ValidationError);
+        expect(() => validateSessionToken("short")).toThrow("Session token has invalid length");
+      });
+
+      it("should throw ValidationError for tokens that are too long", () => {
+        const longToken = "x".repeat(SESSION_TOKEN_MAX_LENGTH + 1);
+        expect(() => validateSessionToken(longToken)).toThrow(ValidationError);
+        expect(() => validateSessionToken(longToken)).toThrow("Session token has invalid length");
+      });
+
+      it("should throw ValidationError for null/undefined", () => {
+        expect(() => validateSessionToken(null)).toThrow(ValidationError);
+        expect(() => validateSessionToken(undefined)).toThrow(ValidationError);
+      });
+
+      it("should throw ValidationError for non-string types", () => {
+        expect(() => validateSessionToken(12345)).toThrow(ValidationError);
+        expect(() => validateSessionToken({})).toThrow(ValidationError);
+      });
+    });
+
+    describe("isSessionTokenCorruptionError", () => {
+      it("should return true for session token invalid length errors", () => {
+        const error = new ValidationError("Session token has invalid length", "sessionToken");
+        expect(isSessionTokenCorruptionError(error)).toBe(true);
+      });
+
+      it("should return false for other ValidationErrors", () => {
+        const error = new ValidationError("Session token is required and must be a string", "sessionToken");
+        expect(isSessionTokenCorruptionError(error)).toBe(false);
+      });
+
+      it("should return false for ValidationErrors on other fields", () => {
+        const error = new ValidationError("Something has invalid length", "userId");
+        expect(isSessionTokenCorruptionError(error)).toBe(false);
+      });
+
+      it("should return false for non-ValidationError instances", () => {
+        expect(isSessionTokenCorruptionError(new Error("Session token has invalid length"))).toBe(false);
+      });
+
+      it("should return false for non-error values", () => {
+        expect(isSessionTokenCorruptionError(null)).toBe(false);
+        expect(isSessionTokenCorruptionError(undefined)).toBe(false);
+        expect(isSessionTokenCorruptionError("string error")).toBe(false);
       });
     });
   });

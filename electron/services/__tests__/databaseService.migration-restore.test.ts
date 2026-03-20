@@ -243,12 +243,14 @@ describe("DatabaseService Migration Auto-Restore (TASK-2057)", () => {
         "mad-backup-20260221T100000.db",
       ]);
 
-      // Track call count for mockDbExec to fail on schema.sql exec
+      // Track call count for mockDbExec to fail on schema.sql exec.
+      // Call 1 = _ensureFailureLogTable() safety check (caught internally),
+      // Call 2 = schema.sql in runMigrations() -- this is the migration we want to fail.
       let execCallCount = 0;
       mockDbExec.mockImplementation(() => {
         execCallCount++;
-        if (execCallCount === 1) {
-          // First exec is schema.sql -- make it throw to simulate migration failure
+        if (execCallCount === 2) {
+          // Second exec is schema.sql -- make it throw to simulate migration failure
           throw new Error("Migration SQL syntax error");
         }
       });
@@ -368,11 +370,13 @@ describe("DatabaseService Migration Auto-Restore (TASK-2057)", () => {
         "mad-backup-20260222T100000.db",
       ]);
 
-      // Make migration fail
+      // Make migration fail.
+      // Call 1 = _ensureFailureLogTable() safety check (caught internally),
+      // Call 2 = schema.sql in runMigrations() -- this is the migration we want to fail.
       let execCallCount = 0;
       mockDbExec.mockImplementation(() => {
         execCallCount++;
-        if (execCallCount === 1) {
+        if (execCallCount === 2) {
           throw new Error("Migration failed");
         }
       });

@@ -130,3 +130,81 @@ export function getContactNamesByPhones(phones: string[]): Record<string, string
 
   return result;
 }
+
+/**
+ * Look up contact names for email addresses from imported contacts.
+ * Synchronous version for use in HTML generation methods.
+ *
+ * TASK-2288: Added to resolve iMessage email handles (e.g., user@gmail.com)
+ * that were showing as "Unknown Contact" in PDF exports.
+ */
+export function getContactNamesByEmails(emails: string[]): Record<string, string> {
+  if (emails.length === 0) return {};
+
+  const result: Record<string, string> = {};
+
+  try {
+    const lowerEmails = emails.map((e) => e.toLowerCase());
+    const placeholders = lowerEmails.map(() => "?").join(",");
+    const sql = `
+      SELECT
+        LOWER(ce.email) as email,
+        c.display_name
+      FROM contact_emails ce
+      JOIN contacts c ON ce.contact_id = c.id
+      WHERE LOWER(ce.email) IN (${placeholders})
+    `;
+
+    const rows = dbAll<{ email: string; display_name: string }>(
+      sql,
+      lowerEmails
+    );
+
+    for (const row of rows) {
+      if (row.display_name && row.email) {
+        result[row.email] = row.display_name;
+        // Also store original-case version for direct lookup
+        const original = emails.find((e) => e.toLowerCase() === row.email);
+        if (original && original !== row.email) {
+          result[original] = row.display_name;
+        }
+      }
+    }
+  } catch (error) {
+    logService.warn(
+      "[Export] Failed to look up contact names from imported contacts (emails)",
+      "ExportUtils",
+      { error }
+    );
+  }
+
+  return result;
+}
+
+/**
+ * Look up contact names for a mixed set of handles (phones + emails).
+ * Partitions handles by type and calls the appropriate sync resolver.
+ *
+ * TASK-2288: Provides complete contact resolution for export code that
+ * needs to resolve all participant types (phone numbers, email handles).
+ */
+export function getContactNamesByHandles(handles: string[]): Record<string, string> {
+  if (handles.length === 0) return {};
+
+  const phones: string[] = [];
+  const emails: string[] = [];
+
+  for (const handle of handles) {
+    if (!handle || handle.trim() === "") continue;
+    if (handle.includes("@")) {
+      emails.push(handle);
+    } else {
+      phones.push(handle);
+    }
+  }
+
+  const phoneResults = getContactNamesByPhones(phones);
+  const emailResults = getContactNamesByEmails(emails);
+
+  return { ...phoneResults, ...emailResults };
+}
