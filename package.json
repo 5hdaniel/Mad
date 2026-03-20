@@ -90,7 +90,7 @@
     "concurrently": "^9.1.0",
     "cross-env": "^7.0.3",
     "depcheck": "^1.4.7",
-    "dotenv-cli": "^7.4.2",
+    "dotenv-cli": "^11.0.0",
     "electron": "^35.7.5",
     "electron-builder": "^25.1.8",
     "electron-rebuild": "^3.2.9",
