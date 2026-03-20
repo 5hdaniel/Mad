@@ -23,6 +23,10 @@ import type {
 } from "../types";
 import type { UserVerifiedInLocalDbAction } from "../types/actions";
 import logger from '../../../utils/logger';
+import {
+  classifyFailureReason,
+  reportOnboardingFailure,
+} from '../sentryOnboarding';
 
 // =============================================================================
 // CONSTANTS
@@ -163,6 +167,8 @@ export function AccountVerificationContent({
   const hasStartedRef = useRef(false);
   // Track when step first rendered so we can enforce MIN_DISPLAY_MS
   const startTimeRef = useRef(Date.now());
+  // Guard to ensure Sentry event fires only once per error occurrence
+  const hasSentryReportedRef = useRef(false);
 
   const verify = async (attempt: number) => {
     setStatus('verifying');
@@ -197,6 +203,21 @@ export function AccountVerificationContent({
           // Max retries reached - show error
           setStatus('error');
           setErrorMessage('Unable to set up your account. Please contact support.');
+          // Report to Sentry once per error occurrence
+          if (!hasSentryReportedRef.current) {
+            hasSentryReportedRef.current = true;
+            const reason = classifyFailureReason({
+              dbInitialized: true, // We reached this step, so DB was initialized
+              networkOnline: navigator.onLine,
+            });
+            reportOnboardingFailure({
+              step: 'account_verification',
+              reason,
+              dbInitialized: true,
+              networkOnline: navigator.onLine,
+              hasSession: true, // User is authenticated to reach onboarding
+            });
+          }
         }
       }
     } catch (error) {
@@ -212,6 +233,24 @@ export function AccountVerificationContent({
             ? `Setup failed: ${error.message}`
             : 'Unable to set up your account. Please contact support.'
         );
+        // Report to Sentry once per error occurrence
+        if (!hasSentryReportedRef.current) {
+          hasSentryReportedRef.current = true;
+          const reason = classifyFailureReason({
+            dbInitialized: true,
+            networkOnline: navigator.onLine,
+            error,
+          });
+          reportOnboardingFailure({
+            step: 'account_verification',
+            reason,
+            dbInitialized: true,
+            networkOnline: navigator.onLine,
+            hasSession: true,
+            errorMessage:
+              error instanceof Error ? error.message : String(error),
+          });
+        }
       }
     }
   };
@@ -228,6 +267,8 @@ export function AccountVerificationContent({
     // Note: hasStartedRef is only for preventing double-execution in useEffect,
     // manual retries should always execute regardless
     setRetryCount(0);
+    // Reset Sentry guard so a new failure sequence can report again
+    hasSentryReportedRef.current = false;
     verify(0);
   };
 
