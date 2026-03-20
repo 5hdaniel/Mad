@@ -58,9 +58,16 @@ function sendTicketNotification(payload: Record<string, unknown>): void {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
-  }).catch((err) => {
-    console.error('[Support] Failed to send ticket notification:', err);
-  });
+  })
+    .then(async (res) => {
+      if (!res.ok) {
+        const text = await res.text().catch(() => '(no body)');
+        console.error('[Support] Notification proxy returned error:', res.status, text);
+      }
+    })
+    .catch((err) => {
+      console.error('[Support] Failed to send ticket notification:', err);
+    });
 }
 
 /**

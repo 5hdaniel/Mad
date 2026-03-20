@@ -40,13 +40,24 @@ export async function POST(request: NextRequest) {
     const apiSecret = process.env.INTERNAL_API_SECRET;
 
     if (!brokerPortalUrl || !apiSecret) {
-      console.warn('[Support] Email notification skipped: BROKER_PORTAL_URL or INTERNAL_API_SECRET not configured');
+      console.warn(
+        '[Support] Email notification skipped: missing env vars —',
+        `BROKER_PORTAL_URL=${brokerPortalUrl ? 'set' : 'MISSING'}`,
+        `INTERNAL_API_SECRET=${apiSecret ? 'set' : 'MISSING'}`
+      );
       return NextResponse.json({ success: false, skipped: true });
     }
 
     const body = await request.json();
+    const targetUrl = `${brokerPortalUrl}/api/email/ticket-notification`;
 
-    const response = await fetch(`${brokerPortalUrl}/api/email/ticket-notification`, {
+    console.info('[Support] Proxying notification to broker portal:', {
+      type: body.type,
+      ticketNumber: body.ticketNumber,
+      targetUrl,
+    });
+
+    const response = await fetch(targetUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -56,6 +67,14 @@ export async function POST(request: NextRequest) {
     });
 
     const result = await response.json();
+
+    if (!response.ok) {
+      console.error('[Support] Broker portal notification failed:', {
+        status: response.status,
+        result,
+      });
+    }
+
     return NextResponse.json(result, { status: response.status });
   } catch (err) {
     console.error('[Support] Notification proxy error:', err);
