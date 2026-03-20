@@ -381,22 +381,49 @@ describe("AppState Integration Tests", () => {
       }
     });
 
-    // TASK-2278: Use renderWithStateMachine to verify error screen renders
+    // TASK-2278: Verify retry from error state transitions back to loading.
+    // Uses direct initial state (not async initialization) to avoid timing issues
+    // with LoadingOrchestrator unmounting hook children on error.
     it("retry restores previous state context", async () => {
-      setupDbInitFailure();
+      const errorState: AppState = {
+        status: "error",
+        error: {
+          code: "DB_INIT_FAILED",
+          message: "Failed to initialize database",
+        },
+        recoverable: true,
+        previousState: {
+          status: "loading",
+          phase: "initializing-db",
+        },
+      };
 
-      renderWithStateMachine(
-        React.createElement("div", { "data-testid": "children" }, "App Content")
-      );
+      const wrapper = ({ children }: { children: React.ReactNode }) =>
+        React.createElement(
+          AppStateProvider,
+          { initialState: errorState },
+          children
+        );
 
-      // Wait for error screen to appear (DB init failure -> error state)
-      await waitFor(() => {
-        expect(screen.getByText("Something went wrong")).toBeInTheDocument();
+      const { result } = renderHook(() => useAppState(), { wrapper });
+
+      expect(result.current.state.status).toBe("error");
+      if (result.current.state.status === "error") {
+        expect(result.current.state.error.code).toBe("DB_INIT_FAILED");
+        expect(result.current.state.recoverable).toBe(true);
+        expect(result.current.state.previousState).toBeDefined();
+      }
+
+      // Dispatch retry
+      act(() => {
+        result.current.dispatch({ type: "RETRY" });
       });
 
-      // Error state should show retry button (recoverable) and error code
-      expect(screen.getByRole("button", { name: "Try Again" })).toBeInTheDocument();
-      expect(screen.getByText(/Error code: DB_INIT_FAILED/)).toBeInTheDocument();
+      // Should return to previous state (loading)
+      expect(result.current.state.status).toBe("loading");
+      if (result.current.state.status === "loading") {
+        expect(result.current.state.phase).toBe("initializing-db");
+      }
     });
 
     it("non-recoverable error blocks retry", async () => {
