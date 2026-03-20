@@ -151,7 +151,8 @@ describe("LoadingOrchestrator", () => {
       expect(screen.queryByTestId("children")).not.toBeInTheDocument();
     });
 
-    it("shows children for recoverable errors", () => {
+    // TASK-2278: Recoverable errors now show ErrorScreen with retry button
+    it("shows error screen with retry button for recoverable errors", () => {
       const errorState: AppState = {
         status: "error",
         error: {
@@ -167,8 +168,62 @@ describe("LoadingOrchestrator", () => {
         </TestWrapper>
       );
 
-      expect(screen.getByTestId("children")).toBeInTheDocument();
-      expect(screen.queryByText("Something went wrong")).not.toBeInTheDocument();
+      expect(screen.getByText("Something went wrong")).toBeInTheDocument();
+      expect(screen.getByText("Connection lost")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Try Again" })).toBeInTheDocument();
+      expect(screen.queryByTestId("children")).not.toBeInTheDocument();
+    });
+
+    // TASK-2278: Non-recoverable errors show ErrorScreen WITHOUT retry button
+    it("shows error screen without retry button for non-recoverable errors", () => {
+      const errorState: AppState = {
+        status: "error",
+        error: {
+          code: "DB_INIT_FAILED",
+          message: "Critical failure",
+        },
+        recoverable: false,
+      };
+
+      render(
+        <TestWrapper initialState={errorState}>
+          <div data-testid="children">App Content</div>
+        </TestWrapper>
+      );
+
+      expect(screen.getByText("Something went wrong")).toBeInTheDocument();
+      expect(screen.getByText("Critical failure")).toBeInTheDocument();
+      // Reset App Data button is always present, but Try Again should NOT be
+      expect(screen.queryByRole("button", { name: "Try Again" })).not.toBeInTheDocument();
+      expect(screen.queryByTestId("children")).not.toBeInTheDocument();
+    });
+
+    // TASK-2278: DB_INIT_FAILED specifically shows error screen (the bug scenario)
+    it("shows error screen for DB_INIT_FAILED recoverable error instead of onboarding", () => {
+      const errorState: AppState = {
+        status: "error",
+        error: {
+          code: "DB_INIT_FAILED",
+          message: "Failed to initialize database",
+        },
+        recoverable: true,
+        previousState: {
+          status: "loading",
+          phase: "initializing-db",
+        },
+      };
+
+      render(
+        <TestWrapper initialState={errorState}>
+          <div data-testid="children">App Content</div>
+        </TestWrapper>
+      );
+
+      // Should show error screen, NOT children (which would show onboarding)
+      expect(screen.getByText("Something went wrong")).toBeInTheDocument();
+      expect(screen.getByText("Failed to initialize database")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Try Again" })).toBeInTheDocument();
+      expect(screen.queryByTestId("children")).not.toBeInTheDocument();
     });
   });
 });
@@ -306,7 +361,8 @@ describe("ErrorScreen", () => {
     expect(screen.getByText("Error code: DB_INIT_FAILED")).toBeInTheDocument();
   });
 
-  it("shows retry button for non-recoverable errors", () => {
+  // TASK-2278: Non-recoverable errors no longer show retry button
+  it("does not show retry button for non-recoverable errors", () => {
     const errorState: AppState = {
       status: "error",
       error: {
@@ -322,9 +378,9 @@ describe("ErrorScreen", () => {
       </TestWrapper>
     );
 
-    expect(
-      screen.getByRole("button", { name: "Try Again" })
-    ).toBeInTheDocument();
+    // Non-recoverable: no retry button, but Reset App Data is still available
+    expect(screen.queryByRole("button", { name: "Try Again" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reset App Data" })).toBeInTheDocument();
   });
 });
 
@@ -379,11 +435,12 @@ describe("LoadingOrchestrator phase transitions", () => {
       </TestWrapper>
     );
 
-    // Storage check failure is a recoverable error, so children are shown
-    // (not the error screen which is for non-recoverable errors)
+    // TASK-2278: Storage check failure is a recoverable error and now shows
+    // ErrorScreen with retry button (previously fell through to children)
     await waitFor(
       () => {
-        expect(screen.getByTestId("children")).toBeInTheDocument();
+        expect(screen.getByText("Something went wrong")).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Try Again" })).toBeInTheDocument();
       },
       { timeout: 2000 }
     );
@@ -406,11 +463,12 @@ describe("LoadingOrchestrator phase transitions", () => {
       </TestWrapper>
     );
 
-    // DB init failure is a recoverable error (via the reducer),
-    // so children are shown (not the error screen)
+    // TASK-2278: DB init failure is a recoverable error and now shows
+    // ErrorScreen with retry button (previously fell through to children/onboarding)
     await waitFor(
       () => {
-        expect(screen.getByTestId("children")).toBeInTheDocument();
+        expect(screen.getByText("Something went wrong")).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Try Again" })).toBeInTheDocument();
       },
       { timeout: 2000 }
     );

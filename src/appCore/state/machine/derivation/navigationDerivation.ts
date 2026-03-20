@@ -280,8 +280,8 @@ export function deriveAppStep(state: AppState): AppStep {
       return "dashboard";
 
     case "error":
-      // Error state shows loading screen with error handling elsewhere
-      return "loading";
+      // TASK-2278: Error state shows error screen (not loading/onboarding)
+      return "error";
   }
 }
 
@@ -306,6 +306,8 @@ export function derivePageTitle(appStep: AppStep): string {
       return "Export to Outlook";
     case "complete":
       return "Export Complete";
+    case "error":
+      return "Error";
     // Onboarding steps: show generic "Setup" since the queue manages
     // step-specific titles via each step's content component.
     case "phone-type-selection":
