@@ -28,6 +28,7 @@ import type {
   TicketLinkSearchResult,
   RequesterSearchResult,
   RecentTicket,
+  SupportSavedView,
 } from './support-types';
 
 // ---------------------------------------------------------------------------
@@ -633,4 +634,42 @@ export async function getTicketDiagnostics(
   } catch {
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Saved View functions (TASK-2299)
+// ---------------------------------------------------------------------------
+
+/** Save a filter view for the current user. */
+export async function supportSaveView(
+  name: string,
+  filtersJson: Record<string, unknown>,
+  isShared: boolean = false
+): Promise<{ id: string }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_save_view', {
+    p_name: name,
+    p_filters_json: filtersJson,
+    p_is_shared: isShared,
+  });
+  if (error) throw error;
+  return data as unknown as { id: string };
+}
+
+/** List the current user's saved views plus shared views. */
+export async function supportListSavedViews(): Promise<SupportSavedView[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_list_saved_views');
+  if (error) throw error;
+  return (data ?? []) as unknown as SupportSavedView[];
+}
+
+/** Delete a saved view. Only the owner can delete it. */
+export async function supportDeleteSavedView(viewId: string): Promise<{ success: boolean }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_delete_saved_view', {
+    p_view_id: viewId,
+  });
+  if (error) throw error;
+  return data as unknown as { success: boolean };
 }

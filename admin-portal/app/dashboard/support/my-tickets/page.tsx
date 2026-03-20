@@ -8,7 +8,7 @@
  * but pre-filters all queries by the current user's assignee_id.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { Inbox, CheckCircle2, Clock } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -25,6 +25,7 @@ import { SearchBar } from '../components/SearchBar';
 import { BulkActionBar } from '../components/BulkActionBar';
 import { ColumnSelector, loadColumnPreferences, saveColumnPreferences } from '../components/ColumnSelector';
 import type { ColumnKey } from '../components/ColumnSelector';
+import { SavedViewSelector } from '../components/SavedViewSelector';
 
 const TicketTable = dynamic(() => import('../components/TicketTable').then(m => m.TicketTable), { ssr: false });
 
@@ -180,6 +181,30 @@ export default function MyTicketsPage() {
     setPage(1);
   }, []);
 
+  // Saved views: capture current filters
+  const currentFilters = useMemo(() => ({
+    status: statusFilter,
+    priority: priorityFilter,
+    category_id: categoryFilter,
+    sort_column: sortColumn,
+    sort_direction: sortDirection,
+    visible_columns: visibleColumns,
+  }), [statusFilter, priorityFilter, categoryFilter, sortColumn, sortDirection, visibleColumns]);
+
+  const handleLoadView = useCallback((filters: Record<string, unknown>) => {
+    setStatusFilter((filters.status as TicketStatus | null) ?? null);
+    setPriorityFilter((filters.priority as TicketPriority | null) ?? null);
+    setCategoryFilter((filters.category_id as string | null) ?? null);
+    if (filters.sort_column) setSortColumn(filters.sort_column as SortColumn);
+    if (filters.sort_direction) setSortDirection(filters.sort_direction as SortDirection);
+    if (Array.isArray(filters.visible_columns)) {
+      const cols = filters.visible_columns as ColumnKey[];
+      setVisibleColumns(cols);
+      saveColumnPreferences(cols);
+    }
+    setPage(1);
+  }, []);
+
   const handleSort = useCallback((column: SortColumn) => {
     setSortColumn((prev) => {
       if (prev === column) {
@@ -244,10 +269,16 @@ export default function MyTicketsPage() {
           onPriorityChange={handlePriorityChange}
           onCategoryChange={handleCategoryChange}
         />
-        <ColumnSelector
-          visibleColumns={visibleColumns}
-          onColumnsChange={handleColumnsChange}
-        />
+        <div className="flex items-center gap-2">
+          <SavedViewSelector
+            currentFilters={currentFilters}
+            onLoadView={handleLoadView}
+          />
+          <ColumnSelector
+            visibleColumns={visibleColumns}
+            onColumnsChange={handleColumnsChange}
+          />
+        </div>
       </div>
 
       {/* Ticket Table */}
