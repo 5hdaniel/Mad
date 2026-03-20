@@ -134,10 +134,11 @@ class DatabaseService implements IDatabaseService {
 
       await logService.info("Initializing database", "DatabaseService", { path: this.dbPath });
 
+      // Ensure app data directory exists before any DB file operations.
+      // Uses recursive:true which is a safe no-op if directory already exists,
+      // avoiding TOCTOU race with existsSync. Fixes Sentry ELECTRON-33.
       const dbDir = path.dirname(this.dbPath);
-      if (!fs.existsSync(dbDir)) {
-        fs.mkdirSync(dbDir, { recursive: true });
-      }
+      fs.mkdirSync(dbDir, { recursive: true });
 
       await databaseEncryptionService.initialize();
       this.encryptionKey = await databaseEncryptionService.getEncryptionKey();
