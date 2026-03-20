@@ -3,15 +3,16 @@
 /**
  * TicketTable - Support Dashboard
  *
- * Renders the ticket queue as a table with pagination.
+ * Renders the ticket queue as a table with pagination and sortable column headers.
  * Each row navigates to the ticket detail page on click.
+ * Sort state is managed by the parent page and passed via props.
  */
 
 import { Fragment } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowUp, ArrowDown } from 'lucide-react';
 import DOMPurify from 'isomorphic-dompurify';
-import type { SupportTicket, TicketStatus, TicketPriority, SearchHighlight } from '@/lib/support-types';
+import type { SupportTicket, TicketStatus, TicketPriority, SearchHighlight, SortColumn, SortDirection } from '@/lib/support-types';
 import { STATUS_LABELS, PRIORITY_LABELS, STATUS_COLORS, PRIORITY_COLORS } from '@/lib/support-types';
 
 interface TicketTableProps {
@@ -23,6 +24,9 @@ interface TicketTableProps {
   onPageChange: (page: number) => void;
   loading?: boolean;
   searchActive?: boolean;
+  sortColumn?: SortColumn;
+  sortDirection?: SortDirection;
+  onSort?: (column: SortColumn) => void;
 }
 
 function StatusBadge({ status }: { status: TicketStatus }) {
@@ -85,11 +89,45 @@ function HighlightSnippet({ highlight }: { highlight: SearchHighlight }) {
   return (
     <span className="inline">
       <span className="font-medium text-gray-600">{label}:</span>{' '}
+      {/* Content sanitized by DOMPurify - only <mark> tags allowed */}
       <span
         className="[&_mark]:bg-yellow-200 [&_mark]:px-0.5 [&_mark]:rounded-sm"
         dangerouslySetInnerHTML={{ __html: sanitized }}
       />
     </span>
+  );
+}
+
+interface SortableHeaderProps {
+  column: SortColumn;
+  label: string;
+  currentColumn?: SortColumn;
+  currentDirection?: SortDirection;
+  onSort?: (column: SortColumn) => void;
+  className?: string;
+}
+
+function SortableHeader({ column, label, currentColumn, currentDirection, onSort, className = '' }: SortableHeaderProps) {
+  const isActive = currentColumn === column;
+
+  return (
+    <th
+      onClick={() => onSort?.(column)}
+      className={`px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:bg-gray-100 transition-colors ${className}`}
+    >
+      <div className="flex items-center gap-1">
+        <span>{label}</span>
+        {isActive ? (
+          currentDirection === 'asc' ? (
+            <ArrowUp className="h-3.5 w-3.5 text-blue-600" />
+          ) : (
+            <ArrowDown className="h-3.5 w-3.5 text-blue-600" />
+          )
+        ) : (
+          <ArrowDown className="h-3.5 w-3.5 text-gray-300" />
+        )}
+      </div>
+    </th>
   );
 }
 
@@ -102,6 +140,9 @@ export function TicketTable({
   onPageChange,
   loading,
   searchActive,
+  sortColumn = 'created_at',
+  sortDirection = 'desc',
+  onSort,
 }: TicketTableProps) {
   const router = useRouter();
 
@@ -167,27 +208,54 @@ export function TicketTable({
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                #
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Subject
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Priority
-              </th>
+              <SortableHeader
+                column="ticket_number"
+                label="#"
+                currentColumn={sortColumn}
+                currentDirection={sortDirection}
+                onSort={onSort}
+              />
+              <SortableHeader
+                column="subject"
+                label="Subject"
+                currentColumn={sortColumn}
+                currentDirection={sortDirection}
+                onSort={onSort}
+              />
+              <SortableHeader
+                column="status"
+                label="Status"
+                currentColumn={sortColumn}
+                currentDirection={sortDirection}
+                onSort={onSort}
+              />
+              <SortableHeader
+                column="priority"
+                label="Priority"
+                currentColumn={sortColumn}
+                currentDirection={sortDirection}
+                onSort={onSort}
+              />
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Category
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Requester
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Created
-              </th>
+              <SortableHeader
+                column="assignee_name"
+                label="Assignee"
+                currentColumn={sortColumn}
+                currentDirection={sortDirection}
+                onSort={onSort}
+              />
+              <SortableHeader
+                column="created_at"
+                label="Created"
+                currentColumn={sortColumn}
+                currentDirection={sortDirection}
+                onSort={onSort}
+              />
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -206,6 +274,7 @@ export function TicketTable({
                         h => h.field === 'subject'
                       );
                       if (subjectHighlight) {
+                        // Content sanitized by DOMPurify - only <mark> tags allowed
                         const sanitized = DOMPurify.sanitize(subjectHighlight.snippet, { ALLOWED_TAGS: ['mark'] });
                         return <span dangerouslySetInnerHTML={{ __html: sanitized }} />;
                       }
@@ -228,12 +297,16 @@ export function TicketTable({
                           h => h.field === 'requester_name' || h.field === 'requester_email'
                         );
                         if (requesterHighlight) {
+                          // Content sanitized by DOMPurify - only <mark> tags allowed
                           const sanitized = DOMPurify.sanitize(requesterHighlight.snippet, { ALLOWED_TAGS: ['mark'] });
                           return <span dangerouslySetInnerHTML={{ __html: sanitized }} />;
                         }
                         return ticket.requester_name;
                       })()}
                     </div>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                    {ticket.assignee_name || <span className="text-gray-400 italic">Unassigned</span>}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                     {formatDate(ticket.created_at)}
@@ -245,7 +318,7 @@ export function TicketTable({
                   );
                   return snippetHighlight ? (
                     <tr className="border-b border-gray-100">
-                      <td colSpan={7} className="px-4 py-1.5 bg-gray-50">
+                      <td colSpan={8} className="px-4 py-1.5 bg-gray-50">
                         <div className="flex items-start gap-2 text-xs text-gray-500 pl-4">
                           <HighlightSnippet highlight={snippetHighlight} />
                         </div>

@@ -12,11 +12,13 @@ import { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { Inbox, CheckCircle2, Clock } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { listTickets, getTicketStats } from '@/lib/support-queries';
+import { listTickets } from '@/lib/support-queries';
 import type {
   SupportTicket,
   TicketStatus,
   TicketPriority,
+  SortColumn,
+  SortDirection,
 } from '@/lib/support-types';
 import { TicketFilters } from '../components/TicketFilters';
 import { SearchBar } from '../components/SearchBar';
@@ -43,6 +45,10 @@ export default function MyTicketsPage() {
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Sort
+  const [sortColumn, setSortColumn] = useState<SortColumn>('created_at');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+
   const pageSize = 20;
 
   const loadTickets = useCallback(async () => {
@@ -57,6 +63,8 @@ export default function MyTicketsPage() {
         search: searchQuery || undefined,
         page,
         page_size: pageSize,
+        sort_by: sortColumn,
+        sort_dir: sortDirection,
       });
       setTickets(data.tickets);
       setTotalCount(data.total_count);
@@ -66,7 +74,7 @@ export default function MyTicketsPage() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, statusFilter, priorityFilter, categoryFilter, searchQuery, page]);
+  }, [user?.id, statusFilter, priorityFilter, categoryFilter, searchQuery, page, sortColumn, sortDirection]);
 
   // Load agent-specific stats by querying filtered counts
   const loadMyStats = useCallback(async () => {
@@ -113,6 +121,18 @@ export default function MyTicketsPage() {
 
   const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
+    setPage(1);
+  }, []);
+
+  const handleSort = useCallback((column: SortColumn) => {
+    setSortColumn((prev) => {
+      if (prev === column) {
+        setSortDirection((dir) => (dir === 'asc' ? 'desc' : 'asc'));
+        return prev;
+      }
+      setSortDirection(column === 'created_at' ? 'desc' : 'asc');
+      return column;
+    });
     setPage(1);
   }, []);
 
@@ -180,6 +200,9 @@ export default function MyTicketsPage() {
         onPageChange={setPage}
         loading={loading}
         searchActive={!!searchQuery}
+        sortColumn={sortColumn}
+        sortDirection={sortDirection}
+        onSort={handleSort}
       />
     </div>
   );

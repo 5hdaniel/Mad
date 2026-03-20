@@ -137,6 +137,8 @@ export async function listTickets(params: TicketListParams): Promise<TicketListR
     p_requester_email: params.requester_email || null,
     p_page: params.page || 1,
     p_page_size: params.page_size || 20,
+    p_sort_by: params.sort_by || 'created_at',
+    p_sort_dir: params.sort_dir || 'desc',
   });
   if (error) throw error;
   return data as unknown as TicketListResponse;
