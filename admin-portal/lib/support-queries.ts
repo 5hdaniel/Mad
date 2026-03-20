@@ -200,6 +200,19 @@ export async function updateTicketPriority(
   return data as unknown as { id: string; priority: string; changed: boolean };
 }
 
+export async function updateTicketCategory(
+  ticketId: string,
+  categoryId: string | null
+): Promise<{ id: string; category_id: string | null; changed: boolean }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('support_update_ticket_category', {
+    p_ticket_id: ticketId,
+    p_category_id: categoryId,
+  });
+  if (error) throw error;
+  return data as unknown as { id: string; category_id: string | null; changed: boolean };
+}
+
 export async function assignTicket(
   ticketId: string,
   assigneeId: string
