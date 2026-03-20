@@ -293,6 +293,17 @@ export const PRIORITY_COLORS: Record<TicketPriority, string> = {
   urgent: 'bg-red-100 text-red-800',
 };
 
+// --- Saved View types ---
+
+export interface SupportSavedView {
+  id: string;
+  name: string;
+  filters: Record<string, unknown>;
+  is_shared: boolean;
+  is_own: boolean;
+  created_at: string;
+}
+
 // --- Timeline types ---
 
 export type TimelineEntry =
