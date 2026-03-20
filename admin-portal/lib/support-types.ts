@@ -108,6 +108,9 @@ export interface SupportCategory {
   children?: SupportCategory[];
 }
 
+export type SortColumn = 'ticket_number' | 'subject' | 'status' | 'priority' | 'created_at' | 'assignee_name';
+export type SortDirection = 'asc' | 'desc';
+
 export interface TicketListParams {
   status?: TicketStatus | null;
   priority?: TicketPriority | null;
@@ -117,6 +120,8 @@ export interface TicketListParams {
   requester_email?: string | null;
   page?: number;
   page_size?: number;
+  sort_by?: SortColumn;
+  sort_dir?: SortDirection;
 }
 
 export interface TicketListResponse {

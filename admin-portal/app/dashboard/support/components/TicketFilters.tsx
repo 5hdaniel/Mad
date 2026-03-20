@@ -8,7 +8,8 @@
 
 import { useEffect, useState } from 'react';
 import { Filter, X } from 'lucide-react';
-import { getCategories, buildCategoryTree } from '@/lib/support-queries';
+import { getCategories, buildCategoryTree, getAssignableAgents } from '@/lib/support-queries';
+import type { AssignableAgent } from '@/lib/support-queries';
 import type { TicketStatus, TicketPriority, SupportCategory } from '@/lib/support-types';
 import { STATUS_LABELS, PRIORITY_LABELS } from '@/lib/support-types';
 
@@ -16,33 +17,42 @@ interface TicketFiltersProps {
   status: TicketStatus | null;
   priority: TicketPriority | null;
   categoryId: string | null;
+  assigneeId?: string | null;
   onStatusChange: (status: TicketStatus | null) => void;
   onPriorityChange: (priority: TicketPriority | null) => void;
   onCategoryChange: (categoryId: string | null) => void;
+  onAssigneeChange?: (assigneeId: string | null) => void;
 }
 
 export function TicketFilters({
   status,
   priority,
   categoryId,
+  assigneeId,
   onStatusChange,
   onPriorityChange,
   onCategoryChange,
+  onAssigneeChange,
 }: TicketFiltersProps) {
   const [categories, setCategories] = useState<SupportCategory[]>([]);
+  const [agents, setAgents] = useState<AssignableAgent[]>([]);
 
   useEffect(() => {
     getCategories().then((cats) => {
       setCategories(buildCategoryTree(cats));
     });
+    getAssignableAgents().then((agentList) => {
+      setAgents(agentList);
+    });
   }, []);
 
-  const hasFilters = status || priority || categoryId;
+  const hasFilters = status || priority || categoryId || assigneeId;
 
   function clearAll() {
     onStatusChange(null);
     onPriorityChange(null);
     onCategoryChange(null);
+    onAssigneeChange?.(null);
   }
 
   return (
@@ -93,6 +103,22 @@ export function TicketFilters({
           </option>
         ))}
       </select>
+
+      {/* Assignee filter */}
+      {onAssigneeChange && (
+        <select
+          value={assigneeId || ''}
+          onChange={(e) => onAssigneeChange(e.target.value || null)}
+          className="text-sm border border-gray-300 rounded-md px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        >
+          <option value="">All Assignees</option>
+          {agents.map((agent) => (
+            <option key={agent.user_id} value={agent.user_id}>
+              {agent.display_name || agent.email}
+            </option>
+          ))}
+        </select>
+      )}
 
       {/* Clear all button */}
       {hasFilters && (

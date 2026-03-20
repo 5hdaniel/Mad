@@ -6,8 +6,8 @@
  * Main support page at /dashboard/support showing:
  * - Search bar (full-text search via tsvector)
  * - Stats cards (open, unassigned, urgent)
- * - Filter bar (status, priority, category)
- * - Ticket table with pagination
+ * - Filter bar (status, priority, category, assignee)
+ * - Ticket table with sortable columns and pagination
  * - Create ticket button
  */
 
@@ -19,6 +19,8 @@ import type {
   SupportTicket,
   TicketStatus,
   TicketPriority,
+  SortColumn,
+  SortDirection,
 } from '@/lib/support-types';
 import { StatsCards } from './components/StatsCards';
 import { TicketFilters } from './components/TicketFilters';
@@ -39,7 +41,12 @@ export default function SupportPage() {
   const [statusFilter, setStatusFilter] = useState<TicketStatus | null>(null);
   const [priorityFilter, setPriorityFilter] = useState<TicketPriority | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Sort
+  const [sortColumn, setSortColumn] = useState<SortColumn>('created_at');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   const pageSize = 20;
 
@@ -50,9 +57,12 @@ export default function SupportPage() {
         status: statusFilter,
         priority: priorityFilter,
         category_id: categoryFilter,
+        assignee_id: assigneeFilter,
         search: searchQuery || undefined,
         page,
         page_size: pageSize,
+        sort_by: sortColumn,
+        sort_dir: sortDirection,
       });
       setTickets(data.tickets);
       setTotalCount(data.total_count);
@@ -62,7 +72,7 @@ export default function SupportPage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, priorityFilter, categoryFilter, searchQuery, page]);
+  }, [statusFilter, priorityFilter, categoryFilter, assigneeFilter, searchQuery, page, sortColumn, sortDirection]);
 
   useEffect(() => {
     loadTickets();
@@ -84,8 +94,27 @@ export default function SupportPage() {
     setPage(1);
   }
 
+  function handleAssigneeChange(assigneeId: string | null) {
+    setAssigneeFilter(assigneeId);
+    setPage(1);
+  }
+
   const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
+    setPage(1);
+  }, []);
+
+  const handleSort = useCallback((column: SortColumn) => {
+    setSortColumn((prev) => {
+      if (prev === column) {
+        // Toggle direction if same column
+        setSortDirection((dir) => (dir === 'asc' ? 'desc' : 'asc'));
+        return prev;
+      }
+      // New column: default to ascending (except created_at which defaults desc)
+      setSortDirection(column === 'created_at' ? 'desc' : 'asc');
+      return column;
+    });
     setPage(1);
   }, []);
 
@@ -122,9 +151,11 @@ export default function SupportPage() {
           status={statusFilter}
           priority={priorityFilter}
           categoryId={categoryFilter}
+          assigneeId={assigneeFilter}
           onStatusChange={handleStatusChange}
           onPriorityChange={handlePriorityChange}
           onCategoryChange={handleCategoryChange}
+          onAssigneeChange={handleAssigneeChange}
         />
       </div>
 
@@ -138,6 +169,9 @@ export default function SupportPage() {
         onPageChange={setPage}
         loading={loading}
         searchActive={!!searchQuery}
+        sortColumn={sortColumn}
+        sortDirection={sortDirection}
+        onSort={handleSort}
       />
 
       {/* Create Ticket Dialog */}
