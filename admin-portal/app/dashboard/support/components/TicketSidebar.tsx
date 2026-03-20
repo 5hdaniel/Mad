@@ -9,9 +9,10 @@
  */
 
 import { useState, useEffect } from 'react';
-import { User, Calendar, Tag, AlertCircle } from 'lucide-react';
-import { updateTicketStatus, updateTicketPriority, assignTicket, getAssignableAgents } from '@/lib/support-queries';
+import { User, Calendar, AlertCircle } from 'lucide-react';
+import { updateTicketStatus, updateTicketPriority, updateTicketCategory, assignTicket, getAssignableAgents, getCategories } from '@/lib/support-queries';
 import type { AssignableAgent } from '@/lib/support-queries';
+import type { SupportCategory } from '@/lib/support-types';
 import type {
   SupportTicket,
   TicketStatus,
@@ -38,11 +39,14 @@ interface TicketSidebarProps {
 
 export function TicketSidebar({ ticket, participants, onTicketUpdated }: TicketSidebarProps) {
   const [agents, setAgents] = useState<AssignableAgent[]>([]);
+  const [categories, setCategories] = useState<SupportCategory[]>([]);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [updatingPriority, setUpdatingPriority] = useState(false);
+  const [updatingCategory, setUpdatingCategory] = useState(false);
   const [updatingAssignee, setUpdatingAssignee] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<TicketStatus | ''>('');
   const [selectedPriority, setSelectedPriority] = useState<TicketPriority>(ticket.priority);
+  const [selectedCategory, setSelectedCategory] = useState<string>(ticket.category_id || '');
   const [selectedAssignee, setSelectedAssignee] = useState<string>(ticket.assignee_id || '');
   const [showPendingReason, setShowPendingReason] = useState(false);
   const [pendingReason, setPendingReason] = useState<PendingReason>('customer');
@@ -53,6 +57,7 @@ export function TicketSidebar({ ticket, participants, onTicketUpdated }: TicketS
 
   useEffect(() => {
     getAssignableAgents().then(setAgents).catch(() => {});
+    getCategories().then((cats) => setCategories(cats.filter((c) => !c.parent_id))).catch(() => {});
   }, []);
 
   const allowedTransitions = ALLOWED_TRANSITIONS[ticket.status] || [];
@@ -87,6 +92,21 @@ export function TicketSidebar({ ticket, participants, onTicketUpdated }: TicketS
       setError(err instanceof Error ? err.message : 'Failed to update priority');
     } finally {
       setUpdatingPriority(false);
+    }
+  }
+
+  async function handleCategorySave() {
+    const newCategoryId = selectedCategory || null;
+    if (newCategoryId === (ticket.category_id || null)) return;
+    setUpdatingCategory(true);
+    setError(null);
+    try {
+      await updateTicketCategory(ticket.id, newCategoryId);
+      onTicketUpdated();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update category');
+    } finally {
+      setUpdatingCategory(false);
     }
   }
 
@@ -253,12 +273,24 @@ export function TicketSidebar({ ticket, participants, onTicketUpdated }: TicketS
         <label className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2 block">
           Category
         </label>
-        <div className="flex items-center gap-1.5 text-sm text-gray-700">
-          <Tag className="h-3.5 w-3.5 text-gray-400" />
-          {ticket.category_name || 'Uncategorized'}
-          {ticket.subcategory_name && (
-            <span className="text-gray-400">/ {ticket.subcategory_name}</span>
-          )}
+        <div className="flex items-center gap-2">
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="flex-1 text-sm text-gray-900 border border-gray-300 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">Uncategorized</option>
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.id}>{cat.name}</option>
+            ))}
+          </select>
+          <button
+            onClick={handleCategorySave}
+            disabled={(selectedCategory || null) === (ticket.category_id || null) || updatingCategory}
+            className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {updatingCategory ? 'Saving...' : 'Save'}
+          </button>
         </div>
       </div>
 
