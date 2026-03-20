@@ -19,7 +19,14 @@ import failureLogService from "../services/failureLogService";
 import { getDeviceId } from "../services/deviceService";
 
 // Import validation utilities
-import { ValidationError, validateUserId, validateSessionToken } from "../utils/validation";
+import {
+  ValidationError,
+  validateUserId,
+  validateSessionToken,
+  isSessionTokenCorruptionError,
+  SESSION_TOKEN_MIN_LENGTH,
+  SESSION_TOKEN_MAX_LENGTH,
+} from "../utils/validation";
 import { wrapHandler } from "../utils/wrapHandler";
 import { redactEmail } from "../utils/redactSensitive";
 
@@ -239,6 +246,28 @@ async function handleLogout(
 
     return { success: true };
   } catch (error) {
+    // TASK-2280: Recover from corrupted session tokens instead of showing error
+    if (isSessionTokenCorruptionError(error)) {
+      await logService.warn(
+        "[Session] Corrupted session token detected during logout, clearing session",
+        "SessionHandlers",
+        { tokenLength: typeof sessionToken === "string" ? sessionToken.trim().length : 0 },
+      );
+      Sentry.captureMessage("Session token corruption detected", {
+        level: "warning",
+        tags: { component: "session", recovery: "auto_clear", operation: "handleLogout" },
+        extra: {
+          tokenLength: typeof sessionToken === "string" ? sessionToken.trim().length : 0,
+          expectedMinLength: SESSION_TOKEN_MIN_LENGTH,
+          expectedMaxLength: SESSION_TOKEN_MAX_LENGTH,
+          platform: process.platform,
+        },
+      });
+      await sessionService.clearSession();
+      // Return success so the renderer redirects to login (session is now cleared)
+      return { success: true };
+    }
+
     await logService.error("Logout failed", "AuthHandlers", {
       error: error instanceof Error ? error.message : "Unknown error",
     });
@@ -558,6 +587,29 @@ async function handleValidateSession(
 
     return { success: true, valid: true, user: session };
   } catch (error) {
+    // TASK-2280: Recover from corrupted session tokens instead of showing error
+    if (isSessionTokenCorruptionError(error)) {
+      await logService.warn(
+        "[Session] Corrupted session token detected during validation, clearing session",
+        "SessionHandlers",
+        { tokenLength: typeof sessionToken === "string" ? sessionToken.trim().length : 0 },
+      );
+      Sentry.captureMessage("Session token corruption detected", {
+        level: "warning",
+        tags: { component: "session", recovery: "auto_clear", operation: "handleValidateSession" },
+        extra: {
+          tokenLength: typeof sessionToken === "string" ? sessionToken.trim().length : 0,
+          expectedMinLength: SESSION_TOKEN_MIN_LENGTH,
+          expectedMaxLength: SESSION_TOKEN_MAX_LENGTH,
+          platform: process.platform,
+        },
+      });
+      await sessionService.clearSession();
+      // Return valid=false without an error message so the renderer
+      // treats this as "no session" and redirects to login
+      return { success: false, valid: false };
+    }
+
     await logService.error("Session validation failed", "AuthHandlers", {
       error: error instanceof Error ? error.message : "Unknown error",
     });
