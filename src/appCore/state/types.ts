@@ -14,6 +14,7 @@ import type { SyncStatus } from "../../hooks/useAutoRefresh";
 export type AppStep =
   | "loading"
   | "login"
+  | "error" // TASK-2278: Error screen for DB init failures and other errors
   | "keychain-explanation"
   | "phone-type-selection"
   | "android-coming-soon"

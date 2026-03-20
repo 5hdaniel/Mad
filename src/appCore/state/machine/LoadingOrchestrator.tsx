@@ -662,14 +662,20 @@ export function LoadingOrchestrator({
     );
   }
 
-  // Non-recoverable error - show error screen
-  if (state.status === "error" && !state.recoverable) {
+  // Error state - show error screen with retry for recoverable errors
+  // TASK-2278: Show ErrorScreen for ALL errors (both recoverable and non-recoverable).
+  // Previously, only non-recoverable errors showed ErrorScreen, causing recoverable
+  // errors (e.g., DB_INIT_FAILED) to fall through to children, which rendered
+  // onboarding instead of an error screen.
+  if (state.status === "error") {
     return (
-      <ErrorScreen error={state.error} onRetry={() => dispatch({ type: "RETRY" })} />
+      <ErrorScreen
+        error={state.error}
+        onRetry={state.recoverable ? () => dispatch({ type: "RETRY" }) : undefined}
+      />
     );
   }
 
-  // Recoverable error or other states - render children
-  // (error recovery UI can be shown as overlay in children)
+  // Non-error states - render children (unauthenticated, onboarding, ready)
   return <>{children}</>;
 }
